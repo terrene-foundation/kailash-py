@@ -454,11 +454,11 @@ performance_results = []
 
 # Connect to database
 conn = await asyncpg.connect(
-    host="{DATABASE_CONFIG['host']}",
-    port={DATABASE_CONFIG['port']},
-    database="{DATABASE_CONFIG['database']}",
-    user="{DATABASE_CONFIG['user']}",
-    password="{DATABASE_CONFIG['password']}"
+    host="{DATABASE_CONFIG["host"]}",
+    port={DATABASE_CONFIG["port"]},
+    database="{DATABASE_CONFIG["database"]}",
+    user="{DATABASE_CONFIG["user"]}",
+    password="{DATABASE_CONFIG["password"]}"
 )
 
 try:

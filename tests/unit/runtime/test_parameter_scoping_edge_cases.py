@@ -335,7 +335,7 @@ result = {'my_param': my_val, 'other_params': other_params}
         # Chain connections
         for i in range(1, 5):
             builder.add_connection(
-                f"level{i}_switch", "true_output", f"level{i+1}_switch", "input"
+                f"level{i}_switch", "true_output", f"level{i + 1}_switch", "input"
             )
         builder.add_connection("level5_switch", "true_output", "final", "input")
 

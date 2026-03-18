@@ -32,7 +32,7 @@ concurrency:
 jobs:
   trust-unit-tests:
     name: Trust Unit Tests
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:

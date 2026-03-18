@@ -554,7 +554,7 @@ class EnterpriseAuditLogNode(Node):
         count_query = f"""
         SELECT COUNT(*) as total
         FROM audit_logs
-        WHERE {' AND '.join(where_conditions)}
+        WHERE {" AND ".join(where_conditions)}
         """
 
         # Data query
@@ -562,7 +562,7 @@ class EnterpriseAuditLogNode(Node):
         SELECT event_id, event_type, severity, user_id, resource_id, action,
                description, metadata, timestamp, ip_address, correlation_id
         FROM audit_logs
-        WHERE {' AND '.join(where_conditions)}
+        WHERE {" AND ".join(where_conditions)}
         ORDER BY {sort_field} {sort_direction}
         LIMIT {size} OFFSET {offset}
         """
@@ -951,7 +951,7 @@ class EnterpriseAuditLogNode(Node):
             WHERE id IN (
                 SELECT id FROM audit_logs
                 WHERE created_at < ?
-                {' AND tenant_id = ?' if tenant_id else ''}
+                {" AND tenant_id = ?" if tenant_id else ""}
                 LIMIT {batch_size}
             )
             """
@@ -1070,7 +1070,7 @@ class EnterpriseAuditLogNode(Node):
         failed_query = f"""
         SELECT COUNT(*) as failed_count
         FROM audit_logs{where_clause}
-        {' AND ' if where_clause else ' WHERE '}
+        {" AND " if where_clause else " WHERE "}
         status = 'failed' OR severity = 'error'
         """
         failed_params = params.copy()

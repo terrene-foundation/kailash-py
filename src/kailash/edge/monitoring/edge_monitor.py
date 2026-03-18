@@ -628,7 +628,7 @@ class EdgeMonitor:
                     edge_node=edge_node,
                     severity=AlertSeverity.WARNING,
                     metric_type=metric_type,
-                    message=f"Anomaly detected: {metric_type.value} deviates {deviation*100:.1f}% from baseline",
+                    message=f"Anomaly detected: {metric_type.value} deviates {deviation * 100:.1f}% from baseline",
                     current_value=current,
                     threshold=baseline,
                     tags={"type": "anomaly", "deviation": str(deviation)},
@@ -659,7 +659,7 @@ class EdgeMonitor:
             error_rate = metrics[MetricType.ERROR_RATE.value]
             if error_rate["mean"] > 0.05:
                 recommendations.append(
-                    f"Investigate errors on {edge_node} - error rate is {error_rate['mean']*100:.1f}%"
+                    f"Investigate errors on {edge_node} - error rate is {error_rate['mean'] * 100:.1f}%"
                 )
 
         # Resource usage
@@ -675,7 +675,7 @@ class EdgeMonitor:
             cache = metrics[MetricType.CACHE_HIT_RATE.value]
             if cache["mean"] < 0.7:
                 recommendations.append(
-                    f"Low cache hit rate ({cache['mean']*100:.1f}%) - review caching strategy"
+                    f"Low cache hit rate ({cache['mean'] * 100:.1f}%) - review caching strategy"
                 )
 
         # Check trends

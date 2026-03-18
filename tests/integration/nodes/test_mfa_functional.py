@@ -490,7 +490,6 @@ class TestMFAVerificationFunctionality:
                     mfa_node, "_get_verification_code", side_effect=mock_get_code
                 ),
             ):
-
                 mock_sms.return_value = True
 
                 # Setup SMS first

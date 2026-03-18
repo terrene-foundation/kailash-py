@@ -986,7 +986,7 @@ class EnterpriseSecurityEventNode(Node):
         SELECT incident_id, title, description, status, severity, assignee,
                created_at, updated_at, closed_at, events, actions_taken
         FROM security_incidents
-        WHERE {' AND '.join(where_conditions)}
+        WHERE {" AND ".join(where_conditions)}
         ORDER BY created_at DESC
         LIMIT {size} OFFSET {offset}
         """
@@ -1121,8 +1121,8 @@ class EnterpriseSecurityEventNode(Node):
 
         query = f"""
         UPDATE security_incidents
-        SET {', '.join(update_fields)}
-        WHERE incident_id = ${param_count-1} AND tenant_id = ${param_count}
+        SET {", ".join(update_fields)}
+        WHERE incident_id = ${param_count - 1} AND tenant_id = ${param_count}
         """
 
         self._db_node.config.update({"query": query, "params": params})

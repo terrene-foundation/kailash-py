@@ -781,7 +781,8 @@ class TestRetryPolicyEngineIntegration:
 
         start_time = time.time()
         result = await engine.execute_with_retry(
-            slow_function, timeout=0.5  # Should timeout before max attempts
+            slow_function,
+            timeout=0.5,  # Should timeout before max attempts
         )
         end_time = time.time()
 

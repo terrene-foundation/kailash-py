@@ -201,7 +201,7 @@ processed_records = []
 failed_records = []
 
 # Connect to database
-conn_string = "postgresql://{DATABASE_CONFIG['user']}:{DATABASE_CONFIG['password']}@{DATABASE_CONFIG['host']}:{DATABASE_CONFIG['port']}/{DATABASE_CONFIG['database']}"
+conn_string = "postgresql://{DATABASE_CONFIG["user"]}:{DATABASE_CONFIG["password"]}@{DATABASE_CONFIG["host"]}:{DATABASE_CONFIG["port"]}/{DATABASE_CONFIG["database"]}"
 
 try:
     conn = await asyncpg.connect(conn_string)

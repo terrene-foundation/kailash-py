@@ -323,7 +323,9 @@ class TestLogProcessorNode:
         ]
 
         result = log_processor.execute(
-            logs=many_logs, max_buffer_size=10, output_format="json"  # Limit to 10
+            logs=many_logs,
+            max_buffer_size=10,
+            output_format="json",  # Limit to 10
         )
 
         assert result["success"] is True

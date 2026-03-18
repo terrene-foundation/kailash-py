@@ -961,7 +961,7 @@ class RoleManagementNode(Node):
 
         update_query = f"""
         UPDATE roles
-        SET {', '.join(update_fields)}
+        SET {", ".join(update_fields)}
         WHERE role_id = ${param_count} AND tenant_id = ${param_count + 1}
         RETURNING role_id, name, description, permissions, parent_roles, attributes, is_active, updated_at
         """
@@ -1158,7 +1158,7 @@ class RoleManagementNode(Node):
         SELECT role_id, name, description, role_type, permissions, parent_roles,
                child_roles, attributes, is_active, created_at, updated_at, created_by
         FROM roles
-        WHERE {' AND '.join(where_conditions)}
+        WHERE {" AND ".join(where_conditions)}
         ORDER BY created_at DESC
         """
 
@@ -1181,7 +1181,7 @@ class RoleManagementNode(Node):
         count_query = f"""
         SELECT COUNT(*) as total
         FROM roles
-        WHERE {' AND '.join(where_conditions)}
+        WHERE {" AND ".join(where_conditions)}
         """
 
         count_result = self._db_node.execute(

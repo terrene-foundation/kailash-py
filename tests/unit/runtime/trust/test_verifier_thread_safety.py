@@ -578,7 +578,7 @@ class TestHighConcurrencyStress:
                         verifier._set_cache(key, result)
                     elif op == 1:
                         # Read own key
-                        key = f"t{thread_id}_k{max(0, i-5)}"
+                        key = f"t{thread_id}_k{max(0, i - 5)}"
                         verifier._get_cached(key)
                     elif op == 2:
                         # Read other thread's key

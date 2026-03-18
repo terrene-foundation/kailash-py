@@ -326,6 +326,7 @@ class TestRedisHealthCheck:
         assert "timed out" in result.error_message
 
 
+@pytest.mark.requires_docker
 class TestHTTPHealthCheck:
     """Test HTTP health check implementation."""
 
@@ -342,16 +343,20 @@ class TestHTTPHealthCheck:
         """Test successful HTTP health check."""
         check = HTTPHealthCheck("api", "http://localhost:8080/health")
 
-        # Mock httpx response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.content = b"OK"
+        # Mock aiohttp response (the actual HTTP library used by HTTPHealthCheck)
+        mock_response = AsyncMock()
+        mock_response.status = 200
+        mock_response.read = AsyncMock(return_value=b"OK")
 
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
+        mock_session = AsyncMock()
+        mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_session.get.return_value.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("httpx.AsyncClient") as mock_async_client:
-            mock_async_client.return_value.__aenter__.return_value = mock_client
+        with patch("aiohttp.ClientSession") as mock_client_session:
+            mock_client_session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_client_session.return_value.__aexit__ = AsyncMock(return_value=False)
             result = await check.check_health()
 
         assert result.service_name == "api"

@@ -172,7 +172,7 @@ class TestBaselinePerformanceBenchmarks:
         print("\\n=== Standard JSON Types Performance ===")
         for name, result in benchmark_results.items():
             print(
-                f"{name:12}: {result['mean']*1000:.3f}ms avg, {result['max']*1000:.3f}ms max"
+                f"{name:12}: {result['mean'] * 1000:.3f}ms avg, {result['max'] * 1000:.3f}ms max"
             )
 
         return benchmark_results
@@ -215,7 +215,7 @@ class TestBaselinePerformanceBenchmarks:
         print("\\n=== Nested Structure Performance ===")
         for depth, result in depth_benchmarks.items():
             print(
-                f"{depth:8}: {result['mean']*1000:.3f}ms avg, {result['max']*1000:.3f}ms max"
+                f"{depth:8}: {result['mean'] * 1000:.3f}ms avg, {result['max'] * 1000:.3f}ms max"
             )
 
         return depth_benchmarks
@@ -260,8 +260,8 @@ class TestW8ContextPerformanceBenchmarks:
         assert multi_context_benchmark["mean"] < 0.1  # <100ms for 10 contexts
 
         print("\\n=== Simple W8Context Performance ===")
-        print(f"Single context: {single_context_benchmark['mean']*1000:.3f}ms avg")
-        print(f"10 contexts   : {multi_context_benchmark['mean']*1000:.3f}ms avg")
+        print(f"Single context: {single_context_benchmark['mean'] * 1000:.3f}ms avg")
+        print(f"10 contexts   : {multi_context_benchmark['mean'] * 1000:.3f}ms avg")
 
         return {
             "single_context": single_context_benchmark,
@@ -317,8 +317,8 @@ class TestW8ContextPerformanceBenchmarks:
         assert json_benchmark["mean"] < 0.5  # <500ms for actual JSON conversion
 
         print("\\n=== Complex W8Context Performance ===")
-        print(f"Serialization check: {complex_benchmark['mean']*1000:.3f}ms avg")
-        print(f"JSON conversion    : {json_benchmark['mean']*1000:.3f}ms avg")
+        print(f"Serialization check: {complex_benchmark['mean'] * 1000:.3f}ms avg")
+        print(f"JSON conversion    : {json_benchmark['mean'] * 1000:.3f}ms avg")
 
         return {
             "serialization_check": complex_benchmark,
@@ -344,7 +344,9 @@ class TestW8ContextPerformanceBenchmarks:
         assert slow_benchmark["mean"] < 0.01  # But not excessively slow
 
         print("\\n=== Slow .to_dict() Performance Impact ===")
-        print(f"Slow to_dict: {slow_benchmark['mean']*1000:.3f}ms avg (expected ~1ms)")
+        print(
+            f"Slow to_dict: {slow_benchmark['mean'] * 1000:.3f}ms avg (expected ~1ms)"
+        )
 
         return {"slow_to_dict": slow_benchmark}
 
@@ -404,7 +406,7 @@ class TestComparativePerformance:
 
         print("\\n=== Comparative Performance ===")
         for obj_type, result in benchmarks.items():
-            print(f"{obj_type:15}: {result['mean']*1000:.6f}ms avg")
+            print(f"{obj_type:15}: {result['mean'] * 1000:.6f}ms avg")
         print(f"Overhead ratio: {overhead_ratio:.2f}x")
 
         return benchmarks
@@ -442,8 +444,8 @@ class TestComparativePerformance:
         assert mixed_benchmark["mean"] < 0.1  # <100ms for full mixed workload
 
         print("\\n=== Mixed Workload Performance ===")
-        print(f"Total mixed workload: {mixed_benchmark['mean']*1000:.3f}ms avg")
-        print(f"Per object average  : {per_object_time*1000:.3f}ms avg")
+        print(f"Total mixed workload: {mixed_benchmark['mean'] * 1000:.3f}ms avg")
+        print(f"Per object average  : {per_object_time * 1000:.3f}ms avg")
 
         return {"mixed_workload": mixed_benchmark, "per_object": per_object_time}
 
@@ -585,8 +587,8 @@ result = {
         print(f"Total workflow time     : {total_workflow_time:.3f}s")
         print(f"Context creation time   : {creation_result['creation_time']:.3f}s")
         print(f"Context processing time : {processing_result['processing_time']:.3f}s")
-        print(f"Per context creation    : {per_context_creation_time*1000:.3f}ms")
-        print(f"Per context processing  : {per_context_processing_time*1000:.3f}ms")
+        print(f"Per context creation    : {per_context_creation_time * 1000:.3f}ms")
+        print(f"Per context processing  : {per_context_processing_time * 1000:.3f}ms")
         print(f"Total JSON size         : {processing_result['total_json_size']} bytes")
 
         return {
@@ -649,7 +651,7 @@ class TestPerformanceRegression:
         for test_name, result in regression_results.items():
             status = "PASS" if result["passes_threshold"] else "FAIL"
             print(
-                f"{test_name:20}: {result['mean_time']*1000:.3f}ms ({result['performance_ratio']:.2f}x threshold) [{status}]"
+                f"{test_name:20}: {result['mean_time'] * 1000:.3f}ms ({result['performance_ratio']:.2f}x threshold) [{status}]"
             )
 
         return regression_results

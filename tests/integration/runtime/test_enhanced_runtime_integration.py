@@ -807,7 +807,7 @@ import time
 time.sleep(0.02)  # Simulate work
 try:
     input_data = data.get('data', [])
-    result = {{'processed_{i}': [x * {i+1} for x in input_data]}}
+    result = {{'processed_{i}': [x * {i + 1} for x in input_data]}}
 except:
     result = {{'processed_{i}': []}}
 """,

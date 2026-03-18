@@ -114,7 +114,6 @@ class TestAsyncSQLDatabaseNode:
         mock_pool.acquire = MagicMock(return_value=MockConnection())
 
         with patch.dict("sys.modules", {"asyncpg": mock_asyncpg}):
-
             # Test connection
             await adapter.connect()
             mock_asyncpg.create_pool.assert_called_once()
@@ -165,7 +164,6 @@ class TestAsyncSQLDatabaseNode:
         mock_aiomysql.create_pool = AsyncMock(return_value=mock_pool)
 
         with patch.dict("sys.modules", {"aiomysql": mock_aiomysql}):
-
             # Test connection
             await adapter.connect()
             mock_aiomysql.create_pool.assert_called_once()

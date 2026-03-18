@@ -18,7 +18,10 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None  # Optional: pip install kailash[monitoring]
 
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin

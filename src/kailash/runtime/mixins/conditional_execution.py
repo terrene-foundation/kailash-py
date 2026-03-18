@@ -841,10 +841,11 @@ class ConditionalExecutionMixin:
                     return result
 
                 # Execute switches hierarchically
-                all_results, switch_results = (
-                    await executor.execute_switches_hierarchically(
-                        parameters=inputs, node_executor=node_executor, **kwargs
-                    )
+                (
+                    all_results,
+                    switch_results,
+                ) = await executor.execute_switches_hierarchically(
+                    parameters=inputs, node_executor=node_executor, **kwargs
                 )
 
                 # Log execution summary

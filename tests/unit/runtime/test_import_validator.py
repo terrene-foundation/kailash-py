@@ -198,7 +198,8 @@ class TestImportPathValidator:
             "src/mymodule/file2.py", "from contracts import Contract"
         )
         self._create_test_file(
-            "src/mymodule/file3.py", "from src.mymodule.core import Core"  # Valid
+            "src/mymodule/file3.py",
+            "from src.mymodule.core import Core",  # Valid
         )
 
         module_dir = Path(self.temp_dir) / "src" / "mymodule"

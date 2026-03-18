@@ -1,0 +1,12 @@
+# Global owners — all files require maintainer review by default
+* @terrene-foundation/maintainers
+
+# Core SDK
+src/kailash/ @terrene-foundation/maintainers
+packages/ @terrene-foundation/maintainers
+
+# CI/CD
+.github/ @terrene-foundation/maintainers
+
+# Documentation
+docs/ @terrene-foundation/maintainers

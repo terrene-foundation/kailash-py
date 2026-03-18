@@ -379,8 +379,8 @@ class RealTimeDashboard:
         <header class="dashboard-header">
             <h1>🚀 Workflow Dashboard</h1>
             <div class="status-indicator">
-                <span class="{'status-active' if self._monitoring else 'status-inactive'}">
-                    {'🟢 Live Monitoring' if self._monitoring else '🔴 Monitoring Stopped'}
+                <span class="{"status-active" if self._monitoring else "status-inactive"}">
+                    {"🟢 Live Monitoring" if self._monitoring else "🔴 Monitoring Stopped"}
                 </span>
             </div>
         </header>
@@ -541,7 +541,7 @@ class RealTimeDashboard:
                 <td>{task.node_type}</td>
                 <td><span class="status-badge {status_class}">{task.status}</span></td>
                 <td>{duration}</td>
-                <td>{task.started_at.strftime('%H:%M:%S') if task.started_at else 'N/A'}</td>
+                <td>{task.started_at.strftime("%H:%M:%S") if task.started_at else "N/A"}</td>
             </tr>
             """
 
@@ -601,8 +601,8 @@ class RealTimeDashboard:
 
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background-color: {colors['bg']};
-            color: {colors['text']};
+            background-color: {colors["bg"]};
+            color: {colors["text"]};
             line-height: 1.6;
         }}
 
@@ -618,13 +618,13 @@ class RealTimeDashboard:
             align-items: center;
             margin-bottom: 30px;
             padding: 20px;
-            background: {colors['card_bg']};
+            background: {colors["card_bg"]};
             border-radius: 8px;
-            border: 1px solid {colors['border']};
+            border: 1px solid {colors["border"]};
         }}
 
         .dashboard-header h1 {{
-            color: {colors['primary']};
+            color: {colors["primary"]};
             font-size: 2em;
         }}
 
@@ -633,24 +633,24 @@ class RealTimeDashboard:
         }}
 
         .status-active {{
-            color: {colors['success']};
+            color: {colors["success"]};
         }}
 
         .status-inactive {{
-            color: {colors['danger']};
+            color: {colors["danger"]};
         }}
 
         section {{
             margin-bottom: 30px;
             padding: 20px;
-            background: {colors['card_bg']};
+            background: {colors["card_bg"]};
             border-radius: 8px;
-            border: 1px solid {colors['border']};
+            border: 1px solid {colors["border"]};
         }}
 
         section h2 {{
             margin-bottom: 20px;
-            color: {colors['primary']};
+            color: {colors["primary"]};
             font-size: 1.5em;
         }}
 
@@ -663,22 +663,22 @@ class RealTimeDashboard:
         .status-card {{
             text-align: center;
             padding: 20px;
-            background: {colors['bg']};
+            background: {colors["bg"]};
             border-radius: 6px;
-            border: 1px solid {colors['border']};
+            border: 1px solid {colors["border"]};
         }}
 
         .status-value {{
             display: block;
             font-size: 2em;
             font-weight: bold;
-            color: {colors['primary']};
+            color: {colors["primary"]};
         }}
 
         .status-label {{
             display: block;
             font-size: 0.9em;
-            color: {colors['text']};
+            color: {colors["text"]};
             opacity: 0.8;
         }}
 
@@ -690,14 +690,14 @@ class RealTimeDashboard:
 
         .chart-container, .chart-item {{
             padding: 15px;
-            background: {colors['bg']};
+            background: {colors["bg"]};
             border-radius: 6px;
-            border: 1px solid {colors['border']};
+            border: 1px solid {colors["border"]};
         }}
 
         .chart-container h3, .chart-item h3 {{
             margin-bottom: 10px;
-            color: {colors['text']};
+            color: {colors["text"]};
         }}
 
         .chart-image {{
@@ -715,11 +715,11 @@ class RealTimeDashboard:
         .tasks-table td {{
             padding: 12px;
             text-align: left;
-            border-bottom: 1px solid {colors['border']};
+            border-bottom: 1px solid {colors["border"]};
         }}
 
         .tasks-table th {{
-            background: {colors['bg']};
+            background: {colors["bg"]};
             font-weight: bold;
         }}
 
@@ -732,22 +732,22 @@ class RealTimeDashboard:
         }}
 
         .status-running {{
-            background: {colors['primary']};
+            background: {colors["primary"]};
             color: white;
         }}
 
         .status-completed {{
-            background: {colors['success']};
+            background: {colors["success"]};
             color: white;
         }}
 
         .status-failed {{
-            background: {colors['danger']};
+            background: {colors["danger"]};
             color: white;
         }}
 
         .status-pending {{
-            background: {colors['warning']};
+            background: {colors["warning"]};
             color: black;
         }}
 

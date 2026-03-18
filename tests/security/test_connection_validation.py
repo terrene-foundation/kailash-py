@@ -311,7 +311,7 @@ class TestConnectionValidation:
         for i in range(100):
             workflow.add_node(DataNode, f"node_{i}", {})
             if i > 0:
-                workflow.add_connection(f"node_{i-1}", "data", f"node_{i}", "input")
+                workflow.add_connection(f"node_{i - 1}", "data", f"node_{i}", "input")
 
         # Measure without validation
         runtime_off = LocalRuntime(connection_validation="off")

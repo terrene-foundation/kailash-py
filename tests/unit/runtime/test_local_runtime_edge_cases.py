@@ -262,7 +262,8 @@ class TestLocalRuntimeEdgeCases:
         """Test cleanup when execution fails."""
         # Create workflow that will fail
         failing_node = PythonCodeNode(
-            name="failing", code="raise Exception('Test failure')"  # Force failure
+            name="failing",
+            code="raise Exception('Test failure')",  # Force failure
         )
         self.workflow.add_node("failing", failing_node)
 

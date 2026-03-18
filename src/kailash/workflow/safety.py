@@ -5,7 +5,10 @@ import threading
 import time
 from contextlib import contextmanager
 
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None  # Optional: pip install kailash[monitoring]
 
 from kailash.sdk_exceptions import WorkflowExecutionError
 

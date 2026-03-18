@@ -570,7 +570,6 @@ class RiskAssessmentNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     ) or last_location.get("country") != current_location.get(
                         "country"
                     ):
-
                         # Check time difference - less than 1 hour for different cities/countries = impossible
                         time_diff = (
                             current_time

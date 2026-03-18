@@ -345,7 +345,9 @@ class TestEdgeStateMachine:
         await edge_state_machine.initialize()
 
         result = await edge_state_machine.execute_async(
-            operation="lock", lock_name="auto_release", timeout_ms=100  # 100ms timeout
+            operation="lock",
+            lock_name="auto_release",
+            timeout_ms=100,  # 100ms timeout
         )
 
         assert result["success"] is True

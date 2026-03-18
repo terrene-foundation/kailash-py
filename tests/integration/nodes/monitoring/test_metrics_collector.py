@@ -229,7 +229,8 @@ class TestMetricsCollectorNode:
         mock_process = Mock()
         mock_process.cpu_percent.return_value = 15.0
         mock_process.memory_info.return_value = Mock(
-            rss=100 * 1024 * 1024, vms=200 * 1024 * 1024  # 100MB  # 200MB
+            rss=100 * 1024 * 1024,
+            vms=200 * 1024 * 1024,  # 100MB  # 200MB
         )
         mock_process.num_threads.return_value = 5
         mock_process.name.return_value = "test_process"

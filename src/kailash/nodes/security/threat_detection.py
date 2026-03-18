@@ -349,7 +349,6 @@ class ThreatDetectionNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 and event.get("failed", False)
                 and event.get("timestamp")
             ):
-
                 event_time = datetime.fromisoformat(
                     event["timestamp"].replace("Z", "+00:00")
                 )

@@ -32,7 +32,9 @@ class TestAsyncTestingFrameworkIntegration:
 
                 # Create mock database
                 self.mock_db = await self.create_test_resource(
-                    "db", lambda: None, mock=True  # Factory doesn't matter for mocks
+                    "db",
+                    lambda: None,
+                    mock=True,  # Factory doesn't matter for mocks
                 )
 
                 # Configure mock database responses

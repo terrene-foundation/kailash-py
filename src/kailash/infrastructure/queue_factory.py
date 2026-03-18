@@ -89,11 +89,16 @@ async def create_task_queue(queue_url: Optional[str] = None) -> Optional[Any]:
 
     # SQL-backed queue: any URL that ConnectionManager understands
     url_lower = url.lower()
-    if url_lower.startswith((
-        "postgresql://", "postgresql+", "postgres://",
-        "mysql://", "mysql+",
-        "sqlite://",
-    )):
+    if url_lower.startswith(
+        (
+            "postgresql://",
+            "postgresql+",
+            "postgres://",
+            "mysql://",
+            "mysql+",
+            "sqlite://",
+        )
+    ):
         logger.info("Creating SQL-backed SQLTaskQueue from URL")
         from kailash.db.connection import ConnectionManager
         from kailash.infrastructure.task_queue import SQLTaskQueue

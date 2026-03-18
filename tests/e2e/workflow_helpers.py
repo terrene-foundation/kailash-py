@@ -46,11 +46,11 @@ import asyncpg
 
 # Connect to database
 conn = await asyncpg.connect(
-    host="{E2ETestConfig.DATABASE['host']}",
-    port={E2ETestConfig.DATABASE['port']},
-    database="{E2ETestConfig.DATABASE['database']}",
-    user="{E2ETestConfig.DATABASE['user']}",
-    password="{E2ETestConfig.DATABASE['password']}"
+    host="{E2ETestConfig.DATABASE["host"]}",
+    port={E2ETestConfig.DATABASE["port"]},
+    database="{E2ETestConfig.DATABASE["database"]}",
+    user="{E2ETestConfig.DATABASE["user"]}",
+    password="{E2ETestConfig.DATABASE["password"]}"
 )
 
 try:
@@ -75,11 +75,11 @@ import asyncpg
 
 # Connect to database
 conn = await asyncpg.connect(
-    host="{E2ETestConfig.DATABASE['host']}",
-    port={E2ETestConfig.DATABASE['port']},
-    database="{E2ETestConfig.DATABASE['database']}",
-    user="{E2ETestConfig.DATABASE['user']}",
-    password="{E2ETestConfig.DATABASE['password']}"
+    host="{E2ETestConfig.DATABASE["host"]}",
+    port={E2ETestConfig.DATABASE["port"]},
+    database="{E2ETestConfig.DATABASE["database"]}",
+    user="{E2ETestConfig.DATABASE["user"]}",
+    password="{E2ETestConfig.DATABASE["password"]}"
 )
 
 try:
@@ -111,11 +111,11 @@ import asyncpg
 
 # Connect to database
 conn = await asyncpg.connect(
-    host="{E2ETestConfig.DATABASE['host']}",
-    port={E2ETestConfig.DATABASE['port']},
-    database="{E2ETestConfig.DATABASE['database']}",
-    user="{E2ETestConfig.DATABASE['user']}",
-    password="{E2ETestConfig.DATABASE['password']}"
+    host="{E2ETestConfig.DATABASE["host"]}",
+    port={E2ETestConfig.DATABASE["port"]},
+    database="{E2ETestConfig.DATABASE["database"]}",
+    user="{E2ETestConfig.DATABASE["user"]}",
+    password="{E2ETestConfig.DATABASE["password"]}"
 )
 
 try:

@@ -400,7 +400,7 @@ class DatabaseExecutionPipeline:
                     stage_time = time.time() - stage_start
 
                     self.logger.debug(
-                        f"Stage {i+1}/{len(self.stages)} ({stage.get_stage_name()}) "
+                        f"Stage {i + 1}/{len(self.stages)} ({stage.get_stage_name()}) "
                         f"completed in {stage_time:.3f}s"
                     )
 

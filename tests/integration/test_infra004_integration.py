@@ -551,7 +551,7 @@ result = {{
 
                             # Connect nodes sequentially
                             if node_idx > 0:
-                                prev_node = f"load_node_{workflow_idx}_{node_idx-1}"
+                                prev_node = f"load_node_{workflow_idx}_{node_idx - 1}"
                                 workflow.add_edge(prev_node, node_id)
 
                         future = executor.submit(agent.execute, workflow)

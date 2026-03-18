@@ -852,7 +852,6 @@ class TestMCPServerIntegrationAndEdgeCases:
                 patch.object(server, "_save_state") as mock_save_state,
                 patch.object(server, "_stop_background_tasks") as mock_stop_tasks,
             ):
-
                 # Initiate shutdown
                 server._graceful_shutdown()
 
@@ -911,7 +910,6 @@ class TestMCPServerIntegrationAndEdgeCases:
                 patch.object(server, "_monitor_memory_usage") as mock_memory,
                 patch.object(server, "_cleanup_cache") as mock_cleanup,
             ):
-
                 mock_memory.return_value = {
                     "used_memory": 85 * 1024 * 1024,  # 85MB
                     "cache_size": 95,

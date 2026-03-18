@@ -128,7 +128,7 @@ class PerformanceMonitor:
             self.recommended_mode = "skip_branches"
             if current_mode != "skip_branches":
                 reason = (
-                    f"skip_branches mode is {(1 - skip_branches_avg/route_data_avg)*100:.1f}% faster "
+                    f"skip_branches mode is {(1 - skip_branches_avg / route_data_avg) * 100:.1f}% faster "
                     f"({skip_branches_avg:.3f}s vs {route_data_avg:.3f}s)"
                 )
                 return True, "skip_branches", reason

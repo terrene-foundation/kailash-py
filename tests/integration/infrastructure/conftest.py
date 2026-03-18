@@ -84,7 +84,9 @@ def _is_mysql_available() -> bool:
 # Parameterized connection fixture
 # ---------------------------------------------------------------------------
 @pytest.fixture(params=["sqlite", "pg", "mysql"])
-async def conn(request: pytest.FixtureRequest) -> AsyncGenerator[ConnectionManager, None]:
+async def conn(
+    request: pytest.FixtureRequest,
+) -> AsyncGenerator[ConnectionManager, None]:
     """Yield an initialized ConnectionManager for each dialect.
 
     The fixture:
@@ -110,7 +112,9 @@ async def conn(request: pytest.FixtureRequest) -> AsyncGenerator[ConnectionManag
 
     manager = ConnectionManager(url)
     await manager.initialize()
-    logger.info("ConnectionManager initialized for dialect=%s url=%s", dialect, url[:40])
+    logger.info(
+        "ConnectionManager initialized for dialect=%s url=%s", dialect, url[:40]
+    )
 
     yield manager
 

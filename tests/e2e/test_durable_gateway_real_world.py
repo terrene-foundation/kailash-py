@@ -2178,7 +2178,7 @@ result = {
                     if rec_result.get("recommendations"):
                         for i, rec in enumerate(rec_result["recommendations"][:3]):
                             print(
-                                f"  - Rec {i+1}: {rec.get('product_name', 'N/A')} (score: {rec.get('recommendation_score', 0):.2f})"
+                                f"  - Rec {i + 1}: {rec.get('product_name', 'N/A')} (score: {rec.get('recommendation_score', 0):.2f})"
                             )
 
     @pytest.mark.asyncio

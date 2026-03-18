@@ -347,7 +347,7 @@ class ResourceAnalyzer:
             ResourceType.MEMORY,
         ]:
             self.logger.error(
-                f"No {metric.resource_type.value} available " f"on {metric.edge_node}"
+                f"No {metric.resource_type.value} available on {metric.edge_node}"
             )
 
     async def _identify_patterns(self):

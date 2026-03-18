@@ -362,6 +362,7 @@ class TestEdgeCases:
 class TestPerformanceRegression:
     """Test performance impact and regression scenarios."""
 
+    @pytest.mark.slow
     def test_performance_overhead_standard_types(self):
         """Test that performance overhead for standard types is minimal."""
         test_node = SampleNode(name="test_node")

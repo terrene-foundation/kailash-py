@@ -829,7 +829,8 @@ result = {
         # Create safety manager with strict limits
         safety_manager = CycleSafetyManager()
         safety_manager.set_global_limits(
-            memory_limit=100, timeout=1.0  # 100MB memory limit  # 1 second timeout
+            memory_limit=100,
+            timeout=1.0,  # 100MB memory limit  # 1 second timeout
         )
 
         # Execute with safety manager

@@ -16,7 +16,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None  # Optional: pip install kailash[monitoring]
 
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow

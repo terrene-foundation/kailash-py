@@ -261,7 +261,7 @@ numbers = data.get('numbers', [])
 multiplier = data.get('multiplier', 1)
 
 result = {{
-    'processed': [n * multiplier * {i+1} for n in numbers],
+    'processed': [n * multiplier * {i + 1} for n in numbers],
     'processor_id': {i}
 }}
 """

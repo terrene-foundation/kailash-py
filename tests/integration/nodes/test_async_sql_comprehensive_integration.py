@@ -825,10 +825,10 @@ class TestAsyncSQLComprehensiveIntegration:
             # Print benchmark results
             print("\n=== Performance Benchmark Results ===")
             print(
-                f"Single inserts (100 ops): {single_insert_time:.3f}s ({100/single_insert_time:.1f} ops/sec)"
+                f"Single inserts (100 ops): {single_insert_time:.3f}s ({100 / single_insert_time:.1f} ops/sec)"
             )
             print(
-                f"Batch insert (100 ops): {batch_insert_time:.3f}s ({100/batch_insert_time:.1f} ops/sec)"
+                f"Batch insert (100 ops): {batch_insert_time:.3f}s ({100 / batch_insert_time:.1f} ops/sec)"
             )
             print(
                 f"Large select ({len(large_select['result']['data'])} rows): {large_select_time:.3f}s"

@@ -28,7 +28,8 @@ class TestAsyncParameterInjection:
 
         runtime = AsyncLocalRuntime()
         results, _ = await runtime.execute_workflow_async(
-            workflow.build(), inputs={"node1": {"x": 5}}  # Node-specific parameter
+            workflow.build(),
+            inputs={"node1": {"x": 5}},  # Node-specific parameter
         )
 
         assert results["node1"]["result"] == 10  # Should use x=5, not x=0
@@ -170,7 +171,8 @@ class TestAsyncParameterInjection:
 
         runtime = AsyncLocalRuntime()
         results, _ = await runtime.execute_workflow_async(
-            workflow.build(), inputs={"node1": {}}  # Empty node-specific params
+            workflow.build(),
+            inputs={"node1": {}},  # Empty node-specific params
         )
 
         assert results["node1"]["result"] == 42

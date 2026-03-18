@@ -38,11 +38,11 @@ import time
 
 # Database configuration
 db_config = {{
-    "host": "{DATABASE_CONFIG['host']}",
-    "port": {DATABASE_CONFIG['port']},
-    "database": "{DATABASE_CONFIG['database']}",
-    "user": "{DATABASE_CONFIG['user']}",
-    "password": "{DATABASE_CONFIG['password']}"
+    "host": "{DATABASE_CONFIG["host"]}",
+    "port": {DATABASE_CONFIG["port"]},
+    "database": "{DATABASE_CONFIG["database"]}",
+    "user": "{DATABASE_CONFIG["user"]}",
+    "password": "{DATABASE_CONFIG["password"]}"
 }}
 
 start_time = time.time()
@@ -176,8 +176,8 @@ import time
 
 # Redis configuration
 redis_config = {{
-    "host": "{REDIS_CONFIG['host']}",
-    "port": {REDIS_CONFIG['port']}
+    "host": "{REDIS_CONFIG["host"]}",
+    "port": {REDIS_CONFIG["port"]}
 }}
 
 start_time = time.time()
@@ -354,17 +354,17 @@ coordination_log = []
 try:
     # Initialize both pools
     db_pool = await asyncpg.create_pool(
-        host="{DATABASE_CONFIG['host']}",
-        port={DATABASE_CONFIG['port']},
-        database="{DATABASE_CONFIG['database']}",
-        user="{DATABASE_CONFIG['user']}",
-        password="{DATABASE_CONFIG['password']}",
+        host="{DATABASE_CONFIG["host"]}",
+        port={DATABASE_CONFIG["port"]},
+        database="{DATABASE_CONFIG["database"]}",
+        user="{DATABASE_CONFIG["user"]}",
+        password="{DATABASE_CONFIG["password"]}",
         min_size=1,
         max_size=3
     )
 
     redis_client = redis.from_url(
-        f"redis://{REDIS_CONFIG['host']}:{REDIS_CONFIG['port']}",
+        f"redis://{REDIS_CONFIG["host"]}:{REDIS_CONFIG["port"]}",
         decode_responses=True
     )
 

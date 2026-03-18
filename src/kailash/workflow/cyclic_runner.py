@@ -422,11 +422,11 @@ class CyclicWorkflowExecutor:
         for i, stage in enumerate(plan.stages):
             stage_nodes = getattr(stage, "nodes", "N/A")
             logger.info(
-                f"Executing stage {i+1}: is_cycle={stage.is_cycle}, nodes={stage_nodes}"
+                f"Executing stage {i + 1}: is_cycle={stage.is_cycle}, nodes={stage_nodes}"
             )
             if stage.is_cycle:
                 logger.info(
-                    f"Stage {i+1} is a cycle group: {stage.cycle_group.cycle_id}"
+                    f"Stage {i + 1} is a cycle group: {stage.cycle_group.cycle_id}"
                 )
                 # Execute cycle group and get downstream nodes
                 cycle_results, downstream_nodes = self._execute_cycle_group(

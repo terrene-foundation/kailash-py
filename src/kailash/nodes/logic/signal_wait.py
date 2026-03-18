@@ -101,8 +101,7 @@ class SignalWaitNode(Node):
                 required=False,
                 default=None,
                 description=(
-                    "Maximum seconds to wait for the signal. "
-                    "None waits indefinitely."
+                    "Maximum seconds to wait for the signal. None waits indefinitely."
                 ),
             ),
             "input_data": NodeParameter(
@@ -187,8 +186,7 @@ class SignalWaitNode(Node):
         signal_channel = self._get_signal_channel()
 
         self.logger.info(
-            f"Node {self.id}: waiting for signal '{signal_name}'"
-            f" (timeout={timeout})"
+            f"Node {self.id}: waiting for signal '{signal_name}' (timeout={timeout})"
         )
 
         try:

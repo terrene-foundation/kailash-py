@@ -59,11 +59,11 @@ from datetime import datetime, timezone
 
 # Connect to database
 conn = await asyncpg.connect(
-    host="{cls.DATABASE['host']}",
-    port={cls.DATABASE['port']},
-    database="{cls.DATABASE['database']}",
-    user="{cls.DATABASE['user']}",
-    password="{cls.DATABASE['password']}"
+    host="{cls.DATABASE["host"]}",
+    port={cls.DATABASE["port"]},
+    database="{cls.DATABASE["database"]}",
+    user="{cls.DATABASE["user"]}",
+    password="{cls.DATABASE["password"]}"
 )
 
 try:

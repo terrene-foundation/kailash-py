@@ -182,7 +182,6 @@ class WorkflowValidationAuditor:
                 connection.source_node in error_msg
                 or connection.target_node in error_msg
             ):
-
                 # Categorize the error
                 # Get node type from workflow nodes
                 target_node = workflow.nodes.get(connection.target_node)

@@ -178,7 +178,7 @@ class TestCreateMigration:
                     name=input_name, description="Test"
                 )
                 filename = os.path.basename(filepath)
-                assert filename == f"{i+1:03d}_{expected_slug}.py"
+                assert filename == f"{i + 1:03d}_{expected_slug}.py"
 
     def test_sequential_numbering(self):
         """Test that migrations are numbered sequentially."""

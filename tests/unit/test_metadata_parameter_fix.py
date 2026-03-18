@@ -298,7 +298,8 @@ class TestMetadataParameterFix:
         )
 
         node = TestNodeWithMetadataParam(
-            id="test", metadata=custom_metadata  # Pass NodeMetadata object
+            id="test",
+            metadata=custom_metadata,  # Pass NodeMetadata object
         )
 
         # Should use the provided NodeMetadata

@@ -838,9 +838,9 @@ class TestAdminNodesPerformanceE2E:
 
             print("\n   Results:")
             print(
-                f"   Actual rate: {actual_rate:.2f} ops/sec ({actual_rate/pattern['operations_per_second']*100:.1f}% of target)"
+                f"   Actual rate: {actual_rate:.2f} ops/sec ({actual_rate / pattern['operations_per_second'] * 100:.1f}% of target)"
             )
-            print(f"   Success rate: {(1-error_rate)*100:.1f}%")
+            print(f"   Success rate: {(1 - error_rate) * 100:.1f}%")
             print(f"   P50 latency: {p50:.3f}s")
             print(f"   P95 latency: {p95:.3f}s")
             print(f"   P99 latency: {p99:.3f}s")
@@ -1057,7 +1057,7 @@ class TestAdminNodesPerformanceE2E:
             for j, user in enumerate(batch):
                 param_start = j * 7 + 1
                 values_parts.append(
-                    f"(${param_start}, ${param_start+1}, ${param_start+2}, ${param_start+3}, ${param_start+4}, ${param_start+5}, ${param_start+6})"
+                    f"(${param_start}, ${param_start + 1}, ${param_start + 2}, ${param_start + 3}, ${param_start + 4}, ${param_start + 5}, ${param_start + 6})"
                 )
                 params.extend(
                     [
@@ -1073,7 +1073,7 @@ class TestAdminNodesPerformanceE2E:
 
             insert_query = f"""
             INSERT INTO users (user_id, email, username, roles, attributes, status, tenant_id)
-            VALUES {', '.join(values_parts)}
+            VALUES {", ".join(values_parts)}
             ON CONFLICT (user_id) DO UPDATE SET
                 roles = EXCLUDED.roles,
                 attributes = EXCLUDED.attributes,
@@ -1084,7 +1084,7 @@ class TestAdminNodesPerformanceE2E:
             try:
                 db_node.execute(query=insert_query, parameters=params)
             except Exception as e:
-                print(f"⚠️  Warning creating user batch {i//batch_size + 1}: {e}")
+                print(f"⚠️  Warning creating user batch {i // batch_size + 1}: {e}")
 
         print(f"✅ Created {num_users} test users with roles and attributes")
 

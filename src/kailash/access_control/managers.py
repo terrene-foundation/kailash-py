@@ -404,7 +404,6 @@ class AccessControlManager:
                 and rule.resource_id == resource_id
                 and rule.permission == permission
             ):
-
                 # Check expiration
                 if rule.expires_at:
                     from datetime import UTC, datetime

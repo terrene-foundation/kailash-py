@@ -59,8 +59,7 @@ class SQLWorkerRegistry:
     ) -> None:
         if not _TABLE_NAME_RE.match(table_name):
             raise ValueError(
-                f"Invalid table name '{table_name}': "
-                f"must match [a-zA-Z_][a-zA-Z0-9_]*"
+                f"Invalid table name '{table_name}': must match [a-zA-Z_][a-zA-Z0-9_]*"
             )
         self._conn = conn
         self._task_queue = task_queue

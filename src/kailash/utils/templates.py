@@ -121,7 +121,7 @@ class {self.name}({self.base_class}):
                 name="{param["name"]}",
                 type={param["type"]},
                 required={param["required"]},
-                description="{param["description"]}"{', ' + default_str if default_str else ''}
+                description="{param["description"]}"{", " + default_str if default_str else ""}
             ),
 """
 

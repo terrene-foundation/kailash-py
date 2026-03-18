@@ -771,7 +771,7 @@ class TestErrorEnhancementPerformance:
         avg_time = (end - start) / 100
         assert (
             avg_time < 0.01
-        ), f"Error enhancement too slow: {avg_time*1000:.2f}ms per call"
+        ), f"Error enhancement too slow: {avg_time * 1000:.2f}ms per call"
 
     def test_error_catalog_caching(self):
         """Verify error catalog is cached for performance."""

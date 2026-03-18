@@ -278,7 +278,7 @@ class CycleAwareNode(Node):
         log_msg = (
             f"[Cycle {cycle_info['cycle_id']}] "
             f"Iteration {cycle_info['iteration']}/{cycle_info['max_iterations']} "
-            f"({progress*100:.1f}%)"
+            f"({progress * 100:.1f}%)"
         )
 
         if message:

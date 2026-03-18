@@ -68,7 +68,8 @@ class TestExecutionPipelineDocker(DockerIntegrationTestBase):
     def execution_pipeline(self, workflow_db_config):
         """Create execution pipeline with real database config."""
         return DatabaseExecutionPipeline(
-            query_executor=None, validation_rules={}  # Will be set up per test
+            query_executor=None,
+            validation_rules={},  # Will be set up per test
         )
 
     @pytest.mark.asyncio
@@ -321,7 +322,8 @@ class TestExecutionPipelineDocker(DockerIntegrationTestBase):
         execution_pipeline.query_timeout = 0.5  # 500ms
 
         context = ExecutionContext(
-            query="SELECT pg_sleep(2)", node_name="timeout_test"  # 2 second sleep
+            query="SELECT pg_sleep(2)",
+            node_name="timeout_test",  # 2 second sleep
         )
 
         start_time = time.time()

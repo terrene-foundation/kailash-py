@@ -79,9 +79,9 @@ class MCPPatternsTestRunner:
         overall_tests = 0
 
         for suite_name, test_method in test_suites:
-            logger.info(f"\n{'='*60}")
+            logger.info(f"\n{'=' * 60}")
             logger.info(f"Running {suite_name}")
-            logger.info(f"{'='*60}")
+            logger.info(f"{'=' * 60}")
 
             suite_start = time.time()
 

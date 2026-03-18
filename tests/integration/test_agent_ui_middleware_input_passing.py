@@ -270,12 +270,16 @@ result = {
 
     # Test with empty inputs
     execution_id_1 = await agent_ui.execute(
-        session_id=session_id, workflow_id=workflow_id, inputs={}  # Empty inputs
+        session_id=session_id,
+        workflow_id=workflow_id,
+        inputs={},  # Empty inputs
     )
 
     # Test with None inputs
     execution_id_2 = await agent_ui.execute(
-        session_id=session_id, workflow_id=workflow_id, inputs=None  # None inputs
+        session_id=session_id,
+        workflow_id=workflow_id,
+        inputs=None,  # None inputs
     )
 
     await asyncio.sleep(0.1)

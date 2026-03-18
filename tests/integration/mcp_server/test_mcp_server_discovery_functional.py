@@ -632,7 +632,6 @@ class TestNetworkDiscoveryFunctionality:
             # Mock network scanning
             with patch.object(discovery, "_is_port_open") as mock_port_check:
                 with patch.object(discovery, "_probe_server_info") as mock_probe:
-
                     # Setup port scanning results
                     def port_check_side_effect(host, port, timeout):
                         # Simulate open ports on specific hosts/ports
@@ -666,7 +665,8 @@ class TestNetworkDiscoveryFunctionality:
 
                     # Test network scanning
                     servers = await discovery.scan_network(
-                        "192.168.1.0/28", ports=[8080, 8081, 8082]  # Small subnet
+                        "192.168.1.0/28",
+                        ports=[8080, 8081, 8082],  # Small subnet
                     )
 
                     # Should find 2 servers

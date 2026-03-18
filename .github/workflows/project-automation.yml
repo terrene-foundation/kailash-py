@@ -14,7 +14,7 @@ env:
 jobs:
   add-to-project:
     name: Add to Project Board
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.event_name == 'issues' && github.event.action == 'opened'
     steps:
       - uses: actions/add-to-project@v0.5.0
@@ -24,7 +24,7 @@ jobs:
 
   label-based-on-files:
     name: Auto-label based on files changed
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && github.event.action == 'opened'
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +37,7 @@ jobs:
 
   session-milestone:
     name: Create Session Milestone
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '/session start')
     steps:
       - name: Parse session number
@@ -59,7 +59,7 @@ jobs:
 
   priority-assignment:
     name: Auto-assign based on priority
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.event_name == 'issues' && github.event.action == 'labeled'
     steps:
       - name: Check for P0 or P1 labels
@@ -74,7 +74,7 @@ jobs:
 
   stale-management:
     name: Manage stale issues
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.event.schedule == '0 0 * * *' # Daily at midnight
     steps:
       - uses: actions/stale@v9

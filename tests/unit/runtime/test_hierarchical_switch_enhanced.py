@@ -143,10 +143,11 @@ class TestHierarchicalSwitchEnhancements:
 
         # Execute - may raise TimeoutError due to mock
         try:
-            all_results, switch_results = (
-                await executor.execute_switches_hierarchically(
-                    parameters={}, node_executor=slow_executor
-                )
+            (
+                all_results,
+                switch_results,
+            ) = await executor.execute_switches_hierarchically(
+                parameters={}, node_executor=slow_executor
             )
 
             # If no exception, check that switch2 may have timed out
@@ -226,10 +227,11 @@ class TestHierarchicalSwitchEnhancements:
                     return {"true_output": {"data": "test"}, "false_output": None}
 
             # Execute
-            all_results, switch_results = (
-                await executor.execute_switches_hierarchically(
-                    parameters={}, node_executor=timed_executor
-                )
+            (
+                all_results,
+                switch_results,
+            ) = await executor.execute_switches_hierarchically(
+                parameters={}, node_executor=timed_executor
             )
 
         # Get metrics

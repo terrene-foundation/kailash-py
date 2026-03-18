@@ -76,7 +76,7 @@ class TestDataGenerator:
         for i in range(rows):
             row = {
                 "id": i + 1,
-                "name": f"Item_{i+1}",
+                "name": f"Item_{i + 1}",
                 "value": (i + 1) * 10 + (i % 3),
                 "category": categories[i % len(categories)],
             }
@@ -118,10 +118,10 @@ class TestDataGenerator:
         """Generate mock text data."""
         text_lines = []
         for i in range(lines):
-            text_lines.append(f"This is line {i+1} of the test text.")
+            text_lines.append(f"This is line {i + 1} of the test text.")
             if i % 2 == 0:
                 text_lines.append(
-                    f"It contains some interesting data about item {i+1}."
+                    f"It contains some interesting data about item {i + 1}."
                 )
 
         return "\n".join(text_lines)

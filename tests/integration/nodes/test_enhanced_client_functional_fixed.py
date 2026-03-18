@@ -267,7 +267,6 @@ class TestKailashClientWorkflowExecution:
                 patch.object(client, "_ensure_session"),
                 patch.object(client, "_session", mock_session),
             ):
-
                 result = await client.execute_workflow(
                     workflow_id="test_workflow", parameters={"param1": "value1"}
                 )
@@ -308,7 +307,6 @@ class TestKailashClientWorkflowExecution:
                 patch.object(client, "_ensure_session"),
                 patch.object(client, "_session", mock_session),
             ):
-
                 result = await client.execute_workflow(
                     workflow_id="default_workflow",
                     parameters={"key": "value"},
@@ -354,7 +352,6 @@ class TestKailashClientResourceManagement:
                 patch.object(client, "_ensure_session"),
                 patch.object(client, "_session", mock_session),
             ):
-
                 # Verify get_resource exists and works if implemented
                 if hasattr(client, "get_resource"):
                     resource = await client.get_resource("res_123")
@@ -392,7 +389,6 @@ class TestKailashClientErrorHandling:
                 patch.object(client, "_ensure_session"),
                 patch.object(client, "_session", mock_session),
             ):
-
                 with pytest.raises(aiohttp.ClientError):
                     await client.execute_workflow(
                         workflow_id="network_test", parameters={"test": "network"}
@@ -417,7 +413,6 @@ class TestKailashClientErrorHandling:
                 patch.object(client, "_ensure_session"),
                 patch.object(client, "_session", mock_session),
             ):
-
                 with pytest.raises(asyncio.TimeoutError):
                     await client.execute_workflow(
                         workflow_id="timeout_test", parameters={"test": "timeout"}
@@ -446,7 +441,6 @@ class TestKailashClientErrorHandling:
                 patch.object(client, "_ensure_session"),
                 patch.object(client, "_session", mock_session),
             ):
-
                 # Should raise an exception for HTTP error
                 with pytest.raises(
                     Exception
@@ -529,7 +523,6 @@ class TestKailashClientIntegrationScenarios:
                 patch.object(client, "_ensure_session"),
                 patch.object(client, "_session", mock_session),
             ):
-
                 result = await client.execute_workflow(
                     workflow_id="large_payload_test", inputs=large_inputs
                 )

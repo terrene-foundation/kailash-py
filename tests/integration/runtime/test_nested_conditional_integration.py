@@ -416,9 +416,9 @@ result.update({'validated': True, 'tier': 'basic'})
         # basic path should execute
         basic_path_nodes = {"basic_validator", "basic_processor"}
         for node in basic_path_nodes:
-            assert node in executed_nodes, (
-                f"{node} should execute for basic user. " f"Executed: {executed_nodes}"
-            )
+            assert (
+                node in executed_nodes
+            ), f"{node} should execute for basic user. Executed: {executed_nodes}"
 
     @pytest.mark.asyncio
     async def test_performance_improvement_metrics(self):

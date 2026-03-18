@@ -143,7 +143,7 @@ class TestWorkflowAPIRuntimeSelection:
 
             # Log success metrics
             print(
-                f"\n✅ AsyncLocalRuntime execution: {execution_time*1000:.0f}ms "
+                f"\n✅ AsyncLocalRuntime execution: {execution_time * 1000:.0f}ms "
                 f"(expected <100ms, no threading)"
             )
 

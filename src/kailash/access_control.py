@@ -596,7 +596,6 @@ class AccessControlManager:
                 and rule.permission == permission
                 and self._rule_applies_to_user(rule, user)
             ):
-
                 # Check expiration
                 if rule.expires_at and rule.expires_at < datetime.now(UTC):
                     continue

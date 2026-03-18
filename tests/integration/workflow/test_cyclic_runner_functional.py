@@ -245,7 +245,7 @@ class TestCyclicWorkflowExecutorBehavior:
                 # Verify result structure
                 assert isinstance(result, dict)
                 # assert len(result) == 1 - result variable may not be defined
-                assert f"node_{i+1}_result" in result
+                assert f"node_{i + 1}_result" in result
 
             # Verify DAG runner was called correct number of times
             # # # # assert mock_runner_instance.execute.call_count == 3  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
@@ -659,7 +659,7 @@ class TestCyclicRunnerIntegrationScenarios:
                 next_phase = phases[i + 1]
                 assert (
                     current_phase["end"] == next_phase["start"]
-                ), f"Phase {i} end should equal phase {i+1} start"
+                ), f"Phase {i} end should equal phase {i + 1} start"
 
             # Test timeout detection - be more lenient due to timing variations
             timeout_threshold = 10.0  # seconds - increased for test stability

@@ -84,7 +84,8 @@ class TestPersistentRuntimeBasics:
 
         # Invalid configuration should set sensible defaults
         runtime = LocalRuntime(
-            persistent_mode=True, max_concurrent_workflows=-1  # Invalid
+            persistent_mode=True,
+            max_concurrent_workflows=-1,  # Invalid
         )
         # Should default to reasonable value
         assert runtime._max_concurrent_workflows > 0

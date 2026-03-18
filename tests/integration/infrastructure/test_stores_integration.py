@@ -52,10 +52,7 @@ class TestEventStoreIntegration:
         """Append 5 events to a stream and retrieve them in sequence order."""
         store = await self._make_store(conn)
         key = "events:test-basic"
-        events = [
-            {"type": "request.started", "data": {"step": i}}
-            for i in range(5)
-        ]
+        events = [{"type": "request.started", "data": {"step": i}} for i in range(5)]
         await store.append(key, events)
 
         retrieved = await store.get(key)
@@ -82,11 +79,13 @@ class TestEventStoreIntegration:
 
         # Verify monotonic data.seq
         for i, evt in enumerate(all_events):
-            assert evt["data"]["seq"] == i, (
-                f"Event at position {i} has seq={evt['data']['seq']}"
-            )
+            assert (
+                evt["data"]["seq"] == i
+            ), f"Event at position {i} has seq={evt['data']['seq']}"
 
-    async def test_get_empty_stream_returns_empty(self, conn: ConnectionManager) -> None:
+    async def test_get_empty_stream_returns_empty(
+        self, conn: ConnectionManager
+    ) -> None:
         """Querying a non-existent stream returns an empty list, not an error."""
         store = await self._make_store(conn)
         result = await store.get("events:nonexistent-stream")
@@ -105,10 +104,7 @@ class TestEventStoreIntegration:
         """get_after(key, n) returns events with sequence > n."""
         store = await self._make_store(conn)
         key = "events:get-after"
-        events = [
-            {"type": "step", "data": {"i": i}}
-            for i in range(10)
-        ]
+        events = [{"type": "step", "data": {"i": i}} for i in range(10)]
         await store.append(key, events)
 
         tail = await store.get_after(key, after_sequence=5)
@@ -117,7 +113,9 @@ class TestEventStoreIntegration:
         # Verify the first tail event is what we expect
         assert tail[0]["data"]["i"] == 5  # 0-indexed data, seq 6
 
-    async def test_get_after_beyond_max_returns_empty(self, conn: ConnectionManager) -> None:
+    async def test_get_after_beyond_max_returns_empty(
+        self, conn: ConnectionManager
+    ) -> None:
         """get_after with a sequence past the end returns nothing."""
         store = await self._make_store(conn)
         key = "events:get-after-past"
@@ -127,7 +125,9 @@ class TestEventStoreIntegration:
 
     # -- delete_before ---------------------------------------------------
 
-    async def test_delete_before_removes_old_events(self, conn: ConnectionManager) -> None:
+    async def test_delete_before_removes_old_events(
+        self, conn: ConnectionManager
+    ) -> None:
         """Events with timestamps before the cutoff are deleted."""
         store = await self._make_store(conn)
         key = "events:gc"
@@ -143,7 +143,11 @@ class TestEventStoreIntegration:
                 "INSERT INTO kailash_events "
                 "(stream_key, sequence, event_type, data, timestamp) "
                 "VALUES (?, ?, ?, ?, ?)",
-                key, seq, "gc-event", data_json, ts,
+                key,
+                seq,
+                "gc-event",
+                data_json,
+                ts,
             )
 
         cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
@@ -259,7 +263,9 @@ class TestCheckpointStoreIntegration:
         keys_all = await store.list_keys("cp:")
         assert len(keys_all) == 3
 
-    async def test_gzip_data_detected_as_compressed(self, conn: ConnectionManager) -> None:
+    async def test_gzip_data_detected_as_compressed(
+        self, conn: ConnectionManager
+    ) -> None:
         """Data starting with gzip magic bytes is flagged as compressed."""
         store = await self._make_store(conn)
         import gzip
@@ -310,7 +316,9 @@ class TestDLQIntegration:
         stats = await dlq.get_stats()
         assert stats["succeeded"] >= 1
 
-    async def test_mark_failure_escalates_to_permanent(self, conn: ConnectionManager) -> None:
+    async def test_mark_failure_escalates_to_permanent(
+        self, conn: ConnectionManager
+    ) -> None:
         """After max_retries failures, status becomes permanent_failure."""
         dlq = await self._make_store(conn)
         item_id = await dlq.enqueue("wf-fail", "err", "data", max_retries=3)
@@ -320,11 +328,13 @@ class TestDLQIntegration:
             await dlq.mark_failure(item_id)
 
         stats = await dlq.get_stats()
-        assert stats["permanent_failure"] >= 1, (
-            f"Expected at least 1 permanent_failure, got stats: {stats}"
-        )
+        assert (
+            stats["permanent_failure"] >= 1
+        ), f"Expected at least 1 permanent_failure, got stats: {stats}"
 
-    async def test_mark_failure_below_max_stays_pending(self, conn: ConnectionManager) -> None:
+    async def test_mark_failure_below_max_stays_pending(
+        self, conn: ConnectionManager
+    ) -> None:
         """Failures below max_retries keep the item in pending status."""
         dlq = await self._make_store(conn)
         item_id = await dlq.enqueue("wf-retry", "err", "data", max_retries=5)
@@ -360,7 +370,9 @@ class TestDLQIntegration:
         stats_after = await dlq.get_stats()
         assert stats_after["total"] == 0
 
-    async def test_enqueue_json_serializable_payload(self, conn: ConnectionManager) -> None:
+    async def test_enqueue_json_serializable_payload(
+        self, conn: ConnectionManager
+    ) -> None:
         """Non-string payloads are JSON-serialized on enqueue."""
         dlq = await self._make_store(conn)
         payload = {"nested": {"list": [1, 2, 3], "flag": True}}
@@ -435,7 +447,9 @@ class TestExecutionStoreIntegration:
         store = await self._make_store(conn)
         assert await store.get_execution("run-does-not-exist") is None
 
-    async def test_list_executions_filter_by_status(self, conn: ConnectionManager) -> None:
+    async def test_list_executions_filter_by_status(
+        self, conn: ConnectionManager
+    ) -> None:
         """list_executions with status filter returns correct subset."""
         store = await self._make_store(conn)
         await store.record_start(run_id="run-s1", workflow_id="wf-list")
@@ -456,7 +470,9 @@ class TestExecutionStoreIntegration:
         assert len(failed) == 1
         assert failed[0]["run_id"] == "run-s2"
 
-    async def test_list_executions_filter_by_workflow_id(self, conn: ConnectionManager) -> None:
+    async def test_list_executions_filter_by_workflow_id(
+        self, conn: ConnectionManager
+    ) -> None:
         """list_executions with workflow_id filter returns correct subset."""
         store = await self._make_store(conn)
         await store.record_start(run_id="run-w1", workflow_id="wf-alpha")
@@ -468,7 +484,9 @@ class TestExecutionStoreIntegration:
         run_ids = {r["run_id"] for r in alpha_runs}
         assert run_ids == {"run-w1", "run-w3"}
 
-    async def test_list_executions_respects_limit(self, conn: ConnectionManager) -> None:
+    async def test_list_executions_respects_limit(
+        self, conn: ConnectionManager
+    ) -> None:
         """list_executions limit parameter caps result count."""
         store = await self._make_store(conn)
         for i in range(20):
@@ -481,7 +499,9 @@ class TestExecutionStoreIntegration:
         """Parameters dict is stored as JSON and retrievable."""
         store = await self._make_store(conn)
         params = {"model": "llama-3", "temperature": 0.7, "tags": ["a", "b"]}
-        await store.record_start(run_id="run-params", workflow_id="wf-params", parameters=params)
+        await store.record_start(
+            run_id="run-params", workflow_id="wf-params", parameters=params
+        )
 
         record = await store.get_execution("run-params")
         assert record is not None

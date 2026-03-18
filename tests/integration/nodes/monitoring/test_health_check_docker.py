@@ -261,7 +261,9 @@ class TestHealthCheckNodeDocker(DockerIntegrationTestBase):
 
         # Execute with short timeout
         result = await health_check_node.execute_async(
-            services=services, timeout=0.5, retries=1  # 500ms timeout
+            services=services,
+            timeout=0.5,
+            retries=1,  # 500ms timeout
         )
 
         assert result["overall_status"] == "unhealthy"

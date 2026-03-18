@@ -280,7 +280,9 @@ class TestEdgeMigrator:
             "edge-1", "edge-2", ["workload-1", "workload-2"]
         )
         id3 = migrator._generate_migration_id(
-            "edge-1", "edge-2", ["workload-2", "workload-1"]  # Different order
+            "edge-1",
+            "edge-2",
+            ["workload-2", "workload-1"],  # Different order
         )
 
         # Should be unique due to timestamp

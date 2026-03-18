@@ -423,10 +423,10 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
     ID="{request_id}"
     Version="2.0"
     IssueInstant="{timestamp}"
-    Destination="{self.saml_settings.get('sso_url', '')}"
+    Destination="{self.saml_settings.get("sso_url", "")}"
     AssertionConsumerServiceURL="{redirect_uri}"
     ProtocolBinding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST">
-    <saml:Issuer>{self.saml_settings.get('entity_id', 'kailash-admin')}</saml:Issuer>
+    <saml:Issuer>{self.saml_settings.get("entity_id", "kailash-admin")}</saml:Issuer>
     <samlp:NameIDPolicy Format="urn:oasis:names:tc:SAML:2.0:nameid-format:emailAddress" AllowCreate="true"/>
 </samlp:AuthnRequest>"""
 

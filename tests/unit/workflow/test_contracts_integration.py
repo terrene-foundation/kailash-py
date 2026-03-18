@@ -207,7 +207,8 @@ class TestContractIntegration:
 
         # Create valid contract first, then corrupt it
         invalid_contract = ConnectionContract(
-            name="invalid_test", source_schema={"type": "string"}  # Valid initially
+            name="invalid_test",
+            source_schema={"type": "string"},  # Valid initially
         )
 
         # Manually corrupt the schema after creation

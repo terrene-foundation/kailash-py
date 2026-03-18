@@ -145,7 +145,6 @@ class TestDistributedSubscriptionManager:
             ) as mock_listener,
             patch.object(distributed_manager, "_instance_monitor") as mock_monitor,
         ):
-
             # Make background tasks return immediately
             mock_heartbeat.return_value = asyncio.sleep(0)
             mock_listener.return_value = asyncio.sleep(0)
@@ -193,7 +192,6 @@ class TestDistributedSubscriptionManager:
             patch.object(distributed_manager, "_notification_listener"),
             patch.object(distributed_manager, "_instance_monitor"),
         ):
-
             with pytest.raises(Exception):
                 await distributed_manager.initialize()
 

@@ -15,7 +15,7 @@ env:
 
 jobs:
   test-with-infrastructure:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 20 # Prevent hanging workflows
     env:
       HOME: ${{ github.workspace }}
@@ -83,8 +83,11 @@ jobs:
             echo "⚠️  gfortran not found - scipy/numpy compilation may fail"
           fi
 
-          uv sync --frozen
-          uv pip install pytest-cov
+          # Install [dev] extras only from local source.
+          # [all] pulls kailash-dataflow/nexus/kaizen from PyPI which may not
+          # yet be available. Sub-packages are installed separately below if present.
+          uv pip install -e ".[dev]" --python "$(which python3)"
+          uv pip install pytest-cov --python "$(which python3)"
 
       - name: Check Node.js for mock API server
         run: |

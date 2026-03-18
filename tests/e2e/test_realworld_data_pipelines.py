@@ -939,7 +939,7 @@ result = {
                 devices = []
                 for i in range(50):
                     device = {
-                        "device_id": f"IOT_{i+1:03d}",
+                        "device_id": f"IOT_{i + 1:03d}",
                         "device_type": random.choice(device_types),
                         "location": f"Room_{random.randint(101, 350)}",
                         "building": random.choice(buildings),

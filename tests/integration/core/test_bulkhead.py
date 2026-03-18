@@ -385,7 +385,8 @@ class TestBulkheadManager:
         manager = BulkheadManager()
 
         config = PartitionConfig(
-            name="database", partition_type=PartitionType.IO_BOUND  # Already exists
+            name="database",
+            partition_type=PartitionType.IO_BOUND,  # Already exists
         )
 
         with pytest.raises(ValueError, match="already exists"):

@@ -88,8 +88,7 @@ def run(workflow_file: str, params: str | None, debug: bool, no_tracking: bool):
             workflow = _load_python_workflow(workflow_file)
         else:
             raise CLIException(
-                "Only Python workflow files are supported. "
-                "File must have .py extension"
+                "Only Python workflow files are supported. File must have .py extension"
             )
 
         # Load parameter overrides
@@ -154,8 +153,7 @@ def validate(workflow_file: str):
             workflow = _load_python_workflow(workflow_file)
         else:
             raise CLIException(
-                "Only Python workflow files are supported. "
-                "File must have .py extension"
+                "Only Python workflow files are supported. File must have .py extension"
             )
 
         # Validate workflow
@@ -201,8 +199,7 @@ def export(workflow_file: str, output_file: str, format: str, registry: str | No
             workflow = _load_python_workflow(workflow_file)
         else:
             raise CLIException(
-                "Only Python workflow files are supported. "
-                "File must have .py extension"
+                "Only Python workflow files are supported. File must have .py extension"
             )
 
         # Export workflow

@@ -416,7 +416,6 @@ class TestMCPResourceSubscriptionIntegration:
                 server_info["host"], server_info["port"]
             ) as ws2,
         ):
-
             # Initialize both connections
             for ws in [ws1, ws2]:
                 await self.send_mcp_request(

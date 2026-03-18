@@ -141,9 +141,9 @@ class TestSagaCoordinatorNode:
         for i in range(3):
             saga_coordinator.execute(
                 operation="add_step",
-                name=f"step{i+1}",
-                node_id=f"node{i+1}",
-                compensation_node_id=f"comp_node{i+1}",
+                name=f"step{i + 1}",
+                node_id=f"node{i + 1}",
+                compensation_node_id=f"comp_node{i + 1}",
             )
 
         # Mock step execution to fail on second step
@@ -171,9 +171,9 @@ class TestSagaCoordinatorNode:
         for i in range(3):
             step = MagicMock()
             step.step_id = f"step_{i}"
-            step.name = f"step{i+1}"
+            step.name = f"step{i + 1}"
             step.state = "completed"
-            step.compensation_node_id = f"comp_node{i+1}"
+            step.compensation_node_id = f"comp_node{i + 1}"
             step.compensation_parameters = {}
             step.result = {"status": "success"}
             saga_coordinator.steps.append(step)

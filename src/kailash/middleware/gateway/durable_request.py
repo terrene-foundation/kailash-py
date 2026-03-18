@@ -479,7 +479,7 @@ class DurableRequest:
                 builder.add_node(node_type, node_id, params)
             except Exception as e:
                 raise ValueError(
-                    f"Failed to add node '{node_id}' of type " f"'{node_type}': {e}"
+                    f"Failed to add node '{node_id}' of type '{node_type}': {e}"
                 ) from e
 
         # ------------------------------------------------------------------

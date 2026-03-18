@@ -254,11 +254,11 @@ class MetricsFormatter(ResponseFormatter):
         if seconds < 60:
             return f"{seconds:.1f} seconds"
         elif seconds < 3600:
-            return f"{seconds/60:.1f} minutes"
+            return f"{seconds / 60:.1f} minutes"
         elif seconds < 86400:
-            return f"{seconds/3600:.1f} hours"
+            return f"{seconds / 3600:.1f} hours"
         else:
-            return f"{seconds/86400:.1f} days"
+            return f"{seconds / 86400:.1f} days"
 
 
 # Default formatter instances

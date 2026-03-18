@@ -223,10 +223,10 @@ High Concurrency Test Results:
 - Failed: {failed_sessions}
 - Total Time: {elapsed_time:.2f}s
 - Avg Time/Session: {avg_time_per_session:.3f}s
-- Queries Executed: {stats['queries']['executed']}
-- Error Rate: {stats['queries']['error_rate']:.2%}
-- Connections Created: {stats['connections']['created']}
-- Pool Efficiency: {stats['queries']['executed'] / stats['connections']['created']:.1f} queries/connection
+- Queries Executed: {stats["queries"]["executed"]}
+- Error Rate: {stats["queries"]["error_rate"]:.2%}
+- Connections Created: {stats["connections"]["created"]}
+- Pool Efficiency: {stats["queries"]["executed"] / stats["connections"]["created"]:.1f} queries/connection
         """
         )
 
@@ -549,8 +549,8 @@ Long Query Test Results:
 Memory Pressure Test Results:
 - Concurrent queries: {concurrent_queries}
 - Successful: {len(successful)}
-- Connections used: {stats['connections']['created']}
-- Average rows per query: {sum(r.get('row_count', 0) for r in successful) / len(successful):.0f}
+- Connections used: {stats["connections"]["created"]}
+- Average rows per query: {sum(r.get("row_count", 0) for r in successful) / len(successful):.0f}
         """
         )
 

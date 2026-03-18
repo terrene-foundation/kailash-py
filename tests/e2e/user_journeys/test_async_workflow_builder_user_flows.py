@@ -112,7 +112,7 @@ class TestAsyncWorkflowBuilderUserFlows:
             import pandas as pd
 
             # Load customer data
-            customers_df = pd.read_csv(r"{temp_workspace / 'customers.csv'}")
+            customers_df = pd.read_csv(r"{temp_workspace / "customers.csv"}")
 
             result = {{
                 "customers": customers_df.to_dict('records'),
@@ -128,7 +128,7 @@ class TestAsyncWorkflowBuilderUserFlows:
             import pandas as pd
 
             # Load orders data
-            orders_df = pd.read_csv(r"{temp_workspace / 'orders.csv'}")
+            orders_df = pd.read_csv(r"{temp_workspace / "orders.csv"}")
 
             result = {{
                 "orders": orders_df.to_dict('records'),

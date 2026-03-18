@@ -43,7 +43,8 @@ class TestCyclicWorkflowBasics:
 
         runtime = LocalRuntime()
         result, run_id = runtime.execute(
-            workflow, parameters={"counter": {"count": 0}}  # Provide initial value
+            workflow,
+            parameters={"counter": {"count": 0}},  # Provide initial value
         )
 
         # Check the result structure
@@ -110,7 +111,8 @@ class TestCyclicWorkflowBasics:
 
         runtime = LocalRuntime()
         result1, _ = runtime.execute(
-            workflow1, parameters={"quality": {"quality": 0.5}}  # Initial quality value
+            workflow1,
+            parameters={"quality": {"quality": 0.5}},  # Initial quality value
         )
         assert result1["quality"]["result"]["quality"] >= 0.9
 

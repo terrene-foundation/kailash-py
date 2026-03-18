@@ -181,7 +181,8 @@ class TestConvergenceSafety:
         start_time = time.time()
 
         results, run_id = runtime.execute(
-            workflow, parameters={"slow": {"counter": 0, "delay": 0.01}}  # Small delay
+            workflow,
+            parameters={"slow": {"counter": 0, "delay": 0.01}},  # Small delay
         )
 
         elapsed = time.time() - start_time

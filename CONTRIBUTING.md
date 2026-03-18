@@ -1,92 +1,137 @@
 # Contributing to Kailash Python SDK
 
-We welcome contributions to the Kailash Python SDK! This document provides guidelines for contributing to the project.
+Thank you for your interest in contributing to the Kailash Python SDK. This document
+covers everything you need to set up, develop, test, and submit contributions.
 
-## Getting Started
+## Development Setup
 
-1. Fork the repository on GitHub
-2. Clone your fork locally
-3. Set up the development environment:
+See [CLAUDE.md](CLAUDE.md) for the full development environment reference, including
+agent orchestration, framework selection, and quality gates.
+
+### Quick start
+
+1. Fork the repository on GitHub and clone your fork:
+
+   ```bash
+   git clone https://github.com/<your-username>/kailash-py.git
+   cd kailash-py
+   ```
+
+2. Install in editable mode with development dependencies:
+
    ```bash
    pip install -e ".[dev]"
    ```
-4. Create a new branch for your feature or bugfix
 
-## Development Process
+3. Create a feature branch:
 
-### Code Style
+   ```bash
+   git checkout -b feat/my-feature
+   ```
 
-We use standard Python tools for code quality:
+## Code Style
 
-- `black` for code formatting
-- `isort` for import sorting
-- `mypy` for type checking
-
-Before submitting, run:
+We enforce consistent style with automated tools. Run these before every commit:
 
 ```bash
-black src/
-isort src/
-mypy src/
+black src/ tests/
+isort src/ tests/ --profile=black
+ruff check src/ tests/
 ```
 
-### Testing
-
-All new features should include tests:
+Or in one pass:
 
 ```bash
-pytest
-pytest --cov=kailash
+ruff format . && ruff check .
 ```
 
-### Architecture Decision Records (ADRs)
+Lint rules are configured in `pyproject.toml` under `[tool.ruff]`.
 
-For significant architectural changes, please document them appropriately:
+## Testing
 
-1. Describe the architectural change in your pull request
-2. Explain the rationale and trade-offs
-3. Update relevant documentation
+Kailash uses a 3-tier testing strategy. **All 5708+ tests must pass before a PR
+can be merged.**
+
+| Tier            | Scope                                 | Command                     |
+| --------------- | ------------------------------------- | --------------------------- |
+| 1 — Unit        | Isolated, no external dependencies    | `pytest tests/unit/`        |
+| 2 — Integration | Real infrastructure (Docker required) | `pytest tests/integration/` |
+| 3 — E2E         | Full workflow scenarios               | `pytest tests/e2e/`         |
+
+For Tier 1 (the default CI gate):
+
+```bash
+pytest tests/unit/ tests/parity/ tests/shared/ \
+  -m "not (slow or integration or e2e or requires_docker)" \
+  -v
+```
+
+**No mocking in Tier 2 or Tier 3 tests.** Use real infrastructure.
+See [CLAUDE.md](CLAUDE.md) and `.claude/rules/testing.md` for the full testing policy.
+
+## Commit Style
+
+We follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+type(scope): short description
+
+Optional body explaining the why.
+
+Optional footer (e.g., Fixes #123)
+```
+
+Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
+
+Examples:
+
+```
+feat(workflow): add conditional branching support
+fix(nodes): resolve async timeout in HTTPRequestNode
+test(dataflow): add integration tests for bulk operations
+docs(readme): update installation guide for v1.0
+```
 
 ## Pull Request Process
 
-1. Update the README.md with details of interface changes
-2. Ensure all tests pass
-3. Update documentation as needed
-4. Request review from maintainers
+1. Ensure all tests pass: `pytest tests/unit/ tests/parity/ tests/shared/`
+2. Run linting: `ruff format . && ruff check .`
+3. Update `CHANGELOG.md` if your change is user-visible
+4. Open a PR against `main` with the following sections:
+   - **Summary** — what changed and why (1-3 bullet points)
+   - **Test plan** — how to verify the change
+   - **Related issues** — links to GitHub issues
+
+PRs require at least one maintainer review before merge.
+
+## Branch Naming
+
+```
+feat/add-oauth-support
+fix/api-timeout-handling
+docs/update-installation-guide
+refactor/workflow-builder-simplification
+test/dataflow-integration-suite
+```
 
 ## Licensing and Intellectual Property
 
-### License
+Kailash Python SDK is owned by [Terrene Foundation](https://terrene.foundation)
+and licensed under the Apache License, Version 2.0.
 
-Kailash SDK is licensed under the Apache License, Version 2.0. By submitting a contribution, you agree that your contribution will be licensed under the same terms as the rest of the project. See the [LICENSE](LICENSE) file for details.
+By submitting a contribution, you agree that your contribution will be licensed
+under the same terms. You retain copyright of your contributions.
 
-### Contributor License Agreement
-
-By contributing to this repository, you represent that:
-
-1. You have the right to submit the contribution under the project's license terms.
-2. Your contribution is your original work, or you have the right to submit it.
-3. You grant Terrene Foundation a perpetual, worldwide, non-exclusive, royalty-free license to use, reproduce, modify, and distribute your contribution as part of the project.
-
-### Patent Notice
-
-The Kailash SDK is the subject of patent applications owned by Terrene Foundation See the [PATENTS](PATENTS) file for details.
-
-Under Apache License 2.0, Section 3, each Contributor grants a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable patent license covering claims necessarily infringed by their Contribution(s) alone or by combination of their Contribution(s) with the Work. This grant applies to all users of the software, whether or not they are contributors.
-
-**Defensive termination**: If you institute patent litigation alleging that the Work constitutes patent infringement, patent licenses granted to you under Section 3 for that Work terminate as of the date such litigation is filed.
-
-### What This Means for You
-
-- **Your code**: You retain copyright of your contributions.
-- **License grant**: Your contributions are licensed under Apache License 2.0, the same terms as the rest of the project.
-- **Patent grant**: Under Section 3, each Contributor (including you) grants a patent license scoped to claims necessarily infringed by their Contribution(s). All users receive the same grant.
-- **No additional obligations**: Beyond the above, there are no further IP obligations for contributors.
+Under Apache License 2.0, Section 3, each Contributor grants a perpetual,
+worldwide, non-exclusive, no-charge, royalty-free, irrevocable patent license
+for claims necessarily infringed by their Contribution(s) alone or combined
+with the Work. See [PATENTS](PATENTS) for details.
 
 ## Code of Conduct
 
-Be respectful and professional in all interactions. We strive to maintain a welcoming environment for all contributors.
+See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Be respectful and professional
+in all interactions. We maintain a welcoming environment for all contributors.
 
-## Questions?
+## Questions
 
-Feel free to open an issue for questions or reach out to info@terrene.foundation
+Open an issue on GitHub or email info@terrene.foundation.

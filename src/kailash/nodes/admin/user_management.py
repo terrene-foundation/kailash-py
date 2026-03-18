@@ -746,7 +746,7 @@ class UserManagementNode(Node):
 
         update_query = f"""
         UPDATE users
-        SET {', '.join(update_fields)}
+        SET {", ".join(update_fields)}
         WHERE user_id = ${param_index} AND tenant_id = ${param_index + 1}
         """
 
@@ -832,7 +832,7 @@ class UserManagementNode(Node):
                roles, attributes, status, tenant_id, external_auth_id, auth_provider,
                created_at, updated_at, last_login_at
         FROM users
-        WHERE {' AND '.join(where_conditions)}
+        WHERE {" AND ".join(where_conditions)}
         ORDER BY created_at DESC
         LIMIT ${param_index} OFFSET ${param_index + 1}
         """
@@ -840,7 +840,7 @@ class UserManagementNode(Node):
         count_query = f"""
         SELECT COUNT(*) as total_count
         FROM users
-        WHERE {' AND '.join(where_conditions)}
+        WHERE {" AND ".join(where_conditions)}
         """
 
         try:
@@ -1134,7 +1134,7 @@ class UserManagementNode(Node):
 
         # Get detailed role information
         if user.roles:
-            placeholders = ",".join([f"${i+1}" for i in range(len(user.roles))])
+            placeholders = ",".join([f"${i + 1}" for i in range(len(user.roles))])
             role_query = f"""
             SELECT role_id, name, description, permissions, parent_roles, attributes
             FROM roles

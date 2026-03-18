@@ -43,7 +43,7 @@ def build_linear(n: int) -> WorkflowBuilder:
     for i in range(n):
         b.add_node("PythonCodeNode", f"n{i}", {"code": "result = {'v': 1}"})
         if i > 0:
-            b.add_connection(f"n{i-1}", "result", f"n{i}", "input")
+            b.add_connection(f"n{i - 1}", "result", f"n{i}", "input")
     return b
 
 

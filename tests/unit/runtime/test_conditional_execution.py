@@ -614,7 +614,7 @@ class TestLocalRuntimePerformanceImpact:
             self.workflow.add_node(f"node_{i}", node)
 
             if i > 0:
-                self.workflow.connect(f"node_{i-1}", f"node_{i}", {"result": "input"})
+                self.workflow.connect(f"node_{i - 1}", f"node_{i}", {"result": "input"})
 
         runtime = LocalRuntime(conditional_execution="skip_branches")
 

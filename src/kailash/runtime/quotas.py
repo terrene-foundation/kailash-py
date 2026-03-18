@@ -68,8 +68,7 @@ class QuotaExceededError(Exception):
         self.current_value = current_value
         self.max_value = max_value
         super().__init__(
-            f"Quota exceeded: {quota_name} "
-            f"(current={current_value}, max={max_value})"
+            f"Quota exceeded: {quota_name} (current={current_value}, max={max_value})"
         )
 
 

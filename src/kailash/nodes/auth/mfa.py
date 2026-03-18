@@ -1043,7 +1043,6 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             token_matches = not trust_token or device.get("trust_token") == trust_token
 
             if device_matches and token_matches:
-
                 # Check if trust has expired
                 expires_at = datetime.fromisoformat(device.get("expires_at", ""))
                 if expires_at <= datetime.now(UTC):

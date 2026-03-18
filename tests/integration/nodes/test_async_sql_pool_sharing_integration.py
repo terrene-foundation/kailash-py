@@ -334,7 +334,6 @@ class TestAsyncSQLPoolSharingIntegration:
             return mock_adapter
 
         with patch.object(AsyncSQLDatabaseNode, "_create_adapter", mock_create_adapter):
-
             # Get adapter
             await node._get_adapter()
 

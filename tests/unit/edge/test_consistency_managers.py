@@ -183,7 +183,9 @@ class TestConsistencyManagers:
         )
 
         manager = BoundedStalenessManager(
-            AsyncMock(), read_callback, max_staleness_ms=5000  # 5 seconds
+            AsyncMock(),
+            read_callback,
+            max_staleness_ms=5000,  # 5 seconds
         )
 
         result = await manager.read("test_key", ["replica1"], ConsistencyLevel.ONE)
@@ -211,7 +213,9 @@ class TestConsistencyManagers:
         )
 
         manager = BoundedStalenessManager(
-            AsyncMock(), read_callback, max_staleness_ms=5000  # 5 seconds
+            AsyncMock(),
+            read_callback,
+            max_staleness_ms=5000,  # 5 seconds
         )
 
         result = await manager.read("test_key", ["replica1"], ConsistencyLevel.ONE)

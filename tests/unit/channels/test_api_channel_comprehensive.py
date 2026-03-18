@@ -111,7 +111,6 @@ class TestAPIChannel:
             patch.object(api_channel, "emit_event") as mock_emit,
             patch("kailash.channels.api_channel.uvicorn") as mock_uvicorn,
         ):
-
             mock_server = Mock()
             mock_server.serve = AsyncMock()
             mock_uvicorn.Server.return_value = mock_server
@@ -165,7 +164,6 @@ class TestAPIChannel:
             patch.object(api_channel, "emit_event") as mock_emit,
             patch.object(api_channel, "_cleanup") as mock_cleanup,
         ):
-
             await api_channel.stop()
 
             assert api_channel.status == ChannelStatus.STOPPED

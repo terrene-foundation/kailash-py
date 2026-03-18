@@ -317,11 +317,9 @@ class AsyncWorkflowTestCase:
         """Assert node output matches expected."""
         self._assertions_made += 1
         actual = result.get_output(node_id, key)
-        assert actual == expected, (
-            f"Node {node_id} output mismatch\n"
-            f"Expected: {expected}\n"
-            f"Actual: {actual}"
-        )
+        assert (
+            actual == expected
+        ), f"Node {node_id} output mismatch\nExpected: {expected}\nActual: {actual}"
 
     def assert_resource_called(
         self,
@@ -348,6 +346,6 @@ class AsyncWorkflowTestCase:
         yield
         elapsed = asyncio.get_event_loop().time() - start
         self._assertions_made += 1
-        assert elapsed < seconds, (
-            f"Operation took {elapsed:.2f}s, " f"exceeding limit of {seconds}s"
-        )
+        assert (
+            elapsed < seconds
+        ), f"Operation took {elapsed:.2f}s, exceeding limit of {seconds}s"

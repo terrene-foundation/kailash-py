@@ -490,9 +490,9 @@ class TestImportExport:
         # Create tasks
         for i in range(2):
             task = TaskRun(
-                task_id=f"task-{i+1}",
+                task_id=f"task-{i + 1}",
                 run_id="export-run",
-                node_id=f"node-{i+1}",
+                node_id=f"node-{i + 1}",
                 node_type="ProcessorNode",
                 status=TaskStatus.COMPLETED,
                 started_at=datetime.now(timezone.utc),

@@ -12,7 +12,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None  # Optional: pip install kailash[monitoring]
 
 logger = logging.getLogger(__name__)
 

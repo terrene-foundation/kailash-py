@@ -123,7 +123,7 @@ class LoadTestingDemo:
 📊 QUICK TEST RESULTS:
    • Total Workflows: {metrics.total_workflows}
    • Successful: {metrics.successful_workflows}
-   • Success Rate: {(metrics.successful_workflows/metrics.total_workflows)*100:.1f}%
+   • Success Rate: {(metrics.successful_workflows / metrics.total_workflows) * 100:.1f}%
    • Throughput: {metrics.throughput:.2f} workflows/second
    • Average Latency: {metrics.avg_latency:.3f} seconds
    • P99 Latency: {metrics.p99_latency:.3f} seconds
@@ -183,7 +183,7 @@ class LoadTestingDemo:
                 print(
                     f"""
    📊 BASELINE RESULTS ({level} concurrent):
-      • Success Rate: {(metrics.successful_workflows/metrics.total_workflows)*100:.1f}%
+      • Success Rate: {(metrics.successful_workflows / metrics.total_workflows) * 100:.1f}%
       • Throughput: {metrics.throughput:.2f} workflows/sec
       • Avg Latency: {metrics.avg_latency:.3f}s
       • P99 Latency: {metrics.p99_latency:.3f}s
@@ -194,7 +194,7 @@ class LoadTestingDemo:
 
                 # Show scaling behavior
                 if level > 50:
-                    prev_metrics = self.results.get(f"baseline_{level//2}")
+                    prev_metrics = self.results.get(f"baseline_{level // 2}")
                     if prev_metrics:
                         throughput_ratio = metrics.throughput / prev_metrics.throughput
                         latency_ratio = metrics.avg_latency / prev_metrics.avg_latency
@@ -255,7 +255,7 @@ class LoadTestingDemo:
                 f"""
 📊 DATABASE STRESS RESULTS:
    • Total Workflows: {metrics.total_workflows}
-   • Success Rate: {(metrics.successful_workflows/metrics.total_workflows)*100:.1f}%
+   • Success Rate: {(metrics.successful_workflows / metrics.total_workflows) * 100:.1f}%
    • Peak Connections: {metrics.peak_connections}
    • Connection Errors: {metrics.connection_errors}
    • Database Errors: {metrics.database_errors}
@@ -325,11 +325,11 @@ class LoadTestingDemo:
    • Total Workflows: {metrics.total_workflows}
    • Successful: {metrics.successful_workflows}
    • Failed: {metrics.failed_workflows}
-   • Success Rate: {(metrics.successful_workflows/metrics.total_workflows)*100:.1f}%
+   • Success Rate: {(metrics.successful_workflows / metrics.total_workflows) * 100:.1f}%
    • Timeout Errors: {metrics.timeout_errors}
    • Resource Errors: {metrics.resource_exhaustion_errors}
    • Other Errors: {metrics.failed_workflows - metrics.timeout_errors - metrics.resource_exhaustion_errors}
-   • Recovery Rate: {((metrics.successful_workflows)/(metrics.total_workflows))*100:.1f}%
+   • Recovery Rate: {((metrics.successful_workflows) / (metrics.total_workflows)) * 100:.1f}%
             """
             )
 
@@ -374,11 +374,11 @@ class LoadTestingDemo:
                 if isinstance(metrics, PerformanceMetrics):
                     print(
                         f"""
-   {test_name.replace('_', ' ').title()}:
+   {test_name.replace("_", " ").title()}:
       • Peak Memory: {metrics.peak_memory_mb:.1f} MB
       • Peak CPU: {metrics.peak_cpu_percent:.1f}%
       • Database Connections: {metrics.peak_connections}
-      • Resource Efficiency: {metrics.successful_workflows/metrics.peak_memory_mb:.1f} workflows/MB
+      • Resource Efficiency: {metrics.successful_workflows / metrics.peak_memory_mb:.1f} workflows/MB
                     """
                     )
 
@@ -439,13 +439,13 @@ class LoadTestingDemo:
                 print(
                     f"""
 📊 REGRESSION ANALYSIS RESULTS:
-   • Throughput Change: {regression_analysis['throughput_change_percent']:+.1f}%
-   • Latency Change: {regression_analysis['latency_change_percent']:+.1f}%
-   • Memory Change: {regression_analysis['memory_change_percent']:+.1f}%
-   • Error Rate Change: {regression_analysis['error_rate_change_percent']:+.1f}%
+   • Throughput Change: {regression_analysis["throughput_change_percent"]:+.1f}%
+   • Latency Change: {regression_analysis["latency_change_percent"]:+.1f}%
+   • Memory Change: {regression_analysis["memory_change_percent"]:+.1f}%
+   • Error Rate Change: {regression_analysis["error_rate_change_percent"]:+.1f}%
 
-   • Regression Detected: {'Yes' if regression_analysis['performance_regression_detected'] else 'No'}
-   • Severity: {regression_analysis['regression_severity'].title()}
+   • Regression Detected: {"Yes" if regression_analysis["performance_regression_detected"] else "No"}
+   • Severity: {regression_analysis["regression_severity"].title()}
                 """
                 )
 
@@ -526,8 +526,8 @@ class LoadTestingDemo:
                     f"""
 🎯 KEY INSIGHTS:
    • Test Success Rate: {success_rate:.1f}%
-   • System Stability: {'Excellent' if success_rate > 90 else 'Good' if success_rate > 70 else 'Needs Attention'}
-   • Performance Trend: {'Stable' if success_rate > 80 else 'Variable'}
+   • System Stability: {"Excellent" if success_rate > 90 else "Good" if success_rate > 70 else "Needs Attention"}
+   • Performance Trend: {"Stable" if success_rate > 80 else "Variable"}
                 """
                 )
 

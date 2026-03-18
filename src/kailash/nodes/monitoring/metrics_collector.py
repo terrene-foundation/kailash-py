@@ -13,7 +13,10 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None  # Optional: pip install kailash[monitoring]
 
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode

@@ -1069,7 +1069,6 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 and consent_record.purpose == purpose
                 and consent_record.status == ConsentStatus.GIVEN
             ):
-
                 consent_record.status = ConsentStatus.WITHDRAWN
                 consent_record.withdrawn_at = datetime.now(UTC)
                 withdrawn_count += 1
@@ -1283,7 +1282,6 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 and consent_record.purpose == purpose
                 and consent_record.status == ConsentStatus.GIVEN
             ):
-
                 # Check if not expired
                 if (
                     not consent_record.expires_at

@@ -152,8 +152,8 @@ def main():
     if args.format == "markdown":
         report = f"""# Sync/Async Parity Report
 
-**Generated**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-**Overall Status**: {'✅ PASS' if overall_status else '❌ FAIL'}
+**Generated**: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+**Overall Status**: {"✅ PASS" if overall_status else "❌ FAIL"}
 
 ---
 
@@ -161,10 +161,10 @@ def main():
 
 | Metric | LocalRuntime | AsyncLocalRuntime | Status |
 |--------|-------------|------------------|--------|
-| Methods | {local_methods} | {async_methods} | {'✅' if method_parity_ok else '❌'} |
-| Specific Tests | {local_tests} | {async_tests} | {'✅' if test_parity_ok else '⚠️'} |
+| Methods | {local_methods} | {async_methods} | {"✅" if method_parity_ok else "❌"} |
+| Specific Tests | {local_tests} | {async_tests} | {"✅" if test_parity_ok else "⚠️"} |
 | Shared Tests | {shared_tests} | {shared_tests} | ✅ |
-| Total Tests | {local_effective} | {async_effective} | {'✅' if abs(local_effective - async_effective) < 10 else '⚠️'} |
+| Total Tests | {local_effective} | {async_effective} | {"✅" if abs(local_effective - async_effective) < 10 else "⚠️"} |
 """
 
         # Add coverage if available

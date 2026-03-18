@@ -83,7 +83,6 @@ class TestCLIChannel:
             patch("kailash.channels.cli_channel.CommandRouterNode"),
             patch("kailash.channels.cli_channel.AsyncLocalRuntime"),
         ):
-
             return CLIChannel(
                 config=channel_config,
                 input_stream=mock_input_stream,
@@ -100,7 +99,6 @@ class TestCLIChannel:
             patch("kailash.channels.cli_channel.CommandRouterNode"),
             patch("kailash.channels.cli_channel.AsyncLocalRuntime"),
         ):
-
             channel = CLIChannel(
                 config=channel_config,
                 input_stream=mock_input_stream,
@@ -121,7 +119,6 @@ class TestCLIChannel:
             patch("kailash.channels.cli_channel.CommandRouterNode"),
             patch("kailash.channels.cli_channel.AsyncLocalRuntime"),
         ):
-
             channel = CLIChannel(config=channel_config)
 
             assert channel.input_stream is sys.stdin
@@ -162,7 +159,6 @@ class TestCLIChannel:
             patch.object(cli_channel, "emit_event") as mock_emit,
             patch.object(cli_channel, "_cli_loop") as mock_loop,
         ):
-
             await cli_channel.start()
 
             assert cli_channel.status == ChannelStatus.RUNNING
@@ -210,7 +206,6 @@ class TestCLIChannel:
             patch.object(cli_channel, "emit_event") as mock_emit,
             patch.object(cli_channel, "_cleanup") as mock_cleanup,
         ):
-
             await cli_channel.stop()
 
             assert cli_channel.status == ChannelStatus.STOPPED
@@ -265,7 +260,6 @@ class TestCLIChannel:
             patch.object(cli_channel, "_generate_prompt", return_value="test> "),
             patch.object(cli_channel, "_write_output") as mock_write,
         ):
-
             await cli_channel._cli_loop()
 
             mock_write.assert_called()
@@ -282,7 +276,6 @@ class TestCLIChannel:
             ),
             patch.object(cli_channel, "_write_output") as mock_write,
         ):
-
             # Set _running to False after first iteration to exit loop
             def stop_after_error(*args):
                 cli_channel._running = False
@@ -614,7 +607,6 @@ class TestCLIChannel:
             patch("kailash.channels.cli_channel.CommandRouterNode"),
             patch("kailash.channels.cli_channel.AsyncLocalRuntime"),
         ):
-
             channel = CLIChannel(config=channel_config, output_stream=None)
 
             # Should not raise an exception

@@ -333,7 +333,8 @@ class TestEnterpriseHealthMonitoringE2E:
 
         # High-frequency enterprise health monitor
         perf_monitor = HealthMonitor(
-            check_interval=1.0, alert_threshold=3  # High frequency monitoring
+            check_interval=1.0,
+            alert_threshold=3,  # High frequency monitoring
         )
 
         # Register multiple enterprise services

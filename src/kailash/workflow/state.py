@@ -54,7 +54,7 @@ class StateManager:
         current = new_state
         for i, key in enumerate(path[:-1]):
             if not hasattr(current, key):
-                raise KeyError(f"Invalid path: {'.'.join(path[:i+1])}")
+                raise KeyError(f"Invalid path: {'.'.join(path[: i + 1])}")
 
             # Get the next level object and ensure we're working with a copy
             next_obj = getattr(current, key)
@@ -132,7 +132,7 @@ class StateManager:
         current = state_obj
         for i, key in enumerate(path):
             if not hasattr(current, key):
-                raise KeyError(f"Invalid path: {'.'.join(path[:i+1])}")
+                raise KeyError(f"Invalid path: {'.'.join(path[: i + 1])}")
             current = getattr(current, key)
 
         return current

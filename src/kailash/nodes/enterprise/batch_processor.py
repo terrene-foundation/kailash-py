@@ -677,7 +677,7 @@ import json
 results = []
 for item in batch:
     try:
-        response = requests.post('{api_endpoint}', json=item, headers={kwargs.get('api_headers', {})})
+        response = requests.post('{api_endpoint}', json=item, headers={kwargs.get("api_headers", {})})
         if response.status_code == 200:
             results.append(response.json())
         else:

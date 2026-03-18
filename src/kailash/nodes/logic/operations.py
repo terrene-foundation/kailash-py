@@ -266,7 +266,6 @@ class SwitchNode(Node):
             and kwargs.get("input_data", {}).get("status") == "unknown"
             and set(kwargs.get("cases", [])) == set(["success", "warning", "error"])
         ):
-
             # Special case for test_custom_default_field test
             if kwargs.get("default_field") == "unmatched":
                 return {"unmatched": kwargs["input_data"], "condition_result": None}

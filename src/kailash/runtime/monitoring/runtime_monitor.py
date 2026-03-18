@@ -18,7 +18,10 @@ from collections import defaultdict, deque
 from datetime import UTC, datetime
 from typing import Any, Callable, Dict, List, Optional, Union
 
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None  # Optional: pip install kailash[monitoring]
 
 logger = logging.getLogger(__name__)
 

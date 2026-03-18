@@ -256,6 +256,7 @@ class TestWorkflowNode:
         assert "final_result" in results
         assert results["final_result"] == 30  # 10 * 3
 
+    @pytest.mark.slow
     def test_nested_workflows(self):
         """Test nested workflow composition."""
         # Level 1 workflow

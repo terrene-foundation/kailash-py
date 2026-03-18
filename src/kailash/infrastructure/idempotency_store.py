@@ -226,8 +226,7 @@ class DBIdempotencyStore:
 
             # Verify the claim succeeded by checking the fingerprint
             row = await tx.fetchone(
-                f"SELECT fingerprint FROM {self.TABLE_NAME} "
-                f"WHERE idempotency_key = ?",
+                f"SELECT fingerprint FROM {self.TABLE_NAME} WHERE idempotency_key = ?",
                 key,
             )
 

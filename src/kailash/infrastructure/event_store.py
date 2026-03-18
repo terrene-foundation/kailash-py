@@ -248,8 +248,7 @@ class DBEventStoreBackend:
             Sorted list of unique stream keys.
         """
         rows = await self._conn.fetch(
-            f"SELECT DISTINCT stream_key FROM {self.TABLE_NAME} "
-            f"ORDER BY stream_key ASC"
+            f"SELECT DISTINCT stream_key FROM {self.TABLE_NAME} ORDER BY stream_key ASC"
         )
         return [row["stream_key"] for row in rows]
 

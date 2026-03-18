@@ -278,7 +278,8 @@ class WorkflowStateModelIntegration:
 
         # Act
         final_state, results = workflow.execute_with_state(
-            state_model=initial_state, wrap_state=False  # Don't wrap state
+            state_model=initial_state,
+            wrap_state=False,  # Don't wrap state
         )
 
         # Assert

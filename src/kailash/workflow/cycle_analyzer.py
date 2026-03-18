@@ -758,7 +758,7 @@ class CycleAnalyzer:
             memory_growth = (memory_values[-1] - memory_values[0]) / memory_values[0]
             if memory_growth > 0.2:
                 alerts.append(
-                    f"Memory usage increasing: {memory_growth*100:.1f}% growth"
+                    f"Memory usage increasing: {memory_growth * 100:.1f}% growth"
                 )
 
         # Check for potential non-convergence

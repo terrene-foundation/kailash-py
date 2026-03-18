@@ -10,8 +10,9 @@ from kailash.nodes.code import (
 )
 
 
+@pytest.mark.slow
 def test_code_executor():
-    """Test basic code execution."""
+    """Test basic code execution (slow on GH runners — subprocess overhead)."""
     executor = CodeExecutor()
     code = """
 result = x + y

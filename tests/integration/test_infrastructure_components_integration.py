@@ -67,7 +67,7 @@ class TestPerformanceTrackerIntegration:
             # Add connections between nodes (WorkflowBuilder uses add_connection)
             for i in range(4):
                 workflow.add_connection(
-                    f"test_node_{i}", "result", f"test_node_{i+1}", "input_data"
+                    f"test_node_{i}", "result", f"test_node_{i + 1}", "input_data"
                 )
 
             # Build workflow
@@ -353,7 +353,6 @@ class TestInfrastructureWorkflowIntegration:
         """Test complete workflow using all infrastructure components together."""
         # Performance tracking
         with PerformanceTracker("complete_workflow", threshold=10.0) as main_tracker:
-
             # Test fixtures
             config = test_fixtures.integration_test_config()
             agent_configs = test_fixtures.test_agent_configs()

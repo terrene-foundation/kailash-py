@@ -76,7 +76,7 @@ async def stamp_schema_version(conn: Any, version: int = SCHEMA_VERSION) -> None
         (downgrade protection).
     """
     await conn.execute(
-        "CREATE TABLE IF NOT EXISTS kailash_meta " "(key TEXT PRIMARY KEY, value TEXT)"
+        "CREATE TABLE IF NOT EXISTS kailash_meta (key TEXT PRIMARY KEY, value TEXT)"
     )
 
     existing = await check_schema_version(conn)

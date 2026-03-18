@@ -415,7 +415,7 @@ class TestPerformanceOptimizer:
         # Complex workflow
         complex_workflow = {
             "nodes": [{"id": f"n{i}"} for i in range(60)],
-            "connections": [{"from": f"n{i}", "to": f"n{i+1}"} for i in range(59)],
+            "connections": [{"from": f"n{i}", "to": f"n{i + 1}"} for i in range(59)],
         }
 
         complex_recommendations = optimizer.optimize_validation_pipeline(
@@ -539,12 +539,12 @@ class TestPerformanceIntegration:
             # Cache some results
             result = TypeCompatibilityResult(is_compatible=True, confidence=1.0)
             optimizer.cache.cache_compatibility_result(
-                type(f"Type{i % 10}"), type(f"Type{(i+1) % 10}"), True, result
+                type(f"Type{i % 10}"), type(f"Type{(i + 1) % 10}"), True, result
             )
 
             # Retrieve (should hit cache)
             cached = optimizer.cache.get_compatibility_result(
-                type(f"Type{i % 10}"), type(f"Type{(i+1) % 10}"), True
+                type(f"Type{i % 10}"), type(f"Type{(i + 1) % 10}"), True
             )
 
             validation_times.append((time.time() - start) * 1000)

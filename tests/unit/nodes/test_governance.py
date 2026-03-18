@@ -108,7 +108,8 @@ class TestGovernanceNodes:
         # Invalid type conversion
         with pytest.raises(TypeError) as exc_info:
             self.test_node.execute(
-                input_text="test", count="invalid_number"  # Cannot convert to int
+                input_text="test",
+                count="invalid_number",  # Cannot convert to int
             )
 
         assert "Cannot convert count to int" in str(exc_info.value)

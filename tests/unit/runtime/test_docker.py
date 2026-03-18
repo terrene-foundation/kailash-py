@@ -768,7 +768,6 @@ class TestDockerRuntimeIntegration:
             patch.object(DockerNodeWrapper, "run_container") as mock_run,
             patch.object(DockerNodeWrapper, "get_results") as mock_results,
         ):
-
             mock_run.return_value = True
             mock_results.return_value = {"result": "test"}
 

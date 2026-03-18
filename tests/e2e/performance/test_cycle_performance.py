@@ -416,7 +416,7 @@ class TestParallelCyclePerformance:
         # Log performance characteristics for debugging
         if speedup < 1.0:
             print(
-                f"INFO: Parallel execution was slower than sequential by {((1/speedup) - 1) * 100:.1f}%"
+                f"INFO: Parallel execution was slower than sequential by {((1 / speedup) - 1) * 100:.1f}%"
             )
             print(
                 "This is expected in CI environments with limited cores or small workloads."
@@ -618,7 +618,7 @@ result = {
             execution_times.append(execution_time)
 
             print(
-                f"\n{count} iterations: {execution_time:.3f}s ({count/execution_time:.1f} iter/s)"
+                f"\n{count} iterations: {execution_time:.3f}s ({count / execution_time:.1f} iter/s)"
             )
 
         # Check linear scalability
@@ -630,7 +630,7 @@ result = {
             time_ratios.append(actual_ratio / expected_ratio)
 
             print(
-                f"Scaling {iteration_counts[i-1]} -> {iteration_counts[i]}: "
+                f"Scaling {iteration_counts[i - 1]} -> {iteration_counts[i]}: "
                 f"Expected {expected_ratio:.1f}x, Actual {actual_ratio:.1f}x"
             )
 

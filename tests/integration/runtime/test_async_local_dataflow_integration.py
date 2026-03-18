@@ -388,7 +388,8 @@ async def test_parameter_precedence_with_dataflow_nodes(test_db):
     # But context provides different name
     runtime = AsyncLocalRuntime()
     result = await runtime.execute_workflow_async(
-        workflow.build(), inputs={"name": "Context Name"}  # Should override config
+        workflow.build(),
+        inputs={"name": "Context Name"},  # Should override config
     )
 
     created_item = result["results"]["create"]

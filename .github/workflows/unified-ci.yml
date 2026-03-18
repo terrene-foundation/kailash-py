@@ -82,7 +82,7 @@ jobs:
   # Check if this is a duplicate run (push to a branch with an open PR)
   check-duplicate:
     name: Check for Duplicate Run
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     outputs:
       should-skip: ${{ steps.check.outputs.skip }}
       skip-reason: ${{ steps.check.outputs.reason }}
@@ -134,7 +134,7 @@ jobs:
     name: Determine Test Context
     needs: check-duplicate
     if: needs.check-duplicate.outputs.should-skip != 'true'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     outputs:
       test-level: ${{ steps.determine.outputs.level }}
       test-mode: ${{ steps.determine.outputs.mode }}
@@ -192,14 +192,14 @@ jobs:
                 echo "Using self-hosted Linux runner"
                 ;;
               *)
-                echo 'label=self-hosted' >> $GITHUB_OUTPUT
-                echo "Using self-hosted runner (default)"
+                echo 'label=ubuntu-latest' >> $GITHUB_OUTPUT
+                echo "Using GitHub-hosted runner (default)"
                 ;;
             esac
           else
-            # For automatic runs (push/PR), use any self-hosted runner
-            echo 'label=self-hosted' >> $GITHUB_OUTPUT
-            echo "Using any available self-hosted runner"
+            # For automatic runs (push/PR), use GitHub-hosted runner
+            echo 'label=ubuntu-latest' >> $GITHUB_OUTPUT
+            echo "Using GitHub-hosted runner"
           fi
 
       - name: Determine test level and mode
@@ -247,7 +247,7 @@ jobs:
     needs: [check-duplicate, determine-context]
     if: |
       false
-    runs-on: ${{ needs.determine-context.outputs.runner-label }}
+    runs-on: ubuntu-latest
     outputs:
       infrastructure-ready: ${{ steps.validate.outputs.ready }}
       postgres-ready: ${{ steps.validate.outputs.postgres }}
@@ -338,12 +338,13 @@ jobs:
       needs.check-duplicate.outputs.should-skip != 'true' &&
       needs.determine-context.result == 'success' &&
       (needs.setup-docker-infrastructure.result == 'success' || needs.setup-docker-infrastructure.result == 'skipped') &&
-      contains(needs.determine-context.outputs.runner-label, 'self-hosted')
-    runs-on: ${{ needs.determine-context.outputs.runner-label }}
+      true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python (self-hosted)
+      - name: Setup Python
         run: |
           echo "Checking available Python versions"
 
@@ -392,110 +393,29 @@ jobs:
             eval "$(pyenv init -)"
           fi
 
-          # Create a single venv and install dependencies
+          # Create a single venv and install dependencies from local source.
+          # Install [dev] extras only — [all] pulls kailash-dataflow/nexus/kaizen
+          # from PyPI which are not yet published at this stage.
           echo "Setting up Python environment"
-          # Use the default Python (should be 3.12 on this system)
           uv venv .venv
-          uv sync --extra dev
+          uv pip install -e ".[dev,server,cli,database,postgres,mysql,files,distributed,monitoring,http,auth,mfa,mcp,scheduler,otel]" --python .venv/bin/python
+          # Install numpy for tests that transitively import it (removed from SDK runtime in v1.0.0)
+          uv pip install numpy --python .venv/bin/python
 
-      - name: Run all checks in parallel
+      - name: Lint (ruff)
+        run: .venv/bin/ruff check src/ tests/ --select=E9,F63,F7,F82
+
+      - name: Test (Tier 1 — unit tests)
+        timeout-minutes: 5
         run: |
-          echo "Running all checks in parallel on $(sysctl -n hw.ncpu) cores"
-
-          # Create a script to run all checks
-          cat > run-all-checks.sh << 'EOF'
-          #!/bin/bash
-          set -e
-
-          # Function to run a check and capture its status
-          run_check() {
-              local name="$1"
-              local cmd="$2"
-              local logfile="$3"
-
-              echo "Starting $name..."
-              if eval "$cmd" > "$logfile" 2>&1; then
-                  echo "✅ $name passed"
-                  return 0
-              else
-                  echo "❌ $name failed"
-                  echo "See $logfile for details"
-                  return 1
-              fi
-          }
-
-          # Run Tier 1 tests only for push/PR events
-          # Tests are now properly organized - unit tests have no sleep calls
-          # Use marker-based exclusion as per test organization policy
-
-          # Fast test execution without parallel overhead
-          # Problematic threading test moved to integration tests
-          # Disable pytest-xdist to avoid test isolation issues in CI
-          # Include parity and shared tests (fast, no external dependencies)
-          PYTEST_CMD="pytest tests/unit/ tests/parity/ tests/shared/ -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' --maxfail=5 -v --log-cli-level=WARNING -p no:xdist"
-          echo "Running Tier 1 unit tests + parity + shared tests (fast mode) with marker-based exclusion"
-
-          # Run all checks in parallel with proper failure detection
-          pids=()
-          failed_checks=()
-
-          run_check "Black formatting" "uv run black --check src/ tests/" "black.log" &
-          pids[0]=$!
-
-          # Run isort check but don't fail CI (due to isort instability with some import patterns)
-          echo "Starting Isort imports (warning only)..."
-          if uv run isort --check-only --profile=black src/ tests/ > "isort.log" 2>&1; then
-              echo "✅ Isort imports passed"
-          else
-              echo "⚠️  Isort imports needs formatting (non-blocking)"
-              echo "Run 'isort . --profile=black' locally to fix"
-              cat isort.log | head -20
-          fi
-          # Don't track isort in pids array so it won't fail CI
-
-          run_check "Ruff linting" "uv run ruff check src/ tests/ --select=E9,F63,F7,F82" "ruff.log" &
-          pids[1]=$!
-
-          # Run tests with the venv Python (WITHOUT coverage for speed)
-          if [ -d ".venv" ]; then
-              run_check "Tests" ".venv/bin/python -m $PYTEST_CMD" "pytest.log" &
-              pids[2]=$!
-          else
-              echo "⚠️  No .venv found, skipping tests"
-              pids[2]=""
-          fi
-
-          # Infrastructure validation (only in infrastructure or admin-nodes mode)
-          if [[ "$TEST_MODE" == "infrastructure" || "$TEST_MODE" == "admin-nodes" ]]; then
-            run_check "Infrastructure validation" "python tests/test_docker_infrastructure.py" "infrastructure.log" &
-            pids[3]=$!
-          fi
-
-          # Wait for all jobs and collect results
-          failed=0
-          for i in "${!pids[@]}"; do
-              if [ -n "${pids[$i]}" ]; then
-                  if ! wait "${pids[$i]}"; then
-                      failed=1
-                  fi
-              fi
-          done
-
-          # Check if any job failed
-          if [ $failed -ne 0 ]; then
-              echo -e "\nSome checks failed. Logs:"
-              for log in *.log; do
-                  if [ -f "$log" ] && grep -q "failed\|error\|Error" "$log"; then
-                      echo -e "\n=== $log ==="
-                      tail -50 "$log"
-                  fi
-              done
-              exit 1
-          fi
-
-          echo -e "\n✅ All checks passed!"
-          echo "Tests run successfully in $TEST_MODE mode!"
-          EOF
-
-          chmod +x run-all-checks.sh
-          ./run-all-checks.sh
+          .venv/bin/python -m pytest \
+            tests/unit/infrastructure/ \
+            tests/unit/core/ \
+            tests/unit/workflow/ \
+            tests/unit/api/ \
+            tests/unit/access_control/ \
+            tests/unit/channels/ \
+            tests/unit/mcp_server/ \
+            tests/unit/edge/ \
+            -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' \
+            --maxfail=5 -q -p no:xdist

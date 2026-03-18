@@ -178,8 +178,7 @@ class TestAsyncRuntimeCleanup:
             # If it succeeds, that's OK (runtime may reinitialize)
             # But it should be documented behavior
             print(
-                "⚠️  P0-8.4: Runtime accepts work after cleanup "
-                "(may auto-reinitialize)"
+                "⚠️  P0-8.4: Runtime accepts work after cleanup (may auto-reinitialize)"
             )
 
         except RuntimeError as e:

@@ -228,13 +228,13 @@ class TestExportIntegration:
 
         # Create README
         readme_file = bundle_dir / "README.md"
-        readme_content = f"""# {bundle_metadata['name']}
+        readme_content = f"""# {bundle_metadata["name"]}
 
 ## Description
 Workflow bundle
 
 ## Requirements
-- Python {bundle_metadata['dependencies']['python']}
+- Python {bundle_metadata["dependencies"]["python"]}
 - See requirements.txt for package dependencies
 
 ## Usage

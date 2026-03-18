@@ -125,8 +125,8 @@ class MockToDockerConverter:
 import pytest
 from tests.integration.docker_test_base import DockerIntegrationTestBase
 
-# Original mocked services: {', '.join(analysis['mocked_services'])}
-# Original mock fixtures: {', '.join(analysis['mock_fixtures'])}
+# Original mocked services: {", ".join(analysis["mocked_services"])}
+# Original mock fixtures: {", ".join(analysis["mock_fixtures"])}
 
 
 @pytest.mark.integration

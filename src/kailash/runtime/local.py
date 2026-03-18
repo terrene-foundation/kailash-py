@@ -684,7 +684,7 @@ class LocalRuntime(
         self._cleanup_registered = False  # Track if atexit cleanup registered
 
         # === Coordinated Shutdown (v0.12.0, TODO-015) ===
-        self._shutdown_coordinator: Optional["ShutdownCoordinator"] = None
+        self._shutdown_coordinator: Optional["ShutdownCoordinator"] = None  # noqa: F821
 
         # Enterprise execution context
         self._execution_context = {
@@ -1249,7 +1249,7 @@ class LocalRuntime(
                 )
 
     @property
-    def shutdown_coordinator(self) -> "ShutdownCoordinator":
+    def shutdown_coordinator(self) -> "ShutdownCoordinator":  # noqa: F821
         """Get or lazily create the ShutdownCoordinator for this runtime.
 
         The coordinator is created on first access and the runtime's own
@@ -3754,14 +3754,15 @@ class LocalRuntime(
                     return result
 
                 # Execute switches hierarchically
-                all_results, switch_results = (
-                    await executor.execute_switches_hierarchically(
-                        parameters=parameters,
-                        task_manager=task_manager,
-                        run_id=run_id,
-                        workflow_context=workflow_context,
-                        node_executor=node_executor,
-                    )
+                (
+                    all_results,
+                    switch_results,
+                ) = await executor.execute_switches_hierarchically(
+                    parameters=parameters,
+                    task_manager=task_manager,
+                    run_id=run_id,
+                    workflow_context=workflow_context,
+                    node_executor=node_executor,
                 )
 
                 # Log execution summary

@@ -304,6 +304,7 @@ class TestSQLDatabaseNodeSQLite:
         )
         assert after_error["data"][0]["count"] == initial_count
 
+    @pytest.mark.slow
     def test_connection_pooling(self, sqlite_test_database, db_configs):
         """Test connection pooling with concurrent queries."""
         node = SQLDatabaseNode(**db_configs["sqlite_test"])

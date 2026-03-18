@@ -228,7 +228,7 @@ def get_{attribute_name}():
 """
         else:
             return f"""
-def get_{module_name.split('.')[-1]}():
+def get_{module_name.split(".")[-1]}():
     \"\"\"Lazy import of {module_name}\"\"\"
     import {module_name}
     return {module_name}
@@ -241,7 +241,7 @@ def get_{module_name.split('.')[-1]}():
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from {module_name} import {', '.join(types)}
+    from {module_name} import {", ".join(types)}
 """
 
     @staticmethod
@@ -262,7 +262,7 @@ Circular dependency between {cycle[0]} and {cycle[1]}:
             elif "ai" in str(cycle):
                 suggestions.append(
                     f"""
-AI module circular dependency in {' -> '.join(cycle)}:
+AI module circular dependency in {" -> ".join(cycle)}:
 1. Create an ai.base module for shared components
 2. Use factory pattern for agent creation
 3. Move orchestration logic to a separate coordinator module
@@ -271,7 +271,7 @@ AI module circular dependency in {' -> '.join(cycle)}:
             else:
                 suggestions.append(
                     f"""
-Complex circular dependency in {' -> '.join(cycle)}:
+Complex circular dependency in {" -> ".join(cycle)}:
 1. Apply Dependency Inversion Principle
 2. Create interfaces/protocols for cross-module communication
 3. Use event-driven architecture to decouple modules

@@ -830,19 +830,19 @@ class WorkflowPerformanceReporter:
             <div class="run-info">
                 <div class="info-item">
                     <span class="label">Run ID:</span>
-                    <span class="value">{run_info['run_id']}</span>
+                    <span class="value">{run_info["run_id"]}</span>
                 </div>
                 <div class="info-item">
                     <span class="label">Workflow:</span>
-                    <span class="value">{run_info['workflow_name']}</span>
+                    <span class="value">{run_info["workflow_name"]}</span>
                 </div>
                 <div class="info-item">
                     <span class="label">Started:</span>
-                    <span class="value">{run_info['started_at']}</span>
+                    <span class="value">{run_info["started_at"]}</span>
                 </div>
                 <div class="info-item">
                     <span class="label">Status:</span>
-                    <span class="value status-{run_info['status'].lower()}">{run_info['status']}</span>
+                    <span class="value status-{run_info["status"].lower()}">{run_info["status"]}</span>
                 </div>
             </div>
         </header>
@@ -931,7 +931,7 @@ class WorkflowPerformanceReporter:
             for chart_name, chart_path in analysis["charts"].items():
                 chart_items += f"""
                 <div class="chart-item">
-                    <h4>{chart_name.replace('_', ' ').title()}</h4>
+                    <h4>{chart_name.replace("_", " ").title()}</h4>
                     <img src="{chart_path}" alt="{chart_name}" class="chart-image">
                 </div>
                 """
@@ -969,7 +969,7 @@ class WorkflowPerformanceReporter:
         {comparison_section}
 
         <footer class="report-footer">
-            <p>Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} by Kailash Workflow Performance Reporter</p>
+            <p>Generated on {datetime.now().strftime("%Y-%m-%d %H:%M:%S")} by Kailash Workflow Performance Reporter</p>
         </footer>
     </div>
 </body>
@@ -1155,11 +1155,11 @@ class WorkflowPerformanceReporter:
         for run in runs:
             table_rows += f"""
             <tr>
-                <td>{run['run_id'][:8]}...</td>
-                <td>{run['total_duration']:.1f}s</td>
-                <td>{run['efficiency_score']:.0f}/100</td>
-                <td>{run['throughput']:.2f}</td>
-                <td>{run['success_rate']:.1f}%</td>
+                <td>{run["run_id"][:8]}...</td>
+                <td>{run["total_duration"]:.1f}s</td>
+                <td>{run["efficiency_score"]:.0f}/100</td>
+                <td>{run["throughput"]:.2f}</td>
+                <td>{run["success_rate"]:.1f}%</td>
             </tr>
             """
 
@@ -1178,17 +1178,17 @@ class WorkflowPerformanceReporter:
                     <div class="trend-item">
                         <span class="trend-icon">{duration_trend}</span>
                         <span class="trend-label">Duration</span>
-                        <span class="trend-value">{trends.get('duration_change', 0):+.1f}%</span>
+                        <span class="trend-value">{trends.get("duration_change", 0):+.1f}%</span>
                     </div>
                     <div class="trend-item">
                         <span class="trend-icon">{efficiency_trend}</span>
                         <span class="trend-label">Efficiency</span>
-                        <span class="trend-value">{trends.get('efficiency_change', 0):+.1f}</span>
+                        <span class="trend-value">{trends.get("efficiency_change", 0):+.1f}</span>
                     </div>
                     <div class="trend-item">
                         <span class="trend-icon">{throughput_trend}</span>
                         <span class="trend-label">Throughput</span>
-                        <span class="trend-value">{trends.get('throughput_change', 0):+.1f}%</span>
+                        <span class="trend-value">{trends.get("throughput_change", 0):+.1f}%</span>
                     </div>
                 </div>
             </div>

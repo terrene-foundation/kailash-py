@@ -1051,8 +1051,7 @@ def export_workflow(
     supported_formats = ["yaml", "json", "manifest"]
     if format not in supported_formats:
         raise ExportException(
-            f"Unknown export format: '{format}'. "
-            f"Supported formats: {supported_formats}"
+            f"Unknown export format: '{format}'. Supported formats: {supported_formats}"
         )
 
     try:

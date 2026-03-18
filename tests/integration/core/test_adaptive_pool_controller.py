@@ -180,7 +180,9 @@ class TestScalingDecisionEngine:
         engine.last_scaling_time = datetime.now() - timedelta(seconds=120)
 
         decision = engine.should_scale(
-            current_size=10, optimal_size=14, metrics=metrics  # 40% increase
+            current_size=10,
+            optimal_size=14,
+            metrics=metrics,  # 40% increase
         )
 
         assert decision.action == "scale_up"
@@ -205,7 +207,9 @@ class TestScalingDecisionEngine:
         engine.last_scaling_time = datetime.now() - timedelta(seconds=120)
 
         decision = engine.should_scale(
-            current_size=20, optimal_size=10, metrics=metrics  # 50% decrease
+            current_size=20,
+            optimal_size=10,
+            metrics=metrics,  # 50% decrease
         )
 
         assert decision.action == "scale_down"

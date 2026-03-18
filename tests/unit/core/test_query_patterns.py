@@ -78,7 +78,7 @@ class TestQueryPatternTracker:
                 fingerprint="analytics_query",
                 execution_time_ms=100.0 + (i * 5),
                 connection_id="conn1",
-                parameters={"date": f"2024-01-{i+1}"},
+                parameters={"date": f"2024-01-{i + 1}"},
                 success=True,
                 result_size=1000 + (i * 100),
             )
@@ -322,7 +322,7 @@ class TestPatternLearningOptimizer:
                 common_parameters={},
                 typical_result_size=100,
                 follows_queries=[],
-                followed_by_queries=[f"query_{i+1}"] if i < 2 else [],
+                followed_by_queries=[f"query_{i + 1}"] if i < 2 else [],
             )
             optimizer.pattern_tracker.pattern_cache[f"query_{i}"] = pattern
 

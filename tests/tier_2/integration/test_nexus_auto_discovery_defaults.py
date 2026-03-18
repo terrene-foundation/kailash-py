@@ -178,13 +178,12 @@ class TestAutoDiscoveryDefaults:
             assert nexus._auto_discovery_enabled is False  # New default
 
             print(
-                "✅ P0-3.6: Existing code works with new default "
-                "(auto_discovery=False)"
+                "✅ P0-3.6: Existing code works with new default (auto_discovery=False)"
             )
 
         except Exception as e:
             pytest.fail(
-                f"❌ BACKWARD COMPATIBILITY BROKEN: " f"Initialization failed with {e}"
+                f"❌ BACKWARD COMPATIBILITY BROKEN: Initialization failed with {e}"
             )
 
 
@@ -320,8 +319,7 @@ class TestAutoDiscoveryConfiguration:
         )
 
         print(
-            f"✅ P0-3.10: auto_discovery={auto_discovery} -> "
-            f"enabled={expected_enabled}"
+            f"✅ P0-3.10: auto_discovery={auto_discovery} -> enabled={expected_enabled}"
         )
 
     def test_auto_discovery_status_logged_clearly(self):
@@ -417,9 +415,7 @@ class TestAutoDiscoveryPerformance:
                 "(may be hanging)"
             )
 
-            print(
-                f"✅ P0-3.13: Discovery completed within timeout " f"({elapsed:.3f}s)"
-            )
+            print(f"✅ P0-3.13: Discovery completed within timeout ({elapsed:.3f}s)")
 
         except Exception as e:
             pytest.fail(f"❌ DISCOVERY BUG: Discovery failed with error: {e}")

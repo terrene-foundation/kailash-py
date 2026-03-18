@@ -147,7 +147,7 @@ def create_large_workflow(node_count: int = 150) -> Workflow:
 
         # Connect to previous node
         if i > 0:
-            builder.add_connection(f"node_{i-1}", "result", f"node_{i}", "input")
+            builder.add_connection(f"node_{i - 1}", "result", f"node_{i}", "input")
 
     return builder.build()
 

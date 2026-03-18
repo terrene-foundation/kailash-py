@@ -161,7 +161,7 @@ class TestAsyncSQLBatchOperationsDocker(DockerIntegrationTestBase):
 
         # Verify returned data
         for i, batch_result in enumerate(result["batch_results"]):
-            assert batch_result["rows"][0]["name"] == f"User{i+1}"
+            assert batch_result["rows"][0]["name"] == f"User{i + 1}"
             assert "id" in batch_result["rows"][0]
 
     @pytest.mark.asyncio

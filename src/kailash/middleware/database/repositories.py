@@ -278,7 +278,7 @@ class MiddlewareWorkflowRepository(BaseRepository):
 
         query = f"""
         UPDATE workflows
-        SET {', '.join(set_clauses)}
+        SET {", ".join(set_clauses)}
         WHERE id = :id
         RETURNING *
         """

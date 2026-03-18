@@ -82,8 +82,7 @@ class AsyncTestUtils:
             return e  # Return exception for further assertions
         except Exception as e:
             raise AssertionError(
-                f"Expected {exception_type.__name__} but got "
-                f"{type(e).__name__}: {e}"
+                f"Expected {exception_type.__name__} but got {type(e).__name__}: {e}"
             )
 
     @staticmethod

@@ -328,7 +328,7 @@ result = {{
                 else:
                     parent_branch = branch // 2
                     workflow.connect(
-                        f"proc_l{level-1}_b{parent_branch}",
+                        f"proc_l{level - 1}_b{parent_branch}",
                         f"switch_l{level}_b{branch}",
                         {"result": "input_data"},
                     )
@@ -776,9 +776,9 @@ class TestConditionalExecutionBenchmarks:
 
     def create_benchmark_report(self, test_name, benchmark_results):
         """Create detailed benchmark report."""
-        report = f"\n{'='*60}\n"
+        report = f"\n{'=' * 60}\n"
         report += f"BENCHMARK REPORT: {test_name}\n"
-        report += f"{'='*60}\n"
+        report += f"{'=' * 60}\n"
 
         route_data = benchmark_results["route_data"]
         skip_branches = benchmark_results["skip_branches"]
@@ -810,7 +810,7 @@ class TestConditionalExecutionBenchmarks:
             ) * 100
             report += f"  Memory Improvement: {memory_improvement:.1f}%\n"
 
-        report += f"{'='*60}\n"
+        report += f"{'=' * 60}\n"
 
         return report
 

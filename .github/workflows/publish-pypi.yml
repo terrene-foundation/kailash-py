@@ -3,8 +3,8 @@ name: Publish to PyPI
 on:
   push:
     tags:
-      - "v*" # Core SDK: v0.12.5
-      - "dataflow-v*" # DataFlow: dataflow-v0.12.4
+      - "v*" # Core SDK: v1.0.0
+      - "dataflow-v*" # DataFlow: dataflow-v1.0.0
       - "kaizen-v*" # Kaizen: kaizen-v1.2.5
       - "nexus-v*" # Nexus: nexus-v1.4.3
       - "eatp-v*" # EATP: eatp-v0.1.0
@@ -35,7 +35,7 @@ permissions: {} # Default deny — each job declares its own
 jobs:
   determine-package:
     name: Determine package from tag
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions: {}
     outputs:
       package: ${{ steps.parse.outputs.package }}
@@ -94,47 +94,110 @@ jobs:
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           fi
 
-  build-and-publish:
-    name: Build and publish ${{ needs.determine-package.outputs.package }}
+  build:
+    name: Build ${{ needs.determine-package.outputs.package }}
     needs: [determine-package]
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
-      contents: write
-    environment:
-      name: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish_to == 'testpypi') && 'testpypi' || 'pypi' }}
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build and publish tools
-        run: python3 -m pip install --user build twine
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      - name: Build wheel and sdist
-        run: python3 -m build
+      - name: Install build tools
+        run: python -m pip install --upgrade build
+
+      - name: Build wheel
+        # Build wheel only — no sdist for packages in the packages/ subdirectory.
+        # For the root kailash package, include sdist for source availability.
+        run: |
+          PACKAGE_DIR="${{ needs.determine-package.outputs.package_dir }}"
+          if [ "$PACKAGE_DIR" = "." ]; then
+            python -m build
+          else
+            python -m build --wheel
+          fi
         working-directory: ${{ needs.determine-package.outputs.package_dir }}
 
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ needs.determine-package.outputs.package }}
+          path: ${{ needs.determine-package.outputs.package_dir }}/dist/
+          if-no-files-found: error
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    needs: [determine-package, build]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_to == 'testpypi'
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/${{ needs.determine-package.outputs.package }}
+    permissions:
+      id-token: write # Required for OIDC trusted publishing
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ needs.determine-package.outputs.package }}
+          path: dist/
+
       - name: Publish to TestPyPI
-        if: github.event_name == 'workflow_dispatch' && inputs.publish_to == 'testpypi'
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.TESTPYPI_API_TOKEN }}
-        run: python3 -m twine upload --repository-url https://test.pypi.org/legacy/ --skip-existing ${{ needs.determine-package.outputs.package_dir }}/dist/*
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [determine-package, build]
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish_to == 'pypi')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/${{ needs.determine-package.outputs.package }}
+    permissions:
+      id-token: write # Required for OIDC trusted publishing
+    steps:
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ needs.determine-package.outputs.package }}
+          path: dist/
 
       - name: Publish to PyPI
-        if: >-
-          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
-          (github.event_name == 'workflow_dispatch' && inputs.publish_to == 'pypi')
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: python3 -m twine upload ${{ needs.determine-package.outputs.package_dir }}/dist/*
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  create-github-release:
+    name: Create GitHub Release
+    needs: [determine-package, publish-pypi]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create releases
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download distribution artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ needs.determine-package.outputs.package }}
+          path: dist/
 
       - name: Create GitHub Release
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ github.ref_name }}
           RELEASE_TITLE: "${{ needs.determine-package.outputs.package }} ${{ needs.determine-package.outputs.version }}"
         run: |
           gh release create "$TAG_NAME" \
+            dist/* \
             --title "$RELEASE_TITLE" \
             --generate-notes

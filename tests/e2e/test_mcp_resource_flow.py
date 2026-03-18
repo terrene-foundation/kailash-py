@@ -70,7 +70,7 @@ import redis.asyncio as redis
 
 async def main():
     # Initialize Redis
-    redis_client = await redis.from_url("{docker_manager.get_service_url('redis')}")
+    redis_client = await redis.from_url("{docker_manager.get_service_url("redis")}")
 
     # Create event store
     event_store = EventStore(redis_client=redis_client)

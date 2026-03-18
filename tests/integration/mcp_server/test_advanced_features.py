@@ -682,7 +682,8 @@ class TestElicitationSystem:
         """Test input request timeout."""
         with pytest.raises(MCPError) as exc_info:
             await self.elicitation.request_input(
-                "Enter something:", timeout=0.1  # Very short timeout
+                "Enter something:",
+                timeout=0.1,  # Very short timeout
             )
 
         assert exc_info.value.error_code == MCPErrorCode.REQUEST_TIMEOUT

@@ -122,8 +122,7 @@ class DatabasePoolFactory(ResourceFactory):
             import asyncpg
         except ImportError:
             raise ImportError(
-                "asyncpg is required for PostgreSQL. "
-                "Install with: pip install asyncpg"
+                "asyncpg is required for PostgreSQL. Install with: pip install asyncpg"
             )
 
         # Use default user if not provided
@@ -155,7 +154,7 @@ class DatabasePoolFactory(ResourceFactory):
             import aiomysql
         except ImportError:
             raise ImportError(
-                "aiomysql is required for MySQL. " "Install with: pip install aiomysql"
+                "aiomysql is required for MySQL. Install with: pip install aiomysql"
             )
 
         logger.info(f"Creating MySQL pool: {self.host}:{self.port}/{self.database}")
@@ -177,8 +176,7 @@ class DatabasePoolFactory(ResourceFactory):
             import aiosqlite
         except ImportError:
             raise ImportError(
-                "aiosqlite is required for SQLite. "
-                "Install with: pip install aiosqlite"
+                "aiosqlite is required for SQLite. Install with: pip install aiosqlite"
             )
 
         logger.info(f"Creating SQLite connection: {self.database}")
@@ -370,7 +368,7 @@ class CacheFactory(ResourceFactory):
             import aiomemcache
         except ImportError:
             raise ImportError(
-                "aiomemcache is required. " "Install with: pip install aiomemcache"
+                "aiomemcache is required. Install with: pip install aiomemcache"
             )
 
         logger.info(f"Creating Memcached client: {self.host}:{self.port}")
@@ -516,8 +514,7 @@ class MessageQueueFactory(ResourceFactory):
             import aio_pika
         except ImportError:
             raise ImportError(
-                "aio-pika is required for RabbitMQ. "
-                "Install with: pip install aio-pika"
+                "aio-pika is required for RabbitMQ. Install with: pip install aio-pika"
             )
 
         logger.info(f"Creating RabbitMQ connection: {self.host}:{self.port}")
@@ -534,7 +531,7 @@ class MessageQueueFactory(ResourceFactory):
             from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
         except ImportError:
             raise ImportError(
-                "aiokafka is required for Kafka. " "Install with: pip install aiokafka"
+                "aiokafka is required for Kafka. Install with: pip install aiokafka"
             )
 
         logger.info(f"Creating Kafka client: {self.host}:{self.port}")

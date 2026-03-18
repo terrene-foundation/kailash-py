@@ -1096,7 +1096,7 @@ class TestValidationPerformanceAndEdgeCases:
         # THEN: Should be fast
         assert (
             elapsed < 0.010
-        ), f"Validation took {elapsed*1000:.2f}ms (should be <10ms)"
+        ), f"Validation took {elapsed * 1000:.2f}ms (should be <10ms)"
         assert result == large_input
 
     @pytest.mark.asyncio

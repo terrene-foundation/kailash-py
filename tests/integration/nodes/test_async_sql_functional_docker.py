@@ -340,7 +340,8 @@ class TestAsyncSQLPerformanceFeaturesDocker(DockerIntegrationTestBase):
                 )
 
             placeholders = ", ".join(
-                f"(${k+1}, ${k+2}, ${k+3})" for k in range(0, len(batch_values), 3)
+                f"(${k + 1}, ${k + 2}, ${k + 3})"
+                for k in range(0, len(batch_values), 3)
             )
 
             await async_sql_node.execute(
