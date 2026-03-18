@@ -33,7 +33,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Union
 
-from trustplane.exceptions import TrustPlaneError
+from trustplane.exceptions import TLSSyslogError
 from trustplane.holds import HoldRecord
 from trustplane.models import (
     DecisionRecord,
@@ -52,7 +52,6 @@ __all__ = [
     "format_ocsf",
     "create_syslog_handler",
     "create_tls_syslog_handler",
-    "TLSSyslogError",
     "export_events",
 ]
 
@@ -671,13 +670,6 @@ def create_tls_syslog_handler(
             super().close()
 
     return _TLSSyslogHandler(tls_sock)
-
-
-class TLSSyslogError(TrustPlaneError):
-    """Raised when TLS syslog connection or handshake fails.
-
-    Security tool MUST NOT silently degrade to plaintext.
-    """
 
 
 # ============================================================================

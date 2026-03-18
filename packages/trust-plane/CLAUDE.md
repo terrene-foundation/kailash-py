@@ -1,13 +1,13 @@
 # TrustPlane Package Instructions
 
-**Last Updated**: 2026-03-15
+**Last Updated**: 2026-03-18
 **Do Not Edit Without Review**: Changes to this file affect the security posture of every session that touches trust-plane. Run `/redteam` after any modification.
 
 ## Overview
 
 TrustPlane is the EATP reference implementation — a trust environment through which AI-assisted work happens. It sits between human authority and AI execution, providing cryptographic attestation for decisions, milestones, and verification in collaborative projects.
 
-**Status**: 1473 tests passing. 14 rounds of red teaming — converged at zero findings (R14). 38+ hardening todos completed. Store abstraction complete with SQLite default, filesystem, and PostgreSQL backends. Enterprise features (RBAC, OIDC, SIEM, dashboard, archive, shadow mode) fully implemented. Exception hierarchy fully unified (22 classes, all trace to TrustPlaneError).
+**Status**: 1499 tests passing. 16 rounds of red teaming — converged at zero findings (R16). 61+ hardening todos completed. v0.2.1 released. Store abstraction complete with SQLite default, filesystem, and PostgreSQL backends. Enterprise features (RBAC, OIDC, SIEM, dashboard, archive, shadow mode) fully implemented. Exception hierarchy fully unified (22 classes with `.details` param, all trace to TrustPlaneError). Budget enforcement wired (posture-budget tracking, NaN-hardened).
 
 ## What NOT to Change — Security Patterns
 
@@ -170,6 +170,23 @@ def from_dict(cls, data: Dict[str, Any]) -> "Self":
 
 **Why**: Silent defaults in `from_dict()` accept malformed/tampered JSON without raising errors. A corrupted or attacker-modified record should fail loudly, not silently produce an object with default values.
 
+### Pattern 12: `math.isfinite()` on ALL runtime cost values
+
+```python
+# DO (in check() and record_action()):
+import math
+action_cost = float(ctx.get("cost", 0.0))
+if not math.isfinite(action_cost) or action_cost < 0:
+    return Verdict.BLOCKED  # Fail-closed
+
+# DO NOT:
+action_cost = float(ctx.get("cost", 0.0))
+if action_cost > limit:  # NaN > limit is False — bypass!
+    return Verdict.BLOCKED
+```
+
+**Why**: `NaN` bypasses ALL numeric comparisons (`NaN > X` is always `False`). If `NaN` enters `session_cost` via `+=`, it permanently poisons the accumulator — all future budget checks pass. Pattern 5 covers constraint fields at construction; Pattern 12 covers runtime cost values from context dicts and deserialized sessions.
+
 ---
 
 ## Store Security Contract
@@ -207,6 +224,12 @@ See `packages/trust-plane/src/trustplane/store/__init__.py` for the protocol def
 | T-53   | Dashboard bearer token auth (hmac.compare_digest)  | APPLIED   | 8 tests in test_dashboard        | 2026-03-15 |
 | T-59   | MCP server thread-safe project access              | APPLIED   | threading.Lock on \_get_project  | 2026-03-15 |
 | R14    | 16 code + 3 doc fixes (19 total across 3 rounds)   | CONVERGED | 4 agents, 1473 tests, 0 HIGH     | 2026-03-15 |
+| R15-C1 | NaN bypass in check() budget gate (isfinite)       | APPLIED   | 4 regression tests               | 2026-03-18 |
+| R15-C2 | NaN poisoning in session.record_action()           | APPLIED   | ValueError on NaN/Inf/negative   | 2026-03-18 |
+| R15-H2 | session_cost deserialization NaN check             | APPLIED   | from_dict() validates isfinite   | 2026-03-18 |
+| R15-H3 | Postgres migration error sanitization              | APPLIED   | \_sanitize_conninfo() on reason  | 2026-03-18 |
+| R15-M4 | SQLite WAL/SHM file permissions to 0o600           | APPLIED   | chmod loop in initialize()       | 2026-03-18 |
+| R15    | Integration hardening (budget, exceptions, E2E)    | CONVERGED | 3 agents, 1494 tests, 0 HIGH     | 2026-03-18 |
 
 **Do not re-apply these fixes — they are already in place.**
 
@@ -295,12 +318,22 @@ Load with `TrustPlaneConfig.load(project_dir)`. CLI flags override config file; 
 project = await TrustProject.create(path, name, author)  # or
 project = await TrustProject.load(path)
 
-# Constraint checking
-verdict = await project.check(action="write_file", resource="/src/main.py")
+# Constraint checking (includes budget enforcement)
+verdict = project.check(action="write_file", context={"resource": "/src/main.py"})
 # Returns: Verdict.AUTO_APPROVED | FLAGGED | HELD | BLOCKED
 
-# Recording decisions
-await project.record_decision(decision_type, description, confidence)
+# Recording decisions with cost tracking
+decision = DecisionRecord(
+    decision_type=DecisionType.TECHNICAL,
+    decision="Use modular architecture",
+    rationale="Separation of concerns",
+    cost=5.50,  # Optional: tracked when budget_tracking=True
+)
+await project.record_decision(decision)
+
+# Budget status (within a session)
+status = project.budget_status
+# {"budget_tracking": True, "session_cost": 25.0, "remaining": 75.0, ...}
 
 # Verification
 result = await project.verify()  # 4-level chain integrity check
@@ -329,7 +362,7 @@ Constraint patterns and resource paths stored in trust-plane records MUST use fo
 ```
 TrustPlaneError                          # Base for all trust-plane errors
   TrustPlaneStoreError                   # Base for store errors
-    RecordNotFoundError                  # Record does not exist
+    RecordNotFoundError(+KeyError)       # Record does not exist (also KeyError for backward compat)
     SchemaTooNewError                    # DB from newer trust-plane version
     SchemaMigrationError                 # Migration failed (rolled back)
     StoreConnectionError                 # Cannot connect to database
@@ -346,6 +379,7 @@ TrustPlaneError                          # Base for all trust-plane errors
     JWKSError                            # JWKS discovery/key retrieval failure
   RBACError                              # RBAC operation errors
   ConstraintViolationError                # Constraint check failure
+    BudgetExhaustedError                 # Financial budget exceeded (session or per-action)
   ArchiveError                           # Archive operation errors
   TLSSyslogError                         # TLS syslog transport errors
   LockTimeoutError(TrustPlaneError, TimeoutError)  # File lock acquisition timeout (dual hierarchy)

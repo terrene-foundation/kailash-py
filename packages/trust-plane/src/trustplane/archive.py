@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from trustplane._locking import validate_id
-from trustplane.exceptions import TrustPlaneError
+from trustplane.exceptions import ArchiveError
 from trustplane.holds import HoldRecord
 from trustplane.models import DecisionRecord, MilestoneRecord
 from trustplane.store import TrustPlaneStore
@@ -44,15 +44,10 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "ArchiveBundle",
-    "ArchiveError",
     "create_archive",
     "list_archives",
     "restore_archive",
 ]
-
-
-class ArchiveError(TrustPlaneError):
-    """Raised when an archive operation fails."""
 
 
 @dataclass

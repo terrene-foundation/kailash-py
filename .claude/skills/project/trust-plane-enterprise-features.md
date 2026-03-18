@@ -2,6 +2,61 @@
 
 Quick reference for TrustPlane enterprise capabilities. For full documentation, see `packages/trust-plane/CLAUDE.md`.
 
+## Budget Enforcement (`trustplane.project` + `trustplane.models`)
+
+Financial constraint tracking across sessions. Budget checks are integrated into `check()` and `record_decision()`.
+
+**Setup**: Enable budget tracking in the constraint envelope:
+
+```python
+envelope = ConstraintEnvelope(
+    financial=FinancialConstraints(
+        max_cost_per_session=100.0,   # Total session budget
+        max_cost_per_action=25.0,     # Per-decision limit
+        budget_tracking=True,          # Enable tracking
+    ),
+    signed_by="Alice",
+)
+```
+
+**Recording costs**: Pass `cost` on `DecisionRecord`:
+
+```python
+dec = DecisionRecord(
+    decision_type=DecisionType.TECHNICAL,
+    decision="Use modular architecture",
+    rationale="Separation of concerns",
+    cost=5.50,  # Tracked when budget_tracking=True
+)
+await project.record_decision(dec)
+```
+
+**Checking budget status**:
+
+```python
+status = project.budget_status
+# {
+#     "budget_tracking": True,
+#     "session_cost": 25.0,
+#     "max_cost_per_session": 100.0,
+#     "max_cost_per_action": 25.0,
+#     "remaining": 75.0,
+#     "utilization": 0.25,
+# }
+```
+
+**Budget exhaustion** raises `BudgetExhaustedError` (subclass of `ConstraintViolationError`):
+
+```python
+from trustplane.exceptions import BudgetExhaustedError
+try:
+    await project.record_decision(expensive_decision)
+except BudgetExhaustedError as e:
+    print(f"Budget exceeded: session={e.session_cost}, limit={e.budget_limit}")
+```
+
+**NaN protection**: All 7 cost paths validate with `math.isfinite()` (Pattern 12). NaN/Inf/negative costs are blocked or rejected.
+
 ## RBAC (`trustplane.rbac`)
 
 4 roles: `admin` (all ops), `auditor` (read-only), `delegate` (operational), `observer` (view-only). Persisted atomically to `rbac.json`. mtime-based cache invalidation for cross-process consistency (R14 fix F6).
@@ -69,20 +124,26 @@ attest shadow-manage stats
 
 ## Cloud Key Managers (`trustplane.key_managers`)
 
-| Provider | Module | Algorithm | Notes |
-|----------|--------|-----------|-------|
-| Local | `key_manager` | Ed25519 | Development default |
-| AWS KMS | `key_managers.aws_kms` | ECDSA P-256 | Ed25519 unavailable |
+| Provider | Module                        | Algorithm   | Notes               |
+| -------- | ----------------------------- | ----------- | ------------------- |
+| Local    | `key_manager`                 | Ed25519     | Development default |
+| AWS KMS  | `key_managers.aws_kms`        | ECDSA P-256 | Ed25519 unavailable |
 | Azure KV | `key_managers.azure_keyvault` | ECDSA P-256 | Ed25519 unavailable |
-| Vault | `key_managers.vault` | ECDSA P-256 | Via Transit engine |
+| Vault    | `key_managers.vault`          | ECDSA P-256 | Via Transit engine  |
 
 All cloud providers wrap native exceptions into `KeyManagerError` subclasses.
 
-## Exception Hierarchy (22 classes)
+## Exception Hierarchy (23 classes)
 
-All trace to `TrustPlaneError`. Key branches: `TrustPlaneStoreError` (6 subclasses), `KeyManagerError` (4), `IdentityError` (2), plus `RBACError`, `ConstraintViolationError`, `ArchiveError`, `TLSSyslogError`, `LockTimeoutError` (dual: `TrustPlaneError + TimeoutError`).
+All trace to `TrustPlaneError` with `.details: dict[str, Any]`. Key branches:
+
+- `TrustPlaneStoreError` (6 subclasses) — `RecordNotFoundError` also inherits `KeyError`
+- `KeyManagerError` (4 subclasses) — provider + key_id attributes
+- `ConstraintViolationError` → `BudgetExhaustedError` — session_cost, budget_limit, action_cost
+- `IdentityError` (2 subclasses), `RBACError`, `ArchiveError`, `TLSSyslogError`
+- `LockTimeoutError` (dual: `TrustPlaneError + TimeoutError`)
 
 ## See Also
 
 - `packages/trust-plane/CLAUDE.md` — Full reference with code examples
-- `.claude/skills/project/trust-plane-security-patterns.md` — 11 security patterns
+- `.claude/skills/project/trust-plane-security-patterns.md` — 13 security patterns

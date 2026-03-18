@@ -3,7 +3,7 @@
 
 """TrustPlane — EATP-powered trust environment for human-AI collaborative work."""
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 from trustplane.models import (
     CommunicationConstraints,
@@ -24,12 +24,29 @@ from trustplane.models import (
     VerificationCategory,
 )
 from trustplane.exceptions import (
+    ArchiveError,
+    BudgetExhaustedError,
+    ConstraintViolationError,
+    IdentityError,
+    JWKSError,
+    KeyExpiredError,
+    KeyManagerError,
+    KeyNotFoundError,
+    LockTimeoutError,
+    RBACError,
     RecordNotFoundError,
     SchemaMigrationError,
     SchemaTooNewError,
+    SigningError,
+    StoreConnectionError,
+    StoreQueryError,
+    StoreTransactionError,
+    TLSSyslogError,
+    TokenVerificationError,
     TrustDecryptionError,
     TrustPlaneError,
     TrustPlaneStoreError,
+    VerificationError,
 )
 from trustplane.project import TrustProject
 from trustplane.store import TrustPlaneStore
@@ -47,6 +64,23 @@ __all__ = [
     "RecordNotFoundError",
     "SchemaTooNewError",
     "SchemaMigrationError",
+    "ConstraintViolationError",
+    "BudgetExhaustedError",
+    "IdentityError",
+    "TokenVerificationError",
+    "JWKSError",
+    "KeyManagerError",
+    "KeyNotFoundError",
+    "KeyExpiredError",
+    "SigningError",
+    "VerificationError",
+    "StoreConnectionError",
+    "StoreQueryError",
+    "StoreTransactionError",
+    "RBACError",
+    "ArchiveError",
+    "TLSSyslogError",
+    "LockTimeoutError",
     "CommunicationConstraints",
     "ConstraintEnvelope",
     "DataAccessConstraints",

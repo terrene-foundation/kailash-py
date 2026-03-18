@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from trustplane._locking import atomic_write, file_lock, safe_read_json, validate_id
+from trustplane.exceptions import RecordNotFoundError
 from trustplane.delegation import Delegate, DelegateStatus, ReviewResolution
 from trustplane.holds import HoldRecord
 from trustplane.models import DecisionRecord, MilestoneRecord, ProjectManifest
@@ -89,7 +90,7 @@ class FileSystemTrustPlaneStore:
         validate_id(decision_id)
         path = self._dir / "decisions" / f"{decision_id}.json"
         if not path.exists():
-            raise KeyError(f"Decision not found: {decision_id}")
+            raise RecordNotFoundError("decision", decision_id)
         return DecisionRecord.from_dict(safe_read_json(path))
 
     def list_decisions(self, limit: int = 1000) -> list[DecisionRecord]:
@@ -117,7 +118,7 @@ class FileSystemTrustPlaneStore:
         validate_id(milestone_id)
         path = self._dir / "milestones" / f"{milestone_id}.json"
         if not path.exists():
-            raise KeyError(f"Milestone not found: {milestone_id}")
+            raise RecordNotFoundError("milestone", milestone_id)
         return MilestoneRecord.from_dict(safe_read_json(path))
 
     def list_milestones(self, limit: int = 1000) -> list[MilestoneRecord]:
@@ -145,7 +146,7 @@ class FileSystemTrustPlaneStore:
         validate_id(hold_id)
         path = self._dir / "holds" / f"{hold_id}.json"
         if not path.exists():
-            raise KeyError(f"Hold not found: {hold_id}")
+            raise RecordNotFoundError("hold", hold_id)
         return HoldRecord.from_dict(safe_read_json(path))
 
     def list_holds(
@@ -182,7 +183,7 @@ class FileSystemTrustPlaneStore:
         validate_id(delegate_id)
         path = self._dir / "delegates" / f"{delegate_id}.json"
         if not path.exists():
-            raise KeyError(f"Delegate not found: {delegate_id}")
+            raise RecordNotFoundError("delegate", delegate_id)
         return Delegate.from_dict(safe_read_json(path))
 
     def list_delegates(
@@ -255,7 +256,7 @@ class FileSystemTrustPlaneStore:
     def get_manifest(self) -> ProjectManifest:
         path = self._dir / "manifest.json"
         if not path.exists():
-            raise KeyError("Manifest not found: no manifest.json in trust directory")
+            raise RecordNotFoundError("manifest", "manifest")
         return ProjectManifest.from_dict(safe_read_json(path))
 
     # ------------------------------------------------------------------
@@ -271,7 +272,7 @@ class FileSystemTrustPlaneStore:
         validate_id(anchor_id)
         path = self._dir / "anchors" / f"{anchor_id}.json"
         if not path.exists():
-            raise KeyError(f"Anchor not found: {anchor_id}")
+            raise RecordNotFoundError("anchor", anchor_id)
         return safe_read_json(path)
 
     def list_anchors(self, limit: int = 1000) -> list[dict]:

@@ -176,7 +176,43 @@ class MultiSigPolicy:
     ...
 ```
 
-**Why**: Without `frozen=True`, an attacker with object reference can bypass `__post_init__` validation by directly setting fields.
+**Why**: Without `frozen=True`, an attacker with object reference can bypass `__post_init__` validation by directly setting fields. This applies to ALL five constraint sub-dataclasses (`OperationalConstraints`, `DataAccessConstraints`, `FinancialConstraints`, `TemporalConstraints`, `CommunicationConstraints`) — all must be `frozen=True`. Use `object.__setattr__` in `__post_init__` if field normalization is needed (e.g., `DataAccessConstraints`).
+
+### 6. MUST NOT Pass Unvalidated Cost Values to Budget Checks
+
+```python
+# DO:
+import math
+action_cost = float(ctx.get("cost", 0.0))
+if not math.isfinite(action_cost) or action_cost < 0:
+    return Verdict.BLOCKED  # Fail-closed on NaN/Inf/negative
+
+# DO NOT:
+action_cost = float(ctx.get("cost", 0.0))
+if action_cost > limit:  # NaN > limit is always False — budget bypassed!
+    return Verdict.BLOCKED
+```
+
+**Why**: `NaN` bypasses all numeric comparisons (`NaN > X` is always `False`). If `NaN` enters `session_cost` via `+=`, it permanently poisons the accumulator — all future budget checks pass. Every path that accepts a cost value (`check()`, `record_action()`, `from_dict()`) MUST validate with `math.isfinite()`.
+
+### 7. MUST NOT Catch Bare `KeyError` Where `RecordNotFoundError` Is Intended
+
+```python
+# DO:
+from trustplane.exceptions import RecordNotFoundError
+try:
+    delegate = store.get_delegate(did)
+except RecordNotFoundError:
+    pass  # Already gone
+
+# DO NOT:
+try:
+    delegate = store.get_delegate(did)
+except KeyError:  # Too broad after dual-hierarchy change
+    pass
+```
+
+**Why**: `RecordNotFoundError` inherits from both `TrustPlaneStoreError` and `KeyError`. Bare `except KeyError` now catches store errors, potentially swallowing unrelated dict lookup failures or corrupted-record exceptions.
 
 ### 8. MUST: Use `normalize_resource_path()` for All Constraint Pattern Storage and Comparison
 
@@ -196,7 +232,7 @@ norm = Path(user_path).as_posix()   # Doesn't collapse double slashes
 
 ## Cross-References
 
-- `packages/trust-plane/CLAUDE.md` — Full security pattern inventory (11 patterns) and Store Security Contract
+- `packages/trust-plane/CLAUDE.md` — Full security pattern inventory (13 patterns) and Store Security Contract
 - `packages/trust-plane/src/trustplane/store/__init__.py` — Store Security Contract as protocol docstring (created in TODO-09)
 - `.claude/rules/security.md` — Global security rules (secrets, injection, input validation)
 - `.claude/rules/eatp.md` — EATP SDK conventions (dataclasses, error hierarchy, cryptography)

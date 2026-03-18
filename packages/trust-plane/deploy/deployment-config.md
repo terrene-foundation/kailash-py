@@ -2,14 +2,14 @@
 
 Package: `trust-plane`
 Created: 2026-03-15
-Last updated: 2026-03-15
+Last updated: 2026-03-18
 
 ## Package Summary
 
 | Field              | Value                                                                    |
 | ------------------ | ------------------------------------------------------------------------ |
 | PyPI name          | `trust-plane`                                                            |
-| Current version    | `0.2.0`                                                                  |
+| Current version    | `0.2.1`                                                                  |
 | Status             | Published on PyPI (v0.2.0, 2026-03-15)                                   |
 | License            | Apache-2.0 (Terrene Foundation)                                          |
 | Python requirement | `>=3.11`                                                                 |

@@ -45,6 +45,7 @@ from trustplane.delegation import Delegate, DelegateStatus, ReviewResolution
 from trustplane.holds import HoldRecord
 from trustplane.models import DecisionRecord, MilestoneRecord, ProjectManifest
 from trustplane.exceptions import (
+    RecordNotFoundError,
     SchemaMigrationError,
     SchemaTooNewError,
     StoreConnectionError,
@@ -292,7 +293,7 @@ class PostgresTrustPlaneStore:
             except Exception as exc:
                 raise SchemaMigrationError(
                     target_version=target,
-                    reason=str(exc),
+                    reason=self._sanitize_conninfo(str(exc)),
                 ) from exc
 
     # ------------------------------------------------------------------
@@ -378,7 +379,7 @@ class PostgresTrustPlaneStore:
         """Retrieve a decision record by ID.
 
         Raises:
-            KeyError: If the decision is not found.
+            RecordNotFoundError: If the decision is not found.
             ValueError: If the decision_id fails validation.
         """
         validate_id(decision_id)
@@ -388,7 +389,7 @@ class PostgresTrustPlaneStore:
                 (decision_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f"Decision not found: {decision_id}")
+            raise RecordNotFoundError("decision", decision_id)
         return DecisionRecord.from_dict(row["data"])
 
     def list_decisions(self, limit: int = 1000) -> list[DecisionRecord]:
@@ -425,7 +426,7 @@ class PostgresTrustPlaneStore:
         """Retrieve a milestone record by ID.
 
         Raises:
-            KeyError: If the milestone is not found.
+            RecordNotFoundError: If the milestone is not found.
             ValueError: If the milestone_id fails validation.
         """
         validate_id(milestone_id)
@@ -435,7 +436,7 @@ class PostgresTrustPlaneStore:
                 (milestone_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f"Milestone not found: {milestone_id}")
+            raise RecordNotFoundError("milestone", milestone_id)
         return MilestoneRecord.from_dict(row["data"])
 
     def list_milestones(self, limit: int = 1000) -> list[MilestoneRecord]:
@@ -473,7 +474,7 @@ class PostgresTrustPlaneStore:
         """Retrieve a hold record by ID.
 
         Raises:
-            KeyError: If the hold is not found.
+            RecordNotFoundError: If the hold is not found.
             ValueError: If the hold_id fails validation.
         """
         validate_id(hold_id)
@@ -483,7 +484,7 @@ class PostgresTrustPlaneStore:
                 (hold_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f"Hold not found: {hold_id}")
+            raise RecordNotFoundError("hold", hold_id)
         return HoldRecord.from_dict(row["data"])
 
     def list_holds(
@@ -544,7 +545,7 @@ class PostgresTrustPlaneStore:
         """Retrieve a delegate by ID.
 
         Raises:
-            KeyError: If the delegate is not found.
+            RecordNotFoundError: If the delegate is not found.
             ValueError: If the delegate_id fails validation.
         """
         validate_id(delegate_id)
@@ -554,7 +555,7 @@ class PostgresTrustPlaneStore:
                 (delegate_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f"Delegate not found: {delegate_id}")
+            raise RecordNotFoundError("delegate", delegate_id)
         return Delegate.from_dict(row["data"])
 
     def list_delegates(
@@ -679,14 +680,14 @@ class PostgresTrustPlaneStore:
         """Retrieve the project manifest.
 
         Raises:
-            KeyError: If the manifest has not been stored yet.
+            RecordNotFoundError: If the manifest has not been stored yet.
         """
         with self._safe_connection() as conn:
             row = conn.execute(
                 "SELECT data FROM manifest WHERE id = 'manifest'"
             ).fetchone()
         if row is None:
-            raise KeyError("Manifest not found: no manifest in trust-plane database")
+            raise RecordNotFoundError("manifest", "manifest")
         return ProjectManifest.from_dict(row["data"])
 
     # ------------------------------------------------------------------
@@ -717,7 +718,7 @@ class PostgresTrustPlaneStore:
         """Retrieve an anchor by ID.
 
         Raises:
-            KeyError: If the anchor is not found.
+            RecordNotFoundError: If the anchor is not found.
             ValueError: If the anchor_id fails validation.
         """
         validate_id(anchor_id)
@@ -727,7 +728,7 @@ class PostgresTrustPlaneStore:
                 (anchor_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f"Anchor not found: {anchor_id}")
+            raise RecordNotFoundError("anchor", anchor_id)
         return row["data"]
 
     def list_anchors(self, limit: int = 1000) -> list[dict]:

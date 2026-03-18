@@ -37,7 +37,7 @@ from typing import Any, Generator
 
 from filelock import FileLock, Timeout
 
-from trustplane.exceptions import TrustPlaneError
+from trustplane.exceptions import LockTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -46,12 +46,6 @@ _SAFE_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 # Default lock timeout (seconds). 0 = no timeout (block forever).
 DEFAULT_LOCK_TIMEOUT: float = 30.0
-
-
-class LockTimeoutError(TrustPlaneError, TimeoutError):
-    """Raised when a file lock cannot be acquired within the timeout."""
-
-    pass
 
 
 @contextmanager
@@ -78,7 +72,7 @@ def file_lock(
         lock.acquire()
     except Timeout:
         raise LockTimeoutError(
-            f"Could not acquire lock on {lock_path} " f"within {timeout}s"
+            f"Could not acquire lock on {lock_path} within {timeout}s"
         )
     try:
         yield

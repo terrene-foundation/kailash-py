@@ -38,7 +38,7 @@ except ImportError:
     )
 
 from trustplane._locking import atomic_write, safe_read_json
-from trustplane.exceptions import TrustPlaneError
+from trustplane.exceptions import IdentityError, JWKSError, TokenVerificationError
 
 logger = logging.getLogger(__name__)
 
@@ -66,23 +66,6 @@ SUPPORTED_JWKS_ALGORITHMS: frozenset[str] = frozenset(
 SUPPORTED_PROVIDERS: frozenset[str] = frozenset(
     {"okta", "azure_ad", "google", "generic_oidc"}
 )
-
-
-# ---------------------------------------------------------------------------
-# Exceptions
-# ---------------------------------------------------------------------------
-
-
-class IdentityError(TrustPlaneError):
-    """Raised for identity/OIDC-specific errors."""
-
-
-class TokenVerificationError(IdentityError):
-    """Raised when a JWT token fails verification."""
-
-
-class JWKSError(IdentityError):
-    """Raised when JWKS discovery or key retrieval fails."""
 
 
 # ---------------------------------------------------------------------------

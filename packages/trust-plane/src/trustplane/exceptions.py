@@ -5,32 +5,80 @@
 
 All trust-plane exceptions inherit from TrustPlaneError so callers
 can catch the entire family with a single except clause.
+
+Every exception accepts an optional ``details`` dict per EATP convention,
+enabling structured error context for audit trails and diagnostics.
 """
 
+from __future__ import annotations
+
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    # Base
     "TrustPlaneError",
+    # Store
     "TrustPlaneStoreError",
-    "TrustDecryptionError",
     "RecordNotFoundError",
     "SchemaTooNewError",
     "SchemaMigrationError",
+    "StoreConnectionError",
+    "StoreQueryError",
+    "StoreTransactionError",
+    # Crypto / decryption
+    "TrustDecryptionError",
+    # Key manager
     "KeyManagerError",
     "KeyNotFoundError",
     "KeyExpiredError",
     "SigningError",
     "VerificationError",
-    "StoreConnectionError",
-    "StoreQueryError",
-    "StoreTransactionError",
+    # Constraint / budget
+    "ConstraintViolationError",
+    "BudgetExhaustedError",
+    # Identity / OIDC
+    "IdentityError",
+    "TokenVerificationError",
+    "JWKSError",
+    # RBAC
+    "RBACError",
+    # Archive
+    "ArchiveError",
+    # SIEM
+    "TLSSyslogError",
+    # Locking
+    "LockTimeoutError",
 ]
 
 
+# ---------------------------------------------------------------------------
+# Base
+# ---------------------------------------------------------------------------
+
+
 class TrustPlaneError(Exception):
-    """Base exception for all trust-plane errors."""
+    """Base exception for all trust-plane errors.
+
+    Attributes:
+        details: Structured context for audit trails and diagnostics.
+    """
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        self.details: dict[str, Any] = details or {}
+        super().__init__(message)
+
+
+# ---------------------------------------------------------------------------
+# Store exceptions
+# ---------------------------------------------------------------------------
 
 
 class TrustPlaneStoreError(TrustPlaneError):
@@ -42,20 +90,25 @@ class TrustPlaneStoreError(TrustPlaneError):
     """
 
 
-class TrustDecryptionError(TrustPlaneError):
-    """Raised when decryption of a stored record fails.
-
-    Common causes: wrong key, truncated ciphertext, tampered data.
-    """
-
-
-class RecordNotFoundError(TrustPlaneStoreError):
+class RecordNotFoundError(TrustPlaneStoreError, KeyError):
     """Raised when a requested record does not exist in the store."""
 
-    def __init__(self, record_type: str, record_id: str) -> None:
+    def __init__(
+        self,
+        record_type: str,
+        record_id: str,
+        *,
+        details: dict[str, Any] | None = None,
+    ) -> None:
         self.record_type = record_type
         self.record_id = record_id
-        super().__init__(f"{record_type} not found: {record_id}")
+        super().__init__(
+            f"{record_type} not found: {record_id}",
+            details=details or {"record_type": record_type, "record_id": record_id},
+        )
+
+    def __str__(self) -> str:
+        return f"{self.record_type} not found: {self.record_id}"
 
 
 class SchemaTooNewError(TrustPlaneStoreError):
@@ -65,13 +118,21 @@ class SchemaTooNewError(TrustPlaneStoreError):
     of trust-plane. The user must upgrade trust-plane to open this database.
     """
 
-    def __init__(self, db_version: int, current_version: int) -> None:
+    def __init__(
+        self,
+        db_version: int,
+        current_version: int,
+        *,
+        details: dict[str, Any] | None = None,
+    ) -> None:
         self.db_version = db_version
         self.current_version = current_version
         super().__init__(
             f"Database schema version {db_version} is newer than this "
             f"trust-plane version supports ({current_version}). "
-            f"Upgrade trust-plane."
+            f"Upgrade trust-plane.",
+            details=details
+            or {"db_version": db_version, "current_version": current_version},
         )
 
 
@@ -82,11 +143,18 @@ class SchemaMigrationError(TrustPlaneStoreError):
     version before the failed migration.
     """
 
-    def __init__(self, target_version: int, reason: str) -> None:
+    def __init__(
+        self,
+        target_version: int,
+        reason: str,
+        *,
+        details: dict[str, Any] | None = None,
+    ) -> None:
         self.target_version = target_version
         self.reason = reason
         super().__init__(
-            f"Migration to schema version {target_version} failed: {reason}"
+            f"Migration to schema version {target_version} failed: {reason}",
+            details=details or {"target_version": target_version, "reason": reason},
         )
 
 
@@ -100,6 +168,18 @@ class StoreQueryError(TrustPlaneStoreError):
 
 class StoreTransactionError(TrustPlaneStoreError):
     """Raised when a store transaction fails to commit or roll back."""
+
+
+# ---------------------------------------------------------------------------
+# Crypto / decryption
+# ---------------------------------------------------------------------------
+
+
+class TrustDecryptionError(TrustPlaneError):
+    """Raised when decryption of a stored record fails.
+
+    Common causes: wrong key, truncated ciphertext, tampered data.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -125,13 +205,17 @@ class KeyManagerError(TrustPlaneError):
         *,
         provider: str = "unknown",
         key_id: str | None = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         self.provider = provider
         self.key_id = key_id
         prefix = f"[{provider}]"
         if key_id:
             prefix += f" key={key_id}"
-        super().__init__(f"{prefix} {message}")
+        super().__init__(
+            f"{prefix} {message}",
+            details=details or {"provider": provider, "key_id": key_id},
+        )
 
 
 class KeyNotFoundError(KeyManagerError):
@@ -148,3 +232,100 @@ class SigningError(KeyManagerError):
 
 class VerificationError(KeyManagerError):
     """Raised when a signature verification operation fails."""
+
+
+# ---------------------------------------------------------------------------
+# Constraint / budget exceptions
+# ---------------------------------------------------------------------------
+
+
+class ConstraintViolationError(TrustPlaneError):
+    """Raised when an action violates the constraint envelope."""
+
+
+class BudgetExhaustedError(ConstraintViolationError):
+    """Raised when an action would exceed the financial budget.
+
+    Attributes:
+        session_cost: Total cost accumulated so far in the session.
+        budget_limit: The max_cost_per_session limit.
+        action_cost: The cost of the action that caused the breach.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        session_cost: float = 0.0,
+        budget_limit: float | None = None,
+        action_cost: float = 0.0,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        self.session_cost = session_cost
+        self.budget_limit = budget_limit
+        self.action_cost = action_cost
+        super().__init__(
+            message,
+            details=details
+            or {
+                "session_cost": session_cost,
+                "budget_limit": budget_limit,
+                "action_cost": action_cost,
+            },
+        )
+
+
+# ---------------------------------------------------------------------------
+# Identity / OIDC exceptions
+# ---------------------------------------------------------------------------
+
+
+class IdentityError(TrustPlaneError):
+    """Raised for identity/OIDC-specific errors."""
+
+
+class TokenVerificationError(IdentityError):
+    """Raised when a JWT token fails verification."""
+
+
+class JWKSError(IdentityError):
+    """Raised when JWKS discovery or key retrieval fails."""
+
+
+# ---------------------------------------------------------------------------
+# RBAC
+# ---------------------------------------------------------------------------
+
+
+class RBACError(TrustPlaneError):
+    """Raised for RBAC-specific errors."""
+
+
+# ---------------------------------------------------------------------------
+# Archive
+# ---------------------------------------------------------------------------
+
+
+class ArchiveError(TrustPlaneError):
+    """Raised when an archive operation fails."""
+
+
+# ---------------------------------------------------------------------------
+# SIEM
+# ---------------------------------------------------------------------------
+
+
+class TLSSyslogError(TrustPlaneError):
+    """Raised when TLS syslog connection or handshake fails.
+
+    Security tool MUST NOT silently degrade to plaintext.
+    """
+
+
+# ---------------------------------------------------------------------------
+# Locking
+# ---------------------------------------------------------------------------
+
+
+class LockTimeoutError(TrustPlaneError, TimeoutError):
+    """Raised when a file lock cannot be acquired within the timeout."""

@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-03-18
+
+### Added
+
+- Financial budget enforcement: `DecisionRecord.cost` field, `AuditSession.session_cost` tracking, `TrustProject.check()` budget gate, `budget_status` property
+- `BudgetExhaustedError` exception (subclass of `ConstraintViolationError`) with structured attributes (session_cost, budget_limit, action_cost)
+- 26 new E2E tests: lifecycle chain integrity, budget depletion, NaN bypass regression, frozen constraint mutation, mode switching, store conformance
+- `.details: dict[str, Any]` parameter on all 23 exception classes (EATP convention)
+
+### Changed
+
+- Exception hierarchy consolidated: all 23 classes centralized in `trustplane.exceptions` (previously 6 were scattered across modules)
+- All 5 constraint sub-dataclasses (`OperationalConstraints`, `DataAccessConstraints`, `FinancialConstraints`, `TemporalConstraints`, `CommunicationConstraints`) are now `frozen=True`
+- Store backends raise `RecordNotFoundError` instead of `KeyError` (backward-compatible: `RecordNotFoundError` inherits from `KeyError`)
+- `from __future__ import annotations` added to models.py, session.py, project.py
+- `__all__` exports added to models.py, session.py, project.py
+
+### Security
+
+- R15-C1: NaN bypass in `check()` budget gate — `math.isfinite()` validation on context cost (Pattern 12)
+- R15-C2: NaN poisoning in `session.record_action()` — ValueError on NaN/Inf/negative cost
+- R15-H2: Session cost deserialization NaN check in `from_dict()`
+- R15-H3: PostgreSQL migration error sanitization via `_sanitize_conninfo()`
+- R15-M4: SQLite WAL/SHM file permissions set to 0o600
+- R16-M3: Frozen constraint sub-dataclasses prevent post-init mutation bypass
+- R16: `except KeyError` narrowed to `except RecordNotFoundError` in delegation cascade and manifest reload
+- R16: `DecisionRecord.from_dict()` cost field pre-validation (defense-in-depth)
+- 16 rounds of red teaming converged at zero findings across all severity levels
+
 ## [0.2.0] - 2026-03-15
 
 ### Added

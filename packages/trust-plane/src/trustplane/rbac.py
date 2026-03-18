@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from trustplane._locking import atomic_write, file_lock, safe_read_json, validate_id
-from trustplane.exceptions import TrustPlaneError
+from trustplane.exceptions import RBACError
 
 logger = logging.getLogger(__name__)
 
@@ -143,10 +143,6 @@ ROLE_PERMISSIONS: dict[Role, RolePermission] = {
 # ---------------------------------------------------------------------------
 # RBACManager
 # ---------------------------------------------------------------------------
-
-
-class RBACError(TrustPlaneError):
-    """Raised for RBAC-specific errors."""
 
 
 class RBACManager:

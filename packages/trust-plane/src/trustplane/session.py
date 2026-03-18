@@ -1,6 +1,8 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 """AuditSession — session-scoped EATP audit context.
 
 Application-layer convenience that brackets EATP operations. Creates
@@ -25,6 +27,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "AuditSession",
+    "compute_diff",
+]
 
 
 def _hash_file(path: Path) -> str:
@@ -130,6 +137,7 @@ class AuditSession:
         self.action_count = 0
         self.decision_count = 0
         self.milestone_count = 0
+        self.session_cost: float = 0.0
         self._active = True
 
         # File change tracking
@@ -159,9 +167,22 @@ class AuditSession:
         end = self.ended_at or datetime.now(timezone.utc)
         return (end - self.started_at).total_seconds()
 
-    def record_action(self, action_type: str) -> None:
-        """Track an action within this session."""
+    def record_action(self, action_type: str, cost: float = 0.0) -> None:
+        """Track an action within this session.
+
+        Args:
+            action_type: The type of action (e.g. "record_decision").
+            cost: The cost of this action (0.0 if budget tracking disabled).
+
+        Raises:
+            ValueError: If cost is NaN, Inf, or negative.
+        """
+        import math as _math
+
+        if not _math.isfinite(cost) or cost < 0:
+            raise ValueError(f"cost must be a non-negative finite number, got {cost}")
         self.action_count += 1
+        self.session_cost += cost
         if action_type == "record_decision":
             self.decision_count += 1
         elif action_type == "create_milestone":
@@ -194,6 +215,7 @@ class AuditSession:
             "total_actions": self.action_count,
             "decisions": self.decision_count,
             "milestones": self.milestone_count,
+            "session_cost": self.session_cost,
         }
         if self.files_changed is not None:
             result["files_changed"] = self.files_changed
@@ -212,6 +234,7 @@ class AuditSession:
             "action_count": self.action_count,
             "decision_count": self.decision_count,
             "milestone_count": self.milestone_count,
+            "session_cost": self.session_cost,
         }
         if self._tracked_paths:
             d["tracked_paths"] = [str(p) for p in self._tracked_paths]
@@ -231,6 +254,12 @@ class AuditSession:
         session.action_count = data.get("action_count", 0)
         session.decision_count = data.get("decision_count", 0)
         session.milestone_count = data.get("milestone_count", 0)
+        import math as _math
+
+        raw_cost = data.get("session_cost", 0.0)
+        if not _math.isfinite(raw_cost) or raw_cost < 0:
+            raise ValueError(f"Invalid session_cost in stored data: {raw_cost}")
+        session.session_cost = raw_cost
         session._start_snapshot = data.get("start_snapshot", {})
         session.git_head_start = data.get("git_head_start")
         return session

@@ -1,0 +1,25 @@
+commit: 33af3d5a (dirty — milestone 4 integration/hardening uncommitted)
+timestamp: 2026-03-18T12:45:00+00:00
+baseline_pass: 1473
+baseline_fail: 0
+final_pass: 1499
+final_fail: 0
+new_tests: 26
+regressions: 0
+command: pytest packages/trust-plane/tests/ -x --tb=short -q
+notes: |
+  Milestone 4 integration/hardening — ALL issues resolved (not just HIGH/CRITICAL).
+  R16 converged: 0 findings across ALL severity levels.
+
+  Changes:
+  - Exception hierarchy: 23 classes centralized, .details param, BudgetExhaustedError
+  - Store: KeyError → RecordNotFoundError (18 replacements), docstrings updated
+  - Budget wiring: DecisionRecord.cost, AuditSession.session_cost, check() enforcement
+  - NaN hardening: Pattern 12 — isfinite on all 7 runtime cost paths
+  - Frozen constraints: All 5 sub-dataclasses frozen=True (Pattern 10 extended)
+  - Cost pre-validation: DecisionRecord.from_dict() defense-in-depth
+  - EATP conventions: from __future__ import annotations, __all__, logger in all modules
+  - Exception narrowing: except KeyError → except RecordNotFoundError in delegation, manifest
+  - Postgres: migration error sanitization via _sanitize_conninfo()
+  - SQLite: WAL/SHM file permissions to 0o600
+  - 26 new E2E tests (lifecycle, budget, NaN, frozen constraints, mode switch, store conformance)

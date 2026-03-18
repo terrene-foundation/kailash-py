@@ -1,6 +1,8 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 """TrustPlane project with EATP trust tracking.
 
 A TrustProject wraps EATP operations for any collaborative workflow:
@@ -53,7 +55,11 @@ from eatp.postures import PostureStateMachine, PostureTransitionRequest, TrustPo
 from eatp.reasoning import ConfidentialityLevel, ReasoningTrace
 from eatp.store.filesystem import FilesystemStore
 
-from trustplane.exceptions import TrustPlaneError
+from trustplane.exceptions import (
+    BudgetExhaustedError,
+    ConstraintViolationError,
+    TrustPlaneError,
+)
 from trustplane.models import (
     ConstraintEnvelope,
     DecisionRecord,
@@ -75,11 +81,9 @@ from trustplane.store.filesystem import FileSystemTrustPlaneStore
 
 logger = logging.getLogger(__name__)
 
-
-class ConstraintViolationError(TrustPlaneError):
-    """Raised when an action violates the constraint envelope."""
-
-    pass
+__all__ = [
+    "TrustProject",
+]
 
 
 class _AuthorityRegistry:
@@ -585,7 +589,7 @@ class TrustProject:
                 manifest.project_name,
                 chain.genesis.id,
             )
-        except (KeyError, Exception) as e:
+        except Exception as e:
             # Chain not in FilesystemStore — either a pre-FilesystemStore
             # project or first load after migration. Re-establish.
             logger.warning(
@@ -704,6 +708,30 @@ class TrustProject:
             ):
                 return Verdict.BLOCKED
 
+        # Check financial constraints (budget limits)
+        import math as _math
+
+        ctx = context or {}
+        action_cost = float(ctx.get("cost", 0.0))
+        # Fail-closed on NaN/Inf/negative cost — Pattern 5 (isfinite)
+        if not _math.isfinite(action_cost) or action_cost < 0:
+            return Verdict.BLOCKED
+        if envelope.financial.budget_tracking:
+            # Per-action cost limit
+            if (
+                envelope.financial.max_cost_per_action is not None
+                and action_cost > envelope.financial.max_cost_per_action
+            ):
+                return Verdict.BLOCKED
+            # Session cost limit
+            if (
+                envelope.financial.max_cost_per_session is not None
+                and self._session is not None
+            ):
+                projected = self._session.session_cost + action_cost
+                if projected > envelope.financial.max_cost_per_session:
+                    return Verdict.BLOCKED
+
         # Use the enforcer for more nuanced classification
         vr = VerificationResult(valid=True)
         try:
@@ -753,15 +781,49 @@ class TrustProject:
             return await self._record_decision_locked(decision)
 
     async def _record_decision_locked(self, decision: DecisionRecord) -> str:
-        # Enforce constraints before recording
+        # Enforce constraints before recording (includes budget check)
+        action_cost = getattr(decision, "cost", 0.0) or 0.0
         verdict = self.check(
             "record_decision",
             {
                 "decision_type": _decision_type_value(decision.decision_type),
                 "content_hash": decision.content_hash(),
+                "cost": action_cost,
             },
         )
         if verdict == Verdict.BLOCKED:
+            # Determine if blocked by budget or by operational constraint
+            envelope = self._manifest.constraint_envelope
+            if (
+                envelope is not None
+                and envelope.financial.budget_tracking
+                and self._session is not None
+            ):
+                projected = self._session.session_cost + action_cost
+                if (
+                    envelope.financial.max_cost_per_session is not None
+                    and projected > envelope.financial.max_cost_per_session
+                ):
+                    raise BudgetExhaustedError(
+                        f"Session budget exceeded: "
+                        f"${projected:.2f} > ${envelope.financial.max_cost_per_session:.2f}",
+                        session_cost=self._session.session_cost,
+                        budget_limit=envelope.financial.max_cost_per_session,
+                        action_cost=action_cost,
+                    )
+                if (
+                    envelope.financial.max_cost_per_action is not None
+                    and action_cost > envelope.financial.max_cost_per_action
+                ):
+                    raise BudgetExhaustedError(
+                        f"Action cost ${action_cost:.2f} exceeds per-action "
+                        f"limit ${envelope.financial.max_cost_per_action:.2f}",
+                        session_cost=(
+                            self._session.session_cost if self._session else 0.0
+                        ),
+                        budget_limit=envelope.financial.max_cost_per_action,
+                        action_cost=action_cost,
+                    )
             raise ConstraintViolationError(
                 f"Action blocked by constraint envelope: "
                 f"decision type '{_decision_type_value(decision.decision_type)}' "
@@ -793,7 +855,7 @@ class TrustProject:
         }
         if self._session is not None and self._session.is_active:
             ctx.update(self._session.context_data())
-            self._session.record_action("record_decision")
+            self._session.record_action("record_decision", cost=action_cost)
 
         anchor = await self._ops.audit(
             agent_id=self._agent_id,
@@ -978,7 +1040,7 @@ class TrustProject:
                     f"manifest has {self._manifest.genesis_id}"
                 )
                 chain_valid = False
-        except (KeyError, Exception) as e:
+        except Exception as e:
             integrity_issues.append(f"chain not found in store: {e}")
             chain_valid = False
 
@@ -1221,6 +1283,40 @@ class TrustProject:
     def posture(self) -> TrustPosture:
         """Current trust posture."""
         return self._posture_machine.get_posture(self._agent_id)
+
+    @property
+    def budget_status(self) -> dict[str, Any]:
+        """Current financial budget status for the active session.
+
+        Returns a dict with:
+            budget_tracking: Whether budget tracking is enabled.
+            session_cost: Total cost accumulated in the current session.
+            max_cost_per_session: The session budget limit (None if unlimited).
+            max_cost_per_action: The per-action limit (None if unlimited).
+            remaining: Budget remaining (None if unlimited or no session).
+            utilization: Fraction of budget used (0.0-1.0, None if unlimited).
+        """
+        envelope = self._manifest.constraint_envelope
+        tracking = envelope.financial.budget_tracking if envelope is not None else False
+        session_cost = self._session.session_cost if self._session else 0.0
+        max_session = (
+            envelope.financial.max_cost_per_session if envelope is not None else None
+        )
+        max_action = (
+            envelope.financial.max_cost_per_action if envelope is not None else None
+        )
+        remaining = (max_session - session_cost) if max_session is not None else None
+        utilization = (
+            (session_cost / max_session) if max_session and max_session > 0 else None
+        )
+        return {
+            "budget_tracking": tracking,
+            "session_cost": session_cost,
+            "max_cost_per_session": max_session,
+            "max_cost_per_action": max_action,
+            "remaining": remaining,
+            "utilization": utilization,
+        }
 
     @property
     def enforcement_mode(self) -> str:
@@ -1820,9 +1916,11 @@ class TrustProject:
 
     def _reload_manifest(self) -> None:
         """Re-read manifest from disk (call inside lock)."""
+        from trustplane.exceptions import RecordNotFoundError
+
         try:
             self._manifest = self._tp_store.get_manifest()
-        except KeyError:
+        except RecordNotFoundError:
             pass  # Manifest not yet written — keep in-memory version
 
     def _write_json(self, relative_path: str, data: dict[str, Any]) -> None:

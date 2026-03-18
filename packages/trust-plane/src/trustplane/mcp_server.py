@@ -31,7 +31,8 @@ from pathlib import Path
 from mcp.server import FastMCP
 
 from trustplane.models import DecisionRecord, _parse_decision_type
-from trustplane.project import ConstraintViolationError, TrustProject
+from trustplane.exceptions import ConstraintViolationError
+from trustplane.project import TrustProject
 
 logger = logging.getLogger(__name__)
 

@@ -72,7 +72,7 @@ class TrustPlaneStore(Protocol):
             The matching DecisionRecord.
 
         Raises:
-            KeyError: If the decision is not found.
+            RecordNotFoundError: If the decision is not found.
             ValueError: If the decision_id fails validation.
         """
         ...
@@ -102,7 +102,7 @@ class TrustPlaneStore(Protocol):
         """Retrieve a milestone record by ID.
 
         Raises:
-            KeyError: If the milestone is not found.
+            RecordNotFoundError: If the milestone is not found.
             ValueError: If the milestone_id fails validation.
         """
         ...
@@ -125,7 +125,7 @@ class TrustPlaneStore(Protocol):
         """Retrieve a hold record by ID.
 
         Raises:
-            KeyError: If the hold is not found.
+            RecordNotFoundError: If the hold is not found.
             ValueError: If the hold_id fails validation.
         """
         ...
@@ -163,7 +163,7 @@ class TrustPlaneStore(Protocol):
         """Retrieve a delegate by ID.
 
         Raises:
-            KeyError: If the delegate is not found.
+            RecordNotFoundError: If the delegate is not found.
             ValueError: If the delegate_id fails validation.
         """
         ...
@@ -214,7 +214,7 @@ class TrustPlaneStore(Protocol):
         """Retrieve the project manifest.
 
         Raises:
-            KeyError: If the manifest has not been stored yet.
+            RecordNotFoundError: If the manifest has not been stored yet.
         """
         ...
 
@@ -236,7 +236,7 @@ class TrustPlaneStore(Protocol):
         """Retrieve an anchor by ID.
 
         Raises:
-            KeyError: If the anchor is not found.
+            RecordNotFoundError: If the anchor is not found.
             ValueError: If the anchor_id fails validation.
         """
         ...

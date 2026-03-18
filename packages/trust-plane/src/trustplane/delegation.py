@@ -44,6 +44,7 @@ from trustplane._locking import (
     safe_read_json,
     validate_id,
 )
+from trustplane.exceptions import RecordNotFoundError
 from trustplane.holds import HoldRecord
 
 if TYPE_CHECKING:
@@ -249,7 +250,7 @@ class DelegationManager:
         invalid = set(dimensions) - VALID_DIMENSIONS
         if invalid:
             raise ValueError(
-                f"Invalid dimensions: {invalid}. " f"Valid: {sorted(VALID_DIMENSIONS)}"
+                f"Invalid dimensions: {invalid}. Valid: {sorted(VALID_DIMENSIONS)}"
             )
 
         if not dimensions:
@@ -437,7 +438,7 @@ class DelegationManager:
                             d.revoked_at = datetime.now(timezone.utc)
                             self._store.update_delegate(d)
                             revoked_ids.append(did)
-                    except KeyError:
+                    except RecordNotFoundError:
                         pass  # Already gone
 
                 self._store.delete_wal()
@@ -479,7 +480,7 @@ class DelegationManager:
 
             try:
                 delegate = self.get_delegate(did)
-            except KeyError:
+            except RecordNotFoundError:
                 continue
 
             if delegate.status == DelegateStatus.REVOKED:

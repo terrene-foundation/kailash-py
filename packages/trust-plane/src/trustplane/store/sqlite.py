@@ -33,7 +33,11 @@ from typing import Any
 
 from trustplane._locking import validate_id
 from trustplane.delegation import Delegate, DelegateStatus, ReviewResolution
-from trustplane.exceptions import SchemaMigrationError, SchemaTooNewError
+from trustplane.exceptions import (
+    RecordNotFoundError,
+    SchemaMigrationError,
+    SchemaTooNewError,
+)
 from trustplane.holds import HoldRecord
 from trustplane.models import DecisionRecord, MilestoneRecord, ProjectManifest
 
@@ -280,10 +284,15 @@ class SqliteTrustPlaneStore:
 
         # Restrict database file permissions (POSIX only — Windows
         # does not support fine-grained permissions via os.chmod).
-        try:
-            os.chmod(self._db_path, 0o600)
-        except OSError:
-            logger.debug("Could not set 0o600 on %s (non-POSIX?)", self._db_path)
+        # Also set permissions on WAL and SHM auxiliary files which SQLite
+        # creates lazily with default umask.
+        for suffix in ("", "-wal", "-shm"):
+            aux_path = self._db_path + suffix
+            if os.path.exists(aux_path):
+                try:
+                    os.chmod(aux_path, 0o600)
+                except OSError:
+                    logger.debug("Could not set 0o600 on %s (non-POSIX?)", aux_path)
 
         if existing_version is None:
             # Fresh database — stamp with current version
@@ -331,7 +340,7 @@ class SqliteTrustPlaneStore:
         """Retrieve a decision record by ID.
 
         Raises:
-            KeyError: If the decision is not found.
+            RecordNotFoundError: If the decision is not found.
             ValueError: If the decision_id fails validation.
         """
         validate_id(decision_id)
@@ -341,7 +350,7 @@ class SqliteTrustPlaneStore:
             (decision_id,),
         ).fetchone()
         if row is None:
-            raise KeyError(f"Decision not found: {decision_id}")
+            raise RecordNotFoundError("decision", decision_id)
         return DecisionRecord.from_dict(json.loads(row["data"]))
 
     def list_decisions(self, limit: int = 1000) -> list[DecisionRecord]:
@@ -380,7 +389,7 @@ class SqliteTrustPlaneStore:
         """Retrieve a milestone record by ID.
 
         Raises:
-            KeyError: If the milestone is not found.
+            RecordNotFoundError: If the milestone is not found.
             ValueError: If the milestone_id fails validation.
         """
         validate_id(milestone_id)
@@ -390,7 +399,7 @@ class SqliteTrustPlaneStore:
             (milestone_id,),
         ).fetchone()
         if row is None:
-            raise KeyError(f"Milestone not found: {milestone_id}")
+            raise RecordNotFoundError("milestone", milestone_id)
         return MilestoneRecord.from_dict(json.loads(row["data"]))
 
     def list_milestones(self, limit: int = 1000) -> list[MilestoneRecord]:
@@ -429,7 +438,7 @@ class SqliteTrustPlaneStore:
         """Retrieve a hold record by ID.
 
         Raises:
-            KeyError: If the hold is not found.
+            RecordNotFoundError: If the hold is not found.
             ValueError: If the hold_id fails validation.
         """
         validate_id(hold_id)
@@ -439,7 +448,7 @@ class SqliteTrustPlaneStore:
             (hold_id,),
         ).fetchone()
         if row is None:
-            raise KeyError(f"Hold not found: {hold_id}")
+            raise RecordNotFoundError("hold", hold_id)
         return HoldRecord.from_dict(json.loads(row["data"]))
 
     def list_holds(
@@ -499,7 +508,7 @@ class SqliteTrustPlaneStore:
         """Retrieve a delegate by ID.
 
         Raises:
-            KeyError: If the delegate is not found.
+            RecordNotFoundError: If the delegate is not found.
             ValueError: If the delegate_id fails validation.
         """
         validate_id(delegate_id)
@@ -509,7 +518,7 @@ class SqliteTrustPlaneStore:
             (delegate_id,),
         ).fetchone()
         if row is None:
-            raise KeyError(f"Delegate not found: {delegate_id}")
+            raise RecordNotFoundError("delegate", delegate_id)
         return Delegate.from_dict(json.loads(row["data"]))
 
     def list_delegates(
@@ -631,12 +640,12 @@ class SqliteTrustPlaneStore:
         """Retrieve the project manifest.
 
         Raises:
-            KeyError: If the manifest has not been stored yet.
+            RecordNotFoundError: If the manifest has not been stored yet.
         """
         conn = self._get_connection()
         row = conn.execute("SELECT data FROM manifest WHERE id = 'manifest'").fetchone()
         if row is None:
-            raise KeyError("Manifest not found: no manifest in trust-plane database")
+            raise RecordNotFoundError("manifest", "manifest")
         return ProjectManifest.from_dict(json.loads(row["data"]))
 
     # ------------------------------------------------------------------
@@ -666,7 +675,7 @@ class SqliteTrustPlaneStore:
         """Retrieve an anchor by ID.
 
         Raises:
-            KeyError: If the anchor is not found.
+            RecordNotFoundError: If the anchor is not found.
             ValueError: If the anchor_id fails validation.
         """
         validate_id(anchor_id)
@@ -676,7 +685,7 @@ class SqliteTrustPlaneStore:
             (anchor_id,),
         ).fetchone()
         if row is None:
-            raise KeyError(f"Anchor not found: {anchor_id}")
+            raise RecordNotFoundError("anchor", anchor_id)
         return json.loads(row["data"])
 
     def list_anchors(self, limit: int = 1000) -> list[dict]:

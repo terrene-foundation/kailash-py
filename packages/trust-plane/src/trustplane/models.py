@@ -1,6 +1,8 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
 
+from __future__ import annotations
+
 """Data models for TrustPlane.
 
 Domain models wrapping EATP primitives:
@@ -13,6 +15,7 @@ Domain models wrapping EATP primitives:
 
 import hashlib
 import json
+import logging
 import math
 import secrets
 from dataclasses import dataclass, field
@@ -20,8 +23,29 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
+logger = logging.getLogger(__name__)
 
-@dataclass
+__all__ = [
+    "OperationalConstraints",
+    "DataAccessConstraints",
+    "FinancialConstraints",
+    "TemporalConstraints",
+    "CommunicationConstraints",
+    "ConstraintEnvelope",
+    "ReviewRequirement",
+    "DecisionType",
+    "HumanCompetency",
+    "VerificationCategory",
+    "ExecutionRecord",
+    "EscalationRecord",
+    "InterventionRecord",
+    "DecisionRecord",
+    "MilestoneRecord",
+    "ProjectManifest",
+]
+
+
+@dataclass(frozen=True)
 class OperationalConstraints:
     """EATP OPERATIONAL dimension — what the AI can do."""
 
@@ -45,7 +69,7 @@ class OperationalConstraints:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class DataAccessConstraints:
     """EATP DATA_ACCESS dimension — what data the AI can see and modify."""
 
@@ -57,12 +81,27 @@ class DataAccessConstraints:
     def __post_init__(self) -> None:
         from trustplane.pathutils import normalize_resource_path
 
-        self.read_paths = [normalize_resource_path(p) for p in self.read_paths]
-        self.write_paths = [normalize_resource_path(p) for p in self.write_paths]
-        self.blocked_paths = [normalize_resource_path(p) for p in self.blocked_paths]
-        self.blocked_patterns = [
-            normalize_resource_path(p) for p in self.blocked_patterns
-        ]
+        # frozen=True requires object.__setattr__ in __post_init__
+        object.__setattr__(
+            self,
+            "read_paths",
+            [normalize_resource_path(p) for p in self.read_paths],
+        )
+        object.__setattr__(
+            self,
+            "write_paths",
+            [normalize_resource_path(p) for p in self.write_paths],
+        )
+        object.__setattr__(
+            self,
+            "blocked_paths",
+            [normalize_resource_path(p) for p in self.blocked_paths],
+        )
+        object.__setattr__(
+            self,
+            "blocked_patterns",
+            [normalize_resource_path(p) for p in self.blocked_patterns],
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -82,7 +121,7 @@ class DataAccessConstraints:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class FinancialConstraints:
     """EATP FINANCIAL dimension — cost boundaries."""
 
@@ -118,7 +157,7 @@ class FinancialConstraints:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class TemporalConstraints:
     """EATP TEMPORAL dimension — time boundaries."""
 
@@ -161,7 +200,7 @@ class TemporalConstraints:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class CommunicationConstraints:
     """EATP COMMUNICATION dimension — external communication boundaries."""
 
@@ -690,10 +729,15 @@ class DecisionRecord:
     author: str = "human"
     related_decisions: list[str] = field(default_factory=list)
     decision_id: str = ""
+    cost: float = 0.0
 
     def __post_init__(self) -> None:
         if not (0.0 <= self.confidence <= 1.0):
             raise ValueError(f"confidence must be 0.0-1.0, got {self.confidence}")
+        if self.cost < 0 or (self.cost != 0.0 and not math.isfinite(self.cost)):
+            raise ValueError(
+                f"cost must be a non-negative finite number, got {self.cost}"
+            )
         if not self.decision_id:
             self.decision_id = self._generate_id()
 
@@ -719,6 +763,7 @@ class DecisionRecord:
             "timestamp": self.timestamp.isoformat(),
             "author": self.author,
             "related_decisions": self.related_decisions,
+            "cost": self.cost,
         }
 
     @classmethod
@@ -741,6 +786,11 @@ class DecisionRecord:
             raise ValueError(
                 "DecisionRecord.from_dict: 'confidence' must be a finite number"
             )
+        cost = data.get("cost", 0.0)
+        if not isinstance(cost, (int, float)) or not math.isfinite(cost) or cost < 0:
+            raise ValueError(
+                "DecisionRecord.from_dict: 'cost' must be a non-negative finite number"
+            )
         return cls(
             decision_id=data["decision_id"],
             decision_type=_parse_decision_type(data["decision_type"]),
@@ -757,6 +807,7 @@ class DecisionRecord:
             timestamp=datetime.fromisoformat(data["timestamp"]),
             author=data.get("author", "human"),
             related_decisions=data.get("related_decisions", []),
+            cost=float(cost),
         )
 
     def content_hash(self) -> str:
