@@ -127,7 +127,7 @@ def test_record_and_get_history(store):
         ),
     ]
     for t in transitions:
-        store.record_transition("agent-001", t)
+        store.record_transition(t)
 
     history = store.get_history("agent-001")
     assert len(history) == 3
@@ -149,7 +149,6 @@ def test_history_limit(store):
     """get_history with limit should return at most that many entries."""
     for i in range(10):
         store.record_transition(
-            "agent-002",
             TransitionResult(
                 success=True,
                 from_posture=TrustPosture.SUPERVISED,
@@ -180,7 +179,6 @@ def test_persistence_across_restarts(db_path):
     store1 = SQLitePostureStore(db_path)
     store1.set_posture("agent-persist", TrustPosture.DELEGATED)
     store1.record_transition(
-        "agent-persist",
         TransitionResult(
             success=True,
             from_posture=TrustPosture.SUPERVISED,
@@ -378,7 +376,7 @@ def test_record_transition_with_metadata(store):
         reason="With metadata",
         metadata={"agent_id": "agent-meta", "custom_key": "custom_value"},
     )
-    store.record_transition("agent-meta", tr)
+    store.record_transition(tr)
 
     history = store.get_history("agent-meta")
     assert len(history) == 1

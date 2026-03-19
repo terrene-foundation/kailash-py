@@ -96,38 +96,17 @@ def validate_dag(
             else:
                 adjacency[name].append(dep)
 
-    # --- DFS-based cycle detection with 3-color marking ---
+    # --- Iterative DFS-based cycle detection with 3-color marking ---
+    # (Recursive DFS would overflow Python's stack on deep chains up to max_agents)
     color: Dict[str, _Color] = {name: _Color.WHITE for name in names}
     parent: Dict[str, str | None] = {name: None for name in names}
     cycles: List[List[str]] = []
     post_order: List[str] = []
 
-    def _dfs(node: str) -> None:
-        """Depth-first search with cycle detection."""
-        color[node] = _Color.GRAY
-        for dep in adjacency[node]:
-            if color[dep] == _Color.GRAY:
-                # Back-edge found: reconstruct cycle
-                cycle = _reconstruct_cycle(node, dep, parent)
-                cycles.append(cycle)
-                logger.info(
-                    "Cycle detected in DAG: %s",
-                    " -> ".join(cycle),
-                )
-            elif color[dep] == _Color.WHITE:
-                parent[dep] = node
-                _dfs(dep)
-        color[node] = _Color.BLACK
-        post_order.append(node)
-
     def _reconstruct_cycle(
         current: str, back_target: str, parent_map: Dict[str, str | None]
     ) -> List[str]:
-        """Reconstruct a cycle from parent pointers.
-
-        Traces from current back to back_target through parent pointers,
-        producing the cycle path.
-        """
+        """Reconstruct a cycle from parent pointers."""
         cycle = [back_target, current]
         node = parent_map.get(current)
         visited_in_trace: Set[str] = {back_target, current}
@@ -142,9 +121,31 @@ def validate_dag(
 
     # Process all nodes (handles disconnected components)
     # Sort names for deterministic traversal order
-    for name in sorted(names):
-        if color[name] == _Color.WHITE:
-            _dfs(name)
+    for start in sorted(names):
+        if color[start] != _Color.WHITE:
+            continue
+        color[start] = _Color.GRAY
+        stack = [(start, iter(adjacency.get(start, [])))]
+        while stack:
+            node, children = stack[-1]
+            try:
+                dep = next(children)
+                if color[dep] == _Color.GRAY:
+                    # Back-edge found: reconstruct cycle
+                    cycle = _reconstruct_cycle(node, dep, parent)
+                    cycles.append(cycle)
+                    logger.info(
+                        "Cycle detected in DAG: %s",
+                        " -> ".join(cycle),
+                    )
+                elif color[dep] == _Color.WHITE:
+                    parent[dep] = node
+                    color[dep] = _Color.GRAY
+                    stack.append((dep, iter(adjacency.get(dep, []))))
+            except StopIteration:
+                color[node] = _Color.BLACK
+                post_order.append(node)
+                stack.pop()
 
     if cycles:
         return ValidationResult(

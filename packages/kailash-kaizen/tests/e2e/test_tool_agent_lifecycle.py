@@ -3,15 +3,16 @@ from __future__ import annotations
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
 
-"""End-to-end test of the complete tool agent lifecycle.
+"""End-to-end test of the tool agent lifecycle.
 
-Exercises all 6 deliverables:
+Exercises 4 of 6 deliverables end-to-end:
 - P1: Agent manifest + introspection + deploy
-- P2: MCP catalog server
 - P3: DAG validator + schema compat + cost estimator
-- P4: DataFlow aggregation queries
 - P5: PostureStateMachine + evidence
 - P6: BudgetTracker + posture-budget integration
+
+P2 (MCP catalog server) is tested at Tier 1 in tests/unit/mcp/test_catalog_server.py.
+P4 (DataFlow aggregation) is tested at Tier 1 in tests/unit/query/test_sql_builder.py.
 
 NO MOCKING -- all real.
 """

@@ -433,8 +433,28 @@ class BudgetTracker:
 
         Args:
             reserved_microdollars: The amount that was previously reserved.
+                Must be a non-negative integer.
             actual_microdollars: The actual cost that was incurred.
+                Must be a non-negative integer.
+
+        Raises:
+            BudgetTrackerError: If either argument is not a non-negative integer.
         """
+        # H2: Validate inputs before acquiring the lock
+        if not isinstance(reserved_microdollars, int) or reserved_microdollars < 0:
+            raise BudgetTrackerError(
+                f"reserved_microdollars must be a non-negative integer, got {reserved_microdollars!r}",
+                details={"reserved_microdollars": str(reserved_microdollars)},
+            )
+        if not isinstance(actual_microdollars, int) or actual_microdollars < 0:
+            raise BudgetTrackerError(
+                f"actual_microdollars must be a non-negative integer, got {actual_microdollars!r}",
+                details={"actual_microdollars": str(actual_microdollars)},
+            )
+
+        events_to_fire: List[BudgetEvent] = []
+        snapshot_to_save: Optional[BudgetSnapshot] = None
+
         with self._lock:
             # Saturating subtract from reserved
             self._reserved = max(0, self._reserved - reserved_microdollars)
@@ -462,13 +482,32 @@ class BudgetTracker:
                 max(0, self._allocated - self._committed - self._reserved),
             )
 
-            # Check thresholds while still holding the lock (reads state)
-            self._check_thresholds()
+            # C1: Collect threshold events inside the lock but do NOT fire callbacks here
+            events_to_fire = self._collect_threshold_events()
 
-        # Auto-save to store outside the lock (save_snapshot is its own atomic op)
-        if self._store is not None and self._tracker_id is not None:
+            # C3: Capture a consistent snapshot while still holding the lock
+            if self._store is not None:
+                snapshot_to_save = BudgetSnapshot(
+                    allocated=self._allocated,
+                    committed=self._committed,
+                )
+
+        # C1: Fire callbacks OUTSIDE the lock to prevent deadlock when callbacks
+        # re-enter remaining_microdollars(), check(), or snapshot().
+        for event in events_to_fire:
+            for cb in self._threshold_callbacks:
+                try:
+                    cb(event)
+                except Exception:
+                    logger.exception(
+                        "Threshold callback raised exception for event %s -- ignoring",
+                        event.event_type,
+                    )
+
+        # C3: Save the snapshot that was captured consistently inside the lock.
+        if snapshot_to_save is not None and self._tracker_id is not None:
             try:
-                self._store.save_snapshot(self._tracker_id, self.snapshot())
+                self._store.save_snapshot(self._tracker_id, snapshot_to_save)
             except Exception:
                 logger.exception(
                     "Failed to auto-save budget snapshot for %s -- state is in memory only",
@@ -568,15 +607,19 @@ class BudgetTracker:
     # Internal
     # ------------------------------------------------------------------
 
-    def _check_thresholds(self) -> None:
-        """Check and fire threshold callbacks if budget thresholds are crossed.
+    def _collect_threshold_events(self) -> List[BudgetEvent]:
+        """Collect threshold events for any newly-crossed budget thresholds.
 
         Called under lock after record(). Each threshold fires at most once.
-        Callback exceptions are caught and logged -- they must not break
-        the tracker.
+        Returns a list of BudgetEvent objects to be fired by the caller
+        OUTSIDE the lock, to avoid deadlock when callbacks re-enter the
+        tracker (e.g. remaining_microdollars(), check(), snapshot()).
+
+        Returns:
+            List of BudgetEvent objects for newly-crossed thresholds (may be empty).
         """
         if self._allocated == 0:
-            return
+            return []
 
         utilization_pct = (self._committed / self._allocated) * 100
 
@@ -594,8 +637,9 @@ class BudgetTracker:
             thresholds_to_fire.append("threshold_80")
             self._fired_thresholds.add("threshold_80")
 
+        events: List[BudgetEvent] = []
+        remaining = max(0, self._allocated - self._committed - self._reserved)
         for event_type in thresholds_to_fire:
-            remaining = max(0, self._allocated - self._committed - self._reserved)
             event = BudgetEvent(
                 event_type=event_type,
                 remaining_microdollars=remaining,
@@ -608,14 +652,8 @@ class BudgetTracker:
                 self._allocated,
                 utilization_pct,
             )
-            for cb in self._threshold_callbacks:
-                try:
-                    cb(event)
-                except Exception:
-                    logger.exception(
-                        "Threshold callback raised exception for event %s -- ignoring",
-                        event_type,
-                    )
+            events.append(event)
+        return events
 
 
 # ---------------------------------------------------------------------------

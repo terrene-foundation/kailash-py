@@ -31,6 +31,7 @@ import os
 import re
 import sqlite3
 import stat
+import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -217,7 +218,8 @@ class SQLitePostureStore:
         _validate_db_path(db_path)
 
         self._db_path = db_path
-        self._conn: Optional[sqlite3.Connection] = None
+        self._local = threading.local()
+        self._closed = False
 
         # Create parent directories if needed
         parent = os.path.dirname(db_path)
@@ -240,15 +242,27 @@ class SQLitePostureStore:
         if hasattr(os, "chmod"):
             os.chmod(db_path, stat.S_IRUSR | stat.S_IWUSR)
 
-        # Connect and initialize
-        self._conn = sqlite3.connect(db_path)
-        self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute(_CREATE_POSTURES_TABLE)
-        self._conn.execute(_CREATE_TRANSITIONS_TABLE)
-        self._conn.commit()
+        # Initialize schema via the calling thread's connection
+        conn = self._get_connection()
+        conn.execute(_CREATE_POSTURES_TABLE)
+        conn.execute(_CREATE_TRANSITIONS_TABLE)
+        conn.commit()
 
         logger.info("SQLitePostureStore initialized at %s", db_path)
+
+    # ------------------------------------------------------------------
+    # Internal connection management
+    # ------------------------------------------------------------------
+
+    def _get_connection(self) -> sqlite3.Connection:
+        """Return a per-thread SQLite connection, creating it if needed."""
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(self._db_path)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.row_factory = sqlite3.Row
+            self._local.conn = conn
+        return conn
 
     # ------------------------------------------------------------------
     # Posture CRUD
@@ -270,7 +284,7 @@ class SQLitePostureStore:
         validate_agent_id(agent_id)
         self._require_open()
 
-        cursor = self._conn.execute(
+        cursor = self._get_connection().execute(
             "SELECT posture FROM postures WHERE agent_id = ?",
             (agent_id,),
         )
@@ -295,12 +309,13 @@ class SQLitePostureStore:
         self._require_open()
 
         now = datetime.now(timezone.utc).isoformat()
-        self._conn.execute(
+        conn = self._get_connection()
+        conn.execute(
             "INSERT OR REPLACE INTO postures (agent_id, posture, updated_at) "
             "VALUES (?, ?, ?)",
             (agent_id, posture.value, now),
         )
-        self._conn.commit()
+        conn.commit()
         logger.debug("Set posture for agent %s to %s", agent_id, posture.value)
 
     # ------------------------------------------------------------------
@@ -309,19 +324,21 @@ class SQLitePostureStore:
 
     def record_transition(
         self,
-        agent_id: str,
         result: TransitionResult,
     ) -> None:
         """Record a posture transition in the history.
 
+        Matches the PostureStore protocol. The agent_id is extracted from
+        ``result.metadata["agent_id"]``.
+
         Args:
-            agent_id: The agent this transition belongs to.
             result: The TransitionResult to persist.
 
         Raises:
-            ValueError: If agent_id is invalid.
+            ValueError: If the agent_id extracted from result is invalid.
             RuntimeError: If the store has been closed.
         """
+        agent_id: str = str(result.metadata.get("agent_id", ""))
         validate_agent_id(agent_id)
         self._require_open()
 
@@ -337,7 +354,8 @@ class SQLitePostureStore:
         if enriched_metadata:
             metadata_json = json.dumps(enriched_metadata, default=str)
 
-        self._conn.execute(
+        conn = self._get_connection()
+        conn.execute(
             "INSERT INTO transitions "
             "(agent_id, from_posture, to_posture, success, timestamp, metadata) "
             "VALUES (?, ?, ?, ?, ?, ?)",
@@ -350,7 +368,7 @@ class SQLitePostureStore:
                 metadata_json,
             ),
         )
-        self._conn.commit()
+        conn.commit()
         logger.debug("Recorded transition for agent %s", agent_id)
 
     def get_history(
@@ -379,7 +397,7 @@ class SQLitePostureStore:
         # Bound limit to prevent unbounded queries
         effective_limit = min(limit, _MAX_HISTORY_LIMIT)
 
-        cursor = self._conn.execute(
+        cursor = self._get_connection().execute(
             "SELECT agent_id, from_posture, to_posture, success, timestamp, metadata "
             "FROM transitions WHERE agent_id = ? ORDER BY id DESC LIMIT ?",
             (agent_id, effective_limit),
@@ -392,14 +410,17 @@ class SQLitePostureStore:
     # ------------------------------------------------------------------
 
     def close(self) -> None:
-        """Close the database connection.
+        """Close the calling thread's database connection.
 
-        After calling close(), further operations will raise RuntimeError.
+        After calling close(), further operations on this thread will raise
+        RuntimeError.
         """
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
-            logger.info("SQLitePostureStore closed")
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            conn.close()
+            self._local.conn = None
+        self._closed = True
+        logger.info("SQLitePostureStore closed")
 
     def __enter__(self) -> SQLitePostureStore:
         """Enter the context manager."""
@@ -415,7 +436,7 @@ class SQLitePostureStore:
 
     def _require_open(self) -> None:
         """Raise RuntimeError if the store has been closed."""
-        if self._conn is None:
+        if self._closed:
             raise RuntimeError(
                 "SQLitePostureStore is closed. "
                 "Cannot perform operations on a closed store."
