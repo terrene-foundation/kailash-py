@@ -1,30 +1,28 @@
-commit: 33af3d5a205b1043358433b979e8f5a657075d49
-timestamp: 2026-03-18T23:59:00+08:00
-baseline_pass: 2768 (EATP from repo root)
+commit: 403ff246
+timestamp: 2026-03-19T22:30:00Z
+baseline_pass: 2839
 baseline_fail: 0
-final_pass: 2837 (EATP from package dir, excl pre-existing test_quickstart fail)
+final_pass: 3108
 final_fail: 0
-new_tests: 304
+new_tests: 269
 regressions: 0
-command: pytest tests/ -x --tb=short -q --timeout=30
+command: pytest packages/{eatp,kailash-kaizen,kailash-dataflow}/tests/ -x --tb=short -q
 
-# Test breakdown by module:
-# EATP BudgetTracker:       45 passed (packages/eatp/tests/unit/test_budget_tracker.py)
-# EATP PostureEvidence:     23 passed (packages/eatp/tests/unit/test_posture_evidence.py)
-# EATP PostureStore:        22 passed (packages/eatp/tests/integration/test_posture_store.py)
-# DataFlow SQL Aggregation: 68 passed (packages/kailash-dataflow/tests/unit/query/test_sql_builder.py)
-# Kaizen Manifest:          42 passed (packages/kailash-kaizen/tests/unit/test_manifest.py)
-# Kaizen Deploy:            30 passed (packages/kailash-kaizen/tests/unit/deploy/test_deploy.py)
-# Kaizen Composition:       32 passed (packages/kailash-kaizen/tests/unit/composition/)
-# Kaizen MCP Catalog:       42 passed (packages/kailash-kaizen/tests/unit/mcp/test_catalog_server.py)
-# Total new tests:          304
+# Milestone 4 implementation session (2026-03-19)
+# Baseline: EATP 2625, Kaizen tool-agent 146, DataFlow query 68
+# Final:    EATP 2842, Kaizen tool-agent 198, DataFlow query 68
 
-# Pre-existing failures (NOT our regressions):
-# - kailash.nodes.base.Node import error affects DataFlow and Kaizen test suites
-#   when run from repo root (conftest cross-contamination)
-# - test_quickstart.py::TestMain::test_module_runnable_as_script (EATP pre-existing)
+# New tests added in this session:
+# EATP BudgetStore:          27 passed (packages/eatp/tests/integration/test_budget_store.py)
+# EATP PostureDefault:        9 passed (packages/eatp/tests/unit/test_posture_default.py)
+# Kaizen PostureBudget:      19 passed (packages/kailash-kaizen/tests/unit/governance/test_posture_budget.py)
+# Kaizen ImportCycles:       23 passed (packages/kailash-kaizen/tests/unit/test_import_cycles.py)
+# Kaizen E2E Lifecycle:      10 passed (packages/kailash-kaizen/tests/e2e/test_tool_agent_lifecycle.py)
 
-# Notes:
-# - DataFlow/Kaizen tests require --noconftest or running from package dir
-#   to avoid pre-existing kailash core SDK import error
-# - All new modules are self-contained and don't depend on broken import chain
+# Security findings addressed:
+# H1: MCP error response sanitization (unexpected exceptions only)
+# H2: SQLiteBudgetStore symlink rejection
+# M2: get_transaction_log limit capped at 10,000
+
+# Deferred to v0.3.0:
+# M1: PostureStateMachine._agent_postures unbounded dict (bounded by agent count, low risk)

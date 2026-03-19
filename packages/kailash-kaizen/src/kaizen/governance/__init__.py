@@ -35,6 +35,7 @@ from kaizen.governance.policy_engine import (
     TagCondition,
     TimeWindowCondition,
 )
+from kaizen.governance.posture_budget import PostureBudgetIntegration
 from kaizen.governance.rate_limiter import (
     ExternalAgentRateLimiter,
     RateLimitCheckResult,
@@ -84,6 +85,8 @@ __all__ = [
     "ExternalAgentPolicy",
     "PolicyDecision",
     "ExternalAgentPolicyEngine",
+    # Posture-Budget integration
+    "PostureBudgetIntegration",
     # DataFlow persistence (optional)
     "register_approval_models",
     "ExternalAgentApprovalStorage",

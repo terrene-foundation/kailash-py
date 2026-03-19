@@ -251,19 +251,29 @@ class TestTrustPostureUpgradeDowngrade:
         assert TrustPosture.PSEUDO_AGENT.can_upgrade_to(TrustPosture.SUPERVISED) is True
 
     def test_cannot_upgrade_to_same_posture(self):
-        assert TrustPosture.SHARED_PLANNING.can_upgrade_to(TrustPosture.SHARED_PLANNING) is False
+        assert (
+            TrustPosture.SHARED_PLANNING.can_upgrade_to(TrustPosture.SHARED_PLANNING)
+            is False
+        )
 
     def test_cannot_upgrade_to_lower_posture(self):
         assert TrustPosture.DELEGATED.can_upgrade_to(TrustPosture.PSEUDO_AGENT) is False
 
     def test_can_downgrade_from_delegated_to_pseudo_agent(self):
-        assert TrustPosture.DELEGATED.can_downgrade_to(TrustPosture.PSEUDO_AGENT) is True
+        assert (
+            TrustPosture.DELEGATED.can_downgrade_to(TrustPosture.PSEUDO_AGENT) is True
+        )
 
     def test_cannot_downgrade_to_same_posture(self):
-        assert TrustPosture.SHARED_PLANNING.can_downgrade_to(TrustPosture.SHARED_PLANNING) is False
+        assert (
+            TrustPosture.SHARED_PLANNING.can_downgrade_to(TrustPosture.SHARED_PLANNING)
+            is False
+        )
 
     def test_cannot_downgrade_to_higher_posture(self):
-        assert TrustPosture.PSEUDO_AGENT.can_downgrade_to(TrustPosture.DELEGATED) is False
+        assert (
+            TrustPosture.PSEUDO_AGENT.can_downgrade_to(TrustPosture.DELEGATED) is False
+        )
 
 
 class TestPostureTransitionRequest:
@@ -303,8 +313,9 @@ class TestPostureTransitionRequest:
 class TestPostureStateMachine:
     """PostureStateMachine transitions and guards."""
 
-    def test_default_posture_is_shared_planning(self, posture_machine: PostureStateMachine):
-        assert posture_machine.get_posture("unknown-agent") == TrustPosture.SHARED_PLANNING
+    def test_default_posture_is_supervised(self, posture_machine: PostureStateMachine):
+        """RT-17: CARE spec requires SUPERVISED as the default posture."""
+        assert posture_machine.get_posture("unknown-agent") == TrustPosture.SUPERVISED
 
     def test_set_and_get_posture(self, posture_machine: PostureStateMachine):
         posture_machine.set_posture("agent-1", TrustPosture.DELEGATED)
@@ -323,7 +334,9 @@ class TestPostureStateMachine:
         assert result.success is False
         assert result.blocked_by == "upgrade_approval_required"
 
-    def test_upgrade_succeeds_with_requester_id(self, posture_machine: PostureStateMachine):
+    def test_upgrade_succeeds_with_requester_id(
+        self, posture_machine: PostureStateMachine
+    ):
         posture_machine.set_posture("agent-1", TrustPosture.SHARED_PLANNING)
         result = posture_machine.transition(
             PostureTransitionRequest(
@@ -337,7 +350,9 @@ class TestPostureStateMachine:
         assert result.success is True
         assert posture_machine.get_posture("agent-1") == TrustPosture.DELEGATED
 
-    def test_downgrade_does_not_require_approval(self, posture_machine: PostureStateMachine):
+    def test_downgrade_does_not_require_approval(
+        self, posture_machine: PostureStateMachine
+    ):
         posture_machine.set_posture("agent-1", TrustPosture.DELEGATED)
         result = posture_machine.transition(
             PostureTransitionRequest(
@@ -361,9 +376,13 @@ class TestPostureStateMachine:
         assert result.success is False
         assert "does not match" in result.reason
 
-    def test_emergency_downgrade_bypasses_guards(self, posture_machine: PostureStateMachine):
+    def test_emergency_downgrade_bypasses_guards(
+        self, posture_machine: PostureStateMachine
+    ):
         posture_machine.set_posture("agent-1", TrustPosture.DELEGATED)
-        result = posture_machine.emergency_downgrade("agent-1", reason="Security incident")
+        result = posture_machine.emergency_downgrade(
+            "agent-1", reason="Security incident"
+        )
         assert result.success is True
         assert result.to_posture == TrustPosture.PSEUDO_AGENT
         assert result.transition_type == PostureTransition.EMERGENCY_DOWNGRADE
@@ -396,7 +415,9 @@ class TestPostureStateMachine:
         assert removed is True
         assert "test_guard" not in posture_machine.list_guards()
 
-    def test_remove_nonexistent_guard_returns_false(self, posture_machine: PostureStateMachine):
+    def test_remove_nonexistent_guard_returns_false(
+        self, posture_machine: PostureStateMachine
+    ):
         assert posture_machine.remove_guard("nonexistent") is False
 
     def test_machine_without_upgrade_approval(self):
@@ -593,7 +614,9 @@ class TestResourceDimension:
         result = resource_dim.check(cv, {"resource_requested": "logs/app.log"})
         assert result.satisfied is False
 
-    def test_check_no_resource_requested_satisfies(self, resource_dim: ResourceDimension):
+    def test_check_no_resource_requested_satisfies(
+        self, resource_dim: ResourceDimension
+    ):
         cv = resource_dim.parse("data/*.json")
         result = resource_dim.check(cv, {})
         assert result.satisfied is True
@@ -659,12 +682,16 @@ class TestDataAccessDimension:
         result = data_dim.check(cv, {"contains_pii": False})
         assert result.satisfied is True
 
-    def test_check_internal_only_with_internal_data(self, data_dim: DataAccessDimension):
+    def test_check_internal_only_with_internal_data(
+        self, data_dim: DataAccessDimension
+    ):
         cv = data_dim.parse("internal_only")
         result = data_dim.check(cv, {"data_classification": "internal"})
         assert result.satisfied is True
 
-    def test_check_internal_only_with_external_data(self, data_dim: DataAccessDimension):
+    def test_check_internal_only_with_external_data(
+        self, data_dim: DataAccessDimension
+    ):
         cv = data_dim.parse("internal_only")
         result = data_dim.check(cv, {"data_classification": "external"})
         assert result.satisfied is False
@@ -686,12 +713,16 @@ class TestCommunicationDimension:
         result = comm_dim.check(cv, {"communication_target": "api.example.com"})
         assert result.satisfied is False
 
-    def test_check_internal_only_allows_localhost(self, comm_dim: CommunicationDimension):
+    def test_check_internal_only_allows_localhost(
+        self, comm_dim: CommunicationDimension
+    ):
         cv = comm_dim.parse("internal_only")
         result = comm_dim.check(cv, {"communication_target": "localhost:8080"})
         assert result.satisfied is True
 
-    def test_check_internal_only_blocks_external(self, comm_dim: CommunicationDimension):
+    def test_check_internal_only_blocks_external(
+        self, comm_dim: CommunicationDimension
+    ):
         cv = comm_dim.parse("internal_only")
         result = comm_dim.check(cv, {"communication_target": "api.example.com"})
         assert result.satisfied is False
@@ -706,7 +737,9 @@ class TestCommunicationDimension:
         result = comm_dim.check(cv, {"communication_target": "sub.example.com"})
         assert result.satisfied is True
 
-    def test_check_allowed_domains_denies_unlisted(self, comm_dim: CommunicationDimension):
+    def test_check_allowed_domains_denies_unlisted(
+        self, comm_dim: CommunicationDimension
+    ):
         cv = comm_dim.parse(
             {
                 "mode": "allowed_domains",
@@ -807,7 +840,9 @@ class TestCommerceConstraint:
         )
         assert commerce_dim.is_tighter(parent, child) is True
 
-    def test_is_tighter_child_adds_beneficiary_invalid(self, commerce_dim: CommerceConstraint):
+    def test_is_tighter_child_adds_beneficiary_invalid(
+        self, commerce_dim: CommerceConstraint
+    ):
         parent = commerce_dim.parse(
             {
                 "beneficiary_id": "org-001",
@@ -822,7 +857,9 @@ class TestCommerceConstraint:
         )
         assert commerce_dim.is_tighter(parent, child) is False
 
-    def test_is_tighter_child_adds_commerce_type_invalid(self, commerce_dim: CommerceConstraint):
+    def test_is_tighter_child_adds_commerce_type_invalid(
+        self, commerce_dim: CommerceConstraint
+    ):
         parent = commerce_dim.parse(
             {
                 "beneficiary_id": "org-001",
@@ -837,7 +874,9 @@ class TestCommerceConstraint:
         )
         assert commerce_dim.is_tighter(parent, child) is False
 
-    def test_is_tighter_child_drops_attribution_invalid(self, commerce_dim: CommerceConstraint):
+    def test_is_tighter_child_drops_attribution_invalid(
+        self, commerce_dim: CommerceConstraint
+    ):
         parent = commerce_dim.parse(
             {
                 "beneficiary_id": "org-001",
@@ -918,7 +957,9 @@ class TestSpendTracker:
         spend_tracker.record_spend("agent-1", amount=500.0, action="purchase")
         assert spend_tracker.would_exceed("agent-1", 400.0) is False
 
-    def test_would_exceed_unknown_agent_returns_false(self, spend_tracker: SpendTracker):
+    def test_would_exceed_unknown_agent_returns_false(
+        self, spend_tracker: SpendTracker
+    ):
         assert spend_tracker.would_exceed("unknown", 100.0) is False
 
     def test_budget_period_enum_values(self):
@@ -988,7 +1029,9 @@ class TestMultiDimensionEvaluator:
         )
         assert result.satisfied is True
 
-    def test_hierarchical_first_dimension_determines(self, evaluator: MultiDimensionEvaluator):
+    def test_hierarchical_first_dimension_determines(
+        self, evaluator: MultiDimensionEvaluator
+    ):
         result = evaluator.evaluate(
             constraints={"cost_limit": 1000, "rate_limit": 50},
             context={"cost_used": 500, "requests_in_period": 100},
@@ -1176,7 +1219,9 @@ class TestVerdictEnum:
 class TestStrictEnforcer:
     """StrictEnforcer classify and enforce."""
 
-    def test_classify_auto_approved(self, valid_verification_result: VerificationResult):
+    def test_classify_auto_approved(
+        self, valid_verification_result: VerificationResult
+    ):
         enforcer = StrictEnforcer()
         verdict = enforcer.classify(valid_verification_result)
         assert verdict == Verdict.AUTO_APPROVED
@@ -1204,7 +1249,9 @@ class TestStrictEnforcer:
         verdict = enforcer.classify(result)
         assert verdict == Verdict.FLAGGED
 
-    def test_enforce_auto_approved_returns_verdict(self, valid_verification_result: VerificationResult):
+    def test_enforce_auto_approved_returns_verdict(
+        self, valid_verification_result: VerificationResult
+    ):
         enforcer = StrictEnforcer()
         verdict = enforcer.enforce(
             agent_id="agent-1",
@@ -1213,7 +1260,9 @@ class TestStrictEnforcer:
         )
         assert verdict == Verdict.AUTO_APPROVED
 
-    def test_enforce_blocked_raises(self, blocked_verification_result: VerificationResult):
+    def test_enforce_blocked_raises(
+        self, blocked_verification_result: VerificationResult
+    ):
         enforcer = StrictEnforcer()
         with pytest.raises(EATPBlockedError) as exc_info:
             enforcer.enforce(
@@ -1247,7 +1296,9 @@ class TestStrictEnforcer:
     def test_enforce_held_callback_allows(self):
         callback_called = False
 
-        def allow_callback(agent_id: str, action: str, result: VerificationResult) -> bool:
+        def allow_callback(
+            agent_id: str, action: str, result: VerificationResult
+        ) -> bool:
             nonlocal callback_called
             callback_called = True
             return True
@@ -1261,7 +1312,9 @@ class TestStrictEnforcer:
             valid=True,
             violations=[{"dim": "cost", "reason": "near limit"}],
         )
-        verdict = enforcer.enforce(agent_id="agent-1", action="write_data", result=result)
+        verdict = enforcer.enforce(
+            agent_id="agent-1", action="write_data", result=result
+        )
         assert verdict == Verdict.AUTO_APPROVED
         assert callback_called is True
 
@@ -1284,13 +1337,17 @@ class TestStrictEnforcer:
 
     def test_enforce_records_kept(self, valid_verification_result: VerificationResult):
         enforcer = StrictEnforcer()
-        enforcer.enforce(agent_id="agent-1", action="read", result=valid_verification_result)
+        enforcer.enforce(
+            agent_id="agent-1", action="read", result=valid_verification_result
+        )
         assert len(enforcer.records) == 1
         assert enforcer.records[0].verdict == Verdict.AUTO_APPROVED
 
     def test_clear_records(self, valid_verification_result: VerificationResult):
         enforcer = StrictEnforcer()
-        enforcer.enforce(agent_id="agent-1", action="read", result=valid_verification_result)
+        enforcer.enforce(
+            agent_id="agent-1", action="read", result=valid_verification_result
+        )
         enforcer.clear_records()
         assert len(enforcer.records) == 0
 
@@ -1314,7 +1371,9 @@ class TestShadowEnforcer:
 
     def test_check_auto_approved(self, valid_verification_result: VerificationResult):
         shadow = ShadowEnforcer()
-        verdict = shadow.check(agent_id="agent-1", action="read", result=valid_verification_result)
+        verdict = shadow.check(
+            agent_id="agent-1", action="read", result=valid_verification_result
+        )
         assert verdict == Verdict.AUTO_APPROVED
 
     def test_metrics_total_checks(
@@ -1337,7 +1396,9 @@ class TestShadowEnforcer:
         shadow.check(agent_id="a1", action="r", result=valid_verification_result)
         assert shadow.metrics.pass_rate == 100.0
 
-    def test_metrics_hold_rate_zero_when_none(self, valid_verification_result: VerificationResult):
+    def test_metrics_hold_rate_zero_when_none(
+        self, valid_verification_result: VerificationResult
+    ):
         shadow = ShadowEnforcer()
         shadow.check(agent_id="a1", action="r", result=valid_verification_result)
         assert shadow.metrics.hold_rate == 0.0
@@ -1360,7 +1421,9 @@ class TestShadowEnforcer:
         assert "Total checks" in report
         assert "2" in report
 
-    def test_reset_clears_everything(self, valid_verification_result: VerificationResult):
+    def test_reset_clears_everything(
+        self, valid_verification_result: VerificationResult
+    ):
         shadow = ShadowEnforcer()
         shadow.check(agent_id="a1", action="r", result=valid_verification_result)
         shadow.reset()
@@ -1450,7 +1513,9 @@ class TestExceptionHierarchy:
         assert err.expired_at == "2025-01-01T00:00:00Z"
 
     def test_invalid_signature_error(self):
-        err = InvalidSignatureError("Bad sig", record_type="delegation", record_id="d-1")
+        err = InvalidSignatureError(
+            "Bad sig", record_type="delegation", record_id="d-1"
+        )
         assert isinstance(err, TrustError)
         assert err.record_type == "delegation"
         assert err.record_id == "d-1"

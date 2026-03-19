@@ -96,7 +96,21 @@ from eatp.authority import (
 )
 
 # Postures
-from eatp.postures import PostureStateMachine, TrustPosture
+from eatp.postures import (
+    PostureEvaluationResult,
+    PostureEvidence,
+    PostureStateMachine,
+    TrustPosture,
+)
+
+# Budget tracking
+from eatp.constraints.budget_tracker import (
+    BudgetCheckResult,
+    BudgetEvent,
+    BudgetSnapshot,
+    BudgetTracker,
+)
+from eatp.constraints.budget_store import SQLiteBudgetStore
 
 # Hooks
 from eatp.hooks import (
@@ -180,6 +194,14 @@ __all__ = [
     # Postures
     "TrustPosture",
     "PostureStateMachine",
+    "PostureEvidence",
+    "PostureEvaluationResult",
+    # Budget tracking
+    "BudgetTracker",
+    "BudgetSnapshot",
+    "BudgetCheckResult",
+    "BudgetEvent",
+    "SQLiteBudgetStore",
     # Hooks
     "HookType",
     "HookContext",

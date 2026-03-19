@@ -425,14 +425,18 @@ class PostureStateMachine:
 
     def __init__(
         self,
-        default_posture: TrustPosture = TrustPosture.SHARED_PLANNING,
+        default_posture: TrustPosture = TrustPosture.SUPERVISED,
         require_upgrade_approval: bool = True,
         store: Optional[PostureStore] = None,
     ):
         """Initialize the posture state machine.
 
         Args:
-            default_posture: Default posture for new agents
+            default_posture: Default posture for new agents.  Defaults to
+                ``TrustPosture.SUPERVISED`` per CARE spec (RT-17): tool
+                agents start at the SUPERVISED posture (autonomy_level=2).
+                Callers may pass ``TrustPosture.SHARED_PLANNING`` or any
+                other posture to override.
             require_upgrade_approval: Whether to require approval for upgrades
             store: Optional persistent store for posture state.  When
                 ``None`` (the default), state is kept in memory.  When

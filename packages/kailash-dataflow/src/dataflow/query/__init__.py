@@ -29,6 +29,7 @@ Usage:
 """
 
 from dataflow.query.aggregation import aggregate, count_by, sum_by
+from dataflow.query.errors import AggregationError, AggregationFieldError
 from dataflow.query.models import AggregateOp, AggregateSpec, AggregationResult
 
 __all__ = [
@@ -38,4 +39,6 @@ __all__ = [
     "AggregateOp",
     "AggregateSpec",
     "AggregationResult",
+    "AggregationError",
+    "AggregationFieldError",
 ]

@@ -270,16 +270,30 @@ class BudgetTracker:
         _threshold_callbacks: Registered callbacks for threshold events.
     """
 
-    def __init__(self, allocated_microdollars: int) -> None:
+    def __init__(
+        self,
+        allocated_microdollars: int,
+        *,
+        store: Optional[Any] = None,
+        tracker_id: Optional[str] = None,
+    ) -> None:
         """Create a new BudgetTracker with the given total budget.
 
         Args:
             allocated_microdollars: Total budget in microdollars. Must be
                 a non-negative integer.
+            store: Optional :class:`BudgetStore` for persistence. When
+                provided, the tracker auto-saves after each ``record()``.
+                If the store already contains a snapshot for ``tracker_id``,
+                committed state is restored automatically (reservations are
+                lost -- safe direction).
+            tracker_id: Required when ``store`` is provided. Identifier
+                used as the key in the persistent store.
 
         Raises:
             BudgetTrackerError: If ``allocated_microdollars`` is negative
-                or not an integer.
+                or not an integer, or if ``store`` is given without
+                ``tracker_id``.
         """
         if not isinstance(allocated_microdollars, int):
             raise BudgetTrackerError(
@@ -291,6 +305,11 @@ class BudgetTracker:
                 f"allocated_microdollars must be non-negative, got {allocated_microdollars}",
                 details={"allocated_microdollars": allocated_microdollars},
             )
+        if store is not None and not tracker_id:
+            raise BudgetTrackerError(
+                "tracker_id is required when store is provided",
+                details={"store": type(store).__name__},
+            )
 
         self._allocated: int = allocated_microdollars
         self._reserved: int = 0
@@ -300,9 +319,22 @@ class BudgetTracker:
             maxlen=_MAX_TRANSACTION_LOG
         )
         self._threshold_callbacks: List[Callable[[BudgetEvent], None]] = []
+        self._store = store
+        self._tracker_id = tracker_id
 
         # Track which thresholds have already fired so we don't re-fire
         self._fired_thresholds: set[str] = set()
+
+        # Auto-restore from store if available
+        if store is not None and tracker_id is not None:
+            existing = store.get_snapshot(tracker_id)
+            if existing is not None:
+                self._committed = existing.committed
+                logger.debug(
+                    "BudgetTracker restored from store: tracker_id=%s, committed=%d",
+                    tracker_id,
+                    existing.committed,
+                )
 
         logger.debug(
             "BudgetTracker created: allocated=%d microdollars (%.2f USD)",
@@ -432,6 +464,16 @@ class BudgetTracker:
 
             # Check thresholds while still holding the lock (reads state)
             self._check_thresholds()
+
+        # Auto-save to store outside the lock (save_snapshot is its own atomic op)
+        if self._store is not None and self._tracker_id is not None:
+            try:
+                self._store.save_snapshot(self._tracker_id, self.snapshot())
+            except Exception:
+                logger.exception(
+                    "Failed to auto-save budget snapshot for %s -- state is in memory only",
+                    self._tracker_id,
+                )
 
     def remaining_microdollars(self) -> int:
         """Return the remaining available budget in microdollars.

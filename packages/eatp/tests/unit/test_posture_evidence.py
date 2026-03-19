@@ -341,9 +341,12 @@ class TestPostureStateMachineBackwardCompat:
 
     def test_posture_state_machine_backward_compat_no_store(self) -> None:
         """store=None preserves the existing in-memory behavior."""
-        machine = PostureStateMachine(require_upgrade_approval=False)
+        machine = PostureStateMachine(
+            default_posture=TrustPosture.SHARED_PLANNING,
+            require_upgrade_approval=False,
+        )
 
-        # Default behavior: get_posture returns default
+        # Default behavior: get_posture returns explicitly-set default
         posture = machine.get_posture("agent-001")
         assert posture == TrustPosture.SHARED_PLANNING
 

@@ -494,13 +494,32 @@ class CatalogMCPServer:
                     ]
                 },
             )
-        except Exception as exc:
-            logger.exception("Tool %s failed", tool_name)
+        except (ValueError, KeyError, TypeError) as exc:
+            # Expected validation errors — safe to return message to client
             return self._ok(
                 req_id,
                 {
                     "content": [
                         {"type": "text", "text": json.dumps({"error": str(exc)})}
+                    ],
+                    "isError": True,
+                },
+            )
+        except Exception:
+            # Unexpected errors — sanitize to avoid leaking internals
+            logger.exception("Tool %s failed", tool_name)
+            return self._ok(
+                req_id,
+                {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(
+                                {
+                                    "error": "Internal tool error. Check server logs for details."
+                                }
+                            ),
+                        }
                     ],
                     "isError": True,
                 },

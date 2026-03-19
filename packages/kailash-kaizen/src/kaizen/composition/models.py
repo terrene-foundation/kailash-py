@@ -7,11 +7,19 @@ from __future__ import annotations
 Data models for composite agent validation.
 
 All models use dataclasses with full to_dict()/from_dict() serialization.
+Error classes are defined in ``errors.py`` and re-exported here for
+backward compatibility.
 """
 
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
+
+from kaizen.composition.errors import (
+    CompositionError,
+    CycleDetectedError,
+    SchemaIncompatibleError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,26 +31,6 @@ __all__ = [
     "CycleDetectedError",
     "SchemaIncompatibleError",
 ]
-
-
-class CompositionError(Exception):
-    """Base error for all composition validation failures.
-
-    Attributes:
-        details: Structured error context for debugging and logging.
-    """
-
-    def __init__(self, message: str, details: Dict[str, Any] | None = None) -> None:
-        super().__init__(message)
-        self.details: Dict[str, Any] = details or {}
-
-
-class CycleDetectedError(CompositionError):
-    """Raised when a cycle is detected in the agent DAG."""
-
-
-class SchemaIncompatibleError(CompositionError):
-    """Raised when output/input schemas are incompatible."""
 
 
 @dataclass

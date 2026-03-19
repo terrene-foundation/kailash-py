@@ -38,6 +38,16 @@ Usage (programmatic)::
     response = server.handle_request({"jsonrpc": "2.0", "id": 1, "method": "initialize"})
 """
 
+from kaizen.mcp.catalog_server.errors import (
+    AgentNotFoundError,
+    CatalogError,
+    CatalogValidationError,
+)
 from kaizen.mcp.catalog_server.server import CatalogMCPServer
 
-__all__ = ["CatalogMCPServer"]
+__all__ = [
+    "CatalogMCPServer",
+    "CatalogError",
+    "AgentNotFoundError",
+    "CatalogValidationError",
+]

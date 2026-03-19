@@ -12,12 +12,14 @@ for composite agent pipelines.
 
 from kaizen.composition.cost_estimator import estimate_cost
 from kaizen.composition.dag_validator import validate_dag
-from kaizen.composition.models import (
-    CompatibilityResult,
+from kaizen.composition.errors import (
     CompositionError,
-    CostEstimate,
     CycleDetectedError,
     SchemaIncompatibleError,
+)
+from kaizen.composition.models import (
+    CompatibilityResult,
+    CostEstimate,
     ValidationResult,
 )
 from kaizen.composition.schema_compat import check_schema_compatibility
