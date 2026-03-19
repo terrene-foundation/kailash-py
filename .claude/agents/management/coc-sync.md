@@ -492,11 +492,42 @@ Generate a report for each synced target.
 - Contamination: CLEAN / N issues
 ```
 
+## Step 7: Sync Dependency Versions
+
+After syncing agents/skills/rules, update ALL version references in the COC template to match current SDK versions. This covers two scopes:
+
+### 7a. pyproject.toml dependency pins
+
+1. Read versions from this BUILD repo's `pyproject.toml` and `packages/*/pyproject.toml`
+2. Update the COC template's `pyproject.toml` dependency pins to match:
+   - `kailash>=X.Y.Z` — from root `pyproject.toml`
+   - `kailash-nexus>=X.Y.Z` — from `packages/kailash-nexus/pyproject.toml`
+   - `kailash-dataflow>=X.Y.Z` — from `packages/kailash-dataflow/pyproject.toml`
+   - `kailash-kaizen>=X.Y.Z` — from `packages/kailash-kaizen/pyproject.toml`
+   - `eatp>=X.Y.Z` — from `packages/eatp/pyproject.toml`
+   - `trust-plane>=X.Y.Z` — from `packages/trust-plane/pyproject.toml`
+3. Use `>=` pins (minimum version), not `==` (exact pin)
+
+### 7b. Version references in agent/skill/doc content
+
+1. Grep the COC template for stale version patterns: `v0.12`, `v0.13`, `(v0.12.1)`, `DataFlow v0.12.2`, etc.
+2. Update agent description frontmatter that references old versions (e.g., `dataflow-specialist.md` description mentioning `v0.12.2`)
+3. Update inline version notes in agent/skill files (e.g., `(v0.12.1)` annotations on feature lists)
+4. For features that are now GA and stable, remove the version annotation entirely — they are just "current behavior"
+5. Update `ENTERPRISE_BRIEF.md` and any other docs with version-specific claims
+
+### 7c. Validation
+
+After updating, run: `grep -rn '0\.12\.\|0\.13\.\|v0\.12\|v0\.13' --include="*.md" --include="*.toml"` on the COC template to verify no stale references remain (excluding `.venv/`).
+
+Report all version mismatches found and fixed.
+
 ## When This Agent Runs
 
 1. **During `/codify` (phase 05)** — after creating/updating agents and skills, sync to COC
 2. **On-demand** — when the user asks to sync or update the template
 3. **After any agent/skill/rule change** — to keep COC in sync
+4. **After any SDK release** — to update dependency versions in the template
 
 ## Delegation
 
