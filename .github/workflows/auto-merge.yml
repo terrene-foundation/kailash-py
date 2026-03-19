@@ -1,0 +1,32 @@
+name: Auto-merge high-confidence PRs
+
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  auto-merge:
+    if: github.event.label.name == 'auto-fix'
+    runs-on: self-hosted
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Enable auto-merge
+        run: gh pr merge ${{ github.event.pull_request.number }} --auto --squash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify Discord
+        if: success()
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            PR="${{ github.event.pull_request.number }}"
+            TITLE="${{ github.event.pull_request.title }}"
+            REPO="${{ github.repository }}"
+            curl -s -H "Content-Type: application/json" \
+              -d "{\"embeds\":[{\"title\":\"[AUTO-MERGE QUEUED] PR #${PR}: ${TITLE}\",\"url\":\"https://github.com/${REPO}/pull/${PR}\",\"color\":3447003,\"description\":\"Will merge automatically when CI passes.\"}]}" \
+              "$DISCORD_WEBHOOK_URL" || true
+          fi
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}

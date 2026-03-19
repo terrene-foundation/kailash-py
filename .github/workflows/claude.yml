@@ -11,11 +11,13 @@ on:
     types: [submitted]
 
 jobs:
-  claude:
+  # ─── Bug fix / general maintenance ─────────────────────────────────
+  fix:
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
       (github.event_name == 'issues' && github.event.action == 'assigned' && github.event.assignee.login == 'claude') ||
       (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'auto-fix') ||
+      (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'needs-review') ||
       (github.event_name == 'pull_request_review_comment') ||
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
     runs-on: self-hosted
@@ -76,23 +78,78 @@ jobs:
       - name: Notify Discord
         if: always()
         run: |
-          if [ -n "${{ secrets.DISCORD_WEBHOOK_URL }}" ]; then
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
             STATUS="${{ job.status }}"
             ISSUE="${{ github.event.issue.number || github.event.pull_request.number }}"
             TITLE="${{ github.event.issue.title || github.event.pull_request.title }}"
             REPO="${{ github.repository }}"
-
-            if [ "$STATUS" = "success" ]; then
-              COLOR=3066993
-              MSG="Claude completed work on #${ISSUE}: ${TITLE}"
-            else
-              COLOR=15158332
-              MSG="Claude failed on #${ISSUE}: ${TITLE}"
-            fi
-
+            COLOR=$( [ "$STATUS" = "success" ] && echo 3066993 || echo 15158332 )
             curl -s -H "Content-Type: application/json" \
-              -d "{\"embeds\":[{\"title\":\"${MSG}\",\"url\":\"https://github.com/${REPO}/issues/${ISSUE}\",\"color\":${COLOR}}]}" \
-              "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
+              -d "{\"embeds\":[{\"title\":\"[$STATUS] #${ISSUE}: ${TITLE}\",\"url\":\"https://github.com/${REPO}/issues/${ISSUE}\",\"color\":${COLOR}}]}" \
+              "$DISCORD_WEBHOOK_URL" || true
+          fi
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+  # ─── Release (admin-gated) ─────────────────────────────────────────
+  release:
+    if: |
+      (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'release') ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude /release'))
+    runs-on: self-hosted
+    timeout-minutes: 180
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          settings: ".claude/settings.json"
+          prompt: |
+            You are the release agent for the Kailash Python SDK.
+            CLAUDE.md and all .claude/rules/ are your absolute directives.
+            Follow the /release command instructions in .claude/commands/release.md EXACTLY.
+
+            ## Release Process
+            1. Read the issue body for release scope (which packages, version bump type).
+            2. Run ALL pre-release checks:
+               - `pytest` — all pass
+               - `black --check .` and `ruff check` — clean
+               - Version consistency: pyproject.toml matches __init__.py for ALL packages
+            3. Bump versions in BOTH locations per package:
+               - pyproject.toml: `version = "X.Y.Z"`
+               - src/{package}/__init__.py: `__version__ = "X.Y.Z"`
+            4. Update SDK dependency pins in framework packages if core version changed.
+            5. Create a PR with title: `chore: release vX.Y.Z`
+            6. Label the PR `release` — this ALWAYS requires admin approval.
+            7. Comment on the issue with the PR link and pre-release checklist results.
+
+            NEVER push tags or publish to PyPI without admin merging the PR first.
+            NEVER skip TestPyPI validation for major/minor releases.
+            The PR description MUST include the full pre-release checklist.
+
+      - name: Notify Discord (Release)
+        if: always()
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            STATUS="${{ job.status }}"
+            ISSUE="${{ github.event.issue.number }}"
+            REPO="${{ github.repository }}"
+            curl -s -H "Content-Type: application/json" \
+              -d "{\"embeds\":[{\"title\":\"[RELEASE $STATUS] #${ISSUE}\",\"url\":\"https://github.com/${REPO}/issues/${ISSUE}\",\"color\":$( [ \"$STATUS\" = \"success\" ] && echo 3066993 || echo 15158332 )}]}" \
+              "$DISCORD_WEBHOOK_URL" || true
           fi
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
