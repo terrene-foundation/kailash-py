@@ -1,0 +1,103 @@
+name: COC Sync to USE Repo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.claude/agents/**'
+      - '.claude/skills/**'
+      - '.claude/rules/**'
+      - '.claude/commands/**'
+      - 'scripts/hooks/**'
+
+jobs:
+  sync:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Sync COC artifacts to USE repo
+        run: |
+          USE_REPO="$HOME/repos/kailash/kailash-coc-claude-py"
+
+          if [ ! -d "$USE_REPO" ]; then
+            echo "USE repo not found at $USE_REPO — skipping sync"
+            exit 0
+          fi
+
+          BRANCH="coc-sync/$(date +%Y%m%d-%H%M%S)"
+          cd "$USE_REPO"
+
+          git checkout main
+          git pull origin main
+          git checkout -b "$BRANCH"
+
+          # Sync rules
+          for rule in zero-tolerance.md no-stubs.md agents.md e2e-god-mode.md terrene-naming.md git.md; do
+            src="$GITHUB_WORKSPACE/.claude/rules/$rule"
+            dst="$USE_REPO/.claude/rules/$rule"
+            if [ -f "$src" ]; then
+              cp "$src" "$dst"
+            fi
+          done
+
+          # Sync hooks
+          for hook in validate-workflow.js validate-bash-command.js validate-deployment.js auto-format.js user-prompt-rules-reminder.js session-start.js session-end.js pre-compact.js stop.js; do
+            src="$GITHUB_WORKSPACE/scripts/hooks/$hook"
+            dst="$USE_REPO/scripts/hooks/$hook"
+            if [ -f "$src" ]; then
+              cp "$src" "$dst"
+            fi
+          done
+
+          if [ -d "$GITHUB_WORKSPACE/scripts/hooks/lib" ]; then
+            cp -r "$GITHUB_WORKSPACE/scripts/hooks/lib/"* "$USE_REPO/scripts/hooks/lib/" 2>/dev/null || true
+          fi
+
+          cat > "$USE_REPO/.claude/.coc-sync-marker" <<MARKER
+          {"synced_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "template_commit": "$(git -C "$GITHUB_WORKSPACE" rev-parse --short HEAD)", "source": "kailash-py"}
+          MARKER
+
+          cd "$USE_REPO"
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "No COC changes to sync"
+            git checkout main
+            git branch -D "$BRANCH"
+            exit 0
+          fi
+
+          git add -A
+          git commit -m "chore(coc): sync from kailash-py $(git -C "$GITHUB_WORKSPACE" rev-parse --short HEAD)
+
+          Automated COC sync from BUILD repo.
+
+          Co-Authored-By: Claude Maintenance <noreply@anthropic.com>"
+
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --repo terrene-foundation/kailash-coc-claude-py \
+            --title "chore(coc): sync from kailash-py" \
+            --body "Automated COC sync. Source commit: $(git -C "$GITHUB_WORKSPACE" rev-parse --short HEAD)" \
+            --label "coc-sync" \
+            --head "$BRANCH"
+
+          git checkout main
+
+      - name: Notify Discord
+        if: always()
+        run: |
+          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+            STATUS="${{ job.status }}"
+            COLOR=$( [ "$STATUS" = "success" ] && echo 3447003 || echo 15158332 )
+            curl -s -H "Content-Type: application/json" \
+              -d "{\"embeds\":[{\"title\":\"[COC-SYNC $STATUS] kailash-py → kailash-coc-claude-py\",\"color\":${COLOR}}]}" \
+              "$DISCORD_WEBHOOK_URL" || true
+          fi
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}

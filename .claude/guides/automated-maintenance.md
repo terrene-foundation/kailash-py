@@ -52,7 +52,7 @@ gh issue create --title "Release v1.1.0" --label release \
 
 | Issue Label | What Claude Does | Auto-merge? | Admin Required? |
 |-------------|-----------------|-------------|-----------------|
-| `auto-fix` | Full COC lifecycle, creates PR | Yes (when CI passes) | No |
+| `auto-fix` | Full COC lifecycle, creates PR | No (open-source, admin reviews all) | Yes |
 | `needs-review` | Full COC lifecycle, creates PR | No | Yes |
 | `release` | Runs /release pipeline, creates PR | No | Always |
 | _(no label)_ | Assign to `claude` or @mention | Claude decides label | Depends |
@@ -100,9 +100,11 @@ BUILD repo (kailash-py)
 
 ## Required Repo Settings
 
-- Allow auto-merge: `true` (enabled)
+- Allow auto-merge: `false` (kailash-py is open-source — all PRs need admin approval)
 - Delete branch on merge: `true` (enabled)
 - Allow squash merge: `true`
+
+**Note**: Unlike kailash-rs (private, auto-merge enabled), kailash-py requires admin approval for ALL PRs because it's an open-source repo. The `auto-fix` label signals "high confidence, ready for review" but does NOT auto-merge.
 
 ## Hooks That Run in CI
 

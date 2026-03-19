@@ -1,31 +1,35 @@
-name: Auto-merge high-confidence PRs
+name: PR Notification (no auto-merge — open-source repo)
+
+# kailash-py is open-source. All PRs require admin approval.
+# This workflow only sends Discord notifications when Claude creates PRs.
 
 on:
   pull_request:
     types: [labeled]
 
 jobs:
-  auto-merge:
-    if: github.event.label.name == 'auto-fix'
-    runs-on: self-hosted
-    permissions:
-      contents: write
-      pull-requests: write
+  notify:
+    if: github.event.label.name == 'auto-fix' || github.event.label.name == 'needs-review'
+    runs-on: ubuntu-latest
     steps:
-      - name: Enable auto-merge
-        run: gh pr merge ${{ github.event.pull_request.number }} --auto --squash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Notify Discord
-        if: success()
         run: |
           if [ -n "$DISCORD_WEBHOOK_URL" ]; then
             PR="${{ github.event.pull_request.number }}"
             TITLE="${{ github.event.pull_request.title }}"
+            LABEL="${{ github.event.label.name }}"
             REPO="${{ github.repository }}"
+
+            if [ "$LABEL" = "auto-fix" ]; then
+              COLOR=3066993
+              DESC="High confidence — ready for admin review"
+            else
+              COLOR=15105570
+              DESC="Needs careful review before merging"
+            fi
+
             curl -s -H "Content-Type: application/json" \
-              -d "{\"embeds\":[{\"title\":\"[AUTO-MERGE QUEUED] PR #${PR}: ${TITLE}\",\"url\":\"https://github.com/${REPO}/pull/${PR}\",\"color\":3447003,\"description\":\"Will merge automatically when CI passes.\"}]}" \
+              -d "{\"embeds\":[{\"title\":\"[PR #${PR}] ${TITLE}\",\"url\":\"https://github.com/${REPO}/pull/${PR}\",\"color\":${COLOR},\"description\":\"${DESC}\"}]}" \
               "$DISCORD_WEBHOOK_URL" || true
           fi
         env:
