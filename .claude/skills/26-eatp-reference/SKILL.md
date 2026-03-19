@@ -158,6 +158,9 @@ This repo contains the standalone EATP SDK (`packages/eatp/`). For SDK-specific 
 - **[eatp-budget-tracking.md](eatp-budget-tracking.md)** — BudgetTracker API, SQLiteBudgetStore, reserve/record lifecycle, threshold callbacks, integer microdollars
 - **[eatp-posture-stores.md](eatp-posture-stores.md)** — PostureStore protocol, SQLitePostureStore, PostureEvidence, PostureEvaluationResult, posture persistence
 - **[eatp-security-patterns.md](eatp-security-patterns.md)** — EATP security patterns from red team: lock ordering, integer arithmetic, symlink rejection, fail-closed
+- **[eatp-store-backends.md](eatp-store-backends.md)** — Step-by-step guide for adding new TrustPlaneStore backends with 6-requirement security contract
+- **[eatp-trust-plane-security.md](eatp-trust-plane-security.md)** — 11 hardened security patterns validated through 14 rounds of red teaming (TrustPlane-specific)
+- **[eatp-trust-plane-enterprise.md](eatp-trust-plane-enterprise.md)** — RBAC, OIDC, SIEM, Dashboard, Archive, Shadow mode, Cloud KMS reference
 
 ## For Detailed Information
 
