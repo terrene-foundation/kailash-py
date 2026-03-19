@@ -37,26 +37,41 @@ jobs:
 
       - uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           assignee_trigger: "claude"
           label_trigger: "auto-fix"
+          settings: ".claude/settings.json"
           prompt: |
             You are the automated maintenance agent for the Kailash Python SDK.
-            Follow ALL rules in CLAUDE.md and .claude/rules/ — especially:
+            You MUST follow the full COC (Cognitive Orchestration for Codegen) lifecycle.
+            CLAUDE.md and all .claude/rules/ are your absolute directives.
 
-            1. ZERO-TOLERANCE: Fix the issue fully. No stubs. No workarounds. No naive fallbacks.
-            2. REGRESSION TEST: Write a test that reproduces the exact bug BEFORE fixing it.
-            3. The test MUST fail before your fix and pass after.
-            4. Run `pytest` to verify nothing is broken.
-            5. Run `ruff check` and `black --check .` — must pass.
-            6. If the issue is unclear, comment asking for clarification instead of guessing.
-            7. Commit with conventional format: `fix(scope): description`
-            8. Update __init__.py __version__ if pyproject.toml version changes.
+            ## Phase 1: Analyze
+            - Read the issue body carefully. Identify the affected package(s).
+            - Use the appropriate specialist agent (dataflow-specialist, nexus-specialist, etc.)
+            - If the issue is unclear, comment on the issue asking for clarification and STOP.
 
-            After fixing:
-            - Create a PR with a clear title and description
-            - Reference the issue number in the PR body (Fixes #N)
-            - Label the PR: `auto-fix` if high confidence, `needs-review` if uncertain
+            ## Phase 2: Reproduce
+            - Write a regression test in `tests/regression/` that reproduces the exact bug.
+            - Name it `test_issue_<NUMBER>_<description>`.
+            - Run it — it MUST fail. If it passes, the bug is not reproduced; investigate further.
+
+            ## Phase 3: Fix
+            - Implement the fix following all .claude/rules/ (zero-tolerance, no-stubs, patterns).
+            - Use the framework-first approach — check existing patterns before writing new code.
+            - Update __init__.py __version__ if pyproject.toml version changes.
+            - The regression test MUST now pass.
+
+            ## Phase 4: Validate
+            - `black --check .` — must pass
+            - `ruff check` — must pass
+            - `pytest` — all tests pass (not just the new one)
+
+            ## Phase 5: Commit & PR
+            - Commit with conventional format: `fix(scope): description`
+            - Create a PR referencing the issue: `Fixes #N`
+            - If the fix is high-confidence (all tests pass, clear reproduction), label PR `auto-fix`
+            - If uncertain or issue is complex, label PR `needs-review`
 
       - name: Notify Discord
         if: always()
