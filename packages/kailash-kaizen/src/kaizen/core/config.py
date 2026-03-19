@@ -48,6 +48,8 @@ class BaseAgentConfig:
     temperature: Optional[float] = 0.1  # Default to 0.1 for deterministic responses
     max_tokens: Optional[int] = None
     provider_config: Optional[Dict[str, Any]] = None
+    api_key: Optional[str] = None  # Per-request API key override for BYOK
+    base_url: Optional[str] = None  # Per-request base URL override
 
     # Async LLM Configuration (for production FastAPI/async workflows)
     use_async_llm: bool = False  # Enable AsyncOpenAI client for non-blocking operations
@@ -165,6 +167,8 @@ class BaseAgentConfig:
                 temperature=config.get("temperature"),
                 max_tokens=config.get("max_tokens"),
                 provider_config=config.get("provider_config"),
+                api_key=config.get("api_key"),
+                base_url=config.get("base_url"),
                 use_async_llm=config.get("use_async_llm", False),
                 strategy_type=config.get("strategy_type", "single_shot"),
                 max_cycles=config.get("max_cycles", 5),
@@ -185,6 +189,10 @@ class BaseAgentConfig:
             kwargs["max_tokens"] = getattr(config, "max_tokens")
         if hasattr(config, "provider_config"):
             kwargs["provider_config"] = getattr(config, "provider_config")
+        if hasattr(config, "api_key"):
+            kwargs["api_key"] = getattr(config, "api_key")
+        if hasattr(config, "base_url"):
+            kwargs["base_url"] = getattr(config, "base_url")
 
         # Async config
         if hasattr(config, "use_async_llm"):

@@ -377,6 +377,18 @@ class LLMAgentNode(Node):
                 default={},
                 description="Provider-specific configuration (e.g., response_format for OpenAI Structured Outputs)",
             ),
+            "api_key": NodeParameter(
+                name="api_key",
+                type=str,
+                required=False,
+                description="Per-request API key override for BYOK multi-tenant scenarios",
+            ),
+            "base_url": NodeParameter(
+                name="base_url",
+                type=str,
+                required=False,
+                description="Per-request base URL override (e.g., for proxy or custom endpoint)",
+            ),
         }
 
     # ============================================================================
@@ -830,8 +842,19 @@ class LLMAgentNode(Node):
                 print(
                     f"DEBUG: Using _provider_llm_response path for provider={provider}"
                 )
+                # Thread per-request API key and base URL to provider
+                per_request_api_key = self.config.get("api_key", kwargs.get("api_key"))
+                per_request_base_url = self.config.get(
+                    "base_url", kwargs.get("base_url")
+                )
                 response = self._provider_llm_response(
-                    provider, model, enriched_messages, tools, generation_config
+                    provider,
+                    model,
+                    enriched_messages,
+                    tools,
+                    generation_config,
+                    api_key=per_request_api_key,
+                    base_url=per_request_base_url,
                 )
 
             # Handle tool execution if enabled and tools were called
@@ -2110,27 +2133,41 @@ Final Answer: 6 hours"""
         messages: list[dict],
         tools: list[dict],
         generation_config: dict,
+        api_key: str = None,
+        base_url: str = None,
     ) -> dict[str, Any]:
-        """Generate LLM response using provider architecture."""
+        """Generate LLM response using provider architecture.
+
+        Args:
+            api_key: Optional per-request API key override for BYOK scenarios.
+            base_url: Optional per-request base URL override.
+        """
         try:
             from .ai_providers import get_provider
 
             # Get the provider instance
             provider_instance = get_provider(provider)
 
-            # Check if provider is available
-            if not provider_instance.is_available():
+            # Check if provider is available (skip if per-request key provided)
+            if not api_key and not provider_instance.is_available():
                 raise RuntimeError(
                     f"Provider {provider} is not available. Check dependencies and configuration."
                 )
 
+            # Build chat kwargs with optional per-request overrides
+            chat_kwargs = {
+                "messages": messages,
+                "model": model,
+                "generation_config": generation_config,
+                "tools": tools,
+            }
+            if api_key:
+                chat_kwargs["api_key"] = api_key
+            if base_url:
+                chat_kwargs["base_url"] = base_url
+
             # Call the provider
-            response = provider_instance.chat(
-                messages=messages,
-                model=model,
-                generation_config=generation_config,
-                tools=tools,
-            )
+            response = provider_instance.chat(**chat_kwargs)
 
             # Ensure usage totals are calculated
             if "usage" in response:

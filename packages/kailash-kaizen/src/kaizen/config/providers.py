@@ -160,23 +160,30 @@ def check_perplexity_available() -> bool:
     return bool(os.getenv("PERPLEXITY_API_KEY"))
 
 
-def get_openai_config(model: Optional[str] = None) -> ProviderConfig:
+def get_openai_config(
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+) -> ProviderConfig:
     """
     Get OpenAI provider configuration.
 
     Args:
         model: Optional model override (default: gpt-4o-mini)
+        api_key: Optional API key override (default: reads from OPENAI_API_KEY env var)
+        base_url: Optional base URL override (e.g., for proxy or custom endpoint)
 
     Returns:
         ProviderConfig for OpenAI
 
     Raises:
-        ConfigurationError: If API key is not available
+        ConfigurationError: If API key is not available from either parameter or env var
     """
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = api_key or os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ConfigurationError(
-            "OpenAI API key not found. Set OPENAI_API_KEY environment variable."
+            "OpenAI API key not found. Set OPENAI_API_KEY environment variable "
+            "or pass api_key parameter."
         )
 
     default_model = "gpt-4o-mini"  # Fast, cost-effective model
@@ -184,17 +191,22 @@ def get_openai_config(model: Optional[str] = None) -> ProviderConfig:
         provider="openai",
         model=model or os.getenv("KAIZEN_OPENAI_MODEL", default_model),
         api_key=api_key,
+        base_url=base_url,
         timeout=int(os.getenv("KAIZEN_TIMEOUT", "30")),
         max_retries=int(os.getenv("KAIZEN_MAX_RETRIES", "3")),
     )
 
 
-def get_ollama_config(model: Optional[str] = None) -> ProviderConfig:
+def get_ollama_config(
+    model: Optional[str] = None,
+    base_url: Optional[str] = None,
+) -> ProviderConfig:
     """
     Get Ollama provider configuration.
 
     Args:
         model: Optional model override (default: llama3.2)
+        base_url: Optional base URL override (default: reads from OLLAMA_BASE_URL env var)
 
     Returns:
         ProviderConfig for Ollama
@@ -208,23 +220,31 @@ def get_ollama_config(model: Optional[str] = None) -> ProviderConfig:
         )
 
     default_model = "llama3.2"  # Using llama3.2 as it's more commonly available
-    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    resolved_base_url = base_url or os.getenv(
+        "OLLAMA_BASE_URL", "http://localhost:11434"
+    )
 
     return ProviderConfig(
         provider="ollama",
         model=model or os.getenv("KAIZEN_OLLAMA_MODEL", default_model),
-        base_url=base_url,
+        base_url=resolved_base_url,
         timeout=int(os.getenv("KAIZEN_TIMEOUT", "60")),  # Ollama may need more time
         max_retries=int(os.getenv("KAIZEN_MAX_RETRIES", "3")),
     )
 
 
-def get_azure_config(model: Optional[str] = None) -> ProviderConfig:
+def get_azure_config(
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+) -> ProviderConfig:
     """
     Get Azure AI Foundry provider configuration.
 
     Args:
         model: Optional model override (default: gpt-4o)
+        api_key: Optional API key override (default: reads from AZURE_AI_INFERENCE_API_KEY)
+        base_url: Optional endpoint override (default: reads from AZURE_AI_INFERENCE_ENDPOINT)
 
     Returns:
         ProviderConfig for Azure AI Foundry
@@ -232,18 +252,22 @@ def get_azure_config(model: Optional[str] = None) -> ProviderConfig:
     Raises:
         ConfigurationError: If Azure credentials not available
     """
-    if not check_azure_available():
+    resolved_api_key = api_key or os.getenv("AZURE_AI_INFERENCE_API_KEY")
+    resolved_base_url = base_url or os.getenv("AZURE_AI_INFERENCE_ENDPOINT")
+
+    if not resolved_api_key or not resolved_base_url:
         raise ConfigurationError(
             "Azure AI Foundry not configured. Set AZURE_AI_INFERENCE_ENDPOINT "
-            "and AZURE_AI_INFERENCE_API_KEY environment variables."
+            "and AZURE_AI_INFERENCE_API_KEY environment variables, "
+            "or pass api_key and base_url parameters."
         )
 
     default_model = "gpt-4o"  # Common Azure deployment
     return ProviderConfig(
         provider="azure",
         model=model or os.getenv("KAIZEN_AZURE_MODEL", default_model),
-        api_key=os.getenv("AZURE_AI_INFERENCE_API_KEY"),
-        base_url=os.getenv("AZURE_AI_INFERENCE_ENDPOINT"),
+        api_key=resolved_api_key,
+        base_url=resolved_base_url,
         timeout=int(os.getenv("KAIZEN_TIMEOUT", "60")),
         max_retries=int(os.getenv("KAIZEN_MAX_RETRIES", "3")),
     )
@@ -284,12 +308,21 @@ def get_docker_config(model: Optional[str] = None) -> ProviderConfig:
     )
 
 
-def get_anthropic_config(model: Optional[str] = None) -> ProviderConfig:
-    """Get Anthropic provider configuration."""
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+def get_anthropic_config(
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> ProviderConfig:
+    """Get Anthropic provider configuration.
+
+    Args:
+        model: Optional model override (default: claude-3-haiku-20240307)
+        api_key: Optional API key override (default: reads from ANTHROPIC_API_KEY env var)
+    """
+    api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         raise ConfigurationError(
-            "Anthropic API key not found. Set ANTHROPIC_API_KEY environment variable."
+            "Anthropic API key not found. Set ANTHROPIC_API_KEY environment variable "
+            "or pass api_key parameter."
         )
 
     default_model = "claude-3-haiku-20240307"  # Fast, cost-effective
@@ -302,12 +335,21 @@ def get_anthropic_config(model: Optional[str] = None) -> ProviderConfig:
     )
 
 
-def get_cohere_config(model: Optional[str] = None) -> ProviderConfig:
-    """Get Cohere provider configuration (embeddings only)."""
-    api_key = os.getenv("COHERE_API_KEY")
+def get_cohere_config(
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> ProviderConfig:
+    """Get Cohere provider configuration (embeddings only).
+
+    Args:
+        model: Optional model override (default: embed-english-v3.0)
+        api_key: Optional API key override (default: reads from COHERE_API_KEY env var)
+    """
+    api_key = api_key or os.getenv("COHERE_API_KEY")
     if not api_key:
         raise ConfigurationError(
-            "Cohere API key not found. Set COHERE_API_KEY environment variable."
+            "Cohere API key not found. Set COHERE_API_KEY environment variable "
+            "or pass api_key parameter."
         )
 
     default_model = "embed-english-v3.0"
@@ -332,12 +374,16 @@ def get_huggingface_config(model: Optional[str] = None) -> ProviderConfig:
     )
 
 
-def get_google_config(model: Optional[str] = None) -> ProviderConfig:
+def get_google_config(
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> ProviderConfig:
     """
     Get Google Gemini provider configuration.
 
     Args:
         model: Optional model override (default: gemini-2.0-flash)
+        api_key: Optional API key override (default: reads from GOOGLE_API_KEY or GEMINI_API_KEY)
 
     Returns:
         ProviderConfig for Google Gemini
@@ -345,13 +391,13 @@ def get_google_config(model: Optional[str] = None) -> ProviderConfig:
     Raises:
         ConfigurationError: If API key or project is not available
     """
-    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    api_key = api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
     project = os.getenv("GOOGLE_CLOUD_PROJECT")
 
     if not api_key and not project:
         raise ConfigurationError(
             "Google credentials not found. Set GOOGLE_API_KEY, GEMINI_API_KEY, "
-            "or GOOGLE_CLOUD_PROJECT environment variable."
+            "or GOOGLE_CLOUD_PROJECT environment variable, or pass api_key parameter."
         )
 
     default_model = "gemini-2.0-flash"  # Fast, efficient model
@@ -364,7 +410,10 @@ def get_google_config(model: Optional[str] = None) -> ProviderConfig:
     )
 
 
-def get_perplexity_config(model: Optional[str] = None) -> ProviderConfig:
+def get_perplexity_config(
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> ProviderConfig:
     """
     Get Perplexity AI provider configuration.
 
@@ -373,12 +422,7 @@ def get_perplexity_config(model: Optional[str] = None) -> ProviderConfig:
 
     Args:
         model: Optional model override (default: sonar)
-            Available models:
-            - sonar: Lightweight search model
-            - sonar-pro: Advanced search capabilities
-            - sonar-reasoning: Reasoning with search
-            - sonar-reasoning-pro: Premier reasoning model
-            - sonar-deep-research: Exhaustive research
+        api_key: Optional API key override (default: reads from PERPLEXITY_API_KEY env var)
 
     Returns:
         ProviderConfig for Perplexity
@@ -386,10 +430,11 @@ def get_perplexity_config(model: Optional[str] = None) -> ProviderConfig:
     Raises:
         ConfigurationError: If API key is not available
     """
-    api_key = os.getenv("PERPLEXITY_API_KEY")
+    api_key = api_key or os.getenv("PERPLEXITY_API_KEY")
     if not api_key:
         raise ConfigurationError(
-            "Perplexity API key not found. Set PERPLEXITY_API_KEY environment variable."
+            "Perplexity API key not found. Set PERPLEXITY_API_KEY environment variable "
+            "or pass api_key parameter."
         )
 
     default_model = "sonar"  # Lightweight, fast model
@@ -503,7 +548,10 @@ def auto_detect_provider(preferred: Optional[ProviderType] = None) -> ProviderCo
 
 
 def get_provider_config(
-    provider: Optional[ProviderType] = None, model: Optional[str] = None
+    provider: Optional[ProviderType] = None,
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
 ) -> ProviderConfig:
     """
     Get provider configuration with auto-detection support.
@@ -511,6 +559,8 @@ def get_provider_config(
     Args:
         provider: Optional explicit provider selection
         model: Optional model override
+        api_key: Optional API key override for BYOK multi-tenant scenarios
+        base_url: Optional base URL override (e.g., for proxy or custom endpoint)
 
     Returns:
         ProviderConfig for requested or auto-detected provider
@@ -519,25 +569,22 @@ def get_provider_config(
         >>> # Auto-detect provider
         >>> config = get_provider_config()
 
-        >>> # Explicit provider
-        >>> config = get_provider_config(provider="openai")
+        >>> # Explicit provider with BYOK key
+        >>> config = get_provider_config(provider="openai", api_key="sk-tenant-key")
 
         >>> # Custom model
         >>> config = get_provider_config(provider="ollama", model="llama3.2")
-
-        >>> # Azure provider
-        >>> config = get_provider_config(provider="azure", model="gpt-4o")
-
-        >>> # Google Gemini provider
-        >>> config = get_provider_config(provider="google", model="gemini-2.0-flash")
-
-        >>> # Docker Model Runner
-        >>> config = get_provider_config(provider="docker", model="ai/llama3.2")
-
-        >>> # Perplexity AI (web search enabled)
-        >>> config = get_provider_config(provider="perplexity", model="sonar-pro")
     """
-    config_functions = {
+    # Build kwargs to pass through to provider-specific functions
+    kwargs: Dict[str, Any] = {}
+    if model is not None:
+        kwargs["model"] = model
+    if api_key is not None:
+        kwargs["api_key"] = api_key
+    if base_url is not None:
+        kwargs["base_url"] = base_url
+
+    config_functions: Dict[str, Any] = {
         "openai": get_openai_config,
         "azure": get_azure_config,
         "anthropic": get_anthropic_config,
@@ -553,7 +600,12 @@ def get_provider_config(
     }
 
     if provider in config_functions:
-        return config_functions[provider](model)
+        # Filter kwargs to only those the target function accepts
+        import inspect
+
+        sig = inspect.signature(config_functions[provider])
+        valid_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
+        return config_functions[provider](**valid_kwargs)
     else:
         # Auto-detect
         return auto_detect_provider(preferred=provider)

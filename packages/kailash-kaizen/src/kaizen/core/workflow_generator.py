@@ -206,6 +206,18 @@ class WorkflowGenerator:
                 name=f"{self.signature.__class__.__name__}",
             )
 
+        # Get optional per-request overrides
+        api_key = (
+            getattr(self.config, "api_key", None)
+            if hasattr(self.config, "api_key")
+            else self.config.get("api_key")
+        )
+        base_url = (
+            getattr(self.config, "base_url", None)
+            if hasattr(self.config, "base_url")
+            else self.config.get("base_url")
+        )
+
         # Create LLMAgentNode with signature-based configuration
         node_config = {
             "provider": llm_provider or "openai",
@@ -213,6 +225,12 @@ class WorkflowGenerator:
             "system_prompt": self._get_system_prompt(),
             "generation_config": generation_config,
         }
+
+        # Add per-request API key and base URL for BYOK multi-tenant support
+        if api_key:
+            node_config["api_key"] = api_key
+        if base_url:
+            node_config["base_url"] = base_url
 
         # Add provider-specific config (preserve as nested dict for LLMAgentNode)
         if provider_config:

@@ -1,0 +1,207 @@
+"""
+Regression test for GitHub Issue #12:
+feat(kaizen): Support per-request API key override in provider config functions.
+
+Tests that API keys and base URLs can be provided at call time instead of
+requiring environment variables, enabling BYOK (Bring Your Own Key) multi-tenant
+scenarios.
+"""
+
+import os
+from unittest.mock import patch
+
+import pytest
+
+from kaizen.config.providers import (
+    ConfigurationError,
+    ProviderConfig,
+    get_anthropic_config,
+    get_google_config,
+    get_ollama_config,
+    get_openai_config,
+    get_perplexity_config,
+    get_provider_config,
+    provider_config_to_dict,
+)
+from kaizen.core.config import BaseAgentConfig
+
+
+class TestProviderConfigApiKeyOverride:
+    """Test per-request API key override in provider config functions."""
+
+    def test_openai_config_with_explicit_api_key(self):
+        """get_openai_config should use explicit api_key over env var."""
+        with patch.dict(os.environ, {}, clear=True):
+            # Without env var, explicit key should work
+            config = get_openai_config(api_key="sk-tenant-123")
+            assert config.api_key == "sk-tenant-123"
+            assert config.provider == "openai"
+
+    def test_openai_config_explicit_key_overrides_env(self):
+        """Explicit api_key should take precedence over env var."""
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-env-key"}, clear=True):
+            config = get_openai_config(api_key="sk-tenant-override")
+            assert config.api_key == "sk-tenant-override"
+
+    def test_openai_config_falls_back_to_env(self):
+        """When no explicit key, should fall back to env var as before."""
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-env-key"}, clear=True):
+            config = get_openai_config()
+            assert config.api_key == "sk-env-key"
+
+    def test_openai_config_no_key_raises(self):
+        """When neither explicit key nor env var, should raise ConfigurationError."""
+        with patch.dict(os.environ, {}, clear=True):
+            with pytest.raises(ConfigurationError):
+                get_openai_config()
+
+    def test_anthropic_config_with_explicit_api_key(self):
+        """get_anthropic_config should accept explicit api_key."""
+        with patch.dict(os.environ, {}, clear=True):
+            config = get_anthropic_config(api_key="sk-ant-tenant-456")
+            assert config.api_key == "sk-ant-tenant-456"
+            assert config.provider == "anthropic"
+
+    def test_google_config_with_explicit_api_key(self):
+        """get_google_config should accept explicit api_key."""
+        with patch.dict(os.environ, {}, clear=True):
+            config = get_google_config(api_key="AIza-tenant-789")
+            assert config.api_key == "AIza-tenant-789"
+            assert config.provider == "google"
+
+    def test_perplexity_config_with_explicit_api_key(self):
+        """get_perplexity_config should accept explicit api_key."""
+        with patch.dict(os.environ, {}, clear=True):
+            config = get_perplexity_config(api_key="pplx-tenant-101")
+            assert config.api_key == "pplx-tenant-101"
+            assert config.provider == "perplexity"
+
+    def test_ollama_config_with_explicit_base_url(self):
+        """get_ollama_config should accept explicit base_url."""
+        with patch.dict(os.environ, {}, clear=True):
+            # Ollama doesn't require API key, but we can override base_url
+            # Skip if ollama not running (availability check may fail)
+            try:
+                config = get_ollama_config(base_url="http://custom-host:11434")
+                assert config.base_url == "http://custom-host:11434"
+            except ConfigurationError:
+                pytest.skip("Ollama not available")
+
+    def test_get_provider_config_with_api_key(self):
+        """get_provider_config should thread api_key to specific provider."""
+        with patch.dict(os.environ, {}, clear=True):
+            config = get_provider_config(
+                provider="openai", model="gpt-4o", api_key="sk-byok-key"
+            )
+            assert config.api_key == "sk-byok-key"
+            assert config.model == "gpt-4o"
+
+    def test_provider_config_to_dict_includes_api_key(self):
+        """provider_config_to_dict should include api_key when present."""
+        config = ProviderConfig(
+            provider="openai",
+            model="gpt-4o",
+            api_key="sk-tenant-key",
+        )
+        config_dict = provider_config_to_dict(config)
+        assert config_dict["api_key"] == "sk-tenant-key"
+
+
+class TestBaseAgentConfigApiKey:
+    """Test api_key and base_url fields on BaseAgentConfig."""
+
+    def test_base_agent_config_has_api_key_field(self):
+        """BaseAgentConfig should accept api_key parameter."""
+        config = BaseAgentConfig(
+            llm_provider="openai",
+            model="gpt-4o",
+            api_key="sk-tenant-key",
+        )
+        assert config.api_key == "sk-tenant-key"
+
+    def test_base_agent_config_has_base_url_field(self):
+        """BaseAgentConfig should accept base_url parameter."""
+        config = BaseAgentConfig(
+            llm_provider="ollama",
+            model="llama3.2",
+            base_url="http://custom:11434",
+        )
+        assert config.base_url == "http://custom:11434"
+
+    def test_base_agent_config_api_key_defaults_none(self):
+        """api_key should default to None for backward compatibility."""
+        config = BaseAgentConfig(llm_provider="openai", model="gpt-4o")
+        assert config.api_key is None
+
+    def test_base_agent_config_from_domain_config_threads_api_key(self):
+        """from_domain_config should pick up api_key from domain config."""
+        from dataclasses import dataclass
+
+        @dataclass
+        class TenantConfig:
+            llm_provider: str = "openai"
+            model: str = "gpt-4o"
+            api_key: str = "sk-tenant-key"
+            base_url: str = "https://custom-proxy.example.com/v1"
+
+        tenant_config = TenantConfig()
+        base_config = BaseAgentConfig.from_domain_config(tenant_config)
+        assert base_config.api_key == "sk-tenant-key"
+        assert base_config.base_url == "https://custom-proxy.example.com/v1"
+
+    def test_base_agent_config_from_dict_threads_api_key(self):
+        """from_domain_config with dict input should pick up api_key."""
+        config_dict = {
+            "llm_provider": "openai",
+            "model": "gpt-4o",
+            "api_key": "sk-dict-key",
+            "base_url": "https://proxy.example.com/v1",
+        }
+        base_config = BaseAgentConfig.from_domain_config(config_dict)
+        assert base_config.api_key == "sk-dict-key"
+        assert base_config.base_url == "https://proxy.example.com/v1"
+
+
+class TestWorkflowGeneratorApiKey:
+    """Test that WorkflowGenerator threads api_key to node_config."""
+
+    def test_workflow_generator_includes_api_key_in_node_config(self):
+        """WorkflowGenerator should pass api_key from config to LLMAgentNode config."""
+        from kaizen.core.workflow_generator import WorkflowGenerator
+        from kaizen.signatures import InputField, OutputField, Signature
+
+        class TestSig(Signature):
+            """Test signature."""
+
+            question: str = InputField(desc="Question")
+            answer: str = OutputField(desc="Answer")
+
+        config = BaseAgentConfig(
+            llm_provider="openai",
+            model="gpt-4o",
+            api_key="sk-workflow-key",
+            base_url="https://proxy.example.com/v1",
+        )
+
+        generator = WorkflowGenerator(config=config, signature=TestSig())
+        workflow = generator.generate_signature_workflow()
+
+        # Inspect the built workflow's node config
+        built = workflow.build()
+        node = built.nodes.get("agent_exec")
+        assert node is not None
+        assert node.config.get("api_key") == "sk-workflow-key"
+        assert node.config.get("base_url") == "https://proxy.example.com/v1"
+
+
+class TestLLMAgentNodeApiKey:
+    """Test that LLMAgentNode accepts and uses api_key parameter."""
+
+    def test_llm_agent_node_has_api_key_parameter(self):
+        """LLMAgentNode should have api_key in its parameters."""
+        from kaizen.nodes.ai.llm_agent import LLMAgentNode
+
+        node = LLMAgentNode()
+        params = node.get_parameters()
+        assert "api_key" in params
+        assert "base_url" in params
