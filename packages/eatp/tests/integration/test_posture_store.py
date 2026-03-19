@@ -366,6 +366,39 @@ def test_history_limit_bounded_to_max(store):
     assert isinstance(history, list)
 
 
+def test_emergency_downgrade_transition_type_preserved(store):
+    """RT-06: EMERGENCY_DOWNGRADE transition_type must survive store roundtrip.
+
+    When an EMERGENCY_DOWNGRADE transition is stored and read back via
+    get_history(), the transition_type MUST be EMERGENCY_DOWNGRADE -- not
+    the generic DOWNGRADE that _determine_transition_type() would infer
+    from the posture levels alone.
+    """
+    tr = TransitionResult(
+        success=True,
+        from_posture=TrustPosture.DELEGATED,
+        to_posture=TrustPosture.PSEUDO_AGENT,
+        transition_type=PostureTransition.EMERGENCY_DOWNGRADE,
+        reason="Security incident detected",
+        metadata={"agent_id": "agent-emergency"},
+    )
+    store.record_transition(tr)
+
+    history = store.get_history("agent-emergency")
+    assert len(history) == 1
+
+    restored = history[0]
+    assert restored.transition_type == PostureTransition.EMERGENCY_DOWNGRADE, (
+        f"Expected EMERGENCY_DOWNGRADE but got {restored.transition_type}. "
+        f"The store lost the transition_type and fell back to "
+        f"_determine_transition_type() which returns DOWNGRADE."
+    )
+    assert restored.from_posture == TrustPosture.DELEGATED
+    assert restored.to_posture == TrustPosture.PSEUDO_AGENT
+    assert restored.reason == "Security incident detected"
+    assert restored.success is True
+
+
 def test_record_transition_with_metadata(store):
     """Transition metadata should be preserved through round-trip."""
     tr = TransitionResult(

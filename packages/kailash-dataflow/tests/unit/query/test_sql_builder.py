@@ -260,6 +260,46 @@ class TestFilterOperators:
         with pytest.raises(TypeError, match="filter must be a dict"):
             _build_where_clause("not_a_dict")  # type: ignore[arg-type]
 
+    def test_filter_none_value_generates_is_null(self) -> None:
+        """Filter with None value and = operator generates IS NULL with no params."""
+        where, params = _build_where_clause({"status": None})
+        assert where == "status IS NULL"
+        assert params == []
+
+    def test_filter_ne_none_generates_is_not_null(self) -> None:
+        """Filter with None value and __ne operator generates IS NOT NULL."""
+        where, params = _build_where_clause({"status__ne": None})
+        assert where == "status IS NOT NULL"
+        assert params == []
+
+    def test_filter_gt_none_raises_value_error(self) -> None:
+        """Filter with None value and __gt operator raises ValueError."""
+        with pytest.raises(ValueError, match="Cannot use operator '>' with NULL"):
+            _build_where_clause({"status__gt": None})
+
+    def test_filter_lt_none_raises_value_error(self) -> None:
+        """Filter with None value and __lt operator raises ValueError."""
+        with pytest.raises(ValueError, match="Cannot use operator '<' with NULL"):
+            _build_where_clause({"status__lt": None})
+
+    def test_filter_gte_none_raises_value_error(self) -> None:
+        """Filter with None value and __gte operator raises ValueError."""
+        with pytest.raises(ValueError, match="Cannot use operator '>=' with NULL"):
+            _build_where_clause({"status__gte": None})
+
+    def test_filter_lte_none_raises_value_error(self) -> None:
+        """Filter with None value and __lte operator raises ValueError."""
+        with pytest.raises(ValueError, match="Cannot use operator '<=' with NULL"):
+            _build_where_clause({"status__lte": None})
+
+    def test_filter_none_mixed_with_non_none(self) -> None:
+        """Filter with both None and non-None values generates correct SQL."""
+        where, params = _build_where_clause({"deleted_at": None, "status": "active"})
+        assert "deleted_at IS NULL" in where
+        assert "status = ?" in where
+        assert "AND" in where
+        assert params == ["active"]
+
 
 # ---------------------------------------------------------------------------
 # validate_identifier tests

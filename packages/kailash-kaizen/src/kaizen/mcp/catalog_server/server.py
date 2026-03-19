@@ -27,7 +27,7 @@ import sys
 from collections import deque
 from typing import Any, Dict, List, Optional
 
-from kaizen.mcp.catalog_server.registry import LocalRegistry
+from kaizen.mcp.catalog_server.registry import MemoryRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -424,7 +424,7 @@ class CatalogMCPServer:
     """
 
     def __init__(self, registry_dir: Optional[str] = None) -> None:
-        self._registry = LocalRegistry(registry_dir=registry_dir)
+        self._registry = MemoryRegistry(registry_dir=registry_dir)
         self._request_log: deque = deque(maxlen=10_000)
         self._initialized = False
         self._seed_builtin_agents()
@@ -467,9 +467,21 @@ class CatalogMCPServer:
             return {}  # Notification -- no response
 
         if method == "tools/list":
+            if not self._initialized:
+                return self._error(
+                    req_id,
+                    _INVALID_REQUEST,
+                    "Server not initialized. Send 'initialize' first.",
+                )
             return self._ok(req_id, {"tools": _TOOL_DEFINITIONS})
 
         if method == "tools/call":
+            if not self._initialized:
+                return self._error(
+                    req_id,
+                    _INVALID_REQUEST,
+                    "Server not initialized. Send 'initialize' first.",
+                )
             tool_name = params.get("name", "")
             arguments = params.get("arguments", {})
             return self._dispatch_tool(req_id, tool_name, arguments)
@@ -480,7 +492,7 @@ class CatalogMCPServer:
         self, req_id: Any, tool_name: str, arguments: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Dispatch to the appropriate tool handler."""
-        handlers = self._tool_handlers
+        handlers = self._get_tool_handlers()
         handler = handlers.get(tool_name)
         if handler is None:
             return self._error(req_id, _INVALID_PARAMS, f"Unknown tool: {tool_name}")
@@ -525,46 +537,57 @@ class CatalogMCPServer:
                 },
             )
 
-    @property
-    def _tool_handlers(self) -> Dict[str, Any]:
-        """Lazily-constructed mapping of tool name -> handler callable."""
-        from kaizen.mcp.catalog_server.tools.application import (
-            handle_app_register,
-            handle_app_status,
-        )
-        from kaizen.mcp.catalog_server.tools.deployment import (
-            handle_catalog_deregister,
-            handle_deploy_agent,
-            handle_deploy_status,
-        )
-        from kaizen.mcp.catalog_server.tools.discovery import (
-            handle_catalog_deps,
-            handle_catalog_describe,
-            handle_catalog_schema,
-            handle_catalog_search,
-        )
-        from kaizen.mcp.catalog_server.tools.governance import (
-            handle_budget_status,
-            handle_validate_composition,
-        )
+    def _get_tool_handlers(self) -> Dict[str, Any]:
+        """Return the mapping of tool name -> handler callable.
 
-        return {
-            "catalog_search": lambda args: handle_catalog_search(self._registry, args),
-            "catalog_describe": lambda args: handle_catalog_describe(
-                self._registry, args
-            ),
-            "catalog_schema": lambda args: handle_catalog_schema(self._registry, args),
-            "catalog_deps": lambda args: handle_catalog_deps(self._registry, args),
-            "deploy_agent": lambda args: handle_deploy_agent(self._registry, args),
-            "deploy_status": lambda args: handle_deploy_status(self._registry, args),
-            "catalog_deregister": lambda args: handle_catalog_deregister(
-                self._registry, args
-            ),
-            "app_register": lambda args: handle_app_register(self._registry, args),
-            "app_status": lambda args: handle_app_status(self._registry, args),
-            "validate_composition": lambda args: handle_validate_composition(args),
-            "budget_status": lambda args: handle_budget_status(args),
-        }
+        Built lazily on first call and cached for subsequent calls so
+        the import + dict construction cost is paid only once.
+        """
+        if not hasattr(self, "_cached_handlers"):
+            from kaizen.mcp.catalog_server.tools.application import (
+                handle_app_register,
+                handle_app_status,
+            )
+            from kaizen.mcp.catalog_server.tools.deployment import (
+                handle_catalog_deregister,
+                handle_deploy_agent,
+                handle_deploy_status,
+            )
+            from kaizen.mcp.catalog_server.tools.discovery import (
+                handle_catalog_deps,
+                handle_catalog_describe,
+                handle_catalog_schema,
+                handle_catalog_search,
+            )
+            from kaizen.mcp.catalog_server.tools.governance import (
+                handle_budget_status,
+                handle_validate_composition,
+            )
+
+            self._cached_handlers: Dict[str, Any] = {
+                "catalog_search": lambda args: handle_catalog_search(
+                    self._registry, args
+                ),
+                "catalog_describe": lambda args: handle_catalog_describe(
+                    self._registry, args
+                ),
+                "catalog_schema": lambda args: handle_catalog_schema(
+                    self._registry, args
+                ),
+                "catalog_deps": lambda args: handle_catalog_deps(self._registry, args),
+                "deploy_agent": lambda args: handle_deploy_agent(self._registry, args),
+                "deploy_status": lambda args: handle_deploy_status(
+                    self._registry, args
+                ),
+                "catalog_deregister": lambda args: handle_catalog_deregister(
+                    self._registry, args
+                ),
+                "app_register": lambda args: handle_app_register(self._registry, args),
+                "app_status": lambda args: handle_app_status(self._registry, args),
+                "validate_composition": lambda args: handle_validate_composition(args),
+                "budget_status": lambda args: handle_budget_status(args),
+            }
+        return self._cached_handlers
 
     # ------------------------------------------------------------------
     # JSON-RPC helpers

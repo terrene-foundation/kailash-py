@@ -31,7 +31,7 @@ from kaizen.deploy.client import (
     deploy_local,
 )
 from kaizen.deploy.introspect import introspect_agent
-from kaizen.deploy.registry import LocalRegistry
+from kaizen.deploy.registry import FileRegistry, LocalRegistry
 
 __all__ = [
     "introspect_agent",
@@ -40,5 +40,6 @@ __all__ = [
     "DeployResult",
     "DeployError",
     "DeployAuthError",
+    "FileRegistry",
     "LocalRegistry",
 ]

@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["LocalRegistry"]
+__all__ = ["MemoryRegistry", "LocalRegistry"]
 
 # Agent/application name validation: alphanumeric, hyphens, underscores
 _VALID_NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]{0,127}$")
@@ -40,7 +40,7 @@ def _validate_name(name: str) -> None:
         )
 
 
-class LocalRegistry:
+class MemoryRegistry:
     """In-memory registry for agents and applications.
 
     Bounded to ``_MAX_AGENTS`` / ``_MAX_APPS`` entries with LRU eviction
@@ -224,3 +224,7 @@ class LocalRegistry:
     def list_apps(self) -> List[Dict[str, Any]]:
         """Return all registered applications."""
         return list(self._apps.values())
+
+
+# Backward-compatible alias -- existing code imports ``LocalRegistry``
+LocalRegistry = MemoryRegistry

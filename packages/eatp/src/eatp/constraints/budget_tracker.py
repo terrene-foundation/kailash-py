@@ -268,6 +268,7 @@ class BudgetTracker:
         _lock: Guards all mutable state.
         _transaction_log: Bounded deque of transaction descriptions.
         _threshold_callbacks: Registered callbacks for threshold events.
+        _record_callbacks: Registered callbacks fired after every record().
     """
 
     def __init__(
@@ -319,6 +320,7 @@ class BudgetTracker:
             maxlen=_MAX_TRANSACTION_LOG
         )
         self._threshold_callbacks: List[Callable[[BudgetEvent], None]] = []
+        self._record_callbacks: List[Callable[[], None]] = []
         self._store = store
         self._tracker_id = tracker_id
 
@@ -514,6 +516,15 @@ class BudgetTracker:
                     self._tracker_id,
                 )
 
+        # H1: Fire record callbacks OUTSIDE the lock after every record().
+        # These enable composable integrations (e.g. posture-budget) without
+        # monkey-patching.
+        for cb in self._record_callbacks:
+            try:
+                cb()
+            except Exception:
+                logger.exception("Record callback raised exception -- ignoring")
+
     def remaining_microdollars(self) -> int:
         """Return the remaining available budget in microdollars.
 
@@ -603,6 +614,23 @@ class BudgetTracker:
         """
         self._threshold_callbacks.append(callback)
 
+    def on_record(self, callback: Callable[[], None]) -> None:
+        """Register a callback to be invoked after every ``record()`` call.
+
+        Unlike ``on_threshold()`` which fires only at specific utilization
+        percentages, ``on_record()`` callbacks fire after *every* successful
+        ``record()`` invocation.  This is useful for integrations that need
+        to check custom utilization thresholds at arbitrary percentages.
+
+        Callbacks are invoked outside the lock, after threshold callbacks.
+        If a callback raises an exception, it is logged and the remaining
+        callbacks still execute (fail-safe).
+
+        Args:
+            callback: Zero-argument callable invoked after each record().
+        """
+        self._record_callbacks.append(callback)
+
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
@@ -621,24 +649,39 @@ class BudgetTracker:
         if self._allocated == 0:
             return []
 
-        utilization_pct = (self._committed / self._allocated) * 100
+        # M1: Use integer arithmetic for threshold comparisons to avoid
+        # floating-point precision issues.  We multiply committed by 100
+        # and compare against allocated * threshold_pct.  Float is used
+        # only for the log message display.
+        committed_x100 = self._committed * 100
 
         thresholds_to_fire: List[str] = []
 
-        if utilization_pct >= 100 and "exhausted" not in self._fired_thresholds:
+        if (
+            committed_x100 >= self._allocated * 100
+            and "exhausted" not in self._fired_thresholds
+        ):
             thresholds_to_fire.append("exhausted")
             self._fired_thresholds.add("exhausted")
 
-        if utilization_pct >= 95 and "threshold_95" not in self._fired_thresholds:
+        if (
+            committed_x100 >= self._allocated * 95
+            and "threshold_95" not in self._fired_thresholds
+        ):
             thresholds_to_fire.append("threshold_95")
             self._fired_thresholds.add("threshold_95")
 
-        if utilization_pct >= 80 and "threshold_80" not in self._fired_thresholds:
+        if (
+            committed_x100 >= self._allocated * 80
+            and "threshold_80" not in self._fired_thresholds
+        ):
             thresholds_to_fire.append("threshold_80")
             self._fired_thresholds.add("threshold_80")
 
         events: List[BudgetEvent] = []
         remaining = max(0, self._allocated - self._committed - self._reserved)
+        # Float only for logging display
+        utilization_pct_display = (self._committed / self._allocated) * 100
         for event_type in thresholds_to_fire:
             event = BudgetEvent(
                 event_type=event_type,
@@ -650,7 +693,7 @@ class BudgetTracker:
                 event_type,
                 self._committed,
                 self._allocated,
-                utilization_pct,
+                utilization_pct_display,
             )
             events.append(event)
         return events

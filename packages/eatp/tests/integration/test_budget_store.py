@@ -400,3 +400,90 @@ class TestBudgetStoreProtocol:
     def test_has_get_transaction_log(self, store: SQLiteBudgetStore) -> None:
         assert hasattr(store, "get_transaction_log")
         assert callable(store.get_transaction_log)
+
+
+# ---------------------------------------------------------------------------
+# RT-02: Operations after close()
+# ---------------------------------------------------------------------------
+class TestOperationsAfterClose:
+    """Operations on a closed store should fail cleanly."""
+
+    def test_save_after_close_raises(self, tmp_db_path: str) -> None:
+        store = SQLiteBudgetStore(tmp_db_path)
+        store.initialize()
+        store.close()
+        with pytest.raises(RuntimeError, match="not initialized"):
+            store.save_snapshot("test", BudgetSnapshot(allocated=100, committed=0))
+
+    def test_get_after_close_raises(self, tmp_db_path: str) -> None:
+        store = SQLiteBudgetStore(tmp_db_path)
+        store.initialize()
+        store.close()
+        with pytest.raises(RuntimeError, match="not initialized"):
+            store.get_snapshot("test")
+
+    def test_log_after_close_raises(self, tmp_db_path: str) -> None:
+        store = SQLiteBudgetStore(tmp_db_path)
+        store.initialize()
+        store.close()
+        with pytest.raises(RuntimeError, match="not initialized"):
+            store.log_transaction("test", "record", 100)
+
+
+# ---------------------------------------------------------------------------
+# RT-03: Invalid limit parameter
+# ---------------------------------------------------------------------------
+class TestInvalidLimit:
+    """Invalid limit values should be rejected."""
+
+    def test_zero_limit_raises(self, store: SQLiteBudgetStore) -> None:
+        with pytest.raises(BudgetStoreError):
+            store.get_transaction_log("test", limit=0)
+
+    def test_negative_limit_raises(self, store: SQLiteBudgetStore) -> None:
+        with pytest.raises(BudgetStoreError):
+            store.get_transaction_log("test", limit=-5)
+
+    def test_large_limit_capped(self, store: SQLiteBudgetStore) -> None:
+        """Limits above 10,000 should be silently capped."""
+        result = store.get_transaction_log("test", limit=999_999)
+        assert isinstance(result, list)
+
+
+# ---------------------------------------------------------------------------
+# RT-05: Concurrent access
+# ---------------------------------------------------------------------------
+class TestConcurrentAccess:
+    """Concurrent store operations must not corrupt data."""
+
+    def test_concurrent_save_get(self, tmp_db_path: str) -> None:
+        import threading
+
+        store = SQLiteBudgetStore(tmp_db_path)
+        store.initialize()
+        errors: list = []
+
+        def writer(tid: int) -> None:
+            try:
+                for i in range(50):
+                    store.save_snapshot(
+                        f"t-{tid}",
+                        BudgetSnapshot(allocated=1_000_000, committed=tid * 10 + i),
+                    )
+            except Exception as e:
+                errors.append(f"Thread {tid}: {e}")
+
+        threads = [threading.Thread(target=writer, args=(i,)) for i in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(errors) == 0, f"Concurrent errors: {errors}"
+
+        for i in range(5):
+            snap = store.get_snapshot(f"t-{i}")
+            assert snap is not None
+            assert snap.allocated == 1_000_000
+
+        store.close()

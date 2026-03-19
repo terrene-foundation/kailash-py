@@ -210,7 +210,10 @@ class SQLiteBudgetStore(BudgetStore):
         _validate_db_path(db_path)
         self._db_path = db_path
         self._initialized = False
+        self._closed = False
         self._local = threading.local()
+        self._connections: List[sqlite3.Connection] = []
+        self._conn_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -232,6 +235,8 @@ class SQLiteBudgetStore(BudgetStore):
             conn.execute("PRAGMA journal_mode=WAL")
             conn.row_factory = sqlite3.Row
             self._local.conn = conn
+            with self._conn_lock:
+                self._connections.append(conn)
         return conn
 
     def _set_file_permissions(self) -> None:
@@ -266,13 +271,19 @@ class SQLiteBudgetStore(BudgetStore):
         logger.info("SQLiteBudgetStore initialized at %s", self._db_path)
 
     def close(self) -> None:
-        """Close the per-thread connection and reset state."""
-        conn = getattr(self._local, "conn", None)
-        if conn is not None:
-            conn.close()
-            self._local.conn = None
+        """Close ALL per-thread connections and reset state."""
+        with self._conn_lock:
+            for conn in self._connections:
+                try:
+                    conn.close()
+                except Exception:
+                    logger.warning(
+                        "Error closing budget store connection", exc_info=True
+                    )
+            self._connections.clear()
+        self._local.conn = None
         self._initialized = False
-        logger.info("SQLiteBudgetStore closed")
+        logger.info("SQLiteBudgetStore closed (all connections)")
 
     # ------------------------------------------------------------------
     # BudgetStore protocol implementation

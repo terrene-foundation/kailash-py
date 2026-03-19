@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["LocalRegistry"]
+__all__ = ["FileRegistry", "LocalRegistry"]
 
 _VALID_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
@@ -40,7 +40,36 @@ def _validate_name(name: str) -> None:
         )
 
 
-class LocalRegistry:
+def _atomic_write(path: Path, content: str) -> None:
+    """Write *content* to *path* atomically via temp-file + fsync + replace.
+
+    On POSIX the temp file is chmod'd to owner-read/write only (0o600).
+    If any step fails, the temp file is cleaned up and the exception is
+    re-raised so that a partial write never corrupts the target file.
+    """
+    import tempfile
+
+    parent = path.parent
+    fd, tmp_path = tempfile.mkstemp(dir=str(parent), suffix=".tmp")
+    try:
+        os.write(fd, content.encode("utf-8"))
+        os.fsync(fd)
+        os.close(fd)
+        fd = -1
+        if os.name != "nt":
+            import stat
+
+            os.chmod(tmp_path, stat.S_IRUSR | stat.S_IWUSR)
+        os.replace(tmp_path, str(path))
+    except BaseException:
+        if fd >= 0:
+            os.close(fd)
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
+
+
+class FileRegistry:
     """File-based local agent registry.
 
     Stores agent manifests as JSON files in a directory.
@@ -76,7 +105,7 @@ class LocalRegistry:
         name = manifest_dict.get("name", "")
         _validate_name(name)
         path = self._dir / f"{name}.json"
-        path.write_text(json.dumps(manifest_dict, indent=2, default=str))
+        _atomic_write(path, json.dumps(manifest_dict, indent=2, default=str))
         logger.info("Registered agent %r at %s", name, path)
         return {
             "agent_name": name,
@@ -141,3 +170,7 @@ class LocalRegistry:
             logger.info("Deregistered agent %r", name)
             return True
         return False
+
+
+# Backward-compatible alias -- existing code imports ``LocalRegistry``
+LocalRegistry = FileRegistry

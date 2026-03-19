@@ -208,9 +208,18 @@ class PostureEvidence:
     def __post_init__(self) -> None:
         if not math.isfinite(self.success_rate):
             raise ValueError(f"success_rate must be finite, got {self.success_rate}")
+        if not (0.0 <= self.success_rate <= 1.0):
+            raise ValueError(
+                f"success_rate must be in [0.0, 1.0], got {self.success_rate}"
+            )
         if not math.isfinite(self.time_at_current_posture_hours):
             raise ValueError(
                 f"time_at_current_posture_hours must be finite, "
+                f"got {self.time_at_current_posture_hours}"
+            )
+        if self.time_at_current_posture_hours < 0:
+            raise ValueError(
+                f"time_at_current_posture_hours must be non-negative, "
                 f"got {self.time_at_current_posture_hours}"
             )
         if self.observation_count < 0:

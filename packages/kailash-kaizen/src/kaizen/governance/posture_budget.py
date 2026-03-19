@@ -15,9 +15,8 @@ integration translates them into posture actions:
 - **emergency** (default 100%): Emergency downgrade to PSEUDO_AGENT.
 
 The integration hooks into the BudgetTracker via ``on_threshold()``
-for the fixed 80/95/100% events, and also wraps the tracker's
-``record()`` method to support custom thresholds at arbitrary
-utilization percentages.
+for the fixed 80/95/100% events, and registers an ``on_record()``
+callback for custom thresholds at arbitrary utilization percentages.
 
 Direction: kaizen -> eatp (never reverse).
 """
@@ -137,24 +136,11 @@ class PostureBudgetIntegration:
         # Independent of the BudgetTracker's own fired_thresholds tracking.
         self._fired_actions: Set[str] = set()
 
-        # Wrap the tracker's record() method to add a custom threshold
-        # check after every call.  This is necessary because the
-        # BudgetTracker only fires on_threshold events at fixed 80/95/100%
-        # utilization.  Custom thresholds (e.g. downgrade=0.70) need to
-        # be checked after every record() call.
-        original_record = budget_tracker.record
-
-        def _wrapped_record(
-            reserved_microdollars: int, actual_microdollars: int
-        ) -> None:
-            original_record(
-                reserved_microdollars=reserved_microdollars,
-                actual_microdollars=actual_microdollars,
-            )
-            # After the original record(), check custom thresholds
-            self._check_thresholds()
-
-        budget_tracker.record = _wrapped_record  # type: ignore[method-assign]
+        # H1: Use the on_record() callback API instead of monkey-patching.
+        # This is clean, composable (multiple integrations work), and
+        # reversible.  The BudgetTracker fires on_record callbacks after
+        # every record() call, outside its lock.
+        budget_tracker.on_record(self._check_thresholds)
 
         logger.info(
             "PostureBudgetIntegration initialized for agent '%s' with "
@@ -307,6 +293,49 @@ class PostureBudgetIntegration:
                 current.value,
             )
         else:
+            # M5: If the failure is due to a stale from_posture (posture
+            # changed between our get_posture() and transition() calls),
+            # re-read the current posture and retry once.
+            if "does not match" in (result.reason or ""):
+                refreshed = self._state_machine.get_posture(self._agent_id)
+                if refreshed <= TrustPosture.SUPERVISED:
+                    logger.info(
+                        "Budget %.0f%% threshold for agent '%s': posture "
+                        "already at %s after refresh, no downgrade needed",
+                        self._thresholds["downgrade"] * 100,
+                        self._agent_id,
+                        refreshed.value,
+                    )
+                    return
+
+                retry_request = PostureTransitionRequest(
+                    agent_id=self._agent_id,
+                    from_posture=refreshed,
+                    to_posture=TrustPosture.SUPERVISED,
+                    reason=request.reason,
+                    requester_id="posture_budget_integration",
+                    metadata=dict(request.metadata),
+                )
+                retry_result = self._state_machine.transition(retry_request)
+                if retry_result.success:
+                    logger.warning(
+                        "Budget %.0f%% threshold: agent '%s' downgraded "
+                        "from %s to SUPERVISED (retry after stale posture)",
+                        self._thresholds["downgrade"] * 100,
+                        self._agent_id,
+                        refreshed.value,
+                    )
+                    return
+                else:
+                    logger.error(
+                        "Budget %.0f%% threshold: retry also failed for "
+                        "agent '%s': %s",
+                        self._thresholds["downgrade"] * 100,
+                        self._agent_id,
+                        retry_result.reason,
+                    )
+                    return
+
             logger.error(
                 "Budget %.0f%% threshold: failed to downgrade agent '%s' "
                 "from %s to SUPERVISED: %s",

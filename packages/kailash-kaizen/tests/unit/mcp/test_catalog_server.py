@@ -169,6 +169,20 @@ class TestProtocol:
         assert "error" in resp
         assert resp["error"]["code"] == -32601
 
+    def test_tools_list_before_initialize_returns_error(self, server):
+        """tools/list before initialize must return an error."""
+        resp = server.handle_request(_make_request("tools/list"))
+        assert "error" in resp
+        assert resp["error"]["code"] == -32600
+        assert "not initialized" in resp["error"]["message"].lower()
+
+    def test_tools_call_before_initialize_returns_error(self, server):
+        """tools/call before initialize must return an error."""
+        resp = server.handle_request(_tool_call("catalog_search", {"query": "react"}))
+        assert "error" in resp
+        assert resp["error"]["code"] == -32600
+        assert "not initialized" in resp["error"]["message"].lower()
+
     def test_unknown_tool_error(self, initialized_server):
         """Calling a non-existent tool returns an error."""
         resp = initialized_server.handle_request(_tool_call("nonexistent_tool", {}))

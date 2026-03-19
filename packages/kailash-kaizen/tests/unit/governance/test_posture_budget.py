@@ -427,6 +427,60 @@ class TestValidation:
 
 
 # ---------------------------------------------------------------------------
+# 10. NaN/Inf threshold rejection (RT-04)
+# ---------------------------------------------------------------------------
+class TestNanInfThresholds:
+    """Non-finite threshold values must be rejected at construction time.
+
+    NaN and Inf bypass numeric comparisons (NaN > X is always False,
+    Inf > 1.0 is True but isfinite() catches it first). These tests
+    verify math.isfinite() enforcement in PostureBudgetIntegration.__init__.
+    """
+
+    def test_nan_warning_rejected(
+        self,
+        budget_tracker: BudgetTracker,
+        state_machine: PostureStateMachine,
+    ) -> None:
+        """NaN threshold value is rejected with a 'finite' error."""
+        with pytest.raises(ValueError, match="finite"):
+            PostureBudgetIntegration(
+                budget_tracker=budget_tracker,
+                state_machine=state_machine,
+                agent_id="nan-test",
+                thresholds={"warning": float("nan")},
+            )
+
+    def test_inf_downgrade_rejected(
+        self,
+        budget_tracker: BudgetTracker,
+        state_machine: PostureStateMachine,
+    ) -> None:
+        """Positive Inf threshold value is rejected with a 'finite' error."""
+        with pytest.raises(ValueError, match="finite"):
+            PostureBudgetIntegration(
+                budget_tracker=budget_tracker,
+                state_machine=state_machine,
+                agent_id="inf-test",
+                thresholds={"downgrade": float("inf")},
+            )
+
+    def test_negative_inf_rejected(
+        self,
+        budget_tracker: BudgetTracker,
+        state_machine: PostureStateMachine,
+    ) -> None:
+        """Negative Inf threshold value is rejected (not finite)."""
+        with pytest.raises(ValueError, match="finite"):
+            PostureBudgetIntegration(
+                budget_tracker=budget_tracker,
+                state_machine=state_machine,
+                agent_id="neginf-test",
+                thresholds={"emergency": float("-inf")},
+            )
+
+
+# ---------------------------------------------------------------------------
 # 8. PostureBudgetIntegration exposes accessors
 # ---------------------------------------------------------------------------
 class TestAccessors:

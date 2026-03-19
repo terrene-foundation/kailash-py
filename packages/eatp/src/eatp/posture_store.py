@@ -135,9 +135,23 @@ CREATE TABLE IF NOT EXISTS transitions (
     to_posture TEXT NOT NULL,
     success INTEGER NOT NULL,
     timestamp TEXT NOT NULL,
-    metadata TEXT
+    metadata TEXT,
+    transition_type TEXT
 )
 """
+
+
+def _migrate_transitions_table(conn: sqlite3.Connection) -> None:
+    """Add transition_type column if missing (migration from pre-RT-06 schema).
+
+    This is safe to call repeatedly -- it checks for column existence first.
+    """
+    cursor = conn.execute("PRAGMA table_info(transitions)")
+    columns = {row[1] for row in cursor.fetchall()}
+    if "transition_type" not in columns:
+        conn.execute("ALTER TABLE transitions ADD COLUMN transition_type TEXT")
+        conn.commit()
+        logger.info("Migrated transitions table: added transition_type column")
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +161,10 @@ CREATE TABLE IF NOT EXISTS transitions (
 
 def _row_to_transition_result(row: sqlite3.Row) -> TransitionResult:
     """Convert a database row back to a TransitionResult.
+
+    Uses the stored ``transition_type`` column when available (RT-06 fix).
+    Falls back to ``_determine_transition_type()`` for rows written before
+    the column was added.
 
     Args:
         row: A sqlite3.Row from the transitions table.
@@ -158,14 +176,23 @@ def _row_to_transition_result(row: sqlite3.Row) -> TransitionResult:
     if row["metadata"] is not None:
         metadata = json.loads(row["metadata"])
 
+    # RT-06: Use stored transition_type if present, otherwise infer from
+    # posture levels.  The stored value preserves EMERGENCY_DOWNGRADE which
+    # would otherwise be lost (inferred as plain DOWNGRADE).
+    stored_transition_type = row["transition_type"]
+    if stored_transition_type is not None:
+        transition_type = PostureTransition(stored_transition_type)
+    else:
+        transition_type = _determine_transition_type(
+            TrustPosture(row["from_posture"]),
+            TrustPosture(row["to_posture"]),
+        )
+
     return TransitionResult(
         success=bool(row["success"]),
         from_posture=TrustPosture(row["from_posture"]),
         to_posture=TrustPosture(row["to_posture"]),
-        transition_type=_determine_transition_type(
-            TrustPosture(row["from_posture"]),
-            TrustPosture(row["to_posture"]),
-        ),
+        transition_type=transition_type,
         reason=metadata.get("_reason", ""),
         blocked_by=metadata.get("_blocked_by"),
         timestamp=datetime.fromisoformat(row["timestamp"]),
@@ -247,6 +274,9 @@ class SQLitePostureStore:
         conn.execute(_CREATE_POSTURES_TABLE)
         conn.execute(_CREATE_TRANSITIONS_TABLE)
         conn.commit()
+
+        # Migrate existing databases that lack the transition_type column
+        _migrate_transitions_table(conn)
 
         logger.info("SQLitePostureStore initialized at %s", db_path)
 
@@ -357,8 +387,9 @@ class SQLitePostureStore:
         conn = self._get_connection()
         conn.execute(
             "INSERT INTO transitions "
-            "(agent_id, from_posture, to_posture, success, timestamp, metadata) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "(agent_id, from_posture, to_posture, success, timestamp, metadata, "
+            "transition_type) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 agent_id,
                 result.from_posture.value,
@@ -366,6 +397,7 @@ class SQLitePostureStore:
                 1 if result.success else 0,
                 result.timestamp.isoformat(),
                 metadata_json,
+                result.transition_type.value,
             ),
         )
         conn.commit()
@@ -398,7 +430,8 @@ class SQLitePostureStore:
         effective_limit = min(limit, _MAX_HISTORY_LIMIT)
 
         cursor = self._get_connection().execute(
-            "SELECT agent_id, from_posture, to_posture, success, timestamp, metadata "
+            "SELECT agent_id, from_posture, to_posture, success, timestamp, metadata, "
+            "transition_type "
             "FROM transitions WHERE agent_id = ? ORDER BY id DESC LIMIT ?",
             (agent_id, effective_limit),
         )

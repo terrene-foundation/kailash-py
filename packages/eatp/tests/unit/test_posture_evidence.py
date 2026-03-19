@@ -148,6 +148,61 @@ class TestPostureEvidence:
         assert restored.metadata == original.metadata
         assert restored.timestamp == original.timestamp
 
+    def test_posture_evidence_rejects_success_rate_above_one(self) -> None:
+        """success_rate > 1.0 is rejected (must be in [0.0, 1.0])."""
+        with pytest.raises(ValueError, match="success_rate must be in"):
+            PostureEvidence(
+                observation_count=10,
+                success_rate=5.0,
+                time_at_current_posture_hours=1.0,
+                anomaly_count=0,
+                source="test",
+            )
+
+    def test_posture_evidence_rejects_negative_success_rate(self) -> None:
+        """success_rate < 0.0 is rejected (must be in [0.0, 1.0])."""
+        with pytest.raises(ValueError, match="success_rate must be in"):
+            PostureEvidence(
+                observation_count=10,
+                success_rate=-0.5,
+                time_at_current_posture_hours=1.0,
+                anomaly_count=0,
+                source="test",
+            )
+
+    def test_posture_evidence_accepts_boundary_success_rates(self) -> None:
+        """success_rate=0.0 and success_rate=1.0 are valid boundary values."""
+        evidence_zero = PostureEvidence(
+            observation_count=10,
+            success_rate=0.0,
+            time_at_current_posture_hours=1.0,
+            anomaly_count=0,
+            source="test",
+        )
+        assert evidence_zero.success_rate == 0.0
+
+        evidence_one = PostureEvidence(
+            observation_count=10,
+            success_rate=1.0,
+            time_at_current_posture_hours=1.0,
+            anomaly_count=0,
+            source="test",
+        )
+        assert evidence_one.success_rate == 1.0
+
+    def test_posture_evidence_rejects_negative_time_at_current_posture(self) -> None:
+        """Negative time_at_current_posture_hours is rejected."""
+        with pytest.raises(
+            ValueError, match="time_at_current_posture_hours must be non-negative"
+        ):
+            PostureEvidence(
+                observation_count=10,
+                success_rate=0.9,
+                time_at_current_posture_hours=-1,
+                anomaly_count=0,
+                source="test",
+            )
+
     def test_posture_evidence_to_dict_structure(self) -> None:
         """to_dict returns expected keys and value types."""
         evidence = PostureEvidence(

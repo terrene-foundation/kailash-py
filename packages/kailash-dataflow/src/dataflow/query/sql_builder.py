@@ -90,8 +90,21 @@ def _build_where_clause(
         # Validate the column name (after stripping operator suffix)
         validate_identifier(column)
 
-        conditions.append(f"{column} {operator} ?")
-        params.append(value)
+        # Handle NULL values: generate IS NULL / IS NOT NULL instead of
+        # parameterized comparison (SQL `column = NULL` is always false).
+        if value is None:
+            if operator == "=":
+                conditions.append(f"{column} IS NULL")
+            elif operator in ("!=", "<>"):
+                conditions.append(f"{column} IS NOT NULL")
+            else:
+                raise ValueError(
+                    f"Cannot use operator '{operator}' with NULL value "
+                    f"for column '{column}'"
+                )
+        else:
+            conditions.append(f"{column} {operator} ?")
+            params.append(value)
 
     return " AND ".join(conditions), params
 
