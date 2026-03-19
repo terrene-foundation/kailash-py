@@ -42,7 +42,7 @@ Quick Start::
     result = await ops.verify(agent_id="agent-001", action="analyze_data")
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Core types
 from eatp.chain import (

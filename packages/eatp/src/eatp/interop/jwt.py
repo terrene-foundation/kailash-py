@@ -43,7 +43,7 @@ except ImportError as _import_err:
 # Module-level constants
 # ---------------------------------------------------------------------------
 
-EATP_VERSION: str = "0.1.0"
+EATP_VERSION: str = "0.2.0"
 """EATP protocol version embedded in every JWT payload."""
 
 # ---------------------------------------------------------------------------
@@ -125,7 +125,9 @@ def _serialize_delegation(delegation: DelegationRecord) -> Dict[str, Any]:
         "capabilities_delegated": delegation.capabilities_delegated,
         "constraint_subset": delegation.constraint_subset,
         "delegated_at": delegation.delegated_at.isoformat(),
-        "expires_at": (delegation.expires_at.isoformat() if delegation.expires_at else None),
+        "expires_at": (
+            delegation.expires_at.isoformat() if delegation.expires_at else None
+        ),
         "signature": delegation.signature,
         "parent_delegation_id": delegation.parent_delegation_id,
         "delegation_chain": delegation.delegation_chain,
@@ -135,7 +137,10 @@ def _serialize_delegation(delegation: DelegationRecord) -> Dict[str, Any]:
         d["human_origin"] = delegation.human_origin.to_dict()
     # Reasoning trace extension (confidentiality-based filtering)
     if delegation.reasoning_trace is not None:
-        if delegation.reasoning_trace.confidentiality <= ConfidentialityLevel.RESTRICTED:
+        if (
+            delegation.reasoning_trace.confidentiality
+            <= ConfidentialityLevel.RESTRICTED
+        ):
             d["reasoning_trace"] = delegation.reasoning_trace.to_dict()
         # Hash and signature are integrity proofs, not confidential — always include
     if delegation.reasoning_trace_hash is not None:
@@ -186,7 +191,9 @@ def _serialize_chain_payload(chain: TrustLineageChain) -> Dict[str, Any]:
         "capabilities": [_serialize_capability(c) for c in chain.capabilities],
         "delegations": [_serialize_delegation(d) for d in chain.delegations],
         "constraint_envelope": (
-            _serialize_constraint_envelope(chain.constraint_envelope) if chain.constraint_envelope else None
+            _serialize_constraint_envelope(chain.constraint_envelope)
+            if chain.constraint_envelope
+            else None
         ),
         "audit_anchors": [_serialize_audit_anchor(a) for a in chain.audit_anchors],
         "chain_hash": chain.hash(),
@@ -226,7 +233,11 @@ def _deserialize_genesis(data: Dict[str, Any]) -> GenesisRecord:
         authority_id=data["authority_id"],
         authority_type=AuthorityType(data["authority_type"]),
         created_at=datetime.fromisoformat(data["created_at"]),
-        expires_at=(datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None),
+        expires_at=(
+            datetime.fromisoformat(data["expires_at"])
+            if data.get("expires_at")
+            else None
+        ),
         signature=data.get("signature", ""),
         signature_algorithm=data.get("signature_algorithm", "Ed25519"),
         metadata=data.get("metadata", {}),
@@ -243,7 +254,11 @@ def _deserialize_capability(data: Dict[str, Any]) -> CapabilityAttestation:
         attester_id=data["attester_id"],
         attested_at=datetime.fromisoformat(data["attested_at"]),
         signature=data.get("signature", ""),
-        expires_at=(datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None),
+        expires_at=(
+            datetime.fromisoformat(data["expires_at"])
+            if data.get("expires_at")
+            else None
+        ),
         scope=data.get("scope"),
     )
 
@@ -271,7 +286,11 @@ def _deserialize_delegation(data: Dict[str, Any]) -> DelegationRecord:
         capabilities_delegated=data["capabilities_delegated"],
         constraint_subset=data.get("constraint_subset", []),
         delegated_at=datetime.fromisoformat(data["delegated_at"]),
-        expires_at=(datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None),
+        expires_at=(
+            datetime.fromisoformat(data["expires_at"])
+            if data.get("expires_at")
+            else None
+        ),
         signature=data.get("signature", ""),
         parent_delegation_id=data.get("parent_delegation_id"),
         human_origin=human_origin,
@@ -308,9 +327,13 @@ def _deserialize_chain(chain_data: Dict[str, Any]) -> TrustLineageChain:
 
     genesis = _deserialize_genesis(chain_data["genesis"])
 
-    capabilities = [_deserialize_capability(c) for c in chain_data.get("capabilities", [])]
+    capabilities = [
+        _deserialize_capability(c) for c in chain_data.get("capabilities", [])
+    ]
 
-    delegations = [_deserialize_delegation(d) for d in chain_data.get("delegations", [])]
+    delegations = [
+        _deserialize_delegation(d) for d in chain_data.get("delegations", [])
+    ]
 
     constraint_envelope = None
     env_data = chain_data.get("constraint_envelope")
@@ -463,7 +486,9 @@ def import_chain_from_jwt(
         "RS512",
     }
     if algorithm not in _SAFE_ALGORITHMS:
-        raise ValueError(f"Algorithm '{algorithm}' is not allowed. Use one of: {', '.join(sorted(_SAFE_ALGORITHMS))}")
+        raise ValueError(
+            f"Algorithm '{algorithm}' is not allowed. Use one of: {', '.join(sorted(_SAFE_ALGORITHMS))}"
+        )
 
     payload = _jwt.decode(token, verify_key, algorithms=[algorithm])
 

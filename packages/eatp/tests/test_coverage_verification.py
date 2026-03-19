@@ -21,7 +21,9 @@ def _get_module_names():
     import eatp
 
     modules = set()
-    for importer, modname, ispkg in pkgutil.walk_packages(eatp.__path__, prefix="eatp."):
+    for importer, modname, ispkg in pkgutil.walk_packages(
+        eatp.__path__, prefix="eatp."
+    ):
         modules.add(modname)
     return sorted(modules)
 
@@ -215,7 +217,7 @@ class TestPublicAPICompleteness:
         import eatp
 
         assert hasattr(eatp, "__version__")
-        assert eatp.__version__ == "0.1.0"
+        assert eatp.__version__ == "0.2.0"
 
     def test_all_list_complete(self):
         """__all__ list contains all public symbols."""

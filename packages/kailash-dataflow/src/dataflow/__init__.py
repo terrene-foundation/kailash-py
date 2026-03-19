@@ -56,7 +56,7 @@ from .utils.suppress_warnings import (
 suppress_core_sdk_warnings()
 
 # Legacy compatibility - maintain the original imports
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 __all__ = [
     "DataFlow",
