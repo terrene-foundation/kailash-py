@@ -15,11 +15,13 @@ jobs:
   add-to-project:
     name: Add to Project Board
     runs-on: ubuntu-latest
-    if: github.event_name == 'issues' && github.event.action == 'opened'
+    # Paused — create org project first, then update URL and re-enable
+    if: false && github.event_name == 'issues' && github.event.action == 'opened'
     steps:
-      - uses: actions/add-to-project@v0.5.0
+      - uses: actions/add-to-project@v1
         with:
-          project-url: https://github.com/${{ github.repository }}/projects/${{ env.PROJECT_NUMBER }}
+          # Format: https://github.com/orgs/<org>/projects/<number>
+          project-url: https://github.com/orgs/terrene-foundation/projects/${{ env.PROJECT_NUMBER }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
   label-based-on-files:

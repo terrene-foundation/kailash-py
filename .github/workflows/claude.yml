@@ -1,20 +1,27 @@
 name: Claude Code Maintenance
 
 on:
-  issue_comment:
-    types: [created]
-  issues:
-    types: [opened, assigned, labeled]
-  pull_request_review_comment:
-    types: [created]
-  pull_request_review:
-    types: [submitted]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to process"
+        required: false
+        type: string
+  # Paused — re-enable when CC quota is restored
+  # issue_comment:
+  #   types: [created]
+  # issues:
+  #   types: [opened, assigned, labeled]
+  # pull_request_review_comment:
+  #   types: [created]
+  # pull_request_review:
+  #   types: [submitted]
 
 jobs:
   # ─── Auto-triage: label new issues for Claude ─────────────────────
   triage:
     if: github.event_name == 'issues' && github.event.action == 'opened'
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       issues: write
@@ -50,7 +57,7 @@ jobs:
       (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'needs-review') ||
       (github.event_name == 'pull_request_review_comment') ||
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
       contents: write
@@ -136,7 +143,7 @@ jobs:
     if: |
       (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'release') ||
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude /release'))
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
       contents: write
