@@ -76,10 +76,10 @@ For each package being released, update version in BOTH locations. Missing eithe
 
 ##### Core SDK (`kailash`)
 
-| File                      | Field                   | Example                  |
-| ------------------------- | ----------------------- | ------------------------ |
-| `pyproject.toml`          | `version = "X.Y.Z"`     | `version = "1.0.0"`      |
-| `src/kailash/__init__.py` | `__version__ = "X.Y.Z"` | `__version__ = "1.0.0"`  |
+| File                      | Field                   | Example                 |
+| ------------------------- | ----------------------- | ----------------------- |
+| `pyproject.toml`          | `version = "X.Y.Z"`     | `version = "1.0.0"`     |
+| `src/kailash/__init__.py` | `__version__ = "X.Y.Z"` | `__version__ = "1.0.0"` |
 
 ##### Framework Packages
 
@@ -87,27 +87,27 @@ Each framework has 2 version locations PLUS the SDK dependency pin:
 
 **kailash-dataflow:**
 
-| File                                                 | Field                           |
-| ---------------------------------------------------- | ------------------------------- |
-| `packages/kailash-dataflow/pyproject.toml`           | `version = "X.Y.Z"`             |
-| `packages/kailash-dataflow/src/dataflow/__init__.py` | `__version__ = "X.Y.Z"`         |
-| `packages/kailash-dataflow/pyproject.toml`           | `dependencies: kailash>=A.B.C`  |
+| File                                                 | Field                          |
+| ---------------------------------------------------- | ------------------------------ |
+| `packages/kailash-dataflow/pyproject.toml`           | `version = "X.Y.Z"`            |
+| `packages/kailash-dataflow/src/dataflow/__init__.py` | `__version__ = "X.Y.Z"`        |
+| `packages/kailash-dataflow/pyproject.toml`           | `dependencies: kailash>=A.B.C` |
 
 **kailash-kaizen:**
 
-| File                                             | Field                           |
-| ------------------------------------------------ | ------------------------------- |
-| `packages/kailash-kaizen/pyproject.toml`         | `version = "X.Y.Z"`             |
-| `packages/kailash-kaizen/src/kaizen/__init__.py` | `__version__ = "X.Y.Z"`         |
-| `packages/kailash-kaizen/pyproject.toml`         | `dependencies: kailash>=A.B.C`  |
+| File                                             | Field                          |
+| ------------------------------------------------ | ------------------------------ |
+| `packages/kailash-kaizen/pyproject.toml`         | `version = "X.Y.Z"`            |
+| `packages/kailash-kaizen/src/kaizen/__init__.py` | `__version__ = "X.Y.Z"`        |
+| `packages/kailash-kaizen/pyproject.toml`         | `dependencies: kailash>=A.B.C` |
 
 **kailash-nexus:**
 
-| File                                           | Field                           |
-| ---------------------------------------------- | ------------------------------- |
-| `packages/kailash-nexus/pyproject.toml`        | `version = "X.Y.Z"`             |
-| `packages/kailash-nexus/src/nexus/__init__.py` | `__version__ = "X.Y.Z"`         |
-| `packages/kailash-nexus/pyproject.toml`        | `dependencies: kailash>=A.B.C`  |
+| File                                           | Field                          |
+| ---------------------------------------------- | ------------------------------ |
+| `packages/kailash-nexus/pyproject.toml`        | `version = "X.Y.Z"`            |
+| `packages/kailash-nexus/src/nexus/__init__.py` | `__version__ = "X.Y.Z"`        |
+| `packages/kailash-nexus/pyproject.toml`        | `dependencies: kailash>=A.B.C` |
 
 ##### SDK Dependency Pin Update Rule
 
@@ -165,9 +165,15 @@ done
 
 #### Step 5: Git Workflow
 
-1. Commit with conventional message: `chore: release vX.Y.Z`
-2. Push (or create PR if protected branch)
-3. Watch CI, merge when green
+Main branch is protected — all changes require a PR with review.
+
+1. Create release branch: `git checkout -b release/vX.Y.Z`
+2. Commit with conventional message: `chore: release vX.Y.Z`
+3. Push branch: `git push -u origin release/vX.Y.Z`
+4. Create PR: `gh pr create --title "chore: release vX.Y.Z" --body "..."`
+5. Wait for CI to pass, then merge (admin can self-approve)
+6. After merge, tag on main: `git checkout main && git pull && git tag -a vX.Y.Z -m "..." && git push --tags`
+7. Tags trigger the publish-pypi.yml workflow automatically
 
 #### Step 6: Publish to Production PyPI
 
@@ -221,7 +227,7 @@ For each: upload wheels, verify production install in clean venv, create GitHub 
 
 Quick reference for all version locations in this monorepo:
 
-| Package          | pyproject.toml                             | __init__.py                                          | SDK Dep     |
+| Package          | pyproject.toml                             | **init**.py                                          | SDK Dep     |
 | ---------------- | ------------------------------------------ | ---------------------------------------------------- | ----------- |
 | kailash          | `pyproject.toml`                           | `src/kailash/__init__.py`                            | —           |
 | kailash-dataflow | `packages/kailash-dataflow/pyproject.toml` | `packages/kailash-dataflow/src/dataflow/__init__.py` | `kailash>=` |
@@ -243,7 +249,7 @@ Quick reference for all version locations in this monorepo:
 - NEVER commit PyPI tokens to source — use `~/.pypirc` or CI secrets
 - NEVER skip security review before publishing
 - NEVER release a framework without updating its `kailash>=` dependency to match the current SDK version
-- ALWAYS update version in BOTH locations (pyproject.toml AND __init__.py) — missing __init__.py causes "my package didn't update" bugs
+- ALWAYS update version in BOTH locations (pyproject.toml AND **init**.py) — missing **init**.py causes "my package didn't update" bugs
 - ALWAYS verify the published package installs correctly in a clean venv
 - ALWAYS publish in dependency order: core SDK first, then frameworks
 - ALWAYS document releases in `deploy/deployments/`
