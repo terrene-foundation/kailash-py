@@ -67,14 +67,16 @@ function validateFile(data) {
   const ext = path.extname(filePath).toLowerCase();
 
   const rustExts = [".rs"];
+  const pyExts = [".py"];
   const jsExts = [".ts", ".tsx", ".js", ".jsx"];
   const configExts = [".yaml", ".yml", ".json", ".env", ".sh", ".toml"];
 
   const isRust = rustExts.includes(ext);
+  const isPy = pyExts.includes(ext);
   const isJs = jsExts.includes(ext);
   const isConfig = configExts.includes(ext);
 
-  if (!isRust && !isJs && !isConfig) {
+  if (!isRust && !isPy && !isJs && !isConfig) {
     return {
       continue: true,
       exitCode: 0,
@@ -101,8 +103,14 @@ function validateFile(data) {
     checkRustPatterns(content, filePath, messages);
   }
 
+  // -- Python-specific checks (.py only) ----------------------------------
+  if (isPy) {
+    const pyBlocked = checkPythonPatterns(content, filePath, messages);
+    if (pyBlocked) shouldBlock = true;
+  }
+
   // -- Hardcoded model detection (code files only -- configs may list models intentionally)
-  if (isRust || isJs) {
+  if (isRust || isPy || isJs) {
     const modelResult = checkHardcodedModels(content, filePath, env, isRust);
     messages.push(...modelResult.messages);
     if (modelResult.block) shouldBlock = true;
@@ -112,8 +120,9 @@ function validateFile(data) {
   checkHardcodedKeys(content, filePath, messages);
 
   // -- Stub/TODO/simulation detection (code files only) -------------------
-  if (isRust || isJs) {
-    checkStubsAndSimulations(content, filePath, messages);
+  if (isRust || isPy || isJs) {
+    const stubBlocked = checkStubsAndSimulations(content, filePath, messages);
+    if (stubBlocked) shouldBlock = true;
   }
 
   if (messages.length === 0) {
@@ -248,6 +257,61 @@ function checkRustPatterns(content, filePath, messages) {
       "CRITICAL: Possible hardcoded secret in Rust code. Use std::env::var() or dotenvy.",
     );
   }
+}
+
+// =====================================================================
+// Python-specific pattern checks
+// =====================================================================
+
+function checkPythonPatterns(content, filePath, messages) {
+  if (isTestFile(filePath)) return false;
+
+  let hasBlocking = false;
+  const lines = content.split("\n");
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Skip comments
+    if (trimmed.startsWith("#")) continue;
+
+    // BLOCKING: raise NotImplementedError in production code
+    if (/\braise\s+NotImplementedError\b/.test(line)) {
+      messages.push(
+        `BLOCKED: raise NotImplementedError at ${path.basename(filePath)}:${i + 1}. ` +
+          `Implement the method fully or remove it.`,
+      );
+      hasBlocking = true;
+    }
+
+    // BLOCKING: pass as placeholder (pass with stub/placeholder comment)
+    if (/^\s*pass\s*#\s*(placeholder|stub|todo|fixme|not\s*implement)/i.test(line)) {
+      messages.push(
+        `BLOCKED: stub pass at ${path.basename(filePath)}:${i + 1}. ` +
+          `Implement the logic or remove the function.`,
+      );
+      hasBlocking = true;
+    }
+
+    // WARNING: bare except: pass (silent error swallowing)
+    if (/\bexcept\s*:\s*pass\b/.test(line)) {
+      messages.push(
+        `WARNING: except: pass at ${path.basename(filePath)}:${i + 1}. ` +
+          `Handle the error or propagate it. See rules/zero-tolerance.md.`,
+      );
+    }
+
+    // WARNING: except Exception: return None (naive fallback)
+    if (/\bexcept\s+\w+.*:\s*return\s+None\b/.test(line)) {
+      messages.push(
+        `REVIEW: except...return None at ${path.basename(filePath)}:${i + 1}. ` +
+          `Verify this is not hiding a real error.`,
+      );
+    }
+  }
+
+  return hasBlocking;
 }
 
 // =====================================================================
@@ -400,73 +464,80 @@ function checkHardcodedKeys(content, filePath, messages) {
 
 /**
  * Detect stubs, TODOs, placeholders, naive fallbacks, and simulated services.
- * Warn-only (never blocks) -- these are code-quality indicators.
+ *
+ * BLOCKING for production code — stubs are NOT warnings.
+ * See rules/zero-tolerance.md (Absolute Rule 2).
+ *
+ * Returns true if any blocking violation was found.
  */
 function checkStubsAndSimulations(content, filePath, messages) {
-  // Skip test files -- stubs in tests are intentional fixture data
-  if (isTestFile(filePath)) {
-    return;
-  }
+  if (isTestFile(filePath)) return false;
 
+  const isPy = filePath.endsWith(".py");
+  const isRust = filePath.endsWith(".rs");
   const lines = content.split("\n");
+  const cfgTestLine = isRust ? findCfgTestLine(lines) : -1;
 
-  // For Rust files: skip #[cfg(test)] regions (test code within source files)
-  const cfgTestLine = filePath.endsWith(".rs") ? findCfgTestLine(lines) : -1;
+  // Blocking patterns per language
+  const blockingPatterns = isRust
+    ? [
+        [/\btodo!\s*\(/, "todo!() macro — IMPLEMENT fully"],
+        [/\bunimplemented!\s*\(/, "unimplemented!() — IMPLEMENT fully"],
+        [/\bpanic!\s*\(\s*"not\s+(yet\s+)?implement/i, "panic!(not implemented) — IMPLEMENT fully"],
+      ]
+    : isPy
+      ? [
+          [/\braise\s+NotImplementedError\b/, "raise NotImplementedError — IMPLEMENT fully"],
+          [/^\s*pass\s*#\s*(placeholder|stub|todo|fixme|not\s*implement)/i, "stub pass — IMPLEMENT fully"],
+        ]
+      : [];
 
-  const stubPatterns = [
-    // Explicit markers
-    [/\bTODO\b/i, "TODO marker"],
-    [/\bFIXME\b/i, "FIXME marker"],
-    [/\bHACK\b/i, "HACK marker"],
-    [/\bSTUB\b/i, "STUB marker"],
-    [/\bXXX\b/, "XXX marker"],
-    // Rust stubs
-    [/\btodo!\s*\(/, "todo!() (unimplemented)"],
-    [/\bunimplemented!\s*\(/, "unimplemented!() macro"],
-    [
-      /\bpanic!\s*\(\s*"not\s+(yet\s+)?implement/i,
-      "panic with not-implemented message",
-    ],
-    // Simulated/mock data in production code
-    [
-      /\b(simulated?|fake|dummy|placeholder)\s*(data|response|result|value)/i,
-      "simulated data",
-    ],
-    // JS-specific naive silent fallbacks
-    [/catch\s*\([^)]*\)\s*\{\s*\}/, "empty catch block (silent fallback)"],
+  const warningPatterns = [
+    [/\bTODO\b/, "TODO marker — do it now"],
+    [/\bFIXME\b/, "FIXME marker — fix it now"],
+    [/\bHACK\b/, "HACK marker — implement properly"],
+    [/\bSTUB\b/, "STUB marker — implement real logic"],
+    [/\bXXX\b/, "XXX marker — resolve immediately"],
+    [/\b(simulated?|fake|dummy|placeholder)\s*(data|response|result|value)/i, "simulated/fake data"],
+    [/catch\s*\([^)]*\)\s*\{\s*\}/, "empty catch block — handle the error"],
   ];
 
   const found = new Set();
+  let hasBlocking = false;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
 
-    // Skip #[cfg(test)] regions in Rust files
-    if (cfgTestLine > 0 && i + 1 >= cfgTestLine) {
-      break; // All remaining lines are test code
+    if (cfgTestLine > 0 && i + 1 >= cfgTestLine) break;
+
+    const isComment = trimmed.startsWith("//") || trimmed.startsWith("///") ||
+      trimmed.startsWith("//!") || trimmed.startsWith("/*") ||
+      trimmed.startsWith("*") || trimmed.startsWith("#");
+
+    if (!isComment) {
+      for (const [pattern, label] of blockingPatterns) {
+        if (pattern.test(line) && !found.has(label)) {
+          found.add(label);
+          messages.push(
+            `BLOCKED: ${label} at ${path.basename(filePath)}:${i + 1}. ` +
+              `Stubs are NOT allowed. Implement fully or remove.`,
+          );
+          hasBlocking = true;
+        }
+      }
     }
 
-    // Skip comments
-    if (
-      trimmed.startsWith("//") ||
-      trimmed.startsWith("*") ||
-      trimmed.startsWith("/*") ||
-      trimmed.startsWith("///") ||
-      trimmed.startsWith("//!")
-    ) {
-      continue;
-    }
-
-    for (const [pattern, label] of stubPatterns) {
+    for (const [pattern, label] of warningPatterns) {
       if (pattern.test(line) && !found.has(label)) {
+        if (trimmed.includes("rules/") || trimmed.includes("Detection Patterns")) continue;
         found.add(label);
-        messages.push(
-          `WARNING: ${label} at ${path.basename(filePath)}:${i + 1}. ` +
-            `Implement fully -- don't leave stubs in production code.`,
-        );
+        messages.push(`WARNING: ${label} at ${path.basename(filePath)}:${i + 1}.`);
       }
     }
   }
+
+  return hasBlocking;
 }
 
 // =====================================================================

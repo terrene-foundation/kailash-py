@@ -31,7 +31,11 @@ When you discover a missing feature, endpoint, or record — **implement or crea
 
 See `rules/e2e-god-mode.md` and `rules/no-stubs.md` for enforcement details.
 
-### 4. Mandatory Reviews
+### 4. Zero Tolerance
+
+Pre-existing failures MUST be fixed, not reported. Stubs are BLOCKED. Naive fallbacks are BLOCKED. SDK bugs get GitHub issues, not workarounds. See `rules/zero-tolerance.md`.
+
+### 5. Mandatory Reviews
 
 - **Code review** (intermediate-reviewer) after EVERY file change — see `rules/agents.md` Rule 1
 - **Security review** (security-reviewer) before EVERY commit — NO exceptions — see `rules/agents.md` Rule 2
@@ -48,7 +52,7 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 | `/implement` | 03    | Load implementation phase; repeat until todos done         |
 | `/redteam`   | 04    | Load validation phase; red team with MCP tools             |
 | `/codify`    | 05    | Load codification phase; create agents & skills            |
-| `/deploy`    | —     | SDK release: PyPI publishing, docs deploy, CI (standalone) |
+| `/release`   | —     | SDK release: PyPI publishing, docs deploy, CI (standalone) |
 | `/ws`        | —     | Read-only workspace status dashboard                       |
 | `/wrapup`    | —     | Write session notes before ending                          |
 

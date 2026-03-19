@@ -76,13 +76,16 @@ function buildReminder(data) {
     );
   }
 
-  // Line 3: Core behavioral rules (always present, survives compression)
+  // Line 3: Zero-tolerance behavioral rules (always present, survives compression)
   lines.push(
-    "[RULES] Never hardcode models/keys. " +
+    "[ZERO-TOLERANCE] " +
+      "Pre-existing failures MUST be FIXED, not reported. " +
+      "Stubs/TODOs/placeholders are BLOCKED — implement fully or remove. " +
+      "No naive fallbacks hiding errors. " +
+      "No workarounds for SDK bugs — deep dive, reproduce, file GitHub issue. " +
+      "Never hardcode models/keys. " +
       "Create missing records (god-mode). " +
-      "Implement gaps, don't document them. " +
-      "Follow up on failures. " +
-      "No stubs/TODOs/simulated data in production code.",
+      "Implement gaps, don't document them.",
   );
 
   // Line 4: Workspace context (survives compaction — primary anti-amnesia mechanism)

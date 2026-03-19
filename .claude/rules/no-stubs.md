@@ -46,9 +46,9 @@ When implementing a feature:
 
 ## Enforcement
 
-- **PostToolUse hook**: `validate-workflow.js` detects stub patterns on every file write
-- **UserPromptSubmit hook**: Reminds agent of no-stubs policy every turn
-- **Red-team agents**: Scan for violations during validation rounds
+- **PostToolUse hook**: `validate-workflow.js` **BLOCKS** (exit code 2) stub patterns in production Python code. This is NOT a warning — it stops the operation.
+- **UserPromptSubmit hook**: Injects zero-tolerance reminder every turn
+- **Red-team agents**: Scan for violations during validation rounds. If a stub is found, the red team MUST fix it — not report it.
 
 ## Why This Matters
 
@@ -61,8 +61,8 @@ Stubs and TODOs accumulate silently. Each one is a hidden failure point:
 
 ## Exceptions
 
-Test files (`test_*`, `*_test.*`, `*.test.*`, `*.spec.*`, `__tests__/`) are excluded.
-Stub exceptions require:
+Test files (`test_*`, `*_test.*`, `*.test.*`, `*.spec.*`, `__tests__/`) are excluded from stub detection.
 
-1. Explicit user approval ("skip this for now")
-2. A tracked TODO with timeline for completion
+**There are NO exceptions for production code.** Previous versions of this rule allowed stubs with "explicit user approval." That exception is REVOKED. If you cannot implement something, ask the user what the behavior should be, then implement it. If the user says "remove it entirely," delete the function — do NOT leave a stub.
+
+See also: `rules/zero-tolerance.md` (Absolute Rule 2)

@@ -79,6 +79,16 @@ When multiple independent operations are needed, you MUST:
    → Agent moves to next task (skipped review!)
 ```
 
+### Rule 6: Pre-Existing Failures MUST Be Fixed
+
+See `rules/zero-tolerance.md` Rule 1. If you find it, you fix it. "Not introduced in this session" is BLOCKED.
+**Exception**: User explicitly says "skip this issue."
+
+### Rule 7: No Workarounds for Core SDK Issues
+
+See `rules/zero-tolerance.md` Rule 4. Deep dive, reproduce, fix directly. NEVER re-implement SDK functionality.
+**Exception**: NONE.
+
 ## PROHIBITED Actions
 
 ### MUST NOT: Skip Code Review
@@ -94,6 +104,10 @@ Never build custom agents when Kaizen patterns exist.
 
 ### MUST NOT: Sequential When Parallel Possible
 If operations are independent, run them in parallel.
+
+### MUST NOT: Violate Zero-Tolerance Rules
+
+Stubs, naive fallbacks, unfixed pre-existing failures, and SDK workarounds are all BLOCKED. See `rules/zero-tolerance.md` and `rules/no-stubs.md`.
 
 ## Quality Gates
 
