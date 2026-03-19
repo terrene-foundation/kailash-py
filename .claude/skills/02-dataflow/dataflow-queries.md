@@ -18,11 +18,13 @@ Use MongoDB-style query operators for filtering, searching, and aggregating Data
 All MongoDB-style filter operators are fully supported. Ensure you're using the latest DataFlow version for complete operator support.
 
 **To ensure all operators work correctly:**
+
 ```bash
 pip install --upgrade kailash-dataflow
 ```
 
 **Supported Operators:**
+
 - ✅ $ne (not equal)
 - ✅ $nin (not in)
 - ✅ $in (in)
@@ -125,16 +127,16 @@ results, run_id = runtime.execute(workflow.build())
 
 ### Comparison Operators
 
-| Operator | SQL Equivalent | Example |
-|----------|---------------|---------|
-| `$gt` | `>` | `{"age": {"$gt": 18}}` |
-| `$gte` | `>=` | `{"age": {"$gte": 18}}` |
-| `$lt` | `<` | `{"price": {"$lt": 100}}` |
-| `$lte` | `<=` | `{"price": {"$lte": 100}}` |
-| `$ne` | `!=` | `{"status": {"$ne": "inactive"}}` |
-| `$eq` | `=` | `{"active": {"$eq": true}}` (or just `{"active": true}`) |
-| `$null` | `IS NULL` | `{"deleted_at": {"$null": True}}` |
-| `$exists` | `IS NOT NULL` | `{"email": {"$exists": True}}` |
+| Operator  | SQL Equivalent | Example                                                  |
+| --------- | -------------- | -------------------------------------------------------- |
+| `$gt`     | `>`            | `{"age": {"$gt": 18}}`                                   |
+| `$gte`    | `>=`           | `{"age": {"$gte": 18}}`                                  |
+| `$lt`     | `<`            | `{"price": {"$lt": 100}}`                                |
+| `$lte`    | `<=`           | `{"price": {"$lte": 100}}`                               |
+| `$ne`     | `!=`           | `{"status": {"$ne": "inactive"}}`                        |
+| `$eq`     | `=`            | `{"active": {"$eq": true}}` (or just `{"active": true}`) |
+| `$null`   | `IS NULL`      | `{"deleted_at": {"$null": True}}`                        |
+| `$exists` | `IS NOT NULL`  | `{"email": {"$exists": True}}`                           |
 
 ### Null Checking Operators (v0.10.6+)
 
@@ -158,6 +160,7 @@ workflow.add_node("PatientListNode", "active", {
 ```
 
 **Common Pattern - Soft Delete Filtering:**
+
 ```python
 # soft_delete: True only affects DELETE operations, NOT queries!
 # You MUST manually filter in queries:
@@ -168,28 +171,28 @@ workflow.add_node("ModelListNode", "active_records", {
 
 ### Logical Operators
 
-| Operator | Purpose | Example |
-|----------|---------|---------|
-| `$and` | All conditions | `{"$and": [{"active": true}, {"verified": true}]}` |
-| `$or` | Any condition | `{"$or": [{"role": "admin"}, {"super_user": true}]}` |
-| `$not` | Negation | `{"$not": {"status": "suspended"}}` |
+| Operator | Purpose        | Example                                              |
+| -------- | -------------- | ---------------------------------------------------- |
+| `$and`   | All conditions | `{"$and": [{"active": true}, {"verified": true}]}`   |
+| `$or`    | Any condition  | `{"$or": [{"role": "admin"}, {"super_user": true}]}` |
+| `$not`   | Negation       | `{"$not": {"status": "suspended"}}`                  |
 
 ### Array Operators
 
-| Operator | Purpose | Example |
-|----------|---------|---------|
-| `$in` | Value in list | `{"category": {"$in": ["a", "b", "c"]}}` |
-| `$nin` | Value not in list | `{"role": {"$nin": ["guest", "banned"]}}` |
-| `$contains` | Array contains value | `{"tags": {"$contains": "featured"}}` |
-| `$overlap` | Arrays overlap | `{"tags": {"$overlap": ["sale", "new"]}}` |
+| Operator    | Purpose              | Example                                   |
+| ----------- | -------------------- | ----------------------------------------- |
+| `$in`       | Value in list        | `{"category": {"$in": ["a", "b", "c"]}}`  |
+| `$nin`      | Value not in list    | `{"role": {"$nin": ["guest", "banned"]}}` |
+| `$contains` | Array contains value | `{"tags": {"$contains": "featured"}}`     |
+| `$overlap`  | Arrays overlap       | `{"tags": {"$overlap": ["sale", "new"]}}` |
 
 ### Text Operators
 
-| Operator | Purpose | Example |
-|----------|---------|---------|
-| `$regex` | Pattern match | `{"name": {"$regex": "laptop"}}` |
+| Operator              | Purpose          | Example                                          |
+| --------------------- | ---------------- | ------------------------------------------------ |
+| `$regex`              | Pattern match    | `{"name": {"$regex": "laptop"}}`                 |
 | `$regex` + `$options` | Case-insensitive | `{"email": {"$regex": "john", "$options": "i"}}` |
-| `$text` | Full-text search | `{"$text": {"$search": "gaming laptop"}}` |
+| `$text`               | Full-text search | `{"$text": {"$search": "gaming laptop"}}`        |
 
 ## Key Parameters / Options
 
@@ -240,10 +243,10 @@ workflow.add_node("ProductListNode", "no_description", {
 })
 ```
 
-### Aggregation
+### Aggregation (ListNode)
 
 ```python
-# Group by and aggregate
+# Group by and aggregate via ListNode (MongoDB-style)
 workflow.add_node("OrderListNode", "revenue_by_status", {
     "group_by": "status",
     "aggregations": {
@@ -253,6 +256,9 @@ workflow.add_node("OrderListNode", "revenue_by_status", {
     }
 })
 ```
+
+> **For direct SQL aggregation queries** (COUNT/SUM/AVG/MIN/MAX with GROUP BY, parameterized SQL, operator suffixes), see [`dataflow-aggregation`](dataflow-aggregation.md).
+> The `dataflow.query` module provides `count_by()`, `sum_by()`, and `aggregate()` async functions that work directly on database connections.
 
 ## Common Mistakes
 
@@ -322,6 +328,7 @@ workflow.add_node("ProductListNode", "query", {
 ## Related Patterns
 
 - **For CRUD operations**: See [`dataflow-crud-operations`](#)
+- **For SQL aggregation (GROUP BY)**: See [`dataflow-aggregation`](dataflow-aggregation.md)
 - **For bulk operations**: See [`dataflow-bulk-operations`](#)
 - **For performance**: See [`dataflow-performance`](#)
 - **For result access**: See [`dataflow-result-access`](#)
@@ -329,6 +336,7 @@ workflow.add_node("ProductListNode", "query", {
 ## When to Escalate to Subagent
 
 Use `dataflow-specialist` subagent when:
+
 - Designing complex aggregation queries
 - Optimizing slow query performance
 - Working with full-text search
@@ -410,12 +418,12 @@ workflow.add_node("UserListNode", "power_users", {
 
 ## Troubleshooting
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| `Invalid operator: gt` | Missing $ prefix | Use `$gt` not `gt` |
-| `TypeError: unsupported operand` | SQL syntax in filter | Use MongoDB-style operators |
-| `No results returned` | Filter too restrictive | Check individual conditions |
-| `Query timeout` | Inefficient query | Add indexes, simplify filter |
+| Issue                            | Cause                  | Solution                     |
+| -------------------------------- | ---------------------- | ---------------------------- |
+| `Invalid operator: gt`           | Missing $ prefix       | Use `$gt` not `gt`           |
+| `TypeError: unsupported operand` | SQL syntax in filter   | Use MongoDB-style operators  |
+| `No results returned`            | Filter too restrictive | Check individual conditions  |
+| `Query timeout`                  | Inefficient query      | Add indexes, simplify filter |
 
 ## Quick Tips
 

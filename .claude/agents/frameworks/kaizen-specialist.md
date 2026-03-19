@@ -61,6 +61,21 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - "Specialist system?" -> [`kaizen-v1-features`](../../skills/04-kaizen/kaizen-v1-features.md)
 - "GPT-5 support?" -> [`kaizen-v1-features`](../../skills/04-kaizen/kaizen-v1-features.md)
 
+**Agent Manifest & Deploy**:
+
+- "Agent manifest?" -> [`kaizen-agent-manifest`](../../skills/04-kaizen/kaizen-agent-manifest.md)
+- "Deploy agent?" -> [`kaizen-agent-manifest`](../../skills/04-kaizen/kaizen-agent-manifest.md)
+- "TOML manifest?" -> [`kaizen-agent-manifest`](../../skills/04-kaizen/kaizen-agent-manifest.md)
+
+**Composition & Governance**:
+
+- "DAG validation?" -> [`kaizen-composition`](../../skills/04-kaizen/kaizen-composition.md)
+- "Schema compatibility?" -> [`kaizen-composition`](../../skills/04-kaizen/kaizen-composition.md)
+- "Cost estimation?" -> [`kaizen-composition`](../../skills/04-kaizen/kaizen-composition.md)
+- "Catalog MCP server?" -> [`kaizen-catalog-server`](../../skills/04-kaizen/kaizen-catalog-server.md)
+- "Budget tracking?" -> [`kaizen-budget-tracking`](../../skills/04-kaizen/kaizen-budget-tracking.md)
+- "Posture-budget integration?" -> [`kaizen-budget-tracking`](../../skills/04-kaizen/kaizen-budget-tracking.md)
+
 ## Primary Responsibilities
 
 ### Use This Subagent When:
@@ -69,6 +84,10 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **Custom Agent Development**: Novel agent patterns beyond standard examples
 - **Performance Optimization**: Agent-level tuning and cost management
 - **Advanced Multi-Modal**: Complex vision/audio workflows
+- **Agent Manifest & Deploy**: TOML-based agent declaration, introspection, local/remote deployment
+- **Composition Validation**: DAG cycle detection, schema compatibility, cost estimation
+- **MCP Catalog Server**: Standalone MCP server for agent catalog operations
+- **Budget-Posture Integration**: Linking budget thresholds to trust posture transitions
 
 ### Use Skills Instead When:
 
@@ -88,16 +107,20 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 
 ### By Use Case
 
-| Need                     | Documentation                                          |
-| ------------------------ | ------------------------------------------------------ |
-| Getting started          | `.claude/skills/04-kaizen/SKILL.md`                    |
-| BaseAgent architecture   | `.claude/skills/04-kaizen/kaizen-agent-patterns.md`    |
-| Multi-agent coordination | `.claude/skills/04-kaizen/kaizen-agent-patterns.md`    |
-| Control Protocol         | `.claude/skills/04-kaizen/kaizen-control-protocol.md`  |
-| Advanced patterns        | `.claude/skills/04-kaizen/kaizen-advanced-patterns.md` |
-| Memory patterns          | `.claude/skills/04-kaizen/kaizen-persistent-memory.md` |
-| Vision processing        | `.claude/skills/04-kaizen/kaizen-vision-processing.md` |
-| Common issues            | `.claude/skills/04-kaizen/kaizen-common-issues.md`     |
+| Need                      | Documentation                                          |
+| ------------------------- | ------------------------------------------------------ |
+| Getting started           | `.claude/skills/04-kaizen/SKILL.md`                    |
+| BaseAgent architecture    | `.claude/skills/04-kaizen/kaizen-agent-patterns.md`    |
+| Multi-agent coordination  | `.claude/skills/04-kaizen/kaizen-agent-patterns.md`    |
+| Control Protocol          | `.claude/skills/04-kaizen/kaizen-control-protocol.md`  |
+| Advanced patterns         | `.claude/skills/04-kaizen/kaizen-advanced-patterns.md` |
+| Memory patterns           | `.claude/skills/04-kaizen/kaizen-persistent-memory.md` |
+| Vision processing         | `.claude/skills/04-kaizen/kaizen-vision-processing.md` |
+| Common issues             | `.claude/skills/04-kaizen/kaizen-common-issues.md`     |
+| Agent manifest & deploy   | `.claude/skills/04-kaizen/kaizen-agent-manifest.md`    |
+| Composition validation    | `.claude/skills/04-kaizen/kaizen-composition.md`       |
+| Catalog MCP server        | `.claude/skills/04-kaizen/kaizen-catalog-server.md`    |
+| Budget tracking & posture | `.claude/skills/04-kaizen/kaizen-budget-tracking.md`   |
 
 ## Core Architecture
 
@@ -128,6 +151,10 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **MCP Session Wiring**: `discover_mcp_resources()`, `read_mcp_resource()`, `discover_mcp_prompts()`, `get_mcp_prompt()` are wired and functional on agent sessions
 - **Performance Caches** (v1.0): 7 caches with 10-100x speedup (Schema, Embedding, Prompt, etc.)
 - **GPT-5 Support** (v1.0): Automatic temperature=1.0 enforcement, 8000 max_tokens for reasoning
+- **Agent Manifest & Deploy** (v1.3): TOML-based agent declaration with governance metadata, local-first deployment to FileRegistry with atomic writes, optional remote CARE Platform deployment, runtime introspection via `introspect_agent()` (Python API only, NOT MCP)
+- **Composition Validation** (v1.3): DAG cycle detection via iterative DFS with 3-color marking (max_agents=1000), JSON Schema structural subtyping for schema compatibility between connected agents, historical data cost estimation with confidence levels
+- **MCP Catalog Server** (v1.3): Dedicated MCP server (`CatalogMCPServer`) with 11 tools for agent discovery/deploy/governance, separate from KaizenMCPServer, pre-seeds 14 built-in agents on startup, runs via `python -m kaizen.mcp.catalog_server`
+- **Posture-Budget Integration** (v1.3): `PostureBudgetIntegration` links `BudgetTracker` to `PostureStateMachine` via `on_record()` callback, configurable thresholds (warning=80%, downgrade=95%, emergency=100%), monotonic escalation with stale-posture retry
 
 ### Deprecation Notes (v1.0)
 
@@ -272,10 +299,14 @@ result = agent.process("input")
 - Implementing RAG, CoT, or ReAct patterns
 - Cost tracking and budget management
 - Performance optimization (v1.0)
+- Agent manifest creation and deployment (v1.3)
+- Composition validation (DAG, schema compat, cost) (v1.3)
+- MCP Catalog Server for agent discovery (v1.3)
+- Posture-budget integration (v1.3)
 
 ## For Detailed Patterns
 
-See the [Kaizen Skills](../../skills/04-kaizen/) (43 skills) for:
+See the [Kaizen Skills](../../skills/04-kaizen/) (47 skills) for:
 
 - Quick start guide ([`kaizen-quickstart-template`](../../skills/04-kaizen/kaizen-quickstart-template.md))
 - BaseAgent basics ([`kaizen-baseagent-quick`](../../skills/04-kaizen/kaizen-baseagent-quick.md))
@@ -294,6 +325,10 @@ See the [Kaizen Skills](../../skills/04-kaizen/) (43 skills) for:
 - Trust/EATP ([`kaizen-trust-eatp`](../../skills/04-kaizen/kaizen-trust-eatp.md))
 - Common issues ([`kaizen-common-issues`](../../skills/04-kaizen/kaizen-common-issues.md))
 - v1.0 features ([`kaizen-v1-features`](../../skills/04-kaizen/kaizen-v1-features.md))
+- Agent manifest & deploy ([`kaizen-agent-manifest`](../../skills/04-kaizen/kaizen-agent-manifest.md))
+- Composition validation ([`kaizen-composition`](../../skills/04-kaizen/kaizen-composition.md))
+- MCP Catalog Server ([`kaizen-catalog-server`](../../skills/04-kaizen/kaizen-catalog-server.md))
+- Budget tracking & posture ([`kaizen-budget-tracking`](../../skills/04-kaizen/kaizen-budget-tracking.md))
 
 **This subagent focuses on**:
 
@@ -302,6 +337,9 @@ See the [Kaizen Skills](../../skills/04-kaizen/) (43 skills) for:
 - Custom agent development
 - Performance optimization
 - A2A protocol advanced use
+- Agent manifest and deployment lifecycle
+- Composition validation and cost estimation
+- Budget-posture governance integration
 
 **Core Principle**: Kaizen is signature-based programming for AI workflows. Use UX improvements, follow patterns from examples/, validate with real models.
 

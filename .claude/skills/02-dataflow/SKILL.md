@@ -86,6 +86,7 @@ Each `@db.model` class generates:
 
 - **[dataflow-crud-operations](dataflow-crud-operations.md)** - Create, Read, Update, Delete
 - **[dataflow-queries](dataflow-queries.md)** - Query patterns and filtering
+- **[dataflow-aggregation](dataflow-aggregation.md)** - SQL aggregation queries (COUNT/SUM/AVG/MIN/MAX GROUP BY)
 - **[dataflow-bulk-operations](dataflow-bulk-operations.md)** - Batch operations
 - **[dataflow-transactions](dataflow-transactions.md)** - Transaction management
 - **[dataflow-connection-isolation](dataflow-connection-isolation.md)** - ⚠️ CRITICAL: ACID guarantees

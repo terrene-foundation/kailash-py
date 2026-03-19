@@ -1,6 +1,6 @@
 ---
 name: kaizen
-description: "Kailash Kaizen - production-ready AI agent framework with signature-based programming, multi-agent coordination, and enterprise features. Use when asking about 'AI agents', 'agent framework', 'BaseAgent', 'multi-agent systems', 'agent coordination', 'signatures', 'agent signatures', 'RAG agents', 'vision agents', 'audio agents', 'multimodal agents', 'agent prompts', 'prompt optimization', 'chain of thought', 'ReAct pattern', 'Planning agent', 'PEV agent', 'Tree-of-Thoughts', 'pipeline patterns', 'supervisor-worker', 'router pattern', 'ensemble pattern', 'blackboard pattern', 'parallel execution', 'agent-to-agent communication', 'A2A protocol', 'streaming agents', 'agent testing', 'agent memory', 'agentic workflows', 'AgentRegistry', 'OrchestrationRuntime', 'distributed agents', 'agent registry', '100+ agents', 'capability discovery', 'fault tolerance', 'health monitoring', 'trust protocol', 'EATP', 'TrustedAgent', 'trust chains', 'secure messaging', 'enterprise trust', 'credential rotation', 'trust verification', or 'cross-organization agents'."
+description: "Kailash Kaizen - production-ready AI agent framework with signature-based programming, multi-agent coordination, and enterprise features. Use when asking about 'AI agents', 'agent framework', 'BaseAgent', 'multi-agent systems', 'agent coordination', 'signatures', 'agent signatures', 'RAG agents', 'vision agents', 'audio agents', 'multimodal agents', 'agent prompts', 'prompt optimization', 'chain of thought', 'ReAct pattern', 'Planning agent', 'PEV agent', 'Tree-of-Thoughts', 'pipeline patterns', 'supervisor-worker', 'router pattern', 'ensemble pattern', 'blackboard pattern', 'parallel execution', 'agent-to-agent communication', 'A2A protocol', 'streaming agents', 'agent testing', 'agent memory', 'agentic workflows', 'AgentRegistry', 'OrchestrationRuntime', 'distributed agents', 'agent registry', '100+ agents', 'capability discovery', 'fault tolerance', 'health monitoring', 'trust protocol', 'EATP', 'TrustedAgent', 'trust chains', 'secure messaging', 'enterprise trust', 'credential rotation', 'trust verification', 'cross-organization agents', 'agent manifest', 'TOML manifest', 'GovernanceManifest', 'deploy agent', 'FileRegistry', 'introspect agent', 'DAG validation', 'validate_dag', 'schema compatibility', 'cost estimation', 'composition validation', 'catalog server', 'CatalogMCPServer', 'MCP catalog', 'budget tracking', 'BudgetTracker', 'PostureBudgetIntegration', 'posture budget', or 'budget threshold'."
 ---
 
 # Kailash Kaizen - AI Agent Framework
@@ -196,7 +196,38 @@ For in-depth documentation, see `packages/kailash-kaizen/docs/`:
   - A2A HTTP service for cross-organization trust operations
   - Credential rotation, rate limiting, and security audit logging
 
-### v1.0 Developer Guides (NEW)
+### Agent Manifest & Deploy (v1.3)
+
+- **[kaizen-agent-manifest](kaizen-agent-manifest.md)** - TOML-based agent declaration, governance metadata, and deployment
+  - `AgentManifest` with `[agent]` and `[governance]` TOML sections
+  - `GovernanceManifest` with risk_level, suggested_posture, budget
+  - `introspect_agent()` for runtime metadata extraction (Python API only, NOT MCP)
+  - `deploy()` / `deploy_local()` for local FileRegistry or remote CARE Platform
+  - `FileRegistry` with atomic writes and path traversal prevention
+
+### Composition Validation (v1.3)
+
+- **[kaizen-composition](kaizen-composition.md)** - DAG validation, schema compatibility, cost estimation
+  - `validate_dag()` with iterative DFS cycle detection (max_agents=1000)
+  - `check_schema_compatibility()` with JSON Schema structural subtyping and type widening
+  - `estimate_cost()` with historical data projection and confidence levels
+
+### MCP Catalog Server (v1.3)
+
+- **[kaizen-catalog-server](kaizen-catalog-server.md)** - Standalone MCP server for agent catalog operations
+  - `CatalogMCPServer` with 11 tools: Discovery (4), Deployment (3), Application (2), Governance (2)
+  - Separate from KaizenMCPServer (which handles BaseAgent tools)
+  - Pre-seeds 14 built-in agents on startup
+  - Entry point: `python -m kaizen.mcp.catalog_server`
+
+### Budget Tracking & Posture Integration (v1.3)
+
+- **[kaizen-budget-tracking](kaizen-budget-tracking.md)** - Atomic budget accounting and posture-budget governance
+  - `BudgetTracker` with two-phase reserve/record, threshold callbacks, `on_record()` API
+  - `PostureBudgetIntegration` links budget to posture state machine
+  - Configurable thresholds: warning (80%), downgrade to SUPERVISED (95%), emergency to PSEUDO_AGENT (100%)
+
+### v1.0 Developer Guides
 
 Located in `packages/kailash-kaizen/src/kaizen/docs/developers/`:
 
@@ -311,6 +342,14 @@ Use Kaizen when you need to:
   - Cross-organization agent coordination
   - Regulatory compliance with audit trails
   - Secure inter-agent communication
+- **Agent manifest, deploy, and composition (v1.3)**:
+  - Declare agents with TOML manifests and governance metadata
+  - Deploy agents to local FileRegistry or remote CARE Platform
+  - Validate composite agent DAGs for cycles
+  - Check schema compatibility between connected agents
+  - Estimate pipeline costs from historical data
+  - Discover/deploy agents via MCP Catalog Server
+  - Link budget thresholds to automatic posture transitions
 
 **Use Pipeline Patterns When:**
 
