@@ -1,14 +1,22 @@
 name: COC Sync to USE Repo
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.claude/agents/**'
-      - '.claude/skills/**'
-      - '.claude/rules/**'
-      - '.claude/commands/**'
-      - 'scripts/hooks/**'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (no push/PR)"
+        required: false
+        type: boolean
+        default: false
+  # Paused — requires cross-repo PAT for ubuntu-latest runners
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - '.claude/agents/**'
+  #     - '.claude/skills/**'
+  #     - '.claude/rules/**'
+  #     - '.claude/commands/**'
+  #     - 'scripts/hooks/**'
 
 jobs:
   sync:
