@@ -70,6 +70,7 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 | E2E god-mode testing                  | `rules/e2e-god-mode.md`       | `tests/e2e/**`, `**/*e2e*`, `**/*playwright*`                         |
 | API keys & model names                | `rules/env-models.md`         | `**/*.py`, `**/*.ts`, `**/*.js`, `.env*`                              |
 | Git commits, branches, PRs            | `rules/git.md`                | Global                                                                |
+| Branch protection & PR workflow       | `rules/branch-protection.md`  | Global                                                                |
 | No stubs, TODOs, or placeholders      | `rules/no-stubs.md`           | Global                                                                |
 | Kailash SDK execution patterns        | `rules/patterns.md`           | `**/*.py`, `**/*.ts`, `**/*.js`                                       |
 | Security (secrets, injection)         | `rules/security.md`           | Global                                                                |
