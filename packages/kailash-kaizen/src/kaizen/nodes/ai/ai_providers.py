@@ -852,9 +852,23 @@ class OpenAIProvider(UnifiedAIProvider):
             generation_config = kwargs.get("generation_config", {})
             tools = kwargs.get("tools", [])
 
-            # Initialize sync client if needed
-            if self._sync_client is None:
-                self._sync_client = openai.OpenAI()
+            # Per-request API key and base URL override for BYOK multi-tenant
+            per_request_api_key = kwargs.get("api_key")
+            per_request_base_url = kwargs.get("base_url")
+
+            # Use per-request client if overrides provided, else shared client
+            if per_request_api_key or per_request_base_url:
+                client_kwargs = {}
+                if per_request_api_key:
+                    client_kwargs["api_key"] = per_request_api_key
+                if per_request_base_url:
+                    client_kwargs["base_url"] = per_request_base_url
+                client = openai.OpenAI(**client_kwargs)
+            else:
+                # Initialize shared sync client if needed
+                if self._sync_client is None:
+                    self._sync_client = openai.OpenAI()
+                client = self._sync_client
 
             # Process messages for vision/audio content
             processed_messages = []
@@ -1080,8 +1094,8 @@ class OpenAIProvider(UnifiedAIProvider):
                 )
                 print("=" * 80 + "\n")
 
-            # Call OpenAI (sync)
-            response = self._sync_client.chat.completions.create(**request_params)
+            # Call OpenAI (sync) — uses per-request client if overrides provided
+            response = client.chat.completions.create(**request_params)
 
             # Format response
             choice = response.choices[0]
@@ -1512,9 +1526,16 @@ class AnthropicProvider(LLMProvider):
             model = kwargs.get("model", "claude-3-sonnet-20240229")
             generation_config = kwargs.get("generation_config", {})
 
-            # Initialize client if needed
-            if self._client is None:
-                self._client = anthropic.Anthropic()
+            # Per-request API key override for BYOK multi-tenant
+            per_request_api_key = kwargs.get("api_key")
+
+            if per_request_api_key:
+                client = anthropic.Anthropic(api_key=per_request_api_key)
+            else:
+                # Initialize shared client if needed
+                if self._client is None:
+                    self._client = anthropic.Anthropic()
+                client = self._client
 
             # Convert messages to Anthropic format
             system_message = None
@@ -1602,7 +1623,7 @@ class AnthropicProvider(LLMProvider):
             if generation_config.get("metadata") is not None:
                 create_kwargs["metadata"] = generation_config.get("metadata")
 
-            response = self._client.messages.create(**create_kwargs)
+            response = client.messages.create(**create_kwargs)
 
             # Format response
             return {
