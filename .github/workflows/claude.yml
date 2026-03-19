@@ -11,11 +11,41 @@ on:
     types: [submitted]
 
 jobs:
+  # ─── Auto-triage: label new issues for Claude ─────────────────────
+  triage:
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    runs-on: self-hosted
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Auto-label bug issues for Claude
+        run: |
+          TITLE="${{ github.event.issue.title }}"
+          LABELS="${{ join(github.event.issue.labels.*.name, ',') }}"
+
+          # Skip docs-only issues
+          if echo "$TITLE" | grep -qi '^\[DOCS\]'; then
+            echo "Documentation issue — skipping auto-label"
+            exit 0
+          fi
+
+          # Skip issues already labeled (manual triage)
+          if [ -n "$LABELS" ]; then
+            echo "Issue already has labels ($LABELS) — skipping"
+            exit 0
+          fi
+
+          # Label for auto-fix — triggers the fix job in a new workflow run
+          echo "Auto-labeling issue #${{ github.event.issue.number }} with auto-fix"
+          gh issue edit "${{ github.event.issue.number }}" --add-label "auto-fix"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # ─── Bug fix / general maintenance ─────────────────────────────────
   fix:
     if: |
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'issues' && github.event.action == 'assigned' && github.event.assignee.login == 'claude') ||
       (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'auto-fix') ||
       (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'needs-review') ||
       (github.event_name == 'pull_request_review_comment') ||
