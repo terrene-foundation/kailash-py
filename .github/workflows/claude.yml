@@ -1,0 +1,83 @@
+name: Claude Code Maintenance
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned, labeled]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  claude:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'issues' && github.event.action == 'assigned' && github.event.assignee.login == 'claude') ||
+      (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'auto-fix') ||
+      (github.event_name == 'pull_request_review_comment') ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
+    runs-on: self-hosted
+    timeout-minutes: 120
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          assignee_trigger: "claude"
+          label_trigger: "auto-fix"
+          prompt: |
+            You are the automated maintenance agent for the Kailash Python SDK.
+            Follow ALL rules in CLAUDE.md and .claude/rules/ — especially:
+
+            1. ZERO-TOLERANCE: Fix the issue fully. No stubs. No workarounds. No naive fallbacks.
+            2. REGRESSION TEST: Write a test that reproduces the exact bug BEFORE fixing it.
+            3. The test MUST fail before your fix and pass after.
+            4. Run `pytest` to verify nothing is broken.
+            5. Run `ruff check` and `black --check .` — must pass.
+            6. If the issue is unclear, comment asking for clarification instead of guessing.
+            7. Commit with conventional format: `fix(scope): description`
+            8. Update __init__.py __version__ if pyproject.toml version changes.
+
+            After fixing:
+            - Create a PR with a clear title and description
+            - Reference the issue number in the PR body (Fixes #N)
+            - Label the PR: `auto-fix` if high confidence, `needs-review` if uncertain
+
+      - name: Notify Discord
+        if: always()
+        run: |
+          if [ -n "${{ secrets.DISCORD_WEBHOOK_URL }}" ]; then
+            STATUS="${{ job.status }}"
+            ISSUE="${{ github.event.issue.number || github.event.pull_request.number }}"
+            TITLE="${{ github.event.issue.title || github.event.pull_request.title }}"
+            REPO="${{ github.repository }}"
+
+            if [ "$STATUS" = "success" ]; then
+              COLOR=3066993
+              MSG="Claude completed work on #${ISSUE}: ${TITLE}"
+            else
+              COLOR=15158332
+              MSG="Claude failed on #${ISSUE}: ${TITLE}"
+            fi
+
+            curl -s -H "Content-Type: application/json" \
+              -d "{\"embeds\":[{\"title\":\"${MSG}\",\"url\":\"https://github.com/${REPO}/issues/${ISSUE}\",\"color\":${COLOR}}]}" \
+              "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
+          fi
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
