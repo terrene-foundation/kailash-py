@@ -249,22 +249,22 @@ class TestCompleteWorkflowIntegration:
                 "fk_sessions_user_id",
             }
             found_fks = expected_fks.intersection(fk_names)
-            assert (
-                len(found_fks) >= 3
-            ), f"Must detect all FK dependencies, found: {found_fks}"
+            assert len(found_fks) >= 3, (
+                f"Must detect all FK dependencies, found: {found_fks}"
+            )
 
             # All FK dependencies must be CRITICAL
             for fk_dep in fk_deps:
-                assert (
-                    fk_dep.impact_level == ImpactLevel.CRITICAL
-                ), f"FK {fk_dep.constraint_name} must be CRITICAL"
+                assert fk_dep.impact_level == ImpactLevel.CRITICAL, (
+                    f"FK {fk_dep.constraint_name} must be CRITICAL"
+                )
                 assert fk_dep.target_table == "workflow_users"
                 assert fk_dep.target_column == "id"
 
             critical_deps = dependency_report.get_critical_dependencies()
-            assert (
-                len(critical_deps) >= 3
-            ), "Must identify at least 3 critical dependencies"
+            assert len(critical_deps) >= 3, (
+                "Must identify at least 3 critical dependencies"
+            )
 
             logger.info(
                 f"Phase 1 complete: Found {len(fk_deps)} FK dependencies in {phase1_time:.2f}s"
@@ -305,9 +305,9 @@ class TestCompleteWorkflowIntegration:
             )
 
             # **CRITICAL SAFETY VALIDATION**: Must block removal
-            assert (
-                safety_validation.is_safe is False
-            ), "CRITICAL: Must block FK target column removal"
+            assert safety_validation.is_safe is False, (
+                "CRITICAL: Must block FK target column removal"
+            )
             assert safety_validation.risk_level == ImpactLevel.CRITICAL
             assert len(safety_validation.blocking_dependencies) >= 3
             assert safety_validation.requires_confirmation is True
@@ -346,15 +346,15 @@ class TestCompleteWorkflowIntegration:
             logger.info("INTEGRATION VALIDATION: End-to-end workflow consistency")
 
             # **WORKFLOW INTEGRATION VALIDATION**: All phases consistent
-            assert (
-                dependency_report.get_removal_recommendation() == "DANGEROUS"
-            ), "Phase 1 must recommend DANGEROUS"
+            assert dependency_report.get_removal_recommendation() == "DANGEROUS", (
+                "Phase 1 must recommend DANGEROUS"
+            )
 
             assert safety_validation.is_safe is False, "Phase 2 must validate as unsafe"
 
-            assert (
-                primary_rec.type == RecommendationType.DO_NOT_REMOVE
-            ), "Phase 3 must recommend DO NOT REMOVE"
+            assert primary_rec.type == RecommendationType.DO_NOT_REMOVE, (
+                "Phase 3 must recommend DO NOT REMOVE"
+            )
 
             # Performance validation
             assert phase1_time < 5.0, f"Phase 1 took too long: {phase1_time:.2f}s"
@@ -428,9 +428,9 @@ class TestCompleteWorkflowIntegration:
             )
 
             # Verify Phase 1 detects no or minimal dependencies
-            assert (
-                dependency_report.get_total_dependency_count() == 0
-            ), "Unused column should have no dependencies"
+            assert dependency_report.get_total_dependency_count() == 0, (
+                "Unused column should have no dependencies"
+            )
             assert dependency_report.has_dependencies() is False
 
             critical_deps = dependency_report.get_critical_dependencies()
@@ -471,9 +471,9 @@ class TestCompleteWorkflowIntegration:
             )
 
             # **SAFETY VALIDATION**: Should allow removal
-            assert (
-                safety_validation.is_safe is True
-            ), "Should validate as safe for unused column"
+            assert safety_validation.is_safe is True, (
+                "Should validate as safe for unused column"
+            )
             assert safety_validation.risk_level in [
                 ImpactLevel.LOW,
                 ImpactLevel.INFORMATIONAL,
@@ -523,12 +523,12 @@ class TestCompleteWorkflowIntegration:
                 "workflow_products", "price"
             )
 
-            assert (
-                name_report.has_dependencies() is True
-            ), "Name column should have dependencies (index, view)"
-            assert (
-                price_report.has_dependencies() is True
-            ), "Price column should have dependencies (constraint, view, index)"
+            assert name_report.has_dependencies() is True, (
+                "Name column should have dependencies (index, view)"
+            )
+            assert price_report.has_dependencies() is True, (
+                "Price column should have dependencies (constraint, view, index)"
+            )
 
             logger.info("✅ SAFE SCENARIO WORKFLOW VALIDATION COMPLETE")
             logger.info(
@@ -657,46 +657,46 @@ class TestCompleteWorkflowIntegration:
             if DependencyType.FOREIGN_KEY in dependency_report.dependencies:
                 fk_deps = dependency_report.dependencies[DependencyType.FOREIGN_KEY]
                 fk_names = {dep.constraint_name for dep in fk_deps}
-                assert (
-                    "fk_notifications_email" in fk_names
-                ), "Should detect incoming FK to email column"
+                assert "fk_notifications_email" in fk_names, (
+                    "Should detect incoming FK to email column"
+                )
 
             # Should detect view dependencies
             assert DependencyType.VIEW in dependency_report.dependencies
             view_deps = dependency_report.dependencies[DependencyType.VIEW]
             view_names = {dep.view_name for dep in view_deps}
-            assert (
-                "workflow_active_customers" in view_names
-            ), "Should detect view using email column"
+            assert "workflow_active_customers" in view_names, (
+                "Should detect view using email column"
+            )
 
             # Should detect index dependencies
             assert DependencyType.INDEX in dependency_report.dependencies
             index_deps = dependency_report.dependencies[DependencyType.INDEX]
             index_names = {dep.index_name for dep in index_deps}
-            assert (
-                "workflow_customers_email_unique" in index_names
-            ), "Should detect unique email index"
+            assert "workflow_customers_email_unique" in index_names, (
+                "Should detect unique email index"
+            )
 
             # Should detect constraint dependencies
             assert DependencyType.CONSTRAINT in dependency_report.dependencies
             constraint_deps = dependency_report.dependencies[DependencyType.CONSTRAINT]
             constraint_names = {dep.constraint_name for dep in constraint_deps}
-            assert (
-                "check_email_format" in constraint_names
-            ), "Should detect email format constraint"
+            assert "check_email_format" in constraint_names, (
+                "Should detect email format constraint"
+            )
 
             # Should detect trigger dependencies
             assert DependencyType.TRIGGER in dependency_report.dependencies
             trigger_deps = dependency_report.dependencies[DependencyType.TRIGGER]
             trigger_names = {dep.trigger_name for dep in trigger_deps}
-            assert (
-                "workflow_email_audit_trigger" in trigger_names
-            ), "Should detect email audit trigger"
+            assert "workflow_email_audit_trigger" in trigger_names, (
+                "Should detect email audit trigger"
+            )
 
             total_deps = dependency_report.get_total_dependency_count()
-            assert (
-                total_deps >= 6
-            ), f"Should detect multiple dependencies, found: {total_deps}"
+            assert total_deps >= 6, (
+                f"Should detect multiple dependencies, found: {total_deps}"
+            )
 
             logger.info(
                 f"Phase 1 complete: Found {total_deps} dependencies in {analysis_time:.2f}s"
@@ -935,29 +935,29 @@ class TestCompleteWorkflowIntegration:
 
             # **PERFORMANCE REQUIREMENTS VALIDATION**
             # Requirement: <30 seconds for dependency analysis
-            assert (
-                phase1_time < 30.0
-            ), f"Phase 1 took too long: {phase1_time:.2f}s (requirement: <30s)"
+            assert phase1_time < 30.0, (
+                f"Phase 1 took too long: {phase1_time:.2f}s (requirement: <30s)"
+            )
 
             # Complete workflow should be reasonable
-            assert (
-                total_workflow_time < 35.0
-            ), f"Total workflow took too long: {total_workflow_time:.2f}s"
+            assert total_workflow_time < 35.0, (
+                f"Total workflow took too long: {total_workflow_time:.2f}s"
+            )
 
             # **ACCURACY VALIDATION UNDER PERFORMANCE CONSTRAINTS**
             total_deps = dependency_report.get_total_dependency_count()
 
             # Should detect all FK dependencies
             fk_deps = dependency_report.dependencies.get(DependencyType.FOREIGN_KEY, [])
-            assert (
-                len(fk_deps) == num_tables
-            ), f"Should find {num_tables} FK deps, found {len(fk_deps)}"
+            assert len(fk_deps) == num_tables, (
+                f"Should find {num_tables} FK deps, found {len(fk_deps)}"
+            )
 
             # Should detect view dependencies
             view_deps = dependency_report.dependencies.get(DependencyType.VIEW, [])
-            assert (
-                len(view_deps) >= num_views
-            ), f"Should find at least {num_views} view deps, found {len(view_deps)}"
+            assert len(view_deps) >= num_views, (
+                f"Should find at least {num_views} view deps, found {len(view_deps)}"
+            )
 
             # All FK dependencies should be CRITICAL
             for fk_dep in fk_deps:
@@ -989,9 +989,9 @@ class TestCompleteWorkflowIntegration:
             report_time = time.time() - report_start
 
             # Reporting should be fast even with large dependency sets
-            assert (
-                report_time < 2.0
-            ), f"Report generation took too long: {report_time:.2f}s"
+            assert report_time < 2.0, (
+                f"Report generation took too long: {report_time:.2f}s"
+            )
 
             # Reports should handle large dependency lists gracefully
             assert "... and" in console_report  # Should truncate for readability

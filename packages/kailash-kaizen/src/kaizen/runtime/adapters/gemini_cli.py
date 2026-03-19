@@ -231,7 +231,7 @@ class GeminiCLIAdapter(BaseRuntimeAdapter):
             tools = self._build_tools(context)
 
             logger.info(
-                f"Executing Gemini: {context.task[:50]}..., " f"model: {self.model}"
+                f"Executing Gemini: {context.task[:50]}..., model: {self.model}"
             )
 
             if on_progress:

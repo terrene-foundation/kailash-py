@@ -1042,11 +1042,11 @@ class ReportFormatter:
             <h2>🛡️ Mitigation Strategies</h2>
             <div class="metric-box">
                 <h3>Total Strategies</h3>
-                <div>{len(getattr(mitigation_plan, 'mitigation_strategies', []))}</div>
+                <div>{len(getattr(mitigation_plan, "mitigation_strategies", []))}</div>
             </div>
             <div class="metric-box">
                 <h3>Total Effort</h3>
-                <div>{getattr(mitigation_plan, 'total_estimated_effort', 0):.1f} hours</div>
+                <div>{getattr(mitigation_plan, "total_estimated_effort", 0):.1f} hours</div>
             </div>
         </div>
         """

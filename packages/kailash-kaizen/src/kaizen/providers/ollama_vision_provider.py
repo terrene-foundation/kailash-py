@@ -115,8 +115,7 @@ class OllamaVisionProvider(OllamaProvider):
         """
         if len(images) > self.vision_config.max_images:
             raise ValueError(
-                f"Too many images ({len(images)}). "
-                f"Max: {self.vision_config.max_images}"
+                f"Too many images ({len(images)}). Max: {self.vision_config.max_images}"
             )
 
         # Convert all to ImageFields

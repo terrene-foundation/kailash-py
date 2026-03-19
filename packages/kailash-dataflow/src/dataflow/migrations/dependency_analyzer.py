@@ -259,34 +259,34 @@ class DependencyAnalyzer:
             # Analyze all dependency types sequentially to avoid connection conflicts
             # Running in parallel causes "another operation in progress" errors with asyncpg
 
-            report.dependencies[DependencyType.FOREIGN_KEY] = (
-                await self.find_foreign_key_dependencies(
-                    safe_table_name, safe_column_name, connection
-                )
+            report.dependencies[
+                DependencyType.FOREIGN_KEY
+            ] = await self.find_foreign_key_dependencies(
+                safe_table_name, safe_column_name, connection
             )
 
-            report.dependencies[DependencyType.VIEW] = (
-                await self.find_view_dependencies(
-                    safe_table_name, safe_column_name, connection
-                )
+            report.dependencies[
+                DependencyType.VIEW
+            ] = await self.find_view_dependencies(
+                safe_table_name, safe_column_name, connection
             )
 
-            report.dependencies[DependencyType.TRIGGER] = (
-                await self.find_trigger_dependencies(
-                    safe_table_name, safe_column_name, connection
-                )
+            report.dependencies[
+                DependencyType.TRIGGER
+            ] = await self.find_trigger_dependencies(
+                safe_table_name, safe_column_name, connection
             )
 
-            report.dependencies[DependencyType.INDEX] = (
-                await self.find_index_dependencies(
-                    safe_table_name, safe_column_name, connection
-                )
+            report.dependencies[
+                DependencyType.INDEX
+            ] = await self.find_index_dependencies(
+                safe_table_name, safe_column_name, connection
             )
 
-            report.dependencies[DependencyType.CONSTRAINT] = (
-                await self.find_constraint_dependencies(
-                    safe_table_name, safe_column_name, connection
-                )
+            report.dependencies[
+                DependencyType.CONSTRAINT
+            ] = await self.find_constraint_dependencies(
+                safe_table_name, safe_column_name, connection
             )
 
             analysis_time = time.time() - start_time

@@ -192,9 +192,9 @@ class TestCachePerformance:
         avg_store = sum(store_times) / len(store_times)
         avg_cache = sum(cache_times) / len(cache_times)
 
-        assert (
-            avg_cache < avg_store
-        ), f"Cache ({avg_cache:.3f}ms) should be faster than store ({avg_store:.3f}ms)"
+        assert avg_cache < avg_store, (
+            f"Cache ({avg_cache:.3f}ms) should be faster than store ({avg_store:.3f}ms)"
+        )
         assert result is not None
 
     async def test_cache_miss_handling(self):
@@ -370,9 +370,9 @@ class TestCachePerformance:
             times.append((time.perf_counter() - start) * 1000)
 
         avg_time = sum(times) / len(times)
-        assert (
-            avg_time < 1.0
-        ), f"Average access time {avg_time:.3f}ms exceeds 1ms target"
+        assert avg_time < 1.0, (
+            f"Average access time {avg_time:.3f}ms exceeds 1ms target"
+        )
 
 
 # ============================================================================
@@ -449,9 +449,12 @@ class TestCredentialRotation:
 
         Intent: Verify authority signing key is updated after rotation.
         """
-        rotation_mgr, key_manager, _, authority_registry = (
-            await self._setup_rotation_env()
-        )
+        (
+            rotation_mgr,
+            key_manager,
+            _,
+            authority_registry,
+        ) = await self._setup_rotation_env()
 
         original_authority = await authority_registry.get_authority("org-test")
         original_key_id = original_authority.signing_key_id
@@ -899,9 +902,9 @@ class TestPerformanceTargets:
         avg_time = sum(flat_times) / len(flat_times)
         operations_per_second = len(flat_times) / (total_time / 1000)
 
-        assert (
-            operations_per_second > 10000
-        ), f"Throughput ({operations_per_second:.0f} ops/s) below 10K target"
+        assert operations_per_second > 10000, (
+            f"Throughput ({operations_per_second:.0f} ops/s) below 10K target"
+        )
 
     async def test_memory_efficiency(self):
         """

@@ -248,8 +248,7 @@ def get_agent_type_registration(name: str) -> AgentTypeRegistration:
     """
     if name not in _AGENT_TYPE_REGISTRY:
         raise ValueError(
-            f"Unknown agent type '{name}'. "
-            f"Available types: {list_agent_type_names()}"
+            f"Unknown agent type '{name}'. Available types: {list_agent_type_names()}"
         )
 
     return _AGENT_TYPE_REGISTRY[name]
@@ -369,8 +368,7 @@ def create_agent_from_type(agent_type: str, model: str, **kwargs) -> BaseAgent:
 
     # Use agent class
     logger.debug(
-        f"Creating agent '{agent_type}' "
-        f"(class: {registration.agent_class.__name__})"
+        f"Creating agent '{agent_type}' (class: {registration.agent_class.__name__})"
     )
 
     # Create config object if agent expects it
@@ -477,13 +475,13 @@ def print_registry_info():
     """Print human-readable registry information."""
     info = get_registry_info()
 
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print("Agent Type Registry Info")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"Total registered types: {info['total_types']}")
     print("\nBy category:")
     for category, count in sorted(info["categories"].items()):
         print(f"  {category}: {count}")
     print(f"\nUnique tags: {info['unique_tags']}")
     print(f"All tags: {', '.join(info['all_tags'])}")
-    print(f"{'='*70}\n")
+    print(f"{'=' * 70}\n")

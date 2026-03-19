@@ -191,8 +191,7 @@ class TestRunQuickstart:
             # Strip ANSI escape codes before measuring length
             clean_line = re.sub(r"\033\[[0-9;]*m", "", line)
             assert len(clean_line) <= 80, (
-                f"Line {line_num} exceeds 80 columns ({len(clean_line)} chars): "
-                f"{clean_line!r}"
+                f"Line {line_num} exceeds 80 columns ({len(clean_line)} chars): {clean_line!r}"
             )
 
     @pytest.mark.asyncio

@@ -154,9 +154,9 @@ def main():
     etl_reports = []
 
     for idx, transaction in enumerate(CUSTOMER_TRANSACTIONS, 1):
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         print(f"TRANSACTION {idx}/{len(CUSTOMER_TRANSACTIONS)}: ID {transaction['id']}")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         print()
 
         print("Raw Data:")
@@ -240,7 +240,7 @@ def main():
 
     print("ETL Success Metrics:")
     print(
-        f"  - Successful: {successful}/{len(etl_reports)} ({successful/len(etl_reports)*100:.1f}%)"
+        f"  - Successful: {successful}/{len(etl_reports)} ({successful / len(etl_reports) * 100:.1f}%)"
     )
     print(f"  - Partial: {partial}/{len(etl_reports)}")
     print(
@@ -322,7 +322,7 @@ def main():
     )
 
     print(
-        f"Transformation Success Rate: {transform_successful}/{len(etl_reports)} ({transform_successful/len(etl_reports)*100:.1f}%)"
+        f"Transformation Success Rate: {transform_successful}/{len(etl_reports)} ({transform_successful / len(etl_reports) * 100:.1f}%)"
     )
     print()
 

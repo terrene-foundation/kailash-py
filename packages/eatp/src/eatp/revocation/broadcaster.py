@@ -242,9 +242,7 @@ class InMemoryRevocationBroadcaster(RevocationBroadcaster):
             if len(self._history) >= _MAX_HISTORY:
                 trim_count = _MAX_HISTORY // 10  # Remove oldest 10%
                 self._history = self._history[trim_count:]
-                logger.debug(
-                    f"[BROADCASTER] Trimmed {trim_count} oldest events from history"
-                )
+                logger.debug(f"[BROADCASTER] Trimmed {trim_count} oldest events from history")
 
             # Store in history
             self._history.append(event)
@@ -275,19 +273,13 @@ class InMemoryRevocationBroadcaster(RevocationBroadcaster):
                         asyncio.run(result)
             except Exception as e:
                 # Log error but continue with other subscribers
-                logger.error(
-                    f"Error broadcasting revocation event {event.event_id} "
-                    f"to subscriber {sub_id}: {e}"
-                )
+                logger.error(f"Error broadcasting revocation event {event.event_id} to subscriber {sub_id}: {e}")
                 with self._lock:
                     # Trim dead letters if at capacity (bounded collection)
                     if len(self._dead_letters) >= _MAX_DEAD_LETTERS:
                         trim_count = _MAX_DEAD_LETTERS // 10
                         self._dead_letters = self._dead_letters[trim_count:]
-                        logger.debug(
-                            f"[BROADCASTER] Trimmed {trim_count} oldest "
-                            f"dead letter entries"
-                        )
+                        logger.debug(f"[BROADCASTER] Trimmed {trim_count} oldest dead letter entries")
 
                     # Track in dead letter queue
                     self._dead_letters.append(
@@ -299,8 +291,7 @@ class InMemoryRevocationBroadcaster(RevocationBroadcaster):
                     )
 
         logger.debug(
-            f"Broadcast revocation event {event.event_id} "
-            f"({event.revocation_type.value}) for {event.target_id}"
+            f"Broadcast revocation event {event.event_id} ({event.revocation_type.value}) for {event.target_id}"
         )
 
     def subscribe(
@@ -539,10 +530,7 @@ class CascadeRevocationManager:
             parent_id, parent_event_id, depth = queue.pop(0)
 
             if depth >= max_depth:
-                logger.warning(
-                    f"Cascade depth limit ({max_depth}) reached for "
-                    f"'{parent_id}' at depth {depth}"
-                )
+                logger.warning(f"Cascade depth limit ({max_depth}) reached for '{parent_id}' at depth {depth}")
                 continue
 
             delegates = self._delegation_registry.get_delegates(parent_id)
@@ -579,10 +567,7 @@ class CascadeRevocationManager:
                 # Add to queue for further processing
                 queue.append((delegate_id, cascade_event.event_id, depth + 1))
 
-        logger.info(
-            f"Cascade revocation complete for {target_id}. "
-            f"Total events: {len(all_events)}"
-        )
+        logger.info(f"Cascade revocation complete for {target_id}. Total events: {len(all_events)}")
 
         return all_events
 
@@ -708,8 +693,7 @@ class TrustRevocationList:
                 self._events[agent_id] = event
 
         logger.debug(
-            f"TRL updated: {event.target_id} and {len(event.affected_agents)} "
-            f"affected agents marked as revoked"
+            f"TRL updated: {event.target_id} and {len(event.affected_agents)} affected agents marked as revoked"
         )
 
     def is_revoked(self, agent_id: str) -> bool:

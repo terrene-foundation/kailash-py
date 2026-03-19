@@ -676,7 +676,7 @@ class TestRenameCoordinationPerformance:
                 if i > 0:
                     # Rename back for next iteration
                     await connection.execute(
-                        f"ALTER TABLE perf_renamed_{i-1} RENAME TO perf_boundary_test"
+                        f"ALTER TABLE perf_renamed_{i - 1} RENAME TO perf_boundary_test"
                     )
 
                 start = time.perf_counter()
@@ -706,9 +706,9 @@ class TestRenameCoordinationPerformance:
             print(f"Coordination performance: avg={avg_time:.3f}s, max={max_time:.3f}s")
 
             # Reasonable performance expectations for integration tests
-            assert (
-                avg_time < 2.0
-            ), f"Average coordination time too slow: {avg_time:.3f}s"
+            assert avg_time < 2.0, (
+                f"Average coordination time too slow: {avg_time:.3f}s"
+            )
             assert max_time < 5.0, f"Max coordination time too slow: {max_time:.3f}s"
 
         finally:

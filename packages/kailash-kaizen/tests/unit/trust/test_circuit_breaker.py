@@ -311,7 +311,8 @@ class TestPostureCircuitBreaker:
     async def test_failure_window_cleanup(self, posture_machine):
         """Test that old failures outside the window are removed."""
         config = CircuitBreakerConfig(
-            failure_threshold=5, failure_window_seconds=60  # High threshold
+            failure_threshold=5,
+            failure_window_seconds=60,  # High threshold
         )
         breaker = PostureCircuitBreaker(posture_machine, config)
 

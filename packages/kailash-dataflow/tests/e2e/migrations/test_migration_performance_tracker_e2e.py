@@ -548,9 +548,9 @@ class TestMigrationPerformanceTrackerE2E:
         assert report_path.exists()
 
         total_time = time.perf_counter() - start_time
-        assert (
-            total_time < 10.0
-        ), f"Complete lifecycle took {total_time:.2f}s, exceeds 10s target"
+        assert total_time < 10.0, (
+            f"Complete lifecycle took {total_time:.2f}s, exceeds 10s target"
+        )
 
         # Cleanup test tables
         await self._cleanup_e2e_tables(connection, "lifecycle")
@@ -622,7 +622,7 @@ class TestMigrationPerformanceTrackerE2E:
                 operation_type=MigrationType.ADD_INDEX,
                 table_name="regression_large_table",
                 description=f"Add complex index {i}",
-                sql_up=f"CREATE INDEX idx_regression_complex_{i} ON regression_large_table(col{i+1}, col{(i+1)%5+1});",
+                sql_up=f"CREATE INDEX idx_regression_complex_{i} ON regression_large_table(col{i + 1}, col{(i + 1) % 5 + 1});",
                 sql_down=f"DROP INDEX IF EXISTS idx_regression_complex_{i};",
                 metadata={"regression_test": True},
             )
@@ -634,7 +634,7 @@ class TestMigrationPerformanceTrackerE2E:
                 operation_type=MigrationType.ADD_CONSTRAINT,
                 table_name="regression_large_table",
                 description=f"Add complex constraint {i}",
-                sql_up=f"ALTER TABLE regression_large_table ADD CONSTRAINT check_regression_{i} CHECK (length(col{i+1}) < 500);",
+                sql_up=f"ALTER TABLE regression_large_table ADD CONSTRAINT check_regression_{i} CHECK (length(col{i + 1}) < 500);",
                 sql_down=f"ALTER TABLE regression_large_table DROP CONSTRAINT IF EXISTS check_regression_{i};",
                 metadata={"regression_test": True},
             )
@@ -675,9 +675,9 @@ class TestMigrationPerformanceTrackerE2E:
 
         # Phase 4: Verify recommendations are provided
         for regression in severe_regressions:
-            assert (
-                len(regression.recommendations) > 0
-            ), "Regressions should have recommendations"
+            assert len(regression.recommendations) > 0, (
+                "Regressions should have recommendations"
+            )
             assert any(
                 "optimization" in rec.lower() or "performance" in rec.lower()
                 for rec in regression.recommendations
@@ -762,9 +762,9 @@ class TestMigrationPerformanceTrackerE2E:
             assert all(result.success for result in results)
 
             # Verify concurrent execution was efficient
-            assert (
-                total_time < 10.0
-            ), f"Concurrent execution took {total_time:.2f}s, exceeds 10s target"
+            assert total_time < 10.0, (
+                f"Concurrent execution took {total_time:.2f}s, exceeds 10s target"
+            )
 
             # Verify each migration has appropriate performance characteristics
             simple_results = [results[0], results[2]]  # Two simple migrations
@@ -775,14 +775,14 @@ class TestMigrationPerformanceTrackerE2E:
             simple_avg_time = sum(r.execution_time_ms for r in simple_results) / len(
                 simple_results
             )
-            assert (
-                complex_result.execution_time_ms > simple_avg_time
-            ), "Complex migration should take longer than simple"
+            assert complex_result.execution_time_ms > simple_avg_time, (
+                "Complex migration should take longer than simple"
+            )
 
             # Medium should be between simple and complex
-            assert (
-                medium_result.execution_time_ms > simple_avg_time
-            ), "Medium migration should take longer than simple"
+            assert medium_result.execution_time_ms > simple_avg_time, (
+                "Medium migration should take longer than simple"
+            )
 
             # Verify all operations were tracked
             total_operations = sum(r.operation_count for r in results)
@@ -1162,9 +1162,9 @@ class TestRealWorldMigrationScenarios:
 
             # Verify e-commerce migration performance
             assert metrics.success is True
-            assert (
-                execution_time < 10.0
-            ), f"E-commerce migration took {execution_time:.2f}s, exceeds 10s target"
+            assert execution_time < 10.0, (
+                f"E-commerce migration took {execution_time:.2f}s, exceeds 10s target"
+            )
             assert metrics.operation_count == len(ecommerce_tables) + len(
                 ecommerce_indexes
             )
@@ -1179,9 +1179,9 @@ class TestRealWorldMigrationScenarios:
                 assert len(result) > 0, f"Table {table_name} should exist"
 
             # Verify performance characteristics
-            assert (
-                metrics.execution_time_ms > 100
-            ), "E-commerce migration should take reasonable time"
+            assert metrics.execution_time_ms > 100, (
+                "E-commerce migration should take reasonable time"
+            )
             assert metrics.query_count > 10, "Should execute multiple queries"
             assert metrics.memory_delta_mb >= 0, "Memory usage should be tracked"
 
@@ -1382,18 +1382,18 @@ class TestRealWorldMigrationScenarios:
 
             # Verify social media migration performance
             assert metrics.success is True
-            assert (
-                execution_time < 10.0
-            ), f"Social media migration took {execution_time:.2f}s, exceeds 10s target"
+            assert execution_time < 10.0, (
+                f"Social media migration took {execution_time:.2f}s, exceeds 10s target"
+            )
             assert metrics.operation_count == len(social_tables) + len(social_indexes)
 
             # Verify specific performance requirements for social media
-            assert (
-                metrics.execution_time_ms < 8000
-            ), "Social media migration should be optimized for speed"
-            assert (
-                metrics.query_count > 15
-            ), "Should have many operations for comprehensive schema"
+            assert metrics.execution_time_ms < 8000, (
+                "Social media migration should be optimized for speed"
+            )
+            assert metrics.query_count > 15, (
+                "Should have many operations for comprehensive schema"
+            )
 
             # Generate performance insights specific to social media workload
             insights = tracker.get_performance_insights([metrics], include_trends=False)

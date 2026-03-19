@@ -5,9 +5,7 @@ Comprehensive test of intelligent responses across various question types
 
 import sys
 
-sys.path.insert(
-    0, ""
-)
+sys.path.insert(0, "")
 sys.path.insert(0, "")
 
 
@@ -65,7 +63,7 @@ def test_comprehensive_intelligence():
             passed += 1
 
     print("\n=== RESULTS ===")
-    print(f"Passed: {passed}/{total} ({passed/total*100:.1f}%)")
+    print(f"Passed: {passed}/{total} ({passed / total * 100:.1f}%)")
     print(
         f"Intelligence system working: {'✓ YES' if passed >= total * 0.8 else '✗ NO'}"
     )

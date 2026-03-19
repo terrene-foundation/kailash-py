@@ -157,10 +157,10 @@ class PerformanceMetrics:
                 continue
 
             print(f"{prefix}{category.upper()}:")
-            print(f"{prefix}  Mean:   {stats['mean']*1000:.1f}ms")
-            print(f"{prefix}  Median: {stats['median']*1000:.1f}ms")
-            print(f"{prefix}  Min:    {stats['min']*1000:.1f}ms")
-            print(f"{prefix}  Max:    {stats['max']*1000:.1f}ms")
+            print(f"{prefix}  Mean:   {stats['mean'] * 1000:.1f}ms")
+            print(f"{prefix}  Median: {stats['median'] * 1000:.1f}ms")
+            print(f"{prefix}  Min:    {stats['min'] * 1000:.1f}ms")
+            print(f"{prefix}  Max:    {stats['max'] * 1000:.1f}ms")
             print(f"{prefix}  Count:  {stats['count']}")
             print(f"{prefix}")
 

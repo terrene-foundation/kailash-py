@@ -55,7 +55,6 @@ class TestPhase2ExperimentalFeatureWorkflow:
             patch("pathlib.Path.glob") as mock_glob,
             patch("kaizen.research.adapter.importlib"),
         ):
-
             # Setup mocks
             mock_result = Mock()
             mock_result.entry_id = "http://arxiv.org/abs/2205.14135"
@@ -278,7 +277,6 @@ class TestPhase2ExperimentalFeatureWorkflow:
             patch("pathlib.Path.glob") as mock_glob,
             patch("kaizen.research.adapter.importlib"),
         ):
-
             # Setup mocks
             mock_result = Mock()
             mock_result.entry_id = "http://arxiv.org/abs/2205.14135"
@@ -386,7 +384,6 @@ class TestPhase2ExperimentalFeatureWorkflow:
             patch("pathlib.Path.glob") as mock_glob,
             patch("kaizen.research.adapter.importlib"),
         ):
-
             # Mock for paper
             mock_result = Mock()
             mock_result.entry_id = f"http://arxiv.org/abs/{arxiv_ids[0]}"

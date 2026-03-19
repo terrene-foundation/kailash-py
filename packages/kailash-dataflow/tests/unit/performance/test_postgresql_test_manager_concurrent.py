@@ -31,7 +31,6 @@ class TestPostgreSQLTestManagerConcurrentUnit:
             patch("dataflow.migrations.postgresql_test_manager.docker"),
             patch("dataflow.migrations.postgresql_test_manager.asyncpg"),
         ):
-
             manager = PostgreSQLTestManager(
                 container_name="test_manager_unit",
                 postgres_port=5438,
@@ -90,7 +89,6 @@ class TestPostgreSQLTestManagerConcurrentUnit:
                 mock_postgresql_manager, "_test_concurrent_schema_operations"
             ) as mock_schema,
         ):
-
             # Setup mock returns
             mock_connections.return_value = {"success": True, "connection_count": 10}
             mock_read_write.return_value = {"success": True, "execution_time": 0.5}
@@ -141,7 +139,6 @@ class TestPostgreSQLTestManagerConcurrentUnit:
                 mock_postgresql_manager, "_test_concurrent_schema_operations"
             ) as mock_schema,
         ):
-
             # Setup mock returns with one failure
             mock_connections.return_value = {"success": True}
             mock_read_write.return_value = {
@@ -238,7 +235,6 @@ class TestPostgreSQLTestManagerConcurrentUnit:
                 mock_postgresql_manager, "_test_concurrent_schema_operations"
             ) as mock_schema,
         ):
-
             # Simulate slow operations
             async def slow_operation(*args, **kwargs):
                 await asyncio.sleep(0.2)  # Exceed performance target
@@ -342,7 +338,6 @@ class TestPostgreSQLTestManagerConcurrentUnit:
                 "dataflow.migrations.postgresql_test_manager.MigrationTestFramework"
             ) as mock_framework,
         ):
-
             # Setup mocks
             mock_start.return_value = mock_container_info
             mock_concurrent.return_value = {

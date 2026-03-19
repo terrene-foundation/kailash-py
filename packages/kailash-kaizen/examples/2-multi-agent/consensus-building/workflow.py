@@ -487,14 +487,14 @@ def consensus_building_workflow(problem: str, num_reviewers: int = 3) -> Dict[st
 
     reviewers = []
     for i in range(num_reviewers):
-        reviewer = ReviewerAgent(config, shared_pool, agent_id=f"reviewer_{i+1}")
+        reviewer = ReviewerAgent(config, shared_pool, agent_id=f"reviewer_{i + 1}")
         reviewers.append(reviewer)
 
     facilitator = FacilitatorAgent(config, shared_pool, agent_id="facilitator")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Consensus-Building Pattern: {problem}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Step 1: Proposer creates proposal
     print("Step 1: Proposer creating solution...")
@@ -525,14 +525,14 @@ def consensus_building_workflow(problem: str, num_reviewers: int = 3) -> Dict[st
 
     # Show shared memory stats
     stats = shared_pool.get_stats()
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Shared Memory Statistics:")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  - Total insights: {stats['insight_count']}")
     print(f"  - Agents involved: {stats['agent_count']}")
     print(f"  - Tag distribution: {stats['tag_distribution']}")
     print(f"  - Segment distribution: {stats['segment_distribution']}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     return {
         "problem": problem,

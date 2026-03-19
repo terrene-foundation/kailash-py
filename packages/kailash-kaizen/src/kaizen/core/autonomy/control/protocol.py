@@ -153,7 +153,7 @@ class ControlProtocol:
         """
         if self._started:
             raise RuntimeError(
-                "Protocol already started. " "Call stop() before starting again."
+                "Protocol already started. Call stop() before starting again."
             )
 
         logger.info("Starting ControlProtocol")
@@ -240,7 +240,7 @@ class ControlProtocol:
         """
         if not self._started:
             raise RuntimeError(
-                "Protocol not started. " "Call start() before sending requests."
+                "Protocol not started. Call start() before sending requests."
             )
 
         request_id = request.request_id

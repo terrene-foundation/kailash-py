@@ -85,11 +85,11 @@ async def test_empty_filter_bug_reproduction(test_suite):
 
     # Assertions
     # THIS WILL FAIL WITH CURRENT BUGGY CODE:
-    assert result.get(
-        "success"
-    ), f"Expected success but got error: {result.get('error')}"
-    assert (
-        result.get("deleted", result.get("processed", 0)) == 3
-    ), f"Expected 3 deletions but got {result.get('deleted', result.get('processed'))}"
+    assert result.get("success"), (
+        f"Expected success but got error: {result.get('error')}"
+    )
+    assert result.get("deleted", result.get("processed", 0)) == 3, (
+        f"Expected 3 deletions but got {result.get('deleted', result.get('processed'))}"
+    )
 
     print("\n✅ TEST PASSED - Bug is fixed!")

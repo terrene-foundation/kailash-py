@@ -69,17 +69,13 @@ class TestNumericConstraintTightening:
 
     def test_tighter_int_allowed(self, parent_ctx):
         """Child with lower int value (tighter) must be allowed."""
-        child = parent_ctx.with_delegation(
-            "worker-1", {"cost_limit": 5000, "max_retries": 3}
-        )
+        child = parent_ctx.with_delegation("worker-1", {"cost_limit": 5000, "max_retries": 3})
         assert child.constraints["cost_limit"] == 5000
         assert child.constraints["max_retries"] == 3
 
     def test_equal_int_allowed(self, parent_ctx):
         """Child with equal int value must be allowed (not loosening)."""
-        child = parent_ctx.with_delegation(
-            "worker-1", {"cost_limit": 10000, "max_retries": 5}
-        )
+        child = parent_ctx.with_delegation("worker-1", {"cost_limit": 10000, "max_retries": 5})
         assert child.constraints["cost_limit"] == 10000
         assert child.constraints["max_retries"] == 5
 
@@ -126,9 +122,7 @@ class TestListConstraintTightening:
 
     def test_subset_allowed(self, parent_ctx):
         """Child with subset of parent's list must be allowed."""
-        child = parent_ctx.with_delegation(
-            "worker-1", {"allowed_actions": ["read", "write"]}
-        )
+        child = parent_ctx.with_delegation("worker-1", {"allowed_actions": ["read", "write"]})
         assert child.constraints["allowed_actions"] == ["read", "write"]
 
     def test_proper_subset_allowed(self, parent_ctx):
@@ -138,9 +132,7 @@ class TestListConstraintTightening:
 
     def test_equal_list_allowed(self, parent_ctx):
         """Child with same list must be allowed (not loosening)."""
-        child = parent_ctx.with_delegation(
-            "worker-1", {"allowed_actions": ["read", "write", "delete"]}
-        )
+        child = parent_ctx.with_delegation("worker-1", {"allowed_actions": ["read", "write", "delete"]})
         assert set(child.constraints["allowed_actions"]) == {
             "read",
             "write",
@@ -155,25 +147,19 @@ class TestListConstraintTightening:
     def test_superset_raises(self, parent_ctx):
         """Child with superset of parent's list must raise ConstraintViolationError."""
         with pytest.raises(ConstraintViolationError) as exc_info:
-            parent_ctx.with_delegation(
-                "worker-1", {"allowed_actions": ["read", "write", "delete", "admin"]}
-            )
+            parent_ctx.with_delegation("worker-1", {"allowed_actions": ["read", "write", "delete", "admin"]})
         assert "allowed_actions" in str(exc_info.value)
 
     def test_new_item_in_list_raises(self, parent_ctx):
         """Child adding new items not in parent's list must raise ConstraintViolationError."""
         with pytest.raises(ConstraintViolationError) as exc_info:
-            parent_ctx.with_delegation(
-                "worker-1", {"allowed_regions": ["us-east", "ap-south"]}
-            )
+            parent_ctx.with_delegation("worker-1", {"allowed_regions": ["us-east", "ap-south"]})
         assert "allowed_regions" in str(exc_info.value)
 
     def test_completely_different_list_raises(self, parent_ctx):
         """Child with completely different list items must raise ConstraintViolationError."""
         with pytest.raises(ConstraintViolationError):
-            parent_ctx.with_delegation(
-                "worker-1", {"allowed_actions": ["execute", "deploy"]}
-            )
+            parent_ctx.with_delegation("worker-1", {"allowed_actions": ["execute", "deploy"]})
 
 
 # ---------------------------------------------------------------------------
@@ -216,9 +202,7 @@ class TestNewConstraintKeys:
 
     def test_new_list_constraint_allowed(self, parent_ctx):
         """Adding a new list constraint not in parent must be allowed."""
-        child = parent_ctx.with_delegation(
-            "worker-1", {"allowed_models": ["gpt-4", "claude-3"]}
-        )
+        child = parent_ctx.with_delegation("worker-1", {"allowed_models": ["gpt-4", "claude-3"]})
         assert child.constraints["allowed_models"] == ["gpt-4", "claude-3"]
 
     def test_new_string_constraint_allowed(self, parent_ctx):
@@ -327,12 +311,8 @@ class TestMultiLevelTightening:
 
     def test_three_level_monotonic_tightening(self, parent_ctx):
         """Each level must only tighten constraints further."""
-        child1 = parent_ctx.with_delegation(
-            "worker-1", {"cost_limit": 5000, "allowed_actions": ["read", "write"]}
-        )
-        child2 = child1.with_delegation(
-            "worker-2", {"cost_limit": 2000, "allowed_actions": ["read"]}
-        )
+        child1 = parent_ctx.with_delegation("worker-1", {"cost_limit": 5000, "allowed_actions": ["read", "write"]})
+        child2 = child1.with_delegation("worker-2", {"cost_limit": 2000, "allowed_actions": ["read"]})
 
         assert child2.constraints["cost_limit"] == 2000
         assert child2.constraints["allowed_actions"] == ["read"]

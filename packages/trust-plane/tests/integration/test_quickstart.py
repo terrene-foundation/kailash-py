@@ -477,9 +477,9 @@ class TestTemplateApply:
                 main,
                 ["--dir", trust_dir, "template", "apply", tmpl["name"]],
             )
-            assert (
-                result.exit_code == 0
-            ), f"Failed for template={tmpl['name']}: {result.output}"
+            assert result.exit_code == 0, (
+                f"Failed for template={tmpl['name']}: {result.output}"
+            )
 
 
 class TestTemplateDescribe:
@@ -531,9 +531,9 @@ class TestTemplateDescribe:
         for tmpl in list_templates():
             runner = CliRunner()
             result = runner.invoke(main, ["template", "describe", tmpl["name"]])
-            assert (
-                result.exit_code == 0
-            ), f"Failed for template={tmpl['name']}: {result.output}"
+            assert result.exit_code == 0, (
+                f"Failed for template={tmpl['name']}: {result.output}"
+            )
             assert "Operational" in result.output
             assert "Data Access" in result.output
             assert "Financial" in result.output

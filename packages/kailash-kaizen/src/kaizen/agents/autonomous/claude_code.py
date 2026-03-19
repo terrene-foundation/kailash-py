@@ -434,9 +434,9 @@ class ClaudeCodeAgent(BaseAutonomousAgent):
             )
 
             # Display diff
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print(f"Diff for: {file_path}")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
             for line in diff:
                 print(line)
 

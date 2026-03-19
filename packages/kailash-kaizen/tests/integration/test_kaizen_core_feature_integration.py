@@ -58,13 +58,13 @@ class TestAgentSignatureIntegrationReal:
         assert len(result["answer"].strip()) > 0, "Answer should not be empty"
 
         # Validate signature preservation
-        assert (
-            agent.signature is not None
-        ), "Signature should be preserved after execution"
+        assert agent.signature is not None, (
+            "Signature should be preserved after execution"
+        )
         assert agent.has_signature == True, "Agent should report having signature"
-        assert (
-            agent.can_execute_structured == True
-        ), "Agent should support structured execution"
+        assert agent.can_execute_structured == True, (
+            "Agent should support structured execution"
+        )
 
     def test_complex_signature_real_execution(self):
         """Complex multi-field signature with real Core SDK execution."""
@@ -269,17 +269,17 @@ class TestEnterpriseWorkflowReal:
         # Validate real document analysis execution
         assert isinstance(result, dict), "Document analysis should return dictionary"
         assert "processing_status" in result, "Result should contain processing_status"
-        assert (
-            "documents_processed" in result
-        ), "Result should contain documents_processed"
-        assert (
-            "compliance_checks_passed" in result
-        ), "Result should contain compliance_checks_passed"
+        assert "documents_processed" in result, (
+            "Result should contain documents_processed"
+        )
+        assert "compliance_checks_passed" in result, (
+            "Result should contain compliance_checks_passed"
+        )
 
         # Validate processing results
-        assert (
-            result["processing_status"] == "completed"
-        ), "Processing should be completed"
+        assert result["processing_status"] == "completed", (
+            "Processing should be completed"
+        )
         assert result["documents_processed"] >= 1, "Should process at least 1 document"
 
 
@@ -326,23 +326,23 @@ class TestMultiAgentCoordinationReal:
         assert "final_decision" in result, "Result should contain final_decision"
         assert "debate_rounds" in result, "Result should contain debate_rounds"
         assert "consensus_level" in result, "Result should contain consensus_level"
-        assert (
-            "coordination_status" in result
-        ), "Result should contain coordination_status"
+        assert "coordination_status" in result, (
+            "Result should contain coordination_status"
+        )
 
         # Validate debate structure
-        assert (
-            len(result["debate_rounds"]) == 2
-        ), "Should have 2 debate rounds as specified"
-        assert (
-            result["coordination_status"] == "successful"
-        ), "Coordination should be successful"
-        assert isinstance(
-            result["consensus_level"], float
-        ), "Consensus level should be float"
-        assert (
-            0.0 <= result["consensus_level"] <= 1.0
-        ), "Consensus level should be between 0 and 1"
+        assert len(result["debate_rounds"]) == 2, (
+            "Should have 2 debate rounds as specified"
+        )
+        assert result["coordination_status"] == "successful", (
+            "Coordination should be successful"
+        )
+        assert isinstance(result["consensus_level"], float), (
+            "Consensus level should be float"
+        )
+        assert 0.0 <= result["consensus_level"] <= 1.0, (
+            "Consensus level should be between 0 and 1"
+        )
 
         # Validate participants
         assert result["participants"] == 3, "Should have 3 participants"
@@ -378,26 +378,26 @@ class TestMultiAgentCoordinationReal:
 
         # Validate real consensus coordination
         assert isinstance(result, dict), "Consensus workflow should return dictionary"
-        assert (
-            "consensus_achieved" in result
-        ), "Result should contain consensus_achieved"
+        assert "consensus_achieved" in result, (
+            "Result should contain consensus_achieved"
+        )
         assert "final_consensus" in result, "Result should contain final_consensus"
         assert "consensus_score" in result, "Result should contain consensus_score"
         assert "agent_positions" in result, "Result should contain agent_positions"
 
         # Validate consensus structure
-        assert isinstance(
-            result["consensus_achieved"], bool
-        ), "Consensus achieved should be boolean"
-        assert isinstance(
-            result["consensus_score"], float
-        ), "Consensus score should be float"
-        assert isinstance(
-            result["agent_positions"], dict
-        ), "Agent positions should be dictionary"
-        assert len(result["agent_positions"]) <= len(
-            experts
-        ), "Should have positions from experts"
+        assert isinstance(result["consensus_achieved"], bool), (
+            "Consensus achieved should be boolean"
+        )
+        assert isinstance(result["consensus_score"], float), (
+            "Consensus score should be float"
+        )
+        assert isinstance(result["agent_positions"], dict), (
+            "Agent positions should be dictionary"
+        )
+        assert len(result["agent_positions"]) <= len(experts), (
+            "Should have positions from experts"
+        )
 
 
 class TestRealWorldPerformanceRequirements:
@@ -426,9 +426,9 @@ class TestRealWorldPerformanceRequirements:
         execution_time = time.time() - start_time
 
         # Performance requirement: reasonable time for real LLM call
-        assert (
-            execution_time < 30.0
-        ), f"Real execution took {execution_time:.3f}s, should be <30s"
+        assert execution_time < 30.0, (
+            f"Real execution took {execution_time:.3f}s, should be <30s"
+        )
 
         # Validate result quality
         assert isinstance(result, dict), "Should return structured result"
@@ -454,9 +454,9 @@ class TestRealWorldPerformanceRequirements:
         execution_time = time.time() - start_time
 
         # Performance requirement: reasonable time for real pattern execution
-        assert (
-            execution_time < 45.0
-        ), f"Real pattern execution took {execution_time:.3f}s, should be <45s"
+        assert execution_time < 45.0, (
+            f"Real pattern execution took {execution_time:.3f}s, should be <45s"
+        )
 
         # Validate result quality
         assert isinstance(result, dict), "Should return structured result"
@@ -484,9 +484,9 @@ class TestRealWorldPerformanceRequirements:
         execution_time = time.time() - start_time
 
         # Performance requirement: reasonable time for enterprise workflow
-        assert (
-            execution_time < 60.0
-        ), f"Real enterprise workflow took {execution_time:.3f}s, should be <60s"
+        assert execution_time < 60.0, (
+            f"Real enterprise workflow took {execution_time:.3f}s, should be <60s"
+        )
 
         # Validate enterprise result quality
         assert isinstance(result, dict), "Should return structured result"

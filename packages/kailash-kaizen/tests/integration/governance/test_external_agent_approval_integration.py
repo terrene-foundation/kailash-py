@@ -106,9 +106,9 @@ class TestCompleteApprovalWorkflow:
         # Step 2: Verify approval request created with PENDING status
         request = approval_manager.get_request(request_id)
         assert request is not None, "Approval request should be created"
-        assert (
-            request.status == ApprovalStatus.PENDING
-        ), "Initial status should be PENDING"
+        assert request.status == ApprovalStatus.PENDING, (
+            "Initial status should be PENDING"
+        )
         assert request.external_agent_id == "agent_001"
         assert request.requested_by == "user_123"
         assert "lead_001" in request.approvers, "Team lead should be in approvers list"
@@ -120,9 +120,9 @@ class TestCompleteApprovalWorkflow:
 
         # Step 4: Verify approval status updated
         request = approval_manager.get_request(request_id)
-        assert (
-            request.status == ApprovalStatus.APPROVED
-        ), "Status should be APPROVED after approval"
+        assert request.status == ApprovalStatus.APPROVED, (
+            "Status should be APPROVED after approval"
+        )
         assert request.approved_by == "lead_001", "Approver ID should be recorded"
         assert request.approved_at is not None, "Approval timestamp should be recorded"
 
@@ -278,9 +278,9 @@ class TestApprovalTimeout:
         request_2 = approval_manager.get_request(request_id_2)
         assert timed_out_count == 1, "Only agent_fast should timeout"
         assert request_1.status == ApprovalStatus.TIMEOUT, "agent_fast should timeout"
-        assert (
-            request_2.status == ApprovalStatus.PENDING
-        ), "agent_slow should still be pending"
+        assert request_2.status == ApprovalStatus.PENDING, (
+            "agent_slow should still be pending"
+        )
 
 
 class TestApprovalNotifications:
@@ -323,9 +323,9 @@ class TestApprovalNotifications:
         # Production implementation would include webhook server verification
         request = approval_manager.get_request(request_id)
         assert request is not None, "Request should exist for notification"
-        assert (
-            request.approvers == approvers
-        ), "Approvers should match notification recipients"
+        assert request.approvers == approvers, (
+            "Approvers should match notification recipients"
+        )
 
     @pytest.mark.asyncio
     async def test_wait_for_approval_with_timeout(self, approval_manager):
@@ -355,9 +355,9 @@ class TestApprovalNotifications:
         approved = await approval_manager.wait_for_approval(request_id, timeout=0.5)
 
         # Verify
-        assert (
-            approved is False
-        ), "Should return False when approval not granted within timeout"
+        assert approved is False, (
+            "Should return False when approval not granted within timeout"
+        )
 
     @pytest.mark.asyncio
     async def test_wait_for_approval_returns_true_when_approved(self, approval_manager):

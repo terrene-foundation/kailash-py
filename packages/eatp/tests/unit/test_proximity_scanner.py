@@ -92,18 +92,14 @@ class TestProximityScannerScan:
     def test_below_flag_no_alert(self):
         """79% usage must NOT trigger alert (below 80% flag)."""
         scanner = ProximityScanner()
-        result = ConstraintCheckResult(
-            satisfied=True, reason="ok", used=79.0, limit=100.0, remaining=21.0
-        )
+        result = ConstraintCheckResult(satisfied=True, reason="ok", used=79.0, limit=100.0, remaining=21.0)
         alerts = scanner.scan([result], "cost_limit")
         assert alerts == []
 
     def test_at_flag_threshold_triggers_flag(self):
         """80% usage must trigger FLAGGED alert."""
         scanner = ProximityScanner()
-        result = ConstraintCheckResult(
-            satisfied=True, reason="ok", used=80.0, limit=100.0, remaining=20.0
-        )
+        result = ConstraintCheckResult(satisfied=True, reason="ok", used=80.0, limit=100.0, remaining=20.0)
         alerts = scanner.scan([result], "cost_limit")
         assert len(alerts) == 1
         assert alerts[0].escalated_verdict == Verdict.FLAGGED
@@ -112,9 +108,7 @@ class TestProximityScannerScan:
     def test_81_percent_triggers_flag(self):
         """81% usage must trigger FLAGGED alert."""
         scanner = ProximityScanner()
-        result = ConstraintCheckResult(
-            satisfied=True, reason="ok", used=81.0, limit=100.0, remaining=19.0
-        )
+        result = ConstraintCheckResult(satisfied=True, reason="ok", used=81.0, limit=100.0, remaining=19.0)
         alerts = scanner.scan([result], "cost_limit")
         assert len(alerts) == 1
         assert alerts[0].escalated_verdict == Verdict.FLAGGED
@@ -122,9 +116,7 @@ class TestProximityScannerScan:
     def test_at_hold_threshold_triggers_hold(self):
         """95% usage must trigger HELD alert."""
         scanner = ProximityScanner()
-        result = ConstraintCheckResult(
-            satisfied=True, reason="ok", used=95.0, limit=100.0, remaining=5.0
-        )
+        result = ConstraintCheckResult(satisfied=True, reason="ok", used=95.0, limit=100.0, remaining=5.0)
         alerts = scanner.scan([result], "cost_limit")
         assert len(alerts) == 1
         assert alerts[0].escalated_verdict == Verdict.HELD
@@ -132,9 +124,7 @@ class TestProximityScannerScan:
     def test_96_percent_triggers_hold(self):
         """96% usage must trigger HELD alert."""
         scanner = ProximityScanner()
-        result = ConstraintCheckResult(
-            satisfied=True, reason="ok", used=96.0, limit=100.0, remaining=4.0
-        )
+        result = ConstraintCheckResult(satisfied=True, reason="ok", used=96.0, limit=100.0, remaining=4.0)
         alerts = scanner.scan([result], "cost_limit")
         assert len(alerts) == 1
         assert alerts[0].escalated_verdict == Verdict.HELD
@@ -142,9 +132,7 @@ class TestProximityScannerScan:
     def test_100_percent_triggers_hold(self):
         """100% usage (at limit) must trigger HELD alert."""
         scanner = ProximityScanner()
-        result = ConstraintCheckResult(
-            satisfied=True, reason="at limit", used=100.0, limit=100.0, remaining=0.0
-        )
+        result = ConstraintCheckResult(satisfied=True, reason="at limit", used=100.0, limit=100.0, remaining=0.0)
         alerts = scanner.scan([result], "cost_limit")
         assert len(alerts) == 1
         assert alerts[0].escalated_verdict == Verdict.HELD
@@ -153,9 +141,7 @@ class TestProximityScannerScan:
     def test_over_limit_triggers_hold(self):
         """Usage > limit must still produce HELD alert."""
         scanner = ProximityScanner()
-        result = ConstraintCheckResult(
-            satisfied=False, reason="exceeded", used=110.0, limit=100.0, remaining=0.0
-        )
+        result = ConstraintCheckResult(satisfied=False, reason="exceeded", used=110.0, limit=100.0, remaining=0.0)
         alerts = scanner.scan([result], "cost_limit")
         assert len(alerts) == 1
         assert alerts[0].escalated_verdict == Verdict.HELD
@@ -164,45 +150,35 @@ class TestProximityScannerScan:
     def test_zero_limit_skipped(self):
         """Limit of 0 must be skipped (not crash with division by zero)."""
         scanner = ProximityScanner()
-        result = ConstraintCheckResult(
-            satisfied=True, reason="ok", used=50.0, limit=0.0, remaining=0.0
-        )
+        result = ConstraintCheckResult(satisfied=True, reason="ok", used=50.0, limit=0.0, remaining=0.0)
         alerts = scanner.scan([result], "cost_limit")
         assert alerts == []
 
     def test_negative_limit_skipped(self):
         """Negative limit must be skipped."""
         scanner = ProximityScanner()
-        result = ConstraintCheckResult(
-            satisfied=True, reason="ok", used=50.0, limit=-10.0, remaining=0.0
-        )
+        result = ConstraintCheckResult(satisfied=True, reason="ok", used=50.0, limit=-10.0, remaining=0.0)
         alerts = scanner.scan([result], "cost_limit")
         assert alerts == []
 
     def test_none_limit_skipped(self):
         """None limit must be skipped."""
         scanner = ProximityScanner()
-        result = ConstraintCheckResult(
-            satisfied=True, reason="ok", used=50.0, limit=None, remaining=None
-        )
+        result = ConstraintCheckResult(satisfied=True, reason="ok", used=50.0, limit=None, remaining=None)
         alerts = scanner.scan([result], "cost_limit")
         assert alerts == []
 
     def test_none_used_skipped(self):
         """None used must be skipped."""
         scanner = ProximityScanner()
-        result = ConstraintCheckResult(
-            satisfied=True, reason="ok", used=None, limit=100.0, remaining=100.0
-        )
+        result = ConstraintCheckResult(satisfied=True, reason="ok", used=None, limit=100.0, remaining=100.0)
         alerts = scanner.scan([result], "cost_limit")
         assert alerts == []
 
     def test_float_edge_case_just_below_flag(self):
         """0.7999999 must NOT trigger flag (float precision)."""
         scanner = ProximityScanner()
-        result = ConstraintCheckResult(
-            satisfied=True, reason="ok", used=79.99999, limit=100.0, remaining=20.0
-        )
+        result = ConstraintCheckResult(satisfied=True, reason="ok", used=79.99999, limit=100.0, remaining=20.0)
         alerts = scanner.scan([result], "cost_limit")
         assert alerts == []
 
@@ -214,9 +190,7 @@ class TestProximityScannerScan:
             dimension_overrides={"rate_limit": (0.50, 0.70)},
         )
         scanner = ProximityScanner(config)
-        result = ConstraintCheckResult(
-            satisfied=True, reason="ok", used=55.0, limit=100.0, remaining=45.0
-        )
+        result = ConstraintCheckResult(satisfied=True, reason="ok", used=55.0, limit=100.0, remaining=45.0)
         # 55% exceeds the per-dimension flag of 50%
         alerts = scanner.scan([result], "rate_limit")
         assert len(alerts) == 1
@@ -230,9 +204,7 @@ class TestProximityScannerScan:
             dimension_overrides={"rate_limit": (0.50, 0.70)},
         )
         scanner = ProximityScanner(config)
-        result = ConstraintCheckResult(
-            satisfied=True, reason="ok", used=55.0, limit=100.0, remaining=45.0
-        )
+        result = ConstraintCheckResult(satisfied=True, reason="ok", used=55.0, limit=100.0, remaining=45.0)
         # 55% does NOT exceed global flag of 80% for cost_limit
         alerts = scanner.scan([result], "cost_limit")
         assert alerts == []
@@ -250,21 +222,9 @@ class TestProximityScannerMultiDimension:
         """Multiple dimensions can trigger alerts simultaneously."""
         scanner = ProximityScanner()
         results_by_dim = {
-            "cost_limit": [
-                ConstraintCheckResult(
-                    satisfied=True, reason="ok", used=85.0, limit=100.0, remaining=15.0
-                )
-            ],
-            "rate_limit": [
-                ConstraintCheckResult(
-                    satisfied=True, reason="ok", used=96.0, limit=100.0, remaining=4.0
-                )
-            ],
-            "resources": [
-                ConstraintCheckResult(
-                    satisfied=True, reason="ok", used=50.0, limit=100.0, remaining=50.0
-                )
-            ],
+            "cost_limit": [ConstraintCheckResult(satisfied=True, reason="ok", used=85.0, limit=100.0, remaining=15.0)],
+            "rate_limit": [ConstraintCheckResult(satisfied=True, reason="ok", used=96.0, limit=100.0, remaining=4.0)],
+            "resources": [ConstraintCheckResult(satisfied=True, reason="ok", used=50.0, limit=100.0, remaining=50.0)],
         }
         alerts = scanner.scan_multi(results_by_dim)
         assert len(alerts) == 2  # cost (flagged) + rate (held)
@@ -274,9 +234,7 @@ class TestProximityScannerMultiDimension:
     def test_conservative_preset_at_71_percent(self):
         """71% usage with CONSERVATIVE preset must trigger FLAG."""
         scanner = ProximityScanner(CONSERVATIVE_PROXIMITY)
-        result = ConstraintCheckResult(
-            satisfied=True, reason="ok", used=71.0, limit=100.0, remaining=29.0
-        )
+        result = ConstraintCheckResult(satisfied=True, reason="ok", used=71.0, limit=100.0, remaining=29.0)
         alerts = scanner.scan([result], "cost_limit")
         assert len(alerts) == 1
         assert alerts[0].escalated_verdict == Verdict.FLAGGED
@@ -284,9 +242,7 @@ class TestProximityScannerMultiDimension:
     def test_conservative_preset_at_91_percent(self):
         """91% usage with CONSERVATIVE preset must trigger HOLD."""
         scanner = ProximityScanner(CONSERVATIVE_PROXIMITY)
-        result = ConstraintCheckResult(
-            satisfied=True, reason="ok", used=91.0, limit=100.0, remaining=9.0
-        )
+        result = ConstraintCheckResult(satisfied=True, reason="ok", used=91.0, limit=100.0, remaining=9.0)
         alerts = scanner.scan([result], "cost_limit")
         assert len(alerts) == 1
         assert alerts[0].escalated_verdict == Verdict.HELD
@@ -394,9 +350,7 @@ class TestProximityEscalation:
     def test_empty_alerts_no_change(self):
         """Empty alerts must return base verdict unchanged."""
         scanner = ProximityScanner()
-        assert (
-            scanner.escalate_verdict(Verdict.AUTO_APPROVED, []) == Verdict.AUTO_APPROVED
-        )
+        assert scanner.escalate_verdict(Verdict.AUTO_APPROVED, []) == Verdict.AUTO_APPROVED
         assert scanner.escalate_verdict(Verdict.FLAGGED, []) == Verdict.FLAGGED
         assert scanner.escalate_verdict(Verdict.HELD, []) == Verdict.HELD
         assert scanner.escalate_verdict(Verdict.BLOCKED, []) == Verdict.BLOCKED
@@ -441,9 +395,7 @@ class TestProximityBackwardCompat:
 
         enforcer = StrictEnforcer()
         # A valid result with no violations should still be AUTO_APPROVED
-        result = VerificationResult(
-            valid=True, level=VerificationLevel.STANDARD, reason="ok"
-        )
+        result = VerificationResult(valid=True, level=VerificationLevel.STANDARD, reason="ok")
         verdict = enforcer.classify(result)
         assert verdict == Verdict.AUTO_APPROVED
 
@@ -453,8 +405,6 @@ class TestProximityBackwardCompat:
         from eatp.enforce.shadow import ShadowEnforcer
 
         shadow = ShadowEnforcer()
-        result = VerificationResult(
-            valid=True, level=VerificationLevel.STANDARD, reason="ok"
-        )
+        result = VerificationResult(valid=True, level=VerificationLevel.STANDARD, reason="ok")
         verdict = shadow.check(agent_id="agent-001", action="test", result=result)
         assert verdict == Verdict.AUTO_APPROVED

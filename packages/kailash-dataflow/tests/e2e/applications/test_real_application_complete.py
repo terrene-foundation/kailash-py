@@ -202,7 +202,7 @@ class TestECommerceApplicationComplete:
         # Connect inventory nodes
         for i in range(1, len(all_products)):
             inventory_workflow.add_connection(
-                f"init_inv_{all_products[i-1]['id']}",
+                f"init_inv_{all_products[i - 1]['id']}",
                 f"init_inv_{all_products[i]['id']}",
             )
 
@@ -331,7 +331,7 @@ class TestECommerceApplicationComplete:
                 )
             else:
                 order_items_workflow.add_connection(
-                    f"reserve_inv_{idx-1}", f"get_inv_{idx}"
+                    f"reserve_inv_{idx - 1}", f"get_inv_{idx}"
                 )
                 order_items_workflow.add_connection(
                     f"get_inv_{idx}", f"order_item_{idx}"

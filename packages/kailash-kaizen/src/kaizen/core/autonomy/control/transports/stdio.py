@@ -184,7 +184,7 @@ class StdioTransport(Transport):
         """
         if not self._ready:
             raise RuntimeError(
-                "Cannot write to transport: not ready. " "Call connect() first."
+                "Cannot write to transport: not ready. Call connect() first."
             )
 
         # Lazy initialization: wrap stdout on first write if needed
@@ -236,7 +236,7 @@ class StdioTransport(Transport):
         """
         if not self._ready:
             raise RuntimeError(
-                "Cannot read from transport: not ready. " "Call connect() first."
+                "Cannot read from transport: not ready. Call connect() first."
             )
 
         return self._read_messages_impl()

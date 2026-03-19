@@ -69,7 +69,8 @@ def main():
 
     # Create vision agent
     config = VisionAgentConfig(
-        model="llama3.2-vision", temperature=0.7  # Using llama3.2-vision model
+        model="llama3.2-vision",
+        temperature=0.7,  # Using llama3.2-vision model
     )
 
     try:

@@ -163,10 +163,7 @@ class ChallengeProtocol:
         rate_limit_window_seconds: int = 60,
     ) -> None:
         if challenge_timeout_seconds < 0:
-            raise ValueError(
-                f"challenge_timeout_seconds must be non-negative, "
-                f"got {challenge_timeout_seconds}"
-            )
+            raise ValueError(f"challenge_timeout_seconds must be non-negative, got {challenge_timeout_seconds}")
 
         self._challenge_timeout_seconds = challenge_timeout_seconds
         self._max_challenges_per_agent = max_challenges_per_agent
@@ -298,8 +295,7 @@ class ChallengeProtocol:
         # Check challenge expiration
         if challenge.is_expired():
             raise ChallengeError(
-                f"Challenge {challenge.challenge_id} has expired at "
-                f"{challenge.expires_at.isoformat()}",
+                f"Challenge {challenge.challenge_id} has expired at {challenge.expires_at.isoformat()}",
                 details={
                     "challenge_id": challenge.challenge_id,
                     "expires_at": challenge.expires_at.isoformat(),
@@ -311,16 +307,11 @@ class ChallengeProtocol:
         capability_attestation = chain.get_capability(challenge.required_proof)
         if capability_attestation is None:
             raise ChallengeError(
-                f"Agent does not have required capability '{challenge.required_proof}' "
-                f"in its trust chain",
+                f"Agent does not have required capability '{challenge.required_proof}' in its trust chain",
                 details={
                     "agent_id": chain.genesis.agent_id,
                     "required_proof": challenge.required_proof,
-                    "available_capabilities": [
-                        cap.capability
-                        for cap in chain.capabilities
-                        if not cap.is_expired()
-                    ],
+                    "available_capabilities": [cap.capability for cap in chain.capabilities if not cap.is_expired()],
                 },
             )
 
@@ -401,8 +392,7 @@ class ChallengeProtocol:
         self._evict_expired_nonces()
         if challenge.nonce in self._used_nonces:
             raise ChallengeError(
-                f"Nonce has already been used — possible replay attack for "
-                f"challenge {challenge.challenge_id}",
+                f"Nonce has already been used — possible replay attack for challenge {challenge.challenge_id}",
                 details={
                     "challenge_id": challenge.challenge_id,
                     "nonce_prefix": challenge.nonce[:16] + "...",
@@ -412,8 +402,7 @@ class ChallengeProtocol:
         # 3. Check challenge ID match (constant-time to prevent timing attacks)
         if not hmac.compare_digest(response.challenge_id, challenge.challenge_id):
             logger.warning(
-                f"[CHALLENGE] Challenge ID mismatch: expected={challenge.challenge_id} "
-                f"got={response.challenge_id}"
+                f"[CHALLENGE] Challenge ID mismatch: expected={challenge.challenge_id} got={response.challenge_id}"
             )
             return False
 
@@ -429,28 +418,21 @@ class ChallengeProtocol:
         response_capability = response.capability_proof.get("capability", "")
         if not hmac.compare_digest(str(response_capability), challenge.required_proof):
             logger.warning(
-                f"[CHALLENGE] Capability mismatch: required='{challenge.required_proof}' "
-                f"got='{response_capability}'"
+                f"[CHALLENGE] Capability mismatch: required='{challenge.required_proof}' got='{response_capability}'"
             )
             return False
 
         # 6. Verify cryptographic signature
         payload = f"{challenge.nonce}:{challenge.timestamp.isoformat()}:{challenge.challenger_id}"
         try:
-            signature_valid = verify_signature(
-                payload, response.signed_nonce, agent_public_key
-            )
+            signature_valid = verify_signature(payload, response.signed_nonce, agent_public_key)
         except Exception as exc:
-            logger.warning(
-                f"[CHALLENGE] Signature verification error for challenge "
-                f"{challenge.challenge_id}: {exc}"
-            )
+            logger.warning(f"[CHALLENGE] Signature verification error for challenge {challenge.challenge_id}: {exc}")
             return False
 
         if not signature_valid:
             logger.warning(
-                f"[CHALLENGE] Invalid signature for challenge {challenge.challenge_id} "
-                f"from agent {response.agent_id}"
+                f"[CHALLENGE] Invalid signature for challenge {challenge.challenge_id} from agent {response.agent_id}"
             )
             return False
 
@@ -490,11 +472,7 @@ class ChallengeProtocol:
         window_start = now - timedelta(seconds=self._rate_limit_window_seconds)
 
         # Filter to only timestamps within the current window
-        recent_timestamps = [
-            ts
-            for ts in self._challenge_timestamps[target_agent_id]
-            if ts > window_start
-        ]
+        recent_timestamps = [ts for ts in self._challenge_timestamps[target_agent_id] if ts > window_start]
 
         # Update stored timestamps to only keep recent ones (garbage collection)
         self._challenge_timestamps[target_agent_id] = recent_timestamps

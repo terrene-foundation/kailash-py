@@ -112,9 +112,7 @@ def verified(
                     "or call set_ops() on the decorated function."
                 )
 
-            result = _run_coroutine_sync(
-                _ops.verify(agent_id=agent_id, action=action, level=level)
-            )
+            result = _run_coroutine_sync(_ops.verify(agent_id=agent_id, action=action, level=level))
             enforcer.enforce(agent_id=agent_id, action=action, result=result)
             return func(*args, **kwargs)
 
@@ -162,8 +160,7 @@ def audited(
             nonlocal _ops
             if _ops is None:
                 raise RuntimeError(
-                    "TrustOperations not configured. Pass ops= to @audited "
-                    "or call set_ops() on the decorated function."
+                    "TrustOperations not configured. Pass ops= to @audited or call set_ops() on the decorated function."
                 )
 
             result = await func(*args, **kwargs)
@@ -189,8 +186,7 @@ def audited(
             nonlocal _ops
             if _ops is None:
                 raise RuntimeError(
-                    "TrustOperations not configured. Pass ops= to @audited "
-                    "or call set_ops() on the decorated function."
+                    "TrustOperations not configured. Pass ops= to @audited or call set_ops() on the decorated function."
                 )
 
             result = func(*args, **kwargs)
@@ -263,14 +259,10 @@ def shadow(
             nonlocal _ops
             if _ops is not None:
                 try:
-                    result = await _ops.verify(
-                        agent_id=agent_id, action=action, level=level
-                    )
+                    result = await _ops.verify(agent_id=agent_id, action=action, level=level)
                     _shadow.check(agent_id=agent_id, action=action, result=result)
                 except Exception as e:
-                    logger.warning(
-                        f"[SHADOW] Verification error for agent={agent_id}: {e}"
-                    )
+                    logger.warning(f"[SHADOW] Verification error for agent={agent_id}: {e}")
             return await func(*args, **kwargs)
 
         @functools.wraps(func)
@@ -278,14 +270,10 @@ def shadow(
             nonlocal _ops
             if _ops is not None:
                 try:
-                    result = _run_coroutine_sync(
-                        _ops.verify(agent_id=agent_id, action=action, level=level)
-                    )
+                    result = _run_coroutine_sync(_ops.verify(agent_id=agent_id, action=action, level=level))
                     _shadow.check(agent_id=agent_id, action=action, result=result)
                 except Exception as e:
-                    logger.warning(
-                        f"[SHADOW] Verification error for agent={agent_id}: {e}"
-                    )
+                    logger.warning(f"[SHADOW] Verification error for agent={agent_id}: {e}")
             return func(*args, **kwargs)
 
         wrapper = async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper

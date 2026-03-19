@@ -139,9 +139,7 @@ class TestInitialize:
         assert chains_dir.is_dir()
 
     @pytest.mark.asyncio
-    async def test_initialize_creates_nested_directories(
-        self, store_with_custom_dir, tmp_path
-    ):
+    async def test_initialize_creates_nested_directories(self, store_with_custom_dir, tmp_path):
         """initialize() must create nested parent directories."""
         nested_dir = tmp_path / "custom" / "nested" / "chains"
         assert not nested_dir.exists()

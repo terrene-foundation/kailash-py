@@ -264,9 +264,7 @@ class TrustAwareOrchestrationRuntime:
 
             # Evaluate policies if engine is enabled
             if self._policy_engine:
-                policy_result = await self._policy_engine.evaluate_for_agent(
-                    agent_id, context
-                )
+                policy_result = await self._policy_engine.evaluate_for_agent(agent_id, context)
                 if not policy_result.allowed:
                     self._policy_violations += 1
                     return policy_result
@@ -318,8 +316,7 @@ class TrustAwareOrchestrationRuntime:
         for cap in capabilities:
             if not context.has_capability(cap):
                 raise OrchestrationTrustError(
-                    f"Supervisor '{supervisor_id}' cannot delegate "
-                    f"capability '{cap}' - not in context"
+                    f"Supervisor '{supervisor_id}' cannot delegate capability '{cap}' - not in context"
                 )
 
         # Create delegation record in trust store
@@ -345,8 +342,7 @@ class TrustAwareOrchestrationRuntime:
         )
 
         logger.debug(
-            f"Created delegation: {supervisor_id} -> {worker_id} "
-            f"for task {task_id} with capabilities {capabilities}"
+            f"Created delegation: {supervisor_id} -> {worker_id} for task {task_id} with capabilities {capabilities}"
         )
 
         return entry
@@ -467,9 +463,7 @@ class TrustAwareOrchestrationRuntime:
         try:
             for task in tasks:
                 # Select agent
-                agent_id = (
-                    agent_selector(task) if agent_selector else context.current_agent_id
-                )
+                agent_id = agent_selector(task) if agent_selector else context.current_agent_id
 
                 # Create executor
                 async def default_executor(t: Any) -> Any:
@@ -561,10 +555,7 @@ class TrustAwareOrchestrationRuntime:
                 return results
 
             # Execute in parallel
-            tasks_coros = [
-                execute_agent_tasks(agent_id, tasks)
-                for agent_id, tasks in task_groups.items()
-            ]
+            tasks_coros = [execute_agent_tasks(agent_id, tasks) for agent_id, tasks in task_groups.items()]
             all_results = await asyncio.gather(*tasks_coros, return_exceptions=True)
 
             # Process results
@@ -598,8 +589,7 @@ class TrustAwareOrchestrationRuntime:
             "policy_violations": self._policy_violations,
             "active_workflows": len(self._active_workflows),
             "verification_success_rate": (
-                (self._total_verifications - self._verification_failures)
-                / self._total_verifications
+                (self._total_verifications - self._verification_failures) / self._total_verifications
                 if self._total_verifications > 0
                 else 1.0
             ),

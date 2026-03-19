@@ -190,9 +190,9 @@ class TestElasticsearchIntegration:
                 log_output = log_capture.getvalue()
                 log_lines = [line for line in log_output.strip().split("\n") if line]
 
-                assert (
-                    len(log_lines) >= 4
-                ), f"Expected 4+ log lines, got {len(log_lines)}"
+                assert len(log_lines) >= 4, (
+                    f"Expected 4+ log lines, got {len(log_lines)}"
+                )
 
                 # Parse and send logs to Elasticsearch
                 for line in log_lines:

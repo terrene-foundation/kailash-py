@@ -30,8 +30,7 @@ try:
     from PIL import Image
 except ImportError:
     raise ImportError(
-        "PIL (Pillow) is required for ImageField. "
-        "Install it with: pip install Pillow"
+        "PIL (Pillow) is required for ImageField. Install it with: pip install Pillow"
     )
 
 try:
@@ -195,8 +194,7 @@ class ImageField:
         # Validate format
         if self._format not in self.formats:
             raise ValueError(
-                f"Unsupported image format: {self._format}. "
-                f"Supported: {self.formats}"
+                f"Unsupported image format: {self._format}. Supported: {self.formats}"
             )
 
     def _resize_image(self):
@@ -459,7 +457,7 @@ class AudioField:
 
         if ext not in self.formats:
             raise ValueError(
-                f"Unsupported audio format: {ext}. " f"Supported: {self.formats}"
+                f"Unsupported audio format: {ext}. Supported: {self.formats}"
             )
 
         self._format = ext

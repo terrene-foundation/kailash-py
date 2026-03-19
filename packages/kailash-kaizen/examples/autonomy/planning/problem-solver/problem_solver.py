@@ -295,7 +295,7 @@ Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 ## Summary
 
 - **Paths Explored**: {len(paths)}
-- **Best Path Score**: {best_path.get('score', 0.0) if isinstance(best_path, dict) else 'N/A'}
+- **Best Path Score**: {best_path.get("score", 0.0) if isinstance(best_path, dict) else "N/A"}
 - **Evaluation Criteria**: {self.config.evaluation_criteria}
 
 ## Solution Paths

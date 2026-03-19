@@ -492,7 +492,7 @@ class TestMultiApplicationModelRegistryE2E:
             discovered = registry.discover_models()
             # Should discover at least 3 models (including own)
             assert len(discovered) >= 3
-            print(f"   📦 App {i+1} discovered {len(discovered)} models")
+            print(f"   📦 App {i + 1} discovered {len(discovered)} models")
 
         print("   ✅ Concurrent operations completed successfully")
 
@@ -618,7 +618,7 @@ class TestMultiApplicationModelRegistryE2E:
 
         registration_time = time.perf_counter() - start_time
         print(
-            f"   ⏱️ Registered {model_count} models in {registration_time:.2f}s ({registration_time/model_count:.3f}s avg)"
+            f"   ⏱️ Registered {model_count} models in {registration_time:.2f}s ({registration_time / model_count:.3f}s avg)"
         )
 
         # Test discovery performance

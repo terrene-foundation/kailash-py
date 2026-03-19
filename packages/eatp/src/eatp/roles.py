@@ -59,9 +59,7 @@ class TrustRole(str, Enum):
 
 ROLE_PERMISSIONS: Mapping[TrustRole, FrozenSet[str]] = MappingProxyType(
     {
-        TrustRole.ADMIN: frozenset(
-            {"establish", "delegate", "verify", "audit", "read"}
-        ),
+        TrustRole.ADMIN: frozenset({"establish", "delegate", "verify", "audit", "read"}),
         TrustRole.OPERATOR: frozenset({"delegate", "verify", "read"}),
         TrustRole.OBSERVER: frozenset({"read"}),
         TrustRole.AUDITOR: frozenset({"audit", "read"}),

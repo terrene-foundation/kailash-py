@@ -86,7 +86,6 @@ class TestIntegrationWorkflow:
             patch("pathlib.Path.glob") as mock_glob,
             patch("kaizen.research.adapter.importlib"),
         ):
-
             # Mock arXiv
             mock_result = Mock()
             mock_result.entry_id = "http://arxiv.org/abs/2205.14135"
@@ -146,7 +145,6 @@ class TestIntegrationWorkflow:
             patch("pathlib.Path.glob") as mock_glob,
             patch("kaizen.research.adapter.importlib"),
         ):
-
             # Setup mocks (same as above)
             mock_result = Mock()
             mock_result.entry_id = "http://arxiv.org/abs/2205.14135"
@@ -203,7 +201,6 @@ class TestIntegrationWorkflow:
             patch("pathlib.Path.glob") as mock_glob,
             patch("kaizen.research.adapter.importlib"),
         ):
-
             # Mock arXiv
             mock_result = Mock()
             mock_result.entry_id = "http://arxiv.org/abs/2205.14135"
@@ -265,7 +262,6 @@ class TestIntegrationWorkflow:
             patch("pathlib.Path.glob") as mock_glob,
             patch("kaizen.research.adapter.importlib"),
         ):
-
             # Mock for all papers
             def mock_arxiv_search(arxiv_id):
                 # Find matching paper
@@ -331,7 +327,6 @@ class TestIntegrationWorkflow:
             patch("pathlib.Path.glob") as mock_glob,
             patch("kaizen.research.adapter.importlib"),
         ):
-
             # Setup mocks
             mock_result = Mock()
             mock_result.entry_id = "http://arxiv.org/abs/2205.14135"
@@ -420,7 +415,6 @@ class TestIntegrationWorkflow:
             patch("kaizen.research.validator.subprocess") as mock_subprocess,
             patch("kaizen.research.validator.git.Repo.clone_from"),
         ):
-
             # Mock arXiv
             mock_result = Mock()
             mock_result.entry_id = "http://arxiv.org/abs/2205.14135"
@@ -473,7 +467,6 @@ class TestIntegrationWorkflow:
             patch("pathlib.Path.glob") as mock_glob,
             patch("kaizen.research.adapter.importlib"),
         ):
-
             # Setup mocks
             mock_result = Mock()
             mock_result.entry_id = "http://arxiv.org/abs/2205.14135"
@@ -530,7 +523,6 @@ class TestIntegrationWorkflow:
             patch("pathlib.Path.glob") as mock_glob,
             patch("kaizen.research.adapter.importlib"),
         ):
-
             # Setup mocks
             mock_result = Mock()
             mock_result.entry_id = "http://arxiv.org/abs/2205.14135"

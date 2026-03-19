@@ -295,8 +295,7 @@ class SchemaCache:
             self._failures += 1
             failure_count = existing.failure_count if existing else 1
             logger.warning(
-                f"Cache FAILED: {model_name} (count={failure_count}, "
-                f"reason={reason})"
+                f"Cache FAILED: {model_name} (count={failure_count}, reason={reason})"
             )
 
     def clear(self) -> None:

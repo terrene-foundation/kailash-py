@@ -519,7 +519,8 @@ class TestHandoffIntegration:
         pattern = create_handoff_pattern(num_tiers=5)
 
         result = pattern.execute_with_handoff(
-            task="Very complex task", max_tier=2  # Limit to tier 2
+            task="Very complex task",
+            max_tier=2,  # Limit to tier 2
         )
 
         # Should not exceed tier 2

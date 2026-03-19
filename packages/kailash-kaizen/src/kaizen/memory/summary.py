@@ -142,9 +142,9 @@ class SummaryMemory(KaizenMemory):
             if old_summary:
                 # Combine old summary with new turn summary
                 # In production, this would be a smarter LLM-based merge
-                self._sessions[session_id][
-                    "summary"
-                ] = f"{old_summary} | {turn_summary}"
+                self._sessions[session_id]["summary"] = (
+                    f"{old_summary} | {turn_summary}"
+                )
             else:
                 self._sessions[session_id]["summary"] = turn_summary
 

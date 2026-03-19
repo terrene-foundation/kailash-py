@@ -44,9 +44,9 @@ class TestAgentLLMProviderParameter:
         sig = inspect.signature(Agent.__init__)
         params = list(sig.parameters.keys())
 
-        assert (
-            "llm_provider" in params
-        ), "Agent.__init__ should have llm_provider as explicit parameter"
+        assert "llm_provider" in params, (
+            "Agent.__init__ should have llm_provider as explicit parameter"
+        )
 
     def test_agent_forwards_llm_provider_to_config(self):
         """Agent should forward llm_provider to AgentConfig."""
@@ -59,9 +59,9 @@ class TestAgentLLMProviderParameter:
         # Verify llm_provider is passed to AgentConfig
         config_call_end = source.find(")", config_call_start + 100)
         config_call = source[config_call_start : config_call_end + 1]
-        assert (
-            "llm_provider=" in config_call
-        ), "Agent should forward llm_provider to AgentConfig"
+        assert "llm_provider=" in config_call, (
+            "Agent should forward llm_provider to AgentConfig"
+        )
 
     def test_agent_respects_explicit_ollama_provider(self):
         """Agent should respect explicit llm_provider='ollama'."""
@@ -196,9 +196,9 @@ class TestAgentLLMProviderEdgeCases:
 
         for provider in valid_providers:
             config = AgentConfig(model="test-model", llm_provider=provider)
-            assert (
-                config.llm_provider == provider
-            ), f"Provider {provider} should be valid"
+            assert config.llm_provider == provider, (
+                f"Provider {provider} should be valid"
+            )
 
     def test_agent_rejects_empty_string_provider(self):
         """Agent should reject empty string llm_provider."""
@@ -251,9 +251,9 @@ class TestAgentLLMProviderAutoDetection:
 
         for model in ["claude-3-opus", "claude-3-sonnet", "claude-2"]:
             config = AgentConfig(model=model)
-            assert (
-                config.llm_provider == "anthropic"
-            ), f"{model} should detect as anthropic"
+            assert config.llm_provider == "anthropic", (
+                f"{model} should detect as anthropic"
+            )
 
     def test_auto_detect_llama_as_ollama(self):
         """Llama models should auto-detect as ollama."""

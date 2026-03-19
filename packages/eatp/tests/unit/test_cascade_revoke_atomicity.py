@@ -195,9 +195,7 @@ class TestPartialFailureRecovery:
 
         assert result.success is False
         # Check that some kind of rollback/failure warning was logged
-        warning_messages = [
-            r.message for r in caplog.records if r.levelno >= logging.WARNING
-        ]
+        warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
         assert len(warning_messages) > 0
 
 
@@ -255,9 +253,7 @@ class TestCompleteSuccess:
 class TestTransactionSupport:
     """F-03: cascade_revoke must use transactions when the store supports them."""
 
-    async def test_inmemory_store_uses_transaction_path(
-        self, store, registry, broadcaster
-    ):
+    async def test_inmemory_store_uses_transaction_path(self, store, registry, broadcaster):
         """InMemoryTrustStore supports transaction(), cascade_revoke should use it."""
         await store.store_chain(_make_chain("agent-A"))
         await store.store_chain(_make_chain("agent-B"))
@@ -287,9 +283,7 @@ class TestTransactionSupport:
 class TestBackwardCompatibilityF03:
     """F-03: Existing callers and test patterns must still work."""
 
-    async def test_existing_cascade_revoke_api_unchanged(
-        self, store, registry, broadcaster
-    ):
+    async def test_existing_cascade_revoke_api_unchanged(self, store, registry, broadcaster):
         """cascade_revoke function signature and return type must be unchanged."""
         await store.store_chain(_make_chain("agent-A"))
 
@@ -308,9 +302,7 @@ class TestBackwardCompatibilityF03:
         assert isinstance(result.revoked_agents, list)
         assert isinstance(result.errors, dict)
 
-    async def test_idempotent_revocation_still_works(
-        self, store, registry, broadcaster
-    ):
+    async def test_idempotent_revocation_still_works(self, store, registry, broadcaster):
         """Re-revoking an already-revoked agent must still be a no-op."""
         await store.store_chain(_make_chain("agent-A"))
 

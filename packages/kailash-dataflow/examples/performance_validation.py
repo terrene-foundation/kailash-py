@@ -737,7 +737,9 @@ class PerformanceValidator:
             status = (
                 "✅ PASSED"
                 if improvement >= 100
-                else "⚠️ PARTIAL" if improvement >= 10 else "❌ FAILED"
+                else "⚠️ PARTIAL"
+                if improvement >= 10
+                else "❌ FAILED"
             )
 
             report += f"\\n{scenario_name}:\n"

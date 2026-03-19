@@ -28,11 +28,7 @@ _EATP_SRC = Path(__file__).resolve().parent.parent.parent / "src" / "eatp"
 
 def _get_all_module_paths() -> List[Path]:
     """Return all .py module paths in the EATP source, excluding __pycache__."""
-    return [
-        p
-        for p in _EATP_SRC.rglob("*.py")
-        if "__pycache__" not in str(p) and p.name != "__init__.py"
-    ]
+    return [p for p in _EATP_SRC.rglob("*.py") if "__pycache__" not in str(p) and p.name != "__init__.py"]
 
 
 # ===================================================================
@@ -72,9 +68,7 @@ class TestBoundedCollectionConvention:
         for module_rel, class_name, attr_name in _BOUNDED_COLLECTION_REQUIREMENTS:
             module_path = _EATP_SRC / module_rel
             if not module_path.exists():
-                missing_bounds.append(
-                    f"{module_rel}:{class_name}.{attr_name} - module not found"
-                )
+                missing_bounds.append(f"{module_rel}:{class_name}.{attr_name} - module not found")
                 continue
 
             source = module_path.read_text()
@@ -88,9 +82,7 @@ class TestBoundedCollectionConvention:
                     break
 
             if class_node is None:
-                missing_bounds.append(
-                    f"{module_rel}:{class_name}.{attr_name} - class not found"
-                )
+                missing_bounds.append(f"{module_rel}:{class_name}.{attr_name} - class not found")
                 continue
 
             # Check for a max/maxlen attribute in __init__
@@ -106,13 +98,9 @@ class TestBoundedCollectionConvention:
                         break
 
             if not has_bound:
-                missing_bounds.append(
-                    f"{module_rel}:{class_name}.{attr_name} - no _max*/maxlen attribute found"
-                )
+                missing_bounds.append(f"{module_rel}:{class_name}.{attr_name} - no _max*/maxlen attribute found")
 
-        assert (
-            not missing_bounds
-        ), f"Per-agent collections missing bounds declaration:\n" + "\n".join(
+        assert not missing_bounds, f"Per-agent collections missing bounds declaration:\n" + "\n".join(
             f"  - {m}" for m in missing_bounds
         )
 
@@ -142,10 +130,7 @@ class TestBoundedCollectionConvention:
                 # Find __init__ method
                 init_method = None
                 for item in node.body:
-                    if (
-                        isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
-                        and item.name == "__init__"
-                    ):
+                    if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__":
                         init_method = item
                         break
 
@@ -180,15 +165,10 @@ class TestBoundedCollectionConvention:
                     known_classes = {c for _, c, _ in _BOUNDED_COLLECTION_REQUIREMENTS}
                     if node.name in known_classes:
                         warnings.append(
-                            f"{module_name}:{node.name} has Dict attributes "
-                            f"{dict_attrs} but no _max_* bounds"
+                            f"{module_name}:{node.name} has Dict attributes {dict_attrs} but no _max_* bounds"
                         )
 
-        assert (
-            not warnings
-        ), f"Potentially unbounded per-agent dicts found:\n" + "\n".join(
-            f"  - {w}" for w in warnings
-        )
+        assert not warnings, f"Potentially unbounded per-agent dicts found:\n" + "\n".join(f"  - {w}" for w in warnings)
 
 
 # ===================================================================
@@ -275,7 +255,6 @@ class TestHmacCompareDigestConvention:
                             violations.append((rel_path, line_num, stripped))
                             break
 
-        assert not violations, (
-            f"Found == comparisons on crypto values (use hmac.compare_digest()):\n"
-            + "\n".join(f"  - {path}:{line}: {code}" for path, line, code in violations)
+        assert not violations, f"Found == comparisons on crypto values (use hmac.compare_digest()):\n" + "\n".join(
+            f"  - {path}:{line}: {code}" for path, line, code in violations
         )

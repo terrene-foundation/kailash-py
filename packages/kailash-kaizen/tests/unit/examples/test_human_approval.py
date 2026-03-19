@@ -37,9 +37,9 @@ class TestApprovalAgent:
         config = ApprovalConfig(llm_provider="mock")
         agent = ApprovalAgent(config)
 
-        assert isinstance(
-            agent.strategy, HumanInLoopStrategy
-        ), f"Agent should use HumanInLoopStrategy, got {type(agent.strategy)}"
+        assert isinstance(agent.strategy, HumanInLoopStrategy), (
+            f"Agent should use HumanInLoopStrategy, got {type(agent.strategy)}"
+        )
 
     def test_config_parameters_work_correctly(self):
         """Test that config parameters are properly set."""
@@ -150,9 +150,9 @@ class TestApprovalAgent:
         config = ApprovalConfig(llm_provider="mock")
         agent = ApprovalAgent(config)
 
-        assert isinstance(
-            agent.signature, DecisionSignature
-        ), f"Agent should use DecisionSignature, got {type(agent.signature)}"
+        assert isinstance(agent.signature, DecisionSignature), (
+            f"Agent should use DecisionSignature, got {type(agent.signature)}"
+        )
 
     def test_agent_inherits_from_base_agent(self):
         """Test that ApprovalAgent inherits from BaseAgent."""
@@ -161,9 +161,9 @@ class TestApprovalAgent:
         config = ApprovalConfig(llm_provider="mock")
         agent = ApprovalAgent(config)
 
-        assert isinstance(
-            agent, BaseAgent
-        ), "ApprovalAgent should inherit from BaseAgent"
+        assert isinstance(agent, BaseAgent), (
+            "ApprovalAgent should inherit from BaseAgent"
+        )
 
     @pytest.mark.asyncio
     async def test_custom_approval_callback_works(self):

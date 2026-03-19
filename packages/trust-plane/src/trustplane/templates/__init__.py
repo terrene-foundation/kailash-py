@@ -66,8 +66,7 @@ def get_template(name: str, author: str = "") -> ConstraintEnvelope:
     """
     if name not in _TEMPLATES:
         raise KeyError(
-            f"Template '{name}' not found. "
-            f"Available: {', '.join(_TEMPLATES.keys())}"
+            f"Template '{name}' not found. Available: {', '.join(_TEMPLATES.keys())}"
         )
     envelope = _TEMPLATES[name]["factory"]()
     if author:
@@ -89,8 +88,7 @@ def describe_template(name: str) -> str:
     """
     if name not in _TEMPLATES:
         raise KeyError(
-            f"Template '{name}' not found. "
-            f"Available: {', '.join(_TEMPLATES.keys())}"
+            f"Template '{name}' not found. Available: {', '.join(_TEMPLATES.keys())}"
         )
     tmpl = _TEMPLATES[name]
     envelope = tmpl["factory"]()
@@ -367,8 +365,7 @@ def _data_pipeline_envelope() -> ConstraintEnvelope:
 
 _register(
     "data-pipeline",
-    "Data pipeline and ETL workflows. "
-    "Protects source data and production pipelines.",
+    "Data pipeline and ETL workflows. Protects source data and production pipelines.",
     "Designed for data engineering teams building ETL/ELT pipelines. AI "
     "can read, transform, and output data, run pipeline jobs, and validate "
     "schemas, but cannot delete source data, modify production pipelines, "
@@ -401,7 +398,7 @@ def _minimal_envelope() -> ConstraintEnvelope:
 
 _register(
     "minimal",
-    "Minimal constraints for exploration. " "Only blocks credential file patterns.",
+    "Minimal constraints for exploration. Only blocks credential file patterns.",
     "A near-empty constraint envelope for teams that want to start "
     "with observation rather than enforcement. The only constraints "
     "applied are blocking access to common credential file patterns "

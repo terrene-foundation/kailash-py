@@ -638,9 +638,9 @@ class TestCompleteRiskAssessmentIntegration:
             )
 
             # Performance assertions
-            assert (
-                avg_time_per_operation < 2.0
-            ), f"{scenario['name']} took {avg_time_per_operation:.3f}s per operation"
+            assert avg_time_per_operation < 2.0, (
+                f"{scenario['name']} took {avg_time_per_operation:.3f}s per operation"
+            )
 
             print(
                 f"✅ {scenario['name']}: {scenario['count']} operations in {scenario_time:.3f}s (avg: {avg_time_per_operation:.3f}s)"
@@ -654,7 +654,7 @@ class TestCompleteRiskAssessmentIntegration:
             f"📊 Performance Summary: {total_operations} operations completed in {total_time:.3f}s"
         )
         print(
-            f"⚡ Average throughput: {total_operations/total_time:.1f} operations/second"
+            f"⚡ Average throughput: {total_operations / total_time:.1f} operations/second"
         )
 
         # System should handle reasonable throughput
@@ -1064,7 +1064,7 @@ class TestCompleteRiskAssessmentIntegration:
         print("\n📊 Real-world scenario simulation completed:")
         print(f"   • {total_scenarios} scenarios processed in {total_time:.3f}s")
         print(
-            f"   • Average processing time: {total_time/total_scenarios:.3f}s per scenario"
+            f"   • Average processing time: {total_time / total_scenarios:.3f}s per scenario"
         )
         print(
             f"   • Risk levels detected: {set(r['actual_risk'] for r in scenario_results)}"

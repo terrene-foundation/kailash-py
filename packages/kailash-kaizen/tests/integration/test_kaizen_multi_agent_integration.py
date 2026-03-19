@@ -415,9 +415,9 @@ class TestMultiAgentPerformanceIntegration:
 
         # Verify performance requirements
         execution_time = end_time - start_time
-        assert (
-            execution_time < 5.0
-        ), f"Multi-agent workflow took {execution_time:.3f}s, expected < 5.0s"
+        assert execution_time < 5.0, (
+            f"Multi-agent workflow took {execution_time:.3f}s, expected < 5.0s"
+        )
 
         # Verify successful execution
         assert results is not None
@@ -452,9 +452,9 @@ class TestMultiAgentPerformanceIntegration:
 
         # Verify performance requirements
         communication_time = end_time - start_time
-        assert (
-            communication_time < 3.0
-        ), f"Broadcast communication took {communication_time:.3f}s, expected < 3.0s"
+        assert communication_time < 3.0, (
+            f"Broadcast communication took {communication_time:.3f}s, expected < 3.0s"
+        )
 
         # Verify all communications succeeded
         assert len(responses) == 5

@@ -132,9 +132,9 @@ class TestMCPClientAgentRealOpenAI:
         # mcp_server_info["populate_agent_tools"](openai_agent)
 
         # Verify we have tools from the real MCP server
-        assert (
-            len(openai_agent.available_tools) > 0
-        ), "Should have tools from real MCP server"
+        assert len(openai_agent.available_tools) > 0, (
+            "Should have tools from real MCP server"
+        )
 
         # Get first available tool
         tool_id = list(openai_agent.available_tools.keys())[0]
@@ -175,9 +175,9 @@ class TestMCPClientAgentRealOpenAI:
         # mcp_server_info["populate_agent_tools"](openai_agent)
 
         # Verify we have tools from the real MCP server
-        assert (
-            len(openai_agent.available_tools) > 0
-        ), "Should have tools from real MCP server"
+        assert len(openai_agent.available_tools) > 0, (
+            "Should have tools from real MCP server"
+        )
 
         # Create a natural language request that maps to text_analysis tool
         user_request = "Analyze this text: AI is transforming software development"
@@ -335,9 +335,9 @@ class TestMCPClientAgentRealOllama:
         # mcp_server_info["populate_agent_tools"](ollama_agent)
 
         # Verify we have tools from the real MCP server
-        assert (
-            len(ollama_agent.available_tools) > 0
-        ), "Should have tools from real MCP server"
+        assert len(ollama_agent.available_tools) > 0, (
+            "Should have tools from real MCP server"
+        )
 
         tool_id = list(ollama_agent.available_tools.keys())[0]
 
@@ -489,7 +489,7 @@ class TestMCPClientAgentRealLLMPerformance:
         # Log throughput
         avg_time = total_time / len(tasks)
         logger.info(f"Average task analysis time: {avg_time:.2f}s")
-        logger.info(f"Total throughput: {len(tasks)/total_time:.2f} tasks/sec")
+        logger.info(f"Total throughput: {len(tasks) / total_time:.2f} tasks/sec")
 
         agent.disconnect_all()
 

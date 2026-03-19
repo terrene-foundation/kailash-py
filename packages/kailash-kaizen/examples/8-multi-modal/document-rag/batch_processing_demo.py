@@ -51,7 +51,7 @@ def create_test_documents(count: int = 5) -> List[str]:
     docs = []
     for i in range(count):
         template = templates[i % len(templates)]
-        content = f"{template}\n\nDocument #{i+1}\nTimestamp: {time.time()}"
+        content = f"{template}\n\nDocument #{i + 1}\nTimestamp: {time.time()}"
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as tmp:
             tmp.write(content)
@@ -137,7 +137,7 @@ class BatchDocumentProcessor:
         print(f"   Successful: {successful}")
         print(f"   Failed: {failed}")
         print(f"   Total time: {total_time:.2f}s")
-        print(f"   Average time/doc: {total_time/len(file_paths):.2f}s")
+        print(f"   Average time/doc: {total_time / len(file_paths):.2f}s")
         print(f"   Total cost: ${self.total_cost:.3f}")
 
         return BatchResult(
@@ -239,10 +239,10 @@ class BatchDocumentProcessor:
         print(f"   Successful: {successful}")
         print(f"   Failed: {failed}")
         print(f"   Total time: {total_time:.2f}s")
-        print(f"   Average time/doc: {total_time/len(file_paths):.2f}s")
+        print(f"   Average time/doc: {total_time / len(file_paths):.2f}s")
         print(f"   Total cost: ${self.total_cost:.3f}")
         print(
-            f"   Speedup: {len(file_paths) / (total_time/len(file_paths)):.1f}x vs sequential"
+            f"   Speedup: {len(file_paths) / (total_time / len(file_paths)):.1f}x vs sequential"
         )
 
         return BatchResult(
@@ -290,7 +290,7 @@ def demonstrate_progress_tracking():
         bar = "█" * progress + "░" * (40 - progress)
 
         print(
-            f"\r   [{bar}] {i}/{len(docs)} ({i/len(docs)*100:.0f}%) | "
+            f"\r   [{bar}] {i}/{len(docs)} ({i / len(docs) * 100:.0f}%) | "
             f"Elapsed: {elapsed:.1f}s | Remaining: {remaining:.1f}s | "
             f"Avg: {avg_time:.2f}s/doc",
             end="",
@@ -342,13 +342,13 @@ def compare_batch_strategies():
     print("\nSequential Processing:")
     print(f"   Time: {result_seq.total_time:.2f}s")
     print(
-        f"   Throughput: {result_seq.total_documents/result_seq.total_time:.2f} docs/second"
+        f"   Throughput: {result_seq.total_documents / result_seq.total_time:.2f} docs/second"
     )
 
     print("\nParallel Processing:")
     print(f"   Time: {result_par.total_time:.2f}s")
     print(
-        f"   Throughput: {result_par.total_documents/result_par.total_time:.2f} docs/second"
+        f"   Throughput: {result_par.total_documents / result_par.total_time:.2f} docs/second"
     )
     print(f"   Speedup: {speedup:.2f}x faster")
 

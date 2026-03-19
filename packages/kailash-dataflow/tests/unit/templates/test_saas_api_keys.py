@@ -64,9 +64,9 @@ class TestAPIKeyManagement:
         # Verify key properties
         assert isinstance(api_key, str), "API key should be string"
         assert len(api_key) >= 32, "API key should be at least 32 characters"
-        assert (
-            api_key.isalnum() or "_" in api_key or "-" in api_key
-        ), "Should be URL-safe"
+        assert api_key.isalnum() or "_" in api_key or "-" in api_key, (
+            "Should be URL-safe"
+        )
 
         # Verify randomness (two keys should be different)
         api_key2 = generate_api_key()
@@ -101,9 +101,9 @@ class TestAPIKeyManagement:
         # Verify different keys produce different hashes
         different_key = "different_api_key_67890"
         different_hash = hash_api_key(different_key)
-        assert (
-            hashed != different_hash
-        ), "Different keys should produce different hashes"
+        assert hashed != different_hash, (
+            "Different keys should produce different hashes"
+        )
 
     def test_create_api_key(self, monkeypatch):
         """
@@ -397,9 +397,9 @@ class TestAPIKeyManagement:
             # Verify API keys listed
             assert isinstance(result, list), "Should return list"
             assert len(result) == 2, "Should return 2 keys"
-            assert all(
-                k["organization_id"] == org_id for k in result
-            ), "All keys should belong to org"
+            assert all(k["organization_id"] == org_id for k in result), (
+                "All keys should belong to org"
+            )
 
     def test_api_key_scopes_validation(self):
         """
@@ -424,9 +424,9 @@ class TestAPIKeyManagement:
             validate_scopes(invalid_scopes)
             assert False, "Invalid scopes should raise error"
         except ValueError as e:
-            assert (
-                "invalid_scope" in str(e).lower()
-            ), "Error should mention invalid scope"
+            assert "invalid_scope" in str(e).lower(), (
+                "Error should mention invalid scope"
+            )
 
         # Duplicate scopes should be deduplicated
         duplicate_scopes = ["read", "write", "read"]
@@ -489,9 +489,9 @@ class TestAPIKeyManagement:
             # Verify expired key rejected
             assert result is not None, "Should return result"
             assert result["valid"] is False, "Expired key should be invalid"
-            assert (
-                "expired" in result.get("error", "").lower()
-            ), "Error should mention expiration"
+            assert "expired" in result.get("error", "").lower(), (
+                "Error should mention expiration"
+            )
 
     def test_api_key_rate_limiting(self, monkeypatch):
         """

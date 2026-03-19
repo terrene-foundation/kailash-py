@@ -559,7 +559,7 @@ class ProgressiveConfiguration:
         doc = f"""
 # DataFlow Configuration Summary
 
-**Configuration Level**: {self.level.value.replace('_', ' ').title()}
+**Configuration Level**: {self.level.value.replace("_", " ").title()}
 **Environment**: {self.environment.title()}
 
 ## Enabled Features

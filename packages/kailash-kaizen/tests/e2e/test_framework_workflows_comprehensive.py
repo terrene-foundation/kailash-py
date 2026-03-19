@@ -83,9 +83,9 @@ class TestCompleteFrameworkWorkflows:
         assert isinstance(runtime, LocalRuntime)
 
         # Performance validation: complete workflow should be fast
-        assert (
-            total_time < 1000
-        ), f"Complete workflow setup took {total_time:.2f}ms, should be <1000ms"
+        assert total_time < 1000, (
+            f"Complete workflow setup took {total_time:.2f}ms, should be <1000ms"
+        )
 
     def test_enterprise_configuration_complete_workflow(self, performance_tracker):
         """Test complete workflow with enterprise configuration."""
@@ -150,9 +150,9 @@ class TestCompleteFrameworkWorkflows:
         assert secondary_built is not None
 
         # Performance with enterprise features should still be reasonable
-        assert (
-            total_time < 2000
-        ), f"Enterprise workflow setup took {total_time:.2f}ms, should be <2000ms"
+        assert total_time < 2000, (
+            f"Enterprise workflow setup took {total_time:.2f}ms, should be <2000ms"
+        )
 
     def test_signature_based_programming_complete_workflow(self):
         """Test complete signature-based programming workflow."""
@@ -424,9 +424,9 @@ class TestProductionDeploymentPatterns:
 
         # Performance should scale reasonably
         average_time = load_time / 20
-        assert (
-            average_time < 150
-        ), f"Average agent creation under load: {average_time:.2f}ms"
+        assert average_time < 150, (
+            f"Average agent creation under load: {average_time:.2f}ms"
+        )
 
         # Cleanup performance test
         for i in range(20):

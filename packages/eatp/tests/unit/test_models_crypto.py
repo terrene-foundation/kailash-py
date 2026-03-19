@@ -437,9 +437,7 @@ class TestDelegationRecord:
         assert restored.delegator_id == delegation_record.delegator_id
         assert restored.delegatee_id == delegation_record.delegatee_id
         assert restored.task_id == delegation_record.task_id
-        assert (
-            restored.capabilities_delegated == delegation_record.capabilities_delegated
-        )
+        assert restored.capabilities_delegated == delegation_record.capabilities_delegated
         assert restored.constraint_subset == delegation_record.constraint_subset
 
     def test_from_dict_backward_compatible(self):
@@ -531,9 +529,7 @@ class TestConstraintEnvelope:
                 source="s",
             ),
         ]
-        env = ConstraintEnvelope(
-            id="env-003", agent_id="a", active_constraints=constraints
-        )
+        env = ConstraintEnvelope(id="env-003", agent_id="a", active_constraints=constraints)
         resource_limits = env.get_constraints_by_type(ConstraintType.FINANCIAL)
         assert len(resource_limits) == 2
 
@@ -564,9 +560,7 @@ class TestConstraintEnvelope:
                 source="s",
             ),
         ]
-        env = ConstraintEnvelope(
-            id="env-007", agent_id="a", active_constraints=constraints
-        )
+        env = ConstraintEnvelope(id="env-007", agent_id="a", active_constraints=constraints)
         all_c = env.get_all_constraints()
         assert "100" in all_c
         assert "dept" in all_c
@@ -727,9 +721,7 @@ class TestTrustLineageChain:
             signature="sig",
             expires_at=PAST,
         )
-        chain = TrustLineageChain(
-            genesis=genesis, capabilities=[valid_cap, expired_cap]
-        )
+        chain = TrustLineageChain(genesis=genesis, capabilities=[valid_cap, expired_cap])
         assert chain.is_expired() is False
 
     def test_has_capability(self, trust_chain):
@@ -1054,12 +1046,8 @@ class TestHashTrustChainState:
         assert isinstance(salt_b64, str)
 
     def test_salted_with_explicit_salt(self):
-        h1, s1 = hash_trust_chain_state_salted(
-            "gen-001", [], [], "hash", salt="fixed_salt"
-        )
-        h2, s2 = hash_trust_chain_state_salted(
-            "gen-001", [], [], "hash", salt="fixed_salt"
-        )
+        h1, s1 = hash_trust_chain_state_salted("gen-001", [], [], "hash", salt="fixed_salt")
+        h2, s2 = hash_trust_chain_state_salted("gen-001", [], [], "hash", salt="fixed_salt")
         assert h1 == h2
         assert s1 == s2 == "fixed_salt"
 
@@ -1069,12 +1057,8 @@ class TestHashTrustChainState:
         assert h1 != h2
 
     def test_salted_with_previous_state_hash(self):
-        h1, _ = hash_trust_chain_state_salted(
-            "gen-001", [], [], "hash", previous_state_hash="prev_123", salt="s"
-        )
-        h2, _ = hash_trust_chain_state_salted(
-            "gen-001", [], [], "hash", previous_state_hash=None, salt="s"
-        )
+        h1, _ = hash_trust_chain_state_salted("gen-001", [], [], "hash", previous_state_hash="prev_123", salt="s")
+        h2, _ = hash_trust_chain_state_salted("gen-001", [], [], "hash", previous_state_hash=None, salt="s")
         assert h1 != h2
 
 
@@ -1545,9 +1529,7 @@ class TestSerializationRoundTrips:
         restored = json.loads(json_str)
         assert restored["id"] == "gen-001"
 
-    def test_capability_signing_payload_is_json_serializable(
-        self, capability_attestation
-    ):
+    def test_capability_signing_payload_is_json_serializable(self, capability_attestation):
         payload = capability_attestation.to_signing_payload()
         json_str = json.dumps(payload)
         restored = json.loads(json_str)
@@ -1712,12 +1694,8 @@ class TestSerializationRoundTrips:
                 source="s",
             ),
         ]
-        env1 = ConstraintEnvelope(
-            id="env", agent_id="a", active_constraints=constraints
-        )
-        env2 = ConstraintEnvelope(
-            id="env", agent_id="a", active_constraints=constraints
-        )
+        env1 = ConstraintEnvelope(id="env", agent_id="a", active_constraints=constraints)
+        env2 = ConstraintEnvelope(id="env", agent_id="a", active_constraints=constraints)
         assert env1.constraint_hash == env2.constraint_hash
         assert len(env1.constraint_hash) == 64
 

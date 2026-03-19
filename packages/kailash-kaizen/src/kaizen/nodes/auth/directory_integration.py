@@ -398,12 +398,12 @@ Example output:
         prompt = f"""Analyze this user profile from directory and assign appropriate system roles.
 
 User Profile:
-- User ID: {user_data.get('user_id', '')}
-- Name: {user_data.get('first_name', '')} {user_data.get('last_name', '')}
-- Email: {user_data.get('email', '')}
-- Job Title: {user_data.get('job_title', '')}
-- Department: {user_data.get('department', '')}
-- Groups: {', '.join(user_data.get('groups', []))}
+- User ID: {user_data.get("user_id", "")}
+- Name: {user_data.get("first_name", "")} {user_data.get("last_name", "")}
+- Email: {user_data.get("email", "")}
+- Job Title: {user_data.get("job_title", "")}
+- Department: {user_data.get("department", "")}
+- Groups: {", ".join(user_data.get("groups", []))}
 
 Available Roles:
 - user: Default role for all users (ALWAYS include)
@@ -471,9 +471,9 @@ Example output:
         """
         prompt = f"""Map directory groups to system permissions for this user.
 
-User Groups: {', '.join(user_data.get('groups', []))}
-Job Title: {user_data.get('job_title', '')}
-Department: {user_data.get('department', '')}
+User Groups: {", ".join(user_data.get("groups", []))}
+Job Title: {user_data.get("job_title", "")}
+Department: {user_data.get("department", "")}
 
 Available Permissions:
 - read: Read access to resources
@@ -535,9 +535,9 @@ Example output:
         prompt = f"""Determine appropriate security settings for this user.
 
 User Profile:
-- Job Title: {user_data.get('job_title', '')}
-- Department: {user_data.get('department', '')}
-- Groups: {', '.join(user_data.get('groups', []))}
+- Job Title: {user_data.get("job_title", "")}
+- Department: {user_data.get("department", "")}
+- Groups: {", ".join(user_data.get("groups", []))}
 
 Security Settings to Determine:
 1. mfa_required: Should MFA be mandatory? (boolean)

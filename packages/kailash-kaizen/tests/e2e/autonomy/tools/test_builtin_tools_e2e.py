@@ -134,15 +134,15 @@ async def test_file_tools_e2e():
 
         # Discover MCP tools
         tools = await agent.discover_mcp_tools()
-        assert (
-            len(tools) >= 12
-        ), f"Should have at least 12 builtin tools, got {len(tools)}"
+        assert len(tools) >= 12, (
+            f"Should have at least 12 builtin tools, got {len(tools)}"
+        )
 
         # Filter file-related tools
         file_tools = [t for t in tools if "file" in t["name"]]
-        assert (
-            len(file_tools) >= 4
-        ), "Should have file_exists, read_file, write_file, delete_file"
+        assert len(file_tools) >= 4, (
+            "Should have file_exists, read_file, write_file, delete_file"
+        )
 
         print(f"✓ Discovered {len(file_tools)} file tools:")
         for tool in file_tools[:5]:
@@ -161,14 +161,14 @@ async def test_file_tools_e2e():
             initial_delay=1.0,
         )
 
-        assert exists_result.get(
-            "success"
-        ), f"file_exists should succeed: {exists_result}"
+        assert exists_result.get("success"), (
+            f"file_exists should succeed: {exists_result}"
+        )
         # Parse JSON content to access nested exists field
         exists_content_data = json.loads(exists_result.get("content", "{}"))
-        assert (
-            exists_content_data.get("exists") is True
-        ), f"File should exist. Content: {exists_content_data}"
+        assert exists_content_data.get("exists") is True, (
+            f"File should exist. Content: {exists_content_data}"
+        )
         print("✓ file_exists tool executed (SAFE level - auto-approved)")
 
         # Test 2: read_file (LOW - auto-approved)
@@ -184,9 +184,9 @@ async def test_file_tools_e2e():
         # Parse JSON content to access nested content field
         read_content_data = json.loads(read_result.get("content", "{}"))
         file_content = read_content_data.get("content", "")
-        assert (
-            "Hello from file tools" in file_content
-        ), f"Should read correct content: {file_content[:100]}"
+        assert "Hello from file tools" in file_content, (
+            f"Should read correct content: {file_content[:100]}"
+        )
         print("✓ read_file tool executed (LOW level)")
 
         # Test 3: write_file (MEDIUM - requires approval)
@@ -311,9 +311,9 @@ async def test_http_tools_e2e():
     # Validate response structure (httpbin.org returns args with our params)
     if isinstance(response_data, dict):
         args = response_data.get("args", {})
-        assert "test" in args or "test" in str(
-            response_data
-        ), f"Should include test parameter in response: {response_data}"
+        assert "test" in args or "test" in str(response_data), (
+            f"Should include test parameter in response: {response_data}"
+        )
         print("✓ http_get executed successfully (LOW level)")
     else:
         # At minimum, verify we got a response
@@ -346,9 +346,9 @@ async def test_http_tools_e2e():
     if isinstance(post_data, dict):
         # httpbin.org echoes back the JSON we sent
         json_echo = post_data.get("json", {})
-        assert "message" in json_echo or "E2E test" in str(
-            post_data
-        ), f"Should echo POST data: {post_data}"
+        assert "message" in json_echo or "E2E test" in str(post_data), (
+            f"Should echo POST data: {post_data}"
+        )
         print("✓ http_post executed successfully (MEDIUM level)")
     else:
         # At minimum, verify we got a response
@@ -419,9 +419,9 @@ async def test_bash_and_web_tools_e2e():
     # Bash commands may require approval depending on danger level
     if bash_result.get("success"):
         output = bash_result.get("stdout", bash_result.get("output", ""))
-        assert "Hello from bash" in str(
-            output
-        ), f"Should execute bash command: {output}"
+        assert "Hello from bash" in str(output), (
+            f"Should execute bash command: {output}"
+        )
         print("✓ bash_command executed (HIGH level, safe command)")
     else:
         error = bash_result.get("error", "")
@@ -447,9 +447,9 @@ async def test_bash_and_web_tools_e2e():
 
         if ls_result.get("success"):
             output = ls_result.get("stdout", ls_result.get("output", ""))
-            assert "test1.txt" in str(output) or "test2.txt" in str(
-                output
-            ), f"Should list directory contents: {output}"
+            assert "test1.txt" in str(output) or "test2.txt" in str(output), (
+                f"Should list directory contents: {output}"
+            )
             print("✓ bash ls command executed")
         else:
             # Approval may be required

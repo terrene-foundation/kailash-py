@@ -39,9 +39,7 @@ class TestKMSUnreachableFailClosed:
     async def test_generate_keypair_connection_error_raises_key_manager_error(self):
         """ConnectionError on generate_keypair raises KeyManagerError."""
         mock_client = _make_mock_kms_client()
-        mock_client.create_key.side_effect = ConnectionError(
-            "Could not connect to KMS endpoint"
-        )
+        mock_client.create_key.side_effect = ConnectionError("Could not connect to KMS endpoint")
         manager = AWSKMSKeyManager(kms_client=mock_client)
 
         with pytest.raises(KeyManagerError) as exc_info:
@@ -120,9 +118,7 @@ class TestKMSUnreachableFailClosed:
             is_hardware_backed=True,
         )
 
-        mock_client.schedule_key_deletion.side_effect = ConnectionError(
-            "KMS endpoint unreachable"
-        )
+        mock_client.schedule_key_deletion.side_effect = ConnectionError("KMS endpoint unreachable")
 
         with pytest.raises(KeyManagerError):
             await manager.revoke_key("agent-001")

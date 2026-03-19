@@ -43,9 +43,9 @@ class TestNodeIdInjection:
             "Node should have _node_id attribute after injection. "
             "This is missing - Core SDK fix not applied."
         )
-        assert (
-            node._node_id == "my_test_node"
-        ), f"Expected _node_id='my_test_node', got '{node._node_id}'"
+        assert node._node_id == "my_test_node", (
+            f"Expected _node_id='my_test_node', got '{node._node_id}'"
+        )
 
         # CRITICAL ASSERTION: id should NOT be injected into config
         assert "id" not in node.config or node.config.get("id") is None, (
@@ -85,12 +85,12 @@ class TestNodeIdInjection:
         )
 
         # Node identifier should be in _node_id, not id
-        assert hasattr(
-            node, "_node_id"
-        ), "Node should have _node_id attribute for node identifier"
-        assert (
-            node._node_id == "my_node"
-        ), f"Node identifier should be in _node_id, got '{node._node_id}'"
+        assert hasattr(node, "_node_id"), (
+            "Node should have _node_id attribute for node identifier"
+        )
+        assert node._node_id == "my_node", (
+            f"Node identifier should be in _node_id, got '{node._node_id}'"
+        )
 
     def test_node_id_property_backward_compatibility(self):
         """
@@ -110,20 +110,20 @@ class TestNodeIdInjection:
         node = TestNode(_node_id="my_node_id")
 
         # BACKWARD COMPATIBILITY: node.id should still work
-        assert hasattr(
-            node, "id"
-        ), "Node should have 'id' property for backward compatibility"
+        assert hasattr(node, "id"), (
+            "Node should have 'id' property for backward compatibility"
+        )
 
         # node.id should return the node identifier
-        assert (
-            node.id == "my_node_id"
-        ), f"node.id should return node identifier 'my_node_id', got '{node.id}'"
+        assert node.id == "my_node_id", (
+            f"node.id should return node identifier 'my_node_id', got '{node.id}'"
+        )
 
         # Internally, _node_id should store the identifier
         assert hasattr(node, "_node_id"), "Node should use _node_id internally"
-        assert (
-            node._node_id == "my_node_id"
-        ), f"_node_id should be 'my_node_id', got '{node._node_id}'"
+        assert node._node_id == "my_node_id", (
+            f"_node_id should be 'my_node_id', got '{node._node_id}'"
+        )
 
 
 class TestNodeMetadataUsesNodeId:
@@ -149,9 +149,9 @@ class TestNodeMetadataUsesNodeId:
         assert hasattr(node, "metadata"), "Node should have metadata attribute"
 
         # NodeMetadata should use _node_id internally (not id)
-        assert hasattr(
-            node, "_node_id"
-        ), "Node should have _node_id for metadata reference"
+        assert hasattr(node, "_node_id"), (
+            "Node should have _node_id for metadata reference"
+        )
         assert node._node_id == "metadata_test_node"
 
     def test_node_metadata_with_user_id_parameter(self):
@@ -177,14 +177,14 @@ class TestNodeMetadataUsesNodeId:
         node = TestNode(_node_id="node_with_user_id", id=user_id)
 
         # User's id should be in config
-        assert (
-            node.config.get("id") == user_id
-        ), f"User id should be '{user_id}', got '{node.config.get('id')}'"
+        assert node.config.get("id") == user_id, (
+            f"User id should be '{user_id}', got '{node.config.get('id')}'"
+        )
 
         # Node identifier should be separate in _node_id
-        assert (
-            node._node_id == "node_with_user_id"
-        ), f"Node identifier should be 'node_with_user_id', got '{node._node_id}'"
+        assert node._node_id == "node_with_user_id", (
+            f"Node identifier should be 'node_with_user_id', got '{node._node_id}'"
+        )
 
         # Metadata should still work correctly
         assert hasattr(node, "metadata"), "Node should have metadata"
@@ -214,14 +214,14 @@ class TestAsyncNodeIdNamespace:
 
         # AsyncNode should use _node_id
         assert hasattr(node, "_node_id"), "AsyncNode should have _node_id attribute"
-        assert (
-            node._node_id == "async_node_id"
-        ), f"AsyncNode _node_id should be 'async_node_id', got '{node._node_id}'"
+        assert node._node_id == "async_node_id", (
+            f"AsyncNode _node_id should be 'async_node_id', got '{node._node_id}'"
+        )
 
         # User's id parameter should not be present
-        assert (
-            "id" not in node.config or node.config.get("id") is None
-        ), "AsyncNode config should not have id from injection"
+        assert "id" not in node.config or node.config.get("id") is None, (
+            "AsyncNode config should not have id from injection"
+        )
 
     def test_async_node_with_user_id_parameter(self):
         """
@@ -249,14 +249,14 @@ class TestAsyncNodeIdNamespace:
         node = TestAsyncNode(_node_id="async_with_id", id=user_id)
 
         # User's id should be preserved
-        assert (
-            node.config.get("id") == user_id
-        ), f"User id should be {user_id}, got '{node.config.get('id')}'"
+        assert node.config.get("id") == user_id, (
+            f"User id should be {user_id}, got '{node.config.get('id')}'"
+        )
 
         # Node identifier in _node_id
-        assert (
-            node._node_id == "async_with_id"
-        ), f"Node identifier should be 'async_with_id', got '{node._node_id}'"
+        assert node._node_id == "async_with_id", (
+            f"Node identifier should be 'async_with_id', got '{node._node_id}'"
+        )
 
 
 class TestEdgeCases:
@@ -351,15 +351,15 @@ class TestEdgeCases:
         node = TypedIdNode(_node_id=node_id_str, id=user_id_int)
 
         # User id should be int
-        assert isinstance(
-            node.config["id"], int
-        ), f"User id should be int, got {type(node.config['id'])}"
+        assert isinstance(node.config["id"], int), (
+            f"User id should be int, got {type(node.config['id'])}"
+        )
         assert node.config["id"] == user_id_int
 
         # Node identifier should be string in _node_id
-        assert isinstance(
-            node._node_id, str
-        ), f"Node identifier should be string, got {type(node._node_id)}"
+        assert isinstance(node._node_id, str), (
+            f"Node identifier should be string, got {type(node._node_id)}"
+        )
         assert node._node_id == node_id_str
 
 

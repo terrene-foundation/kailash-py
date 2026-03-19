@@ -64,7 +64,6 @@ class TestEmbeddingProviders:
             yield mock_session_obj
 
         with patch("dataflow.semantic.embeddings.aiohttp.ClientSession", mock_session):
-
             provider = OllamaEmbeddings(dimension=3)
 
             # First call - should hit API

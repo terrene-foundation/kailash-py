@@ -17,9 +17,7 @@ from pathlib import Path
 
 def fix_migration_trigger_async_issues():
     """Fix async execution issues in migration trigger tests."""
-    file_path = Path(
-        ""
-    )
+    file_path = Path("")
 
     with open(file_path, "r") as f:
         content = f.read()
@@ -85,9 +83,7 @@ def fix_migration_trigger_async_issues():
 
 def fix_migration_history_manager_issues():
     """Fix MigrationStatus enum and JSON parsing issues."""
-    file_path = Path(
-        ""
-    )
+    file_path = Path("")
 
     with open(file_path, "r") as f:
         content = f.read()
@@ -120,9 +116,7 @@ def fix_migration_history_manager_issues():
 
 def fix_web_migration_api_session_test():
     """Fix session cleanup test issues."""
-    file_path = Path(
-        ""
-    )
+    file_path = Path("")
 
     with open(file_path, "r") as f:
         content = f.read()
@@ -156,9 +150,7 @@ def fix_web_migration_api_session_test():
 
 def fix_batched_executor_integration_tests():
     """Fix batched migration executor integration test issues."""
-    file_path = Path(
-        ""
-    )
+    file_path = Path("")
 
     with open(file_path, "r") as f:
         content = f.read()

@@ -158,9 +158,7 @@ class TestCreateSdJwtStructure:
         # JWT itself has 3 dot-separated parts
         parts = token.split("~")
         jwt_part = parts[0]
-        assert (
-            len(jwt_part.split(".")) == 3
-        ), "JWT segment must have header.payload.signature"
+        assert len(jwt_part.split(".")) == 3, "JWT segment must have header.payload.signature"
         # At least one disclosure for "name"
         assert len(parts) >= 2, "Must have at least JWT~disclosure~"
         # Trailing empty string from final ~
@@ -195,9 +193,7 @@ class TestCreateSdJwtStructure:
 
         assert "_sd" in payload, "Payload must contain _sd array"
         assert isinstance(payload["_sd"], list)
-        assert (
-            len(payload["_sd"]) > 0
-        ), "_sd must contain at least one hash for 'hidden'"
+        assert len(payload["_sd"]) > 0, "_sd must contain at least one hash for 'hidden'"
 
     def test_payload_contains_sd_alg(self):
         """Payload must declare _sd_alg as sha-256."""
@@ -223,9 +219,7 @@ class TestCreateSdJwtStructure:
         parts = token.split("~")
         # parts[0] is JWT, parts[-1] is empty (trailing ~)
         disclosures = [p for p in parts[1:] if p]
-        assert (
-            len(disclosures) == 2
-        ), "Two disclosed claims should produce two disclosures"
+        assert len(disclosures) == 2, "Two disclosed claims should produce two disclosures"
 
         # Each disclosure is base64url([salt, claim_name, claim_value])
         for disc in disclosures:
@@ -249,9 +243,7 @@ class TestCreateSdJwtStructure:
         payload = json.loads(base64.urlsafe_b64decode(padded))
 
         assert "secret" not in payload, "Hidden claim must not appear in JWT payload"
-        assert "hidden_value" not in json.dumps(
-            payload
-        ), "Hidden claim value must not be in payload"
+        assert "hidden_value" not in json.dumps(payload), "Hidden claim value must not be in payload"
 
 
 # ===================================================================
@@ -340,13 +332,9 @@ class TestSdJwtDisclosureHashing:
         for disc in disclosures:
             # Hash the raw base64url disclosure string
             disc_hash = (
-                base64.urlsafe_b64encode(hashlib.sha256(disc.encode("ascii")).digest())
-                .decode("ascii")
-                .rstrip("=")
+                base64.urlsafe_b64encode(hashlib.sha256(disc.encode("ascii")).digest()).decode("ascii").rstrip("=")
             )
-            assert (
-                disc_hash in sd_hashes
-            ), f"Disclosure hash {disc_hash} not found in _sd array {sd_hashes}"
+            assert disc_hash in sd_hashes, f"Disclosure hash {disc_hash} not found in _sd array {sd_hashes}"
 
     def test_hidden_claims_also_in_sd_array(self):
         """Claims that are NOT disclosed still have hashes in _sd."""
@@ -739,12 +727,8 @@ class TestSdJwtEdgeCases:
     def test_each_token_has_unique_salts(self):
         """Two SD-JWTs for the same claims should have different disclosures (different salts)."""
         claims = {"name": "agent-001"}
-        token1 = create_sd_jwt(
-            claims=claims, signing_key=_PRIVATE_KEY, disclosed_claims=["name"]
-        )
-        token2 = create_sd_jwt(
-            claims=claims, signing_key=_PRIVATE_KEY, disclosed_claims=["name"]
-        )
+        token1 = create_sd_jwt(claims=claims, signing_key=_PRIVATE_KEY, disclosed_claims=["name"])
+        token2 = create_sd_jwt(claims=claims, signing_key=_PRIVATE_KEY, disclosed_claims=["name"])
 
         disc1 = [p for p in token1.split("~")[1:] if p]
         disc2 = [p for p in token2.split("~")[1:] if p]

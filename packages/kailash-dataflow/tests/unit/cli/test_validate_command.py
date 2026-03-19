@@ -67,9 +67,9 @@ class TestValidateCommand:
                 if result.exit_code != 0:
                     print(f"\n=== CLI Output ===\n{result.output}\n==================")
 
-                assert (
-                    result.exit_code == 0
-                ), f"Expected 0, got {result.exit_code}. Output: {result.output}"
+                assert result.exit_code == 0, (
+                    f"Expected 0, got {result.exit_code}. Output: {result.output}"
+                )
                 assert "✓" in result.output or "valid" in result.output.lower()
                 assert "error" not in result.output.lower()
 

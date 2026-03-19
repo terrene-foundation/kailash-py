@@ -5,9 +5,7 @@ import subprocess
 import sys
 
 # Add kaizen source to path
-sys.path.insert(
-    0, ""
-)
+sys.path.insert(0, "")
 
 
 def run_implementation_test():

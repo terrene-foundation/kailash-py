@@ -237,9 +237,7 @@ class TestStoreGetChainsMissingReasoning:
         assert "agent-001" in result
 
     @pytest.mark.asyncio
-    async def test_chain_with_all_delegations_having_reasoning_not_included(
-        self, store
-    ):
+    async def test_chain_with_all_delegations_having_reasoning_not_included(self, store):
         """A chain where all delegations have reasoning traces must NOT be included."""
         trace = _make_reasoning_trace()
         chain = TrustLineageChain(
@@ -408,9 +406,7 @@ class TestAuditQueryServiceGetUnattestedReasoning:
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_all_anchors_with_reasoning_returns_empty(
-        self, audit_service, audit_store
-    ):
+    async def test_all_anchors_with_reasoning_returns_empty(self, audit_service, audit_store):
         """All audit anchors having reasoning must return empty list."""
         trace = _make_reasoning_trace()
         anchor = _make_audit_anchor("aud-001", reasoning_trace=trace)
@@ -430,9 +426,7 @@ class TestAuditQueryServiceGetUnattestedReasoning:
         assert result[0].id == "aud-001"
 
     @pytest.mark.asyncio
-    async def test_mixed_anchors_only_missing_returned(
-        self, audit_service, audit_store
-    ):
+    async def test_mixed_anchors_only_missing_returned(self, audit_service, audit_store):
         """Only anchors missing reasoning traces must be returned."""
         trace = _make_reasoning_trace()
         anchor_with = _make_audit_anchor("aud-001", reasoning_trace=trace)
@@ -599,9 +593,7 @@ class TestScoringReasoningCoverage:
         chain_full = TrustLineageChain(
             genesis=_make_genesis("agent-002"),
             capabilities=[_make_capability()],
-            constraint_envelope=_make_constraint_envelope_with_reasoning_required(
-                "agent-002"
-            ),
+            constraint_envelope=_make_constraint_envelope_with_reasoning_required("agent-002"),
             delegations=[
                 _make_delegation("del-003", reasoning_trace=trace),
                 _make_delegation("del-004", reasoning_trace=trace),
@@ -609,10 +601,7 @@ class TestScoringReasoningCoverage:
         )
         await store.store_chain(chain_full)
         score_full = await compute_trust_score("agent-002", store)
-        assert (
-            score_full.breakdown["reasoning_coverage"]
-            > score.breakdown["reasoning_coverage"]
-        )
+        assert score_full.breakdown["reasoning_coverage"] > score.breakdown["reasoning_coverage"]
 
     @pytest.mark.asyncio
     async def test_reasoning_coverage_weight_is_approximately_5_percent(self, store):
@@ -696,9 +685,7 @@ class TestScoringReasoningCoverage:
         report = await generate_trust_report("agent-001", store)
 
         # Should have a risk indicator about missing reasoning
-        reasoning_indicators = [
-            ri for ri in report.risk_indicators if "reasoning" in ri.lower()
-        ]
+        reasoning_indicators = [ri for ri in report.risk_indicators if "reasoning" in ri.lower()]
         assert len(reasoning_indicators) > 0
 
     @pytest.mark.asyncio
@@ -714,9 +701,7 @@ class TestScoringReasoningCoverage:
         report = await generate_trust_report("agent-001", store)
 
         # Should NOT have a risk indicator about missing reasoning
-        reasoning_indicators = [
-            ri for ri in report.risk_indicators if "reasoning" in ri.lower()
-        ]
+        reasoning_indicators = [ri for ri in report.risk_indicators if "reasoning" in ri.lower()]
         assert len(reasoning_indicators) == 0
 
 
@@ -732,10 +717,7 @@ class TestScoringBackwardCompatibility:
     async def test_original_5_factor_weights_still_sum_to_100(self):
         """The original SCORING_WEIGHTS dict must still sum to 100."""
         total = sum(SCORING_WEIGHTS.values())
-        assert total == 100, (
-            f"SCORING_WEIGHTS must still sum to 100 for backward compatibility, "
-            f"got {total}"
-        )
+        assert total == 100, f"SCORING_WEIGHTS must still sum to 100 for backward compatibility, got {total}"
 
     @pytest.mark.asyncio
     async def test_score_grade_mapping_unchanged(self):
@@ -763,9 +745,7 @@ class TestScoringBackwardCompatibility:
         chain_with_traces = TrustLineageChain(
             genesis=_make_genesis("agent-002"),
             capabilities=[_make_capability()],
-            constraint_envelope=_make_constraint_envelope_without_reasoning_required(
-                "agent-002"
-            ),
+            constraint_envelope=_make_constraint_envelope_without_reasoning_required("agent-002"),
             delegations=[_make_delegation("del-002", reasoning_trace=trace)],
         )
         await store.store_chain(chain_with_traces)

@@ -378,12 +378,12 @@ async def test_multi_agent_checkpoint_resume():
         print(f"   ✓ Agent 2 resumed at step {resumed_agent_2.step_number}")
 
         print("\n5. Validating state isolation...")
-        assert (
-            resumed_agent_1.agent_id != resumed_agent_2.agent_id
-        ), "Agent IDs should differ"
-        assert (
-            resumed_agent_1.step_number != resumed_agent_2.step_number
-        ), "Step numbers should differ"
+        assert resumed_agent_1.agent_id != resumed_agent_2.agent_id, (
+            "Agent IDs should differ"
+        )
+        assert resumed_agent_1.step_number != resumed_agent_2.step_number, (
+            "Step numbers should differ"
+        )
         print("   ✓ Agent states properly isolated")
 
         print("\n" + "=" * 70)

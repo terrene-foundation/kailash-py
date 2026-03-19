@@ -164,9 +164,9 @@ async def test_danger_escalation_e2e():
             max_attempts=3,
         )
 
-        assert safe_result.get(
-            "success"
-        ), f"SAFE operation should succeed: {safe_result}"
+        assert safe_result.get("success"), (
+            f"SAFE operation should succeed: {safe_result}"
+        )
         print("  - Level 1 (SAFE): read_file executed ✓")
 
         # Level 2: MEDIUM operations (writes, may require approval)
@@ -232,9 +232,9 @@ async def test_danger_escalation_e2e():
 
         for tool_name, expected_level in danger_order:
             actual_level = get_tool_danger_level(tool_name)
-            assert (
-                actual_level == expected_level
-            ), f"{tool_name} should be {expected_level}, got {actual_level}"
+            assert actual_level == expected_level, (
+                f"{tool_name} should be {expected_level}, got {actual_level}"
+            )
 
         print("  - Danger level ordering validated ✓")
 
@@ -304,9 +304,9 @@ async def test_budget_enforcement_e2e():
             )
 
     ollama_cost = cost_tracker.get_total_cost() - start_cost
-    assert (
-        ollama_cost == 0.0
-    ), f"Ollama operations should be free, got ${ollama_cost:.4f}"
+    assert ollama_cost == 0.0, (
+        f"Ollama operations should be free, got ${ollama_cost:.4f}"
+    )
     print(f"\n✓ Ollama operations: ${ollama_cost:.4f} (FREE)")
 
     # Test 2: OpenAI quality validation (paid)
@@ -343,9 +343,9 @@ async def test_budget_enforcement_e2e():
     # Validate cost accuracy (<20% error margin)
     if estimated_cost > 0:
         error_margin = abs(openai_cost - estimated_cost) / estimated_cost
-        assert (
-            error_margin < 0.20
-        ), f"Cost estimation error should be <20%, got {error_margin * 100:.1f}%"
+        assert error_margin < 0.20, (
+            f"Cost estimation error should be <20%, got {error_margin * 100:.1f}%"
+        )
         print(
             f"✓ Cost estimation accuracy: {(1 - error_margin) * 100:.1f}% (within 20% margin)"
         )
@@ -353,9 +353,9 @@ async def test_budget_enforcement_e2e():
     # Verify total cost is under budget
     total_cost = cost_tracker.get_total_cost()
     budget_limit = cost_tracker.budget_usd
-    assert (
-        total_cost < budget_limit
-    ), f"Total cost ${total_cost:.2f} should be under budget ${budget_limit:.2f}"
+    assert total_cost < budget_limit, (
+        f"Total cost ${total_cost:.2f} should be under budget ${budget_limit:.2f}"
+    )
 
     print(f"✓ Total cost: ${total_cost:.4f} / ${budget_limit:.2f} budget")
     print(f"✓ Budget remaining: ${budget_limit - total_cost:.2f}")

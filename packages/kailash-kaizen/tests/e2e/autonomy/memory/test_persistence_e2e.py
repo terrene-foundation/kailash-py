@@ -330,9 +330,9 @@ async def test_memory_tier_promotion():
         hot_retrieval_time = (time.perf_counter() - start) * 1000  # ms
 
         assert result is not None
-        assert (
-            hot_retrieval_time < 1.0
-        ), f"Hot tier should be <1ms, got {hot_retrieval_time:.4f}ms"
+        assert hot_retrieval_time < 1.0, (
+            f"Hot tier should be <1ms, got {hot_retrieval_time:.4f}ms"
+        )
         print(f"   ✓ Hot tier retrieval: {hot_retrieval_time:.4f}ms (<1ms)")
 
         # Test 6: Check access patterns
@@ -436,9 +436,9 @@ async def test_memory_tier_demotion():
 
         # Check if should demote to cold
         demote_to = await tier_manager.should_demote(test_key, "warm")
-        assert (
-            demote_to == "cold"
-        ), "Should demote from warm to cold after extended inactivity"
+        assert demote_to == "cold", (
+            "Should demote from warm to cold after extended inactivity"
+        )
         print("   ✓ Eligible for demotion to cold tier")
 
         # Test 5: Verify access patterns show demotion

@@ -2614,7 +2614,7 @@ Final Answer: 6 hours"""
             # In production, this would send actual alerts
             self.logger.warning(
                 f"Budget Alert: ${self._total_cost:.2f}/${self.budget_limit:.2f} USD used "
-                f"({self._total_cost/self.budget_limit*100:.1f}%)"
+                f"({self._total_cost / self.budget_limit * 100:.1f}%)"
             )
 
         return True

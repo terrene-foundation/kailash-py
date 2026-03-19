@@ -85,9 +85,9 @@ class TestGeminiAudioIntegration:
 
         # INTENT VALIDATION: Audio was actually processed
         assert response["content"], "Response content should not be empty"
-        assert (
-            len(response["content"]) >= 10
-        ), "Response should have substantial content"
+        assert len(response["content"]) >= 10, (
+            "Response should have substantial content"
+        )
 
         # Negative check: Response should NOT indicate audio processing failure
         failure_indicators = [

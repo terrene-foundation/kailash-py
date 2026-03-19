@@ -852,9 +852,9 @@ class TestCARE051FailClosedVerification:
 
         # Verification should FAIL in strict mode (fail-closed)
         is_valid = strict_store.verify_record(record)
-        assert (
-            is_valid is False
-        ), "CARE-051: Unsigned records must fail verification in strict mode"
+        assert is_valid is False, (
+            "CARE-051: Unsigned records must fail verification in strict mode"
+        )
 
     def test_strict_verification_fails_without_verify_key(self, ed25519_keypair):
         """CARE-051: strict_verification=True fails when no verify_key configured."""
@@ -881,9 +881,9 @@ class TestCARE051FailClosedVerification:
 
         # Verification should FAIL because no verify_key is configured
         is_valid = strict_store.verify_record(record)
-        assert (
-            is_valid is False
-        ), "CARE-051: Verification must fail when verify_key is missing in strict mode"
+        assert is_valid is False, (
+            "CARE-051: Verification must fail when verify_key is missing in strict mode"
+        )
 
     def test_non_strict_allows_graceful_degradation(self):
         """strict_verification=False allows graceful degradation for dev/testing."""
@@ -935,9 +935,9 @@ class TestEmptyHashHandling:
             f"ROUND5-002: compute_query_hash({{}}) should return '{'0' * 16}', "
             f"got '{result}'"
         )
-        assert (
-            len(result) == 16
-        ), f"ROUND5-002: Hash length should be 16, got {len(result)}"
+        assert len(result) == 16, (
+            f"ROUND5-002: Hash length should be 16, got {len(result)}"
+        )
 
     def test_compute_query_hash_none_params_returns_16_zeroes(self):
         """ROUND5-002: compute_query_hash(None) returns '0' * 16, not ''."""
@@ -949,17 +949,17 @@ class TestEmptyHashHandling:
             f"ROUND5-002: compute_query_hash(None) should return '{'0' * 16}', "
             f"got '{result}'"
         )
-        assert (
-            len(result) == 16
-        ), f"ROUND5-002: Hash length should be 16, got {len(result)}"
+        assert len(result) == 16, (
+            f"ROUND5-002: Hash length should be 16, got {len(result)}"
+        )
 
     def test_compute_query_hash_empty_dict_not_empty_string(self):
         """ROUND5-002: Verify empty params does NOT return empty string."""
         result = DataFlowAuditStore.compute_query_hash({})
 
-        assert (
-            result != ""
-        ), "ROUND5-002: compute_query_hash({}) must NOT return empty string"
+        assert result != "", (
+            "ROUND5-002: compute_query_hash({}) must NOT return empty string"
+        )
         assert result, "ROUND5-002: compute_query_hash({}) must return a truthy value"
 
     def test_compute_query_hash_with_params_returns_16_chars(self):

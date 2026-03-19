@@ -13,9 +13,7 @@ from pathlib import Path
 
 def fix_migration_history_test():
     """Fix the prepare_rollback test expectation."""
-    file_path = Path(
-        ""
-    )
+    file_path = Path("")
 
     with open(file_path, "r") as f:
         content = f.read()
@@ -38,9 +36,7 @@ def fix_migration_history_test():
 
 def fix_web_api_test_import():
     """Fix the MigrationWebAPI import issue."""
-    file_path = Path(
-        ""
-    )
+    file_path = Path("")
 
     with open(file_path, "r") as f:
         content = f.read()

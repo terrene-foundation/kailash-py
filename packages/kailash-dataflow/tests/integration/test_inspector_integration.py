@@ -305,7 +305,7 @@ class TestInspectorWithRealWorkflows:
 
         # Add connections
         for i in range(4):
-            workflow.add_connection(f"task_{i}", "id", f"task_{i+1}", "id")
+            workflow.add_connection(f"task_{i}", "id", f"task_{i + 1}", "id")
 
         inspector = Inspector(db, workflow)
 

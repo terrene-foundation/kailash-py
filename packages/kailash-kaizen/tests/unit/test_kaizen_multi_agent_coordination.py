@@ -575,9 +575,9 @@ class TestMultiAgentCoordinationPerformance:
 
         # Should create agent in under 100ms
         performance_tracker.assert_performance("agent_creation", 100)
-        assert (
-            creation_time_ms < 100
-        ), f"Agent creation took {creation_time_ms:.2f}ms, expected < 100ms"
+        assert creation_time_ms < 100, (
+            f"Agent creation took {creation_time_ms:.2f}ms, expected < 100ms"
+        )
 
         # Verify agent was created correctly
         assert agent is not None
@@ -608,9 +608,9 @@ class TestMultiAgentCoordinationPerformance:
         creation_time_ms = performance_tracker.end_timer("workflow_creation")
 
         # Should create workflow in under 500ms
-        assert (
-            creation_time_ms < 500
-        ), f"Workflow creation took {creation_time_ms:.2f}ms, expected < 500ms"
+        assert creation_time_ms < 500, (
+            f"Workflow creation took {creation_time_ms:.2f}ms, expected < 500ms"
+        )
 
         # Verify workflow was created correctly
         assert consensus_workflow is not None
@@ -635,9 +635,9 @@ class TestMultiAgentCoordinationPerformance:
         creation_time_ms = performance_tracker.end_timer("team_creation")
 
         # Should create team in under 1000ms
-        assert (
-            creation_time_ms < 1000
-        ), f"Team creation took {creation_time_ms:.2f}ms, expected < 1000ms"
+        assert creation_time_ms < 1000, (
+            f"Team creation took {creation_time_ms:.2f}ms, expected < 1000ms"
+        )
 
         # Verify team was created correctly
         assert team is not None

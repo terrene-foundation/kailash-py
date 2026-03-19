@@ -8,10 +8,14 @@ Maps trust verification results to EATP trust postures.
 
 from __future__ import annotations
 
+import logging
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checkable
+
+logger = logging.getLogger(__name__)
 
 
 class TrustPosture(str, Enum):
@@ -169,6 +173,234 @@ class TransitionResult:
         }
 
 
+# ---------------------------------------------------------------------------
+# PostureEvidence and PostureEvaluationResult dataclasses
+# ---------------------------------------------------------------------------
+
+_VALID_DECISIONS = frozenset({"approved", "denied", "deferred"})
+
+
+@dataclass
+class PostureEvidence:
+    """Evidence supporting a posture transition evaluation.
+
+    Contains quantitative metrics collected by monitoring systems that
+    inform posture transition decisions.
+
+    Attributes:
+        observation_count: Number of observed actions/interactions.
+        success_rate: Fraction of successful actions (0.0 to 1.0).
+        time_at_current_posture_hours: Hours spent at the current posture.
+        anomaly_count: Number of anomalies detected during observation.
+        source: Identifier of the monitoring system that produced this evidence.
+        timestamp: When this evidence was collected.
+        metadata: Additional context (region, cluster, etc.).
+    """
+
+    observation_count: int
+    success_rate: float
+    time_at_current_posture_hours: float
+    anomaly_count: int
+    source: str
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.success_rate):
+            raise ValueError(f"success_rate must be finite, got {self.success_rate}")
+        if not math.isfinite(self.time_at_current_posture_hours):
+            raise ValueError(
+                f"time_at_current_posture_hours must be finite, "
+                f"got {self.time_at_current_posture_hours}"
+            )
+        if self.observation_count < 0:
+            raise ValueError(
+                f"observation_count must be non-negative, got {self.observation_count}"
+            )
+        if self.anomaly_count < 0:
+            raise ValueError(
+                f"anomaly_count must be non-negative, got {self.anomaly_count}"
+            )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to dictionary."""
+        return {
+            "observation_count": self.observation_count,
+            "success_rate": self.success_rate,
+            "time_at_current_posture_hours": self.time_at_current_posture_hours,
+            "anomaly_count": self.anomaly_count,
+            "source": self.source,
+            "timestamp": self.timestamp.isoformat(),
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> PostureEvidence:
+        """Deserialize from dictionary.
+
+        Args:
+            data: Dictionary produced by ``to_dict()``.
+
+        Returns:
+            PostureEvidence instance.
+
+        Raises:
+            KeyError: If a required key is missing.
+            ValueError: If a field value is invalid.
+        """
+        timestamp_raw = data.get("timestamp")
+        if timestamp_raw is None:
+            raise KeyError("'timestamp' is required in PostureEvidence data")
+        if isinstance(timestamp_raw, str):
+            timestamp = datetime.fromisoformat(timestamp_raw)
+        elif isinstance(timestamp_raw, datetime):
+            timestamp = timestamp_raw
+        else:
+            raise ValueError(
+                f"timestamp must be an ISO-format string or datetime, "
+                f"got {type(timestamp_raw).__name__}"
+            )
+
+        return cls(
+            observation_count=data["observation_count"],
+            success_rate=data["success_rate"],
+            time_at_current_posture_hours=data["time_at_current_posture_hours"],
+            anomaly_count=data["anomaly_count"],
+            source=data["source"],
+            timestamp=timestamp,
+            metadata=data.get("metadata", {}),
+        )
+
+
+@dataclass
+class PostureEvaluationResult:
+    """Result of a posture evaluation.
+
+    Captures the decision (approved / denied / deferred) together with the
+    rationale, an optional suggested posture, and supporting evidence.
+
+    Attributes:
+        decision: One of ``"approved"``, ``"denied"``, ``"deferred"``.
+        rationale: Human-readable explanation of the decision.
+        suggested_posture: Posture the evaluator recommends (may be ``None``).
+        evidence_summary: Key metrics that informed the decision.
+        evaluator_id: Identifier of the evaluator that produced this result.
+        timestamp: When the evaluation was performed.
+    """
+
+    decision: str
+    rationale: str
+    suggested_posture: Optional[TrustPosture] = None
+    evidence_summary: Dict[str, Any] = field(default_factory=dict)
+    evaluator_id: str = ""
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def __post_init__(self) -> None:
+        if self.decision not in _VALID_DECISIONS:
+            raise ValueError(
+                f"decision must be one of {set(_VALID_DECISIONS)}, "
+                f"got {self.decision!r}"
+            )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to dictionary."""
+        return {
+            "decision": self.decision,
+            "rationale": self.rationale,
+            "suggested_posture": (
+                self.suggested_posture.value
+                if self.suggested_posture is not None
+                else None
+            ),
+            "evidence_summary": self.evidence_summary,
+            "evaluator_id": self.evaluator_id,
+            "timestamp": self.timestamp.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> PostureEvaluationResult:
+        """Deserialize from dictionary.
+
+        Args:
+            data: Dictionary produced by ``to_dict()``.
+
+        Returns:
+            PostureEvaluationResult instance.
+
+        Raises:
+            KeyError: If a required key is missing.
+            ValueError: If a field value is invalid.
+        """
+        timestamp_raw = data.get("timestamp")
+        if timestamp_raw is None:
+            raise KeyError("'timestamp' is required in PostureEvaluationResult data")
+        if isinstance(timestamp_raw, str):
+            timestamp = datetime.fromisoformat(timestamp_raw)
+        elif isinstance(timestamp_raw, datetime):
+            timestamp = timestamp_raw
+        else:
+            raise ValueError(
+                f"timestamp must be an ISO-format string or datetime, "
+                f"got {type(timestamp_raw).__name__}"
+            )
+
+        suggested_raw = data.get("suggested_posture")
+        suggested_posture: Optional[TrustPosture] = None
+        if suggested_raw is not None:
+            if isinstance(suggested_raw, TrustPosture):
+                suggested_posture = suggested_raw
+            else:
+                suggested_posture = TrustPosture(suggested_raw)
+
+        return cls(
+            decision=data["decision"],
+            rationale=data["rationale"],
+            suggested_posture=suggested_posture,
+            evidence_summary=data.get("evidence_summary", {}),
+            evaluator_id=data.get("evaluator_id", ""),
+            timestamp=timestamp,
+        )
+
+
+# ---------------------------------------------------------------------------
+# PostureStore protocol
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class PostureStore(Protocol):
+    """Protocol for posture state persistence.
+
+    Any class implementing these four methods can serve as a backing store
+    for ``PostureStateMachine``.  The store is responsible for durable
+    persistence of posture state and transition history.
+
+    Implementations MUST raise ``KeyError`` from ``get_posture`` when the
+    agent has never been registered.  The state machine interprets a
+    ``KeyError`` as "use the default posture".
+    """
+
+    def get_posture(self, agent_id: str) -> TrustPosture:
+        """Return the current posture for *agent_id*.
+
+        Raises:
+            KeyError: If the agent has no stored posture.
+        """
+        ...
+
+    def set_posture(self, agent_id: str, posture: TrustPosture) -> None:
+        """Persist the posture for *agent_id*."""
+        ...
+
+    def get_history(self, agent_id: str, limit: int = 100) -> List[TransitionResult]:
+        """Return the most recent *limit* transition results for *agent_id*."""
+        ...
+
+    def record_transition(self, result: TransitionResult) -> None:
+        """Persist a transition result."""
+        ...
+
+
 class PostureStateMachine:
     """State machine for managing agent posture transitions.
 
@@ -195,17 +427,23 @@ class PostureStateMachine:
         self,
         default_posture: TrustPosture = TrustPosture.SHARED_PLANNING,
         require_upgrade_approval: bool = True,
+        store: Optional[PostureStore] = None,
     ):
         """Initialize the posture state machine.
 
         Args:
             default_posture: Default posture for new agents
             require_upgrade_approval: Whether to require approval for upgrades
+            store: Optional persistent store for posture state.  When
+                ``None`` (the default), state is kept in memory.  When
+                provided, ``get_posture`` / ``set_posture`` and transition
+                recording are delegated to the store.
         """
         self._agent_postures: Dict[str, TrustPosture] = {}
         self._default_posture = default_posture
         self._guards: List[TransitionGuard] = []
         self._transition_history: List[TransitionResult] = []
+        self._store: Optional[PostureStore] = store
         # ROUND6-002: Maximum transition history to prevent unbounded memory growth
         self._max_history_size = 10000
 
@@ -224,7 +462,16 @@ class PostureStateMachine:
         """Record a transition result with bounded history (ROUND6-002).
 
         Appends the result and trims oldest entries if history exceeds max size.
+        When a store is configured, the result is also persisted there.
         """
+        if self._store is not None:
+            try:
+                self._store.record_transition(result)
+            except Exception:
+                logger.exception(
+                    "PostureStore.record_transition failed for agent %s",
+                    result.metadata.get("agent_id", "<unknown>"),
+                )
         self._transition_history.append(result)
         if len(self._transition_history) > self._max_history_size:
             # Keep most recent entries, discard oldest 10%
@@ -232,11 +479,27 @@ class PostureStateMachine:
             self._transition_history = self._transition_history[trim_count:]
 
     def get_posture(self, agent_id: str) -> TrustPosture:
-        """Get the current posture for an agent."""
+        """Get the current posture for an agent.
+
+        When a store is configured, the posture is read from the store.
+        If the store raises ``KeyError`` (agent not yet registered), the
+        default posture is returned.
+        """
+        if self._store is not None:
+            try:
+                return self._store.get_posture(agent_id)
+            except KeyError:
+                return self._default_posture
         return self._agent_postures.get(agent_id, self._default_posture)
 
     def set_posture(self, agent_id: str, posture: TrustPosture) -> None:
-        """Set the posture for an agent directly (bypasses guards)."""
+        """Set the posture for an agent directly (bypasses guards).
+
+        When a store is configured, the posture is persisted there as
+        well as in the in-memory cache.
+        """
+        if self._store is not None:
+            self._store.set_posture(agent_id, posture)
         self._agent_postures[agent_id] = posture
 
     def transition(self, request: PostureTransitionRequest) -> TransitionResult:
@@ -280,7 +543,7 @@ class PostureStateMachine:
                 return result
 
         # Transition allowed
-        self._agent_postures[request.agent_id] = request.to_posture
+        self.set_posture(request.agent_id, request.to_posture)
         metadata = dict(request.metadata)
         metadata["agent_id"] = request.agent_id
         result = TransitionResult(
@@ -314,7 +577,7 @@ class PostureStateMachine:
             TransitionResult
         """
         current = self.get_posture(agent_id)
-        self._agent_postures[agent_id] = TrustPosture.PSEUDO_AGENT
+        self.set_posture(agent_id, TrustPosture.PSEUDO_AGENT)
 
         emergency_metadata = {"agent_id": agent_id}
         if requester_id:
@@ -721,9 +984,13 @@ __all__ = [
     # Dataclasses
     "PostureConstraints",
     "PostureResult",
+    "PostureEvidence",
+    "PostureEvaluationResult",
     "TransitionGuard",
     "PostureTransitionRequest",
     "TransitionResult",
+    # Protocol
+    "PostureStore",
     # Mapper
     "TrustPostureMapper",
     # State machine

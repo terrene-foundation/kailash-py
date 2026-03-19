@@ -172,10 +172,7 @@ def _validate_signing_key(signing_key: str) -> None:
     except Exception as e:
         if "signing_key" in str(e):
             raise
-        raise ValueError(
-            f"signing_key is not valid base64: {e}. "
-            f"Provide a base64-encoded Ed25519 private key."
-        ) from e
+        raise ValueError(f"signing_key is not valid base64: {e}. Provide a base64-encoded Ed25519 private key.") from e
 
 
 def _validate_public_key(public_key: str) -> None:
@@ -202,10 +199,7 @@ def _validate_public_key(public_key: str) -> None:
     except Exception as e:
         if "public_key" in str(e):
             raise
-        raise ValueError(
-            f"public_key is not valid base64: {e}. "
-            f"Provide a base64-encoded Ed25519 public key."
-        ) from e
+        raise ValueError(f"public_key is not valid base64: {e}. Provide a base64-encoded Ed25519 public key.") from e
 
 
 # ---------------------------------------------------------------------------
@@ -230,10 +224,7 @@ def _ed25519_sign(message: bytes, private_key_b64: str) -> bytes:
     try:
         from nacl.signing import SigningKey
     except ImportError as e:
-        raise ImportError(
-            "PyNaCl is required for UCAN Ed25519 signing. "
-            "Install with: pip install pynacl"
-        ) from e
+        raise ImportError("PyNaCl is required for UCAN Ed25519 signing. Install with: pip install pynacl") from e
 
     private_key_bytes = base64.b64decode(private_key_b64)
     signing_key = SigningKey(private_key_bytes)
@@ -260,10 +251,7 @@ def _ed25519_verify(message: bytes, signature: bytes, public_key_b64: str) -> bo
         from nacl.exceptions import BadSignatureError
         from nacl.signing import VerifyKey
     except ImportError as e:
-        raise ImportError(
-            "PyNaCl is required for UCAN Ed25519 verification. "
-            "Install with: pip install pynacl"
-        ) from e
+        raise ImportError("PyNaCl is required for UCAN Ed25519 verification. Install with: pip install pynacl") from e
 
     public_key_bytes = base64.b64decode(public_key_b64)
     verify_key = VerifyKey(public_key_bytes)
@@ -332,29 +320,18 @@ def _build_facts(
         "eatp_delegation_chain": delegation.delegation_chain,
         "eatp_delegation_depth": delegation.delegation_depth,
         "eatp_delegated_at": delegation.delegated_at.isoformat(),
-        "eatp_expires_at": (
-            delegation.expires_at.isoformat() if delegation.expires_at else None
-        ),
+        "eatp_expires_at": (delegation.expires_at.isoformat() if delegation.expires_at else None),
         "eatp_parent_delegation_id": delegation.parent_delegation_id,
         "eatp_original_signature": delegation.signature,
         # Reasoning trace extension (confidentiality-filtered)
         **(
             {"eatp_reasoning_trace": delegation.reasoning_trace.to_dict()}
             if delegation.reasoning_trace
-            and delegation.reasoning_trace.confidentiality
-            <= ConfidentialityLevel.RESTRICTED
+            and delegation.reasoning_trace.confidentiality <= ConfidentialityLevel.RESTRICTED
             else {}
         ),
-        **(
-            {"eatp_reasoning_trace_hash": delegation.reasoning_trace_hash}
-            if delegation.reasoning_trace_hash
-            else {}
-        ),
-        **(
-            {"eatp_reasoning_signature": delegation.reasoning_signature}
-            if delegation.reasoning_signature
-            else {}
-        ),
+        **({"eatp_reasoning_trace_hash": delegation.reasoning_trace_hash} if delegation.reasoning_trace_hash else {}),
+        **({"eatp_reasoning_signature": delegation.reasoning_signature} if delegation.reasoning_signature else {}),
     }
 
 
@@ -422,9 +399,7 @@ def to_ucan(
     payload: Dict[str, Any] = {
         "iss": iss,
         "aud": aud,
-        "att": _build_attenuations(
-            delegation.capabilities_delegated, delegation.task_id
-        ),
+        "att": _build_attenuations(delegation.capabilities_delegated, delegation.task_id),
         "nnc": secrets.token_hex(16),
         "prf": [],
         "fct": _build_facts(delegation),
@@ -510,10 +485,7 @@ def from_ucan(
         header_bytes = _b64url_decode(header_b64)
         header = json.loads(header_bytes)
     except (ValueError, json.JSONDecodeError, UnicodeDecodeError) as e:
-        raise ValueError(
-            f"Invalid UCAN token: header segment could not be decoded as "
-            f"base64url JSON. {e}"
-        ) from e
+        raise ValueError(f"Invalid UCAN token: header segment could not be decoded as base64url JSON. {e}") from e
 
     if header.get("alg") != "EdDSA":
         raise ValueError(
@@ -523,10 +495,7 @@ def from_ucan(
         )
 
     if header.get("typ") != "JWT":
-        raise ValueError(
-            f"Invalid UCAN header: expected typ='JWT', "
-            f"got typ='{header.get('typ')}'."
-        )
+        raise ValueError(f"Invalid UCAN header: expected typ='JWT', got typ='{header.get('typ')}'.")
 
     ucv = header.get("ucv")
     if ucv != UCAN_VERSION:
@@ -542,9 +511,7 @@ def from_ucan(
     try:
         signature_bytes = _b64url_decode(signature_b64)
     except ValueError as e:
-        raise ValueError(
-            f"Invalid UCAN signature segment: could not decode base64url. {e}"
-        ) from e
+        raise ValueError(f"Invalid UCAN signature segment: could not decode base64url. {e}") from e
 
     _ed25519_verify(signing_input, signature_bytes, public_key)
 
@@ -553,9 +520,7 @@ def from_ucan(
         payload_bytes = _b64url_decode(payload_b64)
         payload = json.loads(payload_bytes)
     except (ValueError, json.JSONDecodeError) as e:
-        raise ValueError(
-            f"Invalid UCAN payload: could not decode base64url or parse JSON. {e}"
-        ) from e
+        raise ValueError(f"Invalid UCAN payload: could not decode base64url or parse JSON. {e}") from e
 
     # --- Step 5: Check expiration ---
     exp = payload.get("exp")
@@ -589,8 +554,7 @@ def from_ucan(
     missing_fields = [f for f in required_fct_fields if f not in fct]
     if missing_fields:
         raise ValueError(
-            f"UCAN fct claim is missing required EATP fields: {missing_fields}. "
-            f"Available fields: {list(fct.keys())}."
+            f"UCAN fct claim is missing required EATP fields: {missing_fields}. Available fields: {list(fct.keys())}."
         )
 
     # Parse expiration from fct for the DelegationRecord

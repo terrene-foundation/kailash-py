@@ -69,9 +69,9 @@ async def test_complete_batch_processing_workflow():
 
         # Each result should have processed content
         for i, result in enumerate(results):
-            assert (
-                "result" in result or "summary" in result or "content" in result
-            ), f"Item {i} should have processed result"
+            assert "result" in result or "summary" in result or "content" in result, (
+                f"Item {i} should have processed result"
+            )
 
     finally:
         sys.path.remove(str(example_path))
@@ -233,7 +233,7 @@ async def test_concurrent_batch_performance():
     print("\nPerformance comparison:")
     print(f"Sequential: {sequential_time:.2f}s")
     print(f"Concurrent: {concurrent_time:.2f}s")
-    print(f"Speedup: {sequential_time/concurrent_time:.2f}x")
+    print(f"Speedup: {sequential_time / concurrent_time:.2f}x")
 
 
 @pytest.mark.e2e
@@ -287,7 +287,7 @@ async def test_concurrent_batch_large_scale():
         print(f"Items: {len(batch_items)}")
         print(f"Successful: {successful}")
         print(f"Time: {elapsed:.2f}s")
-        print(f"Rate: {len(batch_items)/elapsed:.2f} items/second")
+        print(f"Rate: {len(batch_items) / elapsed:.2f} items/second")
 
     finally:
         sys.path.remove(str(example_path))

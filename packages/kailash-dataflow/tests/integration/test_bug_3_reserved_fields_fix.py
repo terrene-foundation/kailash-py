@@ -167,9 +167,9 @@ class TestBug3ReservedFieldsFix:
         node = TestNode(_node_id="my_test_node")
 
         # Verify backward compatibility - node.id should work
-        assert (
-            node.id == "my_test_node"
-        ), "node.id property should return node identifier"
+        assert node.id == "my_test_node", (
+            "node.id property should return node identifier"
+        )
         assert node._node_id == "my_test_node", "_node_id should be set correctly"
 
     @pytest.mark.asyncio
@@ -201,9 +201,9 @@ class TestBug3ReservedFieldsFix:
         results, _ = runtime.execute(workflow.build())
 
         # The user's 'id' parameter should be used for the database record
-        assert (
-            results["my_create_node"]["id"] == 123
-        ), "User's id parameter should be preserved"
+        assert results["my_create_node"]["id"] == 123, (
+            "User's id parameter should be preserved"
+        )
 
         # Verify in database
         async with test_suite.get_connection() as conn:

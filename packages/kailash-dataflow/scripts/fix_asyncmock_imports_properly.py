@@ -50,9 +50,7 @@ def fix_asyncmock_import(file_path):
 
 
 def main():
-    test_dir = Path(
-        ""
-    )
+    test_dir = Path("")
 
     fixed_files = []
     for test_file in test_dir.rglob("test_*.py"):

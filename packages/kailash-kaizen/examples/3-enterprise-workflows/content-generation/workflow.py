@@ -178,7 +178,7 @@ class ContentGenerationAgent(BaseAgent):
             Blog post with SEO optimization
         """
         requirements = f"""
-SEO Keywords: {', '.join(keywords)}
+SEO Keywords: {", ".join(keywords)}
 Target word count: {word_count} words
 Include:
 - Engaging introduction
@@ -214,7 +214,7 @@ Include:
         """
         requirements = f"""
 Product: {product_name}
-Key Benefits: {', '.join(key_benefits)}
+Key Benefits: {", ".join(key_benefits)}
 Target Audience: {target_audience}
 
 Include:
@@ -300,7 +300,7 @@ Include:
         requirements = f"""
 Platform: {platform}
 Platform Guidelines: {spec}
-{'Include relevant hashtags' if include_hashtags else 'No hashtags'}
+{"Include relevant hashtags" if include_hashtags else "No hashtags"}
 
 Make it:
 - Attention-grabbing

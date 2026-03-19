@@ -406,9 +406,9 @@ class TestHealthMonitorIntegration:
 
             # Performance should be reasonable (parallel execution)
             # With parallel execution, should be much faster than sequential
-            assert (
-                execution_time < 2.0
-            ), f"Health checks took too long: {execution_time:.2f}s"
+            assert execution_time < 2.0, (
+                f"Health checks took too long: {execution_time:.2f}s"
+            )
 
             # Verify parallel execution was faster than sequential would be
             # (Each DB check takes ~10ms + memory checks ~1ms each + custom checks ~1ms each)
@@ -417,9 +417,9 @@ class TestHealthMonitorIntegration:
             parallel_efficiency = total_individual_time / execution_time
 
             # Should have significant parallel efficiency (>2x speedup)
-            assert (
-                parallel_efficiency > 2.0
-            ), f"Parallel efficiency too low: {parallel_efficiency:.2f}x"
+            assert parallel_efficiency > 2.0, (
+                f"Parallel efficiency too low: {parallel_efficiency:.2f}x"
+            )
 
     @pytest.mark.asyncio
     async def test_health_monitoring_error_resilience(

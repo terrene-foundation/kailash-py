@@ -199,9 +199,9 @@ result = {{
 
             # Verify iteration success
             assert results is not None, f"Iteration {iteration} must succeed"
-            assert (
-                f"iteration_processor_{iteration}" in results
-            ), f"Iteration {iteration} processor must execute"
+            assert f"iteration_processor_{iteration}" in results, (
+                f"Iteration {iteration} processor must execute"
+            )
 
         # Performance analysis
         avg_iteration_time = sum(iteration_times) / len(iteration_times)
@@ -287,9 +287,9 @@ result = {{
         warm_duration = (time.perf_counter() - warm_start_time) * 1000
 
         # Verify both operations succeeded
-        assert (
-            results is not None and warm_results is not None
-        ), "Both operations must succeed"
+        assert results is not None and warm_results is not None, (
+            "Both operations must succeed"
+        )
 
         # Performance comparison
         performance_improvement = (

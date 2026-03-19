@@ -168,7 +168,7 @@ class TestRateLimitingSecurityE2E:
         # First 3 should succeed
         for i in range(3):
             resp = client.get("/api/test")
-            assert resp.status_code == 200, f"Request {i+1} should succeed"
+            assert resp.status_code == 200, f"Request {i + 1} should succeed"
 
         # 4th should be rate limited
         resp = client.get("/api/test")

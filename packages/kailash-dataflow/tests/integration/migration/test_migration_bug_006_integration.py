@@ -97,9 +97,9 @@ async def test_multi_app_same_schema_real_database(test_suite):
     final_migration_count = await _get_migration_count(app2_db)
     print(f"Final migrations: {final_migration_count}")
 
-    assert (
-        final_migration_count == initial_migration_count
-    ), f"Duplicate migration detected! Initial: {initial_migration_count}, Final: {final_migration_count}"
+    assert final_migration_count == initial_migration_count, (
+        f"Duplicate migration detected! Initial: {initial_migration_count}, Final: {final_migration_count}"
+    )
 
     # === App 3: Third application with subset of fields ===
     print("Starting App 3 with subset of fields...")
@@ -118,9 +118,9 @@ async def test_multi_app_same_schema_real_database(test_suite):
 
     # Verify still no additional migrations
     subset_migration_count = await _get_migration_count(app3_db)
-    assert (
-        subset_migration_count == initial_migration_count
-    ), "Subset model triggered unnecessary migration"
+    assert subset_migration_count == initial_migration_count, (
+        "Subset model triggered unnecessary migration"
+    )
 
     # Test that all apps can work with the data using direct SQL
     async with app1_db.get_connection() as conn:
@@ -146,9 +146,9 @@ async def test_multi_app_same_schema_real_database(test_suite):
     # App 2 can read the data using its connection
     async with app2_db.get_connection() as conn:
         users = await conn.fetch("SELECT * FROM users WHERE username = $1", "testuser")
-        assert (
-            len(users) >= 1
-        ), "App 2 can't read App 1's data"  # Allow for previous test data
+        assert len(users) >= 1, (
+            "App 2 can't read App 1's data"
+        )  # Allow for previous test data
         print("✅ App 2 can read App 1's data")
 
     # App 3 can also read the data (even with subset model)
@@ -156,9 +156,9 @@ async def test_multi_app_same_schema_real_database(test_suite):
         users = await conn.fetch(
             "SELECT username, email FROM users WHERE username = $1", "testuser"
         )
-        assert (
-            len(users) >= 1
-        ), "App 3 can't read data with subset model"  # Allow for previous test data
+        assert len(users) >= 1, (
+            "App 3 can't read data with subset model"
+        )  # Allow for previous test data
         print("✅ App 3 can read data with subset model")
 
 
@@ -198,9 +198,9 @@ async def test_existing_database_compatibility_real(test_suite):
     print(f"Migrations applied: {migration_count}")
 
     # Should be 0 because existing schema is compatible
-    assert (
-        migration_count == 0
-    ), f"Unexpected migration applied to existing database: {migration_count}"
+    assert migration_count == 0, (
+        f"Unexpected migration applied to existing database: {migration_count}"
+    )
 
     # Test that we can work with existing data
     async with df.get_connection() as conn:
@@ -313,9 +313,9 @@ async def test_schema_compatibility_edge_cases_real(test_suite):
 
     # Verify no migration was applied
     migration_count = await _get_migration_count(df)
-    assert (
-        migration_count == 0
-    ), f"Unexpected migration for compatible types: {migration_count}"
+    assert migration_count == 0, (
+        f"Unexpected migration for compatible types: {migration_count}"
+    )
 
     # Test that operations work using direct SQL
     async with df.get_connection() as conn:

@@ -92,7 +92,7 @@ class TestFileLockCrossProcess:
         child_script = textwrap.dedent(
             f"""\
             import sys
-            sys.path.insert(0, {repr(str(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'src')))})
+            sys.path.insert(0, {repr(str(os.path.join(os.path.dirname(__file__), "..", "..", "..", "src")))})
             from eatp.store.filesystem import file_lock
             with file_lock({repr(target)}, exclusive=True):
                 with open({repr(marker)}, "a") as f:
@@ -111,9 +111,7 @@ class TestFileLockCrossProcess:
                 [sys.executable, "-c", child_script],
                 env={
                     **os.environ,
-                    "PYTHONPATH": os.path.join(
-                        os.path.dirname(__file__), "..", "..", "..", "src"
-                    ),
+                    "PYTHONPATH": os.path.join(os.path.dirname(__file__), "..", "..", "..", "src"),
                 },
             )
             # Give child time to start and attempt lock

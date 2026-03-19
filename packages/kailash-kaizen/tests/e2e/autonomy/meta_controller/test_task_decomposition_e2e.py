@@ -174,10 +174,10 @@ async def execute_subtasks_sequentially(
     """
     results = []
     for i, subtask in enumerate(subtasks):
-        print(f"\n  Executing subtask {i+1}/{len(subtasks)}: {subtask[:60]}...")
+        print(f"\n  Executing subtask {i + 1}/{len(subtasks)}: {subtask[:60]}...")
 
         async def run_subtask():
-            return executor.run(subtask=subtask, input=f"subtask_{i+1}")
+            return executor.run(subtask=subtask, input=f"subtask_{i + 1}")
 
         result = await async_retry_with_backoff(
             run_subtask, max_attempts=3, initial_delay=2.0
@@ -244,9 +244,9 @@ async def test_complex_task_decomposition_into_subtasks():
     # Verify decomposition
     assert decomposition_result is not None, "Decomposition result should not be None"
     assert isinstance(decomposition_result, dict), "Result should be a dictionary"
-    assert (
-        "error" not in decomposition_result
-    ), f"Should not have error: {decomposition_result.get('error')}"
+    assert "error" not in decomposition_result, (
+        f"Should not have error: {decomposition_result.get('error')}"
+    )
 
     # Extract subtasks from result
     subtasks_text = decomposition_result.get(
@@ -285,11 +285,11 @@ async def test_complex_task_decomposition_into_subtasks():
     # Execute each subtask via meta-controller
     subtask_results = []
     for i, subtask in enumerate(subtasks):
-        print(f"\n  Routing subtask {i+1}: {subtask}")
+        print(f"\n  Routing subtask {i + 1}: {subtask}")
 
         async def execute_via_router():
             return meta_controller.run(
-                task=subtask, subtask=subtask, input=f"data_{i+1}"
+                task=subtask, subtask=subtask, input=f"data_{i + 1}"
             )
 
         result = await async_retry_with_backoff(
@@ -300,11 +300,11 @@ async def test_complex_task_decomposition_into_subtasks():
         subtask_results.append(result)
 
         # Verify execution
-        assert result is not None, f"Subtask {i+1} result should not be None"
+        assert result is not None, f"Subtask {i + 1} result should not be None"
         assert isinstance(result, dict), "Result should be a dictionary"
-        assert (
-            "error" not in result
-        ), f"Subtask {i+1} should not have error: {result.get('error')}"
+        assert "error" not in result, (
+            f"Subtask {i + 1} should not have error: {result.get('error')}"
+        )
 
     print(f"\n✓ Executed {len(subtask_results)} subtasks successfully")
 
@@ -314,7 +314,7 @@ async def test_complex_task_decomposition_into_subtasks():
     # Prepare results for aggregation
     results_summary = "\n".join(
         [
-            f"{i+1}. {subtasks[i]}: {result.get('result', result.get('output', 'Done'))[:50]}"
+            f"{i + 1}. {subtasks[i]}: {result.get('result', result.get('output', 'Done'))[:50]}"
             for i, result in enumerate(subtask_results)
         ]
     )
@@ -332,9 +332,9 @@ async def test_complex_task_decomposition_into_subtasks():
     # Verify aggregation
     assert final_result is not None, "Final result should not be None"
     assert isinstance(final_result, dict), "Result should be a dictionary"
-    assert (
-        "error" not in final_result
-    ), f"Should not have error: {final_result.get('error')}"
+    assert "error" not in final_result, (
+        f"Should not have error: {final_result.get('error')}"
+    )
 
     final_output = final_result.get("final_result", final_result.get("output", ""))
     print(f"Final aggregated result: {final_output[:200]}...")

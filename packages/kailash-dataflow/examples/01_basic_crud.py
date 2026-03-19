@@ -121,8 +121,8 @@ def demo_list():
             "BlogPostCreateNode",
             f"create_{i}",
             {
-                "title": f"Post {i+1}",
-                "content": f"Content for post {i+1}",
+                "title": f"Post {i + 1}",
+                "content": f"Content for post {i + 1}",
                 "author": "Bob Jones" if i % 2 == 0 else "Alice Smith",
                 "published": i % 2 == 0,
                 "views": i * 10,

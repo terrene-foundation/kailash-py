@@ -96,7 +96,7 @@ async def test_rate_limiting_with_real_redis_database(redis_limiter):
         result = await limiter.check_rate_limit(
             agent_id="agent-001", user_id="user-123"
         )
-        assert result.allowed is True, f"Request {i+1} should be allowed"
+        assert result.allowed is True, f"Request {i + 1} should be allowed"
         assert result.limit_exceeded is None
         await limiter.record_invocation(agent_id="agent-001", user_id="user-123")
 
@@ -128,9 +128,9 @@ async def test_rate_limiting_with_real_redis_database(redis_limiter):
 
     # Step 4: Make 9th invocation (should allow - minute window expired)
     result = await limiter.check_rate_limit(agent_id="agent-001", user_id="user-123")
-    assert (
-        result.allowed is True
-    ), "Request should be allowed after minute window expired"
+    assert result.allowed is True, (
+        "Request should be allowed after minute window expired"
+    )
 
 
 # ============================================================================
@@ -188,9 +188,9 @@ async def test_sliding_window_accuracy_with_real_time(redis_limiter):
 
     # Step 5: Should be at limit now (2 existing + 2 new = 4 = burst limit)
     result = await limiter.check_rate_limit(agent_id="agent-001", user_id="user-123")
-    assert (
-        result.allowed is False
-    ), "Should be blocked at burst limit (4 requests in window)"
+    assert result.allowed is False, (
+        "Should be blocked at burst limit (4 requests in window)"
+    )
 
 
 # ============================================================================
@@ -289,13 +289,15 @@ async def test_redis_connection_pooling_reduces_latency(redis_limiter):
     p95_latency = sorted(latencies)[int(len(latencies) * 0.95)]
 
     print(f"\nConnection Pooling Performance:")
-    print(f"  Total duration: {total_duration*1000:.2f}ms")
-    print(f"  Average latency: {avg_latency*1000:.2f}ms")
-    print(f"  P95 latency: {p95_latency*1000:.2f}ms")
+    print(f"  Total duration: {total_duration * 1000:.2f}ms")
+    print(f"  Average latency: {avg_latency * 1000:.2f}ms")
+    print(f"  P95 latency: {p95_latency * 1000:.2f}ms")
 
     # Assert performance targets (integration test allows more time than unit tests)
-    assert avg_latency < 0.05, f"Average latency {avg_latency*1000:.2f}ms exceeds 50ms"
-    assert p95_latency < 0.1, f"P95 latency {p95_latency*1000:.2f}ms exceeds 100ms"
+    assert avg_latency < 0.05, (
+        f"Average latency {avg_latency * 1000:.2f}ms exceeds 50ms"
+    )
+    assert p95_latency < 0.1, f"P95 latency {p95_latency * 1000:.2f}ms exceeds 100ms"
 
 
 # ============================================================================

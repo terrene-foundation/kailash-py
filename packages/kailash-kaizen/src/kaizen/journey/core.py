@@ -251,9 +251,9 @@ class Pathway(metaclass=PathwayMeta):
     _signature: ClassVar[Optional[Type["Signature"]]] = None
     _agents: ClassVar[List[str]] = []
     _pipeline: ClassVar[str] = "sequential"
-    _pipeline_config: ClassVar[Dict[str, Any]] = (
-        {}
-    )  # REQ-INT-002: Pattern-specific config
+    _pipeline_config: ClassVar[
+        Dict[str, Any]
+    ] = {}  # REQ-INT-002: Pattern-specific config
     _accumulate: ClassVar[List[str]] = []
     _next: ClassVar[Optional[str]] = None
     _guidelines: ClassVar[List[str]] = []

@@ -246,7 +246,7 @@ class TestSchemaCacheFailureHandling:
 
         # Three failures
         for i in range(3):
-            cache.mark_table_failed("User", "sqlite:///:memory:", f"Error {i+1}")
+            cache.mark_table_failed("User", "sqlite:///:memory:", f"Error {i + 1}")
 
         # After max failures, should not retry even after wait
         # The cache will return False, but internally won't retry

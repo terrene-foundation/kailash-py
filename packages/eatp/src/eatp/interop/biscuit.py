@@ -96,10 +96,7 @@ except ImportError:
 def _require_nacl() -> None:
     """Raise ImportError if PyNaCl is not installed."""
     if not _NACL_AVAILABLE:
-        raise ImportError(
-            "PyNaCl is required for Biscuit token operations. "
-            "Install with: pip install pynacl"
-        )
+        raise ImportError("PyNaCl is required for Biscuit token operations. Install with: pip install pynacl")
 
 
 # ---------------------------------------------------------------------------
@@ -241,7 +238,9 @@ def _verify_bytes(payload: bytes, signature: bytes, public_key_raw: bytes) -> bo
 # ---------------------------------------------------------------------------
 
 
-def _parse_token(token: bytes) -> Tuple[
+def _parse_token(
+    token: bytes,
+) -> Tuple[
     int,  # version
     bytes,  # authority_block_bytes
     List[bytes],  # attenuation_blocks
@@ -285,9 +284,7 @@ def _parse_token(token: bytes) -> Tuple[
     attenuation_blocks: List[bytes] = []
     for i in range(num_attenuation):
         if offset + _UINT32_BYTES > len(token):
-            raise ValueError(
-                f"Token truncated: missing length field for attenuation block {i}."
-            )
+            raise ValueError(f"Token truncated: missing length field for attenuation block {i}.")
         att_block_len = struct.unpack(">I", token[offset : offset + _UINT32_BYTES])[0]
         offset += _UINT32_BYTES
 
@@ -327,11 +324,7 @@ def _build_authority_payload(version_byte: int, authority_block: bytes) -> bytes
 
     Layout: version(1) + authority_block_len(4) + authority_block
     """
-    return (
-        struct.pack("B", version_byte)
-        + struct.pack(">I", len(authority_block))
-        + authority_block
-    )
+    return struct.pack("B", version_byte) + struct.pack(">I", len(authority_block)) + authority_block
 
 
 # ===================================================================
@@ -428,9 +421,7 @@ def from_biscuit(token: bytes, public_key: str) -> ConstraintEnvelope:
         )
 
     # Verify the full signature chain
-    if not _verify_signature_chain(
-        version, authority_block_bytes, attenuation_blocks, signatures, public_key
-    ):
+    if not _verify_signature_chain(version, authority_block_bytes, attenuation_blocks, signatures, public_key):
         raise InvalidSignatureError(
             "Biscuit token signature verification failed. "
             "The token may have been tampered with or signed by a different key.",
@@ -473,8 +464,7 @@ def attenuate(
     """
     if not additional_constraints:
         raise ValueError(
-            "additional_constraints must be a non-empty list. "
-            "Attenuation with zero constraints serves no purpose."
+            "additional_constraints must be a non-empty list. Attenuation with zero constraints serves no purpose."
         )
     _validate_attenuator_key(attenuator_key)
     _require_nacl()
@@ -485,9 +475,7 @@ def attenuate(
     att_block_data: Dict[str, Any] = {
         "additional_constraints": additional_constraints,
     }
-    att_block_bytes = json.dumps(
-        att_block_data, separators=(",", ":"), sort_keys=True
-    ).encode("utf-8")
+    att_block_bytes = json.dumps(att_block_data, separators=(",", ":"), sort_keys=True).encode("utf-8")
 
     # The attenuator signs: previous_signature(64 bytes) + new_attenuation_block
     # The previous signature is the last signature in the chain
@@ -526,8 +514,7 @@ def attenuate(
     new_token = b"".join(parts)
 
     logger.debug(
-        "Attenuated Biscuit token: added %d constraints, "
-        "now %d attenuation blocks, %d signatures (%d bytes)",
+        "Attenuated Biscuit token: added %d constraints, now %d attenuation blocks, %d signatures (%d bytes)",
         len(additional_constraints),
         len(new_attenuation_blocks),
         len(new_signatures),
@@ -568,9 +555,7 @@ def verify_biscuit(token: bytes, public_key: str) -> bool:
         return False
 
     try:
-        version, authority_block_bytes, attenuation_blocks, signatures = _parse_token(
-            token
-        )
+        version, authority_block_bytes, attenuation_blocks, signatures = _parse_token(token)
     except ValueError as exc:
         logger.debug("Biscuit token parse failed: %s", exc)
         return False
@@ -583,9 +568,7 @@ def verify_biscuit(token: bytes, public_key: str) -> bool:
         )
         return False
 
-    return _verify_signature_chain(
-        version, authority_block_bytes, attenuation_blocks, signatures, public_key
-    )
+    return _verify_signature_chain(version, authority_block_bytes, attenuation_blocks, signatures, public_key)
 
 
 # ---------------------------------------------------------------------------

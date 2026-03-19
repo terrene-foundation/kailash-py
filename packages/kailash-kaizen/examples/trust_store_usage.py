@@ -150,7 +150,7 @@ async def example_2_cache_performance():
     # Performance improvement
     improvement = ((first_time - cached_time) / first_time) * 100
     print(f"\n📊 Performance improvement: {improvement:.1f}%")
-    print(f"   Cache makes retrieval {first_time/cached_time:.1f}x faster!")
+    print(f"   Cache makes retrieval {first_time / cached_time:.1f}x faster!")
 
     # Clean up
     await store.close()

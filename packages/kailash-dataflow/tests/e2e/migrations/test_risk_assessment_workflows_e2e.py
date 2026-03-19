@@ -352,15 +352,15 @@ class TestRiskAssessmentWorkflowsE2E:
         execution_time = time.time() - start_time
 
         # Verify E2E performance requirement
-        assert (
-            execution_time < 10.0
-        ), f"E2E workflow took {execution_time}s, should be <10s"
+        assert execution_time < 10.0, (
+            f"E2E workflow took {execution_time}s, should be <10s"
+        )
 
         # Verify workflow completion
         assert result["operations_assessed"] == 2, "Should assess both operations"
-        assert (
-            result["overall_recommendation"] == "PROCEED_SAFELY"
-        ), "Low risk operations should proceed safely"
+        assert result["overall_recommendation"] == "PROCEED_SAFELY", (
+            "Low risk operations should proceed safely"
+        )
 
         # Verify individual decisions
         decisions = result["decisions"]
@@ -377,9 +377,9 @@ class TestRiskAssessmentWorkflowsE2E:
 
         # Verify business impact summary
         impact_summary = result["business_impact_summary"]
-        assert (
-            impact_summary["total_operations"] == 2
-        ), "Should summarize both operations"
+        assert impact_summary["total_operations"] == 2, (
+            "Should summarize both operations"
+        )
         assert impact_summary["average_risk_score"] < 35, "Should have low average risk"
 
     def test_e2e_high_risk_production_workflow(self, workflow_orchestrator):
@@ -413,16 +413,16 @@ class TestRiskAssessmentWorkflowsE2E:
         )
 
         # Verify workflow blocks high-risk operations
-        assert (
-            result["overall_recommendation"] == "BLOCK_WORKFLOW"
-        ), "Should block high-risk workflow"
+        assert result["overall_recommendation"] == "BLOCK_WORKFLOW", (
+            "Should block high-risk workflow"
+        )
 
         # Verify individual decisions
         decisions = result["decisions"]
         critical_operations = [d for d in decisions if d["decision"] == "BLOCK"]
-        assert (
-            len(critical_operations) > 0
-        ), "Should block at least one critical operation"
+        assert len(critical_operations) > 0, (
+            "Should block at least one critical operation"
+        )
 
         # Verify executive approval requirements
         executive_approvals = [d for d in decisions if "EXECUTIVE" in str(d)]
@@ -433,9 +433,9 @@ class TestRiskAssessmentWorkflowsE2E:
 
         # Verify business impact summary reflects high risk
         impact_summary = result["business_impact_summary"]
-        assert (
-            impact_summary["average_risk_score"] > 50
-        ), "Should have high average risk"
+        assert impact_summary["average_risk_score"] > 50, (
+            "Should have high average risk"
+        )
         assert (
             impact_summary["risk_distribution"]["HIGH"]
             + impact_summary["risk_distribution"]["CRITICAL"]
@@ -496,9 +496,9 @@ class TestRiskAssessmentWorkflowsE2E:
 
         # Verify business impact analysis
         impact_summary = result["business_impact_summary"]
-        assert (
-            25 <= impact_summary["average_risk_score"] <= 75
-        ), "Should have mixed average risk"
+        assert 25 <= impact_summary["average_risk_score"] <= 75, (
+            "Should have mixed average risk"
+        )
         assert impact_summary["total_risk_factors"] > 0, "Should identify risk factors"
 
     def test_e2e_workflow_performance_and_scalability(self, workflow_orchestrator):
@@ -532,25 +532,25 @@ class TestRiskAssessmentWorkflowsE2E:
         execution_time = time.time() - start_time
 
         # Verify E2E performance requirements
-        assert (
-            execution_time < 10.0
-        ), f"Large workflow took {execution_time}s, should be <10s"
-        assert (
-            result["execution_time"] < 5.0
-        ), f"Workflow execution took {result['execution_time']}s, should be <5s"
+        assert execution_time < 10.0, (
+            f"Large workflow took {execution_time}s, should be <10s"
+        )
+        assert result["execution_time"] < 5.0, (
+            f"Workflow execution took {result['execution_time']}s, should be <5s"
+        )
 
         # Verify all operations processed
         assert result["operations_assessed"] == 10, "Should assess all 10 operations"
-        assert (
-            len(result["decisions"]) == 10
-        ), "Should make decisions for all operations"
+        assert len(result["decisions"]) == 10, (
+            "Should make decisions for all operations"
+        )
 
         # Verify business impact scales correctly
         impact_summary = result["business_impact_summary"]
         assert impact_summary["total_operations"] == 10, "Should count all operations"
-        assert (
-            impact_summary["total_risk_factors"] >= 10
-        ), "Should accumulate risk factors"
+        assert impact_summary["total_risk_factors"] >= 10, (
+            "Should accumulate risk factors"
+        )
 
     def test_e2e_workflow_error_handling_and_recovery(self, workflow_orchestrator):
         """Test E2E workflow error handling and graceful degradation."""
@@ -584,9 +584,9 @@ class TestRiskAssessmentWorkflowsE2E:
         )
 
         # Verify workflow completes despite errors
-        assert (
-            "error" in result or result["operations_assessed"] >= 1
-        ), "Should handle errors gracefully or complete valid operations"
+        assert "error" in result or result["operations_assessed"] >= 1, (
+            "Should handle errors gracefully or complete valid operations"
+        )
 
         # Verify timing information is captured even with errors
         assert "execution_time" in result, "Should capture timing information"
@@ -629,24 +629,24 @@ class TestRiskAssessmentWorkflowsE2E:
             "high",
             "critical",
         ], "Should identify high/critical risk"
-        assert (
-            critical_decision["decision"] == "BLOCK"
-        ), "Should block critical financial operation"
+        assert critical_decision["decision"] == "BLOCK", (
+            "Should block critical financial operation"
+        )
         assert critical_decision["mitigation_required"], "Should require mitigation"
 
         # Verify workflow blocks entire process
-        assert (
-            result["overall_recommendation"] == "BLOCK_WORKFLOW"
-        ), "Should block workflow for critical financial system"
+        assert result["overall_recommendation"] == "BLOCK_WORKFLOW", (
+            "Should block workflow for critical financial system"
+        )
 
         # Verify business impact reflects criticality
         impact_summary = result["business_impact_summary"]
-        assert (
-            impact_summary["highest_risk_score"] >= 70
-        ), "Should have very high risk score"
-        assert (
-            impact_summary["average_risk_score"] >= 70
-        ), "Should have high average risk"
+        assert impact_summary["highest_risk_score"] >= 70, (
+            "Should have very high risk score"
+        )
+        assert impact_summary["average_risk_score"] >= 70, (
+            "Should have high average risk"
+        )
 
     def test_e2e_complete_migration_lifecycle_simulation(self, workflow_orchestrator):
         """Test complete migration lifecycle from assessment to execution decision."""
@@ -697,9 +697,9 @@ class TestRiskAssessmentWorkflowsE2E:
         total_time = time.time() - start_time
 
         # Verify complete lifecycle timing
-        assert (
-            total_time < 10.0
-        ), f"Complete lifecycle took {total_time}s, should be <10s"
+        assert total_time < 10.0, (
+            f"Complete lifecycle took {total_time}s, should be <10s"
+        )
 
         # Verify phased approach recommendation
         decisions = result["decisions"]
@@ -707,9 +707,9 @@ class TestRiskAssessmentWorkflowsE2E:
 
         # Verify risk progression (low → medium → high)
         risk_scores = [d["risk_score"] for d in decisions]
-        assert (
-            risk_scores[0] < risk_scores[1] < risk_scores[2]
-        ), "Risk scores should increase with business impact"
+        assert risk_scores[0] < risk_scores[1] < risk_scores[2], (
+            "Risk scores should increase with business impact"
+        )
 
         # Verify appropriate recommendations for each phase
         low_risk_decision = decisions[0]
@@ -733,12 +733,12 @@ class TestRiskAssessmentWorkflowsE2E:
         # Verify comprehensive business impact analysis
         impact_summary = result["business_impact_summary"]
         assert impact_summary["total_operations"] == 3, "Should analyze all phases"
-        assert (
-            impact_summary["risk_distribution"]["LOW"] >= 1
-        ), "Should have low-risk operations"
-        assert (
-            impact_summary["risk_distribution"]["HIGH"] >= 1
-        ), "Should have high-risk operations"
-        assert (
-            30 <= impact_summary["average_risk_score"] <= 70
-        ), "Should have realistic mixed risk"
+        assert impact_summary["risk_distribution"]["LOW"] >= 1, (
+            "Should have low-risk operations"
+        )
+        assert impact_summary["risk_distribution"]["HIGH"] >= 1, (
+            "Should have high-risk operations"
+        )
+        assert 30 <= impact_summary["average_risk_score"] <= 70, (
+            "Should have realistic mixed risk"
+        )

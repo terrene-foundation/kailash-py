@@ -508,7 +508,9 @@ class TestImpactAnalysisReporter:
                     else (
                         40
                         if risk_level == RiskLevel.MEDIUM
-                        else 60 if risk_level == RiskLevel.HIGH else 85
+                        else 60
+                        if risk_level == RiskLevel.HIGH
+                        else 85
                     )
                 ),
                 risk_level=risk_level,
@@ -1056,9 +1058,9 @@ class TestReportFormatter:
             format_time = time.time() - start_time
 
             # Validate performance (should be fast even for complex reports)
-            assert (
-                format_time < 1.0
-            ), f"{report_format.value} formatting took {format_time:.3f}s"
+            assert format_time < 1.0, (
+                f"{report_format.value} formatting took {format_time:.3f}s"
+            )
 
             # Validate output is generated
             assert isinstance(formatted_report, str)
@@ -1072,7 +1074,9 @@ class TestReportFormatter:
         with pytest.raises(ValueError, match="Unsupported format type"):
             invalid_format = type("InvalidFormat", (), {"value": "invalid"})()
             report_formatter.format_report(
-                Mock(), invalid_format, FormatStyle.STANDARD  # Mock report
+                Mock(),
+                invalid_format,
+                FormatStyle.STANDARD,  # Mock report
             )
 
         # Test with malformed report (missing required fields)

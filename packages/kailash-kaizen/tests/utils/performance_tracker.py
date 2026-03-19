@@ -225,9 +225,9 @@ class PerformanceTracker:
             )
 
         # Check for success
-        assert (
-            self.metrics.success
-        ), f"Operation '{self.operation_name}' failed: {self.metrics.error_message}"
+        assert self.metrics.success, (
+            f"Operation '{self.operation_name}' failed: {self.metrics.error_message}"
+        )
 
 
 class BenchmarkSuite:

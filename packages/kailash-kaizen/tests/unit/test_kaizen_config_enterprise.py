@@ -468,9 +468,9 @@ class TestKaizenFrameworkConfigIntegration:
         config = KaizenConfig(**enterprise_config)
         config_time = (time.time() - start_time) * 1000
 
-        assert (
-            config_time < 10
-        ), f"Configuration creation took {config_time:.2f}ms, should be <10ms"
+        assert config_time < 10, (
+            f"Configuration creation took {config_time:.2f}ms, should be <10ms"
+        )
 
         # Test framework initialization performance
         start_time = time.time()
@@ -478,6 +478,6 @@ class TestKaizenFrameworkConfigIntegration:
         init_time = (time.time() - start_time) * 1000
 
         # Framework init can be slower but should be reasonable
-        assert (
-            init_time < 100
-        ), f"Framework initialization took {init_time:.2f}ms, should be <100ms"
+        assert init_time < 100, (
+            f"Framework initialization took {init_time:.2f}ms, should be <100ms"
+        )

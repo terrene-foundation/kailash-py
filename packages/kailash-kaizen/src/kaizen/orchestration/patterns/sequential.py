@@ -463,7 +463,8 @@ def create_sequential_pipeline(
 
         # Create pattern with provided stages
         pattern = SequentialPipelinePattern(
-            stages=list(stages), shared_memory=shared_memory  # Copy list
+            stages=list(stages),
+            shared_memory=shared_memory,  # Copy list
         )
 
         # Update stage indices

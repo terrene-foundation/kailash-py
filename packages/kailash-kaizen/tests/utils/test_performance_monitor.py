@@ -297,9 +297,9 @@ class MemoryProfiler:
     def assert_memory_limit(self, limit_mb: float, label: str = "current") -> None:
         """Assert that current memory usage is within limit."""
         current_mb = self.process.memory_info().rss / 1024 / 1024
-        assert (
-            current_mb <= limit_mb
-        ), f"Memory usage {current_mb:.1f}MB exceeds limit {limit_mb}MB for {label}"
+        assert current_mb <= limit_mb, (
+            f"Memory usage {current_mb:.1f}MB exceeds limit {limit_mb}MB for {label}"
+        )
 
     def assert_no_memory_leak(self, threshold_mb: float = 10.0) -> None:
         """Assert no significant memory increase from baseline."""

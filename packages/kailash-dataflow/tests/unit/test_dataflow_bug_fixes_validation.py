@@ -41,9 +41,9 @@ class TestDataFlowBugFixesValidation:
 
         # Get the source code of the _get_tdd_connection_info method
         method = getattr(create_node_class, "_get_tdd_connection_info", None)
-        assert (
-            method is not None
-        ), "Generated node should have _get_tdd_connection_info method"
+        assert method is not None, (
+            "Generated node should have _get_tdd_connection_info method"
+        )
         assert callable(method), "_get_tdd_connection_info should be callable"
 
         # Get the method source code
@@ -54,9 +54,9 @@ class TestDataFlowBugFixesValidation:
             source_code = inspect.getsource(create_node_class)
 
         # Verify the fix: should contain 'self.logger' not bare 'logger'
-        assert (
-            "self.logger.debug" in source_code
-        ), "Fixed code should use 'self.logger.debug'"
+        assert "self.logger.debug" in source_code, (
+            "Fixed code should use 'self.logger.debug'"
+        )
 
         # Verify the bug is not present: should NOT contain bare 'logger.debug'
         # Note: We need to be careful not to match 'self.logger.debug'
@@ -64,9 +64,9 @@ class TestDataFlowBugFixesValidation:
 
         bare_logger_pattern = r"(?<!self\.)logger\.debug"
         bare_logger_matches = re.findall(bare_logger_pattern, source_code)
-        assert (
-            len(bare_logger_matches) == 0
-        ), f"Fixed code should not contain bare 'logger.debug', found: {bare_logger_matches}"
+        assert len(bare_logger_matches) == 0, (
+            f"Fixed code should not contain bare 'logger.debug', found: {bare_logger_matches}"
+        )
 
     def test_generated_code_has_fixed_parameter_access(self):
         """
@@ -90,9 +90,9 @@ class TestDataFlowBugFixesValidation:
 
         # Get the _get_tdd_connection_info method
         method = getattr(create_node_class, "_get_tdd_connection_info", None)
-        assert (
-            method is not None
-        ), "Generated node should have _get_tdd_connection_info method"
+        assert method is not None, (
+            "Generated node should have _get_tdd_connection_info method"
+        )
 
         # Since the method is defined in a closure, we can't easily get source code
         # Instead, test that it handles missing parameters correctly
@@ -154,9 +154,9 @@ class TestDataFlowBugFixesValidation:
 
         # Verify the node has the required attributes
         assert hasattr(node_instance, "logger"), "Node should have logger attribute"
-        assert hasattr(
-            node_instance, "dataflow_instance"
-        ), "Node should have dataflow_instance attribute"
+        assert hasattr(node_instance, "dataflow_instance"), (
+            "Node should have dataflow_instance attribute"
+        )
 
         # Set up a scenario that will trigger the exception path
         node_instance.dataflow_instance = Mock()

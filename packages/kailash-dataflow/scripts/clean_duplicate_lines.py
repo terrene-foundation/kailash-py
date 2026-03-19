@@ -53,9 +53,7 @@ def clean_duplicates(file_path):
 
 def main():
     """Clean duplicate lines from test files."""
-    history_file = Path(
-        ""
-    )
+    history_file = Path("")
 
     removed = clean_duplicates(history_file)
     print(f"Removed {removed} duplicate lines from {history_file.name}")

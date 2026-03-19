@@ -449,9 +449,9 @@ class TestWarningCountReduction:
         ]
 
         # Test that we have more debug than warning messages for informational content
-        assert (
-            len(debug_messages) >= 6
-        ), "Should have at least 6 informational messages as DEBUG"
+        assert len(debug_messages) >= 6, (
+            "Should have at least 6 informational messages as DEBUG"
+        )
 
         # The key metric: informational messages are DEBUG, actual issues are WARNING
         assert len(debug_messages) > 0
@@ -516,9 +516,9 @@ class TestSourceCodeLogLevels:
 
         # After the fix, there should be no logger.info calls in nodes.py
         # All operational/debug logs should be logger.debug
-        assert (
-            info_count == 0
-        ), f"Found {info_count} logger.info() calls in nodes.py - should be 0"
+        assert info_count == 0, (
+            f"Found {info_count} logger.info() calls in nodes.py - should be 0"
+        )
 
     def test_engine_py_no_info_level_for_debug_messages(self):
         """Verify engine.py doesn't use logger.info for debug messages."""
@@ -533,9 +533,9 @@ class TestSourceCodeLogLevels:
 
         # After the fix, there should be no logger.info calls in engine.py
         # All operational/debug logs should be logger.debug
-        assert (
-            info_count == 0
-        ), f"Found {info_count} logger.info() calls in engine.py - should be 0"
+        assert info_count == 0, (
+            f"Found {info_count} logger.info() calls in engine.py - should be 0"
+        )
 
     def test_nodes_py_still_has_warnings_for_real_issues(self):
         """Verify nodes.py still uses logger.warning for real issues."""
@@ -555,9 +555,9 @@ class TestSourceCodeLogLevels:
         # - Failed to parse datetime
         # - Failed to parse conflict_on JSON
         # - Failed to ensure table exists
-        assert (
-            warning_count >= 5
-        ), f"Found only {warning_count} logger.warning() calls in nodes.py - expected at least 5"
+        assert warning_count >= 5, (
+            f"Found only {warning_count} logger.warning() calls in nodes.py - expected at least 5"
+        )
 
     def test_engine_py_still_has_warnings_for_real_issues(self):
         """Verify engine.py still uses logger.warning for real issues."""
@@ -576,9 +576,9 @@ class TestSourceCodeLogLevels:
         # - Migration failures
         # - Schema discovery fallbacks
         # - etc.
-        assert (
-            warning_count >= 10
-        ), f"Found only {warning_count} logger.warning() calls in engine.py - expected at least 10"
+        assert warning_count >= 10, (
+            f"Found only {warning_count} logger.warning() calls in engine.py - expected at least 10"
+        )
 
 
 @pytest.mark.unit
@@ -594,9 +594,9 @@ class TestMaskSensitiveValuesIntegration:
         source = inspect.getsource(nodes)
 
         # Check that mask_sensitive_values is imported
-        assert (
-            "from .logging_config import mask_sensitive_values" in source
-        ), "nodes.py should import mask_sensitive_values from logging_config"
+        assert "from .logging_config import mask_sensitive_values" in source, (
+            "nodes.py should import mask_sensitive_values from logging_config"
+        )
 
     def test_mask_sensitive_values_imported_in_engine(self):
         """Verify engine.py imports mask_sensitive_values."""
@@ -607,9 +607,9 @@ class TestMaskSensitiveValuesIntegration:
         source = inspect.getsource(engine)
 
         # Check that mask_sensitive_values is imported
-        assert (
-            "from .logging_config import mask_sensitive_values" in source
-        ), "engine.py should import mask_sensitive_values from logging_config"
+        assert "from .logging_config import mask_sensitive_values" in source, (
+            "engine.py should import mask_sensitive_values from logging_config"
+        )
 
     def test_connection_string_masking_in_node_logs(self):
         """Verify connection strings are masked when logged in nodes."""

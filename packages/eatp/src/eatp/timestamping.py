@@ -201,9 +201,7 @@ class TimestampResponse:
             algorithm=request_data.get("algorithm", "sha256"),
         )
         token = TimestampToken.from_dict(data["token"])
-        raw_response = (
-            bytes.fromhex(data["raw_response"]) if data.get("raw_response") else None
-        )
+        raw_response = bytes.fromhex(data["raw_response"]) if data.get("raw_response") else None
         return cls(
             request=request,
             token=token,
@@ -220,9 +218,7 @@ class TimestampAuthority(ABC):
     """
 
     @abstractmethod
-    async def get_timestamp(
-        self, hash_value: str, nonce: Optional[str] = None
-    ) -> TimestampResponse:
+    async def get_timestamp(self, hash_value: str, nonce: Optional[str] = None) -> TimestampResponse:
         """
         Get a timestamp for a hash value.
 
@@ -387,9 +383,7 @@ class LocalTimestampAuthority(TimestampAuthority):
                 current_timestamp.isoformat(),
             )
 
-    async def get_timestamp(
-        self, hash_value: str, nonce: Optional[str] = None
-    ) -> TimestampResponse:
+    async def get_timestamp(self, hash_value: str, nonce: Optional[str] = None) -> TimestampResponse:
         """
         Get a timestamp for a hash value.
 
@@ -527,9 +521,7 @@ class RFC3161TimestampAuthority(TimestampAuthority):
         """URL of this timestamp authority."""
         return self._url
 
-    async def get_timestamp(
-        self, hash_value: str, nonce: Optional[str] = None
-    ) -> TimestampResponse:
+    async def get_timestamp(self, hash_value: str, nonce: Optional[str] = None) -> TimestampResponse:
         """
         Get a timestamp from an RFC 3161 Time Stamping Authority.
 
@@ -608,9 +600,7 @@ class RFC3161TimestampAuthority(TimestampAuthority):
                     headers={"Content-Type": "application/timestamp-query"},
                 ) as resp:
                     if resp.status != 200:
-                        raise RuntimeError(
-                            f"TSA returned HTTP {resp.status}: {await resp.text()}"
-                        )
+                        raise RuntimeError(f"TSA returned HTTP {resp.status}: {await resp.text()}")
 
                     raw_response = await resp.read()
 
@@ -650,10 +640,7 @@ class RFC3161TimestampAuthority(TimestampAuthority):
             return False
 
         if token.authority != self._url:
-            logger.warning(
-                f"Token authority {token.authority} does not match "
-                f"configured TSA {self._url}"
-            )
+            logger.warning(f"Token authority {token.authority} does not match configured TSA {self._url}")
             return False
 
         try:
@@ -702,9 +689,7 @@ class RFC3161TimestampAuthority(TimestampAuthority):
 
         # MessageImprint: SEQUENCE { AlgorithmIdentifier, OCTET STRING }
         hash_der = bytes([0x04, len(hash_bytes)]) + hash_bytes
-        msg_imprint = (
-            bytes([0x30, len(sha256_oid) + len(hash_der)]) + sha256_oid + hash_der
-        )
+        msg_imprint = bytes([0x30, len(sha256_oid) + len(hash_der)]) + sha256_oid + hash_der
 
         # Nonce (INTEGER)
         nonce_bytes = nonce.to_bytes((nonce.bit_length() + 7) // 8 or 1, "big")
@@ -808,9 +793,7 @@ class TimestampAnchorManager:
                 self._anchor_history.append(response)
                 return response
             except Exception as e:
-                logger.debug(
-                    "Fallback timestamp authority failed: %s", type(e).__name__
-                )
+                logger.debug("Fallback timestamp authority failed: %s", type(e).__name__)
                 continue
 
         # Try local fallback
@@ -819,9 +802,7 @@ class TimestampAnchorManager:
             self._anchor_history.append(response)
             return response
 
-        raise RuntimeError(
-            "All timestamp authorities failed and local fallback is disabled"
-        )
+        raise RuntimeError("All timestamp authorities failed and local fallback is disabled")
 
     async def anchor_merkle_root(self, tree: MerkleTree) -> TimestampResponse:
         """
@@ -864,11 +845,7 @@ class TimestampAnchorManager:
             if token.authority == fallback.authority_url:
                 return await fallback.verify_timestamp(token)
 
-        if (
-            self._local_fallback
-            and self._local is not None
-            and token.authority == self._local.authority_url
-        ):
+        if self._local_fallback and self._local is not None and token.authority == self._local.authority_url:
             return await self._local.verify_timestamp(token)
 
         # Unknown authority - cannot verify
@@ -899,9 +876,7 @@ class TimestampAnchorManager:
         self._anchor_history.clear()
 
 
-async def verify_timestamp_token(
-    token: TimestampToken, authority: TimestampAuthority
-) -> bool:
+async def verify_timestamp_token(token: TimestampToken, authority: TimestampAuthority) -> bool:
     """
     Verify a timestamp token using a specific authority.
 

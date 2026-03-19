@@ -162,14 +162,14 @@ class EnterpriseAuthProviderNode(CoreEnterpriseAuthNode):
 User ID: {user_id}
 
 Context Information:
-- IP Address: {risk_context.get('ip_address', 'unknown')}
-- Device Recognized: {risk_context.get('device_info', {}).get('recognized', False)}
-- Device Info: {json.dumps(risk_context.get('device_info', {}), indent=2)}
-- Location: {risk_context.get('location', 'unknown')}
-- Timestamp: {risk_context.get('timestamp', 'unknown')}
+- IP Address: {risk_context.get("ip_address", "unknown")}
+- Device Recognized: {risk_context.get("device_info", {}).get("recognized", False)}
+- Device Info: {json.dumps(risk_context.get("device_info", {}), indent=2)}
+- Location: {risk_context.get("location", "unknown")}
+- Timestamp: {risk_context.get("timestamp", "unknown")}
 
 Risk Factors Already Identified:
-{', '.join(existing_factors) if existing_factors else 'None'}
+{", ".join(existing_factors) if existing_factors else "None"}
 
 Analyze this authentication attempt considering:
 1. Behavioral patterns: Is this consistent with normal user behavior?

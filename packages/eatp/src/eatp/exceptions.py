@@ -43,9 +43,7 @@ class AuthorityInactiveError(TrustError):
         message = f"Authority is inactive: {authority_id}"
         if reason:
             message += f" ({reason})"
-        super().__init__(
-            message, details={"authority_id": authority_id, "reason": reason}
-        )
+        super().__init__(message, details={"authority_id": authority_id, "reason": reason})
         self.authority_id = authority_id
         self.reason = reason
 
@@ -64,9 +62,7 @@ class TrustChainNotFoundError(TrustError):
 class InvalidTrustChainError(TrustError):
     """Raised when a trust chain fails verification."""
 
-    def __init__(
-        self, agent_id: str, reason: str, violations: Optional[List[str]] = None
-    ):
+    def __init__(self, agent_id: str, reason: str, violations: Optional[List[str]] = None):
         super().__init__(
             f"Invalid trust chain for agent {agent_id}: {reason}",
             details={
@@ -165,9 +161,7 @@ class InvalidSignatureError(TrustError):
         record_type: Optional[str] = None,
         record_id: Optional[str] = None,
     ):
-        super().__init__(
-            message, details={"record_type": record_type, "record_id": record_id}
-        )
+        super().__init__(message, details={"record_type": record_type, "record_id": record_id})
         self.record_type = record_type
         self.record_id = record_id
 
@@ -201,9 +195,7 @@ class DelegationExpiredError(DelegationError):
     """Raised when attempting to use an expired delegation."""
 
     def __init__(self, delegation_id: str, expired_at: str):
-        super().__init__(
-            f"Delegation {delegation_id} expired at {expired_at}", reason="expired"
-        )
+        super().__init__(f"Delegation {delegation_id} expired at {expired_at}", reason="expired")
         self.delegation_id = delegation_id
         self.expired_at = expired_at
 

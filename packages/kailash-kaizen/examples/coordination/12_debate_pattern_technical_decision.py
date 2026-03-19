@@ -197,11 +197,11 @@ def main():
     decision_reports = []
 
     for idx, decision in enumerate(TECHNICAL_DECISIONS, 1):
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         print(
             f"TECHNICAL DECISION {idx}/{len(TECHNICAL_DECISIONS)}: {decision['title']}"
         )
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         print()
 
         print("Context:")

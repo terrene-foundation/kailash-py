@@ -189,7 +189,9 @@ class ContentAnalyzerAgent(BaseAgent):
         topics = (
             topics_raw
             if isinstance(topics_raw, list)
-            else [topics_raw] if topics_raw else ["general"]
+            else [topics_raw]
+            if topics_raw
+            else ["general"]
         )
 
         sentiment = result.get("sentiment", "neutral")
@@ -198,7 +200,9 @@ class ContentAnalyzerAgent(BaseAgent):
         entities = (
             entities_raw
             if isinstance(entities_raw, list)
-            else [] if self.doc_config.extract_entities else []
+            else []
+            if self.doc_config.extract_entities
+            else []
         )
 
         key_points_raw = result.get("key_points", [])

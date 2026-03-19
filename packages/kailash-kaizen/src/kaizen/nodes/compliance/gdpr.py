@@ -1099,7 +1099,6 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 and consent_record.purpose == purpose
                 and consent_record.status == ConsentStatus.GIVEN
             ):
-
                 consent_record.status = ConsentStatus.WITHDRAWN
                 consent_record.withdrawn_at = datetime.now(UTC)
                 withdrawn_count += 1
@@ -1313,7 +1312,6 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 and consent_record.purpose == purpose
                 and consent_record.status == ConsentStatus.GIVEN
             ):
-
                 # Check if not expired
                 if (
                     not consent_record.expires_at
@@ -1523,7 +1521,7 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         prompt = f"""Analyze the following GDPR compliance scenario and provide expert insights:
 
 Data Type: {data_type}
-Frameworks: {', '.join(self.frameworks)}
+Frameworks: {", ".join(self.frameworks)}
 
 PII Detected:
 {pii_summary if pii_summary else "No PII detected"}

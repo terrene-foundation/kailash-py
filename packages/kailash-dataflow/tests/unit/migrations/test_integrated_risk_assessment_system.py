@@ -253,9 +253,9 @@ class TestIntegratedRiskAssessmentSystem:
         total_time = time.time() - start_time
 
         # Verify performance requirement (<2 seconds end-to-end)
-        assert (
-            total_time < 2.0
-        ), f"End-to-end assessment took {total_time:.3f}s, should be < 2.0s"
+        assert total_time < 2.0, (
+            f"End-to-end assessment took {total_time:.3f}s, should be < 2.0s"
+        )
 
         # Verify result structure
         assert isinstance(result, IntegratedAssessmentResult)
@@ -552,9 +552,9 @@ class TestIntegratedRiskAssessmentSystem:
         generation_time = time.time() - start_time
 
         # Should be very fast (<0.2 seconds)
-        assert (
-            generation_time < 0.2
-        ), f"Executive summary generation took {generation_time:.3f}s, should be < 0.2s"
+        assert generation_time < 0.2, (
+            f"Executive summary generation took {generation_time:.3f}s, should be < 0.2s"
+        )
 
         # Verify summary content
         assert executive_summary.overall_risk_level in [
@@ -860,9 +860,9 @@ class TestFactoryFunctions:
             execution_time = time.time() - start_time
 
             # Should be very fast
-            assert (
-                execution_time < 0.5
-            ), f"Quick assessment took {execution_time:.3f}s, should be < 0.5s"
+            assert execution_time < 0.5, (
+                f"Quick assessment took {execution_time:.3f}s, should be < 0.5s"
+            )
 
             # Should return executive summary
             assert executive_summary.overall_risk_level in [
@@ -932,9 +932,9 @@ class TestFactoryFunctions:
             execution_time = time.time() - start_time
 
             # Should meet performance requirements
-            assert (
-                execution_time < 3.0
-            ), f"Comprehensive assessment took {execution_time:.3f}s, should be < 3.0s"
+            assert execution_time < 3.0, (
+                f"Comprehensive assessment took {execution_time:.3f}s, should be < 3.0s"
+            )
 
             # Should return complete result
             assert isinstance(result, IntegratedAssessmentResult)
@@ -1040,9 +1040,9 @@ class TestPerformanceBenchmarks:
             execution_time = time.time() - start_time
 
             # Should still meet performance requirements even with large datasets
-            assert (
-                execution_time < 5.0
-            ), f"Large-scale assessment took {execution_time:.3f}s, should be < 5.0s"
+            assert execution_time < 5.0, (
+                f"Large-scale assessment took {execution_time:.3f}s, should be < 5.0s"
+            )
 
             # Results should be comprehensive
             assert result is not None
@@ -1142,9 +1142,9 @@ class TestPerformanceBenchmarks:
             total_time = time.time() - start_time
 
             # Should handle multiple operations efficiently
-            assert (
-                total_time < 10.0
-            ), f"Concurrent simulation took {total_time:.3f}s for 5 operations"
+            assert total_time < 10.0, (
+                f"Concurrent simulation took {total_time:.3f}s for 5 operations"
+            )
 
             # All operations should succeed
             assert len(results) == 5

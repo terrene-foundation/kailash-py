@@ -141,9 +141,9 @@ class TestMigrationFoundationE2E:
             expected_models = ["User", "Post", "Comment", "Category", "Tag"]
 
             for model_name in expected_models:
-                assert (
-                    model_name in final_models
-                ), f"Model {model_name} not found in final models"
+                assert model_name in final_models, (
+                    f"Model {model_name} not found in final models"
+                )
 
             # Verify migration system handled all changes
             migration_system = dataflow._migration_system
@@ -341,9 +341,9 @@ class TestMigrationFoundationE2E:
                         new_field_causing_failure: str  # This will trigger migration
 
                     # Verify rollback was executed after failure
-                    assert (
-                        rollback_executed
-                    ), "Rollback should have been executed after migration failure"
+                    assert rollback_executed, (
+                        "Rollback should have been executed after migration failure"
+                    )
 
                 finally:
                     # Restore original methods
@@ -402,14 +402,14 @@ class TestMigrationFoundationE2E:
             last_login: Optional[str]  # Another new field
 
         # Verify user confirmation workflow was triggered
-        assert (
-            len(confirmation_requests) > 0
-        ), "User confirmation should have been requested"
+        assert len(confirmation_requests) > 0, (
+            "User confirmation should have been requested"
+        )
 
         # Verify migration previews were generated
-        assert (
-            len(migration_previews) > 0
-        ), "Migration previews should have been generated"
+        assert len(migration_previews) > 0, (
+            "Migration previews should have been generated"
+        )
 
         # Verify preview contains expected migration SQL
         preview_content = " ".join(migration_previews)
@@ -447,18 +447,18 @@ class TestMigrationFoundationE2E:
                 updated_at: Optional[str]
 
             # Verify migration system works consistently
-            assert hasattr(
-                dataflow, "_migration_system"
-            ), f"Migration system missing for {db_name}"
-            assert (
-                dataflow._migration_system is not None
-            ), f"Migration system not initialized for {db_name}"
+            assert hasattr(dataflow, "_migration_system"), (
+                f"Migration system missing for {db_name}"
+            )
+            assert dataflow._migration_system is not None, (
+                f"Migration system not initialized for {db_name}"
+            )
 
             # Verify model registration worked
             models = dataflow.get_models()
-            assert (
-                "CrossDbConsistencyTest" in models
-            ), f"Model registration failed for {db_name}"
+            assert "CrossDbConsistencyTest" in models, (
+                f"Model registration failed for {db_name}"
+            )
 
     def test_high_volume_schema_changes_performance_e2e(self):
         """Test migration system performance with high volume of schema changes."""
@@ -505,9 +505,9 @@ class TestMigrationFoundationE2E:
         total_time = end_time - start_time
 
         # Should handle high volume efficiently (< 10 seconds for E2E)
-        assert (
-            total_time < 10.0
-        ), f"Migration system too slow for high volume: {total_time} seconds"
+        assert total_time < 10.0, (
+            f"Migration system too slow for high volume: {total_time} seconds"
+        )
 
         # Verify all models were processed
         final_models = dataflow.get_models()
@@ -608,15 +608,15 @@ class TestMigrationFoundationE2E:
             new_field: str  # Should trigger migration confirmation
 
         # Verify user was communicated with (no silent operation)
-        assert (
-            len(user_communications) > 0
-        ), "Silent failure mode detected - user should receive communications"
+        assert len(user_communications) > 0, (
+            "Silent failure mode detected - user should receive communications"
+        )
 
         # Verify types of communications
         has_confirmation = any("CONFIRMATION" in comm for comm in user_communications)
         has_preview = any("PREVIEW" in comm for comm in user_communications)
 
         # At least one type of user communication should have occurred
-        assert (
-            has_confirmation or has_preview
-        ), "User should receive migration confirmations or previews"
+        assert has_confirmation or has_preview, (
+            "User should receive migration confirmations or previews"
+        )

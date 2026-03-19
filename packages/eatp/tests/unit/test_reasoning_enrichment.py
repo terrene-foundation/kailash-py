@@ -172,9 +172,7 @@ class TestReasoningCompletenessScore:
 
     def test_signature_verified_adds_10_points(self, minimal_trace):
         """signature_verified=True adds exactly 10 points over base score."""
-        base_score = reasoning_completeness_score(
-            minimal_trace, signature_verified=False
-        )
+        base_score = reasoning_completeness_score(minimal_trace, signature_verified=False)
         sig_score = reasoning_completeness_score(minimal_trace, signature_verified=True)
         assert sig_score - base_score == 10
 

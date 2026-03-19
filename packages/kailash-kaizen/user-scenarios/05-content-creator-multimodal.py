@@ -201,8 +201,8 @@ def main():
 
     strategy_prompt = f"""
     Based on these {len(SAMPLE_IMAGES)} products analyzed:
-    - Categories: {', '.join(set(img['category'] for img in SAMPLE_IMAGES))}
-    - Products: {', '.join(img['title'] for img in SAMPLE_IMAGES)}
+    - Categories: {", ".join(set(img["category"] for img in SAMPLE_IMAGES))}
+    - Products: {", ".join(img["title"] for img in SAMPLE_IMAGES)}
 
     Suggest:
     1. Overall content strategy for these products

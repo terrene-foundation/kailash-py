@@ -26,9 +26,9 @@ class TestTenantTrustManagerLockExists:
         """ROUND7-001: Verify _lock attribute exists on TenantTrustManager."""
         manager = TenantTrustManager(strict_mode=True)
 
-        assert hasattr(
-            manager, "_lock"
-        ), "TenantTrustManager must have _lock attribute for thread safety"
+        assert hasattr(manager, "_lock"), (
+            "TenantTrustManager must have _lock attribute for thread safety"
+        )
 
     def test_lock_is_threading_lock(self):
         """ROUND7-001: Verify _lock is a threading.Lock instance."""
@@ -39,12 +39,12 @@ class TestTenantTrustManagerLockExists:
         # We verify it has the acquire/release interface
         assert hasattr(manager._lock, "acquire"), "_lock must have acquire() method"
         assert hasattr(manager._lock, "release"), "_lock must have release() method"
-        assert hasattr(
-            manager._lock, "__enter__"
-        ), "_lock must support context manager protocol"
-        assert hasattr(
-            manager._lock, "__exit__"
-        ), "_lock must support context manager protocol"
+        assert hasattr(manager._lock, "__enter__"), (
+            "_lock must support context manager protocol"
+        )
+        assert hasattr(manager._lock, "__exit__"), (
+            "_lock must support context manager protocol"
+        )
 
     def test_lock_is_reentrant_safe(self):
         """Test that lock can be acquired and released properly."""
@@ -119,9 +119,9 @@ class TestConcurrentDelegationCreation:
         )
 
         # Verify all delegation IDs are unique
-        assert (
-            len(created_ids) == total_expected
-        ), "Not all delegation IDs were recorded"
+        assert len(created_ids) == total_expected, (
+            "Not all delegation IDs were recorded"
+        )
         assert len(set(created_ids)) == total_expected, "Delegation IDs are not unique"
 
     def test_concurrent_creates_preserve_all_delegation_ids(self):
@@ -165,9 +165,9 @@ class TestConcurrentDelegationCreation:
         # Verify all delegation IDs are in the manager
         stored_ids = set(manager._delegations.keys())
         missing_ids = delegation_ids - stored_ids
-        assert (
-            len(missing_ids) == 0
-        ), f"Missing delegation IDs after concurrent creates: {missing_ids}"
+        assert len(missing_ids) == 0, (
+            f"Missing delegation IDs after concurrent creates: {missing_ids}"
+        )
 
 
 class TestConcurrentCreateAndRevoke:
@@ -272,9 +272,9 @@ class TestConcurrentCreateAndRevoke:
         # Revoke each only once - should all succeed
         for d in delegations:
             result = loop.run_until_complete(manager.revoke_delegation(d.delegation_id))
-            assert (
-                result is True
-            ), f"First revocation should succeed for {d.delegation_id}"
+            assert result is True, (
+                f"First revocation should succeed for {d.delegation_id}"
+            )
 
         # All should now be revoked
         for d in delegations:
@@ -335,13 +335,13 @@ class TestConcurrentCreateAndVerify:
                             )
                         )
                         # Result should be (bool, Optional[str])
-                        assert isinstance(
-                            result, tuple
-                        ), "verify result should be tuple"
+                        assert isinstance(result, tuple), (
+                            "verify result should be tuple"
+                        )
                         assert len(result) == 2, "verify result should have 2 elements"
-                        assert isinstance(
-                            result[0], bool
-                        ), "first element should be bool"
+                        assert isinstance(result[0], bool), (
+                            "first element should be bool"
+                        )
             except Exception as e:
                 errors.append(e)
             finally:
@@ -424,9 +424,9 @@ class TestConcurrentCreateAndVerify:
         # All results should be (True, None) since we created a valid delegation
         for r in results:
             assert r[0] is True, f"All verifications should succeed, got {r}"
-            assert (
-                r[1] is None
-            ), f"Successful verification should have None reason, got {r}"
+            assert r[1] is None, (
+                f"Successful verification should have None reason, got {r}"
+            )
 
 
 class TestConcurrentCreateAndList:
@@ -471,17 +471,17 @@ class TestConcurrentCreateAndList:
                     all_delegations = loop.run_until_complete(
                         manager.list_delegations()
                     )
-                    assert isinstance(
-                        all_delegations, list
-                    ), "list_delegations should return list"
+                    assert isinstance(all_delegations, list), (
+                        "list_delegations should return list"
+                    )
 
                     # List by tenant
                     tenant_delegations = loop.run_until_complete(
                         manager.list_delegations(tenant_id="src-0")
                     )
-                    assert isinstance(
-                        tenant_delegations, list
-                    ), "list_delegations with tenant should return list"
+                    assert isinstance(tenant_delegations, list), (
+                        "list_delegations with tenant should return list"
+                    )
 
                     time.sleep(0.005)  # Small delay
             except Exception as e:
@@ -537,21 +537,21 @@ class TestConcurrentCreateAndList:
                     delegations = tl.run_until_complete(manager.list_delegations())
                     for d in delegations:
                         # Verify all fields are present and valid
-                        assert (
-                            d.delegation_id is not None
-                        ), "delegation_id should not be None"
-                        assert (
-                            d.source_tenant_id is not None
-                        ), "source_tenant_id should not be None"
-                        assert (
-                            d.target_tenant_id is not None
-                        ), "target_tenant_id should not be None"
-                        assert isinstance(
-                            d.allowed_models, list
-                        ), "allowed_models should be list"
-                        assert isinstance(
-                            d.allowed_operations, set
-                        ), "allowed_operations should be set"
+                        assert d.delegation_id is not None, (
+                            "delegation_id should not be None"
+                        )
+                        assert d.source_tenant_id is not None, (
+                            "source_tenant_id should not be None"
+                        )
+                        assert d.target_tenant_id is not None, (
+                            "target_tenant_id should not be None"
+                        )
+                        assert isinstance(d.allowed_models, list), (
+                            "allowed_models should be list"
+                        )
+                        assert isinstance(d.allowed_operations, set), (
+                            "allowed_operations should be set"
+                        )
             except Exception as e:
                 errors.append(e)
             finally:
@@ -601,8 +601,8 @@ class TestHighConcurrencyStress:
                         # Verify access
                         loop.run_until_complete(
                             manager.verify_cross_tenant_access(
-                                source_tenant_id=f"stress-src-{thread_id}-{max(0, i-5)}",
-                                target_tenant_id=f"stress-tgt-{thread_id}-{max(0, i-5)}",
+                                source_tenant_id=f"stress-src-{thread_id}-{max(0, i - 5)}",
+                                target_tenant_id=f"stress-tgt-{thread_id}-{max(0, i - 5)}",
                                 agent_id=f"receiver-{thread_id}",
                                 model="StressModel",
                                 operation="SELECT",
@@ -650,17 +650,17 @@ class TestHighConcurrencyStress:
                     errors.append(e)
 
         # Check no exceptions
-        assert (
-            len(errors) == 0
-        ), f"Errors during high-concurrency stress test: {errors[:5]}"
+        assert len(errors) == 0, (
+            f"Errors during high-concurrency stress test: {errors[:5]}"
+        )
 
         # Verify state is consistent - we created many delegations
         expected_creates = num_threads * (operations_per_thread // 6 + 1)
         actual_count = len(manager._delegations)
         # At minimum we should have many delegations (exact count depends on rounding)
-        assert (
-            actual_count >= expected_creates - num_threads
-        ), f"Expected at least {expected_creates - num_threads} delegations, got {actual_count}"
+        assert actual_count >= expected_creates - num_threads, (
+            f"Expected at least {expected_creates - num_threads} delegations, got {actual_count}"
+        )
 
     def test_extreme_concurrency_no_crashes(self):
         """ROUND7-001: Extreme concurrency doesn't cause crashes or hangs."""
@@ -719,9 +719,9 @@ class TestHighConcurrencyStress:
             t.join(timeout=30)
 
         # Verify all threads completed
-        assert (
-            completed_threads[0] == num_threads
-        ), f"Not all threads completed: {completed_threads[0]}/{num_threads}"
+        assert completed_threads[0] == num_threads, (
+            f"Not all threads completed: {completed_threads[0]}/{num_threads}"
+        )
 
         # Check no exceptions
         assert len(errors) == 0, f"Errors during extreme concurrency test: {errors[:5]}"

@@ -40,11 +40,7 @@ def _make_envelope(
         constraints.append(
             Constraint(
                 id=f"con-{i:03d}",
-                constraint_type=(
-                    ConstraintType.FINANCIAL
-                    if i % 2 == 0
-                    else ConstraintType.DATA_ACCESS
-                ),
+                constraint_type=(ConstraintType.FINANCIAL if i % 2 == 0 else ConstraintType.DATA_ACCESS),
                 value=100 * (i + 1) if i % 2 == 0 else f"scope_{i}",
                 source=f"cap-{i:03d}",
                 priority=i,
@@ -224,9 +220,7 @@ class TestFromBiscuit:
         restored = from_biscuit(token, public_key)
 
         assert len(restored.active_constraints) == 4
-        for original, restored_c in zip(
-            envelope.active_constraints, restored.active_constraints
-        ):
+        for original, restored_c in zip(envelope.active_constraints, restored.active_constraints):
             assert restored_c.id == original.id
             assert restored_c.constraint_type == original.constraint_type
             assert restored_c.source == original.source
@@ -239,9 +233,7 @@ class TestFromBiscuit:
         token = to_biscuit(envelope, private_key)
         restored = from_biscuit(token, public_key)
 
-        for original, restored_c in zip(
-            envelope.active_constraints, restored.active_constraints
-        ):
+        for original, restored_c in zip(envelope.active_constraints, restored.active_constraints):
             # Values may be converted through JSON, so compare string representations
             assert str(restored_c.value) == str(original.value)
 
@@ -394,9 +386,7 @@ class TestAttenuate:
         token = to_biscuit(envelope, private_key)
 
         attenuator_private, _ = generate_keypair()
-        attenuated = attenuate(
-            token, ["read_only", "max_rows:1000"], attenuator_private
-        )
+        attenuated = attenuate(token, ["read_only", "max_rows:1000"], attenuator_private)
 
         # Parse the attenuation block
         authority_block_len = struct.unpack(">I", attenuated[1:5])[0]
@@ -604,9 +594,7 @@ class TestEdgeCases:
         token = to_biscuit(envelope, private_key)
         restored = from_biscuit(token, public_key)
 
-        for original, restored_c in zip(
-            envelope.active_constraints, restored.active_constraints
-        ):
+        for original, restored_c in zip(envelope.active_constraints, restored.active_constraints):
             assert restored_c.constraint_type == original.constraint_type
 
     def test_different_keys_produce_different_tokens(self):

@@ -94,15 +94,15 @@ class TestBudgetIntegration:
         # Verify budget enforcement
         assert len(executed) > 0, "Some operations should execute"
         assert len(denied) > 0, "Some operations should be denied"
-        assert (
-            context.budget_used <= context.budget_limit
-        ), "Budget should not exceed limit"
+        assert context.budget_used <= context.budget_limit, (
+            "Budget should not exceed limit"
+        )
 
         # Verify correct denial of operations that would exceed budget
         # Last operation should be denied
-        assert denied[-1] in [
-            op[0] for op in operations[-2:]
-        ], "Later operations should be denied"
+        assert denied[-1] in [op[0] for op in operations[-2:]], (
+            "Later operations should be denied"
+        )
 
     def test_budget_exhaustion_triggers_denial(self):
         """

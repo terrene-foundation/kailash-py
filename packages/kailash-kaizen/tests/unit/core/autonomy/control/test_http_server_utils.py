@@ -287,9 +287,9 @@ class TestHTTPServerStreamEndpoint:
 
                 # Validate SSE format received
                 assert len(received_data) > 0, "No data received from SSE stream"
-                assert any(
-                    line.startswith("data:") for line in received_data
-                ), f"Expected SSE format with 'data:' prefix, got: {received_data}"
+                assert any(line.startswith("data:") for line in received_data), (
+                    f"Expected SSE format with 'data:' prefix, got: {received_data}"
+                )
 
 
 # ============================================

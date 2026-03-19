@@ -320,9 +320,9 @@ class TestColumnRemovalCompleteUserWorkflows:
             assert dependency_report.has_dependencies() is True
 
             total_deps = dependency_report.get_total_dependency_count()
-            assert (
-                total_deps >= 6
-            ), f"DBA expects comprehensive analysis, found {total_deps} dependencies"
+            assert total_deps >= 6, (
+                f"DBA expects comprehensive analysis, found {total_deps} dependencies"
+            )
 
             # Must detect all foreign key references (critical business data)
             fk_deps = dependency_report.dependencies.get(DependencyType.FOREIGN_KEY, [])
@@ -345,9 +345,9 @@ class TestColumnRemovalCompleteUserWorkflows:
 
             # Validate impact assessment for management presentation
             assert impact_report.assessment.overall_risk == ImpactLevel.CRITICAL
-            assert (
-                impact_report.assessment.critical_dependencies >= 3
-            ), "Management needs to see critical impact"
+            assert impact_report.assessment.critical_dependencies >= 3, (
+                "Management needs to see critical impact"
+            )
 
             # Generate multiple report formats for different audiences
             console_report = impact_reporter.format_user_friendly_report(
@@ -395,9 +395,9 @@ class TestColumnRemovalCompleteUserWorkflows:
             )
 
             # Validate DBA safety assessment
-            assert (
-                safety_validation.is_safe is False
-            ), "DBA expects system to block dangerous removal"
+            assert safety_validation.is_safe is False, (
+                "DBA expects system to block dangerous removal"
+            )
             assert safety_validation.risk_level == ImpactLevel.CRITICAL
             assert len(safety_validation.blocking_dependencies) >= 3
             assert safety_validation.requires_confirmation is True
@@ -484,12 +484,12 @@ class TestColumnRemovalCompleteUserWorkflows:
                 f"SELECT COUNT(*) FROM user_orders_{test_id}"
             )
 
-            assert (
-                final_customer_count == 5
-            ), "Customer data must be preserved during analysis"
-            assert (
-                final_order_count == 5
-            ), "Order data must be preserved during analysis"
+            assert final_customer_count == 5, (
+                "Customer data must be preserved during analysis"
+            )
+            assert final_order_count == 5, (
+                "Order data must be preserved during analysis"
+            )
 
         finally:
             # Cleanup handled by fixture
@@ -648,9 +648,9 @@ class TestColumnRemovalCompleteUserWorkflows:
                     )
 
             # Developer expects most legacy columns to be safe for removal
-            assert (
-                len(safe_columns) >= 2
-            ), f"Expected some safe columns, found: {safe_columns}"
+            assert len(safe_columns) >= 2, (
+                f"Expected some safe columns, found: {safe_columns}"
+            )
 
             # **STEP 4**: Developer plans and executes safe removal
             logger.info(
@@ -672,9 +672,9 @@ class TestColumnRemovalCompleteUserWorkflows:
                     await column_removal_manager.validate_removal_safety(removal_plan)
                 )
 
-                assert (
-                    safety_validation.is_safe is True
-                ), f"Expected {column} to be safe for removal"
+                assert safety_validation.is_safe is True, (
+                    f"Expected {column} to be safe for removal"
+                )
                 assert safety_validation.risk_level in [
                     ImpactLevel.LOW,
                     ImpactLevel.INFORMATIONAL,
@@ -718,9 +718,9 @@ class TestColumnRemovalCompleteUserWorkflows:
                         )
                     """
                     )
-                    assert (
-                        column_exists is False
-                    ), f"Column {column} should have been removed"
+                    assert column_exists is False, (
+                        f"Column {column} should have been removed"
+                    )
 
             # Verify active functionality still works (dependencies preserved)
             active_view_works = await e2e_connection.fetchval(
@@ -731,9 +731,9 @@ class TestColumnRemovalCompleteUserWorkflows:
             inventory_fk_works = await e2e_connection.fetchval(
                 f"SELECT COUNT(*) FROM user_inventory_{test_id}"
             )
-            assert (
-                inventory_fk_works == 3
-            ), "Inventory FK relationships should still work"
+            assert inventory_fk_works == 3, (
+                "Inventory FK relationships should still work"
+            )
 
             # Verify data integrity
             product_count = await e2e_connection.fetchval(
@@ -1037,9 +1037,9 @@ class TestColumnRemovalCompleteUserWorkflows:
             successful_automations = sum(1 for r in automation_results if r["success"])
 
             # DevOps expects all approved changes to execute successfully
-            assert (
-                successful_automations >= 2
-            ), f"Expected successful automated removals, got {successful_automations}"
+            assert successful_automations >= 2, (
+                f"Expected successful automated removals, got {successful_automations}"
+            )
 
             # **STEP 6**: DevOps validates data integrity after automation
             logger.info(
@@ -1069,9 +1069,9 @@ class TestColumnRemovalCompleteUserWorkflows:
                 AND constraint_name = 'fk_sessions_user_{test_id}'
             """
             )
-            assert (
-                email_constraint_exists == 1
-            ), "Critical FK constraint must be preserved"
+            assert email_constraint_exists == 1, (
+                "Critical FK constraint must be preserved"
+            )
 
             total_pipeline_time = sum(
                 r["analysis_time_seconds"] for r in pipeline_results
@@ -1438,12 +1438,12 @@ class TestColumnRemovalCompleteUserWorkflows:
 
             # Verify expected data patterns
             assert len(total_events_by_user) == 3, "All users should be preserved"
-            assert (
-                total_events_by_user[0]["event_count"] == 2
-            ), "User 001 should have 2 events"
-            assert (
-                total_events_by_user[1]["event_count"] == 2
-            ), "User 002 should have 2 events"
+            assert total_events_by_user[0]["event_count"] == 2, (
+                "User 001 should have 2 events"
+            )
+            assert total_events_by_user[1]["event_count"] == 2, (
+                "User 002 should have 2 events"
+            )
 
             successful_phase1 = sum(1 for r in phase1_results if r["success"])
             total_refactoring_time = sum(

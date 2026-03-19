@@ -619,10 +619,10 @@ class DashboardRenderer:
         lines.append(
             f"  Checkpoint Save: "
             f"mean={checkpoint['save_mean']:.0f}ms | "
-            f"compression={checkpoint['compression_ratio']*100:.0f}%"
+            f"compression={checkpoint['compression_ratio'] * 100:.0f}%"
         )
 
-        lines.append(f"  Checkpoint Load: " f"mean={checkpoint['load_mean']:.0f}ms")
+        lines.append(f"  Checkpoint Load: mean={checkpoint['load_mean']:.0f}ms")
 
         return "\n".join(lines)
 

@@ -242,9 +242,9 @@ class TestSyncDDLAutoMigrate:
             )
             tables = cursor.fetchall()
             conn.close()
-            assert (
-                len(tables) == 0
-            ), "Table should NOT be created in existing_schema_mode"
+            assert len(tables) == 0, (
+                "Table should NOT be created in existing_schema_mode"
+            )
 
 
 @pytest.mark.asyncio
@@ -396,9 +396,9 @@ class TestSyncDDLInMemoryLimitation:
 
         # create_tables_sync should return False for in-memory databases
         success = db.create_tables_sync()
-        assert (
-            not success
-        ), "create_tables_sync should return False for :memory: databases"
+        assert not success, (
+            "create_tables_sync should return False for :memory: databases"
+        )
 
 
 class TestSyncDDLEdgeCases:
@@ -462,9 +462,9 @@ class TestSyncDDLEdgeCases:
                 "created_at",
                 "updated_at",
             }
-            assert expected.issubset(
-                columns
-            ), f"Expected columns {expected}, got {columns}"
+            assert expected.issubset(columns), (
+                f"Expected columns {expected}, got {columns}"
+            )
 
 
 if __name__ == "__main__":

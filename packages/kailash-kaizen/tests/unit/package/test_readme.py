@@ -33,15 +33,15 @@ class TestReadme:
     def test_readme_not_empty(self, readme_content):
         """Test that README is not empty."""
         assert len(readme_content) > 0, "README.md should not be empty"
-        assert (
-            len(readme_content) > 100
-        ), "README.md should have substantial content (>100 chars)"
+        assert len(readme_content) > 100, (
+            "README.md should have substantial content (>100 chars)"
+        )
 
     def test_readme_has_title(self, readme_content):
         """Test that README has a title (# heading)."""
-        assert readme_content.startswith(
-            "#"
-        ), "README should start with a title (# heading)"
+        assert readme_content.startswith("#"), (
+            "README should start with a title (# heading)"
+        )
 
         # Extract first line
         first_line = readme_content.split("\n")[0]
@@ -81,12 +81,12 @@ class TestReadme:
 
     def test_readme_has_installation_command(self, readme_content):
         """Test that README includes pip install command."""
-        assert (
-            "pip install" in readme_content
-        ), "README should include 'pip install' command"
-        assert (
-            "kailash-kaizen" in readme_content
-        ), "README should mention 'kailash-kaizen' package name"
+        assert "pip install" in readme_content, (
+            "README should include 'pip install' command"
+        )
+        assert "kailash-kaizen" in readme_content, (
+            "README should mention 'kailash-kaizen' package name"
+        )
 
     def test_readme_has_quick_start(self, readme_content):
         """Test that README has a quick start or usage section."""
@@ -98,9 +98,9 @@ class TestReadme:
     def test_readme_has_code_examples(self, readme_content):
         """Test that README contains code examples."""
         # Look for Python code blocks
-        assert (
-            "```python" in readme_content or "```py" in readme_content
-        ), "README should contain Python code examples"
+        assert "```python" in readme_content or "```py" in readme_content, (
+            "README should contain Python code examples"
+        )
 
     def test_readme_code_examples_valid_syntax(self, readme_content):
         """Test that code examples in README have valid Python syntax.
@@ -147,9 +147,9 @@ class TestReadme:
                 pytest.fail(f"Code block {i} has syntax error: {e}\n\nCode:\n{code}")
 
         # At least some code blocks should be syntactically valid
-        assert (
-            valid_count > 0
-        ), "README should have at least one valid Python code example"
+        assert valid_count > 0, (
+            "README should have at least one valid Python code example"
+        )
 
     def test_readme_has_documentation_links(self, readme_content):
         """Test that README has links to documentation."""
@@ -167,9 +167,9 @@ class TestReadme:
 
     def test_readme_mentions_kailash_sdk(self, readme_content):
         """Test that README mentions Kailash SDK dependency."""
-        assert (
-            "kailash" in readme_content.lower()
-        ), "README should mention Kailash SDK dependency"
+        assert "kailash" in readme_content.lower(), (
+            "README should mention Kailash SDK dependency"
+        )
 
     def test_readme_no_broken_markdown(self, readme_content):
         """Test that README has valid Markdown formatting."""
@@ -178,9 +178,9 @@ class TestReadme:
 
         # Check for unmatched code blocks
         code_fence_count = readme_content.count("```")
-        assert (
-            code_fence_count % 2 == 0
-        ), f"Unmatched code fences in README (found {code_fence_count})"
+        assert code_fence_count % 2 == 0, (
+            f"Unmatched code fences in README (found {code_fence_count})"
+        )
 
         # Check for unmatched bold/italic markers
         # Note: This is a simple check and may have false positives
@@ -221,14 +221,14 @@ class TestReadmeLinks:
         if len(markdown_links) > 0:
             for link_text, link_url in markdown_links:
                 # Check that link text is not empty
-                assert (
-                    len(link_text.strip()) > 0
-                ), f"Link text should not be empty: [{link_text}]({link_url})"
+                assert len(link_text.strip()) > 0, (
+                    f"Link text should not be empty: [{link_text}]({link_url})"
+                )
 
                 # Check that link URL is not empty
-                assert (
-                    len(link_url.strip()) > 0
-                ), f"Link URL should not be empty: [{link_text}]({link_url})"
+                assert len(link_url.strip()) > 0, (
+                    f"Link URL should not be empty: [{link_text}]({link_url})"
+                )
 
     def test_readme_relative_links_exist(self, package_root, readme_content):
         """Test that relative links in README point to existing files."""
@@ -284,9 +284,9 @@ class TestReadmeContent:
         )
 
         if code_blocks:  # Only check if there are code blocks
-            assert (
-                has_kaizen_import
-            ), "At least one code example should demonstrate importing kaizen"
+            assert has_kaizen_import, (
+                "At least one code example should demonstrate importing kaizen"
+            )
 
     def test_readme_example_shows_basic_usage(self, readme_content):
         """Test that README shows basic usage pattern."""
@@ -308,16 +308,16 @@ class TestReadmeContent:
         char_count = len(readme_content)
 
         # Should have meaningful content (at least 500 chars)
-        assert (
-            char_count >= 500
-        ), f"README is too short ({char_count} chars), should be at least 500 chars"
+        assert char_count >= 500, (
+            f"README is too short ({char_count} chars), should be at least 500 chars"
+        )
 
         # But not excessively long for PyPI display
         # PyPI renders up to ~100KB, but we want to keep it concise
         # Detailed docs should be in separate files
-        assert (
-            char_count <= 50000
-        ), f"README is very long ({char_count} chars), consider moving detailed docs to separate files"
+        assert char_count <= 50000, (
+            f"README is very long ({char_count} chars), consider moving detailed docs to separate files"
+        )
 
     def test_readme_has_badges(self, readme_content):
         """Test that README has badges (optional but recommended)."""

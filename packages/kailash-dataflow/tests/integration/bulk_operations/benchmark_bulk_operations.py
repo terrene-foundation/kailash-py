@@ -181,9 +181,9 @@ class TestBulkCreatePerformance:
         duration = time.time() - start_time
 
         create_result = results.get("bulk_create")
-        assert create_result.get(
-            "success"
-        ), f"Bulk create failed: {create_result.get('error')}"
+        assert create_result.get("success"), (
+            f"Bulk create failed: {create_result.get('error')}"
+        )
         assert create_result.get("inserted") == record_count
 
         print(f"\n\nbulk_create({record_count:,} records, batch_size={batch_size:,}):")

@@ -67,9 +67,9 @@ def test_complete_multi_agent_collaboration_workflow():
 
         # Should have contributions from multiple agents
         if "agent_outputs" in results:
-            assert (
-                len(results["agent_outputs"]) >= 2
-            ), "Should have outputs from multiple agents"
+            assert len(results["agent_outputs"]) >= 2, (
+                "Should have outputs from multiple agents"
+            )
 
         # Shared insights should exist
         if "shared_insights" in results:
@@ -303,9 +303,9 @@ def test_insight_flow_sequential_enhancement():
 
     # Confidence should increase with iterations
     confidences = [e["confidence"] for e in enhancements]
-    assert (
-        confidences[-1] > confidences[0]
-    ), "Confidence should increase with enhancement"
+    assert confidences[-1] > confidences[0], (
+        "Confidence should increase with enhancement"
+    )
 
     # Final insights should build on earlier ones
     final_insights = pool.get_insights(agent_id="final", topic=topic, top_k=10)

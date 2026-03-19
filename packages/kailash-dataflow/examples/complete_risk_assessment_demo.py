@@ -408,7 +408,9 @@ class CompleteRiskAssessmentDemo:
 
         # Create risk reduction roadmap
         roadmap = self.mitigation_engine.create_risk_reduction_roadmap(
-            risk_assessment, RiskLevel.MEDIUM, mitigation_plan  # Target risk level
+            risk_assessment,
+            RiskLevel.MEDIUM,
+            mitigation_plan,  # Target risk level
         )
 
         print(f"  └─ Enterprise Strategies: {len(mitigation_strategies)}")
@@ -668,7 +670,9 @@ class CompleteRiskAssessmentDemo:
             scalability = (
                 "Excellent"
                 if result["total_time"] < 0.5
-                else "Good" if result["total_time"] < 2.0 else "Acceptable"
+                else "Good"
+                if result["total_time"] < 2.0
+                else "Acceptable"
             )
             print(
                 f"{result['scenario']:<12} {result['total_time']:<10.3f} {result['risk_score']:<6.1f} {result['strategies']:<10} {scalability}"

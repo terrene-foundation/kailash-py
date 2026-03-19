@@ -183,8 +183,7 @@ class NotebookEditTool(BaseTool):
                 ctype = CellType(cell_type)
             except ValueError:
                 return NativeToolResult.from_error(
-                    f"Invalid cell_type '{cell_type}'. "
-                    f"Must be one of: code, markdown"
+                    f"Invalid cell_type '{cell_type}'. Must be one of: code, markdown"
                 )
 
             # For replace and delete, cell_id is required

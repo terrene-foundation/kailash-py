@@ -690,7 +690,7 @@ class TestSQLInjectionE2EScenarios:
                 # Injection attempt every 10th entry
                 log_entries.append(
                     {
-                        "timestamp": f"2025-01-11T12:00:{i%60:02d}",
+                        "timestamp": f"2025-01-11T12:00:{i % 60:02d}",
                         "level": "ERROR'; DROP TABLE log;--",
                         "message": f"Message {i}",
                         "source": "system",
@@ -700,7 +700,7 @@ class TestSQLInjectionE2EScenarios:
                 # Normal entry
                 log_entries.append(
                     {
-                        "timestamp": f"2025-01-11T12:00:{i%60:02d}",
+                        "timestamp": f"2025-01-11T12:00:{i % 60:02d}",
                         "level": "INFO",
                         "message": f"Normal log message {i}",
                         "source": "application",

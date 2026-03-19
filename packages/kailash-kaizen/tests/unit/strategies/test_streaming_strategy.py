@@ -38,9 +38,9 @@ async def test_stream_yields_chunks():
         chunks.append(chunk)
 
     assert len(chunks) > 0, "Should yield at least one chunk"
-    assert all(
-        isinstance(chunk, str) for chunk in chunks
-    ), "All chunks should be strings"
+    assert all(isinstance(chunk, str) for chunk in chunks), (
+        "All chunks should be strings"
+    )
 
 
 @pytest.mark.asyncio
@@ -72,9 +72,9 @@ async def test_chunk_size_1_token_by_token():
         chunks.append(chunk)
 
     # With chunk_size=1, we should get many small chunks
-    assert (
-        len(chunks) >= 10
-    ), f"Expected many chunks with chunk_size=1, got {len(chunks)}"
+    assert len(chunks) >= 10, (
+        f"Expected many chunks with chunk_size=1, got {len(chunks)}"
+    )
 
 
 @pytest.mark.asyncio
@@ -89,12 +89,12 @@ async def test_chunk_size_5():
         chunks.append(chunk)
 
     # With chunk_size=5, we should get fewer, larger chunks
-    assert (
-        len(chunks) >= 2
-    ), f"Expected multiple chunks with chunk_size=5, got {len(chunks)}"
-    assert (
-        len(chunks) <= 10
-    ), f"Expected fewer chunks with chunk_size=5, got {len(chunks)}"
+    assert len(chunks) >= 2, (
+        f"Expected multiple chunks with chunk_size=5, got {len(chunks)}"
+    )
+    assert len(chunks) <= 10, (
+        f"Expected fewer chunks with chunk_size=5, got {len(chunks)}"
+    )
 
 
 @pytest.mark.asyncio
@@ -143,9 +143,9 @@ async def test_chunk_count_correct():
     # Get result from execute
     result = await strategy.execute(agent, inputs)
 
-    assert result["chunks"] == len(
-        stream_chunks
-    ), f"Chunk count mismatch: result={result['chunks']}, actual={len(stream_chunks)}"
+    assert result["chunks"] == len(stream_chunks), (
+        f"Chunk count mismatch: result={result['chunks']}, actual={len(stream_chunks)}"
+    )
 
 
 @pytest.mark.asyncio
@@ -166,9 +166,9 @@ async def test_response_reconstruction_correct():
     # Reconstruct from chunks
     reconstructed = "".join(stream_chunks)
 
-    assert (
-        result["response"] == reconstructed
-    ), f"Response mismatch:\nResult: {result['response']}\nReconstructed: {reconstructed}"
+    assert result["response"] == reconstructed, (
+        f"Response mismatch:\nResult: {result['response']}\nReconstructed: {reconstructed}"
+    )
 
 
 @pytest.mark.asyncio
@@ -191,9 +191,9 @@ async def test_multiple_sequential_streams():
     # Both should be independent and complete
     assert len(chunks1) > 0
     assert len(chunks2) > 0
-    assert len(chunks1) == len(
-        chunks2
-    ), "Both streams should yield same number of chunks"
+    assert len(chunks1) == len(chunks2), (
+        "Both streams should yield same number of chunks"
+    )
 
 
 @pytest.mark.asyncio
@@ -215,9 +215,9 @@ async def test_different_chunk_sizes_give_different_chunk_counts():
         chunks5.append(chunk)
 
     # Larger chunk size should give fewer chunks
-    assert len(chunks1) > len(
-        chunks5
-    ), f"chunk_size=1 should give more chunks than chunk_size=5: {len(chunks1)} vs {len(chunks5)}"
+    assert len(chunks1) > len(chunks5), (
+        f"chunk_size=1 should give more chunks than chunk_size=5: {len(chunks1)} vs {len(chunks5)}"
+    )
 
 
 @pytest.mark.asyncio
@@ -239,9 +239,9 @@ async def test_streaming_delay_exists():
 
     # With 0.01s delay per chunk, should take at least 0.01 * num_chunks
     expected_min = 0.01 * len(chunks)
-    assert (
-        elapsed >= expected_min * 0.5
-    ), f"Streaming should have delay: elapsed={elapsed:.3f}s, expected>={expected_min:.3f}s"
+    assert elapsed >= expected_min * 0.5, (
+        f"Streaming should have delay: elapsed={elapsed:.3f}s, expected>={expected_min:.3f}s"
+    )
 
 
 @pytest.mark.asyncio

@@ -75,9 +75,9 @@ class TestBaseAdapterHierarchy:
         ]
 
         for adapter in adapters:
-            assert (
-                adapter.adapter_type == "sql"
-            ), f"{adapter.__class__.__name__} should have adapter_type='sql'"
+            assert adapter.adapter_type == "sql", (
+                f"{adapter.__class__.__name__} should have adapter_type='sql'"
+            )
 
     def test_adapter_connection_info(self):
         """Test get_connection_info method from BaseAdapter."""

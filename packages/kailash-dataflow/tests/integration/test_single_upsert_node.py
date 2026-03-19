@@ -136,19 +136,19 @@ class TestPostgreSQLUpsertNode:
         )
 
         # Assert: Should be created (INSERT happened)
-        assert (
-            results["upsert_user"]["created"] is True
-        ), "created should be True when record doesn't exist"
-        assert (
-            results["upsert_user"]["action"] == "created"
-        ), "action should be 'created' for INSERT"
+        assert results["upsert_user"]["created"] is True, (
+            "created should be True when record doesn't exist"
+        )
+        assert results["upsert_user"]["action"] == "created", (
+            "action should be 'created' for INSERT"
+        )
         assert results["upsert_user"]["record"]["email"] == user_email
-        assert (
-            results["upsert_user"]["record"]["name"] == "Alice New"
-        ), "Should use create data for new records"
-        assert (
-            results["upsert_user"]["record"]["id"] == user_id
-        ), "String ID should be preserved exactly as provided"
+        assert results["upsert_user"]["record"]["name"] == "Alice New", (
+            "Should use create data for new records"
+        )
+        assert results["upsert_user"]["record"]["id"] == user_id, (
+            "String ID should be preserved exactly as provided"
+        )
 
     @pytest.mark.asyncio
     async def test_postgresql_upsert_update_path(self, postgresql_db_url):
@@ -196,18 +196,18 @@ class TestPostgreSQLUpsertNode:
         )
 
         # Assert: Should be updated (UPDATE happened)
-        assert (
-            results["upsert_user"]["created"] is False
-        ), "created should be False when record exists"
-        assert (
-            results["upsert_user"]["action"] == "updated"
-        ), "action should be 'updated' for UPDATE"
-        assert (
-            results["upsert_user"]["record"]["id"] == user_id
-        ), "Original ID should be preserved"
-        assert (
-            results["upsert_user"]["record"]["name"] == "Bob Updated"
-        ), "Should use update data for existing records"
+        assert results["upsert_user"]["created"] is False, (
+            "created should be False when record exists"
+        )
+        assert results["upsert_user"]["action"] == "updated", (
+            "action should be 'updated' for UPDATE"
+        )
+        assert results["upsert_user"]["record"]["id"] == user_id, (
+            "Original ID should be preserved"
+        )
+        assert results["upsert_user"]["record"]["name"] == "Bob Updated", (
+            "Should use update data for existing records"
+        )
 
     @pytest.mark.asyncio
     async def test_postgresql_string_id_preservation(self, postgresql_db_url):
@@ -242,12 +242,12 @@ class TestPostgreSQLUpsertNode:
         results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
 
         # Assert: String ID should be preserved exactly
-        assert isinstance(
-            results["upsert"]["record"]["id"], str
-        ), "ID should remain a string (not converted to int)"
-        assert (
-            results["upsert"]["record"]["id"] == session_id
-        ), "String ID should be preserved exactly as provided"
+        assert isinstance(results["upsert"]["record"]["id"], str), (
+            "ID should remain a string (not converted to int)"
+        )
+        assert results["upsert"]["record"]["id"] == session_id, (
+            "String ID should be preserved exactly as provided"
+        )
 
     @pytest.mark.asyncio
     async def test_postgresql_auto_timestamp_management(self, postgresql_db_url):
@@ -312,9 +312,9 @@ class TestPostgreSQLUpsertNode:
         updated_at2 = results2["upsert2"]["record"]["updated_at"]
 
         # Assert: created_at unchanged, updated_at changed
-        assert (
-            created_at2 == created_at1
-        ), "created_at should remain unchanged on update"
+        assert created_at2 == created_at1, (
+            "created_at should remain unchanged on update"
+        )
         assert updated_at2 > updated_at1, "updated_at should be updated on UPDATE"
 
     @pytest.mark.asyncio
@@ -358,7 +358,9 @@ class TestPostgreSQLUpsertNode:
         # Verify exactly 1 record exists (atomic operation prevented race conditions)
         workflow_count = WorkflowBuilder()
         workflow_count.add_node(
-            "CounterReadNode", "read", {"id": "counter-shared"}  # Phase 1: Read by 'id'
+            "CounterReadNode",
+            "read",
+            {"id": "counter-shared"},  # Phase 1: Read by 'id'
         )
 
         runtime = AsyncLocalRuntime()
@@ -367,9 +369,9 @@ class TestPostgreSQLUpsertNode:
         )
 
         # Assert: Record should exist (atomic upsert handled concurrency)
-        assert (
-            count_results["read"]["id"] == "counter-shared"
-        ), "Atomic upsert should handle concurrent operations on same ID"
+        assert count_results["read"]["id"] == "counter-shared", (
+            "Atomic upsert should handle concurrent operations on same ID"
+        )
 
 
 @pytest.mark.integration
@@ -417,12 +419,12 @@ class TestSQLiteUpsertNode:
         results1, _ = await runtime.execute_workflow_async(workflow1.build(), inputs={})
 
         # Assert: First upsert should INSERT
-        assert (
-            results1["upsert1"]["created"] is True
-        ), "First upsert should create new record"
-        assert (
-            results1["upsert1"]["record"]["price"] == 49.99
-        ), "Should use create data for new records"
+        assert results1["upsert1"]["created"] is True, (
+            "First upsert should create new record"
+        )
+        assert results1["upsert1"]["record"]["price"] == 49.99, (
+            "Should use create data for new records"
+        )
 
         # Act: Second upsert (UPDATE) - same 'id' should trigger UPDATE
         workflow2 = WorkflowBuilder()
@@ -448,15 +450,15 @@ class TestSQLiteUpsertNode:
         results2, _ = await runtime.execute_workflow_async(workflow2.build(), inputs={})
 
         # Assert: Second upsert should UPDATE
-        assert (
-            results2["upsert2"]["created"] is False
-        ), "Second upsert should update existing record"
-        assert (
-            results2["upsert2"]["record"]["price"] == 99.99
-        ), "Should use update data for existing records"
-        assert (
-            results2["upsert2"]["record"]["id"] == "prod-123"
-        ), "Original ID should be preserved"
+        assert results2["upsert2"]["created"] is False, (
+            "Second upsert should update existing record"
+        )
+        assert results2["upsert2"]["record"]["price"] == 99.99, (
+            "Should use update data for existing records"
+        )
+        assert results2["upsert2"]["record"]["id"] == "prod-123", (
+            "Original ID should be preserved"
+        )
 
     @pytest.mark.asyncio
     async def test_sqlite_string_id_preservation(self, tmp_path):
@@ -527,9 +529,9 @@ class TestUpsertNodeParameterValidation:
         with pytest.raises(Exception) as exc_info:
             await runtime.execute_workflow_async(workflow.build(), inputs={})
 
-        assert (
-            "where" in str(exc_info.value).lower()
-        ), "Error message should mention 'where' parameter"
+        assert "where" in str(exc_info.value).lower(), (
+            "Error message should mention 'where' parameter"
+        )
 
     @pytest.mark.asyncio
     async def test_missing_update_and_create_raises_error(self):
@@ -559,9 +561,9 @@ class TestUpsertNodeParameterValidation:
             await runtime.execute_workflow_async(workflow.build(), inputs={})
 
         error_message = str(exc_info.value).lower()
-        assert (
-            "update" in error_message or "create" in error_message
-        ), "Error message should mention missing 'update' or 'create' parameter"
+        assert "update" in error_message or "create" in error_message, (
+            "Error message should mention missing 'update' or 'create' parameter"
+        )
 
 
 @pytest.mark.integration
@@ -598,9 +600,9 @@ class TestUpsertNodeWorkflowIntegration:
         )
 
         # Assert: Workflow should execute successfully
-        assert (
-            "upsert_setting" in results
-        ), "UpsertNode should execute and return results"
+        assert "upsert_setting" in results, (
+            "UpsertNode should execute and return results"
+        )
         assert results["upsert_setting"]["record"]["key"] == "theme"
         assert run_id is not None, "Workflow should return run_id"
 
@@ -649,9 +651,9 @@ class TestUpsertNodeWorkflowIntegration:
         # Assert: Both nodes should execute successfully
         assert "upsert" in results
         assert "read" in results
-        assert (
-            results["read"]["id"] == results["upsert"]["record"]["id"]
-        ), "Read should retrieve the upserted record"
+        assert results["read"]["id"] == results["upsert"]["record"]["id"], (
+            "Read should retrieve the upserted record"
+        )
 
 
 @pytest.mark.integration
@@ -757,6 +759,6 @@ class TestUpsertNodeReturnStructure:
 
         assert upsert_result["created"] is False
         assert upsert_result["action"] == "updated"
-        assert (
-            upsert_result["record"]["id"] == "user-1"
-        ), "Should preserve original record ID"
+        assert upsert_result["record"]["id"] == "user-1", (
+            "Should preserve original record ID"
+        )

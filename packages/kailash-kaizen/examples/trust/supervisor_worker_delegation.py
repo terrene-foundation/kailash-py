@@ -147,7 +147,7 @@ async def main():
                 agent_id=worker_id,
                 authority_id=authority_id,
                 capabilities=[],  # Will receive capabilities via delegation
-                metadata={"role": f"ETL Worker {i+1}"},
+                metadata={"role": f"ETL Worker {i + 1}"},
             )
         except Exception:
             pass  # May already exist
@@ -157,7 +157,7 @@ async def main():
         delegation = await trust_ops.delegate(
             delegator_agent_id=supervisor_id,
             delegatee_agent_id=worker_id,
-            task_id=f"task-batch-{i+1}",
+            task_id=f"task-batch-{i + 1}",
             capabilities=["process_data"],  # Subset of supervisor's capabilities
             constraints=[
                 # Tighter batch size limit
@@ -239,12 +239,12 @@ async def main():
             anchor = await trust_ops.audit(
                 agent_id=worker_id,
                 action_type="process_data",
-                resource_uri=f"s3://data-lake/batch-{i+1}/",
+                resource_uri=f"s3://data-lake/batch-{i + 1}/",
                 result=ActionResult.SUCCESS,
                 metadata={
                     "records_processed": 1500,
                     "duration_seconds": 45,
-                    "task_id": f"task-batch-{i+1}",
+                    "task_id": f"task-batch-{i + 1}",
                 },
             )
             print(f"   - {worker_id}: Processed 1500 records")

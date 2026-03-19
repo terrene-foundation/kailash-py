@@ -208,8 +208,7 @@ class OpenAICodexAdapter(BaseRuntimeAdapter):
             input_content = self._build_input(context)
 
             logger.info(
-                f"Executing OpenAI Codex: {context.task[:50]}..., "
-                f"model: {self.model}"
+                f"Executing OpenAI Codex: {context.task[:50]}..., model: {self.model}"
             )
 
             if on_progress:

@@ -55,9 +55,7 @@ class EATPBlockedError(PermissionError):
         self.action = action
         self.reason = reason
         self.violations = violations or []
-        super().__init__(
-            f"EATP BLOCKED: Agent '{agent_id}' denied action '{action}': {reason}"
-        )
+        super().__init__(f"EATP BLOCKED: Agent '{agent_id}' denied action '{action}': {reason}")
 
 
 class EATPHeldError(PermissionError):
@@ -74,9 +72,7 @@ class EATPHeldError(PermissionError):
         self.action = action
         self.reason = reason
         self.violations = violations or []
-        super().__init__(
-            f"EATP HELD: Agent '{agent_id}' action '{action}' requires review: {reason}"
-        )
+        super().__init__(f"EATP HELD: Agent '{agent_id}' action '{action}' requires review: {reason}")
 
 
 @dataclass
@@ -198,9 +194,7 @@ class StrictEnforcer:
                 hook_type=HookType.PRE_VERIFICATION,
                 metadata=dict(metadata) if metadata else {},
             )
-            hook_result = self._hook_registry.execute_sync(
-                HookType.PRE_VERIFICATION, pre_context
-            )
+            hook_result = self._hook_registry.execute_sync(HookType.PRE_VERIFICATION, pre_context)
             if not hook_result.allow:
                 logger.warning(
                     f"[ENFORCE] BLOCKED by PRE_VERIFICATION hook: "
@@ -232,9 +226,7 @@ class StrictEnforcer:
                     **(metadata or {}),
                 },
             )
-            hook_result = self._hook_registry.execute_sync(
-                HookType.POST_VERIFICATION, post_context
-            )
+            hook_result = self._hook_registry.execute_sync(HookType.POST_VERIFICATION, post_context)
             if not hook_result.allow:
                 logger.warning(
                     f"[ENFORCE] BLOCKED by POST_VERIFICATION hook: "
@@ -272,18 +264,14 @@ class StrictEnforcer:
         if verdict == Verdict.BLOCKED:
             reason = result.reason or "Verification failed"
             # Include reasoning violation details in log when present
-            reasoning_violations = [
-                v for v in result.violations if v.get("dimension") == "reasoning"
-            ]
+            reasoning_violations = [v for v in result.violations if v.get("dimension") == "reasoning"]
             if reasoning_violations:
                 logger.warning(
                     f"[ENFORCE] BLOCKED: agent={agent_id} action={action} "
                     f"reason={reason} reasoning_violations={reasoning_violations}"
                 )
             else:
-                logger.warning(
-                    f"[ENFORCE] BLOCKED: agent={agent_id} action={action} reason={reason}"
-                )
+                logger.warning(f"[ENFORCE] BLOCKED: agent={agent_id} action={action} reason={reason}")
             raise EATPBlockedError(
                 agent_id=agent_id,
                 action=action,
@@ -313,9 +301,7 @@ class StrictEnforcer:
         reason = result.reason or "Action requires human review"
 
         if self._on_held == HeldBehavior.RAISE:
-            logger.warning(
-                f"[ENFORCE] HELD: agent={agent_id} action={action} — raising"
-            )
+            logger.warning(f"[ENFORCE] HELD: agent={agent_id} action={action} — raising")
             raise EATPHeldError(
                 agent_id=agent_id,
                 action=action,
@@ -324,9 +310,7 @@ class StrictEnforcer:
             )
 
         if self._on_held == HeldBehavior.QUEUE:
-            logger.info(
-                f"[ENFORCE] HELD: agent={agent_id} action={action} — queued for review"
-            )
+            logger.info(f"[ENFORCE] HELD: agent={agent_id} action={action} — queued for review")
             self._review_queue.append(record)
             # Bounded memory for review queue
             if len(self._review_queue) > self._max_records:
@@ -341,9 +325,7 @@ class StrictEnforcer:
 
         # CALLBACK
         assert self._held_callback is not None
-        logger.info(
-            f"[ENFORCE] HELD: agent={agent_id} action={action} — invoking callback"
-        )
+        logger.info(f"[ENFORCE] HELD: agent={agent_id} action={action} — invoking callback")
         allowed = self._held_callback(agent_id, action, result)
         if allowed:
             record.verdict = Verdict.AUTO_APPROVED

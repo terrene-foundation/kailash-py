@@ -383,9 +383,9 @@ class TestSimplifiedJWTAuth:
             # Verify wrong password fails
             wrong_login = login_user(mock_db, email, "WrongPassword")
             assert wrong_login["success"] is False, "Wrong password should fail"
-            assert (
-                wrong_login["error_code"] == "INVALID_CREDENTIALS"
-            ), "Should indicate invalid credentials"
+            assert wrong_login["error_code"] == "INVALID_CREDENTIALS", (
+                "Should indicate invalid credentials"
+            )
         finally:
             # Restore original function
             saas_starter.auth.jwt_auth.find_user_by_email = original_find

@@ -635,7 +635,6 @@ class DataValidationEngine:
             "timestamptz",
             "time",
         ]:
-
             # Sample a few values to check format compatibility
             incompatible_samples = []
             for sample in column_stats.sample_values[:5]:  # Check first 5 samples
@@ -661,7 +660,6 @@ class DataValidationEngine:
             "numeric",
             "decimal",
         ]:
-
             incompatible_samples = []
             for sample in column_stats.sample_values[:5]:
                 if not self._is_valid_numeric_format(str(sample.value)):
@@ -724,7 +722,6 @@ class DataValidationEngine:
         if old_type_norm.startswith(
             ("varchar", "char", "text")
         ) and new_type_norm.startswith(("varchar", "char")):
-
             new_size = self._extract_type_size(new_type)
             if new_size:
                 return f"""

@@ -1193,9 +1193,9 @@ class TestCARE048RollbackMechanism:
         # All chains should be restored to original signatures
         for agent_id, original_sig in original_signatures.items():
             chain = await failing_store.get_chain(agent_id)
-            assert (
-                chain.genesis.signature == original_sig
-            ), f"Chain {agent_id} was not rolled back to original signature"
+            assert chain.genesis.signature == original_sig, (
+                f"Chain {agent_id} was not rolled back to original signature"
+            )
 
     async def test_rollback_failure_logs_critical_and_reports_inconsistent_state(
         self, authority_registry, sample_authority

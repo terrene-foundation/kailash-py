@@ -248,14 +248,8 @@ def _verify_standard(
     # 3. Constraint tightening — validate each delegation level
     for i, constraints in enumerate(constraint_pairs):
         parent_constraints = _CONSTRAINT_LEVELS[i]
-        child_constraints = (
-            _CONSTRAINT_LEVELS[i + 1]
-            if i + 1 < len(_CONSTRAINT_LEVELS)
-            else constraints
-        )
-        val_result = validator.validate_tightening(
-            parent_constraints, child_constraints
-        )
+        child_constraints = _CONSTRAINT_LEVELS[i + 1] if i + 1 < len(_CONSTRAINT_LEVELS) else constraints
+        val_result = validator.validate_tightening(parent_constraints, child_constraints)
         if not val_result.valid:
             return False
 
@@ -278,9 +272,7 @@ def _verify_full(
 
     # 2. Verify genesis signature (signed by authority = keypairs[0])
     _, auth_pub = keypairs[0]
-    if not verify_signature(
-        chain.genesis.to_signing_payload(), chain.genesis.signature, auth_pub
-    ):
+    if not verify_signature(chain.genesis.to_signing_payload(), chain.genesis.signature, auth_pub):
         return False
 
     # 3. Verify capability signature(s) (also signed by authority)
@@ -303,9 +295,7 @@ def _verify_full(
 
 
 # Cache built chains so keygen happens once per session
-_CHAIN_CACHE: Dict[
-    int, Tuple[TrustLineageChain, List[Tuple[str, str]], List[Dict[str, Any]]]
-] = {}
+_CHAIN_CACHE: Dict[int, Tuple[TrustLineageChain, List[Tuple[str, str]], List[Dict[str, Any]]]] = {}
 
 
 def _get_chain(depth: int):

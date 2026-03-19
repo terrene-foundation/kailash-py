@@ -56,9 +56,9 @@ class TestAgentExecutionCompleteWorkflows:
         execution_time = (time.time() - start_time) * 1000
 
         # Step 3: Verify complete workflow
-        assert (
-            execution_time < 10000
-        ), f"E2E execution took {execution_time:.1f}ms, expected <10000ms"
+        assert execution_time < 10000, (
+            f"E2E execution took {execution_time:.1f}ms, expected <10000ms"
+        )
         assert isinstance(result, dict)
 
         # Step 4: Verify substantive intelligent response
@@ -384,9 +384,9 @@ class TestMultiAgentCoordinationE2E:
         assert all(isinstance(r, dict) for r in results)
 
         # Verify reasonable performance for parallel execution
-        assert (
-            total_time < 15000
-        ), f"Parallel execution took {total_time:.1f}ms, expected <15000ms"
+        assert total_time < 15000, (
+            f"Parallel execution took {total_time:.1f}ms, expected <15000ms"
+        )
 
 
 class TestEnterpriseAgentExecutionE2E:
@@ -539,12 +539,12 @@ class TestAgentExecutionProductionScenarios:
         avg_time = sum(execution_times) / len(execution_times)
         max_time = max(execution_times)
 
-        assert (
-            avg_time < 8000
-        ), f"Average execution time {avg_time:.1f}ms under load exceeds 8000ms"
-        assert (
-            max_time < 15000
-        ), f"Max execution time {max_time:.1f}ms under load exceeds 15000ms"
+        assert avg_time < 8000, (
+            f"Average execution time {avg_time:.1f}ms under load exceeds 8000ms"
+        )
+        assert max_time < 15000, (
+            f"Max execution time {max_time:.1f}ms under load exceeds 15000ms"
+        )
 
     def test_agent_execution_real_deployment_workflow(self):
         """Complete real deployment workflow execution."""

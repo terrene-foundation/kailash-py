@@ -209,9 +209,9 @@ class TestCountNodeSQLGeneration:
 
         # Verify total count
         user_nodes = [n for n in sqlite_db._nodes.keys() if n.startswith("User")]
-        assert (
-            len(user_nodes) == 11
-        ), f"Expected 11 nodes, got {len(user_nodes)}: {user_nodes}"
+        assert len(user_nodes) == 11, (
+            f"Expected 11 nodes, got {len(user_nodes)}: {user_nodes}"
+        )
 
 
 class TestCountNodeParameterValidation:
@@ -296,9 +296,9 @@ class TestCountNodeDocumentation:
         params = node.get_parameters()
 
         for param_name, param in params.items():
-            assert (
-                param.description is not None
-            ), f"Parameter {param_name} missing description"
-            assert (
-                len(param.description) > 0
-            ), f"Parameter {param_name} has empty description"
+            assert param.description is not None, (
+                f"Parameter {param_name} missing description"
+            )
+            assert len(param.description) > 0, (
+                f"Parameter {param_name} has empty description"
+            )

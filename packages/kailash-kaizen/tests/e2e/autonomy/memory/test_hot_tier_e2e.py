@@ -99,9 +99,9 @@ async def test_hot_memory_operations():
 
     avg_retrieval_time = sum(retrieval_times) / len(retrieval_times)
     print(f"\n   Average retrieval time: {avg_retrieval_time:.4f}ms")
-    assert (
-        avg_retrieval_time < 1.0
-    ), f"Hot tier too slow: {avg_retrieval_time:.4f}ms > 1ms"
+    assert avg_retrieval_time < 1.0, (
+        f"Hot tier too slow: {avg_retrieval_time:.4f}ms > 1ms"
+    )
 
     # Test 3: Exists check
     print("\n3. Testing exists check...")

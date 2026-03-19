@@ -745,7 +745,7 @@ class ProblemAnalyzerNode(Node):
         for i, cap in enumerate(capabilities):
             tasks.append(
                 {
-                    "task_id": f"task_{i+1}",
+                    "task_id": f"task_{i + 1}",
                     "description": f"Apply {cap} to problem",
                     "required_capability": cap,
                     "estimated_duration": 30,  # minutes
@@ -1365,7 +1365,7 @@ class SelfOrganizingAgentNode(A2AAgentNode):
             kwargs["messages"].append({"role": "user", "content": enhanced_task})
 
         # Add self-organization instructions to system prompt
-        so_prompt = f"""You are a self-organizing agent with capabilities: {', '.join(capabilities)}.
+        so_prompt = f"""You are a self-organizing agent with capabilities: {", ".join(capabilities)}.
 
 Current team context: {json.dumps(team_context, indent=2)}
 Collaboration mode: {collaboration_mode}
@@ -1377,7 +1377,7 @@ Guidelines:
 4. Share insights that others can build upon
 5. Be proactive in identifying how you can help
 
-{kwargs.get('system_prompt', '')}"""
+{kwargs.get("system_prompt", "")}"""
 
         kwargs["system_prompt"] = so_prompt
 

@@ -415,7 +415,6 @@ class TestPerformanceValidator:
         with patch.object(
             performance_validator, "_execute_query_with_metrics", new=mock_execute
         ):
-
             comparison = await performance_validator.validate_performance(
                 staging_environment=mock_staging_environment,
                 migration_info=migration_info,

@@ -125,7 +125,7 @@ def main():
     print("   User checks conversation history...")
     cli_state = session_manager.get_session_state(session.session_id, channel="cli")
     print(f"   ✓ Retrieved {len(cli_state['conversation_history'])} messages from API")
-    print(f"   ✓ Last message: \"{cli_state['conversation_history'][-1]['content']}\"")
+    print(f'   ✓ Last message: "{cli_state["conversation_history"][-1]["content"]}"')
 
     session_manager.update_session_state(
         session.session_id,

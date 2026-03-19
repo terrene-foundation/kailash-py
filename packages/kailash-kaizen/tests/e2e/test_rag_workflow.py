@@ -102,9 +102,9 @@ def test_complete_rag_research_workflow():
             keywords_found = any(
                 kw in response_text for kw in query_case["expected_keywords"]
             )
-            assert (
-                keywords_found
-            ), f"Expected one of {query_case['expected_keywords']} in response to '{query_case['query']}'"
+            assert keywords_found, (
+                f"Expected one of {query_case['expected_keywords']} in response to '{query_case['query']}'"
+            )
 
     finally:
         sys.path.remove(str(example_path))
@@ -178,9 +178,9 @@ def test_rag_workflow_incremental_knowledge_building():
             ]
         )
 
-        assert (
-            concepts_mentioned >= 2
-        ), "Should synthesize multiple concepts from knowledge base"
+        assert concepts_mentioned >= 2, (
+            "Should synthesize multiple concepts from knowledge base"
+        )
 
     finally:
         sys.path.remove(str(example_path))
@@ -262,9 +262,9 @@ def test_rag_workflow_multi_domain_research():
 
             # Should retrieve relevant domain knowledge
             domain_match = any(kw in response for kw in query_case["keywords"])
-            assert (
-                domain_match
-            ), f"Expected domain-specific keywords {query_case['keywords']} for query '{query_case['query']}'"
+            assert domain_match, (
+                f"Expected domain-specific keywords {query_case['keywords']} for query '{query_case['query']}'"
+            )
 
     finally:
         sys.path.remove(str(example_path))
@@ -357,9 +357,9 @@ def test_rag_semantic_search_accuracy():
             )
 
             # More relevant content should be retrieved than irrelevant
-            assert (
-                retrieved_count > not_retrieved_count
-            ), f"Semantic search should prioritize relevant content for query '{test_case['query']}'"
+            assert retrieved_count > not_retrieved_count, (
+                f"Semantic search should prioritize relevant content for query '{test_case['query']}'"
+            )
 
     finally:
         sys.path.remove(str(example_path))
@@ -433,9 +433,9 @@ def test_rag_semantic_search_top_k_ranking():
         )
 
         # Should prioritize highly relevant content
-        assert (
-            highly_relevant_count >= less_relevant_count
-        ), "Top-k ranking should prioritize most relevant results"
+        assert highly_relevant_count >= less_relevant_count, (
+            "Top-k ranking should prioritize most relevant results"
+        )
 
     finally:
         sys.path.remove(str(example_path))

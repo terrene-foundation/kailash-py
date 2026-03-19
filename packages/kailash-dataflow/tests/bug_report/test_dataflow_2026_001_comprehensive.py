@@ -36,15 +36,15 @@ class TestIssue1SkipRegistryParameterFixed:
 
             # Should have a DF-CFG-001 warning
             df_warnings = [x for x in w if "DF-CFG-001" in str(x.message)]
-            assert (
-                len(df_warnings) == 1
-            ), "FIX VERIFIED: skip_registry now emits DF-CFG-001 warning"
+            assert len(df_warnings) == 1, (
+                "FIX VERIFIED: skip_registry now emits DF-CFG-001 warning"
+            )
 
             # Warning should suggest the correct parameter
             warning_msg = str(df_warnings[0].message)
-            assert (
-                "enable_model_persistence=False" in warning_msg
-            ), "Warning should suggest enable_model_persistence=False"
+            assert "enable_model_persistence=False" in warning_msg, (
+                "Warning should suggest enable_model_persistence=False"
+            )
 
             db.close()
 
@@ -120,9 +120,9 @@ class TestIssue2aDDLDefaultValuesFixed:
         ddl = db._generate_create_table_sql("TestListDefault", "postgresql")
 
         # FIX VERIFIED: Should contain proper JSONB default syntax
-        assert (
-            "DEFAULT '[]'::jsonb" in ddl
-        ), f"FIX VERIFIED: DDL contains valid JSONB default. Generated: {ddl}"
+        assert "DEFAULT '[]'::jsonb" in ddl, (
+            f"FIX VERIFIED: DDL contains valid JSONB default. Generated: {ddl}"
+        )
         # Should NOT contain bare DEFAULT []
         assert "DEFAULT []" not in ddl or "DEFAULT '[]'" in ddl
 
@@ -137,9 +137,9 @@ class TestIssue2aDDLDefaultValuesFixed:
         ddl = db._generate_create_table_sql("TestDictDefault", "postgresql")
 
         # FIX VERIFIED: Should contain proper JSONB default syntax
-        assert (
-            "DEFAULT '{}'::jsonb" in ddl
-        ), f"FIX VERIFIED: DDL contains valid JSONB default. Generated: {ddl}"
+        assert "DEFAULT '{}'::jsonb" in ddl, (
+            f"FIX VERIFIED: DDL contains valid JSONB default. Generated: {ddl}"
+        )
 
     def test_empty_list_default_produces_valid_sql_mysql(self, db):
         """Empty list default [] now produces valid MySQL DDL."""
@@ -152,9 +152,9 @@ class TestIssue2aDDLDefaultValuesFixed:
         ddl = db._generate_create_table_sql("TestMySQLListDefault", "mysql")
 
         # FIX VERIFIED: Should contain MySQL JSON cast syntax
-        assert (
-            "DEFAULT (CAST('[]' AS JSON))" in ddl
-        ), f"FIX VERIFIED: DDL contains valid MySQL JSON default. Generated: {ddl}"
+        assert "DEFAULT (CAST('[]' AS JSON))" in ddl, (
+            f"FIX VERIFIED: DDL contains valid MySQL JSON default. Generated: {ddl}"
+        )
 
     def test_empty_list_default_produces_valid_sql_sqlite(self, db):
         """Empty list default [] now produces valid SQLite DDL."""
@@ -167,9 +167,9 @@ class TestIssue2aDDLDefaultValuesFixed:
         ddl = db._generate_create_table_sql("TestSQLiteListDefault", "sqlite")
 
         # FIX VERIFIED: Should contain TEXT default (SQLite stores JSON as TEXT)
-        assert (
-            "DEFAULT '[]'" in ddl
-        ), f"FIX VERIFIED: DDL contains valid SQLite TEXT default. Generated: {ddl}"
+        assert "DEFAULT '[]'" in ddl, (
+            f"FIX VERIFIED: DDL contains valid SQLite TEXT default. Generated: {ddl}"
+        )
         # Should NOT have JSONB cast (SQLite doesn't support it)
         assert "::jsonb" not in ddl
 
@@ -186,30 +186,30 @@ class TestIssue2bGenericTypeMappingFixed:
     def test_list_str_maps_to_jsonb_postgresql(self, db):
         """List[str] now correctly maps to JSONB in PostgreSQL."""
         sql_type = db._python_type_to_sql_type(List[str], "postgresql")
-        assert (
-            sql_type == "JSONB"
-        ), f"FIX VERIFIED: List[str] maps to JSONB, got: {sql_type}"
+        assert sql_type == "JSONB", (
+            f"FIX VERIFIED: List[str] maps to JSONB, got: {sql_type}"
+        )
 
     def test_dict_str_any_maps_to_jsonb_postgresql(self, db):
         """Dict[str, Any] now correctly maps to JSONB in PostgreSQL."""
         sql_type = db._python_type_to_sql_type(Dict[str, Any], "postgresql")
-        assert (
-            sql_type == "JSONB"
-        ), f"FIX VERIFIED: Dict[str, Any] maps to JSONB, got: {sql_type}"
+        assert sql_type == "JSONB", (
+            f"FIX VERIFIED: Dict[str, Any] maps to JSONB, got: {sql_type}"
+        )
 
     def test_list_str_maps_to_json_mysql(self, db):
         """List[str] now correctly maps to JSON in MySQL."""
         sql_type = db._python_type_to_sql_type(List[str], "mysql")
-        assert (
-            sql_type == "JSON"
-        ), f"FIX VERIFIED: List[str] maps to JSON in MySQL, got: {sql_type}"
+        assert sql_type == "JSON", (
+            f"FIX VERIFIED: List[str] maps to JSON in MySQL, got: {sql_type}"
+        )
 
     def test_list_str_maps_to_text_sqlite(self, db):
         """List[str] now correctly maps to TEXT in SQLite."""
         sql_type = db._python_type_to_sql_type(List[str], "sqlite")
-        assert (
-            sql_type == "TEXT"
-        ), f"FIX VERIFIED: List[str] maps to TEXT in SQLite, got: {sql_type}"
+        assert sql_type == "TEXT", (
+            f"FIX VERIFIED: List[str] maps to TEXT in SQLite, got: {sql_type}"
+        )
 
 
 class TestIssue3ConfigurationValidationFixed:
@@ -228,9 +228,9 @@ class TestIssue3ConfigurationValidationFixed:
 
             # Should have a DF-CFG-001 warning
             df_warnings = [x for x in w if "DF-CFG-001" in str(x.message)]
-            assert (
-                len(df_warnings) == 1
-            ), "FIX VERIFIED: unknown kwargs now emit DF-CFG-001 warning"
+            assert len(df_warnings) == 1, (
+                "FIX VERIFIED: unknown kwargs now emit DF-CFG-001 warning"
+            )
 
             warning_msg = str(df_warnings[0].message)
             assert "totally_unknown_param" in warning_msg

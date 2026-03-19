@@ -38,9 +38,9 @@ class TestRAGResearchAsyncMigration:
         agent = RAGResearchAgent(config=config)
 
         # Should use async strategy after migration
-        assert isinstance(
-            agent.strategy, AsyncSingleShotStrategy
-        ), f"Expected AsyncSingleShotStrategy, got {type(agent.strategy).__name__}"
+        assert isinstance(agent.strategy, AsyncSingleShotStrategy), (
+            f"Expected AsyncSingleShotStrategy, got {type(agent.strategy).__name__}"
+        )
 
     def test_rag_no_explicit_strategy_override(self):
         """
@@ -153,9 +153,9 @@ class TestRAGResearchRetrievalConsistency:
         if "error" not in result:
             # RAG signature specifies answer, sources, confidence, relevant_excerpts
             # At least answer should be present
-            assert (
-                "answer" in result
-            ), f"Missing answer field. Got: {list(result.keys())}"
+            assert "answer" in result, (
+                f"Missing answer field. Got: {list(result.keys())}"
+            )
 
     def test_rag_vector_search_quality(self):
         """

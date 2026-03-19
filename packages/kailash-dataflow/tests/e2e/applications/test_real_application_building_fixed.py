@@ -235,7 +235,7 @@ class TestECommerceApplication:
                 checkout_workflow.add_connection("create_order", f"order_item_{idx}")
             else:
                 checkout_workflow.add_connection(
-                    f"order_item_{idx-1}", f"order_item_{idx}"
+                    f"order_item_{idx - 1}", f"order_item_{idx}"
                 )
 
         # Update cart status
@@ -262,7 +262,7 @@ class TestECommerceApplication:
 
         for idx in range(len(cart_items) - 1):
             checkout_workflow.add_connection(
-                f"update_stock_{idx}", f"update_stock_{idx+1}"
+                f"update_stock_{idx}", f"update_stock_{idx + 1}"
             )
 
         # Execute checkout
@@ -462,7 +462,7 @@ class TestBlogPlatformApplication:
 
             if idx > 0:
                 view_workflow.add_connection(
-                    f"increment_views_{idx-1}", f"increment_views_{idx}"
+                    f"increment_views_{idx - 1}", f"increment_views_{idx}"
                 )
 
         if published_posts:

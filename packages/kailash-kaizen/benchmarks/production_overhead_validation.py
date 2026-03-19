@@ -54,10 +54,10 @@ class ProductionOverheadValidator:
 
     async def run_baseline_test(self, num_requests: int = 50) -> List[float]:
         """Run baseline test WITHOUT observability."""
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"BASELINE: {num_requests} requests WITHOUT observability")
         print(f"Provider: {self.provider}, Model: {self.model}")
-        print(f"{'='*80}\n")
+        print(f"{'=' * 80}\n")
 
         config = BaseAgentConfig(
             llm_provider=self.provider,
@@ -81,7 +81,7 @@ class ProductionOverheadValidator:
 
         for i in range(num_requests):
             question = questions[i % len(questions)]
-            print(f"Request {i+1}/{num_requests}: {question[:30]}...")
+            print(f"Request {i + 1}/{num_requests}: {question[:30]}...")
 
             start = time.perf_counter()
             result = agent.run(question=question)
@@ -106,10 +106,10 @@ class ProductionOverheadValidator:
 
     async def run_observability_test(self, num_requests: int = 50) -> List[float]:
         """Run test WITH full observability enabled."""
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"WITH OBSERVABILITY: {num_requests} requests WITH full observability")
         print(f"Provider: {self.provider}, Model: {self.model}")
-        print(f"{'='*80}\n")
+        print(f"{'=' * 80}\n")
 
         config = BaseAgentConfig(
             llm_provider=self.provider,
@@ -142,7 +142,7 @@ class ProductionOverheadValidator:
 
         for i in range(num_requests):
             question = questions[i % len(questions)]
-            print(f"Request {i+1}/{num_requests}: {question[:30]}...")
+            print(f"Request {i + 1}/{num_requests}: {question[:30]}...")
 
             start = time.perf_counter()
             result = agent.run(question=question)
@@ -243,13 +243,13 @@ class ProductionOverheadValidator:
 
     async def validate(self, num_requests: int = 50) -> ValidationResult:
         """Run complete validation test."""
-        print(f"\n{'#'*80}")
+        print(f"\n{'#' * 80}")
         print("# Production Overhead Validation")
         print(f"# Provider: {self.provider}, Model: {self.model}")
         print(
             f"# Requests: {num_requests} baseline + {num_requests} with observability"
         )
-        print(f"{'#'*80}\n")
+        print(f"{'#' * 80}\n")
 
         # Run baseline
         baseline_latencies = await self.run_baseline_test(num_requests)
@@ -265,15 +265,15 @@ class ProductionOverheadValidator:
         result = self.calculate_overhead(baseline_latencies, obs_latencies)
 
         # Print final results
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print("FINAL RESULTS")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
         print(f"Baseline Average:           {result.baseline_avg_ms:.2f}ms")
         print(f"With Observability Average: {result.observability_avg_ms:.2f}ms")
         print(f"Overhead (absolute):        {result.overhead_ms:.2f}ms")
         print(f"Overhead (percentage):      {result.overhead_percent:.2f}%")
         print(f"Sample Size:                {result.sample_size} requests per test")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         # Evaluate against targets
         target_percent = 10.0  # <10% total overhead target

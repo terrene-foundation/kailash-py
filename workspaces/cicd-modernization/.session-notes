@@ -1,0 +1,22 @@
+# Session Notes — 2026-03-18
+
+## Accomplished
+- Switched all workflows from self-hosted to ubuntu-latest
+- CI green: 1649 curated unit tests in 12s on GH runners
+- Moved 8 hanging test files to tests/integration/nodes/
+- Community files: CODEOWNERS, dependabot.yml, SECURITY.md, CONTRIBUTING.md (all 3 repos)
+- CodeQL scanning workflow added
+- OIDC publish workflow (pypa/gh-action-pypi-publish) ready
+- psutil lazy import fixed (7 modules), black formatted codebase
+- 27 CI commits squashed into 1
+
+## Blockers
+- Sub-packages not on PyPI at v1.0.0 (blocks `kailash[all]`)
+- OIDC trusted publishing needs PyPI website config per package
+
+## Next Steps
+1. Publish sub-packages to PyPI
+2. Configure OIDC trusted publishing on PyPI
+3. Add Pyright to CI
+4. Python version matrix (3.10-3.13)
+5. Merge Dependabot PRs

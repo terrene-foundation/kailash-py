@@ -289,7 +289,7 @@ Message: {error_analysis.message}
 Context: {error_analysis.context}
 
 Workflow Context:
-- Node type: {workflow_context.node_type or 'unknown'}
+- Node type: {workflow_context.node_type or "unknown"}
 - Connections: {len(workflow_context.connections)}
 
 Available Solutions:
@@ -321,7 +321,7 @@ Solution 2: relevance=0.7, reasoning="Alternative approach with moderate complex
         formatted = []
         for i, solution in enumerate(solutions):
             formatted.append(
-                f"{i+1}. {solution.description}\n" f"   Code: {solution.code_template}"
+                f"{i + 1}. {solution.description}\n   Code: {solution.code_template}"
             )
 
         return "\n".join(formatted)

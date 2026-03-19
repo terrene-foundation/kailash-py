@@ -299,7 +299,7 @@ async def test_cache_warming_strategy(cache: TrustChainCache):
     print(f"\nCache Warming Results:")
     print(f"  Chains loaded: {num_chains}")
     print(f"  Cache size: {stats.size}")
-    print(f"  Warming time: {elapsed*1000:.2f}ms")
+    print(f"  Warming time: {elapsed * 1000:.2f}ms")
 
     # Now all lookups should be fast
     for i in range(num_chains):

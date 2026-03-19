@@ -153,9 +153,9 @@ class TestApprovalBlocksExecution:
         assert pending[0].request_metadata["cost"] == 15.00
 
         # Verify invocation not executed yet
-        assert (
-            executor.execution_count == 0
-        ), "Execution should be blocked pending approval"
+        assert executor.execution_count == 0, (
+            "Execution should be blocked pending approval"
+        )
 
         # Step 3: Approve request
         await approval_manager.approve_request(request_id, "lead_001")
@@ -266,9 +266,9 @@ class TestApprovalTimeoutPreventsExecution:
         # Assertions
         assert result["success"] is False, "Invocation should be blocked after timeout"
         assert "timed out" in result["error"], "Error should indicate timeout"
-        assert (
-            executor.execution_count == 0
-        ), "Execution should NOT complete after timeout"
+        assert executor.execution_count == 0, (
+            "Execution should NOT complete after timeout"
+        )
 
 
 class TestRejectionPreventsExecution:
@@ -332,23 +332,23 @@ class TestRejectionPreventsExecution:
         result = await invocation_task
 
         # Assertions: Verify invocation blocked
-        assert (
-            result["success"] is False
-        ), "Invocation should be blocked after rejection"
+        assert result["success"] is False, (
+            "Invocation should be blocked after rejection"
+        )
         assert "rejected" in result["error"].lower(), "Error should indicate rejection"
-        assert (
-            rejection_reason in result["error"]
-        ), "Error should include rejection reason"
-        assert (
-            executor.execution_count == 0
-        ), "Execution should NOT complete after rejection"
+        assert rejection_reason in result["error"], (
+            "Error should include rejection reason"
+        )
+        assert executor.execution_count == 0, (
+            "Execution should NOT complete after rejection"
+        )
 
         # Step 4: Verify audit trail
         request = approval_manager.get_request(request_id)
         assert request.status == ApprovalStatus.REJECTED, "Status should be REJECTED"
-        assert (
-            request.rejection_reason == rejection_reason
-        ), "Rejection reason should be recorded"
+        assert request.rejection_reason == rejection_reason, (
+            "Rejection reason should be recorded"
+        )
         assert request.approved_by == "lead_001", "Rejector ID should be recorded"
         assert request.approved_at is not None, "Rejection timestamp should be recorded"
 

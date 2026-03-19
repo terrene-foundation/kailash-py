@@ -138,9 +138,7 @@ class TestInitialize:
         await store.initialize()
 
         conn = sqlite3.connect(db_path)
-        cursor = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='trust_chains'"
-        )
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='trust_chains'")
         result = cursor.fetchone()
         conn.close()
 
@@ -217,9 +215,7 @@ class TestStoreChain:
         await store.store_chain(chain, expires_at=expiry)
 
         conn = sqlite3.connect(db_path)
-        cursor = conn.execute(
-            "SELECT expires_at FROM trust_chains WHERE agent_id = 'agent-1'"
-        )
+        cursor = conn.execute("SELECT expires_at FROM trust_chains WHERE agent_id = 'agent-1'")
         row = cursor.fetchone()
         conn.close()
         assert row[0] == expiry.isoformat()
@@ -379,9 +375,7 @@ class TestUpdateChain:
         with pytest.raises(TrustChainNotFoundError):
             await store.update_chain("nonexistent", chain)
 
-    async def test_update_chain_preserves_stored_at_updates_updated_at(
-        self, store, db_path
-    ):
+    async def test_update_chain_preserves_stored_at_updates_updated_at(self, store, db_path):
         """update_chain() must preserve created_at and set updated_at."""
         await store.initialize()
         chain = _make_chain("agent-1")
@@ -389,9 +383,7 @@ class TestUpdateChain:
 
         # Read original timestamps
         conn = sqlite3.connect(db_path)
-        cursor = conn.execute(
-            "SELECT created_at, updated_at FROM trust_chains WHERE agent_id = 'agent-1'"
-        )
+        cursor = conn.execute("SELECT created_at, updated_at FROM trust_chains WHERE agent_id = 'agent-1'")
         row = cursor.fetchone()
         conn.close()
         original_created_at = row[0]
@@ -404,9 +396,7 @@ class TestUpdateChain:
         await store.update_chain("agent-1", updated_chain)
 
         conn = sqlite3.connect(db_path)
-        cursor = conn.execute(
-            "SELECT created_at, updated_at FROM trust_chains WHERE agent_id = 'agent-1'"
-        )
+        cursor = conn.execute("SELECT created_at, updated_at FROM trust_chains WHERE agent_id = 'agent-1'")
         row = cursor.fetchone()
         conn.close()
 
@@ -437,9 +427,7 @@ class TestDeleteChain:
         await store.delete_chain("agent-1", soft_delete=True)
 
         conn = sqlite3.connect(db_path)
-        cursor = conn.execute(
-            "SELECT active, deleted_at FROM trust_chains WHERE agent_id = 'agent-1'"
-        )
+        cursor = conn.execute("SELECT active, deleted_at FROM trust_chains WHERE agent_id = 'agent-1'")
         row = cursor.fetchone()
         conn.close()
 
@@ -456,9 +444,7 @@ class TestDeleteChain:
         await store.delete_chain("agent-1", soft_delete=False)
 
         conn = sqlite3.connect(db_path)
-        cursor = conn.execute(
-            "SELECT COUNT(*) FROM trust_chains WHERE agent_id = 'agent-1'"
-        )
+        cursor = conn.execute("SELECT COUNT(*) FROM trust_chains WHERE agent_id = 'agent-1'")
         count = cursor.fetchone()[0]
         conn.close()
 
@@ -481,9 +467,7 @@ class TestDeleteChain:
         await store.delete_chain("agent-1", soft_delete=False)
 
         conn = sqlite3.connect(db_path)
-        cursor = conn.execute(
-            "SELECT COUNT(*) FROM trust_chains WHERE agent_id = 'agent-1'"
-        )
+        cursor = conn.execute("SELECT COUNT(*) FROM trust_chains WHERE agent_id = 'agent-1'")
         count = cursor.fetchone()[0]
         conn.close()
         assert count == 0
@@ -762,9 +746,7 @@ class TestGetChainsMissingReasoning:
         await store.initialize()
 
         # Chain with delegation but no reasoning trace
-        chain_no_reason = _make_chain_with_delegation(
-            "agent-missing", reasoning_trace=None
-        )
+        chain_no_reason = _make_chain_with_delegation("agent-missing", reasoning_trace=None)
         await store.store_chain(chain_no_reason)
 
         # Chain without delegations (should NOT be included)

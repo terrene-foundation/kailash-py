@@ -136,8 +136,7 @@ class ShadowEnforcer:
             verdict = self._classifier.classify(result)
         except Exception:
             logger.exception(
-                f"[SHADOW] Classification failed for agent={agent_id} action={action} — "
-                "returning BLOCKED as fail-safe"
+                f"[SHADOW] Classification failed for agent={agent_id} action={action} — returning BLOCKED as fail-safe"
             )
             verdict = Verdict.BLOCKED
 
@@ -158,10 +157,7 @@ class ShadowEnforcer:
 
         # Track verdict changes
         verdict_value = verdict.value
-        if (
-            self._metrics.last_verdict is not None
-            and verdict_value != self._metrics.last_verdict
-        ):
+        if self._metrics.last_verdict is not None and verdict_value != self._metrics.last_verdict:
             self._metrics.verdict_changes += 1
         self._metrics.last_verdict = verdict_value
 
@@ -169,22 +165,13 @@ class ShadowEnforcer:
             self._metrics.auto_approved_count += 1
         elif verdict == Verdict.FLAGGED:
             self._metrics.flagged_count += 1
-            logger.info(
-                f"[SHADOW] WOULD FLAG: agent={agent_id} action={action} "
-                f"violations={len(result.violations)}"
-            )
+            logger.info(f"[SHADOW] WOULD FLAG: agent={agent_id} action={action} violations={len(result.violations)}")
         elif verdict == Verdict.HELD:
             self._metrics.held_count += 1
-            logger.warning(
-                f"[SHADOW] WOULD HOLD: agent={agent_id} action={action} "
-                f"violations={len(result.violations)}"
-            )
+            logger.warning(f"[SHADOW] WOULD HOLD: agent={agent_id} action={action} violations={len(result.violations)}")
         elif verdict == Verdict.BLOCKED:
             self._metrics.blocked_count += 1
-            logger.warning(
-                f"[SHADOW] WOULD BLOCK: agent={agent_id} action={action} "
-                f"reason={result.reason}"
-            )
+            logger.warning(f"[SHADOW] WOULD BLOCK: agent={agent_id} action={action} reason={result.reason}")
 
         # Track reasoning trace metrics (only when explicitly set, not None)
         if result.reasoning_present is True:
@@ -233,16 +220,12 @@ class ShadowEnforcer:
         blocked_agents: Dict[str, int] = {}
         for record in self._records:
             if record.verdict == Verdict.BLOCKED:
-                blocked_agents[record.agent_id] = (
-                    blocked_agents.get(record.agent_id, 0) + 1
-                )
+                blocked_agents[record.agent_id] = blocked_agents.get(record.agent_id, 0) + 1
 
         if blocked_agents:
             lines.append("")
             lines.append("Top blocked agents:")
-            for agent_id, count in sorted(
-                blocked_agents.items(), key=lambda x: x[1], reverse=True
-            )[:5]:
+            for agent_id, count in sorted(blocked_agents.items(), key=lambda x: x[1], reverse=True)[:5]:
                 lines.append(f"  {agent_id}: {count} blocks")
 
         # Reasoning trace metrics
@@ -253,10 +236,7 @@ class ShadowEnforcer:
             lines.append(f"  Reasoning present:  {m.reasoning_present_count}")
             lines.append(f"  Reasoning absent:   {m.reasoning_absent_count}")
             if m.reasoning_verification_failed_count > 0:
-                lines.append(
-                    f"  Reasoning verification failures: "
-                    f"{m.reasoning_verification_failed_count}"
-                )
+                lines.append(f"  Reasoning verification failures: {m.reasoning_verification_failed_count}")
 
         return "\n".join(lines)
 

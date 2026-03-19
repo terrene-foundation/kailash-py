@@ -756,9 +756,9 @@ class TestThreadSafety:
         )
 
         # No errors should have occurred
-        assert (
-            errors == []
-        ), f"Concurrent create/revoke_by_human caused errors: {errors}"
+        assert errors == [], (
+            f"Concurrent create/revoke_by_human caused errors: {errors}"
+        )
         assert created_count == 50, f"Expected 50 creates, got {created_count}"
 
     def test_propagator_has_lock(self):

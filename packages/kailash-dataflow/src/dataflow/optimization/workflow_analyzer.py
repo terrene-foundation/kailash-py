@@ -182,14 +182,12 @@ class WorkflowAnalyzer:
                         merge_node.type in self.merge_nodes
                         and node.id in merge_node.inputs
                     ):
-
                         # Look for aggregate nodes that take the merge as input
                         for agg_node in nodes:
                             if (
                                 agg_node.type in self.aggregate_nodes
                                 and merge_node.id in agg_node.inputs
                             ):
-
                                 # Found a Query→Merge→Aggregate pattern!
                                 opportunity = self._create_qma_optimization(
                                     query_node=node,
@@ -365,7 +363,7 @@ class WorkflowAnalyzer:
                     estimated_improvement="50% less compute",
                     optimization_strategy="Eliminate duplicate operations and reuse results",
                     confidence=0.7,
-                    description=f"Remove {len(group)-1} redundant {node_type} operations",
+                    description=f"Remove {len(group) - 1} redundant {node_type} operations",
                 )
                 opportunities.append(opportunity)
 

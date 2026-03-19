@@ -1551,7 +1551,7 @@ class OrchestrationRuntime:
             # Connect nodes based on mode
             if mode == "sequential" and i > 0:
                 # Chain: previous node output feeds into current node
-                prev_node_id = f"agent_{i-1}_{agents[i-1].agent_id}"
+                prev_node_id = f"agent_{i - 1}_{agents[i - 1].agent_id}"
                 workflow.add_connection(prev_node_id, node_id, "output", "input")
             # parallel mode: no connections (nodes execute independently)
             # hybrid mode: implement batch-based connections (future enhancement)

@@ -622,9 +622,9 @@ def test_benchmark_cache_hit_rate_under_load(benchmark, trust_cache, established
 
     # Check hit rate
     load_result = asyncio.run(simulate_cache_load())
-    assert (
-        load_result["hit_rate"] > 0.85
-    ), f"Cache hit rate ({load_result['hit_rate']:.2%}) below 85% target"
+    assert load_result["hit_rate"] > 0.85, (
+        f"Cache hit rate ({load_result['hit_rate']:.2%}) below 85% target"
+    )
 
 
 # ============================================================================

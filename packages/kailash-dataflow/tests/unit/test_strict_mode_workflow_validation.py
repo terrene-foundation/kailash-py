@@ -541,7 +541,7 @@ class TestWorkflowStructureQuality:
             workflow.add_node(f"Level{i}", f"l{i}", {"value": i})
 
         for i in range(6):
-            workflow.add_connection(f"l{i}", "value", f"l{i+1}", "data")
+            workflow.add_connection(f"l{i}", "value", f"l{i + 1}", "data")
 
         # Act: Validate workflow depth
         warnings = self._check_workflow_depth(workflow)
@@ -806,7 +806,7 @@ class TestWorkflowHealthReport:
             workflow.add_node(f"Node{i}", f"n{i}", {"value": i})
 
         for i in range(4):
-            workflow.add_connection(f"n{i}", "value", f"n{i+1}", "data")
+            workflow.add_connection(f"n{i}", "value", f"n{i + 1}", "data")
 
         # Act: Generate health report
         report = self._generate_health_report(workflow)
@@ -1191,7 +1191,7 @@ class TestErrorMessageQuality:
             workflow.add_node(f"Level{i}", f"l{i}", {"value": i})
 
         for i in range(6):
-            workflow.add_connection(f"l{i}", "value", f"l{i+1}", "data")
+            workflow.add_connection(f"l{i}", "value", f"l{i + 1}", "data")
 
         # Act: Call helper directly with proper arguments
         warnings = self._check_workflow_depth_helper(workflow)

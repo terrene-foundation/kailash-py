@@ -191,9 +191,7 @@ class ESAAlreadyRegisteredError(ESARegistryError):
         Args:
             esa_id: ESA identifier that's already registered
         """
-        super().__init__(
-            f"ESA '{esa_id}' is already registered", details={"esa_id": esa_id}
-        )
+        super().__init__(f"ESA '{esa_id}' is already registered", details={"esa_id": esa_id})
         self.esa_id = esa_id
 
 
@@ -207,9 +205,7 @@ class ESANotFoundError(ESARegistryError):
         Args:
             esa_id: ESA identifier that was not found
         """
-        super().__init__(
-            f"ESA '{esa_id}' not found in registry", details={"esa_id": esa_id}
-        )
+        super().__init__(f"ESA '{esa_id}' not found in registry", details={"esa_id": esa_id})
         self.esa_id = esa_id
 
 
@@ -273,9 +269,7 @@ class ESARegistry:
         self._registrations: Dict[str, ESARegistration] = {}
 
         # Type index for fast lookups
-        self._type_index: Dict[SystemType, List[str]] = {
-            system_type: [] for system_type in SystemType
-        }
+        self._type_index: Dict[SystemType, List[str]] = {system_type: [] for system_type in SystemType}
 
         # Health monitoring state
         self._health_check_task: Optional[asyncio.Task] = None
@@ -303,9 +297,7 @@ class ESARegistry:
 
         # Start health monitoring if enabled
         if self.enable_health_monitoring:
-            self._health_check_task = asyncio.create_task(
-                self._health_monitoring_loop()
-            )
+            self._health_check_task = asyncio.create_task(self._health_monitoring_loop())
 
         self._initialized = True
 
@@ -371,9 +363,7 @@ class ESARegistry:
                 if chain.is_expired():
                     raise TrustError(f"Trust chain for ESA '{esa_id}' is expired")
             except Exception as e:
-                raise TrustError(
-                    f"Trust chain verification failed for ESA '{esa_id}': {str(e)}"
-                )
+                raise TrustError(f"Trust chain verification failed for ESA '{esa_id}': {str(e)}")
 
         # 3. Create registration record
         registration = ESARegistration(
@@ -680,21 +670,13 @@ class ESARegistry:
         ):
             return SystemType.DATABASE
 
-        if (
-            "rest" in system_type_str
-            or "api" in system_type_str
-            or "http" in system_type_str
-        ):
+        if "rest" in system_type_str or "api" in system_type_str or "http" in system_type_str:
             return SystemType.REST_API
 
         if "soap" in system_type_str or "wsdl" in system_type_str:
             return SystemType.SOAP_SERVICE
 
-        if (
-            "file" in system_type_str
-            or "fs" in system_type_str
-            or "storage" in system_type_str
-        ):
+        if "file" in system_type_str or "fs" in system_type_str or "storage" in system_type_str:
             return SystemType.FILE_SYSTEM
 
         if (
@@ -714,18 +696,10 @@ class ESARegistry:
         ):
             return SystemType.CLOUD_SERVICE
 
-        if (
-            "ldap" in system_type_str
-            or "active directory" in system_type_str
-            or "ad" in system_type_str
-        ):
+        if "ldap" in system_type_str or "active directory" in system_type_str or "ad" in system_type_str:
             return SystemType.LDAP
 
-        if (
-            "email" in system_type_str
-            or "smtp" in system_type_str
-            or "imap" in system_type_str
-        ):
+        if "email" in system_type_str or "smtp" in system_type_str or "imap" in system_type_str:
             return SystemType.EMAIL_SERVER
 
         return SystemType.UNKNOWN
@@ -767,11 +741,7 @@ class ESARegistry:
             return SystemType.FILE_SYSTEM
 
         # Message queue connections
-        if (
-            re.match(r"^amqp://", conn_lower)
-            or re.match(r"^kafka://", conn_lower)
-            or re.match(r"^sqs://", conn_lower)
-        ):
+        if re.match(r"^amqp://", conn_lower) or re.match(r"^kafka://", conn_lower) or re.match(r"^sqs://", conn_lower):
             return SystemType.MESSAGE_QUEUE
 
         # LDAP
@@ -817,12 +787,8 @@ class ESARegistry:
             Dictionary with registry statistics
         """
         total = len(self._registrations)
-        healthy = sum(
-            1 for r in self._registrations.values() if r.health_status == "healthy"
-        )
-        unhealthy = sum(
-            1 for r in self._registrations.values() if r.health_status == "unhealthy"
-        )
+        healthy = sum(1 for r in self._registrations.values() if r.health_status == "healthy")
+        unhealthy = sum(1 for r in self._registrations.values() if r.health_status == "unhealthy")
         unknown = total - healthy - unhealthy
 
         # Count by type

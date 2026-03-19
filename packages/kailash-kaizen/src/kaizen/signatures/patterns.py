@@ -266,7 +266,7 @@ Reasoning Steps: [Summary of the logical progression]"""
             # Generate reasoning steps
             reasoning_steps = []
             for i in range(min(3, self.reasoning_steps)):
-                step = f"Step {i+1}: Analyze and process the input systematically"
+                step = f"Step {i + 1}: Analyze and process the input systematically"
                 reasoning_steps.append(step)
 
             # Generate outputs based on signature

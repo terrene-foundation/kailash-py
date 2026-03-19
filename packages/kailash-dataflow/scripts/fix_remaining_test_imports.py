@@ -12,9 +12,7 @@ from pathlib import Path
 
 def fix_batched_executor_integration_test():
     """Fix import syntax error in batched_migration_executor_integration test."""
-    filepath = Path(
-        ""
-    )
+    filepath = Path("")
 
     if filepath.exists():
         with open(filepath, "r") as f:
@@ -45,9 +43,7 @@ from tests.utils.real_infrastructure import real_infra"""
 
 def add_missing_methods_to_real_infrastructure():
     """Add missing methods to real_infrastructure module."""
-    filepath = Path(
-        ""
-    )
+    filepath = Path("")
 
     if filepath.exists():
         with open(filepath, "r") as f:
@@ -91,9 +87,7 @@ def add_missing_methods_to_real_infrastructure():
 
 def fix_all_integration_tests():
     """Fix common import issues in all integration tests."""
-    integration_dir = Path(
-        ""
-    )
+    integration_dir = Path("")
 
     problem_files = [
         "test_migration_history_manager.py",
@@ -136,9 +130,7 @@ def fix_all_integration_tests():
 
 def fix_monitoring_tests():
     """Fix monitoring test imports."""
-    monitoring_dir = Path(
-        ""
-    )
+    monitoring_dir = Path("")
 
     if monitoring_dir.exists():
         for filepath in monitoring_dir.glob("*.py"):
@@ -170,9 +162,7 @@ def fix_monitoring_tests():
 
 def fix_dataflow_integration_tests():
     """Fix dataflow subdirectory integration tests."""
-    dataflow_dir = Path(
-        ""
-    )
+    dataflow_dir = Path("")
 
     if dataflow_dir.exists():
         for filepath in dataflow_dir.rglob("test_*.py"):

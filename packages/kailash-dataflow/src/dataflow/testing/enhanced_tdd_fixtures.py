@@ -178,7 +178,6 @@ async def enhanced_tdd_context():
         enable_monitoring=True,
         enable_memory_optimization=True,
     ) as opt_context:
-
         # Create base TDD context with optimized settings
         from dataflow.testing.tdd_support import tdd_test_context
 
@@ -612,7 +611,6 @@ async def comprehensive_tdd_benchmark():
         enable_monitoring=True,
         enable_memory_optimization=True,
     ) as opt_context:
-
         benchmark_context = BenchmarkContext()
 
         # Record initial metrics

@@ -224,7 +224,9 @@ class AutonomousResearchAgent:
         """Initialize 3-tier memory system."""
         # Hot tier: In-memory cache (< 1ms)
         self.hot_memory = HotMemoryTier(
-            max_size=100, eviction_policy="lru", default_ttl=300  # 5 minutes
+            max_size=100,
+            eviction_policy="lru",
+            default_ttl=300,  # 5 minutes
         )
 
         # Warm/Cold tier: DataFlow persistent storage

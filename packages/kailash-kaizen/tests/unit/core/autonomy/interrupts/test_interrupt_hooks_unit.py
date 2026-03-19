@@ -48,12 +48,12 @@ def test_hook_event_definitions():
     assert hasattr(HookEvent, "PRE_INTERRUPT"), "Should have PRE_INTERRUPT event"
     assert hasattr(HookEvent, "POST_INTERRUPT"), "Should have POST_INTERRUPT event"
 
-    assert (
-        HookEvent.PRE_INTERRUPT.value == "pre_interrupt"
-    ), "PRE_INTERRUPT should have correct value"
-    assert (
-        HookEvent.POST_INTERRUPT.value == "post_interrupt"
-    ), "POST_INTERRUPT should have correct value"
+    assert HookEvent.PRE_INTERRUPT.value == "pre_interrupt", (
+        "PRE_INTERRUPT should have correct value"
+    )
+    assert HookEvent.POST_INTERRUPT.value == "post_interrupt", (
+        "POST_INTERRUPT should have correct value"
+    )
 
 
 @pytest.mark.asyncio
@@ -87,12 +87,12 @@ async def test_register_interrupt_hooks():
     )
 
     # Assert
-    assert (
-        HookEvent.PRE_INTERRUPT in hook_manager._hooks
-    ), "Should have PRE_INTERRUPT hooks"
-    assert (
-        HookEvent.POST_INTERRUPT in hook_manager._hooks
-    ), "Should have POST_INTERRUPT hooks"
+    assert HookEvent.PRE_INTERRUPT in hook_manager._hooks, (
+        "Should have PRE_INTERRUPT hooks"
+    )
+    assert HookEvent.POST_INTERRUPT in hook_manager._hooks, (
+        "Should have POST_INTERRUPT hooks"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -117,18 +117,18 @@ async def test_interrupt_manager_triggers_hooks():
 
     async def pre_interrupt_hook(context: HookContext) -> HookResult:
         executed.append("pre_interrupt")
-        assert (
-            context.event_type == HookEvent.PRE_INTERRUPT
-        ), "Should be PRE_INTERRUPT event"
+        assert context.event_type == HookEvent.PRE_INTERRUPT, (
+            "Should be PRE_INTERRUPT event"
+        )
         assert "interrupt_mode" in context.data, "Should include interrupt mode"
         assert "interrupt_source" in context.data, "Should include interrupt source"
         return HookResult(success=True)
 
     async def post_interrupt_hook(context: HookContext) -> HookResult:
         executed.append("post_interrupt")
-        assert (
-            context.event_type == HookEvent.POST_INTERRUPT
-        ), "Should be POST_INTERRUPT event"
+        assert context.event_type == HookEvent.POST_INTERRUPT, (
+            "Should be POST_INTERRUPT event"
+        )
         assert "checkpoint_id" in context.data, "Should include checkpoint ID"
         return HookResult(success=True)
 

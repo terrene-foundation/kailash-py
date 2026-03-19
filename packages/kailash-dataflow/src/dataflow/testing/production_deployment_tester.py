@@ -1348,7 +1348,7 @@ async def main():
         total = len(results)
 
         print("\n🎯 Production Testing Complete!")
-        print(f"Results: {passed}/{total} tests passed ({(passed/total*100):.1f}%)")
+        print(f"Results: {passed}/{total} tests passed ({(passed / total * 100):.1f}%)")
 
         if passed / total >= 0.8:
             print(

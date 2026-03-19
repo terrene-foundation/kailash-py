@@ -240,7 +240,7 @@ Respond with JSON only:
         # Simple response generation (can be enhanced with dedicated LLM)
         context = "\n\n".join(
             [
-                f"Document {i+1}: {doc.get('content', '')[:500]}..."
+                f"Document {i + 1}: {doc.get('content', '')[:500]}..."
                 for i, doc in enumerate(retrieved_docs[:3])
             ]
         )
@@ -302,7 +302,7 @@ Assess the quality and provide improvement suggestions:
         formatted = []
         for i, doc in enumerate(docs[:5]):  # Limit to 5 docs for prompt length
             content = doc.get("content", "")[:300]  # Truncate for prompt
-            formatted.append(f"Doc {i+1}: {content}...")
+            formatted.append(f"Doc {i + 1}: {content}...")
         return "\n\n".join(formatted)
 
     def _parse_verification_response(self, response: Dict) -> Dict[str, Any]:
@@ -852,7 +852,7 @@ Generate {self.num_query_variations} high-quality variations that will improve r
 
         context = "\n\n".join(
             [
-                f"Source {i+1} (RRF Score: {doc.get('fusion_metadata', {}).get('rrf_score', 0.0):.3f}): "
+                f"Source {i + 1} (RRF Score: {doc.get('fusion_metadata', {}).get('rrf_score', 0.0):.3f}): "
                 f"{doc.get('content', '')[:400]}..."
                 for i, doc in enumerate(top_docs)
             ]
@@ -862,7 +862,7 @@ Generate {self.num_query_variations} high-quality variations that will improve r
 
 {context}
 
-[Response generated from {len(documents)} unique documents using {fused_results.get('fusion_method', 'unknown')} fusion]"""
+[Response generated from {len(documents)} unique documents using {fused_results.get("fusion_method", "unknown")} fusion]"""
 
     def _calculate_fusion_improvement(
         self, individual_results: List[Dict], fused_results: Dict
@@ -1207,7 +1207,7 @@ Generate {self.num_hypotheses if self.use_multiple_hypotheses else 1} detailed h
             diversity = doc.get("source_diversity", 0)
 
             context_parts.append(
-                f"Document {i+1} (found by {diversity} hypotheses): {content}..."
+                f"Document {i + 1} (found by {diversity} hypotheses): {content}..."
             )
 
         context = "\n\n".join(context_parts)
@@ -1577,13 +1577,13 @@ Generate a broader, more abstract version that would help retrieve relevant back
             response_parts.append("\nBackground Context:")
             for i, doc in enumerate(background_docs):
                 content = doc.get("content", "")[:250]
-                response_parts.append(f"Background {i+1}: {content}...")
+                response_parts.append(f"Background {i + 1}: {content}...")
 
         if specific_docs:
             response_parts.append("\nSpecific Information:")
             for i, doc in enumerate(specific_docs):
                 content = doc.get("content", "")[:300]
-                response_parts.append(f"Specific {i+1}: {content}...")
+                response_parts.append(f"Specific {i + 1}: {content}...")
 
         response_parts.append(
             f"\n[Generated using step-back reasoning with abstract query: '{abstract_query}']"

@@ -780,7 +780,7 @@ class Kaizen:
         # Create agents for each role
         team_agents = []
         for i, role in enumerate(roles):
-            agent_name = f"{team_name}_{role}_{i+1}"
+            agent_name = f"{team_name}_{role}_{i + 1}"
 
             # Configure agent based on role
             agent_config = {

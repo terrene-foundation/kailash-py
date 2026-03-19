@@ -141,7 +141,7 @@ class TestBudgetEnforcementE2E:
         for i in range(5):
             # Check budget
             result = await enforcer.check_budget(budget, estimated_cost=10.0)
-            assert result.allowed is True, f"Invocation {i+1} should be allowed"
+            assert result.allowed is True, f"Invocation {i + 1} should be allowed"
 
             # Record usage
             budget = await enforcer.record_usage(

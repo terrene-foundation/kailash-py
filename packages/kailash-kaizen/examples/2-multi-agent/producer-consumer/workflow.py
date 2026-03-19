@@ -168,7 +168,7 @@ class ProducerAgent(BaseAgent):
             )
 
             # Extract item
-            item = result.get("item", f"Work item {i+1} for: {task_spec}")
+            item = result.get("item", f"Work item {i + 1} for: {task_spec}")
 
             # Write to shared memory queue
             if self.shared_memory:
@@ -496,14 +496,14 @@ def producer_consumer_workflow(
     producers = []
     for i in range(producer_count):
         producer = ProducerAgent(
-            config=config, shared_memory=shared_pool, agent_id=f"producer_{i+1}"
+            config=config, shared_memory=shared_pool, agent_id=f"producer_{i + 1}"
         )
         producers.append(producer)
 
     consumers = []
     for i in range(consumer_count):
         consumer = ConsumerAgent(
-            config=config, shared_memory=shared_pool, agent_id=f"consumer_{i+1}"
+            config=config, shared_memory=shared_pool, agent_id=f"consumer_{i + 1}"
         )
         consumers.append(consumer)
 
@@ -511,9 +511,9 @@ def producer_consumer_workflow(
         config=config, shared_memory=shared_pool, agent_id="queue_manager"
     )
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Producer-Consumer Pattern: {task_spec}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Step 1: Producers generate items
     print(f"Step 1: Producers generating {item_count} items...")
@@ -562,14 +562,14 @@ def producer_consumer_workflow(
 
     # Show shared memory stats
     memory_stats = shared_pool.get_stats()
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Shared Memory Statistics:")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  - Total insights: {memory_stats['insight_count']}")
     print(f"  - Agents involved: {memory_stats['agent_count']}")
     print(f"  - Tag distribution: {memory_stats['tag_distribution']}")
     print(f"  - Segment distribution: {memory_stats['segment_distribution']}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     return {
         "task_spec": task_spec,

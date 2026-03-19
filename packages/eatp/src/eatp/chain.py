@@ -349,11 +349,7 @@ class DelegationRecord:
             capabilities_delegated=data["capabilities_delegated"],
             constraint_subset=data.get("constraint_subset", []),
             delegated_at=datetime.fromisoformat(data["delegated_at"]),
-            expires_at=(
-                datetime.fromisoformat(data["expires_at"])
-                if data.get("expires_at")
-                else None
-            ),
+            expires_at=(datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None),
             signature=data.get("signature", ""),
             parent_delegation_id=data.get("parent_delegation_id"),
             # EATP fields with backward-compatible defaults
@@ -435,13 +431,9 @@ class ConstraintEnvelope:
         """Get list of all constraint values as strings."""
         return [str(c.value) for c in self.active_constraints]
 
-    def get_constraints_by_type(
-        self, constraint_type: ConstraintType
-    ) -> List[Constraint]:
+    def get_constraints_by_type(self, constraint_type: ConstraintType) -> List[Constraint]:
         """Get constraints of a specific type."""
-        return [
-            c for c in self.active_constraints if c.constraint_type == constraint_type
-        ]
+        return [c for c in self.active_constraints if c.constraint_type == constraint_type]
 
     def is_valid(self) -> bool:
         """Check if this envelope is still valid."""
@@ -668,19 +660,14 @@ class TrustLineageChain:
             import hashlib
 
             deterministic_salt = (
-                hashlib.sha256(f"{self.genesis.id}:linked".encode()).hexdigest()[:43]
-                + "="
+                hashlib.sha256(f"{self.genesis.id}:linked".encode()).hexdigest()[:43] + "="
             )  # Base64-like format
 
             hash_result, _ = hash_trust_chain_state_salted(
                 genesis_id=self.genesis.id,
                 capability_ids=[c.id for c in self.capabilities],
                 delegation_ids=[d.id for d in self.delegations],
-                constraint_hash=(
-                    self.constraint_envelope.constraint_hash
-                    if self.constraint_envelope
-                    else ""
-                ),
+                constraint_hash=(self.constraint_envelope.constraint_hash if self.constraint_envelope else ""),
                 previous_state_hash=previous_hash,
                 salt=deterministic_salt,
             )
@@ -691,11 +678,7 @@ class TrustLineageChain:
                 genesis_id=self.genesis.id,
                 capability_ids=[c.id for c in self.capabilities],
                 delegation_ids=[d.id for d in self.delegations],
-                constraint_hash=(
-                    self.constraint_envelope.constraint_hash
-                    if self.constraint_envelope
-                    else ""
-                ),
+                constraint_hash=(self.constraint_envelope.constraint_hash if self.constraint_envelope else ""),
             )
 
     def is_expired(self) -> bool:
@@ -763,10 +746,7 @@ class TrustLineageChain:
 
         # From delegations
         for delegation in self.delegations:
-            if (
-                capability in delegation.capabilities_delegated
-                and not delegation.is_expired()
-            ):
+            if capability in delegation.capabilities_delegated and not delegation.is_expired():
                 constraints.update(delegation.constraint_subset)
 
         return list(constraints)
@@ -784,15 +764,11 @@ class TrustLineageChain:
         """
         # Check genesis exists
         if not self.genesis:
-            return VerificationResult(
-                valid=False, level=VerificationLevel.QUICK, reason="No genesis record"
-            )
+            return VerificationResult(valid=False, level=VerificationLevel.QUICK, reason="No genesis record")
 
         # Check not expired
         if self.is_expired():
-            return VerificationResult(
-                valid=False, level=VerificationLevel.QUICK, reason="Trust chain expired"
-            )
+            return VerificationResult(valid=False, level=VerificationLevel.QUICK, reason="Trust chain expired")
 
         return VerificationResult(valid=True, level=VerificationLevel.QUICK)
 
@@ -825,9 +801,7 @@ class TrustLineageChain:
         delegation_map = {d.id: d for d in self.delegations}
 
         # Find leaf delegations (no other delegation references them as parent)
-        parent_ids = {
-            d.parent_delegation_id for d in self.delegations if d.parent_delegation_id
-        }
+        parent_ids = {d.parent_delegation_id for d in self.delegations if d.parent_delegation_id}
         leaves = [d for d in self.delegations if d.id not in parent_ids]
 
         if not leaves:
@@ -867,9 +841,7 @@ class TrustLineageChain:
 
             # Depth limit check - prevent DoS via extremely deep chains
             if len(chain) >= max_depth:
-                raise ValueError(
-                    f"Delegation chain exceeds maximum depth of {max_depth}"
-                )
+                raise ValueError(f"Delegation chain exceeds maximum depth of {max_depth}")
 
             visited.add(current.id)
             chain.append(current)
@@ -924,9 +896,7 @@ class TrustLineageChain:
             capabilities_delegated=d["capabilities_delegated"],
             constraint_subset=d["constraint_subset"],
             delegated_at=datetime.fromisoformat(d["delegated_at"]),
-            expires_at=(
-                datetime.fromisoformat(d["expires_at"]) if d.get("expires_at") else None
-            ),
+            expires_at=(datetime.fromisoformat(d["expires_at"]) if d.get("expires_at") else None),
             signature=d.get("signature", ""),
             parent_delegation_id=d.get("parent_delegation_id"),
             reasoning_trace=reasoning_trace,
@@ -943,11 +913,7 @@ class TrustLineageChain:
                 "authority_id": self.genesis.authority_id,
                 "authority_type": self.genesis.authority_type.value,
                 "created_at": self.genesis.created_at.isoformat(),
-                "expires_at": (
-                    self.genesis.expires_at.isoformat()
-                    if self.genesis.expires_at
-                    else None
-                ),
+                "expires_at": (self.genesis.expires_at.isoformat() if self.genesis.expires_at else None),
                 "signature_algorithm": self.genesis.signature_algorithm,
                 "metadata": self.genesis.metadata,
             },
@@ -959,9 +925,7 @@ class TrustLineageChain:
                     "constraints": cap.constraints,
                     "attester_id": cap.attester_id,
                     "attested_at": cap.attested_at.isoformat(),
-                    "expires_at": (
-                        cap.expires_at.isoformat() if cap.expires_at else None
-                    ),
+                    "expires_at": (cap.expires_at.isoformat() if cap.expires_at else None),
                     "scope": cap.scope,
                 }
                 for cap in self.capabilities
@@ -999,11 +963,7 @@ class TrustLineageChain:
             authority_id=genesis_data["authority_id"],
             authority_type=AuthorityType(genesis_data["authority_type"]),
             created_at=datetime.fromisoformat(genesis_data["created_at"]),
-            expires_at=(
-                datetime.fromisoformat(genesis_data["expires_at"])
-                if genesis_data.get("expires_at")
-                else None
-            ),
+            expires_at=(datetime.fromisoformat(genesis_data["expires_at"]) if genesis_data.get("expires_at") else None),
             signature=genesis_data.get("signature", ""),
             signature_algorithm=genesis_data.get("signature_algorithm", "Ed25519"),
             metadata=genesis_data.get("metadata", {}),
@@ -1017,20 +977,14 @@ class TrustLineageChain:
                 constraints=cap["constraints"],
                 attester_id=cap["attester_id"],
                 attested_at=datetime.fromisoformat(cap["attested_at"]),
-                expires_at=(
-                    datetime.fromisoformat(cap["expires_at"])
-                    if cap.get("expires_at")
-                    else None
-                ),
+                expires_at=(datetime.fromisoformat(cap["expires_at"]) if cap.get("expires_at") else None),
                 signature=cap.get("signature", ""),
                 scope=cap.get("scope"),
             )
             for cap in data.get("capabilities", [])
         ]
 
-        delegations = [
-            cls._deserialize_delegation(d) for d in data.get("delegations", [])
-        ]
+        delegations = [cls._deserialize_delegation(d) for d in data.get("delegations", [])]
 
         constraint_envelope = None
         if data.get("constraint_envelope"):
@@ -1131,9 +1085,7 @@ class LinkedHashChain:
 
         return linked_hash
 
-    def _compute_linked_hash(
-        self, current_hash: str, previous_hash: Optional[str]
-    ) -> str:
+    def _compute_linked_hash(self, current_hash: str, previous_hash: Optional[str]) -> str:
         """
         Compute a linked hash by combining current and previous hashes.
 

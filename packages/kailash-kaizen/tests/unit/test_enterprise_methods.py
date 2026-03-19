@@ -29,12 +29,12 @@ class TestEnterpriseAuditTrailMethod:
         kaizen = Kaizen(config=KaizenConfig(**enterprise_config))
 
         # Method should exist
-        assert hasattr(
-            kaizen, "get_audit_trail"
-        ), "Framework should have get_audit_trail method"
-        assert callable(
-            getattr(kaizen, "get_audit_trail")
-        ), "get_audit_trail should be callable"
+        assert hasattr(kaizen, "get_audit_trail"), (
+            "Framework should have get_audit_trail method"
+        )
+        assert callable(getattr(kaizen, "get_audit_trail")), (
+            "get_audit_trail should be callable"
+        )
 
     def test_get_audit_trail_returns_list(self):
         """Test that get_audit_trail() returns a list of audit entries."""
@@ -67,17 +67,17 @@ class TestEnterpriseAuditTrailMethod:
         audit_trail = kaizen.get_audit_trail()
 
         # Should contain audit entries for framework operations
-        assert (
-            len(audit_trail) > 0
-        ), "Audit trail should contain entries after framework operations"
+        assert len(audit_trail) > 0, (
+            "Audit trail should contain entries after framework operations"
+        )
 
         # Check for agent creation entry
         agent_creation_entries = [
             entry for entry in audit_trail if "agent" in str(entry).lower()
         ]
-        assert (
-            len(agent_creation_entries) > 0
-        ), "Audit trail should contain agent creation entries"
+        assert len(agent_creation_entries) > 0, (
+            "Audit trail should contain agent creation entries"
+        )
 
     def test_get_audit_trail_with_limit_parameter(self):
         """Test that get_audit_trail() accepts limit parameter."""
@@ -95,15 +95,15 @@ class TestEnterpriseAuditTrailMethod:
 
         # Test with limit
         limited_trail = kaizen.get_audit_trail(limit=2)
-        assert (
-            len(limited_trail) <= 2
-        ), "Limited audit trail should respect limit parameter"
+        assert len(limited_trail) <= 2, (
+            "Limited audit trail should respect limit parameter"
+        )
 
         # Test without limit
         full_trail = kaizen.get_audit_trail()
-        assert len(full_trail) >= len(
-            limited_trail
-        ), "Full trail should have more or equal entries"
+        assert len(full_trail) >= len(limited_trail), (
+            "Full trail should have more or equal entries"
+        )
 
     def test_get_audit_trail_enterprise_features_disabled(self):
         """Test get_audit_trail behavior when enterprise features are disabled."""
@@ -160,12 +160,12 @@ class TestEnterpriseMemorySystemMethod:
         )
 
         # Method should exist
-        assert hasattr(
-            kaizen, "create_memory_system"
-        ), "Framework should have create_memory_system method"
-        assert callable(
-            getattr(kaizen, "create_memory_system")
-        ), "create_memory_system should be callable"
+        assert hasattr(kaizen, "create_memory_system"), (
+            "Framework should have create_memory_system method"
+        )
+        assert callable(getattr(kaizen, "create_memory_system")), (
+            "create_memory_system should be callable"
+        )
 
     def test_create_memory_system_with_tier_configuration(self):
         """Test that create_memory_system() accepts tier configuration."""
@@ -184,9 +184,9 @@ class TestEnterpriseMemorySystemMethod:
         )
 
         # Should return memory system instance
-        assert (
-            memory_system is not None
-        ), "create_memory_system should return memory system instance"
+        assert memory_system is not None, (
+            "create_memory_system should return memory system instance"
+        )
 
     def test_create_memory_system_with_different_tiers(self):
         """Test create_memory_system with different tier configurations."""
@@ -203,9 +203,9 @@ class TestEnterpriseMemorySystemMethod:
 
         for tier in tiers:
             memory_system = kaizen.create_memory_system(tier=tier)
-            assert (
-                memory_system is not None
-            ), f"Should create memory system for tier '{tier}'"
+            assert memory_system is not None, (
+                f"Should create memory system for tier '{tier}'"
+            )
 
     def test_create_memory_system_enterprise_features(self):
         """Test memory system creation with enterprise features."""
@@ -230,12 +230,12 @@ class TestEnterpriseMemorySystemMethod:
 
         # Should have enterprise capabilities
         assert hasattr(memory_system, "store"), "Memory system should have store method"
-        assert hasattr(
-            memory_system, "retrieve"
-        ), "Memory system should have retrieve method"
-        assert hasattr(
-            memory_system, "search"
-        ), "Memory system should have search method"
+        assert hasattr(memory_system, "retrieve"), (
+            "Memory system should have retrieve method"
+        )
+        assert hasattr(memory_system, "search"), (
+            "Memory system should have search method"
+        )
 
     def test_create_memory_system_memory_disabled(self):
         """Test create_memory_system behavior when memory is disabled."""
@@ -266,12 +266,12 @@ class TestEnterpriseSessionMethod:
         )
 
         # Method should exist
-        assert hasattr(
-            kaizen, "create_session"
-        ), "Framework should have create_session method"
-        assert callable(
-            getattr(kaizen, "create_session")
-        ), "create_session should be callable"
+        assert hasattr(kaizen, "create_session"), (
+            "Framework should have create_session method"
+        )
+        assert callable(getattr(kaizen, "create_session")), (
+            "create_session should be callable"
+        )
 
     def test_create_session_with_session_config(self):
         """Test that create_session() accepts session configuration."""
@@ -318,9 +318,9 @@ class TestEnterpriseSessionMethod:
         )
 
         # Should have enterprise session capabilities
-        assert hasattr(
-            session, "session_id"
-        ), "Session should have session_id attribute"
+        assert hasattr(session, "session_id"), (
+            "Session should have session_id attribute"
+        )
         assert hasattr(session, "get_agents"), "Session should have get_agents method"
         assert hasattr(session, "execute"), "Session should have execute method"
 
@@ -383,12 +383,12 @@ class TestEnterpriseCoordinatorMethod:
         )
 
         # Method should exist
-        assert hasattr(
-            kaizen, "create_coordinator"
-        ), "Framework should have create_coordinator method"
-        assert callable(
-            getattr(kaizen, "create_coordinator")
-        ), "create_coordinator should be callable"
+        assert hasattr(kaizen, "create_coordinator"), (
+            "Framework should have create_coordinator method"
+        )
+        assert callable(getattr(kaizen, "create_coordinator")), (
+            "create_coordinator should be callable"
+        )
 
     def test_create_coordinator_with_coordination_pattern(self):
         """Test coordinator creation with coordination patterns."""
@@ -417,9 +417,9 @@ class TestEnterpriseCoordinatorMethod:
         )
 
         # Should return coordinator instance
-        assert (
-            coordinator is not None
-        ), "create_coordinator should return coordinator instance"
+        assert coordinator is not None, (
+            "create_coordinator should return coordinator instance"
+        )
 
     def test_create_coordinator_different_patterns(self):
         """Test coordinator creation with different coordination patterns."""
@@ -440,9 +440,9 @@ class TestEnterpriseCoordinatorMethod:
 
         for pattern in patterns:
             coordinator = kaizen.create_coordinator(pattern=pattern, agents=agents)
-            assert (
-                coordinator is not None
-            ), f"Should create coordinator for pattern '{pattern}'"
+            assert coordinator is not None, (
+                f"Should create coordinator for pattern '{pattern}'"
+            )
 
     def test_create_coordinator_enterprise_workflow_execution(self):
         """Test coordinator execution of enterprise workflows."""
@@ -473,9 +473,9 @@ class TestEnterpriseCoordinatorMethod:
 
         # Should have enterprise execution capabilities
         assert hasattr(coordinator, "execute"), "Coordinator should have execute method"
-        assert hasattr(
-            coordinator, "get_results"
-        ), "Coordinator should have get_results method"
+        assert hasattr(coordinator, "get_results"), (
+            "Coordinator should have get_results method"
+        )
 
     def test_create_coordinator_multi_agent_disabled(self):
         """Test create_coordinator behavior when multi-agent is disabled."""
@@ -515,9 +515,9 @@ class TestEnterpriseConfigurationIntegration:
 
         # Agent should have access to enterprise configuration
         assert hasattr(agent, "config"), "Agent should have config attribute"
-        assert hasattr(
-            agent, "enterprise_config"
-        ), "Agent should have enterprise_config attribute"
+        assert hasattr(agent, "enterprise_config"), (
+            "Agent should have enterprise_config attribute"
+        )
 
         # Enterprise features should be enabled
         assert agent.enterprise_config.audit_trail_enabled == True

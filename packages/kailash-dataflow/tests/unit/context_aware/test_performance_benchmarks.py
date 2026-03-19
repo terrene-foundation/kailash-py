@@ -92,9 +92,9 @@ class TestContextSwitchLatency:
 
         assert elapsed < 10.0, f"1000 switches took {elapsed:.2f}s, expected < 10s"
         # Log average latency for reference (not failing assertion)
-        assert (
-            avg_latency_ms < 100
-        ), f"Avg latency {avg_latency_ms:.3f}ms seems too high"
+        assert avg_latency_ms < 100, (
+            f"Avg latency {avg_latency_ms:.3f}ms seems too high"
+        )
 
     def test_switch_latency_consistent(self, memory_dataflow):
         """Switch latency is consistent across iterations."""

@@ -106,9 +106,9 @@ class TestModifiedAuditEntryDetected:
         # Recompute hash - it should be different
         # Note: The stored integrity_hash won't update automatically
         # but verify_integrity() will fail because recomputed hash differs
-        assert (
-            not record.verify_integrity()
-        ), "Tampered record should fail integrity check"
+        assert not record.verify_integrity(), (
+            "Tampered record should fail integrity check"
+        )
 
         # Restore original to verify integrity check passes again
         record.anchor.action = original_action
@@ -149,9 +149,9 @@ class TestModifiedAuditEntryDetected:
             setattr(record.anchor, field_name, tampered_value)
 
             # Verify tampering is detected
-            assert (
-                not record.verify_integrity()
-            ), f"Modifying {field_name} should fail integrity check"
+            assert not record.verify_integrity(), (
+                f"Modifying {field_name} should fail integrity check"
+            )
 
             # Restore
             setattr(record.anchor, field_name, original_value)
@@ -194,15 +194,15 @@ class TestModifiedAuditEntryDetected:
         records[3].anchor.action = "TAMPERED_ACTION"
 
         # The individual record should fail integrity verification
-        assert not records[
-            3
-        ].verify_integrity(), "Modified record should fail integrity check"
+        assert not records[3].verify_integrity(), (
+            "Modified record should fail integrity check"
+        )
 
         # Proof with original leaf hash still verifies against original tree
         # because the proof was generated with the original hash
-        assert tree.verify_proof(
-            proof
-        ), "Original proof still valid against original tree"
+        assert tree.verify_proof(proof), (
+            "Original proof still valid against original tree"
+        )
 
         # But if we try to verify with a recomputed leaf hash (simulating
         # an attacker trying to create a valid proof for tampered data),
@@ -229,9 +229,9 @@ class TestModifiedAuditEntryDetected:
 
         # The tampered record has a different integrity hash
         tampered_leaf_hash = tampered_record.integrity_hash
-        assert (
-            tampered_leaf_hash != original_leaf_hash
-        ), "Tampered record should have different integrity hash"
+        assert tampered_leaf_hash != original_leaf_hash, (
+            "Tampered record should have different integrity hash"
+        )
 
         # Trying to use the original proof with the tampered leaf fails
         tampered_proof = MerkleProof(
@@ -241,9 +241,9 @@ class TestModifiedAuditEntryDetected:
             root_hash=proof.root_hash,
             tree_size=proof.tree_size,
         )
-        assert not verify_merkle_proof(
-            tampered_leaf_hash, tampered_proof
-        ), "Proof with tampered leaf hash should fail"
+        assert not verify_merkle_proof(tampered_leaf_hash, tampered_proof), (
+            "Proof with tampered leaf hash should fail"
+        )
 
 
 class TestDeletedAuditEntryDetected:
@@ -283,9 +283,9 @@ class TestDeletedAuditEntryDetected:
         deleted_record = records.pop(2)
 
         # Chain should now be broken
-        assert not verify_chain(
-            records
-        ), "Deleting a record should break the hash chain"
+        assert not verify_chain(records), (
+            "Deleting a record should break the hash chain"
+        )
 
     def test_merkle_tree_detects_deletion(self):
         """
@@ -313,16 +313,16 @@ class TestDeletedAuditEntryDetected:
         tampered_tree = MerkleTree.from_audit_records(remaining_records)
 
         # Root hash should be different
-        assert (
-            tampered_tree.root_hash != original_tree.root_hash
-        ), "Deleting a record should change the Merkle root"
+        assert tampered_tree.root_hash != original_tree.root_hash, (
+            "Deleting a record should change the Merkle root"
+        )
 
         # Original proofs are now invalid
         # The proof for the deleted entry definitely won't work
         deleted_proof = original_proofs[deleted_index]
-        assert not tampered_tree.verify_proof(
-            deleted_proof
-        ), "Proof for deleted entry should fail"
+        assert not tampered_tree.verify_proof(deleted_proof), (
+            "Proof for deleted entry should fail"
+        )
 
     def test_chain_gap_detection(self):
         """
@@ -466,9 +466,9 @@ class TestInjectedAuditEntryDetected:
         tampered_tree = MerkleTree.from_audit_records(tampered_records)
 
         # Root hash should be different
-        assert (
-            tampered_tree.root_hash != original_root
-        ), "Injection should change Merkle root"
+        assert tampered_tree.root_hash != original_root, (
+            "Injection should change Merkle root"
+        )
 
         # Original proofs may not verify against tampered tree
         # (depends on where injection occurred relative to proof)
@@ -558,15 +558,15 @@ class TestTimestampManipulationDetected:
         record.anchor.timestamp = original_timestamp - timedelta(days=30)
 
         # Integrity check should fail
-        assert (
-            not record.verify_integrity()
-        ), "Backdating timestamp should fail integrity check"
+        assert not record.verify_integrity(), (
+            "Backdating timestamp should fail integrity check"
+        )
 
         # Forward-dating also detected
         record.anchor.timestamp = original_timestamp + timedelta(days=30)
-        assert (
-            not record.verify_integrity()
-        ), "Forward-dating timestamp should fail integrity check"
+        assert not record.verify_integrity(), (
+            "Forward-dating timestamp should fail integrity check"
+        )
 
         # Restore original
         record.anchor.timestamp = original_timestamp
@@ -659,15 +659,15 @@ class TestTimestampManipulationDetected:
         records[2].anchor.timestamp = base_time - timedelta(days=1)
 
         # The record fails individual integrity check
-        assert not records[
-            2
-        ].verify_integrity(), "Tampered timestamp should fail integrity check"
+        assert not records[2].verify_integrity(), (
+            "Tampered timestamp should fail integrity check"
+        )
 
         # Original proof is still valid against original tree because
         # the stored hash hasn't changed (only verify_integrity detects it)
-        assert original_tree.verify_proof(
-            proof
-        ), "Original proof still valid against original tree"
+        assert original_tree.verify_proof(proof), (
+            "Original proof still valid against original tree"
+        )
 
         # To show timestamp affects hash, create a new record with tampered time
         tampered_anchor = AuditAnchor(
@@ -685,9 +685,9 @@ class TestTimestampManipulationDetected:
 
         # The tampered record has a different integrity hash
         tampered_leaf_hash = tampered_record.integrity_hash
-        assert (
-            tampered_leaf_hash != original_leaf_hash
-        ), "Tampered timestamp produces different hash"
+        assert tampered_leaf_hash != original_leaf_hash, (
+            "Tampered timestamp produces different hash"
+        )
 
         # A proof generated with tampered hash won't match original root
         tampered_proof = MerkleProof(
@@ -697,9 +697,9 @@ class TestTimestampManipulationDetected:
             root_hash=proof.root_hash,
             tree_size=proof.tree_size,
         )
-        assert not verify_merkle_proof(
-            tampered_leaf_hash, tampered_proof
-        ), "Tampered timestamp hash doesn't match original proof"
+        assert not verify_merkle_proof(tampered_leaf_hash, tampered_proof), (
+            "Tampered timestamp hash doesn't match original proof"
+        )
 
     def test_future_timestamp_detection(self):
         """
@@ -734,9 +734,9 @@ class TestTimestampManipulationDetected:
             return record.anchor.timestamp <= max_allowed
 
         # Future timestamp should be rejected
-        assert not is_timestamp_valid(
-            future_record
-        ), "Future timestamp should be detected"
+        assert not is_timestamp_valid(future_record), (
+            "Future timestamp should be detected"
+        )
 
         # Record with current timestamp should be valid
         current_anchor = AuditAnchor(

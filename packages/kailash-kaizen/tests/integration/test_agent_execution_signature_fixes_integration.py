@@ -43,9 +43,9 @@ class TestAgentExecutionCoreSDKIntegration:
         execution_time = (time.time() - start_time) * 1000
 
         # Must complete within performance requirements
-        assert (
-            execution_time < 5000
-        ), f"Integration execution took {execution_time:.1f}ms, expected <5000ms"
+        assert execution_time < 5000, (
+            f"Integration execution took {execution_time:.1f}ms, expected <5000ms"
+        )
 
         # Must return structured response
         assert isinstance(result, dict)
@@ -252,9 +252,9 @@ class TestAgentExecutionPerformanceIntegration:
 
         # Average performance should be acceptable
         avg_time = sum(execution_times) / len(execution_times)
-        assert (
-            avg_time < 5000
-        ), f"Average execution time {avg_time:.1f}ms exceeds 5000ms limit"
+        assert avg_time < 5000, (
+            f"Average execution time {avg_time:.1f}ms exceeds 5000ms limit"
+        )
 
     def test_agent_execute_workflow_compilation_performance(self):
         """Agent workflow compilation must be performant."""
@@ -265,9 +265,9 @@ class TestAgentExecutionPerformanceIntegration:
         workflow = agent.compile_workflow()
         compilation_time = (time.time() - start_time) * 1000
 
-        assert (
-            compilation_time < 500
-        ), f"Workflow compilation took {compilation_time:.1f}ms, expected <500ms"
+        assert compilation_time < 500, (
+            f"Workflow compilation took {compilation_time:.1f}ms, expected <500ms"
+        )
         assert workflow is not None
 
     def test_agent_execute_signature_compilation_performance(self):
@@ -287,9 +287,9 @@ class TestAgentExecutionPerformanceIntegration:
         self.kaizen.create_agent("sig_perf", self.agent_config, signature=signature)
         compilation_time = (time.time() - start_time) * 1000
 
-        assert (
-            compilation_time < 200
-        ), f"Signature compilation took {compilation_time:.1f}ms, expected <200ms"
+        assert compilation_time < 200, (
+            f"Signature compilation took {compilation_time:.1f}ms, expected <200ms"
+        )
 
     def test_agent_execute_memory_usage_realistic(self):
         """Agent execution must have reasonable memory usage."""
@@ -311,9 +311,9 @@ class TestAgentExecutionPerformanceIntegration:
         memory_increase = memory_after - memory_before
 
         # Memory increase should be reasonable for integration testing
-        assert (
-            memory_increase < 50
-        ), f"Memory usage increased by {memory_increase:.1f}MB, expected <50MB"
+        assert memory_increase < 50, (
+            f"Memory usage increased by {memory_increase:.1f}MB, expected <50MB"
+        )
 
 
 class TestAgentExecutionWorkflowPatternsIntegration:

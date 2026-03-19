@@ -30,9 +30,9 @@ class InterruptManager:
         self._shutdown_callbacks: list[Callable[[], Awaitable[None]]] = []
         self._signal_handlers_installed = False
         self._original_handlers: dict[int, Any] = {}
-        self._child_managers: list["InterruptManager"] = (
-            []
-        )  # For propagation (TODO-169 Day 3)
+        self._child_managers: list[
+            "InterruptManager"
+        ] = []  # For propagation (TODO-169 Day 3)
         self.hook_manager: Any = (
             None  # Optional HookManager for lifecycle events (TODO-169 Day 4)
         )
@@ -143,8 +143,7 @@ class InterruptManager:
         self._interrupted.set()
 
         logger.warning(
-            f"Interrupt requested: {message} "
-            f"(mode={mode.value}, source={source.value})"
+            f"Interrupt requested: {message} (mode={mode.value}, source={source.value})"
         )
 
     def is_interrupted(self) -> bool:
@@ -208,9 +207,9 @@ class InterruptManager:
         for i, callback in enumerate(self._shutdown_callbacks):
             try:
                 await callback()
-                logger.debug(f"Shutdown callback {i+1} completed")
+                logger.debug(f"Shutdown callback {i + 1} completed")
             except Exception as e:
-                logger.error(f"Shutdown callback {i+1} failed: {e}", exc_info=True)
+                logger.error(f"Shutdown callback {i + 1} failed: {e}", exc_info=True)
 
         logger.info("All shutdown callbacks executed")
 
@@ -269,7 +268,7 @@ class InterruptManager:
         )
 
         logger.info(
-            f"Graceful shutdown complete " f"(checkpoint={checkpoint_id or 'none'})"
+            f"Graceful shutdown complete (checkpoint={checkpoint_id or 'none'})"
         )
 
         return status
@@ -362,7 +361,7 @@ class InterruptManager:
         for i, child in enumerate(self._child_managers):
             # Check if child already interrupted
             if child.is_interrupted():
-                logger.debug(f"Child {i+1} already interrupted, skipping")
+                logger.debug(f"Child {i + 1} already interrupted, skipping")
                 continue
 
             # Propagate interrupt with updated message
@@ -381,7 +380,7 @@ class InterruptManager:
             )
 
             logger.debug(
-                f"Propagated interrupt to child {i+1} (mode={reason.mode.value})"
+                f"Propagated interrupt to child {i + 1} (mode={reason.mode.value})"
             )
 
         logger.info(f"Propagated interrupt to {len(self._child_managers)} children")

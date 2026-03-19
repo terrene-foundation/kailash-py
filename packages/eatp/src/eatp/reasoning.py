@@ -136,13 +136,11 @@ class ReasoningTrace:
 
         if len(self.decision) > _MAX_DECISION_LEN:
             raise ValueError(
-                f"decision exceeds maximum length of {_MAX_DECISION_LEN} characters, "
-                f"got {len(self.decision)}"
+                f"decision exceeds maximum length of {_MAX_DECISION_LEN} characters, got {len(self.decision)}"
             )
         if len(self.rationale) > _MAX_RATIONALE_LEN:
             raise ValueError(
-                f"rationale exceeds maximum length of {_MAX_RATIONALE_LEN} characters, "
-                f"got {len(self.rationale)}"
+                f"rationale exceeds maximum length of {_MAX_RATIONALE_LEN} characters, got {len(self.rationale)}"
             )
         if len(self.alternatives_considered) > _MAX_ALTERNATIVES:
             raise ValueError(
@@ -156,24 +154,14 @@ class ReasoningTrace:
                     f"{_MAX_ALTERNATIVE_LEN} characters, got {len(alt)}"
                 )
         if len(self.evidence) > _MAX_EVIDENCE_ITEMS:
+            raise ValueError(f"evidence exceeds maximum of {_MAX_EVIDENCE_ITEMS} items, got {len(self.evidence)}")
+        if self.methodology is not None and len(self.methodology) > _MAX_METHODOLOGY_LEN:
             raise ValueError(
-                f"evidence exceeds maximum of {_MAX_EVIDENCE_ITEMS} items, "
-                f"got {len(self.evidence)}"
-            )
-        if (
-            self.methodology is not None
-            and len(self.methodology) > _MAX_METHODOLOGY_LEN
-        ):
-            raise ValueError(
-                f"methodology exceeds maximum length of {_MAX_METHODOLOGY_LEN} characters, "
-                f"got {len(self.methodology)}"
+                f"methodology exceeds maximum length of {_MAX_METHODOLOGY_LEN} characters, got {len(self.methodology)}"
             )
         if self.confidence is not None:
             if not (0.0 <= self.confidence <= 1.0):
-                raise ValueError(
-                    f"confidence must be between 0.0 and 1.0 inclusive, "
-                    f"got {self.confidence}"
-                )
+                raise ValueError(f"confidence must be between 0.0 and 1.0 inclusive, got {self.confidence}")
 
     def to_dict(self) -> Dict[str, Any]:
         """

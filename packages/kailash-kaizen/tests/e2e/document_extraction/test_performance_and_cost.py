@@ -66,9 +66,9 @@ class TestPerformanceBenchmarks:
 
         # Ollama baseline (local processing)
         # Typically slower than API calls but acceptable
-        assert (
-            extraction_time < 120.0
-        ), "Ollama should complete within 2 minutes for test doc"
+        assert extraction_time < 120.0, (
+            "Ollama should complete within 2 minutes for test doc"
+        )
 
         # Verify cost is free
         assert result["cost"] == 0.0, "Ollama should be free"
@@ -327,9 +327,9 @@ class TestProviderComparison:
         )
 
         # Landing AI offers better value per dollar
-        assert (
-            landing_ai_value > openai_value
-        ), "Landing AI should offer better value (accuracy/cost)"
+        assert landing_ai_value > openai_value, (
+            "Landing AI should offer better value (accuracy/cost)"
+        )
 
 
 @pytest.mark.e2e
@@ -374,9 +374,9 @@ class TestProductionScalability:
                 print(f"Error processing {doc_path}: {e}")
 
         # Verify processing
-        assert processed == len(
-            multi_document_batch
-        ), "Should process all documents successfully"
+        assert processed == len(multi_document_batch), (
+            "Should process all documents successfully"
+        )
         assert errors == 0, "Should have no errors"
 
         # Verify performance summary

@@ -115,7 +115,7 @@ class TestRateLimitingWithRealRedis:
             # Step 1: Make 5 invocations (should all be allowed)
             for i in range(5):
                 result = await limiter.check_rate_limit("agent-001", "user-123")
-                assert result.allowed is True, f"Invocation {i+1} should be allowed"
+                assert result.allowed is True, f"Invocation {i + 1} should be allowed"
                 await limiter.record_invocation("agent-001", "user-123")
 
             # Step 2: 6th invocation should block (per_minute exceeded)
@@ -317,9 +317,9 @@ class TestRateLimitingWithRealRedis:
             # Verify metrics tracked fail-open
             metrics = limiter.get_metrics()
             if metrics:
-                assert (
-                    metrics.fail_open_total >= 1
-                ), "Should track fail-open occurrences"
+                assert metrics.fail_open_total >= 1, (
+                    "Should track fail-open occurrences"
+                )
 
         finally:
             # Limiter already closed in test
@@ -366,9 +366,9 @@ class TestRateLimitingWithRealRedis:
             assert len(errors) == 0, f"Should have no connection errors, got: {errors}"
 
             successful_results = [r for r in results if not isinstance(r, Exception)]
-            assert (
-                len(successful_results) == 100
-            ), "All 100 checks should complete successfully"
+            assert len(successful_results) == 100, (
+                "All 100 checks should complete successfully"
+            )
 
             # Verify average latency <10ms
             total_duration = end_time - start_time
@@ -377,9 +377,9 @@ class TestRateLimitingWithRealRedis:
             print(f"Average latency: {avg_latency:.2f}ms for 100 concurrent checks")
 
             # Connection pooling should keep latency low
-            assert (
-                avg_latency < 50
-            ), f"Average latency should be <50ms with pooling, got {avg_latency:.2f}ms"
+            assert avg_latency < 50, (
+                f"Average latency should be <50ms with pooling, got {avg_latency:.2f}ms"
+            )
 
         finally:
             await limiter.close()
@@ -432,7 +432,7 @@ class TestRateLimitingWithRealRedis:
             # Step 4: Make 5 more invocations (total 10 in hour)
             for i in range(5):
                 result = await limiter.check_rate_limit("agent-001", "user-123")
-                assert result.allowed is True, f"Invocation {i+6} should be allowed"
+                assert result.allowed is True, f"Invocation {i + 6} should be allowed"
                 await limiter.record_invocation("agent-001", "user-123")
 
             # Step 5: 11th invocation blocked (both minute and hour limits reached)
@@ -485,9 +485,9 @@ class TestRateLimitingWithRealRedis:
             print(f"Single check latency: {latency_ms:.2f}ms")
 
             # With pipeline, checking 3 windows should be <10ms
-            assert (
-                latency_ms < 20
-            ), f"Pipeline should keep latency <20ms, got {latency_ms:.2f}ms"
+            assert latency_ms < 20, (
+                f"Pipeline should keep latency <20ms, got {latency_ms:.2f}ms"
+            )
 
         finally:
             await limiter.close()
@@ -529,9 +529,9 @@ class TestRateLimitingWithRealRedis:
             # Step 2: User B makes 5 invocations (separate quota)
             for i in range(5):
                 result = await limiter.check_rate_limit("agent-001", "user-b")
-                assert (
-                    result.allowed is True
-                ), "User B should have separate quota from User A"
+                assert result.allowed is True, (
+                    "User B should have separate quota from User A"
+                )
                 await limiter.record_invocation("agent-001", "user-b")
 
             # Step 3: User A 6th invocation blocked
@@ -603,15 +603,15 @@ class TestRateLimitingWithRealRedis:
             day_ttl = await redis_client.ttl(day_key)
 
             # Verify TTLs are close to expected values (allow 5s margin)
-            assert (
-                56 <= minute_ttl <= 61
-            ), f"Minute TTL should be ~61s, got {minute_ttl}s"
-            assert (
-                3596 <= hour_ttl <= 3601
-            ), f"Hour TTL should be ~3601s, got {hour_ttl}s"
-            assert (
-                86396 <= day_ttl <= 86401
-            ), f"Day TTL should be ~86401s, got {day_ttl}s"
+            assert 56 <= minute_ttl <= 61, (
+                f"Minute TTL should be ~61s, got {minute_ttl}s"
+            )
+            assert 3596 <= hour_ttl <= 3601, (
+                f"Hour TTL should be ~3601s, got {hour_ttl}s"
+            )
+            assert 86396 <= day_ttl <= 86401, (
+                f"Day TTL should be ~86401s, got {day_ttl}s"
+            )
 
             await redis_client.close()
 

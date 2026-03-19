@@ -410,7 +410,7 @@ class TeamCoordinationPattern(CoordinationPattern):
                         "max_tokens": member.config.get("max_tokens", 600),
                     },
                 ),
-                "role": getattr(member, "role", f"Team Member {i+1}"),
+                "role": getattr(member, "role", f"Team Member {i + 1}"),
                 "team_context": {
                     "team_name": team.name,
                     "task": task,
@@ -420,7 +420,7 @@ class TeamCoordinationPattern(CoordinationPattern):
                 "coordinator_id": "team_coordinator",
                 "a2a_enabled": True,
                 "system_prompt": (
-                    f"You are {getattr(member, 'role', f'Team Member {i+1}')} on team '{team.name}'. "
+                    f"You are {getattr(member, 'role', f'Team Member {i + 1}')} on team '{team.name}'. "
                     f"Task: {task}. "
                     f"Coordination strategy: {coordination_strategy}. "
                     f"Work collaboratively with your team members to complete the task effectively."

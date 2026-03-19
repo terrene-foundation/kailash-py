@@ -69,9 +69,9 @@ class TestBug006ValidationComplete:
 
         for model_type, db_type in compatibility_cases:
             result = generator._types_are_compatible(model_type, db_type)
-            assert (
-                result is True
-            ), f"Compatible types {model_type} vs {db_type} should not trigger migration"
+            assert result is True, (
+                f"Compatible types {model_type} vs {db_type} should not trigger migration"
+            )
 
     def test_schema_compatibility_prevents_destructive_migration(self):
         """Test that schema compatibility checking prevents destructive migrations."""
@@ -111,9 +111,9 @@ class TestBug006ValidationComplete:
         is_compatible = generator._schemas_are_compatible(
             existing_db_table, dataflow_model_table
         )
-        assert (
-            is_compatible is True
-        ), "DataFlow model subset should be compatible with existing database"
+        assert is_compatible is True, (
+            "DataFlow model subset should be compatible with existing database"
+        )
 
     def test_checksum_prevents_duplicate_migrations(self):
         """Test that migration checksums prevent duplicate applications."""
@@ -164,9 +164,9 @@ class TestBug006ValidationComplete:
         )
 
         is_already_applied = system._is_migration_already_applied(identical_migration)
-        assert (
-            is_already_applied is True
-        ), "Identical migration should be detected as already applied"
+        assert is_already_applied is True, (
+            "Identical migration should be detected as already applied"
+        )
 
     def test_comprehensive_bug_006_scenario_unit_level(self):
         """
@@ -239,9 +239,9 @@ class TestBug006ValidationComplete:
         for table_name, model_table in dev_b_models.items():
             db_table = existing_db_schema[table_name]
             is_compatible = generator._schemas_are_compatible(db_table, model_table)
-            assert (
-                is_compatible is True
-            ), f"Dev B's {table_name} model should be compatible with existing DB"
+            assert is_compatible is True, (
+                f"Dev B's {table_name} model should be compatible with existing DB"
+            )
 
         # Developer C with subset of fields (admin panel)
         dev_c_models = {
@@ -260,9 +260,9 @@ class TestBug006ValidationComplete:
         for table_name, model_table in dev_c_models.items():
             db_table = existing_db_schema[table_name]
             is_compatible = generator._schemas_are_compatible(db_table, model_table)
-            assert (
-                is_compatible is True
-            ), f"Dev C's subset {table_name} model should be compatible"
+            assert is_compatible is True, (
+                f"Dev C's subset {table_name} model should be compatible"
+            )
 
         print("✅ Bug 006 validation passed at unit level!")
         print("   - Type compatibility prevents unnecessary migrations")

@@ -911,9 +911,7 @@ class TestFromAuditAnchor:
 class TestRoundTrip:
     """Tests ensuring CEF and OCSF serializers handle all event types."""
 
-    def test_cef_roundtrip_all_event_types(
-        self, establish_event, delegate_event, verify_event, audit_event
-    ):
+    def test_cef_roundtrip_all_event_types(self, establish_event, delegate_event, verify_event, audit_event):
         """All event types should serialize to valid CEF strings."""
         for event in [establish_event, delegate_event, verify_event, audit_event]:
             cef = serialize_cef(event)
@@ -923,9 +921,7 @@ class TestRoundTrip:
             parts = cef.split("|")
             assert len(parts) >= 7
 
-    def test_ocsf_roundtrip_all_event_types(
-        self, establish_event, delegate_event, verify_event, audit_event
-    ):
+    def test_ocsf_roundtrip_all_event_types(self, establish_event, delegate_event, verify_event, audit_event):
         """All event types should serialize to valid OCSF dicts."""
         for event in [establish_event, delegate_event, verify_event, audit_event]:
             ocsf = serialize_ocsf(event)

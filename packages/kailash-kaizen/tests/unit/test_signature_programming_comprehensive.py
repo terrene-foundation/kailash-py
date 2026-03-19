@@ -166,9 +166,9 @@ class TestSignatureCompilationFunctionality:
 
         # Performance validation
         performance_tracker.assert_performance("signature_compilation", 50)
-        assert (
-            compilation_time < 50
-        ), f"Signature compilation took {compilation_time:.2f}ms, expected <50ms"
+        assert compilation_time < 50, (
+            f"Signature compilation took {compilation_time:.2f}ms, expected <50ms"
+        )
 
     def test_complex_signature_compilation_performance(self, performance_tracker):
         """Test complex signature compilation maintains performance."""
@@ -196,9 +196,9 @@ class TestSignatureCompilationFunctionality:
         assert "parameters" in workflow_params
 
         # Complex signatures may take longer but should still be reasonable
-        assert (
-            compilation_time < 100
-        ), f"Complex signature compilation took {compilation_time:.2f}ms, expected <100ms"
+        assert compilation_time < 100, (
+            f"Complex signature compilation took {compilation_time:.2f}ms, expected <100ms"
+        )
 
 
 class TestKaizenFrameworkIntegration:
@@ -265,9 +265,9 @@ class TestKaizenFrameworkIntegration:
         assert hasattr(kaizen, "create_signature")
 
         # Performance requirement
-        assert (
-            initialization_time < 100
-        ), f"Framework init with signatures took {initialization_time:.1f}ms, expected <100ms"
+        assert initialization_time < 100, (
+            f"Framework init with signatures took {initialization_time:.1f}ms, expected <100ms"
+        )
 
 
 class TestSignatureSystemBugFixes:
@@ -362,9 +362,9 @@ class TestSignaturePerformanceValidation:
 
         # Verify validation performance requirement
         performance_tracker.assert_performance("signature_validation", 10)
-        assert (
-            validation_time < 10
-        ), f"Signature validation took {validation_time:.2f}ms, expected <10ms"
+        assert validation_time < 10, (
+            f"Signature validation took {validation_time:.2f}ms, expected <10ms"
+        )
 
     def test_memory_usage_during_signature_operations(self):
         """Test memory overhead during signature operations is minimal."""
@@ -394,9 +394,9 @@ class TestSignaturePerformanceValidation:
         memory_increase = memory_after - memory_before
 
         # Memory overhead should be reasonable
-        assert (
-            memory_increase < 10
-        ), f"Memory overhead {memory_increase:.1f}MB exceeds 10MB limit"
+        assert memory_increase < 10, (
+            f"Memory overhead {memory_increase:.1f}MB exceeds 10MB limit"
+        )
 
     def test_signature_system_integration_performance(self, performance_tracker):
         """Test end-to-end signature system performance."""
@@ -421,6 +421,6 @@ class TestSignaturePerformanceValidation:
         assert workflow is not None
 
         # End-to-end should be reasonably fast
-        assert (
-            total_time < 200
-        ), f"End-to-end signature workflow took {total_time:.1f}ms, expected <200ms"
+        assert total_time < 200, (
+            f"End-to-end signature workflow took {total_time:.1f}ms, expected <200ms"
+        )

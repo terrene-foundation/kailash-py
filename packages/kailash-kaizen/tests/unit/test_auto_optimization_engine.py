@@ -300,9 +300,9 @@ class TestAutoOptimizationEngine:
         await engine.optimize_signature(signature, {})
         optimization_time = (time.time() - start_time) * 1000  # Convert to ms
 
-        assert (
-            optimization_time < 50.0
-        ), f"Optimization took {optimization_time:.1f}ms, should be <50ms"
+        assert optimization_time < 50.0, (
+            f"Optimization took {optimization_time:.1f}ms, should be <50ms"
+        )
 
         # Test feedback processing speed
         start_time = time.time()
@@ -314,9 +314,9 @@ class TestAutoOptimizationEngine:
         )
         feedback_time = (time.time() - start_time) * 1000
 
-        assert (
-            feedback_time < 10.0
-        ), f"Feedback processing took {feedback_time:.1f}ms, should be <10ms"
+        assert feedback_time < 10.0, (
+            f"Feedback processing took {feedback_time:.1f}ms, should be <10ms"
+        )
 
     @pytest.mark.asyncio
     async def test_concurrent_optimization_handling(self, engine):

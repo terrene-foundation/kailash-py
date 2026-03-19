@@ -521,6 +521,6 @@ class TestPerformanceOverhead:
         # Should be <40% overhead (relaxed for test environment variability)
         # Production target is <2% but test environment has significant variance
         # due to concurrent test execution, system load, and CI environments.
-        assert (
-            overhead < 40.0
-        ), f"Metrics overhead {overhead:.2f}% exceeds 40% test threshold"
+        assert overhead < 40.0, (
+            f"Metrics overhead {overhead:.2f}% exceeds 40% test threshold"
+        )

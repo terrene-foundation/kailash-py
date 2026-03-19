@@ -325,9 +325,7 @@ class TestRespondToChallenge:
     def test_produces_valid_response(self, protocol, keypair, trust_chain):
         """respond_to_challenge returns a ChallengeResponse with correct fields."""
         private_key, public_key = keypair
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
 
         response = protocol.respond_to_challenge(challenge, private_key, trust_chain)
 
@@ -340,9 +338,7 @@ class TestRespondToChallenge:
     def test_signed_nonce_is_verifiable(self, protocol, keypair, trust_chain):
         """The signed_nonce must be verifiable with the corresponding public key."""
         private_key, public_key = keypair
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
 
         response = protocol.respond_to_challenge(challenge, private_key, trust_chain)
 
@@ -350,14 +346,10 @@ class TestRespondToChallenge:
         payload = f"{challenge.nonce}:{challenge.timestamp.isoformat()}:{challenge.challenger_id}"
         assert verify_signature(payload, response.signed_nonce, public_key) is True
 
-    def test_capability_proof_contains_attestation_info(
-        self, protocol, keypair, trust_chain
-    ):
+    def test_capability_proof_contains_attestation_info(self, protocol, keypair, trust_chain):
         """capability_proof must contain proof from the trust chain."""
         private_key, public_key = keypair
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
 
         response = protocol.respond_to_challenge(challenge, private_key, trust_chain)
 
@@ -371,9 +363,7 @@ class TestRespondToChallenge:
         private_key, public_key = keypair
         # Create a challenge with 0-second timeout (already expired)
         expired_protocol = ChallengeProtocol(challenge_timeout_seconds=0)
-        challenge = expired_protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = expired_protocol.create_challenge("verifier", "agent-target", "analyze_data")
 
         # Small sleep to ensure expiration
         time.sleep(0.01)
@@ -384,9 +374,7 @@ class TestRespondToChallenge:
     def test_missing_capability_raises(self, protocol, keypair, trust_chain):
         """Responding without required capability must raise ChallengeError."""
         private_key, public_key = keypair
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "delete_everything"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "delete_everything")
 
         with pytest.raises(ChallengeError, match="capability"):
             protocol.respond_to_challenge(challenge, private_key, trust_chain)
@@ -394,9 +382,7 @@ class TestRespondToChallenge:
     def test_response_timestamp_is_utc(self, protocol, keypair, trust_chain):
         """Response timestamp must be UTC-aware."""
         private_key, public_key = keypair
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
 
         response = protocol.respond_to_challenge(challenge, private_key, trust_chain)
 
@@ -415,23 +401,17 @@ class TestVerifyResponse:
     def test_valid_response_verifies(self, protocol, keypair, trust_chain):
         """A correctly produced response must verify as True."""
         private_key, public_key = keypair
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
         response = protocol.respond_to_challenge(challenge, private_key, trust_chain)
 
         result = protocol.verify_response(challenge, response, public_key)
         assert result is True
 
-    def test_wrong_public_key_fails(
-        self, protocol, keypair, another_keypair, trust_chain
-    ):
+    def test_wrong_public_key_fails(self, protocol, keypair, another_keypair, trust_chain):
         """Response signed with one key must fail verification with a different key."""
         private_key, _ = keypair
         _, wrong_public_key = another_keypair
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
         response = protocol.respond_to_challenge(challenge, private_key, trust_chain)
 
         result = protocol.verify_response(challenge, response, wrong_public_key)
@@ -440,9 +420,7 @@ class TestVerifyResponse:
     def test_tampered_signed_nonce_fails(self, protocol, keypair, trust_chain):
         """A response with a tampered signed_nonce must fail verification."""
         private_key, public_key = keypair
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
         response = protocol.respond_to_challenge(challenge, private_key, trust_chain)
 
         # Tamper with the signed nonce
@@ -460,9 +438,7 @@ class TestVerifyResponse:
     def test_mismatched_challenge_id_fails(self, protocol, keypair, trust_chain):
         """Response with wrong challenge_id must fail verification."""
         private_key, public_key = keypair
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
         response = protocol.respond_to_challenge(challenge, private_key, trust_chain)
 
         # Change the challenge_id in the response
@@ -481,9 +457,7 @@ class TestVerifyResponse:
         """Verifying a response to an expired challenge must raise ChallengeError."""
         private_key, public_key = keypair
         short_protocol = ChallengeProtocol(challenge_timeout_seconds=0)
-        challenge = short_protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = short_protocol.create_challenge("verifier", "agent-target", "analyze_data")
 
         # Build a response manually since respond_to_challenge would reject it
         payload = f"{challenge.nonce}:{challenge.timestamp.isoformat()}:{challenge.challenger_id}"
@@ -516,9 +490,7 @@ class TestNonceReplayProtection:
     def test_nonce_cannot_be_reused(self, protocol, keypair, trust_chain):
         """After a successful verification, the same nonce must be rejected."""
         private_key, public_key = keypair
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
         response = protocol.respond_to_challenge(challenge, private_key, trust_chain)
 
         # First verification succeeds
@@ -526,23 +498,17 @@ class TestNonceReplayProtection:
         assert result is True
 
         # Second verification with same nonce must raise
-        with pytest.raises(
-            ChallengeError, match="[Rr]eplay|[Nn]once.*used|[Nn]once.*already"
-        ):
+        with pytest.raises(ChallengeError, match="[Rr]eplay|[Nn]once.*used|[Nn]once.*already"):
             protocol.verify_response(challenge, response, public_key)
 
     def test_different_nonces_both_succeed(self, protocol, keypair, trust_chain):
         """Two challenges with different nonces must both verify independently."""
         private_key, public_key = keypair
 
-        challenge1 = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge1 = protocol.create_challenge("verifier", "agent-target", "analyze_data")
         response1 = protocol.respond_to_challenge(challenge1, private_key, trust_chain)
 
-        challenge2 = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge2 = protocol.create_challenge("verifier", "agent-target", "analyze_data")
         response2 = protocol.respond_to_challenge(challenge2, private_key, trust_chain)
 
         assert protocol.verify_response(challenge1, response1, public_key) is True
@@ -551,9 +517,7 @@ class TestNonceReplayProtection:
     def test_used_nonces_tracked(self, protocol, keypair, trust_chain):
         """Protocol must track used nonces."""
         private_key, public_key = keypair
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
         response = protocol.respond_to_challenge(challenge, private_key, trust_chain)
 
         assert len(protocol.used_nonces) == 0
@@ -593,9 +557,7 @@ class TestRateLimiting:
         limited_protocol.create_challenge("verifier", "agent-target", "analyze_data")
 
         with pytest.raises(ChallengeError, match="[Rr]ate.limit"):
-            limited_protocol.create_challenge(
-                "verifier", "agent-target", "analyze_data"
-            )
+            limited_protocol.create_challenge("verifier", "agent-target", "analyze_data")
 
     def test_rate_limit_per_target_agent(self):
         """Rate limit must be per target agent, not global."""
@@ -710,9 +672,7 @@ class TestSecurityEdgeCases:
     def test_response_from_different_agent_fails(self, protocol, keypair, trust_chain):
         """A response claiming to be from a different agent must fail."""
         private_key, public_key = keypair
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
         response = protocol.respond_to_challenge(challenge, private_key, trust_chain)
 
         # Tamper with agent_id
@@ -727,14 +687,10 @@ class TestSecurityEdgeCases:
         result = protocol.verify_response(challenge, forged_response, public_key)
         assert result is False
 
-    def test_capability_proof_without_matching_capability_fails(
-        self, protocol, keypair, trust_chain
-    ):
+    def test_capability_proof_without_matching_capability_fails(self, protocol, keypair, trust_chain):
         """A response with a capability_proof that doesn't match required_proof must fail."""
         private_key, public_key = keypair
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
         response = protocol.respond_to_challenge(challenge, private_key, trust_chain)
 
         # Tamper with capability proof
@@ -752,9 +708,7 @@ class TestSecurityEdgeCases:
         result = protocol.verify_response(challenge, forged_response, public_key)
         assert result is False
 
-    def test_concurrent_challenges_are_independent(
-        self, protocol, keypair, trust_chain
-    ):
+    def test_concurrent_challenges_are_independent(self, protocol, keypair, trust_chain):
         """Multiple active challenges for the same agent must not interfere."""
         private_key, public_key = keypair
 

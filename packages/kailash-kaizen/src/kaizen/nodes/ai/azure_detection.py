@@ -256,7 +256,7 @@ class AzureBackendDetector:
             return "azure_ai_foundry"
 
         raise ValueError(
-            f"Invalid AZURE_BACKEND value: '{name}'. " "Use 'openai' or 'foundry'."
+            f"Invalid AZURE_BACKEND value: '{name}'. Use 'openai' or 'foundry'."
         )
 
     @property

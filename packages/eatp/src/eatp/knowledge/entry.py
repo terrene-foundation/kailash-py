@@ -132,19 +132,13 @@ class KnowledgeEntry:
         """
         # Check entry_id prefix
         if not self.entry_id.startswith("ke-"):
-            raise ValueError(
-                f"Invalid entry_id format: must start with 'ke-', got '{self.entry_id}'"
-            )
+            raise ValueError(f"Invalid entry_id format: must start with 'ke-', got '{self.entry_id}'")
 
         # Check confidence_score bounds
         if self.confidence_score < 0.0:
-            raise ValueError(
-                f"confidence_score must be >= 0.0, got {self.confidence_score}"
-            )
+            raise ValueError(f"confidence_score must be >= 0.0, got {self.confidence_score}")
         if self.confidence_score > 1.0:
-            raise ValueError(
-                f"confidence_score must be <= 1.0, got {self.confidence_score}"
-            )
+            raise ValueError(f"confidence_score must be <= 1.0, got {self.confidence_score}")
 
         # Check non-empty content
         if not self.content:

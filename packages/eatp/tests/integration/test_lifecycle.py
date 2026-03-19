@@ -518,9 +518,7 @@ class TestFullLifecycleFilesystem:
         assert len(retrieved.capabilities) == 1
         assert retrieved.capabilities[0].capability == "analyze_data"
 
-    async def test_persistence_survives_close_and_reopen(
-        self, registry, key_manager, tmp_path
-    ):
+    async def test_persistence_survives_close_and_reopen(self, registry, key_manager, tmp_path):
         """Data persists after closing and reopening the FilesystemStore."""
         store_dir = str(tmp_path / "persist_test")
 
@@ -605,20 +603,12 @@ class TestFullLifecycleFilesystem:
         await fs_ops.establish(
             agent_id="list-agent-1",
             authority_id="org-acme",
-            capabilities=[
-                CapabilityRequest(
-                    capability="read", capability_type=CapabilityType.ACCESS
-                )
-            ],
+            capabilities=[CapabilityRequest(capability="read", capability_type=CapabilityType.ACCESS)],
         )
         await fs_ops.establish(
             agent_id="list-agent-2",
             authority_id="org-acme",
-            capabilities=[
-                CapabilityRequest(
-                    capability="write", capability_type=CapabilityType.ACTION
-                )
-            ],
+            capabilities=[CapabilityRequest(capability="write", capability_type=CapabilityType.ACTION)],
         )
 
         count = await fs_store.count_chains()
@@ -874,9 +864,7 @@ class TestEnforcementIntegration:
 
         result = await ops.verify(agent_id="valid-agent", action="read_data")
         enforcer = StrictEnforcer()
-        verdict = enforcer.enforce(
-            agent_id="valid-agent", action="read_data", result=result
-        )
+        verdict = enforcer.enforce(agent_id="valid-agent", action="read_data", result=result)
 
         assert verdict == Verdict.AUTO_APPROVED
 
@@ -907,9 +895,7 @@ class TestEnforcementIntegration:
         invalid_result = await ops.verify(agent_id="ghost-agent", action="anything")
 
         shadow = ShadowEnforcer()
-        verdict = shadow.check(
-            agent_id="ghost-agent", action="anything", result=invalid_result
-        )
+        verdict = shadow.check(agent_id="ghost-agent", action="anything", result=invalid_result)
 
         # Returns BLOCKED verdict but does NOT raise
         assert verdict == Verdict.BLOCKED

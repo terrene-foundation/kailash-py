@@ -349,7 +349,7 @@ class FKSafeMigrationExecutorNode(BaseNode):
             # Execute each migration plan
             for i, plan_data in enumerate(safe_migration_plans):
                 self.logger.info(
-                    f"Executing migration plan {i+1}/{len(safe_migration_plans)}"
+                    f"Executing migration plan {i + 1}/{len(safe_migration_plans)}"
                 )
 
                 # Create migration plan object (simplified)
@@ -381,7 +381,7 @@ class FKSafeMigrationExecutorNode(BaseNode):
 
                 if not result.success:
                     overall_success = False
-                    self.logger.error(f"Migration plan {i+1} failed: {result.errors}")
+                    self.logger.error(f"Migration plan {i + 1} failed: {result.errors}")
                     if enable_rollback:
                         break  # Stop execution on first failure
 
@@ -596,7 +596,7 @@ class MigrationPlannerNode(BaseNode):
 
         for i in range(total_operations):
             plan = {
-                "plan_id": f"migration_plan_{i+1}",
+                "plan_id": f"migration_plan_{i + 1}",
                 "execution_mode": execution_mode,
                 "requires_coordination": multi_table_coordination,
                 "transaction_safe": kwargs["transaction_safety"],

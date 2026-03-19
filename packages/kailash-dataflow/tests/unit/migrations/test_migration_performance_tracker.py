@@ -691,7 +691,6 @@ class TestMigrationPerformanceTracker:
             patch("psutil.Process"),
             patch("resource.getrusage"),
         ):
-
             # Simulate tracking overhead
             tracker._start_time = time.perf_counter()
             tracker._monitoring_active = True
@@ -719,9 +718,9 @@ class TestMigrationPerformanceTracker:
         overhead_time = (time.perf_counter() - start_time) * 1000  # Convert to ms
 
         # Verify overhead is minimal
-        assert (
-            overhead_time < 50.0
-        ), f"Performance tracking overhead {overhead_time:.2f}ms exceeds 50ms limit"
+        assert overhead_time < 50.0, (
+            f"Performance tracking overhead {overhead_time:.2f}ms exceeds 50ms limit"
+        )
         assert metrics is not None
 
 

@@ -206,7 +206,7 @@ class TestQueryParameters:
 
         @self.app.endpoint("/api/status", methods=["GET"])
         async def get_status(
-            status: str = Query("active", pattern="^(active|archived|deleted)$")
+            status: str = Query("active", pattern="^(active|archived|deleted)$"),
         ):
             return {"status": status}
 

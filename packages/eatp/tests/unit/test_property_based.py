@@ -106,9 +106,7 @@ class TestSignatureIntegrity:
         tampered=signing_payload_str,
     )
     @settings(max_examples=200)
-    def test_tampered_payload_fails_verification(
-        self, payload: str, tampered: str
-    ) -> None:
+    def test_tampered_payload_fails_verification(self, payload: str, tampered: str) -> None:
         """Modifying the payload after signing must cause verification to fail."""
         assume(payload != tampered)
         private_key, public_key = generate_keypair()
@@ -150,15 +148,11 @@ class TestSerializationDeterminism:
         assert serialize_for_signing(data) == serialize_for_signing(reversed_data)
 
     @given(
-        keys=st.lists(
-            st.text(min_size=1, max_size=10), min_size=2, max_size=5, unique=True
-        ),
+        keys=st.lists(st.text(min_size=1, max_size=10), min_size=2, max_size=5, unique=True),
         values=st.lists(st.integers(), min_size=2, max_size=5),
     )
     @settings(max_examples=200)
-    def test_different_dicts_serialize_differently(
-        self, keys: list, values: list
-    ) -> None:
+    def test_different_dicts_serialize_differently(self, keys: list, values: list) -> None:
         """Two dicts with different content must serialize to different strings."""
         # Build two dicts that differ by at least one value
         n = min(len(keys), len(values))
@@ -223,8 +217,7 @@ class TestHashChainIntegrity:
         """100+ unique inputs must produce 100+ unique hashes (no collisions)."""
         hashes = [hash_chain(item) for item in data]
         assert len(set(hashes)) == len(hashes), (
-            f"Hash collision detected among {len(data)} inputs: "
-            f"{len(data) - len(set(hashes))} collision(s)"
+            f"Hash collision detected among {len(data)} inputs: {len(data) - len(set(hashes))} collision(s)"
         )
 
 
@@ -342,9 +335,7 @@ def _make_genesis(gen_id: str, agent_id: str, authority_id: str) -> GenesisRecor
     )
 
 
-def _make_capability(
-    cap_id: str, capability: str, attester_id: str
-) -> CapabilityAttestation:
+def _make_capability(cap_id: str, capability: str, attester_id: str) -> CapabilityAttestation:
     """Helper to build a minimal CapabilityAttestation for property tests."""
     return CapabilityAttestation(
         id=cap_id,
@@ -357,9 +348,7 @@ def _make_capability(
     )
 
 
-def _make_delegation(
-    del_id: str, delegator: str, delegatee: str, task_id: str
-) -> DelegationRecord:
+def _make_delegation(del_id: str, delegator: str, delegatee: str, task_id: str) -> DelegationRecord:
     """Helper to build a minimal DelegationRecord for property tests."""
     return DelegationRecord(
         id=del_id,
@@ -382,9 +371,7 @@ class TestTrustLineageChainRoundTrip:
         authority_id=valid_id,
     )
     @settings(max_examples=200)
-    def test_genesis_only_round_trip(
-        self, gen_id: str, agent_id: str, authority_id: str
-    ) -> None:
+    def test_genesis_only_round_trip(self, gen_id: str, agent_id: str, authority_id: str) -> None:
         """A chain with only a genesis record survives to_dict/from_dict."""
         genesis = _make_genesis(gen_id, agent_id, authority_id)
         chain = TrustLineageChain(genesis=genesis)
@@ -460,9 +447,7 @@ class TestTrustLineageChainRoundTrip:
         authority_id=valid_id,
     )
     @settings(max_examples=200)
-    def test_chain_hash_survives_round_trip(
-        self, gen_id: str, agent_id: str, authority_id: str
-    ) -> None:
+    def test_chain_hash_survives_round_trip(self, gen_id: str, agent_id: str, authority_id: str) -> None:
         """The chain hash must be the same before and after serialization round-trip."""
         genesis = _make_genesis(gen_id, agent_id, authority_id)
         chain = TrustLineageChain(genesis=genesis)
@@ -636,9 +621,7 @@ class TestHashTrustChainState:
         """Adding a new capability ID to the list must change the state hash."""
         assume(extra_cap not in cap_ids)
         h_before = hash_trust_chain_state(genesis_id, cap_ids, del_ids, constraint_hash)
-        h_after = hash_trust_chain_state(
-            genesis_id, cap_ids + [extra_cap], del_ids, constraint_hash
-        )
+        h_after = hash_trust_chain_state(genesis_id, cap_ids + [extra_cap], del_ids, constraint_hash)
         assert h_before != h_after
 
     @given(
@@ -675,9 +658,7 @@ class TestHashTrustChainState:
     ) -> None:
         """The hash must be order-independent for capability_ids (they are sorted internally)."""
         h1 = hash_trust_chain_state(genesis_id, cap_ids, del_ids, constraint_hash)
-        h2 = hash_trust_chain_state(
-            genesis_id, list(reversed(cap_ids)), del_ids, constraint_hash
-        )
+        h2 = hash_trust_chain_state(genesis_id, list(reversed(cap_ids)), del_ids, constraint_hash)
         assert h1 == h2
 
 
@@ -710,9 +691,7 @@ class TestDIDGenerationDeterminism:
 
     @given(agent_id1=valid_id, agent_id2=valid_id)
     @settings(max_examples=200)
-    def test_different_agent_ids_produce_different_dids(
-        self, agent_id1: str, agent_id2: str
-    ) -> None:
+    def test_different_agent_ids_produce_different_dids(self, agent_id1: str, agent_id2: str) -> None:
         """Different agent IDs must produce different DIDs."""
         assume(agent_id1 != agent_id2)
         from eatp.interop.did import generate_did

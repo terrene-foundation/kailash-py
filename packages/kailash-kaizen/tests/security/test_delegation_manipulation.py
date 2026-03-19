@@ -942,7 +942,7 @@ class TestHashChainIntegrityVerified:
         original_hashes = ["hash_a", "hash_b", "hash_c"]
 
         for i, h in enumerate(original_hashes):
-            chain.add_hash(f"agent-{i+1}", h)
+            chain.add_hash(f"agent-{i + 1}", h)
 
         # Step 2: Verify chain is valid before tampering
         valid_before, break_index = chain.verify_chain_linkage(original_hashes)

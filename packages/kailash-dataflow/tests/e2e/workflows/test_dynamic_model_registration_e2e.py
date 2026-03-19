@@ -61,9 +61,9 @@ class TestDynamicModelRegistration:
         # Verify registration results
         assert result["success_count"] > 0, "No models registered"
         assert result["error_count"] == 0, f"Registration errors: {result['errors']}"
-        assert len(result["registered_models"]) == len(
-            test_tables
-        ), "Not all tables registered"
+        assert len(result["registered_models"]) == len(test_tables), (
+            "Not all tables registered"
+        )
         print(
             f"✓ Registered {result['success_count']} models: {result['registered_models']}"
         )
@@ -131,9 +131,9 @@ class TestDynamicModelRegistration:
         if test_model_name in recon_result["generated_nodes"]:
             nodes = recon_result["generated_nodes"][test_model_name]
             for node_type in expected_nodes:
-                assert (
-                    node_type in nodes
-                ), f"Missing {node_type} node for reconstructed {test_model_name}"
+                assert node_type in nodes, (
+                    f"Missing {node_type} node for reconstructed {test_model_name}"
+                )
             print(f"✓ All nodes available for reconstructed {test_model_name}")
 
         # ========================================
@@ -188,9 +188,9 @@ class TestDynamicModelRegistration:
             model_info = db2.get_model_info(model_name)
             assert model_info is not None, f"No model info for {model_name}"
             assert "fields" in model_info, f"No fields in model info for {model_name}"
-            assert model_info.get("dynamic") or model_info.get(
-                "reconstructed"
-            ), f"{model_name} not marked as dynamic/reconstructed"
+            assert model_info.get("dynamic") or model_info.get("reconstructed"), (
+                f"{model_name} not marked as dynamic/reconstructed"
+            )
             print(f"✓ Model info available for {model_name}")
 
         # ========================================
@@ -249,12 +249,12 @@ async def test_edge_cases():
 
     recon_result = db_no_persist.reconstruct_models_from_registry()
     # When persistence is disabled, it returns specific structure
-    assert (
-        "reconstructed_models" in recon_result
-    ), "Should have reconstructed_models key"
-    assert (
-        len(recon_result["reconstructed_models"]) == 0
-    ), "Should not reconstruct when persistence disabled"
+    assert "reconstructed_models" in recon_result, (
+        "Should have reconstructed_models key"
+    )
+    assert len(recon_result["reconstructed_models"]) == 0, (
+        "Should not reconstruct when persistence disabled"
+    )
     assert len(recon_result["errors"]) > 0, "Should have error message"
     print("✓ Model persistence disable handled correctly")
 

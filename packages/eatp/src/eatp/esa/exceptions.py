@@ -44,8 +44,7 @@ class ESANotEstablishedError(ESAError):
             system_id: The system ID that lacks established trust
         """
         super().__init__(
-            f"ESA not established for system: {system_id}. "
-            f"Call establish_trust() before executing operations.",
+            f"ESA not established for system: {system_id}. Call establish_trust() before executing operations.",
             details={"system_id": system_id},
         )
         self.system_id = system_id
@@ -218,8 +217,7 @@ class ESADelegationError(ESAError):
             reason: Human-readable reason for failure
         """
         message = (
-            f"Failed to delegate capability '{capability}' to agent "
-            f"'{delegatee_id}' for system '{system_id}': {reason}"
+            f"Failed to delegate capability '{capability}' to agent '{delegatee_id}' for system '{system_id}': {reason}"
         )
 
         super().__init__(

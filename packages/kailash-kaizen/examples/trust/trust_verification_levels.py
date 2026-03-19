@@ -241,7 +241,7 @@ async def main():
 
     print("\n   Results:")
     print(f"   {'Level':<12} {'p50':<12} {'p95':<12} {'p99':<12} {'Target':<12}")
-    print(f"   {'-'*60}")
+    print(f"   {'-' * 60}")
     print(
         f"   {'QUICK':<12} {quick_stats['p50_ms']:.3f}ms     {quick_stats['p95_ms']:.3f}ms     {quick_stats['p99_ms']:.3f}ms     <5ms"
     )

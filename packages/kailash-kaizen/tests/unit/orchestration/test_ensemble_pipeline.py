@@ -161,9 +161,9 @@ class TestEnsembleCreation:
 
     def test_ensemble_factory_method_exists(self):
         """Test that Pipeline.ensemble() factory method exists."""
-        assert hasattr(
-            Pipeline, "ensemble"
-        ), "Pipeline.ensemble() factory method not found"
+        assert hasattr(Pipeline, "ensemble"), (
+            "Pipeline.ensemble() factory method not found"
+        )
         assert callable(Pipeline.ensemble), "Pipeline.ensemble is not callable"
 
     def test_ensemble_creates_ensemble_pipeline(self, mock_agents, mock_synthesizer):
@@ -174,9 +174,9 @@ class TestEnsembleCreation:
 
         assert pipeline is not None
         assert hasattr(pipeline, "run"), "EnsemblePipeline must have run() method"
-        assert isinstance(
-            pipeline, Pipeline
-        ), "EnsemblePipeline must inherit from Pipeline"
+        assert isinstance(pipeline, Pipeline), (
+            "EnsemblePipeline must inherit from Pipeline"
+        )
 
     def test_ensemble_requires_agents_parameter(self, mock_synthesizer):
         """Test that ensemble() requires agents parameter."""
@@ -252,13 +252,13 @@ class TestA2AAgentDiscovery:
         assert result["perspective_count"] == 3, "Should use exactly 3 agents (top_k=3)"
 
         # Verify correct agents were called
-        assert (
-            mock_agents[0]._call_count == 1
-        ), "code_expert should be selected (top score)"
+        assert mock_agents[0]._call_count == 1, (
+            "code_expert should be selected (top score)"
+        )
         assert mock_agents[1]._call_count == 1, "data_expert should be selected (2nd)"
-        assert (
-            mock_agents[3]._call_count == 1
-        ), "research_expert should be selected (3rd)"
+        assert mock_agents[3]._call_count == 1, (
+            "research_expert should be selected (3rd)"
+        )
 
         # Verify other agents NOT called
         assert mock_agents[2]._call_count == 0, "writing_expert should NOT be selected"
@@ -313,12 +313,12 @@ class TestA2AAgentDiscovery:
         pipeline.run(task="Write Python function", input="test")
 
         # Only code_expert should be selected (highest score)
-        assert (
-            mock_agents[0]._call_count == 1
-        ), "code_expert should be selected (highest score)"
-        assert (
-            sum(a._call_count for a in mock_agents[1:]) == 0
-        ), "Other agents should NOT be selected"
+        assert mock_agents[0]._call_count == 1, (
+            "code_expert should be selected (highest score)"
+        )
+        assert sum(a._call_count for a in mock_agents[1:]) == 0, (
+            "Other agents should NOT be selected"
+        )
 
 
 # ============================================================================
@@ -634,9 +634,9 @@ class TestEnsembleDiversityQuality:
         pipeline.run(task="Write code and analyze data", input="test")
 
         # Specialists should be selected over general_agent
-        assert (
-            mock_agents[5]._call_count == 0
-        ), "general_agent should NOT be selected when specialists available"
+        assert mock_agents[5]._call_count == 0, (
+            "general_agent should NOT be selected when specialists available"
+        )
 
     def test_ensemble_with_single_agent_works(self, mock_agents, mock_synthesizer):
         """Test that ensemble works with just one agent."""

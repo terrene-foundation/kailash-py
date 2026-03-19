@@ -319,7 +319,7 @@ class StagedDeploymentStrategy(AbstractDeploymentStrategy):
         try:
             for i, phase in enumerate(phases):
                 self.logger.info(
-                    f"Executing staged phase {i+1}/{len(phases)}: {phase.name}"
+                    f"Executing staged phase {i + 1}/{len(phases)}: {phase.name}"
                 )
                 execution_context.current_phase = phase.name
 
@@ -346,7 +346,7 @@ class StagedDeploymentStrategy(AbstractDeploymentStrategy):
 
                 # Log checkpoint progress
                 self.logger.info(
-                    f"Staged phase completed: {phase.name} ({i+1}/{len(phases)})"
+                    f"Staged phase completed: {phase.name} ({i + 1}/{len(phases)})"
                 )
 
             self.logger.info(
@@ -506,7 +506,7 @@ class ZeroDowntimeDeploymentStrategy(AbstractDeploymentStrategy):
         try:
             for i, phase in enumerate(phases):
                 self.logger.info(
-                    f"Executing zero-downtime phase {i+1}/{len(phases)}: {phase.name}"
+                    f"Executing zero-downtime phase {i + 1}/{len(phases)}: {phase.name}"
                 )
                 execution_context.current_phase = phase.name
 

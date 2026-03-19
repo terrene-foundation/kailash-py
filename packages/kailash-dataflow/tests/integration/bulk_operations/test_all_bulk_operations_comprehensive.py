@@ -120,12 +120,12 @@ class TestBulkDeleteOperations:
         )
 
         # Verify success
-        assert result[
-            "success"
-        ], f"Expected success but got error: {result.get('error')}"
-        assert (
-            result["deleted"] == 5
-        ), f"Expected 5 deletions but got {result.get('deleted')}"
+        assert result["success"], (
+            f"Expected success but got error: {result.get('error')}"
+        )
+        assert result["deleted"] == 5, (
+            f"Expected 5 deletions but got {result.get('deleted')}"
+        )
 
     @pytest.mark.asyncio
     async def test_bulk_delete_with_empty_filter_safe_mode_enabled_fails(
@@ -261,12 +261,12 @@ class TestBulkUpdateOperations:
             confirmed=True,
         )
 
-        assert result[
-            "success"
-        ], f"Expected success but got error: {result.get('error')}"
-        assert (
-            result["updated"] == 5
-        ), f"Expected 5 updates but got {result.get('updated')}"
+        assert result["success"], (
+            f"Expected success but got error: {result.get('error')}"
+        )
+        assert result["updated"] == 5, (
+            f"Expected 5 updates but got {result.get('updated')}"
+        )
 
     @pytest.mark.asyncio
     async def test_bulk_update_with_non_empty_filter(self, setup_test_table):

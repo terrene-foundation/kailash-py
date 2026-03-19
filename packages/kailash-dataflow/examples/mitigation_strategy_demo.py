@@ -315,9 +315,9 @@ def print_roadmap(roadmap: RiskReductionRoadmap):
 async def demonstrate_scenario(scenario: str):
     """Demonstrate complete workflow for a specific scenario."""
 
-    print(f"\n{'='*100}")
+    print(f"\n{'=' * 100}")
     print(f"DEMONSTRATION: {scenario.upper().replace('_', ' ')} SCENARIO")
-    print(f"{'='*100}")
+    print(f"{'=' * 100}")
 
     # Initialize engines
     risk_engine = RiskAssessmentEngine()
@@ -429,12 +429,12 @@ We'll demonstrate three scenarios:
 
         # Add pause between scenarios for readability
         if scenario != scenarios[-1]:
-            print(f"\n{'='*50}")
+            print(f"\n{'=' * 50}")
             print("Press Enter to continue to next scenario...")
-            print(f"{'='*50}")
+            print(f"{'=' * 50}")
             # input()  # Commented out for automated runs
 
-    print(f"\n{'='*100}")
+    print(f"\n{'=' * 100}")
     print("DEMONSTRATION COMPLETE")
     print("=" * 100)
     print(

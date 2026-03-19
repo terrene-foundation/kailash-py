@@ -406,9 +406,7 @@ class TestCascadeRevocationDeepChains:
         )
 
         revoked_targets = {e.target_id for e in events}
-        assert set(agents) == revoked_targets, (
-            f"Expected all {len(agents)} agents revoked, " f"got {len(revoked_targets)}"
-        )
+        assert set(agents) == revoked_targets, f"Expected all {len(agents)} agents revoked, got {len(revoked_targets)}"
         # Verify event count: 1 initial + 11 cascade = 12 total
         assert len(events) == 12
 
@@ -429,9 +427,7 @@ class TestCascadeRevocationDeepChains:
 
     def test_cascade_100_levels_at_max_depth(self, broadcaster, registry):
         """100-level chain (at MAX_CASCADE_DEPTH) must revoke all 101 agents."""
-        assert (
-            MAX_CASCADE_DEPTH == 100
-        ), f"Expected MAX_CASCADE_DEPTH == 100, got {MAX_CASCADE_DEPTH}"
+        assert MAX_CASCADE_DEPTH == 100, f"Expected MAX_CASCADE_DEPTH == 100, got {MAX_CASCADE_DEPTH}"
         agents = self._build_linear_chain(registry, depth=100)
         manager = CascadeRevocationManager(broadcaster, registry)
 
@@ -445,9 +441,7 @@ class TestCascadeRevocationDeepChains:
         assert set(agents) == revoked_targets
         assert len(events) == 101
 
-    def test_cascade_deep_chain_initial_event_is_agent_revoked(
-        self, broadcaster, registry
-    ):
+    def test_cascade_deep_chain_initial_event_is_agent_revoked(self, broadcaster, registry):
         """The first event in a deep chain must be AGENT_REVOKED type."""
         self._build_linear_chain(registry, depth=15)
         manager = CascadeRevocationManager(broadcaster, registry)
@@ -461,9 +455,7 @@ class TestCascadeRevocationDeepChains:
         assert events[0].revocation_type == RevocationType.AGENT_REVOKED
         assert events[0].target_id == "agent-0"
 
-    def test_cascade_deep_chain_subsequent_events_are_cascade_type(
-        self, broadcaster, registry
-    ):
+    def test_cascade_deep_chain_subsequent_events_are_cascade_type(self, broadcaster, registry):
         """All events after the initial one must be CASCADE_REVOCATION type."""
         self._build_linear_chain(registry, depth=15)
         manager = CascadeRevocationManager(broadcaster, registry)
@@ -476,8 +468,7 @@ class TestCascadeRevocationDeepChains:
 
         for event in events[1:]:
             assert event.revocation_type == RevocationType.CASCADE_REVOCATION, (
-                f"Expected CASCADE_REVOCATION for {event.target_id}, "
-                f"got {event.revocation_type}"
+                f"Expected CASCADE_REVOCATION for {event.target_id}, got {event.revocation_type}"
             )
 
     def test_cascade_deep_chain_all_events_have_unique_ids(self, broadcaster, registry):
@@ -507,13 +498,9 @@ class TestCascadeRevocationDeepChains:
 
         # Every cascade event (not the initial) must have cascade_from set
         for event in events[1:]:
-            assert (
-                event.cascade_from is not None
-            ), f"Cascade event for {event.target_id} has no cascade_from"
+            assert event.cascade_from is not None, f"Cascade event for {event.target_id} has no cascade_from"
 
-    def test_cascade_deep_chain_broadcaster_receives_all_events(
-        self, broadcaster, registry
-    ):
+    def test_cascade_deep_chain_broadcaster_receives_all_events(self, broadcaster, registry):
         """All events must appear in the broadcaster's history."""
         self._build_linear_chain(registry, depth=15)
         manager = CascadeRevocationManager(broadcaster, registry)
@@ -528,8 +515,7 @@ class TestCascadeRevocationDeepChains:
         history_ids = {e.event_id for e in history}
         for event in events:
             assert event.event_id in history_ids, (
-                f"Event {event.event_id} for {event.target_id} "
-                f"missing from broadcaster history"
+                f"Event {event.event_id} for {event.target_id} missing from broadcaster history"
             )
 
 
@@ -603,9 +589,7 @@ class TestTrustReportRoundTrip:
         """computed_at datetime must be preserved with timezone."""
         serialized = full_trust_report.to_dict()
         restored = TrustReport.from_dict(serialized)
-        assert restored.score.computed_at == datetime(
-            2026, 3, 15, 12, 0, 0, tzinfo=timezone.utc
-        )
+        assert restored.score.computed_at == datetime(2026, 3, 15, 12, 0, 0, tzinfo=timezone.utc)
 
     def test_round_trip_empty_risk_indicators(self, full_trust_score):
         """TrustReport with empty risk_indicators survives round-trip."""
@@ -717,9 +701,7 @@ class TestTrustMetricsCollectorThreadSafety:
         metrics = collector.get_posture_metrics()
         # Each worker records 100 unique agents, 10 workers = 1000 total
         total_agents = sum(metrics.posture_distribution.values())
-        assert (
-            total_agents == 1000
-        ), f"Expected 1000 agents in posture distribution, got {total_agents}"
+        assert total_agents == 1000, f"Expected 1000 agents in posture distribution, got {total_agents}"
 
     def test_concurrent_record_transition(self):
         """Concurrent record_transition calls must not lose counts."""
@@ -792,9 +774,7 @@ class TestTrustMetricsCollectorThreadSafety:
 
         def mixed_ops(worker_id):
             for i in range(50):
-                collector.record_posture(
-                    f"agent-{worker_id}", postures[i % len(postures)]
-                )
+                collector.record_posture(f"agent-{worker_id}", postures[i % len(postures)])
                 collector.record_transition("upgrade")
                 collector.record_constraint_evaluation(passed=True, duration_ms=0.5)
                 collector.record_circuit_breaker_open()

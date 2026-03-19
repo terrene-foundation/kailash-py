@@ -175,9 +175,7 @@ class TestVCStructure:
         assert W3C_CREDENTIALS_V2_CONTEXT in vc["@context"]
         assert EATP_CONTEXT_URL in vc["@context"]
 
-    def test_type_includes_verifiable_credential_and_eatp(
-        self, trust_chain, keypair, issuer_did
-    ):
+    def test_type_includes_verifiable_credential_and_eatp(self, trust_chain, keypair, issuer_did):
         """VC type MUST include VerifiableCredential and EATPTrustChain."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -203,9 +201,7 @@ class TestVCStructure:
         parsed = datetime.fromisoformat(vc["validFrom"])
         assert parsed.tzinfo is not None
 
-    def test_valid_until_present_when_chain_expires(
-        self, trust_chain, keypair, issuer_did
-    ):
+    def test_valid_until_present_when_chain_expires(self, trust_chain, keypair, issuer_did):
         """VC MUST have validUntil when the chain has an expiration."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -242,9 +238,7 @@ class TestVCStructure:
 
         assert "validUntil" not in vc
 
-    def test_credential_subject_contains_chain_data(
-        self, trust_chain, keypair, issuer_did
-    ):
+    def test_credential_subject_contains_chain_data(self, trust_chain, keypair, issuer_did):
         """VC credentialSubject MUST contain EATP chain data."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -268,9 +262,7 @@ class TestVCStructure:
         assert "createdAt" in genesis
         assert "signatureAlgorithm" in genesis
 
-    def test_credential_subject_capabilities_fields(
-        self, trust_chain, keypair, issuer_did
-    ):
+    def test_credential_subject_capabilities_fields(self, trust_chain, keypair, issuer_did):
         """VC credentialSubject capabilities MUST contain all capability fields."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -284,9 +276,7 @@ class TestVCStructure:
         assert cap["attesterId"] == "authority-001"
         assert "attestedAt" in cap
 
-    def test_credential_subject_delegations_fields(
-        self, trust_chain, keypair, issuer_did
-    ):
+    def test_credential_subject_delegations_fields(self, trust_chain, keypair, issuer_did):
         """VC credentialSubject delegations MUST contain all delegation fields."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -411,9 +401,7 @@ class TestExportChainAsVC:
         with pytest.raises(ValueError, match="signing_key"):
             export_as_verifiable_credential(trust_chain, issuer_did, "not-a-valid-key")
 
-    def test_export_constraint_envelope_when_present(
-        self, trust_chain, keypair, issuer_did
-    ):
+    def test_export_constraint_envelope_when_present(self, trust_chain, keypair, issuer_did):
         """Exported VC should include constraint envelope data when present."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -430,9 +418,7 @@ class TestExportChainAsVC:
 class TestExportCapabilityAsVC:
     """Tests for export_capability_as_vc function."""
 
-    def test_export_single_capability(
-        self, capability_attestation, keypair, issuer_did
-    ):
+    def test_export_single_capability(self, capability_attestation, keypair, issuer_did):
         """Exporting a single capability should produce a valid VC."""
         private_key, _ = keypair
         vc = export_capability_as_vc(capability_attestation, issuer_did, private_key)
@@ -449,9 +435,7 @@ class TestExportCapabilityAsVC:
         assert W3C_CREDENTIALS_V2_CONTEXT in vc["@context"]
         assert EATP_CONTEXT_URL in vc["@context"]
 
-    def test_capability_vc_credential_subject(
-        self, capability_attestation, keypair, issuer_did
-    ):
+    def test_capability_vc_credential_subject(self, capability_attestation, keypair, issuer_did):
         """Capability VC credentialSubject MUST contain capability data."""
         private_key, _ = keypair
         vc = export_capability_as_vc(capability_attestation, issuer_did, private_key)
@@ -471,9 +455,7 @@ class TestExportCapabilityAsVC:
         assert "proof" in vc
         assert vc["proof"]["type"] == "Ed25519Signature2020"
 
-    def test_capability_vc_valid_from(
-        self, capability_attestation, keypair, issuer_did
-    ):
+    def test_capability_vc_valid_from(self, capability_attestation, keypair, issuer_did):
         """Capability VC MUST have validFrom matching attested_at."""
         private_key, _ = keypair
         vc = export_capability_as_vc(capability_attestation, issuer_did, private_key)
@@ -482,9 +464,7 @@ class TestExportCapabilityAsVC:
         valid_from = datetime.fromisoformat(vc["validFrom"])
         assert valid_from == capability_attestation.attested_at
 
-    def test_capability_vc_valid_until_when_expires(
-        self, capability_attestation, keypair, issuer_did
-    ):
+    def test_capability_vc_valid_until_when_expires(self, capability_attestation, keypair, issuer_did):
         """Capability VC MUST have validUntil when capability expires."""
         private_key, _ = keypair
         vc = export_capability_as_vc(capability_attestation, issuer_did, private_key)
@@ -515,9 +495,7 @@ class TestVerifyCredential:
 
         assert verify_credential(vc, public_key) is True
 
-    def test_verify_valid_capability_vc(
-        self, capability_attestation, keypair, issuer_did
-    ):
+    def test_verify_valid_capability_vc(self, capability_attestation, keypair, issuer_did):
         """verify_credential MUST return True for a valid capability VC."""
         private_key, public_key = keypair
         vc = export_capability_as_vc(capability_attestation, issuer_did, private_key)
@@ -610,10 +588,7 @@ class TestImportFromVC:
         assert imported.genesis.agent_id == trust_chain.genesis.agent_id
         assert imported.genesis.authority_id == trust_chain.genesis.authority_id
         assert imported.genesis.authority_type == trust_chain.genesis.authority_type
-        assert (
-            imported.genesis.signature_algorithm
-            == trust_chain.genesis.signature_algorithm
-        )
+        assert imported.genesis.signature_algorithm == trust_chain.genesis.signature_algorithm
 
     def test_round_trip_capabilities(self, trust_chain, keypair, issuer_did):
         """Imported chain should have same capabilities."""
@@ -683,9 +658,7 @@ class TestImportFromVC:
         with pytest.raises(ValueError, match="type"):
             import_from_verifiable_credential(vc)
 
-    def test_import_raises_on_missing_credential_subject(
-        self, trust_chain, keypair, issuer_did
-    ):
+    def test_import_raises_on_missing_credential_subject(self, trust_chain, keypair, issuer_did):
         """import_from_verifiable_credential MUST raise when credentialSubject missing."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -817,9 +790,7 @@ class TestEdgeCases:
 
         assert len(vc["credentialSubject"]["delegations"]) == 2
 
-    def test_export_deterministic_for_same_input(
-        self, trust_chain, keypair, issuer_did
-    ):
+    def test_export_deterministic_for_same_input(self, trust_chain, keypair, issuer_did):
         """Two exports of the same chain should produce structurally equivalent VCs
         (proof values will differ due to timestamp)."""
         private_key, _ = keypair
@@ -845,18 +816,14 @@ class TestEdgeCases:
         imported = import_from_verifiable_credential(vc)
         assert imported.genesis.agent_id == "agent-alpha"
 
-    def test_capability_vc_scope_preserved(
-        self, capability_attestation, keypair, issuer_did
-    ):
+    def test_capability_vc_scope_preserved(self, capability_attestation, keypair, issuer_did):
         """Capability VC should preserve scope data in credentialSubject."""
         private_key, _ = keypair
         vc = export_capability_as_vc(capability_attestation, issuer_did, private_key)
 
         assert vc["credentialSubject"]["scope"] == {"tables": ["transactions"]}
 
-    def test_genesis_metadata_preserved_in_export(
-        self, trust_chain, keypair, issuer_did
-    ):
+    def test_genesis_metadata_preserved_in_export(self, trust_chain, keypair, issuer_did):
         """Genesis metadata should be preserved in the VC export."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -896,9 +863,15 @@ class TestReasoningTraceExport:
             authority_type=AuthorityType.ORGANIZATION,
             created_at=now,
             signature=sign(
-                {"id": "gen-rt-pub", "agent_id": "agent-alpha",
-                 "authority_id": "authority-001", "authority_type": "organization",
-                 "created_at": now.isoformat(), "expires_at": None, "metadata": {}},
+                {
+                    "id": "gen-rt-pub",
+                    "agent_id": "agent-alpha",
+                    "authority_id": "authority-001",
+                    "authority_type": "organization",
+                    "created_at": now.isoformat(),
+                    "expires_at": None,
+                    "metadata": {},
+                },
                 private_key,
             ),
         )
@@ -957,9 +930,15 @@ class TestReasoningTraceExport:
             authority_type=AuthorityType.ORGANIZATION,
             created_at=now,
             signature=sign(
-                {"id": "gen-rt-restr", "agent_id": "agent-alpha",
-                 "authority_id": "authority-001", "authority_type": "organization",
-                 "created_at": now.isoformat(), "expires_at": None, "metadata": {}},
+                {
+                    "id": "gen-rt-restr",
+                    "agent_id": "agent-alpha",
+                    "authority_id": "authority-001",
+                    "authority_type": "organization",
+                    "created_at": now.isoformat(),
+                    "expires_at": None,
+                    "metadata": {},
+                },
                 private_key,
             ),
         )
@@ -1012,9 +991,15 @@ class TestReasoningTraceExport:
             authority_type=AuthorityType.ORGANIZATION,
             created_at=now,
             signature=sign(
-                {"id": "gen-rt-conf", "agent_id": "agent-alpha",
-                 "authority_id": "authority-001", "authority_type": "organization",
-                 "created_at": now.isoformat(), "expires_at": None, "metadata": {}},
+                {
+                    "id": "gen-rt-conf",
+                    "agent_id": "agent-alpha",
+                    "authority_id": "authority-001",
+                    "authority_type": "organization",
+                    "created_at": now.isoformat(),
+                    "expires_at": None,
+                    "metadata": {},
+                },
                 private_key,
             ),
         )
@@ -1065,9 +1050,15 @@ class TestReasoningTraceExport:
             authority_type=AuthorityType.ORGANIZATION,
             created_at=now,
             signature=sign(
-                {"id": "gen-rt-sec", "agent_id": "agent-alpha",
-                 "authority_id": "authority-001", "authority_type": "organization",
-                 "created_at": now.isoformat(), "expires_at": None, "metadata": {}},
+                {
+                    "id": "gen-rt-sec",
+                    "agent_id": "agent-alpha",
+                    "authority_id": "authority-001",
+                    "authority_type": "organization",
+                    "created_at": now.isoformat(),
+                    "expires_at": None,
+                    "metadata": {},
+                },
                 private_key,
             ),
         )
@@ -1117,9 +1108,15 @@ class TestReasoningTraceExport:
             authority_type=AuthorityType.ORGANIZATION,
             created_at=now,
             signature=sign(
-                {"id": "gen-rt-ts", "agent_id": "agent-alpha",
-                 "authority_id": "authority-001", "authority_type": "organization",
-                 "created_at": now.isoformat(), "expires_at": None, "metadata": {}},
+                {
+                    "id": "gen-rt-ts",
+                    "agent_id": "agent-alpha",
+                    "authority_id": "authority-001",
+                    "authority_type": "organization",
+                    "created_at": now.isoformat(),
+                    "expires_at": None,
+                    "metadata": {},
+                },
                 private_key,
             ),
         )
@@ -1172,9 +1169,15 @@ class TestReasoningTraceExport:
             authority_type=AuthorityType.ORGANIZATION,
             created_at=now,
             signature=sign(
-                {"id": "gen-rt-hashonly", "agent_id": "agent-alpha",
-                 "authority_id": "authority-001", "authority_type": "organization",
-                 "created_at": now.isoformat(), "expires_at": None, "metadata": {}},
+                {
+                    "id": "gen-rt-hashonly",
+                    "agent_id": "agent-alpha",
+                    "authority_id": "authority-001",
+                    "authority_type": "organization",
+                    "created_at": now.isoformat(),
+                    "expires_at": None,
+                    "metadata": {},
+                },
                 private_key,
             ),
         )
@@ -1230,9 +1233,15 @@ class TestReasoningTraceImport:
             authority_type=AuthorityType.ORGANIZATION,
             created_at=now,
             signature=sign(
-                {"id": "gen-imp-rt", "agent_id": "agent-alpha",
-                 "authority_id": "authority-001", "authority_type": "organization",
-                 "created_at": now.isoformat(), "expires_at": None, "metadata": {}},
+                {
+                    "id": "gen-imp-rt",
+                    "agent_id": "agent-alpha",
+                    "authority_id": "authority-001",
+                    "authority_type": "organization",
+                    "created_at": now.isoformat(),
+                    "expires_at": None,
+                    "metadata": {},
+                },
                 private_key,
             ),
         )
@@ -1288,9 +1297,15 @@ class TestReasoningTraceImport:
             authority_type=AuthorityType.ORGANIZATION,
             created_at=now,
             signature=sign(
-                {"id": "gen-imp-hashonly", "agent_id": "agent-alpha",
-                 "authority_id": "authority-001", "authority_type": "organization",
-                 "created_at": now.isoformat(), "expires_at": None, "metadata": {}},
+                {
+                    "id": "gen-imp-hashonly",
+                    "agent_id": "agent-alpha",
+                    "authority_id": "authority-001",
+                    "authority_type": "organization",
+                    "created_at": now.isoformat(),
+                    "expires_at": None,
+                    "metadata": {},
+                },
                 private_key,
             ),
         )
@@ -1322,9 +1337,7 @@ class TestReasoningTraceImport:
         assert imp_del.reasoning_trace_hash == "sha256-conf-hash"
         assert imp_del.reasoning_signature == "sig-conf"
 
-    def test_import_vc_without_reasoning_fields_backward_compat(
-        self, trust_chain, keypair, issuer_did
-    ):
+    def test_import_vc_without_reasoning_fields_backward_compat(self, trust_chain, keypair, issuer_did):
         """Import MUST handle VCs without reasoning fields (backward compatibility)."""
         private_key, _ = keypair
         vc = export_as_verifiable_credential(trust_chain, issuer_did, private_key)
@@ -1369,9 +1382,15 @@ class TestReasoningTraceRoundTrip:
             authority_type=AuthorityType.ORGANIZATION,
             created_at=now,
             signature=sign(
-                {"id": "gen-roundtrip", "agent_id": "agent-roundtrip",
-                 "authority_id": "authority-001", "authority_type": "organization",
-                 "created_at": now.isoformat(), "expires_at": None, "metadata": {}},
+                {
+                    "id": "gen-roundtrip",
+                    "agent_id": "agent-roundtrip",
+                    "authority_id": "authority-001",
+                    "authority_type": "organization",
+                    "created_at": now.isoformat(),
+                    "expires_at": None,
+                    "metadata": {},
+                },
                 private_key,
             ),
         )
@@ -1447,9 +1466,15 @@ class TestReasoningTraceRoundTrip:
             authority_type=AuthorityType.ORGANIZATION,
             created_at=now,
             signature=sign(
-                {"id": "gen-hash-stable", "agent_id": "agent-hash",
-                 "authority_id": "authority-001", "authority_type": "organization",
-                 "created_at": now.isoformat(), "expires_at": None, "metadata": {}},
+                {
+                    "id": "gen-hash-stable",
+                    "agent_id": "agent-hash",
+                    "authority_id": "authority-001",
+                    "authority_type": "organization",
+                    "created_at": now.isoformat(),
+                    "expires_at": None,
+                    "metadata": {},
+                },
                 private_key,
             ),
         )

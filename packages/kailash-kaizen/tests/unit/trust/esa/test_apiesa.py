@@ -541,7 +541,8 @@ class TestErrorHandling:
         """Test execute_operation with missing path parameter."""
         with pytest.raises(ESAOperationError) as exc_info:
             await basic_esa.execute_operation(
-                operation="get_users", parameters={}  # Missing 'path'
+                operation="get_users",
+                parameters={},  # Missing 'path'
             )
 
         assert "Missing required parameter: 'path'" in str(exc_info.value)

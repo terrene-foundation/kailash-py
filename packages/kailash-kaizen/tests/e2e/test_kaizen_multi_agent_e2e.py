@@ -150,21 +150,21 @@ class TestMultiAgentDebateWorkflowE2E:
         )
 
         # Step 6: Validate performance requirements
-        assert (
-            total_time < 10.0
-        ), f"Total debate time {total_time:.3f}s exceeded 10s limit"
-        assert (
-            init_time < 1.0
-        ), f"Initialization time {init_time:.3f}s exceeded 1s limit"
-        assert (
-            agent_time < 2.0
-        ), f"Agent creation time {agent_time:.3f}s exceeded 2s limit"
-        assert (
-            workflow_time < 1.0
-        ), f"Workflow creation time {workflow_time:.3f}s exceeded 1s limit"
-        assert (
-            execution_time < 8.0
-        ), f"Execution time {execution_time:.3f}s exceeded 8s limit"
+        assert total_time < 10.0, (
+            f"Total debate time {total_time:.3f}s exceeded 10s limit"
+        )
+        assert init_time < 1.0, (
+            f"Initialization time {init_time:.3f}s exceeded 1s limit"
+        )
+        assert agent_time < 2.0, (
+            f"Agent creation time {agent_time:.3f}s exceeded 2s limit"
+        )
+        assert workflow_time < 1.0, (
+            f"Workflow creation time {workflow_time:.3f}s exceeded 1s limit"
+        )
+        assert execution_time < 8.0, (
+            f"Execution time {execution_time:.3f}s exceeded 8s limit"
+        )
 
         # Step 7: Validate agent specialization effectiveness
         self._validate_agent_specialization(
@@ -367,9 +367,9 @@ class TestMultiAgentConsensusWorkflowE2E:
         assert len(str(final_agreement)) > 50  # Should be substantial agreement
 
         # Validate performance
-        assert (
-            execution_time < 10.0
-        ), f"Consensus workflow took {execution_time:.3f}s, expected < 10.0s"
+        assert execution_time < 10.0, (
+            f"Consensus workflow took {execution_time:.3f}s, expected < 10.0s"
+        )
 
         # Validate consensus quality
         agreement_text = str(final_agreement).lower()
@@ -487,14 +487,14 @@ class TestMultiAgentTeamCoordinationE2E:
 # Research contribution from {member.name}
 result = {{
     'researcher': '{member.name}',
-    'research_area': 'market_trend_{i+1}',
+    'research_area': 'market_trend_{i + 1}',
     'findings': [
-        'Finding 1: Market growth in sector {i+1}',
-        'Finding 2: Consumer preference shift in area {i+1}',
-        'Finding 3: Technology adoption trend {i+1}'
+        'Finding 1: Market growth in sector {i + 1}',
+        'Finding 2: Consumer preference shift in area {i + 1}',
+        'Finding 3: Technology adoption trend {i + 1}'
     ],
-    'confidence': 0.{85 + i*5},
-    'methodology': 'quantitative_analysis_{i+1}',
+    'confidence': 0.{85 + i * 5},
+    'methodology': 'quantitative_analysis_{i + 1}',
     'data_sources': ['source_1', 'source_2', 'source_3'],
     'completion_status': 'completed'
 }}
@@ -598,9 +598,9 @@ result['team_recommendations'] = [
         assert synthesis_data.get("confidence_score", 0) > 0.8
 
         # Validate collaboration performance
-        assert (
-            collaboration_time < 10.0
-        ), f"Team collaboration took {collaboration_time:.3f}s, expected < 10.0s"
+        assert collaboration_time < 10.0, (
+            f"Team collaboration took {collaboration_time:.3f}s, expected < 10.0s"
+        )
 
         # Validate team state management
         if hasattr(team, "state"):
@@ -658,9 +658,9 @@ result['team_recommendations'] = [
                 individual_confidence_scores
             )
             team_confidence = synthesis_data["confidence_score"]
-            assert (
-                team_confidence >= avg_individual_confidence
-            ), "Team synthesis should have higher confidence than average individual contributions"
+            assert team_confidence >= avg_individual_confidence, (
+                "Team synthesis should have higher confidence than average individual contributions"
+            )
 
 
 class TestMultiAgentScalabilityE2E:
@@ -710,16 +710,16 @@ class TestMultiAgentScalabilityE2E:
         assert len(results) > 0
 
         # Validate performance at scale
-        assert (
-            execution_time < 15.0
-        ), f"Large-scale coordination took {execution_time:.3f}s, expected < 15.0s"
+        assert execution_time < 15.0, (
+            f"Large-scale coordination took {execution_time:.3f}s, expected < 15.0s"
+        )
 
         # Verify all agents participated
         agent_participation = self._count_agent_participation(results, agents)
         participation_rate = agent_participation / num_agents
-        assert (
-            participation_rate >= 0.75
-        ), f"Only {participation_rate:.1%} of agents participated, expected >= 75%"
+        assert participation_rate >= 0.75, (
+            f"Only {participation_rate:.1%} of agents participated, expected >= 75%"
+        )
 
     def _count_agent_participation(self, results: Dict[str, Any], agents: List) -> int:
         """Count how many agents participated in the coordination."""

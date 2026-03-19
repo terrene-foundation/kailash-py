@@ -347,9 +347,9 @@ class TestPerformanceLargeSchema:
             logger.info(f"  - Indexes: {object_counts['index_count']}")
 
             # Verify we have a large enough schema for the test
-            assert (
-                total_objects >= 1000
-            ), f"Schema too small for performance test: {total_objects} objects"
+            assert total_objects >= 1000, (
+                f"Schema too small for performance test: {total_objects} objects"
+            )
 
             # **MAIN PERFORMANCE TEST**: Analyze dependencies for high-impact column
             logger.info("Starting dependency analysis performance test...")
@@ -371,42 +371,42 @@ class TestPerformanceLargeSchema:
             current_memory, peak_memory = get_memory_profile()
 
             # **PERFORMANCE VALIDATION 1**: <30 second requirement
-            assert (
-                analysis_time < 30.0
-            ), f"PERFORMANCE FAILURE: Analysis took {analysis_time:.2f}s (requirement: <30s)"
+            assert analysis_time < 30.0, (
+                f"PERFORMANCE FAILURE: Analysis took {analysis_time:.2f}s (requirement: <30s)"
+            )
 
             # **PERFORMANCE VALIDATION 2**: <512MB memory requirement
-            assert (
-                peak_memory < 512.0
-            ), f"PERFORMANCE FAILURE: Peak memory {peak_memory:.1f}MB (requirement: <512MB)"
+            assert peak_memory < 512.0, (
+                f"PERFORMANCE FAILURE: Peak memory {peak_memory:.1f}MB (requirement: <512MB)"
+            )
 
             # **ACCURACY VALIDATION**: Verify all dependencies were detected
-            assert (
-                dependency_report.has_dependencies() is True
-            ), "Should detect dependencies in large schema"
+            assert dependency_report.has_dependencies() is True, (
+                "Should detect dependencies in large schema"
+            )
 
             total_deps = dependency_report.get_total_dependency_count()
-            assert (
-                total_deps >= NUM_DEPENDENT_TABLES_PER_MAIN
-            ), f"Should detect at least {NUM_DEPENDENT_TABLES_PER_MAIN} dependencies"
+            assert total_deps >= NUM_DEPENDENT_TABLES_PER_MAIN, (
+                f"Should detect at least {NUM_DEPENDENT_TABLES_PER_MAIN} dependencies"
+            )
 
             # Verify foreign key detection accuracy
             fk_deps = dependency_report.dependencies.get(DependencyType.FOREIGN_KEY, [])
-            assert (
-                len(fk_deps) >= NUM_DEPENDENT_TABLES_PER_MAIN
-            ), f"Should detect {NUM_DEPENDENT_TABLES_PER_MAIN} FK deps, found {len(fk_deps)}"
+            assert len(fk_deps) >= NUM_DEPENDENT_TABLES_PER_MAIN, (
+                f"Should detect {NUM_DEPENDENT_TABLES_PER_MAIN} FK deps, found {len(fk_deps)}"
+            )
 
             # Verify view detection
             view_deps = dependency_report.dependencies.get(DependencyType.VIEW, [])
-            assert (
-                len(view_deps) >= NUM_VIEWS_PER_MAIN
-            ), f"Should detect {NUM_VIEWS_PER_MAIN} view deps, found {len(view_deps)}"
+            assert len(view_deps) >= NUM_VIEWS_PER_MAIN, (
+                f"Should detect {NUM_VIEWS_PER_MAIN} view deps, found {len(view_deps)}"
+            )
 
             # All foreign keys should be CRITICAL (referencing target column)
             critical_deps = dependency_report.get_critical_dependencies()
-            assert (
-                len(critical_deps) >= NUM_DEPENDENT_TABLES_PER_MAIN
-            ), "All FKs should be critical"
+            assert len(critical_deps) >= NUM_DEPENDENT_TABLES_PER_MAIN, (
+                "All FKs should be critical"
+            )
 
             # **PERFORMANCE METRICS LOGGING**
             deps_per_second = total_deps / analysis_time if analysis_time > 0 else 0
@@ -445,9 +445,9 @@ class TestPerformanceLargeSchema:
             plan_time = time.time() - plan_start
 
             assert plan_time < 10.0, f"Removal planning too slow: {plan_time:.2f}s"
-            assert (
-                len(removal_plan.dependencies) == total_deps
-            ), "Planning should include all dependencies"
+            assert len(removal_plan.dependencies) == total_deps, (
+                "Planning should include all dependencies"
+            )
 
             logger.info(f"  ✅ Removal planning: {plan_time:.2f}s")
 
@@ -549,20 +549,20 @@ class TestPerformanceLargeSchema:
         avg_individual_time = sum(r["analysis_time"] for r in results) / len(results)
 
         # All analyses should complete reasonably quickly
-        assert (
-            max_individual_time < 10.0
-        ), f"Concurrent analysis too slow: {max_individual_time:.2f}s"
+        assert max_individual_time < 10.0, (
+            f"Concurrent analysis too slow: {max_individual_time:.2f}s"
+        )
 
         # Memory usage should be reasonable for concurrent operations
-        assert (
-            peak_memory < 256.0
-        ), f"Concurrent memory usage too high: {peak_memory:.1f}MB"
+        assert peak_memory < 256.0, (
+            f"Concurrent memory usage too high: {peak_memory:.1f}MB"
+        )
 
         # All analyses should detect the same dependencies
         dependency_counts = [r["dependency_count"] for r in results]
-        assert all(
-            count == dependency_counts[0] for count in dependency_counts
-        ), "Concurrent analyses should detect same dependencies"
+        assert all(count == dependency_counts[0] for count in dependency_counts), (
+            "Concurrent analyses should detect same dependencies"
+        )
 
         logger.info("Concurrent analysis results:")
         logger.info(f"  - Total time: {concurrent_time:.2f}s")
@@ -615,11 +615,13 @@ class TestPerformanceLargeSchema:
 
                 # Add foreign key to previous level
                 if level > 0:
-                    prev_level_table = f"perf_mem_L{level-1}_N{node % nodes_per_level}"
+                    prev_level_table = (
+                        f"perf_mem_L{level - 1}_N{node % nodes_per_level}"
+                    )
                     create_sql += f""",
                         prev_level_key VARCHAR(50),
                         CONSTRAINT fk_{table_name}_prev FOREIGN KEY (prev_level_key)
-                            REFERENCES {prev_level_table}(level_{level-1}_key) ON DELETE CASCADE
+                            REFERENCES {prev_level_table}(level_{level - 1}_key) ON DELETE CASCADE
                     """
 
                 create_sql += ");"
@@ -678,9 +680,9 @@ class TestPerformanceLargeSchema:
         # Memory per dependency should be reasonable
         memory_per_dependency = peak_traced / total_deps if total_deps > 0 else 0
 
-        assert (
-            memory_per_dependency < 1.0
-        ), f"Memory per dependency too high: {memory_per_dependency:.2f}MB"
+        assert memory_per_dependency < 1.0, (
+            f"Memory per dependency too high: {memory_per_dependency:.2f}MB"
+        )
         assert peak_traced < 512.0, f"Peak memory too high: {peak_traced:.1f}MB"
 
         logger.info("Memory efficiency results:")
@@ -826,15 +828,15 @@ class TestPerformanceLargeSchema:
             else float("inf")
         )
 
-        assert (
-            variation_ratio < 3.0
-        ), f"Performance scaling too poor: {variation_ratio:.2f}x variation"
+        assert variation_ratio < 3.0, (
+            f"Performance scaling too poor: {variation_ratio:.2f}x variation"
+        )
 
         # Largest test should still meet performance requirements
         largest_test = scaling_results[-1]
-        assert (
-            largest_test["analysis_time"] < 15.0
-        ), f"Largest test too slow: {largest_test['analysis_time']:.2f}s"
+        assert largest_test["analysis_time"] < 15.0, (
+            f"Largest test too slow: {largest_test['analysis_time']:.2f}s"
+        )
 
         logger.info(
             f"Scaling validation: {variation_ratio:.2f}x performance variation (requirement: <3.0x)"

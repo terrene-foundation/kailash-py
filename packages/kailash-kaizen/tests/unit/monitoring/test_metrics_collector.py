@@ -155,17 +155,17 @@ class TestMetricsCollectorPerformance:
 
         # Average overhead should be <1ms
         avg_overhead = sum(durations) / len(durations)
-        assert (
-            avg_overhead < 1.0
-        ), f"Average overhead {avg_overhead:.3f}ms exceeds 1ms target"
+        assert avg_overhead < 1.0, (
+            f"Average overhead {avg_overhead:.3f}ms exceeds 1ms target"
+        )
 
         # 95th percentile should also be <1ms
         sorted_durations = sorted(durations)
         p95_index = int(0.95 * len(sorted_durations))
         p95_overhead = sorted_durations[p95_index]
-        assert (
-            p95_overhead < 1.0
-        ), f"P95 overhead {p95_overhead:.3f}ms exceeds 1ms target"
+        assert p95_overhead < 1.0, (
+            f"P95 overhead {p95_overhead:.3f}ms exceeds 1ms target"
+        )
 
     @pytest.mark.asyncio
     async def test_non_blocking_queue_put(self):
@@ -180,7 +180,7 @@ class TestMetricsCollectorPerformance:
         duration = time.perf_counter() - start
 
         # Should be nearly instantaneous (<0.1ms)
-        assert duration < 0.0001, f"Non-blocking put took {duration*1000:.3f}ms"
+        assert duration < 0.0001, f"Non-blocking put took {duration * 1000:.3f}ms"
 
 
 class TestMetricsCollectorFailSafe:
@@ -220,7 +220,8 @@ class TestMetricsCollectorFailSafe:
         # Attempt to record with invalid data (should handle gracefully)
         try:
             await collector.record_metric(
-                metric_name="test.error", value=float("inf")  # Invalid value
+                metric_name="test.error",
+                value=float("inf"),  # Invalid value
             )
             # Even if it succeeds, that's fine (fail-safe)
             success = True

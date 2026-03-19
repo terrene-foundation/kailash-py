@@ -135,13 +135,13 @@ async def test_safe_tools_auto_approved_e2e():
 
         for tool_name in safe_tools:
             danger_level = get_tool_danger_level(tool_name)
-            assert (
-                danger_level == DangerLevel.SAFE
-            ), f"{tool_name} should be SAFE level, got {danger_level}"
+            assert danger_level == DangerLevel.SAFE, (
+                f"{tool_name} should be SAFE level, got {danger_level}"
+            )
             assert is_tool_safe(tool_name), f"{tool_name} should be classified as safe"
-            assert not requires_approval(
-                tool_name, DangerLevel.MEDIUM
-            ), f"{tool_name} should not require approval"
+            assert not requires_approval(tool_name, DangerLevel.MEDIUM), (
+                f"{tool_name} should not require approval"
+            )
 
         print(f"✓ Verified {len(safe_tools)} tools classified as SAFE")
 
@@ -154,14 +154,14 @@ async def test_safe_tools_auto_approved_e2e():
             max_attempts=3,
         )
 
-        assert exists_result.get(
-            "success"
-        ), f"file_exists should succeed: {exists_result}"
+        assert exists_result.get("success"), (
+            f"file_exists should succeed: {exists_result}"
+        )
         # Parse JSON content to access nested exists field
         exists_content_data = json.loads(exists_result.get("content", "{}"))
-        assert (
-            exists_content_data.get("exists") is True
-        ), f"File should exist. Content: {exists_content_data}"
+        assert exists_content_data.get("exists") is True, (
+            f"File should exist. Content: {exists_content_data}"
+        )
         print("✓ file_exists executed (SAFE - auto-approved)")
 
         # Test 2: read_file (SAFE - auto-approved)
@@ -177,9 +177,9 @@ async def test_safe_tools_auto_approved_e2e():
         # Parse JSON content to access nested content field
         read_content_data = json.loads(read_result.get("content", "{}"))
         file_content = read_content_data.get("content", "")
-        assert (
-            "Safe tool testing" in file_content
-        ), f"Should read correct content: {file_content[:100]}"
+        assert "Safe tool testing" in file_content, (
+            f"Should read correct content: {file_content[:100]}"
+        )
         print("✓ read_file executed (SAFE - auto-approved)")
 
         # Test 3: list_directory (SAFE - auto-approved)
@@ -249,22 +249,22 @@ async def test_medium_high_tools_require_approval_e2e():
 
         for tool_name in medium_tools:
             danger_level = get_tool_danger_level(tool_name)
-            assert (
-                danger_level == DangerLevel.MEDIUM
-            ), f"{tool_name} should be MEDIUM level, got {danger_level}"
-            assert requires_approval(
-                tool_name, DangerLevel.MEDIUM
-            ), f"{tool_name} should require approval at MEDIUM threshold"
+            assert danger_level == DangerLevel.MEDIUM, (
+                f"{tool_name} should be MEDIUM level, got {danger_level}"
+            )
+            assert requires_approval(tool_name, DangerLevel.MEDIUM), (
+                f"{tool_name} should require approval at MEDIUM threshold"
+            )
             print(f"  - {tool_name}: MEDIUM level ✓")
 
         for tool_name in high_tools:
             danger_level = get_tool_danger_level(tool_name)
-            assert (
-                danger_level == DangerLevel.HIGH
-            ), f"{tool_name} should be HIGH level, got {danger_level}"
-            assert requires_approval(
-                tool_name, DangerLevel.HIGH
-            ), f"{tool_name} should require approval at HIGH threshold"
+            assert danger_level == DangerLevel.HIGH, (
+                f"{tool_name} should be HIGH level, got {danger_level}"
+            )
+            assert requires_approval(tool_name, DangerLevel.HIGH), (
+                f"{tool_name} should require approval at HIGH threshold"
+            )
             print(f"  - {tool_name}: HIGH level ✓")
 
         # Test 1: write_file (MEDIUM - requires approval)
@@ -426,9 +426,9 @@ async def test_permission_policies_e2e():
         unknown_safe = is_tool_safe("unknown_tool")
         assert unknown_safe is False, "Unknown tools should not be classified as safe"
         unknown_approval = requires_approval("unknown_tool")
-        assert (
-            unknown_approval is True
-        ), "Unknown tools should require approval by default"
+        assert unknown_approval is True, (
+            "Unknown tools should require approval by default"
+        )
 
         print("  - Unknown tools default to unsafe ✓")
 

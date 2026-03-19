@@ -535,7 +535,7 @@ class BulkDeleteNode(SmartNodeConnectionMixin, AsyncNode):
 
                 archive_insert_query = f"""
                 INSERT INTO {archive_table} ({column_names})
-                VALUES {', '.join(value_rows)}
+                VALUES {", ".join(value_rows)}
                 """
 
                 archive_insert_node = AsyncSQLDatabaseNode(

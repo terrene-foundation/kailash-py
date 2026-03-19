@@ -139,9 +139,9 @@ class TestNonceUniqueness:
         plaintext = b"identical content"
         c1 = encrypt_record(plaintext, key)
         c2 = encrypt_record(plaintext, key)
-        assert (
-            c1 != c2
-        ), "Two encryptions of the same plaintext must differ (nonce uniqueness)"
+        assert c1 != c2, (
+            "Two encryptions of the same plaintext must differ (nonce uniqueness)"
+        )
 
     def test_nonces_differ(self) -> None:
         key = derive_encryption_key(os.urandom(32))

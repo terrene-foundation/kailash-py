@@ -131,9 +131,9 @@ async def test_complete_multi_developer_workflow():
 
     # Verify no duplicate migrations
     bob_migrations = await _get_detailed_migration_history(bob_db)
-    assert len(bob_migrations) == len(
-        alice_migrations
-    ), f"Bob triggered duplicate migrations! Alice: {len(alice_migrations)}, Bob: {len(bob_migrations)}"
+    assert len(bob_migrations) == len(alice_migrations), (
+        f"Bob triggered duplicate migrations! Alice: {len(alice_migrations)}, Bob: {len(bob_migrations)}"
+    )
     print("✅ Bob: No duplicate migrations created")
 
     # Bob can see Alice's data
@@ -180,9 +180,9 @@ async def test_complete_multi_developer_workflow():
 
     # Verify no additional migrations
     charlie_migrations = await _get_detailed_migration_history(charlie_db)
-    assert len(charlie_migrations) == len(
-        alice_migrations
-    ), f"Charlie's subset models triggered migrations! Expected: {len(alice_migrations)}, Got: {len(charlie_migrations)}"
+    assert len(charlie_migrations) == len(alice_migrations), (
+        f"Charlie's subset models triggered migrations! Expected: {len(alice_migrations)}, Got: {len(charlie_migrations)}"
+    )
     print("✅ Charlie: No migrations needed for subset models")
 
     # Charlie can work with existing data
@@ -309,9 +309,9 @@ async def test_concurrent_application_startup():
     print(f"Total migrations applied: {migration_count}")
 
     # Should be exactly 1 migration (not 3)
-    assert (
-        migration_count <= 1
-    ), f"Race condition detected! {migration_count} migrations instead of 1"
+    assert migration_count <= 1, (
+        f"Race condition detected! {migration_count} migrations instead of 1"
+    )
 
     # All apps should be able to work with the database
     for i, app in enumerate(apps):

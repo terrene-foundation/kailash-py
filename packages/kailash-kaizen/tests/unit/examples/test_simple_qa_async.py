@@ -35,9 +35,9 @@ class TestSimpleQAAsyncMigration:
         agent = SimpleQAAgent(config=config)
 
         # Should use async strategy after migration
-        assert isinstance(
-            agent.strategy, AsyncSingleShotStrategy
-        ), f"Expected AsyncSingleShotStrategy, got {type(agent.strategy).__name__}"
+        assert isinstance(agent.strategy, AsyncSingleShotStrategy), (
+            f"Expected AsyncSingleShotStrategy, got {type(agent.strategy).__name__}"
+        )
 
     def test_simple_qa_no_explicit_strategy_override(self):
         """

@@ -93,7 +93,7 @@ async def test_rate_limiting_prevents_excessive_invocations(production_limiter):
         result = await limiter.check_rate_limit(
             agent_id="agent-001", user_id="user-123"
         )
-        assert result.allowed is True, f"Request {i+1} should be allowed"
+        assert result.allowed is True, f"Request {i + 1} should be allowed"
         await limiter.record_invocation(agent_id="agent-001", user_id="user-123")
 
     print(f"\nStep 1: Made 10 invocations (at base limit)")
@@ -103,7 +103,7 @@ async def test_rate_limiting_prevents_excessive_invocations(production_limiter):
         result = await limiter.check_rate_limit(
             agent_id="agent-001", user_id="user-123"
         )
-        assert result.allowed is True, f"Burst request {i+1} should be allowed"
+        assert result.allowed is True, f"Burst request {i + 1} should be allowed"
         await limiter.record_invocation(agent_id="agent-001", user_id="user-123")
 
     # Now at burst limit (15), next should block
@@ -170,7 +170,7 @@ async def test_per_user_rate_limiting_isolates_users(production_limiter):
     # Step 1: User A makes 10 invocations
     for i in range(10):
         result = await limiter.check_rate_limit(agent_id="agent-001", user_id="user-a")
-        assert result.allowed is True, f"User A request {i+1} should be allowed"
+        assert result.allowed is True, f"User A request {i + 1} should be allowed"
         await limiter.record_invocation(agent_id="agent-001", user_id="user-a")
 
     print(f"\nStep 1: User A made 10 invocations")
@@ -178,7 +178,7 @@ async def test_per_user_rate_limiting_isolates_users(production_limiter):
     # Step 2: User B makes 10 invocations (separate quota)
     for i in range(10):
         result = await limiter.check_rate_limit(agent_id="agent-001", user_id="user-b")
-        assert result.allowed is True, f"User B request {i+1} should be allowed"
+        assert result.allowed is True, f"User B request {i + 1} should be allowed"
         await limiter.record_invocation(agent_id="agent-001", user_id="user-b")
 
     print(f"Step 2: User B made 10 invocations (separate quota)")
@@ -264,14 +264,14 @@ async def test_rate_limit_performance_under_load(production_limiter):
 
     print(f"\nPerformance Results (1000 rate limit checks):")
     print(f"  Total duration: {total_duration:.2f}s")
-    print(f"  Average latency: {avg*1000:.2f}ms")
-    print(f"  P50 latency: {p50*1000:.2f}ms")
-    print(f"  P95 latency: {p95*1000:.2f}ms")
-    print(f"  P99 latency: {p99*1000:.2f}ms")
+    print(f"  Average latency: {avg * 1000:.2f}ms")
+    print(f"  P50 latency: {p50 * 1000:.2f}ms")
+    print(f"  P95 latency: {p95 * 1000:.2f}ms")
+    print(f"  P99 latency: {p99 * 1000:.2f}ms")
 
     # Assertions (E2E allows more variance than integration tests)
-    assert p95 < 0.05, f"P95 latency {p95*1000:.2f}ms exceeds 50ms target"
-    assert p99 < 0.1, f"P99 latency {p99*1000:.2f}ms exceeds 100ms target"
+    assert p95 < 0.05, f"P95 latency {p95 * 1000:.2f}ms exceeds 50ms target"
+    assert p99 < 0.1, f"P99 latency {p99 * 1000:.2f}ms exceeds 100ms target"
     assert len(all_latencies) == 1000, "All 1000 checks should complete"
 
     # Verify metrics
@@ -338,7 +338,7 @@ async def test_team_level_rate_limiting(production_limiter):
         result = await limiter.check_rate_limit(
             agent_id="agent-001", user_id="user-b1", team_id="team-beta"
         )
-        assert result.allowed is True, f"Team Beta request {i+1} should be allowed"
+        assert result.allowed is True, f"Team Beta request {i + 1} should be allowed"
         await limiter.record_invocation(
             agent_id="agent-001", user_id="user-b1", team_id="team-beta"
         )
@@ -414,7 +414,7 @@ async def test_org_level_rate_limiting(production_limiter):
             team_id="team-alpha",
             org_id="org-beta",
         )
-        assert result.allowed is True, f"Org BETA request {i+1} should be allowed"
+        assert result.allowed is True, f"Org BETA request {i + 1} should be allowed"
         await limiter.record_invocation(
             agent_id="agent-001",
             user_id=f"user-{i}",

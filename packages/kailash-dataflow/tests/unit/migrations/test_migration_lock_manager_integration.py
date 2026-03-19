@@ -90,7 +90,6 @@ class TestConnectionManagerAdapter:
         with patch.object(
             adapter, "execute_query", new=AsyncMock(return_value=[{"success": True}])
         ) as mock_execute:
-
             result = await adapter.execute_query("SELECT 1", None)
 
             mock_execute.assert_called_once_with("SELECT 1", None)
@@ -262,7 +261,6 @@ class TestMigrationLockManagerIntegration:
         with patch.object(
             adapter, "execute_query", new=AsyncMock(return_value=[{"success": True}])
         ) as mock_execute:
-
             lock_manager = MigrationLockManager(adapter, lock_timeout=30)
 
             result = await lock_manager.acquire_migration_lock("test_schema")
@@ -291,7 +289,6 @@ class TestMigrationLockManagerIntegration:
         with patch.object(
             adapter, "execute_query", new=AsyncMock(side_effect=side_effects)
         ):
-
             lock_manager = MigrationLockManager(adapter, lock_timeout=30)
 
             result = await lock_manager.acquire_migration_lock("test_schema")
@@ -337,7 +334,6 @@ class TestMigrationLockManagerIntegration:
         with patch.object(
             adapter, "execute_query", new=AsyncMock(side_effect=side_effects)
         ):
-
             lock_manager = MigrationLockManager(adapter, lock_timeout=30)
 
             status = await lock_manager.check_lock_status("test_schema")

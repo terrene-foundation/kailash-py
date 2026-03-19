@@ -71,12 +71,12 @@ class TestPythonVersionCompatibility:
 
         # If requires-python is >=3.11, classifiers should include 3.11, 3.12, 3.13, etc.
         if ">=3.11" in requires_python:
-            assert (
-                11 in classifier_versions
-            ), "Classifier for Python 3.11 missing with requires-python >=3.11"
-            assert (
-                13 in classifier_versions or len(classifier_versions) >= 2
-            ), "Should include multiple Python version classifiers"
+            assert 11 in classifier_versions, (
+                "Classifier for Python 3.11 missing with requires-python >=3.11"
+            )
+            assert 13 in classifier_versions or len(classifier_versions) >= 2, (
+                "Should include multiple Python version classifiers"
+            )
 
     def test_minimum_python_version(self, pyproject_data):
         """Test that minimum Python version is 3.11+."""
@@ -100,9 +100,9 @@ class TestPythonVersionCompatibility:
         requires_python = pyproject_data["project"]["requires-python"]
 
         # Should not have upper bound like <3.14
-        assert (
-            "<" not in requires_python
-        ), f"Should not have maximum Python version constraint: {requires_python}"
+        assert "<" not in requires_python, (
+            f"Should not have maximum Python version constraint: {requires_python}"
+        )
 
 
 class TestPlatformCompatibility:
@@ -133,9 +133,9 @@ class TestPlatformCompatibility:
         is_os_independent = "OS Independent" in os_classifier_text
 
         # Either OS independent or supports multiple platforms
-        assert (
-            is_os_independent or len(os_classifiers) >= 3
-        ), "Package should be OS Independent or support multiple platforms"
+        assert is_os_independent or len(os_classifiers) >= 3, (
+            "Package should be OS Independent or support multiple platforms"
+        )
 
     def test_current_platform_supported(self, pyproject_data):
         """Test that current platform is supported."""
@@ -246,9 +246,9 @@ class TestArchitectureCompatibility:
 
         for ext in compiled_extensions:
             compiled_files = list(src_dir.glob(f"**/*{ext}"))
-            assert (
-                len(compiled_files) == 0
-            ), f"Found compiled files with extension {ext}: {compiled_files}"
+            assert len(compiled_files) == 0, (
+                f"Found compiled files with extension {ext}: {compiled_files}"
+            )
 
 
 class TestWheelCompatibility:
@@ -277,9 +277,9 @@ class TestWheelCompatibility:
 
         # Check if main module is pure Python
         kaizen_file = inspect.getfile(kaizen)
-        assert kaizen_file.endswith(
-            ".py"
-        ), f"Main module should be .py file, got {kaizen_file}"
+        assert kaizen_file.endswith(".py"), (
+            f"Main module should be .py file, got {kaizen_file}"
+        )
 
     def test_no_binary_distribution_requirements(self, package_root):
         """Test that package doesn't require binary distribution."""
@@ -451,6 +451,6 @@ class TestDockerCompatibility:
                                 if '"""' not in line and "'''" not in line:
                                     real_matches.append(match)
 
-                    assert (
-                        len(real_matches) == 0
-                    ), f"File {py_file} contains hardcoded paths: {real_matches}"
+                    assert len(real_matches) == 0, (
+                        f"File {py_file} contains hardcoded paths: {real_matches}"
+                    )

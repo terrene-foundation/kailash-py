@@ -89,9 +89,9 @@ class TestContextManagerInstanceReuse:
 
         async with tx:
             # The transaction must have a _conn_cm attribute after entering
-            assert hasattr(
-                tx, "_conn_cm"
-            ), "_conn_cm attribute must be set in __aenter__"
+            assert hasattr(tx, "_conn_cm"), (
+                "_conn_cm attribute must be set in __aenter__"
+            )
             assert tx._conn_cm is not None, "_conn_cm must not be None after __aenter__"
 
     async def test_connection_not_leaked_on_normal_exit(self, adapter_with_table):
@@ -163,9 +163,9 @@ class TestContextManagerInstanceReuse:
             async with tx:
                 # One call should have happened during __aenter__
                 calls_at_enter = len(counter.calls)
-                assert (
-                    calls_at_enter == 1
-                ), f"Expected exactly 1 call to _get_connection in __aenter__, got {calls_at_enter}"
+                assert calls_at_enter == 1, (
+                    f"Expected exactly 1 call to _get_connection in __aenter__, got {calls_at_enter}"
+                )
 
             # After __aexit__, no additional call to _get_connection should have happened
             calls_at_exit = len(counter.calls)
@@ -187,24 +187,24 @@ class TestDelFallback:
         """SQLiteEnterpriseTransaction must have class-level defaults for safety."""
         # These must exist as class attributes so __del__ can reference them
         # even if __init__ raised an exception
-        assert hasattr(
-            SQLiteEnterpriseTransaction, "connection"
-        ), "Class-level 'connection' default missing"
-        assert hasattr(
-            SQLiteEnterpriseTransaction, "_conn_cm"
-        ), "Class-level '_conn_cm' default missing"
-        assert hasattr(
-            SQLiteEnterpriseTransaction, "_committed"
-        ), "Class-level '_committed' default missing"
-        assert hasattr(
-            SQLiteEnterpriseTransaction, "_rolled_back"
-        ), "Class-level '_rolled_back' default missing"
-        assert hasattr(
-            SQLiteEnterpriseTransaction, "transaction_started"
-        ), "Class-level 'transaction_started' default missing"
-        assert hasattr(
-            SQLiteEnterpriseTransaction, "_source_traceback"
-        ), "Class-level '_source_traceback' default missing"
+        assert hasattr(SQLiteEnterpriseTransaction, "connection"), (
+            "Class-level 'connection' default missing"
+        )
+        assert hasattr(SQLiteEnterpriseTransaction, "_conn_cm"), (
+            "Class-level '_conn_cm' default missing"
+        )
+        assert hasattr(SQLiteEnterpriseTransaction, "_committed"), (
+            "Class-level '_committed' default missing"
+        )
+        assert hasattr(SQLiteEnterpriseTransaction, "_rolled_back"), (
+            "Class-level '_rolled_back' default missing"
+        )
+        assert hasattr(SQLiteEnterpriseTransaction, "transaction_started"), (
+            "Class-level 'transaction_started' default missing"
+        )
+        assert hasattr(SQLiteEnterpriseTransaction, "_source_traceback"), (
+            "Class-level '_source_traceback' default missing"
+        )
 
     def test_class_level_default_values(self):
         """Class-level defaults must have correct initial values."""
@@ -260,9 +260,9 @@ class TestDelFallback:
             resource_warnings = [
                 x for x in w if issubclass(x.category, ResourceWarning)
             ]
-            assert (
-                len(resource_warnings) == 1
-            ), f"Expected exactly 1 ResourceWarning, got {len(resource_warnings)}"
+            assert len(resource_warnings) == 1, (
+                f"Expected exactly 1 ResourceWarning, got {len(resource_warnings)}"
+            )
             assert "SQLiteEnterpriseTransaction" in str(resource_warnings[0].message)
             assert "commit/rollback" in str(resource_warnings[0].message).lower()
 
@@ -289,9 +289,9 @@ class TestDelFallback:
             resource_warnings = [
                 x for x in w if issubclass(x.category, ResourceWarning)
             ]
-            assert (
-                len(resource_warnings) == 0
-            ), f"Expected no ResourceWarning after commit, got {len(resource_warnings)}"
+            assert len(resource_warnings) == 0, (
+                f"Expected no ResourceWarning after commit, got {len(resource_warnings)}"
+            )
 
     async def test_del_silent_after_rollback(self, adapter_with_table):
         """__del__ must NOT warn after a rollback."""
@@ -308,9 +308,9 @@ class TestDelFallback:
             resource_warnings = [
                 x for x in w if issubclass(x.category, ResourceWarning)
             ]
-            assert (
-                len(resource_warnings) == 0
-            ), f"Expected no ResourceWarning after rollback, got {len(resource_warnings)}"
+            assert len(resource_warnings) == 0, (
+                f"Expected no ResourceWarning after rollback, got {len(resource_warnings)}"
+            )
 
     async def test_del_silent_when_no_connection(self, adapter_with_table):
         """__del__ must NOT warn if connection was never acquired."""
@@ -350,9 +350,9 @@ class TestDelFallback:
 
         mock_adapter = MagicMock()
         tx = SQLiteEnterpriseTransaction(mock_adapter, "DEFERRED")
-        assert (
-            tx._source_traceback is not None
-        ), "_source_traceback must be set in __init__ when __debug__ is True"
+        assert tx._source_traceback is not None, (
+            "_source_traceback must be set in __init__ when __debug__ is True"
+        )
         assert isinstance(tx._source_traceback, list)
         assert len(tx._source_traceback) > 0
 
@@ -372,9 +372,9 @@ class TestDelFallback:
             warning_text = str(resource_warnings[0].message)
             # If __debug__ is True, traceback should be included
             if __debug__:
-                assert (
-                    "test_sqlite_enterprise_transaction" in warning_text
-                ), "Warning should include source traceback pointing to test file"
+                assert "test_sqlite_enterprise_transaction" in warning_text, (
+                    "Warning should include source traceback pointing to test file"
+                )
 
         # Clean up leaked connection
         try:

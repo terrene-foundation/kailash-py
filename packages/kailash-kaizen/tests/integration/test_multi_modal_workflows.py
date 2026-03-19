@@ -172,7 +172,7 @@ class TestDocumentUnderstandingWorkflow:
         for i in range(3):
             img = Image.new("RGB", (400, 300), color="white")
             draw = ImageDraw.Draw(img)
-            draw.text((50, 50), f"Document {i+1}", fill="black")
+            draw.text((50, 50), f"Document {i + 1}", fill="black")
             img_path = tmp_path / f"doc_{i}.png"
             img.save(img_path)
             images.append(str(img_path))

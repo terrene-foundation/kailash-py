@@ -44,9 +44,9 @@ class TestAgentSignatureIntegrationCompletion:
         )
 
         # CRITICAL: Signature must be properly set, not None
-        assert (
-            agent.signature is not None
-        ), "Agent signature should not be None when passed as parameter"
+        assert agent.signature is not None, (
+            "Agent signature should not be None when passed as parameter"
+        )
 
         # Must be converted to proper Signature object
         if isinstance(agent.signature, str):
@@ -54,18 +54,18 @@ class TestAgentSignatureIntegrationCompletion:
             assert agent.signature == "question -> answer"
         else:
             # If converted to Signature object
-            assert hasattr(
-                agent.signature, "inputs"
-            ), "Signature should have inputs attribute"
-            assert hasattr(
-                agent.signature, "outputs"
-            ), "Signature should have outputs attribute"
-            assert (
-                "question" in agent.signature.inputs
-            ), "Signature should contain question input"
-            assert (
-                "answer" in agent.signature.outputs
-            ), "Signature should contain answer output"
+            assert hasattr(agent.signature, "inputs"), (
+                "Signature should have inputs attribute"
+            )
+            assert hasattr(agent.signature, "outputs"), (
+                "Signature should have outputs attribute"
+            )
+            assert "question" in agent.signature.inputs, (
+                "Signature should contain question input"
+            )
+            assert "answer" in agent.signature.outputs, (
+                "Signature should contain answer output"
+            )
 
     def test_agent_signature_property_set_from_signature_object(self):
         """Agent signature must be properly set from Signature object parameter."""
@@ -78,26 +78,26 @@ class TestAgentSignatureIntegrationCompletion:
         agent = kaizen.create_agent("qa", {"model": "gpt-4"}, signature=signature)
 
         # CRITICAL: Signature must be properly set, not None
-        assert (
-            agent.signature is not None
-        ), "Agent signature should not be None when passed as object"
-        assert (
-            agent.signature == signature
-        ), "Agent signature should be the same object passed"
+        assert agent.signature is not None, (
+            "Agent signature should not be None when passed as object"
+        )
+        assert agent.signature == signature, (
+            "Agent signature should be the same object passed"
+        )
 
         # Must have proper signature attributes
-        assert hasattr(
-            agent.signature, "inputs"
-        ), "Signature should have inputs attribute"
-        assert hasattr(
-            agent.signature, "outputs"
-        ), "Signature should have outputs attribute"
-        assert (
-            "question" in agent.signature.inputs
-        ), "Signature should contain question input"
-        assert (
-            "answer" in agent.signature.outputs
-        ), "Signature should contain answer output"
+        assert hasattr(agent.signature, "inputs"), (
+            "Signature should have inputs attribute"
+        )
+        assert hasattr(agent.signature, "outputs"), (
+            "Signature should have outputs attribute"
+        )
+        assert "question" in agent.signature.inputs, (
+            "Signature should contain question input"
+        )
+        assert "answer" in agent.signature.outputs, (
+            "Signature should contain answer output"
+        )
 
     def test_agent_has_signature_property_works(self):
         """Agent must have proper signature detection properties."""
@@ -114,20 +114,20 @@ class TestAgentSignatureIntegrationCompletion:
         # Must properly detect signature presence
         # These properties should exist and work correctly
         if hasattr(agent_with_sig, "has_signature"):
-            assert (
-                agent_with_sig.has_signature == True
-            ), "Agent with signature should report has_signature=True"
-            assert (
-                agent_without_sig.has_signature == False
-            ), "Agent without signature should report has_signature=False"
+            assert agent_with_sig.has_signature == True, (
+                "Agent with signature should report has_signature=True"
+            )
+            assert agent_without_sig.has_signature == False, (
+                "Agent without signature should report has_signature=False"
+            )
 
         if hasattr(agent_with_sig, "can_execute_structured"):
-            assert (
-                agent_with_sig.can_execute_structured == True
-            ), "Agent with signature should support structured execution"
-            assert (
-                agent_without_sig.can_execute_structured == False
-            ), "Agent without signature should not support structured execution"
+            assert agent_with_sig.can_execute_structured == True, (
+                "Agent with signature should support structured execution"
+            )
+            assert agent_without_sig.can_execute_structured == False, (
+                "Agent without signature should not support structured execution"
+            )
 
     def test_signature_integration_preserves_signature_through_compilation(self):
         """Signature must be preserved through workflow compilation process."""
@@ -144,22 +144,22 @@ class TestAgentSignatureIntegrationCompletion:
         agent.compile_workflow()
 
         # CRITICAL: Signature must still be present after compilation
-        assert (
-            agent.signature is not None
-        ), "Signature should not be None after workflow compilation"
+        assert agent.signature is not None, (
+            "Signature should not be None after workflow compilation"
+        )
 
         # Must be same signature content
         if isinstance(agent.signature, str):
-            assert (
-                agent.signature == "question -> answer"
-            ), "String signature should be preserved"
+            assert agent.signature == "question -> answer", (
+                "String signature should be preserved"
+            )
         else:
-            assert (
-                "question" in agent.signature.inputs
-            ), "Signature inputs should be preserved"
-            assert (
-                "answer" in agent.signature.outputs
-            ), "Signature outputs should be preserved"
+            assert "question" in agent.signature.inputs, (
+                "Signature inputs should be preserved"
+            )
+            assert "answer" in agent.signature.outputs, (
+                "Signature outputs should be preserved"
+            )
 
 
 class TestAgentStructuredExecutionCompletion:
@@ -192,9 +192,9 @@ class TestAgentStructuredExecutionCompletion:
 
             # CRITICAL: Must return structured output matching signature
             assert isinstance(result, dict), "Agent execution should return dictionary"
-            assert (
-                "answer" in result
-            ), "Result should contain 'answer' field per signature"
+            assert "answer" in result, (
+                "Result should contain 'answer' field per signature"
+            )
             assert isinstance(result["answer"], str), "Answer should be a string"
             assert len(result["answer"]) > 0, "Answer should not be empty"
 
@@ -244,9 +244,9 @@ class TestAgentStructuredExecutionCompletion:
             assert isinstance(result, dict), "Result should be dictionary"
             assert "analysis" in result, "Result should contain analysis field"
             assert "confidence" in result, "Result should contain confidence field"
-            assert (
-                "recommendation" in result
-            ), "Result should contain recommendation field"
+            assert "recommendation" in result, (
+                "Result should contain recommendation field"
+            )
 
             # All outputs should be meaningful (not empty/None)
             for field in ["analysis", "confidence", "recommendation"]:
@@ -310,9 +310,9 @@ class TestPatternExecutionLogicCompletion:
             # Each step should contain reasoning content
             assert len(str(result["step1"]).strip()) > 0, "Step1 should not be empty"
             assert len(str(result["step2"]).strip()) > 0, "Step2 should not be empty"
-            assert (
-                len(str(result["final_answer"]).strip()) > 0
-            ), "Final answer should not be empty"
+            assert len(str(result["final_answer"]).strip()) > 0, (
+                "Final answer should not be empty"
+            )
 
     def test_react_execution_logic_complete(self):
         """ReAct execution must implement actual reasoning + acting pattern."""
@@ -355,9 +355,9 @@ Final_Answer: Python is a versatile programming language used for web developmen
 
             # Each component should contain reasoning content
             for field in ["thought", "action", "observation", "final_answer"]:
-                assert (
-                    len(str(result[field]).strip()) > 0
-                ), f"{field} should not be empty"
+                assert len(str(result[field]).strip()) > 0, (
+                    f"{field} should not be empty"
+                )
 
     def test_pattern_execution_signature_requirement(self):
         """Pattern execution must require and validate signature."""
@@ -422,12 +422,12 @@ class TestEnterpriseWorkflowExecutionCompletion:
         )
 
         # Must have execute method
-        assert hasattr(
-            workflow, "execute"
-        ), "Enterprise workflow should have execute method"
-        assert callable(
-            getattr(workflow, "execute")
-        ), "Execute method should be callable"
+        assert hasattr(workflow, "execute"), (
+            "Enterprise workflow should have execute method"
+        )
+        assert callable(getattr(workflow, "execute")), (
+            "Execute method should be callable"
+        )
 
     def test_enterprise_workflow_execute_returns_structured_result(self):
         """Enterprise workflow execute must return structured enterprise result."""
@@ -468,9 +468,9 @@ class TestEnterpriseWorkflowExecutionCompletion:
             )
 
             # Must return structured enterprise result
-            assert isinstance(
-                result, dict
-            ), "Enterprise workflow result should be dictionary"
+            assert isinstance(result, dict), (
+                "Enterprise workflow result should be dictionary"
+            )
             assert "approval_status" in result, "Result should contain approval_status"
             assert "audit_trail" in result, "Result should contain audit_trail"
             assert len(result["audit_trail"]) > 0, "Audit trail should not be empty"
@@ -506,12 +506,12 @@ class TestEnterpriseWorkflowExecutionCompletion:
             workflow = kaizen.create_enterprise_workflow(template_type, config)
 
             # Each template type must have execute method
-            assert hasattr(
-                workflow, "execute"
-            ), f"{template_type} workflow should have execute method"
-            assert callable(
-                getattr(workflow, "execute")
-            ), f"{template_type} execute method should be callable"
+            assert hasattr(workflow, "execute"), (
+                f"{template_type} workflow should have execute method"
+            )
+            assert callable(getattr(workflow, "execute")), (
+                f"{template_type} execute method should be callable"
+            )
 
     def test_enterprise_workflow_execution_with_audit_trail(self):
         """Enterprise workflow execution must generate audit trail."""
@@ -565,9 +565,9 @@ class TestEnterpriseWorkflowExecutionCompletion:
             for entry in audit_trail:
                 assert "action" in entry, "Audit entry should have action"
                 assert "timestamp" in entry, "Audit entry should have timestamp"
-                assert isinstance(
-                    entry["timestamp"], (int, float)
-                ), "Timestamp should be numeric"
+                assert isinstance(entry["timestamp"], (int, float)), (
+                    "Timestamp should be numeric"
+                )
 
 
 class TestMultiAgentCoordinationExecutionCompletion:
@@ -600,12 +600,12 @@ class TestMultiAgentCoordinationExecutionCompletion:
         )
 
         # Must have execute method
-        assert hasattr(
-            debate_workflow, "execute"
-        ), "Debate workflow should have execute method"
-        assert callable(
-            getattr(debate_workflow, "execute")
-        ), "Execute method should be callable"
+        assert hasattr(debate_workflow, "execute"), (
+            "Debate workflow should have execute method"
+        )
+        assert callable(getattr(debate_workflow, "execute")), (
+            "Execute method should be callable"
+        )
 
     def test_multi_agent_debate_execution_returns_coordination_result(self):
         """Multi-agent debate execution must return structured coordination result."""
@@ -655,22 +655,22 @@ class TestMultiAgentCoordinationExecutionCompletion:
             assert isinstance(result, dict), "Debate result should be dictionary"
             assert "final_decision" in result, "Result should contain final_decision"
             assert "debate_rounds" in result, "Result should contain debate_rounds"
-            assert (
-                len(result["debate_rounds"]) == 2
-            ), "Should have 2 debate rounds as specified"
+            assert len(result["debate_rounds"]) == 2, (
+                "Should have 2 debate rounds as specified"
+            )
 
             # Each round should contain agent contributions
             for i, round_data in enumerate(result["debate_rounds"]):
-                assert "round" in round_data, f"Round {i+1} should have round number"
-                assert (
-                    "proponent_argument" in round_data
-                ), f"Round {i+1} should have proponent argument"
-                assert (
-                    "opponent_argument" in round_data
-                ), f"Round {i+1} should have opponent argument"
-                assert (
-                    "moderator_synthesis" in round_data
-                ), f"Round {i+1} should have moderator synthesis"
+                assert "round" in round_data, f"Round {i + 1} should have round number"
+                assert "proponent_argument" in round_data, (
+                    f"Round {i + 1} should have proponent argument"
+                )
+                assert "opponent_argument" in round_data, (
+                    f"Round {i + 1} should have opponent argument"
+                )
+                assert "moderator_synthesis" in round_data, (
+                    f"Round {i + 1} should have moderator synthesis"
+                )
 
     def test_multi_agent_consensus_workflow_execution_complete(self):
         """Multi-agent consensus workflows must execute with coordination."""
@@ -696,9 +696,9 @@ class TestMultiAgentCoordinationExecutionCompletion:
         )
 
         # Must have execute method
-        assert hasattr(
-            consensus_workflow, "execute"
-        ), "Consensus workflow should have execute method"
+        assert hasattr(consensus_workflow, "execute"), (
+            "Consensus workflow should have execute method"
+        )
 
         # Mock consensus execution
         with patch.object(consensus_workflow, "execute") as mock_execute:
@@ -718,9 +718,9 @@ class TestMultiAgentCoordinationExecutionCompletion:
 
             # Must return structured consensus result
             assert isinstance(result, dict), "Consensus result should be dictionary"
-            assert (
-                "consensus_achieved" in result
-            ), "Result should indicate if consensus achieved"
+            assert "consensus_achieved" in result, (
+                "Result should indicate if consensus achieved"
+            )
             assert "final_consensus" in result, "Result should contain final consensus"
             assert "consensus_score" in result, "Result should contain consensus score"
             assert (
@@ -751,9 +751,9 @@ class TestMultiAgentCoordinationExecutionCompletion:
         )
 
         # Must have execute method
-        assert hasattr(
-            supervisor_workflow, "execute"
-        ), "Supervisor workflow should have execute method"
+        assert hasattr(supervisor_workflow, "execute"), (
+            "Supervisor workflow should have execute method"
+        )
 
         # Mock supervisor-worker execution
         with patch.object(supervisor_workflow, "execute") as mock_execute:
@@ -776,19 +776,19 @@ class TestMultiAgentCoordinationExecutionCompletion:
             result = supervisor_workflow.execute()
 
             # Must return structured supervision result
-            assert isinstance(
-                result, dict
-            ), "Supervisor workflow result should be dictionary"
-            assert (
-                "task_completion_status" in result
-            ), "Result should contain completion status"
-            assert (
-                "supervisor_coordination" in result
-            ), "Result should contain supervisor coordination"
+            assert isinstance(result, dict), (
+                "Supervisor workflow result should be dictionary"
+            )
+            assert "task_completion_status" in result, (
+                "Result should contain completion status"
+            )
+            assert "supervisor_coordination" in result, (
+                "Result should contain supervisor coordination"
+            )
             assert "worker_results" in result, "Result should contain worker results"
-            assert len(result["worker_results"]) == len(
-                workers
-            ), "Should have results from all workers"
+            assert len(result["worker_results"]) == len(workers), (
+                "Should have results from all workers"
+            )
 
 
 class TestCoreFeaturePerformanceRequirements:
@@ -818,9 +818,9 @@ class TestCoreFeaturePerformanceRequirements:
             execution_time = time.time() - start_time
 
             # Performance requirement: <200ms (but mocked, so should be much faster)
-            assert (
-                execution_time < 0.2
-            ), f"Agent execution took {execution_time:.3f}s, should be <200ms"
+            assert execution_time < 0.2, (
+                f"Agent execution took {execution_time:.3f}s, should be <200ms"
+            )
             assert isinstance(result, dict), "Should return structured result"
 
     def test_pattern_execution_performance(self):
@@ -847,9 +847,9 @@ class TestCoreFeaturePerformanceRequirements:
             execution_time = time.time() - start_time
 
             # Performance requirement: <500ms (but mocked, so should be much faster)
-            assert (
-                execution_time < 0.5
-            ), f"Pattern execution took {execution_time:.3f}s, should be <500ms"
+            assert execution_time < 0.5, (
+                f"Pattern execution took {execution_time:.3f}s, should be <500ms"
+            )
             assert isinstance(result, dict), "Should return structured result"
 
     def test_validation_methods_performance(self):
@@ -861,9 +861,9 @@ class TestCoreFeaturePerformanceRequirements:
         signature = kaizen.create_signature("question -> answer")
         signature_time = time.time() - start_time
 
-        assert (
-            signature_time < 0.1
-        ), f"Signature creation took {signature_time:.3f}s, should be <100ms"
+        assert signature_time < 0.1, (
+            f"Signature creation took {signature_time:.3f}s, should be <100ms"
+        )
         assert signature is not None, "Signature should be created"
 
         # Test agent creation performance
@@ -871,9 +871,9 @@ class TestCoreFeaturePerformanceRequirements:
         agent = kaizen.create_agent("test", {"model": "gpt-4"})
         agent_time = time.time() - start_time
 
-        assert (
-            agent_time < 0.1
-        ), f"Agent creation took {agent_time:.3f}s, should be <100ms"
+        assert agent_time < 0.1, (
+            f"Agent creation took {agent_time:.3f}s, should be <100ms"
+        )
         assert agent is not None, "Agent should be created"
 
 

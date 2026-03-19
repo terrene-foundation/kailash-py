@@ -127,7 +127,7 @@ async def test_allows_under_limit_invocations(fake_redis_limiter):
         result = await limiter.check_rate_limit(
             agent_id="agent-001", user_id="user-123"
         )
-        assert result.allowed is True, f"Request {i+1} should be allowed"
+        assert result.allowed is True, f"Request {i + 1} should be allowed"
         assert result.limit_exceeded is None
         assert result.remaining >= 0
         assert result.retry_after_seconds is None
@@ -158,7 +158,7 @@ async def test_blocks_when_minute_limit_exceeded(fake_redis_limiter):
         result = await limiter.check_rate_limit(
             agent_id="agent-001", user_id="user-123"
         )
-        assert result.allowed is True, f"Request {i+1} should be allowed (burst)"
+        assert result.allowed is True, f"Request {i + 1} should be allowed (burst)"
         await limiter.record_invocation(agent_id="agent-001", user_id="user-123")
 
     # 16th invocation should be blocked
@@ -259,9 +259,9 @@ async def test_sliding_window_accuracy_prevents_burst_at_boundary(fake_redis_lim
     # Try invocation at t=55 (only 5 seconds after last request)
     # Sliding window: All 15 requests are still in 60-second window
     result = await limiter.check_rate_limit(agent_id="agent-001", user_id="user-123")
-    assert (
-        result.allowed is False
-    ), "Sliding window should block request at boundary (all 15 still in window)"
+    assert result.allowed is False, (
+        "Sliding window should block request at boundary (all 15 still in window)"
+    )
     assert result.limit_exceeded == "per_minute"
 
 
@@ -311,9 +311,9 @@ async def test_rate_limit_check_result_includes_retry_after_seconds(fake_redis_l
     assert result.allowed is False
     assert result.retry_after_seconds is not None
     # Should be approximately 30 seconds (oldest entry expires in ~30s)
-    assert (
-        28 <= result.retry_after_seconds <= 32
-    ), f"Expected retry_after ~30s, got {result.retry_after_seconds}"
+    assert 28 <= result.retry_after_seconds <= 32, (
+        f"Expected retry_after ~30s, got {result.retry_after_seconds}"
+    )
 
 
 # ============================================================================
@@ -337,9 +337,9 @@ async def test_burst_allows_temporary_spike(fake_redis_limiter):
         result = await limiter.check_rate_limit(
             agent_id="agent-001", user_id="user-123"
         )
-        assert (
-            result.allowed is True
-        ), f"Request {i+1} should be allowed (burst capacity)"
+        assert result.allowed is True, (
+            f"Request {i + 1} should be allowed (burst capacity)"
+        )
         await limiter.record_invocation(agent_id="agent-001", user_id="user-123")
 
     # Verify all 12 allowed
@@ -376,7 +376,7 @@ async def test_burst_disabled_enforces_base_limit(simple_config):
         result = await limiter.check_rate_limit(
             agent_id="agent-001", user_id="user-123"
         )
-        assert result.allowed is True, f"Request {i+1} should be allowed"
+        assert result.allowed is True, f"Request {i + 1} should be allowed"
         await limiter.record_invocation(agent_id="agent-001", user_id="user-123")
 
     # 6th invocation should be blocked (no burst)
@@ -544,7 +544,9 @@ async def test_metrics_tracking_enabled(fake_redis_limiter):
         result = await limiter.check_rate_limit(
             agent_id="agent-001", user_id="user-123"
         )
-        assert result.allowed is True, f"Request {i+1} should be allowed (within burst)"
+        assert result.allowed is True, (
+            f"Request {i + 1} should be allowed (within burst)"
+        )
         await limiter.record_invocation(agent_id="agent-001", user_id="user-123")
 
     # Make 5 more requests (will exceed burst limit)
@@ -552,9 +554,9 @@ async def test_metrics_tracking_enabled(fake_redis_limiter):
         result = await limiter.check_rate_limit(
             agent_id="agent-001", user_id="user-123"
         )
-        assert (
-            result.allowed is False
-        ), f"Request {i+16} should be blocked (burst exceeded)"
+        assert result.allowed is False, (
+            f"Request {i + 16} should be blocked (burst exceeded)"
+        )
 
     metrics = limiter.get_metrics()
     assert metrics is not None
@@ -628,6 +630,6 @@ async def test_rate_limit_check_performance_baseline(fake_redis_limiter):
     duration = time.time() - start
 
     assert result.allowed is True
-    assert (
-        duration < 0.05
-    ), f"Rate limit check took {duration*1000:.2f}ms (expected <50ms)"
+    assert duration < 0.05, (
+        f"Rate limit check took {duration * 1000:.2f}ms (expected <50ms)"
+    )

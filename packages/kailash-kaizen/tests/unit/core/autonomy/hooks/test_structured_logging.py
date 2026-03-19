@@ -88,9 +88,9 @@ class TestTraceIdInfrastructure:
         uuid_pattern = re.compile(
             r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
         )
-        assert uuid_pattern.match(
-            context.trace_id
-        ), f"trace_id '{context.trace_id}' is not valid UUID v4 format"
+        assert uuid_pattern.match(context.trace_id), (
+            f"trace_id '{context.trace_id}' is not valid UUID v4 format"
+        )
 
     def test_hook_manager_preserves_trace_id(self):
         """
@@ -166,9 +166,9 @@ class TestTraceIdInfrastructure:
         )
         assert len(captured_contexts) == 5
         for context in captured_contexts:
-            assert uuid_v4_pattern.match(
-                context.trace_id
-            ), f"trace_id '{context.trace_id}' does not match UUID v4 format"
+            assert uuid_v4_pattern.match(context.trace_id), (
+                f"trace_id '{context.trace_id}' does not match UUID v4 format"
+            )
 
     @pytest.mark.asyncio
     async def test_trace_id_propagates_to_all_hooks(self):

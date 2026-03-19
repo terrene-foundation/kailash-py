@@ -420,7 +420,7 @@ class TestModelRegistryPerformanceEdgeCases:
         total_time = end_time - start_time
 
         print(
-            f"Registered {model_count} models in {total_time:.2f}s ({total_time/model_count:.3f}s avg)"
+            f"Registered {model_count} models in {total_time:.2f}s ({total_time / model_count:.3f}s avg)"
         )
 
         # Performance threshold - should handle rapid registration

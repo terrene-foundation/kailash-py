@@ -151,9 +151,7 @@ class AgentRegistry:
         self._heartbeat_interval = heartbeat_interval
 
         if verify_on_registration and not trust_operations:
-            raise ValueError(
-                "trust_operations is required when verify_on_registration is True"
-            )
+            raise ValueError("trust_operations is required when verify_on_registration is True")
 
     async def register(self, request: RegistrationRequest) -> AgentMetadata:
         """
@@ -190,9 +188,7 @@ class AgentRegistry:
         # Step 1: Validate request
         errors = request.validate()
         if errors:
-            logger.warning(
-                f"Registration validation failed for {request.agent_id}: {errors}"
-            )
+            logger.warning(f"Registration validation failed for {request.agent_id}: {errors}")
             raise ValidationError(errors)
 
         # Step 2: Verify trust (if enabled)
@@ -218,9 +214,7 @@ class AgentRegistry:
         # Step 4: Store metadata
         await self._store.register_agent(metadata)
 
-        logger.info(
-            f"Registered agent {request.agent_id} with capabilities: {request.capabilities}"
-        )
+        logger.info(f"Registered agent {request.agent_id} with capabilities: {request.capabilities}")
 
         return metadata
 
@@ -403,11 +397,7 @@ class AgentRegistry:
 
         # Filter by excluded constraints
         if query.exclude_constraints:
-            agents = [
-                a
-                for a in agents
-                if not any(c in a.constraints for c in query.exclude_constraints)
-            ]
+            agents = [a for a in agents if not any(c in a.constraints for c in query.exclude_constraints)]
 
         # Filter by min_last_seen
         if query.min_last_seen:
@@ -434,9 +424,7 @@ class AgentRegistry:
         await self._store.update_last_seen(agent_id, datetime.now(timezone.utc))
         logger.debug(f"Heartbeat received from {agent_id}")
 
-    async def get_stale_agents(
-        self, timeout: Optional[int] = None
-    ) -> List[AgentMetadata]:
+    async def get_stale_agents(self, timeout: Optional[int] = None) -> List[AgentMetadata]:
         """
         Find agents that haven't sent heartbeats recently.
 
@@ -456,11 +444,7 @@ class AgentRegistry:
             # Fallback: filter in memory
             cutoff = datetime.now(timezone.utc) - timedelta(seconds=timeout)
             all_agents = await self._store.list_all()
-            return [
-                a
-                for a in all_agents
-                if a.status == AgentStatus.ACTIVE and a.last_seen < cutoff
-            ]
+            return [a for a in all_agents if a.status == AgentStatus.ACTIVE and a.last_seen < cutoff]
 
     async def list_all(self, active_only: bool = False) -> List[AgentMetadata]:
         """
@@ -577,10 +561,7 @@ class AgentRegistry:
             if request.trust_chain_hash and chain_hash != request.trust_chain_hash:
                 raise TrustVerificationError(
                     request.agent_id,
-                    reason=(
-                        f"Trust chain hash mismatch: "
-                        f"expected {request.trust_chain_hash}, got {chain_hash}"
-                    ),
+                    reason=(f"Trust chain hash mismatch: expected {request.trust_chain_hash}, got {chain_hash}"),
                 )
 
             # Verify requested capabilities are in trust chain
@@ -625,17 +606,13 @@ class AgentRegistry:
         def score(agent: AgentMetadata) -> float:
             # Capability score (0-100)
             if query.capabilities:
-                cap_matches = sum(
-                    1 for c in query.capabilities if c in agent.capabilities
-                )
+                cap_matches = sum(1 for c in query.capabilities if c in agent.capabilities)
                 cap_score = (cap_matches / len(query.capabilities)) * 100
             else:
                 cap_score = 100  # No capability filter
 
             # Recency score (0-100, decays over time)
-            minutes_ago = (
-                datetime.now(timezone.utc) - agent.last_seen
-            ).total_seconds() / 60
+            minutes_ago = (datetime.now(timezone.utc) - agent.last_seen).total_seconds() / 60
             recency_score = max(0, 100 - minutes_ago)
 
             # Type score (0-50)

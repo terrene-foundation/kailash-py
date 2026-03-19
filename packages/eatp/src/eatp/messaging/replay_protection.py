@@ -142,9 +142,7 @@ class InMemoryReplayProtection(ReplayProtection):
         """
         async with self._lock:
             if nonce in self._seen_nonces:
-                logger.warning(
-                    f"Replay detected: message {message_id} with nonce {nonce[:16]}..."
-                )
+                logger.warning(f"Replay detected: message {message_id} with nonce {nonce[:16]}...")
                 return False
 
             # Record nonce
@@ -155,9 +153,7 @@ class InMemoryReplayProtection(ReplayProtection):
                 await self.cleanup_expired_nonces()
                 # If still over cap after cleanup, evict oldest entries
                 if len(self._seen_nonces) > self._max_nonces:
-                    sorted_nonces = sorted(
-                        self._seen_nonces.items(), key=lambda x: x[1]
-                    )
+                    sorted_nonces = sorted(self._seen_nonces.items(), key=lambda x: x[1])
                     excess = len(self._seen_nonces) - self._max_nonces
                     for old_nonce, _ in sorted_nonces[:excess]:
                         del self._seen_nonces[old_nonce]

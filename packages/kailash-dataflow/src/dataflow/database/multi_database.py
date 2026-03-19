@@ -390,12 +390,12 @@ class PostgreSQLAdapter(DatabaseAdapter):
         """PostgreSQL UPSERT using ON CONFLICT."""
         quoted_table = self.quote_identifier(table)
         quoted_columns = [self.quote_identifier(col) for col in columns]
-        placeholders = [f"${i+1}" for i in range(len(values))]
+        placeholders = [f"${i + 1}" for i in range(len(values))]
 
         sql = f"""
-        INSERT INTO {quoted_table} ({', '.join(quoted_columns)})
-        VALUES ({', '.join(placeholders)})
-        ON CONFLICT ({', '.join(self.quote_identifier(c) for c in conflict_columns)})
+        INSERT INTO {quoted_table} ({", ".join(quoted_columns)})
+        VALUES ({", ".join(placeholders)})
+        ON CONFLICT ({", ".join(self.quote_identifier(c) for c in conflict_columns)})
         """
 
         if update_columns:
@@ -550,8 +550,8 @@ class MySQLAdapter(DatabaseAdapter):
         placeholders = ["%s" for _ in values]
 
         sql = f"""
-        INSERT INTO {quoted_table} ({', '.join(quoted_columns)})
-        VALUES ({', '.join(placeholders)})
+        INSERT INTO {quoted_table} ({", ".join(quoted_columns)})
+        VALUES ({", ".join(placeholders)})
         """
 
         if update_columns:
@@ -673,9 +673,9 @@ class SQLiteAdapter(DatabaseAdapter):
         placeholders = ["?" for _ in values]
 
         sql = f"""
-        INSERT INTO {quoted_table} ({', '.join(quoted_columns)})
-        VALUES ({', '.join(placeholders)})
-        ON CONFLICT ({', '.join(self.quote_identifier(c) for c in conflict_columns)})
+        INSERT INTO {quoted_table} ({", ".join(quoted_columns)})
+        VALUES ({", ".join(placeholders)})
+        ON CONFLICT ({", ".join(self.quote_identifier(c) for c in conflict_columns)})
         """
 
         if update_columns:
@@ -797,7 +797,7 @@ class SQLGenerator:
         quoted_columns = [self.adapter.quote_identifier(col) for col in columns]
 
         if self.adapter.dialect == DatabaseDialect.POSTGRESQL:
-            placeholders = [f"${i+1}" for i in range(len(values))]
+            placeholders = [f"${i + 1}" for i in range(len(values))]
         else:
             placeholders = [
                 "?" if self.adapter.dialect == DatabaseDialect.SQLITE else "%s"
@@ -805,8 +805,8 @@ class SQLGenerator:
             ]
 
         sql = f"""
-        INSERT INTO {quoted_table} ({', '.join(quoted_columns)})
-        VALUES ({', '.join(placeholders)})
+        INSERT INTO {quoted_table} ({", ".join(quoted_columns)})
+        VALUES ({", ".join(placeholders)})
         """
 
         if returning and self.adapter.supports_feature(DatabaseFeature.RETURNING):

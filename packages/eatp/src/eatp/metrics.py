@@ -179,9 +179,7 @@ class TrustMetricsCollector:
             transition_type: Type of transition (e.g., 'upgrade', 'downgrade')
         """
         with self._lock:
-            self._transitions[transition_type] = (
-                self._transitions.get(transition_type, 0) + 1
-            )
+            self._transitions[transition_type] = self._transitions.get(transition_type, 0) + 1
             self._trim_bounded_dict(self._transitions, "_transitions")
 
     def record_circuit_breaker_open(self) -> None:
@@ -222,9 +220,7 @@ class TrustMetricsCollector:
 
             # Track dimension failures
             for dimension in failed_dimensions:
-                self._dimension_failures[dimension] = (
-                    self._dimension_failures.get(dimension, 0) + 1
-                )
+                self._dimension_failures[dimension] = self._dimension_failures.get(dimension, 0) + 1
             self._trim_bounded_dict(self._dimension_failures, "_dimension_failures")
 
             # Track anti-gaming flags
@@ -357,41 +353,29 @@ def export_prometheus(collector: TrustMetricsCollector) -> str:
             lines.append(f'eatp_trust_score{{agent_id="{agent_id}"}} {level}')
 
     # --- eatp_verification_total (counter): total constraint evaluations ---
-    lines.append(
-        "# HELP eatp_verification_total Total constraint evaluations performed"
-    )
+    lines.append("# HELP eatp_verification_total Total constraint evaluations performed")
     lines.append("# TYPE eatp_verification_total counter")
     lines.append(f"eatp_verification_total {constraint_metrics.evaluations_total}")
 
     # --- eatp_posture_distribution (gauge): agent count per posture ---
-    lines.append(
-        "# HELP eatp_posture_distribution Number of agents at each trust posture level"
-    )
+    lines.append("# HELP eatp_posture_distribution Number of agents at each trust posture level")
     lines.append("# TYPE eatp_posture_distribution gauge")
     for posture_name, count in posture_metrics.posture_distribution.items():
         lines.append(f'eatp_posture_distribution{{posture="{posture_name}"}} {count}')
 
     # --- eatp_constraint_utilization (gauge): pass rate ---
-    lines.append(
-        "# HELP eatp_constraint_utilization Constraint evaluation pass rate (0.0-1.0)"
-    )
+    lines.append("# HELP eatp_constraint_utilization Constraint evaluation pass rate (0.0-1.0)")
     lines.append("# TYPE eatp_constraint_utilization gauge")
     if constraint_metrics.evaluations_total > 0:
-        utilization = (
-            constraint_metrics.evaluations_passed / constraint_metrics.evaluations_total
-        )
+        utilization = constraint_metrics.evaluations_passed / constraint_metrics.evaluations_total
     else:
         utilization = 0.0
     lines.append(f"eatp_constraint_utilization {utilization:.6f}")
 
     # --- eatp_circuit_breaker_opens_total (counter) ---
-    lines.append(
-        "# HELP eatp_circuit_breaker_opens_total Total circuit breaker open events"
-    )
+    lines.append("# HELP eatp_circuit_breaker_opens_total Total circuit breaker open events")
     lines.append("# TYPE eatp_circuit_breaker_opens_total counter")
-    lines.append(
-        f"eatp_circuit_breaker_opens_total {posture_metrics.circuit_breaker_opens}"
-    )
+    lines.append(f"eatp_circuit_breaker_opens_total {posture_metrics.circuit_breaker_opens}")
 
     return "\n".join(lines) + "\n"
 
@@ -439,8 +423,7 @@ class OTelMetricsAdapter:
             from opentelemetry import metrics as otel_metrics
         except ImportError:
             raise ImportError(
-                "opentelemetry-api is required for OTelMetricsAdapter. "
-                "Install with: pip install opentelemetry-api"
+                "opentelemetry-api is required for OTelMetricsAdapter. Install with: pip install opentelemetry-api"
             )
 
         self._meter_name = meter_name
@@ -479,9 +462,7 @@ class OTelMetricsAdapter:
             agent_id: The agent identifier.
             result: The verification result (e.g., "passed", "failed").
         """
-        self._verification_counter.add(
-            1, attributes={"agent_id": agent_id, "result": result}
-        )
+        self._verification_counter.add(1, attributes={"agent_id": agent_id, "result": result})
 
     def record_posture(self, agent_id: str, posture: str) -> None:
         """Record the current posture for an agent.
@@ -500,13 +481,8 @@ class OTelMetricsAdapter:
         }
         level = posture_levels.get(posture)
         if level is None:
-            raise ValueError(
-                f"Unknown posture '{posture}'. Valid postures: "
-                f"{list(posture_levels.keys())}"
-            )
-        self._posture_gauge.set(
-            level, attributes={"agent_id": agent_id, "posture": posture}
-        )
+            raise ValueError(f"Unknown posture '{posture}'. Valid postures: {list(posture_levels.keys())}")
+        self._posture_gauge.set(level, attributes={"agent_id": agent_id, "posture": posture})
 
 
 __all__ = [

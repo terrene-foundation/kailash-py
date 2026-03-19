@@ -332,14 +332,14 @@ class MigrationOrchestrationEngine:
                 if not operation_validation["is_valid"]:
                     errors.extend(
                         [
-                            f"Operation {i+1}: {error}"
+                            f"Operation {i + 1}: {error}"
                             for error in operation_validation["errors"]
                         ]
                     )
 
                 warnings.extend(
                     [
-                        f"Operation {i+1}: {warning}"
+                        f"Operation {i + 1}: {warning}"
                         for warning in operation_validation["warnings"]
                     ]
                 )
@@ -517,7 +517,7 @@ class MigrationOrchestrationEngine:
 
                 executed_operations += 1
                 logger.debug(
-                    f"Completed operation {i+1}/{len(plan.migration.operations)}: {operation.operation_type.value}"
+                    f"Completed operation {i + 1}/{len(plan.migration.operations)}: {operation.operation_type.value}"
                 )
 
             execution_time_ms = int((time.time() - start_time) * 1000)

@@ -83,9 +83,7 @@ class CommerceConstraint(ConstraintDimension):
                     "allowed_beneficiaries",
                     [value["beneficiary_id"]] if "beneficiary_id" in value else [],
                 ),
-                "commerce_types": value.get(
-                    "commerce_types", [ct.value for ct in CommerceType]
-                ),
+                "commerce_types": value.get("commerce_types", [ct.value for ct in CommerceType]),
                 "jurisdiction": value.get("jurisdiction"),
                 "attribution_required": value.get("attribution_required", True),
             }
@@ -99,9 +97,7 @@ class CommerceConstraint(ConstraintDimension):
             metadata={"commerce_type_count": len(parsed["commerce_types"])},
         )
 
-    def check(
-        self, constraint: ConstraintValue, context: Dict[str, Any]
-    ) -> ConstraintCheckResult:
+    def check(self, constraint: ConstraintValue, context: Dict[str, Any]) -> ConstraintCheckResult:
         """Check commerce constraint against execution context.
 
         Context keys:
@@ -120,8 +116,7 @@ class CommerceConstraint(ConstraintDimension):
             if beneficiary not in parsed["allowed_beneficiaries"]:
                 return ConstraintCheckResult(
                     satisfied=False,
-                    reason=f"Beneficiary '{beneficiary}' not in allowed list: "
-                    f"{parsed['allowed_beneficiaries']}",
+                    reason=f"Beneficiary '{beneficiary}' not in allowed list: {parsed['allowed_beneficiaries']}",
                 )
 
         # Check commerce type
@@ -129,30 +124,21 @@ class CommerceConstraint(ConstraintDimension):
             if commerce_type not in parsed["commerce_types"]:
                 return ConstraintCheckResult(
                     satisfied=False,
-                    reason=f"Commerce type '{commerce_type}' not allowed. "
-                    f"Allowed: {parsed['commerce_types']}",
+                    reason=f"Commerce type '{commerce_type}' not allowed. Allowed: {parsed['commerce_types']}",
                 )
 
         # Check jurisdiction
-        if (
-            jurisdiction
-            and parsed.get("jurisdiction")
-            and jurisdiction != parsed["jurisdiction"]
-        ):
+        if jurisdiction and parsed.get("jurisdiction") and jurisdiction != parsed["jurisdiction"]:
             return ConstraintCheckResult(
                 satisfied=False,
-                reason=f"Jurisdiction '{jurisdiction}' does not match "
-                f"required '{parsed['jurisdiction']}'",
+                reason=f"Jurisdiction '{jurisdiction}' does not match required '{parsed['jurisdiction']}'",
             )
 
         # Check attribution requirement
         if parsed.get("attribution_required"):
             attribution_chain = context.get("attribution_chain", [])
             if not attribution_chain and beneficiary:
-                logger.info(
-                    f"Attribution required but no chain provided for "
-                    f"beneficiary {beneficiary}"
-                )
+                logger.info(f"Attribution required but no chain provided for beneficiary {beneficiary}")
 
         return ConstraintCheckResult(
             satisfied=True,
@@ -182,9 +168,7 @@ class CommerceConstraint(ConstraintDimension):
             return False
 
         # If parent requires attribution, child must too
-        if parent.parsed.get("attribution_required") and not child.parsed.get(
-            "attribution_required"
-        ):
+        if parent.parsed.get("attribution_required") and not child.parsed.get("attribution_required"):
             return False
 
         return True

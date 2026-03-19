@@ -373,10 +373,7 @@ class DatabaseESA(EnterpriseSystemAgent):
                             await cursor.execute(query)
                             rows = await cursor.fetchall()
                             # Convert to dict-like rows
-                            return [
-                                dict(zip([d[0] for d in cursor.description], row))
-                                for row in rows
-                            ]
+                            return [dict(zip([d[0] for d in cursor.description], row)) for row in rows]
                 elif self.esa.database_type == DatabaseType.SQLITE:
                     cursor = await self.esa._connection.execute(query)
                     rows = await cursor.fetchall()
@@ -407,8 +404,7 @@ class DatabaseESA(EnterpriseSystemAgent):
         def _validate_table_name(name: str) -> str:
             if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", name):
                 raise ESAOperationError(
-                    f"Invalid table name: {name!r}. "
-                    "Table names must be alphanumeric with underscores."
+                    f"Invalid table name: {name!r}. Table names must be alphanumeric with underscores."
                 )
             return name
 
@@ -564,9 +560,7 @@ class DatabaseESA(EnterpriseSystemAgent):
                         reason=f"Invalid column name: {col!r}",
                     )
             placeholders = self._get_placeholders(len(columns))
-            query = (
-                f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
-            )
+            query = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
             values = list(data.values())
 
             # Execute insert
@@ -651,14 +645,9 @@ class DatabaseESA(EnterpriseSystemAgent):
             # Execute update
             if self.database_type == DatabaseType.POSTGRESQL:
                 # Use $1, $2 for asyncpg
-                set_clause = ", ".join(
-                    [f"{col} = ${i+1}" for i, col in enumerate(data.keys())]
-                )
+                set_clause = ", ".join([f"{col} = ${i + 1}" for i, col in enumerate(data.keys())])
                 where_conditions = " AND ".join(
-                    [
-                        f"{col} = ${i+len(data)+1}"
-                        for i, col in enumerate(conditions.keys())
-                    ]
+                    [f"{col} = ${i + len(data) + 1}" for i, col in enumerate(conditions.keys())]
                 )
                 query = f"UPDATE {table} SET {set_clause} WHERE {where_conditions}"
                 async with self._pool.acquire() as conn:
@@ -730,9 +719,7 @@ class DatabaseESA(EnterpriseSystemAgent):
 
             # Execute delete
             if self.database_type == DatabaseType.POSTGRESQL:
-                where_conditions = " AND ".join(
-                    [f"{col} = ${i+1}" for i, col in enumerate(conditions.keys())]
-                )
+                where_conditions = " AND ".join([f"{col} = ${i + 1}" for i, col in enumerate(conditions.keys())])
                 query = f"DELETE FROM {table} WHERE {where_conditions}"
                 async with self._pool.acquire() as conn:
                     result = await conn.execute(query, *values)
@@ -891,7 +878,7 @@ class DatabaseESA(EnterpriseSystemAgent):
             Placeholder string (e.g., "%s, %s, %s" or "$1, $2, $3")
         """
         if self.database_type == DatabaseType.POSTGRESQL:
-            return ", ".join([f"${i+1}" for i in range(count)])
+            return ", ".join([f"${i + 1}" for i in range(count)])
         else:
             return ", ".join(["%s"] * count)
 

@@ -365,9 +365,9 @@ class TestPostgreSQLTestManagerE2E:
 
         # Total workflow time should be under 10 seconds
         total_time = time.perf_counter() - start_time
-        assert (
-            total_time < 10.0
-        ), f"Complete E2E workflow took {total_time:.3f}s (>10s limit)"
+        assert total_time < 10.0, (
+            f"Complete E2E workflow took {total_time:.3f}s (>10s limit)"
+        )
 
     @pytest.mark.asyncio
     async def test_production_scale_migration_workflow(self, postgresql_manager):
@@ -741,9 +741,9 @@ class TestPostgreSQLTestManagerE2E:
         assert simulation_time < 8.0  # Should complete within 8 seconds
 
         successful_users = [r for r in user_results if r["success"]]
-        assert (
-            len(successful_users) == 10
-        ), f"Only {len(successful_users)}/10 users successful"
+        assert len(successful_users) == 10, (
+            f"Only {len(successful_users)}/10 users successful"
+        )
 
         # Verify database consistency after concurrent access
         final_conn = await asyncpg.connect(container_info.database_url)
@@ -885,9 +885,9 @@ class TestPostgreSQLTestManagerE2E:
 
         # Total E2E performance verification
         total_time = time.perf_counter() - start_time
-        assert (
-            total_time < 10.0
-        ), f"Total E2E load test took {total_time:.3f}s (>10s limit)"
+        assert total_time < 10.0, (
+            f"Total E2E load test took {total_time:.3f}s (>10s limit)"
+        )
 
     @pytest.mark.asyncio
     async def test_disaster_recovery_simulation(self, postgresql_manager):

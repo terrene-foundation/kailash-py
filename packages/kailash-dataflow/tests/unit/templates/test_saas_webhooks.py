@@ -174,12 +174,12 @@ class TestWebhookHandling:
             # Verify webhook events returned
             assert isinstance(result, list), "Should return list"
             assert len(result) == 2, "Should return 2 events"
-            assert all(
-                e["organization_id"] == org_id for e in result
-            ), "All events should belong to org"
-            assert all(
-                e["event_type"] == "user.created" for e in result
-            ), "Should filter by event type"
+            assert all(e["organization_id"] == org_id for e in result), (
+                "All events should belong to org"
+            )
+            assert all(e["event_type"] == "user.created" for e in result), (
+                "Should filter by event type"
+            )
 
     def test_retry_failed_webhook(self, monkeypatch):
         """
@@ -548,9 +548,9 @@ class TestWebhookHandling:
             assert result is not None, "Should return event"
             assert "delivery_attempts" in result, "Should track delivery attempts"
             assert len(result["delivery_attempts"]) == 2, "Should have 2 attempts"
-            assert (
-                result["delivery_attempts"][-1]["response_code"] == 200
-            ), "Last attempt should succeed"
+            assert result["delivery_attempts"][-1]["response_code"] == 200, (
+                "Last attempt should succeed"
+            )
 
     def test_webhook_event_ordering(self, monkeypatch):
         """
@@ -621,11 +621,11 @@ class TestWebhookHandling:
 
             # Verify chronological ordering
             assert len(result) == 3, "Should return 3 events"
-            assert (
-                result[0]["created_at"] < result[1]["created_at"]
-            ), "Should be chronological"
-            assert (
-                result[1]["created_at"] < result[2]["created_at"]
-            ), "Should be chronological"
+            assert result[0]["created_at"] < result[1]["created_at"], (
+                "Should be chronological"
+            )
+            assert result[1]["created_at"] < result[2]["created_at"], (
+                "Should be chronological"
+            )
             assert result[0]["id"] == "evt_1", "Oldest event first"
             assert result[2]["id"] == "evt_3", "Newest event last"

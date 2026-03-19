@@ -274,7 +274,7 @@ class TestUnsafeDDLProtection:
             )
 
             # All database types should include IF NOT EXISTS
-            assert (
-                "IF NOT EXISTS" in sql.upper()
-            ), f"Missing IF NOT EXISTS for {db_type}"
+            assert "IF NOT EXISTS" in sql.upper(), (
+                f"Missing IF NOT EXISTS for {db_type}"
+            )
             assert "CREATE TABLE" in sql.upper(), f"Missing CREATE TABLE for {db_type}"

@@ -333,9 +333,9 @@ class TestMigrateToSqliteConfirmDelete:
             "reviews",
             "anchors",
         ):
-            assert not (
-                seeded_trust_dir / subdir
-            ).exists(), f"{subdir}/ should be deleted after confirm_delete"
+            assert not (seeded_trust_dir / subdir).exists(), (
+                f"{subdir}/ should be deleted after confirm_delete"
+            )
 
     def test_confirm_delete_preserves_db(self, seeded_trust_dir):
         migrate_to_sqlite(seeded_trust_dir, confirm_delete=True)

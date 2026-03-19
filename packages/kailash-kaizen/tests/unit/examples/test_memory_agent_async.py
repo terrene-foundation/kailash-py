@@ -29,9 +29,9 @@ class TestMemoryAgentAsyncMigration:
         config = MemoryConfig(llm_provider="openai", model="gpt-3.5-turbo")
         agent = MemoryAgent(config=config)
 
-        assert isinstance(
-            agent.strategy, AsyncSingleShotStrategy
-        ), f"Expected AsyncSingleShotStrategy, got {type(agent.strategy).__name__}"
+        assert isinstance(agent.strategy, AsyncSingleShotStrategy), (
+            f"Expected AsyncSingleShotStrategy, got {type(agent.strategy).__name__}"
+        )
 
     def test_memory_no_explicit_strategy_override(self):
         """Test that MemoryAgent no longer explicitly passes strategy."""

@@ -118,9 +118,9 @@ class TestEnterpriseApprovalWorkflowE2E:
         # Verify complete workflow execution
         assert results is not None, "Approval workflow failed to execute"
         assert run_id is not None, "No run ID generated for approval workflow"
-        assert (
-            total_time < 10.0
-        ), f"Approval workflow took {total_time:.2f}s (should be <10s)"
+        assert total_time < 10.0, (
+            f"Approval workflow took {total_time:.2f}s (should be <10s)"
+        )
 
         # Verify all approval levels were processed
         processed_levels = []
@@ -129,9 +129,9 @@ class TestEnterpriseApprovalWorkflowE2E:
                 if level in node_id.lower():
                     processed_levels.append(level)
 
-        assert (
-            len(set(processed_levels)) >= 5
-        ), f"Not all approval levels processed. Found: {set(processed_levels)}"
+        assert len(set(processed_levels)) >= 5, (
+            f"Not all approval levels processed. Found: {set(processed_levels)}"
+        )
 
         # Verify audit trail was created
         audit_trail = framework.get_coordination_audit_trail()
@@ -141,16 +141,16 @@ class TestEnterpriseApprovalWorkflowE2E:
         workflow_audit = [
             entry for entry in audit_trail if entry.get("run_id") == run_id
         ]
-        assert (
-            len(workflow_audit) > 0
-        ), "No audit entry found for this workflow execution"
+        assert len(workflow_audit) > 0, (
+            "No audit entry found for this workflow execution"
+        )
 
         # Verify compliance reporting
         compliance_report = framework.generate_compliance_report()
         assert compliance_report is not None, "Failed to generate compliance report"
-        assert (
-            "compliance_status" in compliance_report
-        ), "Compliance status missing from report"
+        assert "compliance_status" in compliance_report, (
+            "Compliance status missing from report"
+        )
 
         # Verify digital signature validation
         signature_nodes = [
@@ -160,9 +160,9 @@ class TestEnterpriseApprovalWorkflowE2E:
 
         for node_id in signature_nodes:
             result = results[node_id]
-            assert (
-                result["status"] == "completed"
-            ), f"Digital signature validation failed for {node_id}"
+            assert result["status"] == "completed", (
+                f"Digital signature validation failed for {node_id}"
+            )
 
         # Verify notification nodes were created
         notification_nodes = [
@@ -259,9 +259,9 @@ class TestEnterpriseApprovalWorkflowE2E:
             for entry in audit_trail
             if entry.get("run_id") in [run_id_v1, run_id_v2]
         ]
-        assert (
-            len(workflow_audits) >= 2
-        ), "Audit trail should contain both original and resubmission"
+        assert len(workflow_audits) >= 2, (
+            "Audit trail should contain both original and resubmission"
+        )
 
 
 class TestEnterpriseCustomerServiceWorkflowE2E:
@@ -328,9 +328,9 @@ class TestEnterpriseCustomerServiceWorkflowE2E:
         # Verify complete workflow execution
         assert results is not None, "Customer service workflow failed to execute"
         assert run_id is not None, "No run ID generated"
-        assert (
-            total_time < 10.0
-        ), f"Service workflow took {total_time:.2f}s (should be <10s)"
+        assert total_time < 10.0, (
+            f"Service workflow took {total_time:.2f}s (should be <10s)"
+        )
 
         # Verify all escalation levels were configured
         escalation_nodes = []
@@ -340,9 +340,9 @@ class TestEnterpriseCustomerServiceWorkflowE2E:
             ]
             escalation_nodes.extend(level_nodes)
 
-        assert (
-            len(escalation_nodes) >= 5
-        ), f"Not all escalation levels found. Found nodes: {escalation_nodes}"
+        assert len(escalation_nodes) >= 5, (
+            f"Not all escalation levels found. Found nodes: {escalation_nodes}"
+        )
 
         # Verify SLA monitoring nodes
         sla_nodes = [node_id for node_id in results.keys() if "sla" in node_id.lower()]
@@ -515,9 +515,9 @@ class TestEnterpriseDocumentAnalysisWorkflowE2E:
         # Verify complete pipeline execution
         assert results is not None, "Document analysis workflow failed"
         assert run_id is not None, "No run ID generated"
-        assert (
-            total_time < 10.0
-        ), f"Document analysis took {total_time:.2f}s (should be <10s)"
+        assert total_time < 10.0, (
+            f"Document analysis took {total_time:.2f}s (should be <10s)"
+        )
 
         # Verify all processing stages were implemented
         stage_coverage = {}
@@ -542,9 +542,9 @@ class TestEnterpriseDocumentAnalysisWorkflowE2E:
             ]
             compliance_nodes.extend(check_nodes)
 
-        assert (
-            len(compliance_nodes) > 0
-        ), f"No compliance check nodes found. Available nodes: {list(results.keys())}"
+        assert len(compliance_nodes) > 0, (
+            f"No compliance check nodes found. Available nodes: {list(results.keys())}"
+        )
 
         # Verify data lineage tracking
         lineage_nodes = [
@@ -649,18 +649,18 @@ class TestEnterpriseDocumentAnalysisWorkflowE2E:
 
         # Generate and verify GDPR compliance report
         compliance_report = framework.generate_compliance_report()
-        assert (
-            "gdpr_compliance" in compliance_report
-        ), "GDPR compliance section missing from report"
+        assert "gdpr_compliance" in compliance_report, (
+            "GDPR compliance section missing from report"
+        )
 
         gdpr_report = compliance_report["gdpr_compliance"]
-        assert (
-            "data_processing_records" in gdpr_report
-        ), "Data processing records missing"
+        assert "data_processing_records" in gdpr_report, (
+            "Data processing records missing"
+        )
         assert "privacy_checks_passed" in gdpr_report, "Privacy checks results missing"
-        assert (
-            "subject_rights_supported" in gdpr_report
-        ), "Subject rights support missing"
+        assert "subject_rights_supported" in gdpr_report, (
+            "Subject rights support missing"
+        )
 
 
 class TestEnterpriseMultiTenantWorkflowE2E:
@@ -755,9 +755,9 @@ class TestEnterpriseMultiTenantWorkflowE2E:
             tenant_nodes = [
                 node_id for node_id in results.keys() if "tenant" in node_id.lower()
             ]
-            assert (
-                len(tenant_nodes) > 0
-            ), f"No tenant isolation nodes found for {tenant_id}"
+            assert len(tenant_nodes) > 0, (
+                f"No tenant isolation nodes found for {tenant_id}"
+            )
 
             # Check for compliance-specific nodes based on requirements
             compliance_found = False
@@ -769,17 +769,17 @@ class TestEnterpriseMultiTenantWorkflowE2E:
                     compliance_found = True
                     break
 
-            assert (
-                compliance_found
-            ), f"No compliance-specific nodes found for {tenant_id}"
+            assert compliance_found, (
+                f"No compliance-specific nodes found for {tenant_id}"
+            )
 
         # Verify performance across all tenants
         total_execution_time = sum(
             result["execution_time"] for result in tenant_results
         )
-        assert (
-            total_execution_time < 10.0
-        ), f"Total multi-tenant execution took {total_execution_time:.2f}s"
+        assert total_execution_time < 10.0, (
+            f"Total multi-tenant execution took {total_execution_time:.2f}s"
+        )
 
         # Verify audit trail separation
         audit_trail = framework.get_coordination_audit_trail()
@@ -796,9 +796,9 @@ class TestEnterpriseMultiTenantWorkflowE2E:
                         )
 
         # Each tenant should have audit entries
-        assert (
-            len(tenant_audit_counts) >= 3
-        ), f"Audit entries found for {len(tenant_audit_counts)} tenants, expected 3"
+        assert len(tenant_audit_counts) >= 3, (
+            f"Audit entries found for {len(tenant_audit_counts)} tenants, expected 3"
+        )
 
     def test_cross_tenant_access_violation_detection(self):
         """Test detection and prevention of cross-tenant access violations."""
@@ -916,9 +916,9 @@ class TestEnterpriseWorkflowComplianceReportingE2E:
             compliance_run_ids.append(run_id)
 
             # Verify workflow executed successfully
-            assert (
-                results is not None
-            ), f"Failed to execute {scenario['type']} compliance workflow"
+            assert results is not None, (
+                f"Failed to execute {scenario['type']} compliance workflow"
+            )
             assert run_id is not None, f"No run ID for {scenario['type']} workflow"
 
         # Generate comprehensive compliance report
@@ -931,22 +931,22 @@ class TestEnterpriseWorkflowComplianceReportingE2E:
         assert "audit_entries" in compliance_report, "Audit entries missing"
 
         # Verify regulation-specific sections
-        assert (
-            "gdpr_compliance" in compliance_report
-        ), "GDPR section missing from report"
+        assert "gdpr_compliance" in compliance_report, (
+            "GDPR section missing from report"
+        )
         assert "sox_compliance" in compliance_report, "SOX section missing from report"
-        assert (
-            "hipaa_compliance" in compliance_report
-        ), "HIPAA section missing from report"
+        assert "hipaa_compliance" in compliance_report, (
+            "HIPAA section missing from report"
+        )
 
         # Verify audit trail completeness
         audit_trail = framework.get_coordination_audit_trail()
         compliance_audits = [
             entry for entry in audit_trail if entry.get("run_id") in compliance_run_ids
         ]
-        assert (
-            len(compliance_audits) >= 3
-        ), f"Expected at least 3 compliance audit entries, found {len(compliance_audits)}"
+        assert len(compliance_audits) >= 3, (
+            f"Expected at least 3 compliance audit entries, found {len(compliance_audits)}"
+        )
 
         # Verify overall compliance status
         overall_status = compliance_report["compliance_status"]
@@ -958,9 +958,9 @@ class TestEnterpriseWorkflowComplianceReportingE2E:
 
         # Verify workflow metrics
         workflow_count = compliance_report["workflow_count"]
-        assert (
-            workflow_count >= 3
-        ), f"Expected at least 3 workflows in report, found {workflow_count}"
+        assert workflow_count >= 3, (
+            f"Expected at least 3 workflows in report, found {workflow_count}"
+        )
 
 
 # E2E Test fixtures

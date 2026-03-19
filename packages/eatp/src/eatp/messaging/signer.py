@@ -144,10 +144,7 @@ class MessageSigner:
             # Set signature in envelope (already base64-encoded by sign())
             envelope.signature = signature
 
-            logger.debug(
-                f"Signed message {envelope.message_id} from {self._agent_id} "
-                f"to {recipient_agent_id}"
-            )
+            logger.debug(f"Signed message {envelope.message_id} from {self._agent_id} to {recipient_agent_id}")
 
             return envelope
 

@@ -92,9 +92,9 @@ print(f"SIGNATURE_ENABLED:{config.get('signature_programming_enabled', False)}")
 
             # Validate performance and functionality
             assert import_time is not None, "Failed to measure import time"
-            assert (
-                import_time < 120
-            ), f"Import with env config too slow: {import_time:.1f}ms"
+            assert import_time < 120, (
+                f"Import with env config too slow: {import_time:.1f}ms"
+            )
             assert debug_enabled is True, "Environment config not loaded correctly"
             assert signature_enabled is True, "Environment config not loaded correctly"
 
@@ -187,9 +187,9 @@ print(f"CONCURRENT_MAX:{max_time:.1f}")
             print(f"Maximum time: {max_time:.1f}ms")
 
             # Validate concurrent performance
-            assert (
-                len(concurrent_times) >= 3
-            ), "Should have at least 3 concurrent imports"
+            assert len(concurrent_times) >= 3, (
+                "Should have at least 3 concurrent imports"
+            )
             assert avg_time < 150, f"Concurrent average too slow: {avg_time:.1f}ms"
             assert max_time < 200, f"Concurrent maximum too slow: {max_time:.1f}ms"
 
@@ -279,12 +279,12 @@ except Exception as e:
 
             # Validate post-usage performance
             assert fresh_import_time is not None, "Failed to measure fresh import time"
-            assert (
-                fresh_import_time < 120
-            ), f"Fresh import after usage too slow: {fresh_import_time:.1f}ms"
-            assert (
-                functionality_preserved is True
-            ), "Functionality not preserved after heavy usage"
+            assert fresh_import_time < 120, (
+                f"Fresh import after usage too slow: {fresh_import_time:.1f}ms"
+            )
+            assert functionality_preserved is True, (
+                "Functionality not preserved after heavy usage"
+            )
 
             print("✓ Post-usage import test passed")
 

@@ -60,7 +60,9 @@ async def test_debug_agent_end_to_end(db, debug_agent):
     # Create workflow with missing parameter (triggers real error)
     workflow = WorkflowBuilder()
     workflow.add_node(
-        "UserCreateNode", "create", {"name": "Alice"}  # Missing required 'id' parameter
+        "UserCreateNode",
+        "create",
+        {"name": "Alice"},  # Missing required 'id' parameter
     )
 
     runtime = LocalRuntime()

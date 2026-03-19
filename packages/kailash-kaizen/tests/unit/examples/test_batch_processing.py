@@ -40,9 +40,9 @@ class TestBatchProcessorAgent:
         )
         agent = BatchProcessorAgent(config)
 
-        assert isinstance(
-            agent.strategy, ParallelBatchStrategy
-        ), f"Agent should use ParallelBatchStrategy, got {type(agent.strategy)}"
+        assert isinstance(agent.strategy, ParallelBatchStrategy), (
+            f"Agent should use ParallelBatchStrategy, got {type(agent.strategy)}"
+        )
 
     def test_config_parameters_work_correctly(self):
         """Test that config parameters are properly set."""
@@ -63,9 +63,9 @@ class TestBatchProcessorAgent:
         )
         agent = BatchProcessorAgent(config)
 
-        assert (
-            agent.strategy.max_concurrent == 7
-        ), f"Strategy max_concurrent should be 7, got {agent.strategy.max_concurrent}"
+        assert agent.strategy.max_concurrent == 7, (
+            f"Strategy max_concurrent should be 7, got {agent.strategy.max_concurrent}"
+        )
 
     @pytest.mark.asyncio
     async def test_concurrent_batch_processing_works(self):
@@ -150,9 +150,9 @@ class TestBatchProcessorAgent:
         )
         agent = BatchProcessorAgent(config)
 
-        assert isinstance(
-            agent.signature, ProcessingSignature
-        ), f"Agent should use ProcessingSignature, got {type(agent.signature)}"
+        assert isinstance(agent.signature, ProcessingSignature), (
+            f"Agent should use ProcessingSignature, got {type(agent.signature)}"
+        )
 
     def test_agent_inherits_from_base_agent(self):
         """Test that BatchProcessorAgent inherits from BaseAgent."""
@@ -163,9 +163,9 @@ class TestBatchProcessorAgent:
         )
         agent = BatchProcessorAgent(config)
 
-        assert isinstance(
-            agent, BaseAgent
-        ), "BatchProcessorAgent should inherit from BaseAgent"
+        assert isinstance(agent, BaseAgent), (
+            "BatchProcessorAgent should inherit from BaseAgent"
+        )
 
     @pytest.mark.asyncio
     async def test_batch_processing_performance(self):
@@ -218,6 +218,6 @@ class TestBatchProcessorAgent:
             batch = [{"prompt": f"Item_{i}"} for i in range(5)]
             results = await agent.process_batch(batch)
 
-            assert (
-                len(results) == 5
-            ), f"Should process all 5 items with max_concurrent={max_concurrent}"
+            assert len(results) == 5, (
+                f"Should process all 5 items with max_concurrent={max_concurrent}"
+            )

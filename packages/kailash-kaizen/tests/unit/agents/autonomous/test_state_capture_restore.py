@@ -49,9 +49,9 @@ def test_state_manager_initialized():
 
     # Assert
     assert hasattr(agent, "state_manager"), "Agent should have state_manager field"
-    assert isinstance(
-        agent.state_manager, StateManager
-    ), "state_manager should be StateManager instance"
+    assert isinstance(agent.state_manager, StateManager), (
+        "state_manager should be StateManager instance"
+    )
     assert agent.current_step == 0, "current_step should start at 0"
 
 
@@ -76,12 +76,12 @@ def test_state_manager_custom_provided():
 
     # Assert
     assert agent.state_manager is custom_manager, "Should use provided StateManager"
-    assert (
-        agent.state_manager.checkpoint_frequency == 5
-    ), "Custom config should be preserved"
-    assert (
-        agent.state_manager.retention_count == 50
-    ), "Custom retention should be preserved"
+    assert agent.state_manager.checkpoint_frequency == 5, (
+        "Custom config should be preserved"
+    )
+    assert agent.state_manager.retention_count == 50, (
+        "Custom retention should be preserved"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -145,13 +145,13 @@ def test_capture_state_with_memory():
     # Assert
     assert len(state.conversation_history) == 1, "Should capture 1 message"
     assert state.conversation_history[0]["role"] == "user", "Should capture role"
-    assert (
-        state.conversation_history[0]["content"] == "Test message"
-    ), "Should capture content"
+    assert state.conversation_history[0]["content"] == "Test message", (
+        "Should capture content"
+    )
     assert state.memory_contents["message_count"] == 1, "Should capture message count"
-    assert (
-        state.memory_contents["metadata"]["key"] == "value"
-    ), "Should capture metadata"
+    assert state.memory_contents["metadata"]["key"] == "value", (
+        "Should capture metadata"
+    )
 
 
 def test_capture_state_with_plan():
@@ -184,9 +184,9 @@ def test_capture_state_with_plan():
     # Assert
     assert len(state.pending_actions) == 2, "Should capture 2 pending actions"
     assert len(state.completed_actions) == 1, "Should capture 1 completed action"
-    assert (
-        state.completed_actions[0]["action"] == "step1"
-    ), "Should capture completed action"
+    assert state.completed_actions[0]["action"] == "step1", (
+        "Should capture completed action"
+    )
 
 
 def test_capture_state_with_budget():

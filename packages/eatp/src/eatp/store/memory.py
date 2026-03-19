@@ -224,9 +224,7 @@ class InMemoryTrustStore(TrustStore):
             all_chains = all_chains + list(self._inactive.values())
 
         if authority_id is not None:
-            return len(
-                [c for c in all_chains if c.genesis.authority_id == authority_id]
-            )
+            return len([c for c in all_chains if c.genesis.authority_id == authority_id])
         return len(all_chains)
 
     def transaction(self) -> TransactionContext:

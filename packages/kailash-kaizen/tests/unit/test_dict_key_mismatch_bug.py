@@ -47,9 +47,9 @@ class TestDictKeyMismatchBug:
         result = strategy.parse_result(raw_result)
 
         # Should be wrapped with "response" key to bypass validation
-        assert (
-            "response" in result
-        ), f"Dict with only 'content' key should be wrapped. Got: {result}"
+        assert "response" in result, (
+            f"Dict with only 'content' key should be wrapped. Got: {result}"
+        )
         assert result["response"] == "The answer is 42"
 
     def test_parse_result_json_string_with_only_content_key_is_wrapped(self):
@@ -67,9 +67,9 @@ class TestDictKeyMismatchBug:
         result = strategy.parse_result(raw_result)
 
         # Should be wrapped
-        assert (
-            "response" in result
-        ), f"Parsed JSON with only 'content' key should be wrapped. Got: {result}"
+        assert "response" in result, (
+            f"Parsed JSON with only 'content' key should be wrapped. Got: {result}"
+        )
         assert result["response"] == "The answer is 42"
 
     def test_parse_result_preserves_valid_signature_fields(self):
@@ -159,9 +159,9 @@ class TestReasoningModelTemperature:
 
         reasoning_models = ["gpt-5", "GPT-5", "gpt-5-turbo", "gpt5"]
         for model in reasoning_models:
-            assert provider._is_reasoning_model(
-                model
-            ), f"{model} should be detected as reasoning model"
+            assert provider._is_reasoning_model(model), (
+                f"{model} should be detected as reasoning model"
+            )
 
     def test_is_reasoning_model_o1(self):
         """o1 models should be detected as reasoning models."""
@@ -171,9 +171,9 @@ class TestReasoningModelTemperature:
 
         reasoning_models = ["o1", "o1-preview", "o1-mini"]
         for model in reasoning_models:
-            assert provider._is_reasoning_model(
-                model
-            ), f"{model} should be detected as reasoning model"
+            assert provider._is_reasoning_model(model), (
+                f"{model} should be detected as reasoning model"
+            )
 
     def test_is_reasoning_model_o3(self):
         """o3 models should be detected as reasoning models."""
@@ -183,9 +183,9 @@ class TestReasoningModelTemperature:
 
         reasoning_models = ["o3", "o3-mini", "o3-preview"]
         for model in reasoning_models:
-            assert provider._is_reasoning_model(
-                model
-            ), f"{model} should be detected as reasoning model"
+            assert provider._is_reasoning_model(model), (
+                f"{model} should be detected as reasoning model"
+            )
 
     def test_non_reasoning_models_not_detected(self):
         """Regular models should NOT be detected as reasoning models."""
@@ -195,9 +195,9 @@ class TestReasoningModelTemperature:
 
         regular_models = ["gpt-4", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo", "o4-mini"]
         for model in regular_models:
-            assert not provider._is_reasoning_model(
-                model
-            ), f"{model} should NOT be detected as reasoning model"
+            assert not provider._is_reasoning_model(model), (
+                f"{model} should NOT be detected as reasoning model"
+            )
 
     def test_filter_removes_temperature_for_reasoning_models(self):
         """Temperature should be removed for reasoning models."""

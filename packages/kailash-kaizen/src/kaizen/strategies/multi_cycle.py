@@ -166,9 +166,9 @@ class MultiCycleStrategy:
 
             try:
                 # Chatty output: Cycle start
-                print(f"\n{'='*80}")
+                print(f"\n{'=' * 80}")
                 print(f"🔄 Cycle {cycle_num + 1}/{self.max_cycles}")
-                print(f"{'='*80}\n")
+                print(f"{'=' * 80}\n")
 
                 # Use cycle_processor_callback if provided, otherwise use default processing
                 if self.cycle_processor_callback:
@@ -262,8 +262,8 @@ class MultiCycleStrategy:
                                     import concurrent.futures
 
                                     with (
-                                        concurrent.futures.ThreadPoolExecutor() as pool
-                                    ):
+                                        concurrent.futures.ThreadPoolExecutor()
+                                    ) as pool:
                                         pool.submit(
                                             asyncio.run,
                                             agent.hook_manager.trigger(
@@ -300,8 +300,8 @@ class MultiCycleStrategy:
                                     loop = asyncio.get_running_loop()
                                     # We're in an async context - use thread pool to avoid nested loop
                                     with (
-                                        concurrent.futures.ThreadPoolExecutor() as pool
-                                    ):
+                                        concurrent.futures.ThreadPoolExecutor()
+                                    ) as pool:
                                         tool_result = pool.submit(
                                             asyncio.run,
                                             agent.execute_tool(tool_name, tool_params),
@@ -340,8 +340,8 @@ class MultiCycleStrategy:
                                     loop = asyncio.get_running_loop()
                                     # In async context - use thread pool
                                     with (
-                                        concurrent.futures.ThreadPoolExecutor() as pool
-                                    ):
+                                        concurrent.futures.ThreadPoolExecutor()
+                                    ) as pool:
                                         pool.submit(
                                             asyncio.run,
                                             agent.hook_manager.trigger(

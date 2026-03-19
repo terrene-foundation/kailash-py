@@ -262,9 +262,9 @@ class TestSessionSyncLatency:
         assert state["data"] == "test"
 
         # Verify low latency
-        assert (
-            duration < 0.05
-        ), f"Session retrieval took {duration:.4f}s, expected <0.05s"
+        assert duration < 0.05, (
+            f"Session retrieval took {duration:.4f}s, expected <0.05s"
+        )
 
 
 class TestConcurrentChannelThroughput:
@@ -302,9 +302,9 @@ class TestConcurrentChannelThroughput:
 
             # Verify throughput >100 req/s
             throughput = len(results) / duration
-            assert (
-                throughput > 100
-            ), f"Throughput {throughput:.2f} req/s, expected >100 req/s"
+            assert throughput > 100, (
+                f"Throughput {throughput:.2f} req/s, expected >100 req/s"
+            )
 
 
 class TestMemoryUsageStability:
@@ -325,7 +325,8 @@ class TestMemoryUsageStability:
         session_ids = []
         for i in range(100):
             session = session_manager.create_session(
-                user_id=f"user_{i}", ttl_hours=0.0001  # Very short TTL
+                user_id=f"user_{i}",
+                ttl_hours=0.0001,  # Very short TTL
             )
             session_ids.append(session.session_id)
 
@@ -384,9 +385,9 @@ class TestMemoryUsageStability:
         duration = time.time() - start_time
 
         # Verify cleanup succeeded
-        assert (
-            cleaned_count == 50
-        ), f"Only cleaned {cleaned_count} sessions, expected 50"
+        assert cleaned_count == 50, (
+            f"Only cleaned {cleaned_count} sessions, expected 50"
+        )
 
         # Verify cleanup was fast (<100ms for 50 sessions)
         assert duration < 0.1, f"Cleanup took {duration:.4f}s, expected <0.1s"
@@ -416,6 +417,6 @@ class TestPerformanceMetrics:
         assert metrics["total_sessions"] > 0
 
         # Verify low overhead (<10ms)
-        assert (
-            duration < 0.01
-        ), f"Metrics collection took {duration:.4f}s, expected <0.01s"
+        assert duration < 0.01, (
+            f"Metrics collection took {duration:.4f}s, expected <0.01s"
+        )

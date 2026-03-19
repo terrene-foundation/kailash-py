@@ -78,9 +78,9 @@ class TestPerformanceValidation:
         create_time = time.time() - start_time
 
         # Should complete within 1 second for single operation
-        assert (
-            create_time < 1.0
-        ), f"Create operation took {create_time:.3f}s, expected < 1.0s"
+        assert create_time < 1.0, (
+            f"Create operation took {create_time:.3f}s, expected < 1.0s"
+        )
         assert result is not None
 
         # Test READ performance
@@ -117,9 +117,9 @@ class TestPerformanceValidation:
         result3, run_id3 = runtime.execute(workflow3.build())
         update_time = time.time() - start_time
 
-        assert (
-            update_time < 1.0
-        ), f"Update operation took {update_time:.3f}s, expected < 1.0s"
+        assert update_time < 1.0, (
+            f"Update operation took {update_time:.3f}s, expected < 1.0s"
+        )
         assert result3 is not None
 
     def test_bulk_operation_performance(self, test_suite):
@@ -157,9 +157,9 @@ class TestPerformanceValidation:
 
         # Bulk operations should be efficient
         time_per_record = bulk_time / record_count
-        assert (
-            time_per_record < 0.1
-        ), f"Bulk create: {time_per_record:.4f}s per record, expected < 0.1s"
+        assert time_per_record < 0.1, (
+            f"Bulk create: {time_per_record:.4f}s per record, expected < 0.1s"
+        )
         assert result is not None
 
         # Test bulk update performance
@@ -179,9 +179,9 @@ class TestPerformanceValidation:
         bulk_update_time = time.time() - start_time
 
         # Bulk update should also be efficient
-        assert (
-            bulk_update_time < 5.0
-        ), f"Bulk update took {bulk_update_time:.3f}s, expected < 5.0s"
+        assert bulk_update_time < 5.0, (
+            f"Bulk update took {bulk_update_time:.3f}s, expected < 5.0s"
+        )
         assert result2 is not None
 
     def test_concurrent_operation_performance(self, test_suite):
@@ -343,9 +343,9 @@ class TestPerformanceValidation:
 
         # Complex queries should not be dramatically slower
         performance_ratio = complex_query_time / max(simple_query_time, 0.001)
-        assert (
-            performance_ratio < 10.0
-        ), f"Complex query {performance_ratio:.1f}x slower than simple"
+        assert performance_ratio < 10.0, (
+            f"Complex query {performance_ratio:.1f}x slower than simple"
+        )
 
     def test_memory_usage_performance(self, test_suite):
         """Test memory usage patterns during operations."""
@@ -394,14 +394,14 @@ class TestPerformanceValidation:
 
         # Performance should be stable (no memory leaks causing slowdown)
         time_variance = max_time - min_time
-        assert (
-            time_variance < 1.0
-        ), f"Time variance {time_variance:.3f}s suggests memory issues"
+        assert time_variance < 1.0, (
+            f"Time variance {time_variance:.3f}s suggests memory issues"
+        )
 
         # Operations should complete efficiently even with larger data
-        assert (
-            avg_time < 1.0
-        ), f"Average time {avg_time:.3f}s too high for memory operations"
+        assert avg_time < 1.0, (
+            f"Average time {avg_time:.3f}s too high for memory operations"
+        )
 
     def test_transaction_performance(self, test_suite):
         """Test transaction performance and rollback efficiency."""
@@ -449,9 +449,9 @@ class TestPerformanceValidation:
         error_transaction_time = time.time() - start_time
 
         # Error handling should not significantly impact performance
-        assert (
-            error_transaction_time < 5.0
-        ), f"Error transaction took {error_transaction_time:.3f}s"
+        assert error_transaction_time < 5.0, (
+            f"Error transaction took {error_transaction_time:.3f}s"
+        )
 
     def test_connection_pool_performance(self, test_suite):
         """Test connection pool performance impact."""
@@ -571,9 +571,9 @@ class TestPerformanceValidation:
 
             # Performance should scale reasonably
             time_per_record = processing_time / size
-            assert (
-                time_per_record < 0.5
-            ), f"Time per record {time_per_record:.4f}s too high for size {size}"
+            assert time_per_record < 0.5, (
+                f"Time per record {time_per_record:.4f}s too high for size {size}"
+            )
 
         # Performance should scale sub-linearly (good optimization)
         if len(processing_times) >= 2:

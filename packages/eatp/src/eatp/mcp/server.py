@@ -143,10 +143,7 @@ _TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     },
     {
         "name": "eatp_audit_query",
-        "description": (
-            "Query the audit trail for agent actions. "
-            "Supports filtering by agent_id and action type."
-        ),
+        "description": ("Query the audit trail for agent actions. Supports filtering by agent_id and action type."),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -196,16 +193,12 @@ _TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                 },
                 "reasoning_decision": {
                     "type": "string",
-                    "description": (
-                        "What was decided — human-readable summary for "
-                        "the reasoning trace (optional)"
-                    ),
+                    "description": ("What was decided — human-readable summary for the reasoning trace (optional)"),
                 },
                 "reasoning_rationale": {
                     "type": "string",
                     "description": (
-                        "Why it was decided — human-readable explanation "
-                        "for the reasoning trace (optional)"
+                        "Why it was decided — human-readable explanation for the reasoning trace (optional)"
                     ),
                 },
                 "reasoning_confidentiality": {
@@ -425,9 +418,7 @@ class EATPMCPServer:
         method = msg.get("method")
 
         if not method or not isinstance(method, str):
-            resp = _error_response(
-                msg_id, _INVALID_REQUEST, "Missing or invalid method"
-            )
+            resp = _error_response(msg_id, _INVALID_REQUEST, "Missing or invalid method")
             return json.dumps(resp)
 
         handler = self._methods.get(method)
@@ -435,9 +426,7 @@ class EATPMCPServer:
             # Ignore unknown notifications (no id)
             if msg_id is None:
                 return None
-            resp = _error_response(
-                msg_id, _METHOD_NOT_FOUND, f"Unknown method: {method}"
-            )
+            resp = _error_response(msg_id, _METHOD_NOT_FOUND, f"Unknown method: {method}")
             return json.dumps(resp)
 
         try:
@@ -603,18 +592,14 @@ class EATPMCPServer:
                 {
                     "uri": f"eatp://chains/{authority_id}",
                     "name": f"Delegation Chain: {authority_id}",
-                    "description": (
-                        f"Delegation hierarchy under authority {authority_id}"
-                    ),
+                    "description": (f"Delegation hierarchy under authority {authority_id}"),
                     "mimeType": "application/json",
                 }
             )
 
         return {"resources": resources}
 
-    async def _handle_resource_templates_list(
-        self, params: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _handle_resource_templates_list(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Handle ``resources/templates/list`` -- return URI templates."""
         return {"resourceTemplates": _RESOURCE_TEMPLATES}
 
@@ -743,9 +728,7 @@ class EATPMCPServer:
                     "created_at": chain.genesis.created_at.isoformat(),
                 }
 
-        authority_list = sorted(
-            authorities_by_id.values(), key=lambda a: a["authority_id"]
-        )
+        authority_list = sorted(authorities_by_id.values(), key=lambda a: a["authority_id"])
 
         return {
             "authorities": authority_list,
@@ -804,9 +787,7 @@ class EATPMCPServer:
                         "constraints": cap.constraints,
                         "attester_id": cap.attester_id,
                         "attested_at": cap.attested_at.isoformat(),
-                        "expires_at": (
-                            cap.expires_at.isoformat() if cap.expires_at else None
-                        ),
+                        "expires_at": (cap.expires_at.isoformat() if cap.expires_at else None),
                         "scope": cap.scope,
                     }
                 )
@@ -821,11 +802,7 @@ class EATPMCPServer:
                     "delegatee_id": delegation.delegatee_id,
                     "capabilities_delegated": delegation.capabilities_delegated,
                     "delegated_at": delegation.delegated_at.isoformat(),
-                    "expires_at": (
-                        delegation.expires_at.isoformat()
-                        if delegation.expires_at
-                        else None
-                    ),
+                    "expires_at": (delegation.expires_at.isoformat() if delegation.expires_at else None),
                     "delegation_depth": delegation.delegation_depth,
                 }
             )
@@ -840,11 +817,7 @@ class EATPMCPServer:
             "active_delegations": active_delegations,
             "chain_expired": chain.is_expired(),
             "created_at": chain.genesis.created_at.isoformat(),
-            "expires_at": (
-                chain.genesis.expires_at.isoformat()
-                if chain.genesis.expires_at
-                else None
-            ),
+            "expires_at": (chain.genesis.expires_at.isoformat() if chain.genesis.expires_at else None),
         }
 
     async def _resource_chain(self, uri_params: Dict[str, str]) -> Dict[str, Any]:
@@ -876,9 +849,7 @@ class EATPMCPServer:
             agent_id = chain.genesis.agent_id
             agent_info[agent_id] = {
                 "agent_id": agent_id,
-                "capabilities": [
-                    cap.capability for cap in chain.capabilities if not cap.is_expired()
-                ],
+                "capabilities": [cap.capability for cap in chain.capabilities if not cap.is_expired()],
                 "delegation_count": len(chain.get_active_delegations()),
                 "expired": chain.is_expired(),
             }
@@ -909,9 +880,7 @@ class EATPMCPServer:
                     children_map[parent].append(child)
                 child_agents.add(child)
 
-        def _build_subtree(
-            agent_id: str, visited: set, depth: int = 0
-        ) -> Dict[str, Any]:
+        def _build_subtree(agent_id: str, visited: set, depth: int = 0) -> Dict[str, Any]:
             """Recursively build the delegation subtree for an agent."""
             if agent_id in visited or depth > 20:
                 return {
@@ -1012,16 +981,8 @@ class EATPMCPServer:
             "agent_id": agent_id,
             "envelope_id": envelope.id if envelope else None,
             "constraint_hash": envelope.constraint_hash if envelope else "",
-            "computed_at": (
-                envelope.computed_at.isoformat()
-                if envelope and envelope.computed_at
-                else None
-            ),
-            "valid_until": (
-                envelope.valid_until.isoformat()
-                if envelope and envelope.valid_until
-                else None
-            ),
+            "computed_at": (envelope.computed_at.isoformat() if envelope and envelope.computed_at else None),
+            "valid_until": (envelope.valid_until.isoformat() if envelope and envelope.valid_until else None),
             "envelope_valid": envelope.is_valid() if envelope else False,
             "constraints": constraints_list,
             "total": len(constraints_list),
@@ -1209,11 +1170,7 @@ class EATPMCPServer:
                     "delegatee_id": delegation.delegatee_id,
                     "capabilities_delegated": delegation.capabilities_delegated,
                     "delegated_at": delegation.delegated_at.isoformat(),
-                    "expires_at": (
-                        delegation.expires_at.isoformat()
-                        if delegation.expires_at
-                        else None
-                    ),
+                    "expires_at": (delegation.expires_at.isoformat() if delegation.expires_at else None),
                     "delegation_depth": delegation.delegation_depth,
                 }
             )
@@ -1237,9 +1194,7 @@ class EATPMCPServer:
             "active_delegations": active_delegations,
             "constraints_summary": constraints_summary,
             "chain_expired": chain.is_expired(),
-            "capabilities": [
-                cap.capability for cap in chain.capabilities if not cap.is_expired()
-            ],
+            "capabilities": [cap.capability for cap in chain.capabilities if not cap.is_expired()],
         }
 
     async def _tool_audit_query(self, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -1300,13 +1255,8 @@ class EATPMCPServer:
             if anchor.reasoning_trace is not None:
                 from eatp.reasoning import ConfidentialityLevel
 
-                if (
-                    anchor.reasoning_trace.confidentiality
-                    <= ConfidentialityLevel.RESTRICTED
-                ):
-                    entry["anchor"][
-                        "reasoning_trace"
-                    ] = anchor.reasoning_trace.to_dict()
+                if anchor.reasoning_trace.confidentiality <= ConfidentialityLevel.RESTRICTED:
+                    entry["anchor"]["reasoning_trace"] = anchor.reasoning_trace.to_dict()
                 # else CONFIDENTIAL/SECRET/TOP_SECRET: omit full trace
             if anchor.reasoning_trace_hash is not None:
                 entry["anchor"]["reasoning_trace_hash"] = anchor.reasoning_trace_hash
@@ -1352,15 +1302,12 @@ class EATPMCPServer:
             return {"error": "capabilities is required and must be a list of strings"}
         for cap in capabilities:
             if not isinstance(cap, str):
-                return {
-                    "error": f"Each capability must be a string, got: {type(cap).__name__}"
-                }
+                return {"error": f"Each capability must be a string, got: {type(cap).__name__}"}
 
         if self._ops is None:
             return {
                 "error": (
-                    "Delegation requires a TrustOperations instance. "
-                    "Initialize EATPMCPServer with trust_ops parameter."
+                    "Delegation requires a TrustOperations instance. Initialize EATPMCPServer with trust_ops parameter."
                 )
             }
 
@@ -1418,9 +1365,7 @@ class EATPMCPServer:
             "capabilities_delegated": delegation.capabilities_delegated,
             "constraint_subset": delegation.constraint_subset,
             "delegated_at": delegation.delegated_at.isoformat(),
-            "expires_at": (
-                delegation.expires_at.isoformat() if delegation.expires_at else None
-            ),
+            "expires_at": (delegation.expires_at.isoformat() if delegation.expires_at else None),
             "delegation_depth": delegation.delegation_depth,
         }
 
@@ -1459,8 +1404,7 @@ class EATPMCPServer:
         if self._ops is None:
             return {
                 "error": (
-                    "Revocation requires a TrustOperations instance. "
-                    "Initialize EATPMCPServer with trust_ops parameter."
+                    "Revocation requires a TrustOperations instance. Initialize EATPMCPServer with trust_ops parameter."
                 )
             }
 
@@ -1534,9 +1478,7 @@ class EATPMCPServer:
         (
             writer_transport,
             writer_protocol,
-        ) = await loop.connect_write_pipe(
-            asyncio.streams.FlowControlMixin, sys.stdout.buffer
-        )
+        ) = await loop.connect_write_pipe(asyncio.streams.FlowControlMixin, sys.stdout.buffer)
         writer = asyncio.StreamWriter(writer_transport, writer_protocol, None, loop)
 
         logger.info("EATP MCP Server started on stdio")

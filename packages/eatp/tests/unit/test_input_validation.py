@@ -177,14 +177,10 @@ def _make_revocation_event(event_id: str) -> RevocationEvent:
 class TestH1ModifiedContextConstraints:
     """H1: modified_context must be size-capped and must not overwrite reserved keys."""
 
-    async def test_modified_context_over_100_keys_is_truncated(
-        self, registry, pre_delegation_context
-    ):
+    async def test_modified_context_over_100_keys_is_truncated(self, registry, pre_delegation_context):
         """modified_context with >100 keys must be truncated to 100."""
         large_inject = {f"key_{i}": f"value_{i}" for i in range(150)}
-        modifier = ContextModifyingHook(
-            name="large_modifier", priority=10, inject=large_inject
-        )
+        modifier = ContextModifyingHook(name="large_modifier", priority=10, inject=large_inject)
         reader = ContextReaderHook(name="reader", priority=200)
 
         registry.register(modifier)
@@ -197,14 +193,10 @@ class TestH1ModifiedContextConstraints:
         injected_keys = [k for k in reader.observed_metadata if k.startswith("key_")]
         assert len(injected_keys) == 100
 
-    async def test_modified_context_exactly_100_keys_is_allowed(
-        self, registry, pre_delegation_context
-    ):
+    async def test_modified_context_exactly_100_keys_is_allowed(self, registry, pre_delegation_context):
         """modified_context with exactly 100 keys must be fully applied."""
         inject = {f"key_{i}": f"value_{i}" for i in range(100)}
-        modifier = ContextModifyingHook(
-            name="exact_modifier", priority=10, inject=inject
-        )
+        modifier = ContextModifyingHook(name="exact_modifier", priority=10, inject=inject)
         reader = ContextReaderHook(name="reader", priority=200)
 
         registry.register(modifier)
@@ -215,9 +207,7 @@ class TestH1ModifiedContextConstraints:
         injected_keys = [k for k in reader.observed_metadata if k.startswith("key_")]
         assert len(injected_keys) == 100
 
-    async def test_reserved_key_agent_id_is_skipped(
-        self, registry, pre_delegation_context
-    ):
+    async def test_reserved_key_agent_id_is_skipped(self, registry, pre_delegation_context):
         """Attempting to overwrite 'agent_id' via modified_context must be skipped."""
         modifier = ContextModifyingHook(
             name="agent_overwriter",
@@ -237,9 +227,7 @@ class TestH1ModifiedContextConstraints:
         # safe_key should still be applied
         assert reader.observed_metadata["safe_key"] == "ok"
 
-    async def test_reserved_key_authority_id_is_skipped(
-        self, registry, pre_delegation_context
-    ):
+    async def test_reserved_key_authority_id_is_skipped(self, registry, pre_delegation_context):
         """Attempting to overwrite 'authority_id' via modified_context must be skipped."""
         modifier = ContextModifyingHook(
             name="auth_overwriter",
@@ -255,9 +243,7 @@ class TestH1ModifiedContextConstraints:
         assert reader.observed_metadata is not None
         assert reader.observed_metadata.get("authority_id") != "malicious-authority"
 
-    async def test_reserved_key_action_is_skipped(
-        self, registry, pre_delegation_context
-    ):
+    async def test_reserved_key_action_is_skipped(self, registry, pre_delegation_context):
         """Attempting to overwrite 'action' via modified_context must be skipped."""
         modifier = ContextModifyingHook(
             name="action_overwriter",
@@ -274,9 +260,7 @@ class TestH1ModifiedContextConstraints:
         assert reader.observed_metadata.get("action") != "delete_all"
         assert reader.observed_metadata["benign"] == "data"
 
-    async def test_all_six_reserved_keys_are_protected(
-        self, registry, pre_delegation_context
-    ):
+    async def test_all_six_reserved_keys_are_protected(self, registry, pre_delegation_context):
         """All 6 reserved keys must be protected from overwrite."""
         reserved = {
             "agent_id": "evil",
@@ -300,15 +284,11 @@ class TestH1ModifiedContextConstraints:
         assert reader.observed_metadata is not None
         # None of the reserved keys should have been set to "evil"
         for key in reserved:
-            assert (
-                reader.observed_metadata.get(key) != "evil"
-            ), f"Reserved key '{key}' was overwritten"
+            assert reader.observed_metadata.get(key) != "evil", f"Reserved key '{key}' was overwritten"
         # The non-reserved key should be applied
         assert reader.observed_metadata["allowed_key"] == "value"
 
-    async def test_non_reserved_key_overwrite_is_allowed(
-        self, registry, pre_delegation_context
-    ):
+    async def test_non_reserved_key_overwrite_is_allowed(self, registry, pre_delegation_context):
         """Non-reserved keys in metadata CAN be overwritten by modified_context."""
         pre_delegation_context.metadata["custom_key"] = "original"
         modifier = ContextModifyingHook(
@@ -325,14 +305,10 @@ class TestH1ModifiedContextConstraints:
         assert reader.observed_metadata is not None
         assert reader.observed_metadata["custom_key"] == "updated"
 
-    async def test_truncation_logs_warning(
-        self, registry, pre_delegation_context, caplog
-    ):
+    async def test_truncation_logs_warning(self, registry, pre_delegation_context, caplog):
         """Truncating modified_context must log a warning."""
         large_inject = {f"key_{i}": f"value_{i}" for i in range(101)}
-        modifier = ContextModifyingHook(
-            name="warn_modifier", priority=10, inject=large_inject
-        )
+        modifier = ContextModifyingHook(name="warn_modifier", priority=10, inject=large_inject)
         registry.register(modifier)
 
         with caplog.at_level(logging.WARNING, logger="eatp.hooks"):
@@ -340,9 +316,7 @@ class TestH1ModifiedContextConstraints:
 
         assert any("exceeds 100 keys" in msg for msg in caplog.messages)
 
-    async def test_reserved_key_skip_logs_warning(
-        self, registry, pre_delegation_context, caplog
-    ):
+    async def test_reserved_key_skip_logs_warning(self, registry, pre_delegation_context, caplog):
         """Skipping a reserved key must log a warning."""
         modifier = ContextModifyingHook(
             name="reserved_warner",

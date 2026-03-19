@@ -141,7 +141,7 @@ class OllamaVisionProvider(BaseDocumentProvider):
         cost = 0.0  # Free!
 
         logger.info(
-            f"Extracting {file_path} with Ollama Vision " f"({page_count} pages, FREE)"
+            f"Extracting {file_path} with Ollama Vision ({page_count} pages, FREE)"
         )
 
         # Check if Ollama is available

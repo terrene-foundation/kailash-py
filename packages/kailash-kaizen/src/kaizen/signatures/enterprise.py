@@ -201,7 +201,7 @@ class EnterpriseSignatureValidator(SignatureValidator):
                 current_sig
             ) and not self._has_security_config(next_sig):
                 errors.append(
-                    f"Sensitive data flow from step {i} to less secure step {i+1}"
+                    f"Sensitive data flow from step {i} to less secure step {i + 1}"
                 )
 
         return errors
@@ -608,7 +608,7 @@ class SignatureComposition:
 
             missing_inputs = required_inputs - provided_outputs
             if missing_inputs:
-                errors.append(f"Step {i+1} missing required inputs: {missing_inputs}")
+                errors.append(f"Step {i + 1} missing required inputs: {missing_inputs}")
 
         return errors
 

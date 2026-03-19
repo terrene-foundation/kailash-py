@@ -218,7 +218,8 @@ class LongRunningResearchAgent(BaseAutonomousAgent):
         """Configure 3-tier memory architecture."""
         # Hot tier: In-memory cache (< 1ms)
         self.hot_memory = HotMemoryTier(
-            max_size=100, eviction_policy="lru"  # Keep last 100 findings in memory
+            max_size=100,
+            eviction_policy="lru",  # Keep last 100 findings in memory
         )
 
         # Warm tier: Database storage (< 10ms)
@@ -461,9 +462,9 @@ async def simulate_long_running_session(
     new_count = len([r for r in results if r["tier"] == "new"])
 
     print("\nQUERY DISTRIBUTION:")
-    print(f"  Hot tier hits:  {hot_count} ({hot_count/num_queries*100:.1f}%)")
-    print(f"  Warm tier hits: {warm_count} ({warm_count/num_queries*100:.1f}%)")
-    print(f"  New queries:    {new_count} ({new_count/num_queries*100:.1f}%)")
+    print(f"  Hot tier hits:  {hot_count} ({hot_count / num_queries * 100:.1f}%)")
+    print(f"  Warm tier hits: {warm_count} ({warm_count / num_queries * 100:.1f}%)")
+    print(f"  New queries:    {new_count} ({new_count / num_queries * 100:.1f}%)")
 
     # Calculate average access times
     print("\nACCESS TIME STATISTICS:")

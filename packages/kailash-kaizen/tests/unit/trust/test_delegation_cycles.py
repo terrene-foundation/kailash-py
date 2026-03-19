@@ -129,9 +129,9 @@ class TestGetDelegationChainCycleDetection:
         # Create a long chain
         delegations = []
         for i in range(15):
-            parent_id = f"del-{i-1}" if i > 0 else None
+            parent_id = f"del-{i - 1}" if i > 0 else None
             delegations.append(
-                _make_delegation(f"agent-{i}", f"agent-{i+1}", f"del-{i}", parent_id)
+                _make_delegation(f"agent-{i}", f"agent-{i + 1}", f"del-{i}", parent_id)
             )
 
         chain = TrustLineageChain(
@@ -272,7 +272,7 @@ class TestDelegationGraphValidator:
         # Create large linear graph (500 nodes)
         delegations = []
         for i in range(500):
-            delegations.append(_make_delegation(f"agent-{i}", f"agent-{i+1}"))
+            delegations.append(_make_delegation(f"agent-{i}", f"agent-{i + 1}"))
 
         graph = DelegationGraph.from_delegations(delegations)
         validator = DelegationGraphValidator(graph)

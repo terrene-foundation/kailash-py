@@ -236,7 +236,9 @@ class DocumentUnderstandingWorkflow:
             equivalent = self.cost_tracker.estimate_openai_equivalent_cost()
             savings = equivalent - cost_summary["total_cost"]
             print(f"OpenAI equivalent cost: ${equivalent:.3f}")
-            print(f"Total savings: ${savings:.3f} ({(savings/equivalent*100):.0f}%)")
+            print(
+                f"Total savings: ${savings:.3f} ({(savings / equivalent * 100):.0f}%)"
+            )
 
         return results
 

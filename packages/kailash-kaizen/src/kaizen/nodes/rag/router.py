@@ -319,13 +319,13 @@ Respond with ONLY a valid JSON object in this exact format:
         input_text = f"""Analyze this RAG use case and recommend the optimal strategy:
 
 DOCUMENT ANALYSIS:
-- Total documents: {analysis['total_docs']}
-- Average length: {analysis['avg_length']} characters
-- Total content: {analysis['total_length']} characters
-- Has structure (headings/sections): {analysis['has_structure']}
-- Technical content: {analysis['is_technical']} (ratio: {analysis.get('technical_content_ratio', 0):.2f})
-- Content types: {', '.join(analysis['content_types'])}
-- Complexity score: {analysis['complexity_score']:.2f}/1.0
+- Total documents: {analysis["total_docs"]}
+- Average length: {analysis["avg_length"]} characters
+- Total content: {analysis["total_length"]} characters
+- Has structure (headings/sections): {analysis["has_structure"]}
+- Technical content: {analysis["is_technical"]} (ratio: {analysis.get("technical_content_ratio", 0):.2f})
+- Content types: {", ".join(analysis["content_types"])}
+- Complexity score: {analysis["complexity_score"]:.2f}/1.0
 
 QUERY ANALYSIS:"""
 
@@ -333,10 +333,10 @@ QUERY ANALYSIS:"""
             query_analysis = analysis.get("query_analysis", {})
             input_text += f"""
 - Query: "{query}"
-- Is question: {query_analysis.get('is_question', False)}
-- Technical query: {query_analysis.get('is_technical', False)}
-- Conceptual query: {query_analysis.get('is_conceptual', False)}
-- Query complexity: {query_analysis.get('complexity', 0):.2f}"""
+- Is question: {query_analysis.get("is_question", False)}
+- Technical query: {query_analysis.get("is_technical", False)}
+- Conceptual query: {query_analysis.get("is_conceptual", False)}
+- Query complexity: {query_analysis.get("complexity", 0):.2f}"""
         else:
             input_text += "\n- No query provided (indexing mode)"
 

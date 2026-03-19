@@ -224,7 +224,9 @@ def test_cache_ttl_expiration():
     """Test cache TTL expiration."""
     backend = MockBackend()
     memory = PersistentBufferMemory(
-        backend=backend, max_turns=10, cache_ttl_seconds=0.1  # 100ms TTL
+        backend=backend,
+        max_turns=10,
+        cache_ttl_seconds=0.1,  # 100ms TTL
     )
 
     # Save turn

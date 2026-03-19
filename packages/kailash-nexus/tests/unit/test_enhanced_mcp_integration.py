@@ -106,9 +106,7 @@ class TestEnhancedMCPServerCreation:
         # Mock the simple MCP server's _resources dict
         with patch("nexus.mcp.MCPServer") as mock_simple_server:
             mock_server_instance = Mock()
-            mock_server_instance._resources = (
-                {}
-            )  # Simple server uses dict for resources
+            mock_server_instance._resources = {}  # Simple server uses dict for resources
             mock_simple_server.return_value = mock_server_instance
 
             # Create Nexus in WebSocket-only mode (default)
@@ -401,9 +399,7 @@ class TestErrorHandling:
         ):
             with patch("nexus.mcp.MCPServer") as mock_simple_server:
                 mock_server_instance = Mock()
-                mock_server_instance._resources = (
-                    {}
-                )  # Mock resources dict for simple server
+                mock_server_instance._resources = {}  # Mock resources dict for simple server
                 mock_simple_server.return_value = mock_server_instance
 
                 # Should handle error gracefully and fall back to simple server

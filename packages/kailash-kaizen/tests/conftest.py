@@ -39,12 +39,12 @@ if not use_real_providers:
 
         # Update in sys.modules cache
         if "kailash.nodes.ai.ai_providers" in sys.modules:
-            sys.modules["kailash.nodes.ai.ai_providers"].PROVIDERS[
-                "mock"
-            ] = KaizenMockProvider
-            sys.modules["kailash.nodes.ai.ai_providers"].MockProvider = (
+            sys.modules["kailash.nodes.ai.ai_providers"].PROVIDERS["mock"] = (
                 KaizenMockProvider
             )
+            sys.modules[
+                "kailash.nodes.ai.ai_providers"
+            ].MockProvider = KaizenMockProvider
 
         print(
             "✅ Patched Core SDK PROVIDERS['mock'] with KaizenMockProvider at module level"

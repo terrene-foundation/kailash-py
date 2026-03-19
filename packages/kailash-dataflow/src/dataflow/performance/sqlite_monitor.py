@@ -654,9 +654,7 @@ class SQLitePerformanceMonitor:
             # Update recommendations list (keep only recent ones)
             self.optimization_recommendations = (
                 recommendations + self.optimization_recommendations
-            )[
-                :50
-            ]  # Keep last 50 recommendations
+            )[:50]  # Keep last 50 recommendations
 
         except Exception as e:
             logger.warning(f"Failed to generate optimization recommendations: {e}")

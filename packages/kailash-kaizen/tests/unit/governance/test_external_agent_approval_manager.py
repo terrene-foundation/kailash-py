@@ -47,9 +47,9 @@ class TestApprovalRequirementEvaluation:
         required, req = manager.determine_if_approval_required("agent_001", metadata)
 
         # Verify
-        assert (
-            required is True
-        ), "Approval should be required when cost exceeds threshold"
+        assert required is True, (
+            "Approval should be required when cost exceeds threshold"
+        )
         assert req is not None
         assert req.require_for_cost_above == 10.0
 
@@ -72,9 +72,9 @@ class TestApprovalRequirementEvaluation:
         required, req = manager.determine_if_approval_required("agent_001", metadata)
 
         # Verify
-        assert (
-            required is False
-        ), "Approval should NOT be required when cost below threshold"
+        assert required is False, (
+            "Approval should NOT be required when cost below threshold"
+        )
         assert req is None
 
     def test_environment_based_approval_triggering(self):
@@ -96,9 +96,9 @@ class TestApprovalRequirementEvaluation:
         required, req = manager.determine_if_approval_required("agent_001", metadata)
 
         # Verify
-        assert (
-            required is True
-        ), "Approval should be required for production environment"
+        assert required is True, (
+            "Approval should be required for production environment"
+        )
         assert req is not None
         assert "production" in req.require_for_environments
 
@@ -121,9 +121,9 @@ class TestApprovalRequirementEvaluation:
         required, req = manager.determine_if_approval_required("agent_001", metadata)
 
         # Verify
-        assert (
-            required is False
-        ), "Approval should NOT be required for development environment"
+        assert required is False, (
+            "Approval should NOT be required for development environment"
+        )
         assert req is None
 
     def test_data_classification_based_approval_triggering(self):
@@ -221,9 +221,9 @@ class TestApprovalRequirementEvaluation:
         required, req = manager.determine_if_approval_required("agent_001", metadata)
 
         # Verify
-        assert (
-            required is False
-        ), "Approval should NOT be required for non-sensitive operation"
+        assert required is False, (
+            "Approval should NOT be required for non-sensitive operation"
+        )
         assert req is None
 
     def test_multiple_conditions_or_logic(self):
@@ -251,9 +251,9 @@ class TestApprovalRequirementEvaluation:
         required, req = manager.determine_if_approval_required("agent_001", metadata)
 
         # Verify
-        assert (
-            required is True
-        ), "Approval should be required when ANY condition matches (OR logic)"
+        assert required is True, (
+            "Approval should be required when ANY condition matches (OR logic)"
+        )
         assert req is not None
 
 
@@ -421,9 +421,9 @@ class TestApprovalDecisions:
         assert request.status == ApprovalStatus.REJECTED, "Status should be REJECTED"
         assert request.approved_by == "lead_001", "Rejector ID should be recorded"
         assert request.approved_at is not None, "Rejection timestamp should be recorded"
-        assert (
-            request.rejection_reason == rejection_reason
-        ), "Rejection reason should be recorded"
+        assert request.rejection_reason == rejection_reason, (
+            "Rejection reason should be recorded"
+        )
 
     @pytest.mark.asyncio
     async def test_approve_request_requires_authorized_approver(self):
@@ -561,9 +561,9 @@ class TestApprovalTimeout:
         # Verify
         assert count == 0, "Should NOT timeout any approvals (already decided)"
         request = manager.get_request(request_id)
-        assert (
-            request.status == ApprovalStatus.APPROVED
-        ), "Status should remain APPROVED"
+        assert request.status == ApprovalStatus.APPROVED, (
+            "Status should remain APPROVED"
+        )
 
 
 class TestGetPendingApprovals:

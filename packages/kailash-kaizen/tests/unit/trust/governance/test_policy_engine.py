@@ -239,9 +239,9 @@ class TestLocationCondition:
         )
 
         result = condition.evaluate(context)
-        assert (
-            result is True
-        ), "Should match blocked country (use with DENY policy to block)"
+        assert result is True, (
+            "Should match blocked country (use with DENY policy to block)"
+        )
 
     def test_ip_allowlist_match(self):
         """
@@ -334,9 +334,9 @@ class TestEnvironmentCondition:
         )
 
         result = condition.evaluate(context)
-        assert (
-            result is True
-        ), "Should match blocked environment (use with DENY policy to block)"
+        assert result is True, (
+            "Should match blocked environment (use with DENY policy to block)"
+        )
 
 
 class TestProviderCondition:
@@ -391,9 +391,9 @@ class TestProviderCondition:
         )
 
         result = condition.evaluate(context)
-        assert (
-            result is True
-        ), "Should match blocked provider (use with DENY policy to block)"
+        assert result is True, (
+            "Should match blocked provider (use with DENY policy to block)"
+        )
 
 
 class TestTagCondition:
@@ -711,9 +711,9 @@ class TestPolicyEngine:
         )
 
         result = await engine.evaluate_policies(context)
-        assert (
-            result.evaluation_time_ms < 5.0
-        ), f"Evaluation took {result.evaluation_time_ms}ms (should be <5ms)"
+        assert result.evaluation_time_ms < 5.0, (
+            f"Evaluation took {result.evaluation_time_ms}ms (should be <5ms)"
+        )
 
     async def test_disabled_policy_not_evaluated(self):
         """
@@ -740,7 +740,7 @@ class TestPolicyEngine:
         )
 
         result = await engine.evaluate_policies(context)
-        assert (
-            result.effect == PolicyEffect.DENY
-        ), "Disabled policy should not allow access"
+        assert result.effect == PolicyEffect.DENY, (
+            "Disabled policy should not allow access"
+        )
         assert "disabled_policy" not in result.matched_policies

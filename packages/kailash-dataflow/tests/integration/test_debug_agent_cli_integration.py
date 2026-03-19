@@ -124,9 +124,9 @@ class TestRealErrorDiagnosisFlow:
             print(
                 f"Exception: {result.exception if hasattr(result, 'exception') else 'None'}"
             )
-        assert (
-            result.exit_code == 0
-        ), f"CLI failed with exit code {result.exit_code}. Output: {result.output[:500]}"
+        assert result.exit_code == 0, (
+            f"CLI failed with exit code {result.exit_code}. Output: {result.output[:500]}"
+        )
         assert "DF-" in result.output  # Error code
         assert "parameter" in result.output.lower()
         assert "Solutions" in result.output
@@ -605,9 +605,9 @@ class TestPerformance:
 
         # Verify execution time meets target
         assert result.exit_code == 0
-        assert (
-            execution_time < 5.0
-        ), f"Diagnosis took {execution_time:.2f}s (target: <5s)"
+        assert execution_time < 5.0, (
+            f"Diagnosis took {execution_time:.2f}s (target: <5s)"
+        )
 
 
 @pytest.mark.integration

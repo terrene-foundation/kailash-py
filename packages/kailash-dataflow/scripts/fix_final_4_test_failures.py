@@ -15,9 +15,7 @@ from pathlib import Path
 
 def fix_operations_json_parsing():
     """Fix JSON parsing issue in schema_state_manager.py."""
-    file_path = Path(
-        ""
-    )
+    file_path = Path("")
 
     with open(file_path, "r") as f:
         content = f.read()
@@ -45,9 +43,7 @@ def fix_operations_json_parsing():
 
 def fix_batched_executor_test():
     """Fix the batched executor integration test."""
-    file_path = Path(
-        ""
-    )
+    file_path = Path("")
 
     with open(file_path, "r") as f:
         content = f.read()
@@ -99,9 +95,7 @@ def fix_batched_executor_test():
 
 def fix_session_cleanup_test():
     """Fix the session cleanup expired test."""
-    file_path = Path(
-        ""
-    )
+    file_path = Path("")
 
     with open(file_path, "r") as f:
         content = f.read()

@@ -1064,14 +1064,14 @@ class SafeTypeConverter:
         try:
             for i, step in enumerate(plan.steps):
                 logger.debug(
-                    f"Executing step {i+1}/{len(plan.steps)}: {step.description}"
+                    f"Executing step {i + 1}/{len(plan.steps)}: {step.description}"
                 )
 
                 # Execute step SQL
                 workflow = WorkflowBuilder()
                 workflow.add_node(
                     "AsyncSQLDatabaseNode",
-                    f"step_{i+1}",
+                    f"step_{i + 1}",
                     {
                         "connection_string": self.connection_string,
                         "database_type": self.database_type,
@@ -1083,18 +1083,18 @@ class SafeTypeConverter:
                 # ✅ FIX: Use LocalRuntime for migration operations to avoid async context issues
                 init_runtime = LocalRuntime()
                 results, _ = init_runtime.execute(workflow.build())
-                node_id = f"step_{i+1}"
+                node_id = f"step_{i + 1}"
 
                 if node_id not in results or results[node_id].get("error"):
                     error_msg = results.get(node_id, {}).get("error", "Unknown error")
-                    logger.error(f"Step {i+1} failed: {error_msg}")
+                    logger.error(f"Step {i + 1} failed: {error_msg}")
 
                     return ConversionResult(
                         success=False,
                         plan=plan,
                         executed_steps=executed_steps,
                         execution_time_ms=0,
-                        error_message=f"Step {i+1} failed: {error_msg}",
+                        error_message=f"Step {i + 1} failed: {error_msg}",
                     )
 
                 executed_steps += 1
@@ -1121,7 +1121,7 @@ class SafeTypeConverter:
                             count = val_data["rows"][0].get("count", 0)
                             if count > 0:
                                 logger.warning(
-                                    f"Validation found {count} potential issues after step {i+1}"
+                                    f"Validation found {count} potential issues after step {i + 1}"
                                 )
 
             return ConversionResult(

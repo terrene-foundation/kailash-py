@@ -104,9 +104,9 @@ class TestErrorCatalogLoading:
         enhancer1 = ErrorEnhancer()
         catalog1 = enhancer1._load_error_catalog()
 
-        assert (
-            ErrorEnhancer._catalog_loaded is True
-        ), "Catalog should be marked as loaded after first load"
+        assert ErrorEnhancer._catalog_loaded is True, (
+            "Catalog should be marked as loaded after first load"
+        )
 
         enhancer2 = ErrorEnhancer()
         catalog2 = enhancer2._load_error_catalog()
@@ -729,9 +729,9 @@ class TestErrorMessageQuality:
         # Should have actionable solutions
         assert len(enhanced.solutions) >= 1, "Should have at least 1 solution"
         for solution in enhanced.solutions:
-            assert (
-                len(solution.description) > 0
-            ), "Each solution should have description"
+            assert len(solution.description) > 0, (
+                "Each solution should have description"
+            )
 
 
 # ============================================================================
@@ -838,9 +838,9 @@ class TestDataFlowErrorClass:
         error_str = str(error)
 
         # Should include key information
-        assert (
-            "DF-101" in error_str or "MISSING_PARAMETER" in error_str
-        ), f"Error string should contain error code: {error_str}"
+        assert "DF-101" in error_str or "MISSING_PARAMETER" in error_str, (
+            f"Error string should contain error code: {error_str}"
+        )
         assert "Missing required parameter" in error_str
         assert "user_create" in error_str
 

@@ -32,25 +32,25 @@ class TestToolDangerLevelsMapping:
             "http_get",
         ]
         for tool in safe_tools:
-            assert (
-                TOOL_DANGER_LEVELS[tool] == DangerLevel.SAFE
-            ), f"{tool} should be SAFE"
+            assert TOOL_DANGER_LEVELS[tool] == DangerLevel.SAFE, (
+                f"{tool} should be SAFE"
+            )
 
     def test_medium_tools_mapped(self):
         """Test MEDIUM level tools are mapped correctly."""
         medium_tools = ["write_file", "http_post", "http_put"]
         for tool in medium_tools:
-            assert (
-                TOOL_DANGER_LEVELS[tool] == DangerLevel.MEDIUM
-            ), f"{tool} should be MEDIUM"
+            assert TOOL_DANGER_LEVELS[tool] == DangerLevel.MEDIUM, (
+                f"{tool} should be MEDIUM"
+            )
 
     def test_high_tools_mapped(self):
         """Test HIGH level tools are mapped correctly."""
         high_tools = ["delete_file", "http_delete", "bash_command"]
         for tool in high_tools:
-            assert (
-                TOOL_DANGER_LEVELS[tool] == DangerLevel.HIGH
-            ), f"{tool} should be HIGH"
+            assert TOOL_DANGER_LEVELS[tool] == DangerLevel.HIGH, (
+                f"{tool} should be HIGH"
+            )
 
     def test_no_low_or_critical_tools(self):
         """Test no tools use LOW or CRITICAL levels."""

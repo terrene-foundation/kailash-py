@@ -98,9 +98,9 @@ class TestAgentBasicExecutionFunctionality:
         execution_time = performance_tracker.end_timer("agent_execution")
 
         performance_tracker.assert_performance("agent_execution", 200)
-        assert (
-            execution_time < 200
-        ), f"Agent execution took {execution_time:.2f}ms, expected <200ms"
+        assert execution_time < 200, (
+            f"Agent execution took {execution_time:.2f}ms, expected <200ms"
+        )
         assert result == {"answer": "Paris"}
 
     def test_agent_execute_with_workflow_parameter(self, performance_tracker):
@@ -244,9 +244,9 @@ solution: Implement time-blocking, priority matrix, and regular team retrospecti
         compilation_time = performance_tracker.end_timer("signature_compilation")
 
         performance_tracker.assert_performance("signature_compilation", 50)
-        assert (
-            compilation_time < 50
-        ), f"Signature compilation took {compilation_time:.2f}ms, expected <50ms"
+        assert compilation_time < 50, (
+            f"Signature compilation took {compilation_time:.2f}ms, expected <50ms"
+        )
 
 
 class TestAgentPatternExecution:
@@ -300,9 +300,9 @@ class TestAgentPatternExecution:
         result = agent.execute_cot(problem="What is 6 * 7?")
         execution_time = performance_tracker.end_timer("cot_execution")
 
-        assert (
-            execution_time < 500
-        ), f"CoT execution took {execution_time:.2f}ms, expected <500ms"
+        assert execution_time < 500, (
+            f"CoT execution took {execution_time:.2f}ms, expected <500ms"
+        )
         assert result == {
             "reasoning": "Step 1: Analyze... Step 2: Calculate...",
             "answer": "42",
@@ -348,9 +348,9 @@ class TestAgentPatternExecution:
         result = agent.execute_react(task="What are the latest AI trends?")
         execution_time = performance_tracker.end_timer("react_execution")
 
-        assert (
-            execution_time < 500
-        ), f"ReAct execution took {execution_time:.2f}ms, expected <500ms"
+        assert execution_time < 500, (
+            f"ReAct execution took {execution_time:.2f}ms, expected <500ms"
+        )
         expected = {
             "thought": "I need to gather information about AI trends",
             "action": "Search for recent AI research papers",
@@ -570,9 +570,9 @@ class TestAgentPerformanceAndOptimization:
         memory_after = process.memory_info().rss / 1024 / 1024
         memory_increase = memory_after - memory_before
 
-        assert (
-            memory_increase < 10
-        ), f"Memory overhead {memory_increase:.2f}MB exceeds 10MB limit"
+        assert memory_increase < 10, (
+            f"Memory overhead {memory_increase:.2f}MB exceeds 10MB limit"
+        )
 
 
 class TestAgentLegacyCompatibility:

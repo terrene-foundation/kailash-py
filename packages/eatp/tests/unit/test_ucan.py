@@ -403,9 +403,7 @@ class TestUCANSignature:
         sig_b64 = token.split(".")[2]
         padded = sig_b64 + "=" * (4 - len(sig_b64) % 4)
         sig_bytes = base64.urlsafe_b64decode(padded)
-        assert (
-            len(sig_bytes) == 64
-        ), f"Expected 64-byte Ed25519 signature, got {len(sig_bytes)}"
+        assert len(sig_bytes) == 64, f"Expected 64-byte Ed25519 signature, got {len(sig_bytes)}"
 
     def test_signature_verifies_with_correct_key(self, delegation, keypair):
         """from_ucan with matching public key should succeed."""
@@ -460,17 +458,13 @@ class TestRoundTrip:
         private_key, public_key = keypair
         token = to_ucan(delegation, private_key)
         restored = from_ucan(token, public_key)
-        assert sorted(restored.capabilities_delegated) == sorted(
-            delegation.capabilities_delegated
-        )
+        assert sorted(restored.capabilities_delegated) == sorted(delegation.capabilities_delegated)
 
     def test_preserves_constraint_subset(self, delegation, keypair):
         private_key, public_key = keypair
         token = to_ucan(delegation, private_key)
         restored = from_ucan(token, public_key)
-        assert sorted(restored.constraint_subset) == sorted(
-            delegation.constraint_subset
-        )
+        assert sorted(restored.constraint_subset) == sorted(delegation.constraint_subset)
 
     def test_preserves_delegation_chain(self, delegation, keypair):
         private_key, public_key = keypair
@@ -643,16 +637,12 @@ class TestErrorHandling:
 
         # Manually encode with wrong version (we need to import helper to sign)
         header_b64 = (
-            base64.urlsafe_b64encode(
-                json.dumps(header, separators=(",", ":"), sort_keys=True).encode()
-            )
+            base64.urlsafe_b64encode(json.dumps(header, separators=(",", ":"), sort_keys=True).encode())
             .rstrip(b"=")
             .decode()
         )
         payload_b64 = (
-            base64.urlsafe_b64encode(
-                json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
-            )
+            base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode())
             .rstrip(b"=")
             .decode()
         )
@@ -867,15 +857,11 @@ class TestUCANReasoningConfidentiality:
     def test_ucan_export_includes_public_reasoning_trace(self, keypair):
         """PUBLIC reasoning traces MUST appear in UCAN facts."""
         private_key, _ = keypair
-        deleg = self._make_delegation_with_reasoning(
-            keypair, ConfidentialityLevel.PUBLIC
-        )
+        deleg = self._make_delegation_with_reasoning(keypair, ConfidentialityLevel.PUBLIC)
         token = to_ucan(deleg, private_key)
         fct = self._decode_payload(token)["fct"]
 
-        assert (
-            "eatp_reasoning_trace" in fct
-        ), "PUBLIC reasoning trace must be included in UCAN facts"
+        assert "eatp_reasoning_trace" in fct, "PUBLIC reasoning trace must be included in UCAN facts"
         assert fct["eatp_reasoning_trace"]["decision"] == "Grant read access to dataset"
         assert fct["eatp_reasoning_trace"]["confidentiality"] == "public"
         # Hash and signature must also be present
@@ -885,15 +871,11 @@ class TestUCANReasoningConfidentiality:
     def test_ucan_export_includes_restricted_reasoning_trace(self, keypair):
         """RESTRICTED reasoning traces MUST appear in UCAN facts (boundary case)."""
         private_key, _ = keypair
-        deleg = self._make_delegation_with_reasoning(
-            keypair, ConfidentialityLevel.RESTRICTED
-        )
+        deleg = self._make_delegation_with_reasoning(keypair, ConfidentialityLevel.RESTRICTED)
         token = to_ucan(deleg, private_key)
         fct = self._decode_payload(token)["fct"]
 
-        assert (
-            "eatp_reasoning_trace" in fct
-        ), "RESTRICTED reasoning trace must be included in UCAN facts"
+        assert "eatp_reasoning_trace" in fct, "RESTRICTED reasoning trace must be included in UCAN facts"
         assert fct["eatp_reasoning_trace"]["confidentiality"] == "restricted"
         assert fct["eatp_reasoning_trace"]["rationale"] == (
             "Agent has valid credentials and task requires data analysis"
@@ -909,36 +891,24 @@ class TestUCANReasoningConfidentiality:
         who later obtains the trace out-of-band can verify its integrity.
         """
         private_key, _ = keypair
-        deleg = self._make_delegation_with_reasoning(
-            keypair, ConfidentialityLevel.CONFIDENTIAL
-        )
+        deleg = self._make_delegation_with_reasoning(keypair, ConfidentialityLevel.CONFIDENTIAL)
         token = to_ucan(deleg, private_key)
         fct = self._decode_payload(token)["fct"]
 
-        assert (
-            "eatp_reasoning_trace" not in fct
-        ), "CONFIDENTIAL reasoning trace must be stripped from UCAN facts"
+        assert "eatp_reasoning_trace" not in fct, "CONFIDENTIAL reasoning trace must be stripped from UCAN facts"
         # Hash and signature MUST survive even when trace is stripped
-        assert (
-            "eatp_reasoning_trace_hash" in fct
-        ), "reasoning trace hash must be present even when trace is stripped"
-        assert (
-            "eatp_reasoning_signature" in fct
-        ), "reasoning signature must be present even when trace is stripped"
+        assert "eatp_reasoning_trace_hash" in fct, "reasoning trace hash must be present even when trace is stripped"
+        assert "eatp_reasoning_signature" in fct, "reasoning signature must be present even when trace is stripped"
         assert len(fct["eatp_reasoning_trace_hash"]) == 64  # SHA-256 hex
 
     def test_ucan_export_strips_secret_reasoning_trace(self, keypair):
         """SECRET reasoning traces MUST NOT appear in UCAN facts."""
         private_key, _ = keypair
-        deleg = self._make_delegation_with_reasoning(
-            keypair, ConfidentialityLevel.SECRET
-        )
+        deleg = self._make_delegation_with_reasoning(keypair, ConfidentialityLevel.SECRET)
         token = to_ucan(deleg, private_key)
         fct = self._decode_payload(token)["fct"]
 
-        assert (
-            "eatp_reasoning_trace" not in fct
-        ), "SECRET reasoning trace must be stripped from UCAN facts"
+        assert "eatp_reasoning_trace" not in fct, "SECRET reasoning trace must be stripped from UCAN facts"
         # Hash and signature MUST survive
         assert "eatp_reasoning_trace_hash" in fct
         assert "eatp_reasoning_signature" in fct
@@ -946,15 +916,11 @@ class TestUCANReasoningConfidentiality:
     def test_ucan_roundtrip_preserves_public_reasoning(self, keypair):
         """Export with PUBLIC reasoning, import back -- trace must survive."""
         private_key, public_key = keypair
-        deleg = self._make_delegation_with_reasoning(
-            keypair, ConfidentialityLevel.PUBLIC
-        )
+        deleg = self._make_delegation_with_reasoning(keypair, ConfidentialityLevel.PUBLIC)
         token = to_ucan(deleg, private_key)
         restored = from_ucan(token, public_key)
 
-        assert (
-            restored.reasoning_trace is not None
-        ), "PUBLIC reasoning trace must survive UCAN round-trip"
+        assert restored.reasoning_trace is not None, "PUBLIC reasoning trace must survive UCAN round-trip"
         assert restored.reasoning_trace.decision == deleg.reasoning_trace.decision
         assert restored.reasoning_trace.rationale == deleg.reasoning_trace.rationale
         assert restored.reasoning_trace.confidentiality == ConfidentialityLevel.PUBLIC
@@ -975,21 +941,18 @@ class TestUCANReasoningConfidentiality:
         reasoning_trace_hash must survive for out-of-band verification.
         """
         private_key, public_key = keypair
-        deleg = self._make_delegation_with_reasoning(
-            keypair, ConfidentialityLevel.CONFIDENTIAL
-        )
+        deleg = self._make_delegation_with_reasoning(keypair, ConfidentialityLevel.CONFIDENTIAL)
         token = to_ucan(deleg, private_key)
         restored = from_ucan(token, public_key)
 
         assert restored.reasoning_trace is None, (
-            "CONFIDENTIAL reasoning trace must be None after UCAN round-trip "
-            "because it was stripped during export"
+            "CONFIDENTIAL reasoning trace must be None after UCAN round-trip because it was stripped during export"
         )
-        assert (
-            restored.reasoning_trace_hash is not None
-        ), "reasoning_trace_hash must survive round-trip even when trace is stripped"
+        assert restored.reasoning_trace_hash is not None, (
+            "reasoning_trace_hash must survive round-trip even when trace is stripped"
+        )
         assert restored.reasoning_trace_hash == deleg.reasoning_trace_hash
-        assert (
-            restored.reasoning_signature is not None
-        ), "reasoning_signature must survive round-trip even when trace is stripped"
+        assert restored.reasoning_signature is not None, (
+            "reasoning_signature must survive round-trip even when trace is stripped"
+        )
         assert restored.reasoning_signature == deleg.reasoning_signature

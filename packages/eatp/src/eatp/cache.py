@@ -143,9 +143,7 @@ class TrustChainCache:
             ValueError: If eviction_policy is not "lru"
         """
         if eviction_policy != "lru":
-            raise ValueError(
-                f"Unsupported eviction policy: {eviction_policy}. Only 'lru' is supported."
-            )
+            raise ValueError(f"Unsupported eviction policy: {eviction_policy}. Only 'lru' is supported.")
 
         self._ttl_seconds = ttl_seconds
         self._max_size = max_size
@@ -162,10 +160,7 @@ class TrustChainCache:
         self._misses = 0
         self._evictions = 0
 
-        logger.info(
-            f"Initialized TrustChainCache: ttl={ttl_seconds}s, max_size={max_size}, "
-            f"policy={eviction_policy}"
-        )
+        logger.info(f"Initialized TrustChainCache: ttl={ttl_seconds}s, max_size={max_size}, policy={eviction_policy}")
 
     async def get(self, agent_id: str) -> Optional[TrustLineageChain]:
         """
@@ -223,9 +218,7 @@ class TrustChainCache:
         """
         async with self._lock:
             # Calculate expiration time
-            expires_at = datetime.now(timezone.utc) + timedelta(
-                seconds=self._ttl_seconds
-            )
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=self._ttl_seconds)
 
             # Create new entry
             entry = CacheEntry(
@@ -239,9 +232,7 @@ class TrustChainCache:
                 # Evict least recently used (first item in OrderedDict)
                 evicted_agent_id, _ = self._cache.popitem(last=False)
                 self._evictions += 1
-                logger.debug(
-                    f"LRU eviction: {evicted_agent_id} (max_size={self._max_size})"
-                )
+                logger.debug(f"LRU eviction: {evicted_agent_id} (max_size={self._max_size})")
 
             # Store entry (will update if exists)
             self._cache[agent_id] = entry
@@ -309,11 +300,7 @@ class TrustChainCache:
             Number of expired entries removed
         """
         async with self._lock:
-            expired_keys = [
-                agent_id
-                for agent_id, entry in self._cache.items()
-                if entry.is_expired()
-            ]
+            expired_keys = [agent_id for agent_id, entry in self._cache.items() if entry.is_expired()]
 
             for agent_id in expired_keys:
                 del self._cache[agent_id]

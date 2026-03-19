@@ -59,9 +59,7 @@ class ExternalAgentPrincipal:
     tags: list[str] = field(default_factory=list)
     org_id: str | None = None
     environment: str = "development"
-    location: dict[str, str] = field(
-        default_factory=dict
-    )  # {"country": "US", "region": "us-east-1"}
+    location: dict[str, str] = field(default_factory=dict)  # {"country": "US", "region": "us-east-1"}
     ip_address: str | None = None
 
 
@@ -429,9 +427,7 @@ class ProviderCondition(PolicyCondition):
         self,
         providers: list[str] | None = None,
         allowed_providers: list[str] | None = None,  # Deprecated, use providers
-        blocked_providers: (
-            list[str] | None
-        ) = None,  # Deprecated, use providers with DENY policy
+        blocked_providers: (list[str] | None) = None,  # Deprecated, use providers with DENY policy
     ):
         """
         Initialize provider condition.
@@ -633,9 +629,7 @@ class ExternalAgentPolicyEngine:
             del self.policies[policy_id]
             logger.info(f"Policy removed: {policy_id}")
 
-    async def evaluate_policies(
-        self, context: ExternalAgentPolicyContext
-    ) -> PolicyEvaluationResult:
+    async def evaluate_policies(self, context: ExternalAgentPolicyContext) -> PolicyEvaluationResult:
         """
         Evaluate all applicable policies against context.
 
@@ -678,19 +672,14 @@ class ExternalAgentPolicyEngine:
                     matched_deny_policies.append(policy.policy_id)
 
                 # Short-circuit for first_applicable strategy
-                if (
-                    self.conflict_resolution_strategy
-                    == ConflictResolutionStrategy.FIRST_APPLICABLE
-                ):
+                if self.conflict_resolution_strategy == ConflictResolutionStrategy.FIRST_APPLICABLE:
                     effect = policy.effect
                     reason = f"First applicable policy: {policy.name}"
                     matched_policies = [policy.policy_id]
                     break
         else:
             # Apply conflict resolution strategy
-            effect, reason, matched_policies = self._resolve_conflicts(
-                matched_allow_policies, matched_deny_policies
-            )
+            effect, reason, matched_policies = self._resolve_conflicts(matched_allow_policies, matched_deny_policies)
 
         # Calculate evaluation time
         evaluation_time_ms = (time.time() - start_time) * 1000
@@ -716,9 +705,7 @@ class ExternalAgentPolicyEngine:
 
         return result
 
-    def _evaluate_policy(
-        self, policy: ExternalAgentPolicy, context: ExternalAgentPolicyContext
-    ) -> bool:
+    def _evaluate_policy(self, policy: ExternalAgentPolicy, context: ExternalAgentPolicyContext) -> bool:
         """
         Evaluate single policy against context.
 
@@ -739,9 +726,7 @@ class ExternalAgentPolicyEngine:
                 if not condition.evaluate(context):
                     return False
             except Exception as e:
-                logger.error(
-                    f"Error evaluating condition for policy {policy.policy_id}: {e}"
-                )
+                logger.error(f"Error evaluating condition for policy {policy.policy_id}: {e}")
                 return False
 
         return True
@@ -768,10 +753,7 @@ class ExternalAgentPolicyEngine:
             )
 
         # Apply conflict resolution strategy
-        if (
-            self.conflict_resolution_strategy
-            == ConflictResolutionStrategy.DENY_OVERRIDES
-        ):
+        if self.conflict_resolution_strategy == ConflictResolutionStrategy.DENY_OVERRIDES:
             if deny_policies:
                 return (
                     PolicyEffect.DENY,
@@ -785,10 +767,7 @@ class ExternalAgentPolicyEngine:
                     allow_policies,
                 )
 
-        elif (
-            self.conflict_resolution_strategy
-            == ConflictResolutionStrategy.ALLOW_OVERRIDES
-        ):
+        elif self.conflict_resolution_strategy == ConflictResolutionStrategy.ALLOW_OVERRIDES:
             if allow_policies:
                 return (
                     PolicyEffect.ALLOW,

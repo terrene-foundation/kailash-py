@@ -478,7 +478,6 @@ class TestMigrationOrchestrationEngine:
                 new=AsyncMock(return_value=None),
             ),
         ):
-
             result = await orchestration_engine.execute_migration(migration)
 
             assert isinstance(result, MigrationResult)
@@ -540,7 +539,6 @@ class TestMigrationOrchestrationEngine:
                 new=AsyncMock(return_value="checkpoint_1"),
             ),
         ):
-
             result = await orchestration_engine.execute_migration(migration)
 
             assert result.success is False
@@ -814,6 +812,6 @@ class TestMigrationOrchestrationEngine:
         execution_time = end_time - start_time
 
         # All object creation should be well under 1 second
-        assert (
-            execution_time < 0.1
-        ), f"Object creation took {execution_time:.3f}s, should be much faster"
+        assert execution_time < 0.1, (
+            f"Object creation took {execution_time:.3f}s, should be much faster"
+        )

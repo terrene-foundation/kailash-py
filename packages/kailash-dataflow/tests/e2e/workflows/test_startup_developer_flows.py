@@ -166,9 +166,9 @@ class TestStartupDeveloperZeroToFirstQuery:
         assert results["list"]["status"] == "success"
 
         elapsed = time.time() - start_time
-        assert (
-            elapsed < 300
-        ), f"Complete flow took {elapsed:.2f}s, should be < 300s (5 min)"
+        assert elapsed < 300, (
+            f"Complete flow took {elapsed:.2f}s, should be < 300s (5 min)"
+        )
 
         # Typically should be much faster
         print(f"Zero to first query completed in {elapsed:.2f} seconds")

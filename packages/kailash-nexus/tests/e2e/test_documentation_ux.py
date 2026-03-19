@@ -28,19 +28,19 @@ def test_fastapi_mount_documentation_exists():
     content = doc_path.read_text()
 
     # Check for key concepts (flexible matching)
-    assert re.search(
-        r"#+ Understanding.*FastAPI.*Mount", content, re.IGNORECASE
-    ), "Missing 'Understanding FastAPI Mount Behavior' section"
+    assert re.search(r"#+ Understanding.*FastAPI.*Mount", content, re.IGNORECASE), (
+        "Missing 'Understanding FastAPI Mount Behavior' section"
+    )
 
     # Must explain that mounted routes don't appear in OpenAPI (case-insensitive)
-    assert (
-        "do not appear" in content.lower() and "openapi" in content.lower()
-    ), "Missing explanation of OpenAPI behavior"
+    assert "do not appear" in content.lower() and "openapi" in content.lower(), (
+        "Missing explanation of OpenAPI behavior"
+    )
 
     # Must include endpoint patterns
-    assert (
-        "/execute" in content and "/workflow/info" in content
-    ), "Missing endpoint pattern examples"
+    assert "/execute" in content and "/workflow/info" in content, (
+        "Missing endpoint pattern examples"
+    )
 
     # Must link to FastAPI official docs
     assert "fastapi.tiangolo.com" in content, "Missing link to FastAPI documentation"
@@ -64,9 +64,9 @@ def test_workflow_registration_guide_updated():
     assert "/workflow/info" in content, "Missing /workflow/info endpoint example"
 
     # Must have example curl commands or code
-    assert (
-        "curl" in content.lower() or "requests.post" in content
-    ), "Missing usage examples"
+    assert "curl" in content.lower() or "requests.post" in content, (
+        "Missing usage examples"
+    )
 
 
 def test_basic_usage_includes_discovery():
@@ -78,17 +78,17 @@ def test_basic_usage_includes_discovery():
     content = doc_path.read_text()
 
     # Must have discovery section
-    assert re.search(
-        r"discover", content, re.IGNORECASE
-    ), "Missing endpoint discovery section"
+    assert re.search(r"discover", content, re.IGNORECASE), (
+        "Missing endpoint discovery section"
+    )
 
     # Must show how to list workflows
     assert "/workflows" in content, "Missing workflow listing endpoint"
 
     # Must explain endpoint patterns
-    assert (
-        "/execute" in content or "endpoint" in content.lower()
-    ), "Missing endpoint pattern information"
+    assert "/execute" in content or "endpoint" in content.lower(), (
+        "Missing endpoint pattern information"
+    )
 
 
 def test_documentation_index_updated():
@@ -100,6 +100,6 @@ def test_documentation_index_updated():
     content = doc_path.read_text()
 
     # Must reference new technical documentation
-    assert (
-        "fastapi" in content.lower() or "mount" in content.lower()
-    ), "Missing reference to FastAPI mount behavior documentation"
+    assert "fastapi" in content.lower() or "mount" in content.lower(), (
+        "Missing reference to FastAPI mount behavior documentation"
+    )

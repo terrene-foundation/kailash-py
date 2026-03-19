@@ -95,12 +95,12 @@ class TestDataFlowGateway:
         assert len(workflow_info) > 0
 
         # Check that workflows for registered models exist
-        assert any(
-            "TestProduct" in key for key in workflow_info.keys()
-        ), "Should have workflows for TestProduct"
-        assert any(
-            "TestOrder" in key for key in workflow_info.keys()
-        ), "Should have workflows for TestOrder"
+        assert any("TestProduct" in key for key in workflow_info.keys()), (
+            "Should have workflows for TestProduct"
+        )
+        assert any("TestOrder" in key for key in workflow_info.keys()), (
+            "Should have workflows for TestOrder"
+        )
 
     @pytest.mark.asyncio
     async def test_concurrent_gateway_requests(self, gateway_config):
@@ -184,14 +184,14 @@ class TestDataFlowGateway:
             # If it starts despite bad config, verify it's in degraded mode
             if gateway.is_running():
                 status = gateway.get_status()
-                assert status.get(
-                    "degraded", False
-                ), "Should be in degraded mode with bad database"
+                assert status.get("degraded", False), (
+                    "Should be in degraded mode with bad database"
+                )
         except Exception as e:
             # Expected behavior - gateway fails to start with bad config
-            assert (
-                "connection" in str(e).lower() or "database" in str(e).lower()
-            ), "Should fail due to database connection"
+            assert "connection" in str(e).lower() or "database" in str(e).lower(), (
+                "Should fail due to database connection"
+            )
         finally:
             if gateway.is_running():
                 await gateway.stop()

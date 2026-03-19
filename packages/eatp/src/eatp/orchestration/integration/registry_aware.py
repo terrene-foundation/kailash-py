@@ -178,10 +178,7 @@ class HealthAwareSelector(AgentSelector):
                 healthy_agents.append(agent)
 
         if not healthy_agents:
-            logger.warning(
-                f"No healthy agents available "
-                f"(min status: {self._min_health.value})"
-            )
+            logger.warning(f"No healthy agents available (min status: {self._min_health.value})")
             return None
 
         # Delegate to inner selector
@@ -335,9 +332,7 @@ class RegistryAwareRuntime(TrustAwareOrchestrationRuntime):
         elif self._config.default_selector == "random":
             base_selector = RandomSelector()
         else:
-            base_selector = CapabilityBasedSelector(
-                prefer_specialized=self._config.prefer_specialized_agents
-            )
+            base_selector = CapabilityBasedSelector(prefer_specialized=self._config.prefer_specialized_agents)
 
         # Wrap with health-aware if configured
         if self._config.health_aware_selection and self._health_monitor:
@@ -477,9 +472,7 @@ class RegistryAwareRuntime(TrustAwareOrchestrationRuntime):
                 selector=selector,
             )
             if not agent_id:
-                raise OrchestrationTrustError(
-                    f"No suitable agent found for task: {task}"
-                )
+                raise OrchestrationTrustError(f"No suitable agent found for task: {task}")
             return agent_id
 
         # Execute using parent's workflow execution
@@ -517,9 +510,7 @@ class RegistryAwareRuntime(TrustAwareOrchestrationRuntime):
         agents = await self._get_available_agents(required_capabilities)
 
         if not agents:
-            raise OrchestrationTrustError(
-                "No suitable agents available for parallel execution"
-            )
+            raise OrchestrationTrustError("No suitable agents available for parallel execution")
 
         # Limit agents if specified
         if max_agents and len(agents) > max_agents:
@@ -543,9 +534,7 @@ class RegistryAwareRuntime(TrustAwareOrchestrationRuntime):
         """Get registry integration statistics."""
         return {
             "cached_agents": len(self._agent_cache),
-            "last_refresh": (
-                self._last_refresh.isoformat() if self._last_refresh else None
-            ),
+            "last_refresh": (self._last_refresh.isoformat() if self._last_refresh else None),
             "health_aware_selection": self._config.health_aware_selection,
             "default_selector": self._config.default_selector,
         }

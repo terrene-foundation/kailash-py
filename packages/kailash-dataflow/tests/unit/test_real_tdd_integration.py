@@ -41,7 +41,6 @@ class TestRealTDDIntegration:
             patch("dataflow.core.engine.DataFlow._register_specialized_nodes"),
             patch("dataflow.core.engine.DataFlow._sync_models_from_registry"),
         ):
-
             # Create DataFlow instance with TDD context
             db = DataFlow(
                 database_url="postgresql://test:pass@localhost:5432/testdb",
@@ -126,7 +125,6 @@ class TestRealTDDIntegration:
                 patch("dataflow.core.engine.DataFlow._register_specialized_nodes"),
                 patch("dataflow.core.engine.DataFlow._sync_models_from_registry"),
             ):
-
                 # Create DataFlow without explicit TDD mode (should detect from env)
                 db = DataFlow(
                     database_url="postgresql://test:pass@localhost:5432/testdb",
@@ -152,7 +150,6 @@ class TestRealTDDIntegration:
                 patch("dataflow.core.engine.DataFlow._register_specialized_nodes"),
                 patch("dataflow.core.engine.DataFlow._sync_models_from_registry"),
             ):
-
                 # Create DataFlow in normal mode
                 db = DataFlow(
                     database_url="postgresql://test:pass@localhost:5432/testdb",
@@ -182,7 +179,6 @@ class TestRealTDDIntegration:
             patch("dataflow.core.engine.DataFlow._register_specialized_nodes"),
             patch("dataflow.core.engine.DataFlow._sync_models_from_registry"),
         ):
-
             db = DataFlow(
                 database_url="postgresql://test:pass@localhost:5432/testdb",
                 tdd_mode=True,
@@ -237,7 +233,6 @@ class TestRealTDDIntegration:
             patch("dataflow.core.engine.DataFlow._sync_models_from_registry"),
             patch("dataflow.core.engine.logger") as mock_logger,
         ):
-
             db = DataFlow(
                 database_url="postgresql://test:pass@localhost:5432/testdb",
                 tdd_mode=True,

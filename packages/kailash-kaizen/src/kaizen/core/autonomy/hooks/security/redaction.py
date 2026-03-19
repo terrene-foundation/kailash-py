@@ -118,7 +118,9 @@ class SensitiveDataRedactor:
                     (
                         self.redact_dict(item)
                         if isinstance(item, dict)
-                        else self.redact_string(item) if isinstance(item, str) else item
+                        else self.redact_string(item)
+                        if isinstance(item, str)
+                        else item
                     )
                     for item in value
                 ]

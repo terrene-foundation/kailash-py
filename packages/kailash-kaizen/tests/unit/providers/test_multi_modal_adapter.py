@@ -163,7 +163,6 @@ class TestOllamaMultiModalAdapter:
             patch.object(adapter, "_call_whisper") as mock_whisper,
             patch.object(adapter, "_combine_results") as mock_combine,
         ):
-
             mock_vision.return_value = {"visual": "Image analysis"}
             mock_whisper.return_value = {"audio": "Audio transcription"}
             mock_combine.return_value = {"combined": "Full analysis"}

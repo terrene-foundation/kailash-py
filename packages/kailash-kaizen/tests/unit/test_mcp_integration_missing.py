@@ -3,9 +3,7 @@
 # Add kaizen source to path
 import sys
 
-sys.path.insert(
-    0, ""
-)
+sys.path.insert(0, "")
 
 from kaizen import Kaizen
 
@@ -26,12 +24,12 @@ class TestMCPIntegrationMissingMethods:
         )
 
         # Test method exists
-        assert hasattr(
-            agent, "expose_as_mcp_tool"
-        ), "Agent missing expose_as_mcp_tool method"
-        assert callable(
-            getattr(agent, "expose_as_mcp_tool")
-        ), "expose_as_mcp_tool must be callable"
+        assert hasattr(agent, "expose_as_mcp_tool"), (
+            "Agent missing expose_as_mcp_tool method"
+        )
+        assert callable(getattr(agent, "expose_as_mcp_tool")), (
+            "expose_as_mcp_tool must be callable"
+        )
 
     def test_agent_expose_as_mcp_tool_basic_functionality(self):
         """Test basic expose_as_mcp_tool functionality."""
@@ -90,12 +88,12 @@ class TestMCPIntegrationMissingMethods:
     def test_framework_expose_agent_as_mcp_tool_method_exists(self):
         """Test that Framework has expose_agent_as_mcp_tool method."""
         # Test method exists on framework
-        assert hasattr(
-            self.kaizen, "expose_agent_as_mcp_tool"
-        ), "Framework missing expose_agent_as_mcp_tool method"
-        assert callable(
-            getattr(self.kaizen, "expose_agent_as_mcp_tool")
-        ), "expose_agent_as_mcp_tool must be callable"
+        assert hasattr(self.kaizen, "expose_agent_as_mcp_tool"), (
+            "Framework missing expose_agent_as_mcp_tool method"
+        )
+        assert callable(getattr(self.kaizen, "expose_agent_as_mcp_tool")), (
+            "expose_agent_as_mcp_tool must be callable"
+        )
 
     def test_framework_expose_agent_as_mcp_tool_functionality(self):
         """Test Framework.expose_agent_as_mcp_tool functionality."""
@@ -123,12 +121,12 @@ class TestMCPIntegrationMissingMethods:
         agent = self.kaizen.create_agent("registry_agent", {"model": "gpt-4"})
 
         # Test method exists
-        assert hasattr(
-            agent, "get_mcp_tool_registry"
-        ), "Agent missing get_mcp_tool_registry method"
-        assert callable(
-            getattr(agent, "get_mcp_tool_registry")
-        ), "get_mcp_tool_registry must be callable"
+        assert hasattr(agent, "get_mcp_tool_registry"), (
+            "Agent missing get_mcp_tool_registry method"
+        )
+        assert callable(getattr(agent, "get_mcp_tool_registry")), (
+            "get_mcp_tool_registry must be callable"
+        )
 
     def test_agent_get_mcp_tool_registry_functionality(self):
         """Test agent.get_mcp_tool_registry functionality."""
@@ -146,12 +144,12 @@ class TestMCPIntegrationMissingMethods:
     def test_framework_list_mcp_tools_method_exists(self):
         """Test that Framework has list_mcp_tools method."""
         # Test method exists
-        assert hasattr(
-            self.kaizen, "list_mcp_tools"
-        ), "Framework missing list_mcp_tools method"
-        assert callable(
-            getattr(self.kaizen, "list_mcp_tools")
-        ), "list_mcp_tools must be callable"
+        assert hasattr(self.kaizen, "list_mcp_tools"), (
+            "Framework missing list_mcp_tools method"
+        )
+        assert callable(getattr(self.kaizen, "list_mcp_tools")), (
+            "list_mcp_tools must be callable"
+        )
 
     def test_framework_list_mcp_tools_functionality(self):
         """Test Framework.list_mcp_tools functionality."""
@@ -178,9 +176,9 @@ class TestMCPIntegrationMissingMethods:
         tool_id = result["tool_id"]
 
         # Test execution interface exists
-        assert hasattr(
-            agent, "execute_mcp_tool"
-        ), "Agent missing execute_mcp_tool method"
+        assert hasattr(agent, "execute_mcp_tool"), (
+            "Agent missing execute_mcp_tool method"
+        )
 
         # Test execution
         execution_result = agent.execute_mcp_tool(
@@ -248,7 +246,8 @@ class TestMCPIntegrationEdgeCases:
 
         # Test with missing required parameters - implementation logs error instead of raising
         agent.expose_as_mcp_tool(
-            tool_name="", description="Test tool"  # Invalid empty name
+            tool_name="",
+            description="Test tool",  # Invalid empty name
         )
         # Should handle gracefully and return None or continue
         # The method logs an error but doesn't raise - this is acceptable behavior

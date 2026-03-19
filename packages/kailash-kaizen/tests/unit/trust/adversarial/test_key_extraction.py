@@ -80,12 +80,12 @@ class TestCryptoPrivateKeyNotInRepr:
         # Private key bytes should NOT appear in public key representations
         for byte_seq in [private_key_bytes[:8], private_key_bytes[-8:]]:
             byte_hex = byte_seq.hex()
-            assert (
-                byte_hex not in public_key_repr.lower()
-            ), "Private key bytes found in public key repr"
-            assert (
-                byte_hex not in public_key_str.lower()
-            ), "Private key bytes found in public key str"
+            assert byte_hex not in public_key_repr.lower(), (
+                "Private key bytes found in public key repr"
+            )
+            assert byte_hex not in public_key_str.lower(), (
+                "Private key bytes found in public key str"
+            )
 
     def test_key_manager_repr_does_not_contain_keys(self):
         """InMemoryKeyManager repr/str must not contain key material."""
@@ -110,12 +110,12 @@ class TestCryptoPrivateKeyNotInRepr:
             # Check that private key bytes don't appear in representations
             for byte_seq in [private_key_bytes[:8], private_key_bytes[-8:]]:
                 byte_hex = byte_seq.hex()
-                assert (
-                    byte_hex not in manager_repr.lower()
-                ), f"Private key bytes found in key manager repr: {byte_hex}"
-                assert (
-                    byte_hex not in manager_str.lower()
-                ), f"Private key bytes found in key manager str: {byte_hex}"
+                assert byte_hex not in manager_repr.lower(), (
+                    f"Private key bytes found in key manager repr: {byte_hex}"
+                )
+                assert byte_hex not in manager_str.lower(), (
+                    f"Private key bytes found in key manager str: {byte_hex}"
+                )
         finally:
             loop.close()
 
@@ -171,9 +171,9 @@ class TestCryptoPrivateKeyNotInDict:
             # KNOWN ISSUE: _keys dict contains private keys
             # This is acceptable for InMemoryKeyManager (development only)
             # Production should use AWSKMSKeyManager or HSM backend
-            assert (
-                "_keys" in manager_dict
-            ), "Expected _keys dict in InMemoryKeyManager (known design)"
+            assert "_keys" in manager_dict, (
+                "Expected _keys dict in InMemoryKeyManager (known design)"
+            )
 
             # Document that keys ARE accessible (known limitation)
             if "_keys" in manager_dict and "test-agent-002" in manager_dict["_keys"]:
@@ -209,9 +209,9 @@ class TestCryptoPrivateKeyNotInJsonSerialization:
         private_key_bytes = base64.b64decode(private_key)
         for byte_seq in [private_key_bytes[:8], private_key_bytes[-8:]]:
             byte_hex = byte_seq.hex()
-            assert (
-                byte_hex not in json_output.lower()
-            ), "Private key bytes found in JSON output"
+            assert byte_hex not in json_output.lower(), (
+                "Private key bytes found in JSON output"
+            )
 
         # Verify the private_key string itself is not in output
         assert private_key not in json_output, "Private key string found in JSON output"
@@ -249,12 +249,12 @@ class TestKeyManagerIterationBlocked:
             # list_keys returns KeyMetadata, NOT the actual keys
             for key_metadata in keys:
                 # KeyMetadata should not contain private key
-                assert not hasattr(
-                    key_metadata, "private_key"
-                ), "KeyMetadata should not contain private_key"
-                assert not hasattr(
-                    key_metadata, "_private_key"
-                ), "KeyMetadata should not contain _private_key"
+                assert not hasattr(key_metadata, "private_key"), (
+                    "KeyMetadata should not contain private_key"
+                )
+                assert not hasattr(key_metadata, "_private_key"), (
+                    "KeyMetadata should not contain _private_key"
+                )
         finally:
             loop.close()
 
@@ -293,15 +293,15 @@ class TestSigningKeyNotInExceptionTraceback:
             private_key_bytes = base64.b64decode(private_key)
             for byte_seq in [private_key_bytes[:8], private_key_bytes[-8:]]:
                 byte_hex = byte_seq.hex()
-                assert (
-                    byte_hex not in exception_text.lower()
-                ), "Private key bytes found in exception text"
-                assert (
-                    byte_hex not in exception_args.lower()
-                ), "Private key bytes found in exception args"
-                assert (
-                    byte_hex not in traceback_text.lower()
-                ), "Private key bytes found in traceback"
+                assert byte_hex not in exception_text.lower(), (
+                    "Private key bytes found in exception text"
+                )
+                assert byte_hex not in exception_args.lower(), (
+                    "Private key bytes found in exception args"
+                )
+                assert byte_hex not in traceback_text.lower(), (
+                    "Private key bytes found in traceback"
+                )
 
 
 class TestCryptoKeyBytesZeroedConcept:
@@ -338,9 +338,9 @@ class TestCryptoKeyBytesZeroedConcept:
             var_value = getattr(crypto_module, var_name)
             if isinstance(var_value, str) and len(var_value) == len(private_key):
                 # Potential key storage - check if it's our key
-                assert (
-                    var_value != private_key
-                ), f"Private key found in module variable: {var_name}"
+                assert var_value != private_key, (
+                    f"Private key found in module variable: {var_name}"
+                )
 
 
 class TestTrustSecurityDerivedKeyNotInLogs:
@@ -377,9 +377,9 @@ class TestTrustSecurityDerivedKeyNotInLogs:
 
             # Derived key bytes should NOT appear in logs
             key_hex = derived_key.hex()
-            assert (
-                key_hex not in log_output.lower()
-            ), "Derived key bytes found in log output"
+            assert key_hex not in log_output.lower(), (
+                "Derived key bytes found in log output"
+            )
 
             # Salt should also not be logged in raw form
             salt_hex = salt.hex()
@@ -421,9 +421,9 @@ class TestPrivateKeyNotSerializableViaPick:
                 # but we verify it's not in obvious plaintext form
                 for byte_seq in [private_key_bytes[:8], private_key_bytes[-8:]]:
                     # Check for raw bytes in pickle
-                    assert (
-                        byte_seq not in pickled
-                    ), "Raw private key bytes found in pickled output"
+                    assert byte_seq not in pickled, (
+                        "Raw private key bytes found in pickled output"
+                    )
 
             except (TypeError, pickle.PicklingError) as e:
                 # If pickle fails, that's actually a security win
@@ -477,9 +477,9 @@ class TestStoreDoesNotExposeSigningKeys:
                     for key, value in obj.items():
                         new_path = f"{path}.{key}" if path else key
                         # Keys named "private_key" or similar are suspicious
-                        assert (
-                            "private_key" not in key.lower()
-                        ), f"Private key field found at {new_path}"
+                        assert "private_key" not in key.lower(), (
+                            f"Private key field found at {new_path}"
+                        )
                         assert (
                             "signing_key" not in key.lower() or key == "signing_key_id"
                         ), f"Signing key field found at {new_path}"
@@ -493,9 +493,9 @@ class TestStoreDoesNotExposeSigningKeys:
             # Also check the store's __dict__ doesn't contain keys
             store_dict = store.__dict__
             for key, value in store_dict.items():
-                assert (
-                    "private_key" not in key.lower()
-                ), f"Private key field found in store: {key}"
+                assert "private_key" not in key.lower(), (
+                    f"Private key field found in store: {key}"
+                )
 
         finally:
             loop.close()
@@ -551,17 +551,17 @@ class TestTransactionalStoreRollbackCleansKeyRefs:
 
                 # After rollback, agent-1 should still have original chain
                 retrieved = await store.get_chain("agent-1")
-                assert (
-                    retrieved.genesis.signature == "sig-1"
-                ), "Original chain should be restored after rollback"
+                assert retrieved.genesis.signature == "sig-1", (
+                    "Original chain should be restored after rollback"
+                )
 
             loop.run_until_complete(test_rollback())
 
             # Verify no leftover references from the failed transaction
             # The store should be in its original state
-            assert (
-                len(store._chains) == 1
-            ), "Store should only contain original chain after rollback"
+            assert len(store._chains) == 1, (
+                "Store should only contain original chain after rollback"
+            )
 
         finally:
             loop.close()

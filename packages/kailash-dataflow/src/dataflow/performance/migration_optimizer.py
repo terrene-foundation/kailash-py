@@ -581,7 +581,8 @@ class OptimizedSchemaComparator:
             logger.error("Incremental comparison error: %s", e)
 
             return IncrementalResult(
-                has_changes=True, processing_time_ms=processing_time_ms  # Safe default
+                has_changes=True,
+                processing_time_ms=processing_time_ms,  # Safe default
             )
 
     def _perform_detailed_comparison(

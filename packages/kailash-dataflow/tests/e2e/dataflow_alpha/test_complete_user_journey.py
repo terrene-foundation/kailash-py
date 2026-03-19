@@ -252,13 +252,13 @@ class TestCompleteUserJourney:
 
                 user_result = results["create_user"]
                 if isinstance(user_result, dict) and "data" in user_result:
-                    assert (
-                        user_result["data"]["name"] == "Bob Smith"
-                    ), "Workflow result incorrect"
+                    assert user_result["data"]["name"] == "Bob Smith", (
+                        "Workflow result incorrect"
+                    )
                 else:
-                    assert (
-                        user_result["name"] == "Bob Smith"
-                    ), "Workflow result incorrect"
+                    assert user_result["name"] == "Bob Smith", (
+                        "Workflow result incorrect"
+                    )
             except WorkflowValidationError:
                 # This is a known issue with generated nodes - they work directly but not in workflows
                 print(
@@ -392,9 +392,9 @@ class TestCompleteUserJourney:
             except Exception as e:
                 # Error should be clear and helpful, not AttributeError
                 assert "AttributeError" not in str(e), f"Unhelpful error: {e}"
-                assert "'DataFlowConfig' object has no attribute" not in str(
-                    e
-                ), f"Configuration error: {e}"
+                assert "'DataFlowConfig' object has no attribute" not in str(e), (
+                    f"Configuration error: {e}"
+                )
 
             # Test non-existent record handling
             read_node = db._nodes["TestModelReadNode"]()
@@ -427,9 +427,9 @@ class TestCompleteUserJourney:
             operation_time = time.time() - start_time
 
             # Should be reasonably fast (not simulation delay)
-            assert (
-                operation_time < 2.0
-            ), f"Single operation too slow: {operation_time:.2f}s"
+            assert operation_time < 2.0, (
+                f"Single operation too slow: {operation_time:.2f}s"
+            )
             assert result is not None, "Performance test operation failed"
 
             # Test multiple operations

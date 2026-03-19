@@ -153,9 +153,7 @@ class TestConfidentialityLevel:
             ConfidentialityLevel.TOP_SECRET,
         ]
         for i in range(len(levels) - 1):
-            assert (
-                levels[i] < levels[i + 1]
-            ), f"{levels[i].name} should be < {levels[i + 1].name}"
+            assert levels[i] < levels[i + 1], f"{levels[i].name} should be < {levels[i + 1].name}"
 
     def test_sorting(self):
         """Confidentiality levels must be sortable."""
@@ -187,10 +185,7 @@ class TestReasoningTraceConstruction:
     def test_minimal_construction(self, minimal_trace):
         """ReasoningTrace with only required fields must succeed."""
         assert minimal_trace.decision == "Approve data access for agent-beta"
-        assert (
-            minimal_trace.rationale
-            == "Agent has valid capability attestation and passes constraint checks"
-        )
+        assert minimal_trace.rationale == "Agent has valid capability attestation and passes constraint checks"
         assert minimal_trace.confidentiality == ConfidentialityLevel.RESTRICTED
         assert minimal_trace.timestamp == FIXED_TIMESTAMP
 
@@ -326,10 +321,7 @@ class TestReasoningTraceToDict:
         """to_dict() on minimal trace must serialize correctly."""
         d = minimal_trace.to_dict()
         assert d["decision"] == "Approve data access for agent-beta"
-        assert (
-            d["rationale"]
-            == "Agent has valid capability attestation and passes constraint checks"
-        )
+        assert d["rationale"] == "Agent has valid capability attestation and passes constraint checks"
         assert d["confidentiality"] == "restricted"
         assert d["timestamp"] == "2026-03-11T14:30:00+00:00"
         assert d["alternatives_considered"] == []
@@ -343,10 +335,7 @@ class TestReasoningTraceToDict:
         assert d["confidentiality"] == "confidential"
         assert d["timestamp"] == "2026-03-11T14:30:00+00:00"
         assert len(d["alternatives_considered"]) == 2
-        assert (
-            d["alternatives_considered"][0]
-            == "Use agent-delta (rejected: higher latency)"
-        )
+        assert d["alternatives_considered"][0] == "Use agent-delta (rejected: higher latency)"
         assert len(d["evidence"]) == 2
         assert d["evidence"][0]["type"] == "capability_check"
         assert d["methodology"] == "cost_benefit"
@@ -519,9 +508,7 @@ class TestReasoningTraceSigningPayload:
         """to_signing_payload() must return dict with sorted keys."""
         payload = full_trace.to_signing_payload()
         keys = list(payload.keys())
-        assert keys == sorted(
-            keys
-        ), f"Keys must be sorted for deterministic signing. Got: {keys}"
+        assert keys == sorted(keys), f"Keys must be sorted for deterministic signing. Got: {keys}"
 
     def test_signing_payload_serializes_enum_as_value(self, full_trace):
         """ConfidentialityLevel must be serialized as string value in signing payload."""
@@ -549,9 +536,7 @@ class TestReasoningTraceSigningPayload:
         parsed = json.loads(json_str)
         assert parsed == payload
 
-    def test_signing_payload_different_traces_produce_different_payloads(
-        self, minimal_trace, full_trace
-    ):
+    def test_signing_payload_different_traces_produce_different_payloads(self, minimal_trace, full_trace):
         """Different traces must produce different signing payloads."""
         p1 = minimal_trace.to_signing_payload()
         p2 = full_trace.to_signing_payload()
@@ -641,9 +626,7 @@ class TestReasoningTraceEdgeCases:
             )
             d = trace.to_dict()
             restored = ReasoningTrace.from_dict(d)
-            assert (
-                restored.confidentiality == level
-            ), f"Round-trip failed for {level.name}"
+            assert restored.confidentiality == level, f"Round-trip failed for {level.name}"
 
     def test_confidence_boundary_exact_zero(self):
         """Confidence of exactly 0.0 must be valid and round-trip."""

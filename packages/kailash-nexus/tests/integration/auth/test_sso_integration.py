@@ -520,7 +520,7 @@ class TestAuthorizationUrlIntegration:
             )
 
             assert "state=test-state" in url, f"{provider.name} missing state param"
-            assert (
-                f"client_id={provider.client_id}" in url
-            ), f"{provider.name} missing client_id param"
+            assert f"client_id={provider.client_id}" in url, (
+                f"{provider.name} missing client_id param"
+            )
             assert "redirect_uri=" in url, f"{provider.name} missing redirect_uri"

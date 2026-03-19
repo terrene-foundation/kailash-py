@@ -581,9 +581,9 @@ class TestPostgreSQLAdapterIntegration:
         import re
 
         version_pattern = r"\d+\.\d+"
-        assert re.search(
-            version_pattern, version
-        ), f"No version number found in: {version}"
+        assert re.search(version_pattern, version), (
+            f"No version number found in: {version}"
+        )
 
     @pytest.mark.timeout(5)
     async def test_get_database_size_real(self, connected_adapter):

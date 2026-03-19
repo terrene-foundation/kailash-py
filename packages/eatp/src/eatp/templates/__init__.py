@@ -260,9 +260,7 @@ def list_templates() -> List[Dict[str, str]]:
     Returns:
         List of dicts with 'name' and 'description' for each template
     """
-    return [
-        {"name": t["name"], "description": t["description"]} for t in TEMPLATES.values()
-    ]
+    return [{"name": t["name"], "description": t["description"]} for t in TEMPLATES.values()]
 
 
 def get_template_names() -> List[str]:
@@ -346,13 +344,9 @@ def load_template_file(path: Path) -> Dict[str, Any]:
 
             return yaml.safe_load(path.read_text())
         except ImportError:
-            raise ImportError(
-                "PyYAML required for YAML templates. Install with: pip install pyyaml"
-            )
+            raise ImportError("PyYAML required for YAML templates. Install with: pip install pyyaml")
     else:
-        raise ValueError(
-            f"Unsupported template format: {suffix}. Use .json or .yaml/.yml"
-        )
+        raise ValueError(f"Unsupported template format: {suffix}. Use .json or .yaml/.yml")
 
 
 __all__ = [

@@ -93,7 +93,7 @@ class ResearchCoordinator:
             analysis_prompt = f"""
             Analyze this research finding:
 
-            {results['research']}
+            {results["research"]}
 
             Provide:
             1. Key insights
@@ -131,15 +131,14 @@ class ResearchCoordinator:
             and not results["research"].startswith("Error")
             and not results["analysis"].startswith("Error")
         ):
-
             review_prompt = f"""
             Review this research output:
 
             Research Findings:
-            {results['research'][:300]}
+            {results["research"][:300]}
 
             Analysis:
-            {results['analysis'][:300]}
+            {results["analysis"][:300]}
 
             Provide:
             1. Quality assessment (1-10)
@@ -204,7 +203,7 @@ def main():
         topic = research_item["topic"]
         context = research_item.get("context", "")
 
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print(f"RESEARCH TASK {idx}/{len(research_topics)}")
         print("=" * 70)
 

@@ -51,9 +51,9 @@ async def test_compression_save_load_roundtrip():
         # Assert: File is compressed (.jsonl.gz)
         compressed_file = Path(tmpdir) / f"{checkpoint_id}.jsonl.gz"
         assert compressed_file.exists(), "Should create .jsonl.gz file"
-        assert not (
-            Path(tmpdir) / f"{checkpoint_id}.jsonl"
-        ).exists(), "Should not create uncompressed file"
+        assert not (Path(tmpdir) / f"{checkpoint_id}.jsonl").exists(), (
+            "Should not create uncompressed file"
+        )
 
         # Act: Load compressed
         loaded_state = await storage.load(checkpoint_id)
@@ -137,9 +137,9 @@ async def test_compression_size_reduction():
         # Assert: Compressed is smaller
         assert compressed_size < uncompressed_size, "Compressed file should be smaller"
         compression_ratio = compressed_size / uncompressed_size
-        assert (
-            compression_ratio < 0.5
-        ), f"Compression should reduce size by >50% (ratio: {compression_ratio:.2f})"
+        assert compression_ratio < 0.5, (
+            f"Compression should reduce size by >50% (ratio: {compression_ratio:.2f})"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -174,9 +174,9 @@ async def test_list_checkpoints_mixed_formats():
         # Assert: Both checkpoints listed
         assert len(checkpoints) == 2, "Should list both compressed and uncompressed"
         checkpoint_ids = [c.checkpoint_id for c in checkpoints]
-        assert (
-            checkpoint_id1 in checkpoint_ids
-        ), "Should include uncompressed checkpoint"
+        assert checkpoint_id1 in checkpoint_ids, (
+            "Should include uncompressed checkpoint"
+        )
         assert checkpoint_id2 in checkpoint_ids, "Should include compressed checkpoint"
 
 
@@ -261,15 +261,15 @@ async def test_exists_with_compression():
         checkpoint_id_uncompressed = await storage_uncompressed.save(state2)
 
         # Act & Assert: Check existence
-        assert await storage_compressed.exists(
-            checkpoint_id_compressed
-        ), "Compressed checkpoint should exist"
-        assert await storage_uncompressed.exists(
-            checkpoint_id_uncompressed
-        ), "Uncompressed checkpoint should exist"
-        assert not await storage_compressed.exists(
-            "nonexistent"
-        ), "Nonexistent checkpoint should not exist"
+        assert await storage_compressed.exists(checkpoint_id_compressed), (
+            "Compressed checkpoint should exist"
+        )
+        assert await storage_uncompressed.exists(checkpoint_id_uncompressed), (
+            "Uncompressed checkpoint should exist"
+        )
+        assert not await storage_compressed.exists("nonexistent"), (
+            "Nonexistent checkpoint should not exist"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════

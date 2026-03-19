@@ -39,9 +39,9 @@ class TestResilientAgent:
         config = FallbackConfig(models=models, llm_provider="mock")
         agent = ResilientAgent(config)
 
-        assert isinstance(
-            agent.strategy, FallbackStrategy
-        ), f"Agent should use FallbackStrategy, got {type(agent.strategy)}"
+        assert isinstance(agent.strategy, FallbackStrategy), (
+            f"Agent should use FallbackStrategy, got {type(agent.strategy)}"
+        )
 
     def test_config_parameters_work_correctly(self):
         """Test that config parameters are properly set."""
@@ -59,9 +59,9 @@ class TestResilientAgent:
         config = FallbackConfig(models=models, llm_provider="mock")
         agent = ResilientAgent(config)
 
-        assert (
-            len(agent.strategy.strategies) == 2
-        ), f"Should have 2 strategies, got {len(agent.strategy.strategies)}"
+        assert len(agent.strategy.strategies) == 2, (
+            f"Should have 2 strategies, got {len(agent.strategy.strategies)}"
+        )
 
     @pytest.mark.asyncio
     async def test_run_executes_successfully(self):
@@ -102,9 +102,9 @@ class TestResilientAgent:
         config = FallbackConfig(models=models, llm_provider="mock")
         agent = ResilientAgent(config)
 
-        assert isinstance(
-            agent.signature, QuerySignature
-        ), f"Agent should use QuerySignature, got {type(agent.signature)}"
+        assert isinstance(agent.signature, QuerySignature), (
+            f"Agent should use QuerySignature, got {type(agent.signature)}"
+        )
 
     def test_agent_inherits_from_base_agent(self):
         """Test that ResilientAgent inherits from BaseAgent."""
@@ -114,9 +114,9 @@ class TestResilientAgent:
         config = FallbackConfig(models=models, llm_provider="mock")
         agent = ResilientAgent(config)
 
-        assert isinstance(
-            agent, BaseAgent
-        ), "ResilientAgent should inherit from BaseAgent"
+        assert isinstance(agent, BaseAgent), (
+            "ResilientAgent should inherit from BaseAgent"
+        )
 
     def test_empty_models_list_raises_error(self):
         """Test that empty models list raises error."""
@@ -137,9 +137,9 @@ class TestResilientAgent:
         config = FallbackConfig(models=models, llm_provider="mock")
         agent = ResilientAgent(config)
 
-        assert (
-            len(agent.strategy.strategies) == 3
-        ), f"Should have 3 strategies for 3 models, got {len(agent.strategy.strategies)}"
+        assert len(agent.strategy.strategies) == 3, (
+            f"Should have 3 strategies for 3 models, got {len(agent.strategy.strategies)}"
+        )
 
     @pytest.mark.asyncio
     async def test_fallback_tracks_successful_strategy(self):
@@ -172,6 +172,6 @@ class TestResilientAgent:
 
         result = await agent.query_async("test question")
 
-        assert isinstance(
-            result, dict
-        ), f"query_async should return dict, got {type(result)}"
+        assert isinstance(result, dict), (
+            f"query_async should return dict, got {type(result)}"
+        )

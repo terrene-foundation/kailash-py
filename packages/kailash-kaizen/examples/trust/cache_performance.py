@@ -195,7 +195,7 @@ async def main():
     )
     second_access_ms = (time.perf_counter() - start) * 1000
     print(f"   - Latency: {second_access_ms:.3f}ms")
-    print(f"   - Speedup: {first_access_ms/second_access_ms:.1f}x")
+    print(f"   - Speedup: {first_access_ms / second_access_ms:.1f}x")
 
     # =========================================================================
     # Performance Benchmark
@@ -223,15 +223,15 @@ async def main():
 
     print("\n   Results:")
     print(f"   {'Metric':<20} {'Cached':<15} {'Uncached':<15} {'Speedup':<10}")
-    print(f"   {'-'*60}")
+    print(f"   {'-' * 60}")
     print(
-        f"   {'p50 (ms)':<20} {cached_p50:.3f}           {uncached_p50:.3f}           {uncached_p50/cached_p50:.1f}x"
+        f"   {'p50 (ms)':<20} {cached_p50:.3f}           {uncached_p50:.3f}           {uncached_p50 / cached_p50:.1f}x"
     )
     print(
-        f"   {'p95 (ms)':<20} {cached_p95:.3f}           {uncached_p95:.3f}           {uncached_p95/cached_p95:.1f}x"
+        f"   {'p95 (ms)':<20} {cached_p95:.3f}           {uncached_p95:.3f}           {uncached_p95 / cached_p95:.1f}x"
     )
     print(
-        f"   {'Average (ms)':<20} {cached_avg:.3f}           {uncached_avg:.3f}           {uncached_avg/cached_avg:.1f}x"
+        f"   {'Average (ms)':<20} {cached_avg:.3f}           {uncached_avg:.3f}           {uncached_avg / cached_avg:.1f}x"
     )
 
     # =========================================================================
@@ -361,7 +361,7 @@ async def main():
     print("Cache Performance Example Complete!")
     print("=" * 70)
     print("\nKey Results:")
-    print(f"- Cache speedup: {uncached_avg/cached_avg:.0f}x faster")
+    print(f"- Cache speedup: {uncached_avg / cached_avg:.0f}x faster")
     print(f"- Target latency (<1ms): {'Met' if cached_p95 < 1 else 'Not met'}")
 
 

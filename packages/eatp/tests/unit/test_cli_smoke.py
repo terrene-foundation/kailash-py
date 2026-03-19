@@ -50,9 +50,7 @@ def _init_authority(runner: CliRunner, store_dir: str) -> str:
         main,
         ["--store-dir", store_dir, "init", "--name", "Smoke Authority", "--json"],
     )
-    assert (
-        result.exit_code == 0
-    ), f"eatp init failed (exit {result.exit_code}): {result.output}"
+    assert result.exit_code == 0, f"eatp init failed (exit {result.exit_code}): {result.output}"
     data = json.loads(result.output)
     return data["authority_id"]
 
@@ -81,9 +79,7 @@ def _establish_agent(
             capabilities,
         ],
     )
-    assert (
-        result.exit_code == 0
-    ), f"eatp establish failed (exit {result.exit_code}): {result.output}"
+    assert result.exit_code == 0, f"eatp establish failed (exit {result.exit_code}): {result.output}"
 
 
 # ---------------------------------------------------------------------------
@@ -96,15 +92,11 @@ class TestVersionSmoke:
 
     def test_version_exits_zero(self, runner):
         result = runner.invoke(main, ["version"])
-        assert (
-            result.exit_code == 0
-        ), f"version exited {result.exit_code}: {result.output}"
+        assert result.exit_code == 0, f"version exited {result.exit_code}: {result.output}"
 
     def test_version_output_contains_version_string(self, runner):
         result = runner.invoke(main, ["version"])
-        assert (
-            __version__ in result.output
-        ), f"Expected '{__version__}' in output: {result.output}"
+        assert __version__ in result.output, f"Expected '{__version__}' in output: {result.output}"
 
     def test_version_json_output_is_valid(self, runner):
         result = runner.invoke(main, ["version", "--json"])
@@ -123,9 +115,7 @@ class TestHelpSmoke:
 
     def test_main_help(self, runner):
         result = runner.invoke(main, ["--help"])
-        assert (
-            result.exit_code == 0
-        ), f"main --help exited {result.exit_code}: {result.output}"
+        assert result.exit_code == 0, f"main --help exited {result.exit_code}: {result.output}"
         # The help text should mention at least some commands
         assert "init" in result.output
         assert "establish" in result.output
@@ -148,13 +138,9 @@ class TestHelpSmoke:
     )
     def test_command_help_exits_zero(self, runner, command):
         result = runner.invoke(main, [command, "--help"])
-        assert (
-            result.exit_code == 0
-        ), f"'{command} --help' exited {result.exit_code}: {result.output}"
+        assert result.exit_code == 0, f"'{command} --help' exited {result.exit_code}: {result.output}"
         # Help text must contain something useful (the command description)
-        assert (
-            len(result.output.strip()) > 0
-        ), f"'{command} --help' produced empty output"
+        assert len(result.output.strip()) > 0, f"'{command} --help' produced empty output"
 
 
 # ---------------------------------------------------------------------------
@@ -179,9 +165,7 @@ class TestInitSmoke:
         )
         auth_dir = Path(store_dir) / "authorities"
         auth_files = list(auth_dir.glob("*.json"))
-        assert (
-            len(auth_files) >= 1
-        ), f"Expected at least 1 authority file in {auth_dir}, found {len(auth_files)}"
+        assert len(auth_files) >= 1, f"Expected at least 1 authority file in {auth_dir}, found {len(auth_files)}"
 
     def test_init_creates_key_file(self, runner, store_dir):
         runner.invoke(
@@ -190,9 +174,7 @@ class TestInitSmoke:
         )
         keys_dir = Path(store_dir) / "keys"
         key_files = list(keys_dir.glob("*.json"))
-        assert (
-            len(key_files) >= 1
-        ), f"Expected at least 1 key file in {keys_dir}, found {len(key_files)}"
+        assert len(key_files) >= 1, f"Expected at least 1 key file in {keys_dir}, found {len(key_files)}"
 
     def test_init_json_output_is_valid(self, runner, store_dir):
         result = runner.invoke(
@@ -230,9 +212,7 @@ class TestEstablishSmoke:
                 "read",
             ],
         )
-        assert (
-            result.exit_code == 0
-        ), f"establish exited {result.exit_code}: {result.output}"
+        assert result.exit_code == 0, f"establish exited {result.exit_code}: {result.output}"
 
     def test_establish_json_output_is_valid(self, runner, store_dir):
         authority_id = _init_authority(runner, store_dir)
@@ -279,9 +259,7 @@ class TestVerifySmoke:
                 "read",
             ],
         )
-        assert (
-            result.exit_code == 0
-        ), f"verify exited {result.exit_code}: {result.output}"
+        assert result.exit_code == 0, f"verify exited {result.exit_code}: {result.output}"
 
     def test_verify_json_output_is_valid(self, runner, store_dir):
         authority_id = _init_authority(runner, store_dir)
@@ -320,8 +298,7 @@ class TestVerifySmoke:
             ],
         )
         assert result.exit_code != 0, (
-            f"verify should have failed for unauthorized action, "
-            f"but exited {result.exit_code}: {result.output}"
+            f"verify should have failed for unauthorized action, but exited {result.exit_code}: {result.output}"
         )
         data = json.loads(result.output)
         assert data["valid"] is False
@@ -342,9 +319,7 @@ class TestStatusSmoke:
             main,
             ["--store-dir", store_dir, "status", "smoke-agent"],
         )
-        assert (
-            result.exit_code == 0
-        ), f"status exited {result.exit_code}: {result.output}"
+        assert result.exit_code == 0, f"status exited {result.exit_code}: {result.output}"
 
     def test_status_json_output_is_valid(self, runner, store_dir):
         authority_id = _init_authority(runner, store_dir)
@@ -388,9 +363,7 @@ class TestAuditSmoke:
             main,
             ["--store-dir", store_dir, "audit", "smoke-agent"],
         )
-        assert (
-            result.exit_code == 0
-        ), f"audit exited {result.exit_code}: {result.output}"
+        assert result.exit_code == 0, f"audit exited {result.exit_code}: {result.output}"
 
     def test_audit_json_output_is_valid(self, runner, store_dir):
         authority_id = _init_authority(runner, store_dir)
@@ -424,9 +397,7 @@ class TestDashboardSmoke:
             main,
             ["--store-dir", store_dir, "dashboard"],
         )
-        assert (
-            result.exit_code != 0
-        ), f"'dashboard' is not a registered command but exited 0: {result.output}"
+        assert result.exit_code != 0, f"'dashboard' is not a registered command but exited 0: {result.output}"
 
 
 # ---------------------------------------------------------------------------
@@ -444,9 +415,7 @@ class TestInvalidArgumentsSmoke:
             ["--store-dir", store_dir, "establish", "--authority", "fake-id"],
         )
         # Click treats missing positional arg as usage error (exit 2)
-        assert (
-            result.exit_code != 0
-        ), f"Expected non-zero exit for missing agent_name: {result.output}"
+        assert result.exit_code != 0, f"Expected non-zero exit for missing agent_name: {result.output}"
 
     def test_establish_missing_authority(self, runner, store_dir):
         """establish requires --authority option."""
@@ -454,9 +423,7 @@ class TestInvalidArgumentsSmoke:
             main,
             ["--store-dir", store_dir, "establish", "some-agent"],
         )
-        assert (
-            result.exit_code != 0
-        ), f"Expected non-zero exit for missing --authority: {result.output}"
+        assert result.exit_code != 0, f"Expected non-zero exit for missing --authority: {result.output}"
 
     def test_verify_missing_agent_id(self, runner, store_dir):
         """verify requires a positional AGENT_ID argument."""
@@ -464,9 +431,7 @@ class TestInvalidArgumentsSmoke:
             main,
             ["--store-dir", store_dir, "verify", "--action", "read"],
         )
-        assert (
-            result.exit_code != 0
-        ), f"Expected non-zero exit for missing agent_id: {result.output}"
+        assert result.exit_code != 0, f"Expected non-zero exit for missing agent_id: {result.output}"
 
     def test_verify_missing_action(self, runner, store_dir):
         """verify requires --action option."""
@@ -474,9 +439,7 @@ class TestInvalidArgumentsSmoke:
             main,
             ["--store-dir", store_dir, "verify", "some-agent"],
         )
-        assert (
-            result.exit_code != 0
-        ), f"Expected non-zero exit for missing --action: {result.output}"
+        assert result.exit_code != 0, f"Expected non-zero exit for missing --action: {result.output}"
 
     def test_audit_missing_agent_id(self, runner, store_dir):
         """audit requires a positional AGENT_ID argument."""
@@ -484,9 +447,7 @@ class TestInvalidArgumentsSmoke:
             main,
             ["--store-dir", store_dir, "audit"],
         )
-        assert (
-            result.exit_code != 0
-        ), f"Expected non-zero exit for missing agent_id: {result.output}"
+        assert result.exit_code != 0, f"Expected non-zero exit for missing agent_id: {result.output}"
 
     def test_delegate_missing_all_options(self, runner, store_dir):
         """delegate requires --from, --to, and --capabilities."""
@@ -494,9 +455,7 @@ class TestInvalidArgumentsSmoke:
             main,
             ["--store-dir", store_dir, "delegate"],
         )
-        assert (
-            result.exit_code != 0
-        ), f"Expected non-zero exit for missing delegate options: {result.output}"
+        assert result.exit_code != 0, f"Expected non-zero exit for missing delegate options: {result.output}"
 
     def test_revoke_missing_delegation_id(self, runner, store_dir):
         """revoke requires a positional DELEGATION_ID argument."""
@@ -504,9 +463,7 @@ class TestInvalidArgumentsSmoke:
             main,
             ["--store-dir", store_dir, "revoke", "--yes"],
         )
-        assert (
-            result.exit_code != 0
-        ), f"Expected non-zero exit for missing delegation_id: {result.output}"
+        assert result.exit_code != 0, f"Expected non-zero exit for missing delegation_id: {result.output}"
 
     def test_export_missing_agent_id(self, runner, store_dir):
         """export requires a positional AGENT_ID argument."""
@@ -514,9 +471,7 @@ class TestInvalidArgumentsSmoke:
             main,
             ["--store-dir", store_dir, "export"],
         )
-        assert (
-            result.exit_code != 0
-        ), f"Expected non-zero exit for missing agent_id: {result.output}"
+        assert result.exit_code != 0, f"Expected non-zero exit for missing agent_id: {result.output}"
 
     def test_verify_chain_missing_agent_id(self, runner, store_dir):
         """verify-chain requires a positional AGENT_ID argument."""
@@ -524,9 +479,7 @@ class TestInvalidArgumentsSmoke:
             main,
             ["--store-dir", store_dir, "verify-chain"],
         )
-        assert (
-            result.exit_code != 0
-        ), f"Expected non-zero exit for missing agent_id: {result.output}"
+        assert result.exit_code != 0, f"Expected non-zero exit for missing agent_id: {result.output}"
 
     def test_init_missing_name(self, runner, store_dir):
         """init requires --name option."""
@@ -534,13 +487,9 @@ class TestInvalidArgumentsSmoke:
             main,
             ["--store-dir", store_dir, "init"],
         )
-        assert (
-            result.exit_code != 0
-        ), f"Expected non-zero exit for missing --name: {result.output}"
+        assert result.exit_code != 0, f"Expected non-zero exit for missing --name: {result.output}"
 
-    def test_establish_with_invalid_authority_gives_error_message(
-        self, runner, store_dir
-    ):
+    def test_establish_with_invalid_authority_gives_error_message(self, runner, store_dir):
         """establish with a non-existent authority must show a helpful error."""
         _init_authority(runner, store_dir)  # create store structure
         result = runner.invoke(
@@ -557,9 +506,9 @@ class TestInvalidArgumentsSmoke:
         assert result.exit_code != 0
         # Must contain a helpful error message, not just a traceback
         lower_output = result.output.lower()
-        assert (
-            "not found" in lower_output or "error" in lower_output
-        ), f"Expected a helpful error message, got: {result.output}"
+        assert "not found" in lower_output or "error" in lower_output, (
+            f"Expected a helpful error message, got: {result.output}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -685,9 +634,7 @@ class TestJsonOutputValidation:
 
     def test_delegate_json_parses(self, runner, store_dir):
         authority_id = _init_authority(runner, store_dir)
-        _establish_agent(
-            runner, store_dir, authority_id, agent_name="delegator", capabilities="read"
-        )
+        _establish_agent(runner, store_dir, authority_id, agent_name="delegator", capabilities="read")
         result = runner.invoke(
             main,
             [
@@ -710,9 +657,7 @@ class TestJsonOutputValidation:
 
     def test_revoke_json_parses(self, runner, store_dir):
         authority_id = _init_authority(runner, store_dir)
-        _establish_agent(
-            runner, store_dir, authority_id, agent_name="revoker", capabilities="read"
-        )
+        _establish_agent(runner, store_dir, authority_id, agent_name="revoker", capabilities="read")
         # Create a delegation first
         del_result = runner.invoke(
             main,
@@ -773,9 +718,7 @@ class TestFullCLIWorkflow:
                 "--json",
             ],
         )
-        assert (
-            init_result.exit_code == 0
-        ), f"WORKFLOW STEP 1 (init) failed: {init_result.output}"
+        assert init_result.exit_code == 0, f"WORKFLOW STEP 1 (init) failed: {init_result.output}"
         authority_id = json.loads(init_result.output)["authority_id"]
 
         # Step 2: Establish agent
@@ -793,9 +736,7 @@ class TestFullCLIWorkflow:
                 "--json",
             ],
         )
-        assert (
-            establish_result.exit_code == 0
-        ), f"WORKFLOW STEP 2 (establish) failed: {establish_result.output}"
+        assert establish_result.exit_code == 0, f"WORKFLOW STEP 2 (establish) failed: {establish_result.output}"
         establish_data = json.loads(establish_result.output)
         assert establish_data["agent_id"] == "workflow-agent"
         assert set(establish_data["capabilities"]) == {
@@ -817,9 +758,7 @@ class TestFullCLIWorkflow:
                 "--json",
             ],
         )
-        assert (
-            verify_result.exit_code == 0
-        ), f"WORKFLOW STEP 3 (verify) failed: {verify_result.output}"
+        assert verify_result.exit_code == 0, f"WORKFLOW STEP 3 (verify) failed: {verify_result.output}"
         verify_data = json.loads(verify_result.output)
         assert verify_data["valid"] is True
         assert verify_data["agent_id"] == "workflow-agent"
@@ -835,9 +774,7 @@ class TestFullCLIWorkflow:
                 "--json",
             ],
         )
-        assert (
-            status_result.exit_code == 0
-        ), f"WORKFLOW STEP 4 (status) failed: {status_result.output}"
+        assert status_result.exit_code == 0, f"WORKFLOW STEP 4 (status) failed: {status_result.output}"
         status_data = json.loads(status_result.output)
         assert status_data["agent_id"] == "workflow-agent"
         assert len(status_data["capabilities"]) == 3
@@ -853,9 +790,7 @@ class TestFullCLIWorkflow:
                 "--json",
             ],
         )
-        assert (
-            audit_result.exit_code == 0
-        ), f"WORKFLOW STEP 5 (audit) failed: {audit_result.output}"
+        assert audit_result.exit_code == 0, f"WORKFLOW STEP 5 (audit) failed: {audit_result.output}"
         audit_data = json.loads(audit_result.output)
         assert audit_data["agent_id"] == "workflow-agent"
         assert isinstance(audit_data["audit_trail"], list)
@@ -865,9 +800,7 @@ class TestFullCLIWorkflow:
             main,
             ["--store-dir", store_dir, "export", "workflow-agent"],
         )
-        assert (
-            export_result.exit_code == 0
-        ), f"WORKFLOW STEP 6 (export) failed: {export_result.output}"
+        assert export_result.exit_code == 0, f"WORKFLOW STEP 6 (export) failed: {export_result.output}"
         export_data = json.loads(export_result.output)
         assert "genesis" in export_data
         assert "capabilities" in export_data
@@ -883,9 +816,7 @@ class TestFullCLIWorkflow:
                 "--json",
             ],
         )
-        assert (
-            chain_result.exit_code == 0
-        ), f"WORKFLOW STEP 7 (verify-chain) failed: {chain_result.output}"
+        assert chain_result.exit_code == 0, f"WORKFLOW STEP 7 (verify-chain) failed: {chain_result.output}"
         chain_data = json.loads(chain_result.output)
         assert chain_data["valid"] is True
 
@@ -937,9 +868,7 @@ class TestFullCLIWorkflow:
                 "--json",
             ],
         )
-        assert (
-            delegate_result.exit_code == 0
-        ), f"delegate failed: {delegate_result.output}"
+        assert delegate_result.exit_code == 0, f"delegate failed: {delegate_result.output}"
 
         # Verify delegatee has the delegated capability
         verify_result = runner.invoke(
@@ -954,9 +883,7 @@ class TestFullCLIWorkflow:
                 "--json",
             ],
         )
-        assert (
-            verify_result.exit_code == 0
-        ), f"verify on delegatee failed: {verify_result.output}"
+        assert verify_result.exit_code == 0, f"verify on delegatee failed: {verify_result.output}"
         assert json.loads(verify_result.output)["valid"] is True
 
         # Verify delegatee does NOT have non-delegated capability

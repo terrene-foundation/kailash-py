@@ -121,9 +121,9 @@ class TestRouterCreation:
 
         assert pipeline is not None
         assert hasattr(pipeline, "run"), "MetaControllerPipeline must have run() method"
-        assert isinstance(
-            pipeline, Pipeline
-        ), "MetaControllerPipeline must inherit from Pipeline"
+        assert isinstance(pipeline, Pipeline), (
+            "MetaControllerPipeline must inherit from Pipeline"
+        )
 
     def test_router_requires_agents_parameter(self):
         """Test that router() requires agents parameter."""
@@ -230,9 +230,9 @@ class TestRouterFallback:
 
         # Should fall back to first agent (code_expert)
         assert result is not None
-        assert (
-            mock_agents[0]._call_count == 1
-        ), "Should fall back to first agent when A2A unavailable"
+        assert mock_agents[0]._call_count == 1, (
+            "Should fall back to first agent when A2A unavailable"
+        )
 
     def test_router_fallback_on_zero_a2a_scores(self, mock_agents):
         """Test router fallback when no agent matches task (all scores = 0)."""
@@ -247,9 +247,9 @@ class TestRouterFallback:
 
         # Should fall back to first agent (code_expert)
         assert result is not None
-        assert (
-            specific_agents[0]._call_count == 1
-        ), "Should fall back to first agent when no capability match"
+        assert specific_agents[0]._call_count == 1, (
+            "Should fall back to first agent when no capability match"
+        )
 
     def test_router_fallback_round_robin_strategy(self, mock_agents):
         """Test router with explicit round-robin fallback strategy."""

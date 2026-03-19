@@ -181,7 +181,7 @@ def demo_fallback_success():
             print(f"All strategies failed: {e}\n")
             errors = agent.get_error_summary()
             for i, error in enumerate(errors):
-                print(f"  {i+1}. {error['strategy']}: {error['error']}")
+                print(f"  {i + 1}. {error['strategy']}: {error['error']}")
 
     asyncio.run(demo())
 

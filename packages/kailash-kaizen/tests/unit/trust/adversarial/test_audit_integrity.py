@@ -136,17 +136,17 @@ class TestAuditRecordImmutableAfterWrite:
 
         # Recompute hash - it should differ
         tampered_hash = tampered_record._compute_integrity_hash()
-        assert (
-            tampered_hash != original_hash
-        ), "Tampered record should have different hash"
+        assert tampered_hash != original_hash, (
+            "Tampered record should have different hash"
+        )
 
         # Verify integrity should fail for tampered record
         # The stored integrity_hash was computed from original data
         # After tampering, verify_integrity() should fail
         tampered_record.integrity_hash = original_hash  # Keep original hash
-        assert (
-            not tampered_record.verify_integrity()
-        ), "Tampered record should fail integrity verification"
+        assert not tampered_record.verify_integrity(), (
+            "Tampered record should fail integrity verification"
+        )
 
     @pytest.mark.asyncio
     async def test_record_context_tampering_detected(self):
@@ -442,9 +442,9 @@ class TestMerkleTreeTamperedLeafDetected:
 
         # Old proof should fail against modified tree
         # (The proof's root_hash doesn't match tree's current root)
-        assert not tree.verify_proof(
-            proof
-        ), "Old proof should fail against modified tree"
+        assert not tree.verify_proof(proof), (
+            "Old proof should fail against modified tree"
+        )
 
 
 # =============================================================================
@@ -480,9 +480,9 @@ class TestAuditTimestampCannotBeBackdated:
 
         # The timestamps in stored_at should still be monotonic
         # Even if anchor.timestamp is backdated, stored_at is set at append time
-        assert (
-            record1.stored_at <= record2.stored_at <= record3.stored_at
-        ), "stored_at timestamps should be monotonically increasing"
+        assert record1.stored_at <= record2.stored_at <= record3.stored_at, (
+            "stored_at timestamps should be monotonically increasing"
+        )
 
         # Check that sequence numbers are proper
         assert (
@@ -508,9 +508,9 @@ class TestAuditTimestampCannotBeBackdated:
         # Serial numbers should be strictly increasing
         serials = [r.token.serial_number for r in responses]
         for i in range(1, len(serials)):
-            assert (
-                serials[i] > serials[i - 1]
-            ), f"Serial numbers must increase: {serials[i-1]} -> {serials[i]}"
+            assert serials[i] > serials[i - 1], (
+                f"Serial numbers must increase: {serials[i - 1]} -> {serials[i]}"
+            )
 
 
 # =============================================================================
@@ -765,17 +765,17 @@ class TestLinkedHashChainInsertionDetected:
         hash2 = chain.add_hash("agent-2", "original_hash_2")
 
         # Verify no tampering with correct hashes
-        assert not chain.detect_tampering(
-            "agent-1", hash1
-        ), "Should not detect tampering"
-        assert not chain.detect_tampering(
-            "agent-2", hash2
-        ), "Should not detect tampering"
+        assert not chain.detect_tampering("agent-1", hash1), (
+            "Should not detect tampering"
+        )
+        assert not chain.detect_tampering("agent-2", hash2), (
+            "Should not detect tampering"
+        )
 
         # Detect tampering with wrong hash
-        assert chain.detect_tampering(
-            "agent-1", "wrong_hash"
-        ), "Should detect tampering"
+        assert chain.detect_tampering("agent-1", "wrong_hash"), (
+            "Should detect tampering"
+        )
         assert chain.detect_tampering("agent-2", hash1), "Should detect hash mismatch"
 
 

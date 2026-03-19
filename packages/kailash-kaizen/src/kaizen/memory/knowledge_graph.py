@@ -134,9 +134,9 @@ class KnowledgeGraphMemory(KaizenMemory):
                 for key, value in entity_attrs.items():
                     if key != "mentions":  # Don't overwrite mention count
                         if key not in self._graphs[session_id]["entities"][entity_name]:
-                            self._graphs[session_id]["entities"][entity_name][
-                                key
-                            ] = value
+                            self._graphs[session_id]["entities"][entity_name][key] = (
+                                value
+                            )
             else:
                 # New entity - add to graph
                 self._graphs[session_id]["entities"][entity_name] = entity_attrs

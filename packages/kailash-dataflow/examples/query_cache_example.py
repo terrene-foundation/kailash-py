@@ -190,10 +190,10 @@ def cache_performance_test():
     get_time = time.time() - start_time
 
     print(
-        f"Cache SET: 100 operations in {set_time:.3f}s ({1000*set_time/100:.1f}ms avg)"
+        f"Cache SET: 100 operations in {set_time:.3f}s ({1000 * set_time / 100:.1f}ms avg)"
     )
     print(
-        f"Cache GET: 100 operations in {get_time:.3f}s ({1000*get_time/100:.1f}ms avg)"
+        f"Cache GET: 100 operations in {get_time:.3f}s ({1000 * get_time / 100:.1f}ms avg)"
     )
     print(f"Hit Rate: {hits}/100 ({hits}%)")
 

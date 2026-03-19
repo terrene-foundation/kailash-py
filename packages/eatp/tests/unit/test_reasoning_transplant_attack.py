@@ -210,29 +210,21 @@ async def _establish_agent_with_capability(
 class TestSignReasoningTraceWithContextId:
     """sign_reasoning_trace must support optional context_id parameter."""
 
-    def test_sign_with_context_id_produces_different_signature(
-        self, reasoning_trace, keypair
-    ):
+    def test_sign_with_context_id_produces_different_signature(self, reasoning_trace, keypair):
         """Signing with context_id must produce a different signature than without."""
         private_key, _ = keypair
         sig_without = sign_reasoning_trace(reasoning_trace, private_key)
-        sig_with = sign_reasoning_trace(
-            reasoning_trace, private_key, context_id="del-123"
-        )
+        sig_with = sign_reasoning_trace(reasoning_trace, private_key, context_id="del-123")
         assert sig_without != sig_with
 
-    def test_sign_with_different_context_ids_produces_different_signatures(
-        self, reasoning_trace, keypair
-    ):
+    def test_sign_with_different_context_ids_produces_different_signatures(self, reasoning_trace, keypair):
         """Different context_ids must produce different signatures."""
         private_key, _ = keypair
         sig_a = sign_reasoning_trace(reasoning_trace, private_key, context_id="del-aaa")
         sig_b = sign_reasoning_trace(reasoning_trace, private_key, context_id="del-bbb")
         assert sig_a != sig_b
 
-    def test_sign_with_none_context_id_matches_no_context(
-        self, reasoning_trace, keypair
-    ):
+    def test_sign_with_none_context_id_matches_no_context(self, reasoning_trace, keypair):
         """context_id=None must produce the same signature as no context_id."""
         private_key, _ = keypair
         sig_default = sign_reasoning_trace(reasoning_trace, private_key)
@@ -259,23 +251,13 @@ class TestVerifyReasoningSignatureWithContextId:
         """Signature created with context_id must verify with the same context_id."""
         private_key, public_key = keypair
         sig = sign_reasoning_trace(reasoning_trace, private_key, context_id="del-456")
-        assert (
-            verify_reasoning_signature(
-                reasoning_trace, sig, public_key, context_id="del-456"
-            )
-            is True
-        )
+        assert verify_reasoning_signature(reasoning_trace, sig, public_key, context_id="del-456") is True
 
     def test_verify_with_wrong_context_id_fails(self, reasoning_trace, keypair):
         """Signature created with one context_id must fail with a different context_id."""
         private_key, public_key = keypair
         sig = sign_reasoning_trace(reasoning_trace, private_key, context_id="del-456")
-        assert (
-            verify_reasoning_signature(
-                reasoning_trace, sig, public_key, context_id="del-789"
-            )
-            is False
-        )
+        assert verify_reasoning_signature(reasoning_trace, sig, public_key, context_id="del-789") is False
 
     def test_verify_context_sig_without_context_fails(self, reasoning_trace, keypair):
         """Signature created WITH context_id must fail verification WITHOUT context_id."""
@@ -287,23 +269,13 @@ class TestVerifyReasoningSignatureWithContextId:
         """Signature created WITHOUT context_id must fail verification WITH context_id."""
         private_key, public_key = keypair
         sig = sign_reasoning_trace(reasoning_trace, private_key)
-        assert (
-            verify_reasoning_signature(
-                reasoning_trace, sig, public_key, context_id="del-456"
-            )
-            is False
-        )
+        assert verify_reasoning_signature(reasoning_trace, sig, public_key, context_id="del-456") is False
 
     def test_verify_none_context_matches_no_context(self, reasoning_trace, keypair):
         """context_id=None on verify must match no-context signing."""
         private_key, public_key = keypair
         sig = sign_reasoning_trace(reasoning_trace, private_key)
-        assert (
-            verify_reasoning_signature(
-                reasoning_trace, sig, public_key, context_id=None
-            )
-            is True
-        )
+        assert verify_reasoning_signature(reasoning_trace, sig, public_key, context_id=None) is True
 
 
 # ===========================================================================
@@ -315,9 +287,7 @@ class TestDelegateBindsReasoningSignature:
     """delegate() must bind the reasoning signature to the delegation record ID."""
 
     @pytest.mark.asyncio
-    async def test_delegate_reasoning_signature_bound_to_delegation_id(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_delegate_reasoning_signature_bound_to_delegation_id(self, ops, reasoning_trace, keypair):
         """The reasoning signature on a delegation must be bound to delegation.id."""
         private_key, public_key = keypair
 
@@ -339,19 +309,11 @@ class TestDelegateBindsReasoningSignature:
                 "reasoning": reasoning_trace.to_signing_payload(),
             }
         )
-        assert (
-            verify_signature(bound_payload, delegation.reasoning_signature, public_key)
-            is True
-        )
+        assert verify_signature(bound_payload, delegation.reasoning_signature, public_key) is True
 
         # The signature must NOT verify against the unbounded trace payload
         unbound_payload = serialize_for_signing(reasoning_trace.to_signing_payload())
-        assert (
-            verify_signature(
-                unbound_payload, delegation.reasoning_signature, public_key
-            )
-            is False
-        )
+        assert verify_signature(unbound_payload, delegation.reasoning_signature, public_key) is False
 
 
 # ===========================================================================
@@ -363,9 +325,7 @@ class TestAuditBindsReasoningSignature:
     """audit() must bind the reasoning signature to the audit anchor ID."""
 
     @pytest.mark.asyncio
-    async def test_audit_reasoning_signature_bound_to_anchor_id(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_audit_reasoning_signature_bound_to_anchor_id(self, ops, reasoning_trace, keypair):
         """The reasoning signature on an audit anchor must be bound to anchor.id."""
         private_key, public_key = keypair
 
@@ -386,17 +346,11 @@ class TestAuditBindsReasoningSignature:
                 "reasoning": reasoning_trace.to_signing_payload(),
             }
         )
-        assert (
-            verify_signature(bound_payload, anchor.reasoning_signature, public_key)
-            is True
-        )
+        assert verify_signature(bound_payload, anchor.reasoning_signature, public_key) is True
 
         # The signature must NOT verify against the unbounded trace payload
         unbound_payload = serialize_for_signing(reasoning_trace.to_signing_payload())
-        assert (
-            verify_signature(unbound_payload, anchor.reasoning_signature, public_key)
-            is False
-        )
+        assert verify_signature(unbound_payload, anchor.reasoning_signature, public_key) is False
 
 
 # ===========================================================================
@@ -408,9 +362,7 @@ class TestVerifyDetectsTransplantAttack:
     """FULL verification must detect reasoning signature transplant attacks."""
 
     @pytest.mark.asyncio
-    async def test_transplanted_delegation_reasoning_signature_fails_verification(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_transplanted_delegation_reasoning_signature_fails_verification(self, ops, reasoning_trace, keypair):
         """A reasoning signature from delegation A must fail on delegation B."""
         private_key, public_key = keypair
 
@@ -421,9 +373,7 @@ class TestVerifyDetectsTransplantAttack:
             source="test",
         )
         await _establish_agent_with_capability(ops, "agent-root", ["read_data"])
-        await _establish_agent_with_capability(
-            ops, "agent-victim", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-victim", ["read_data"], constraints=[reasoning_constraint])
 
         # Create a legitimate delegation to get a valid reasoning signature
         legit_delegation = await ops.delegate(
@@ -464,15 +414,12 @@ class TestVerifyDetectsTransplantAttack:
 
         # The transplanted signature must be detected and rejected
         assert result.valid is False, (
-            "FULL verification must FAIL when a reasoning signature is transplanted "
-            "from one delegation to another"
+            "FULL verification must FAIL when a reasoning signature is transplanted from one delegation to another"
         )
         assert result.reasoning_verified is False
 
     @pytest.mark.asyncio
-    async def test_transplanted_audit_reasoning_signature_fails_verification(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_transplanted_audit_reasoning_signature_fails_verification(self, ops, reasoning_trace, keypair):
         """A reasoning signature from audit anchor A must fail on audit anchor B."""
         private_key, public_key = keypair
 
@@ -521,15 +468,12 @@ class TestVerifyDetectsTransplantAttack:
         )
 
         assert result.valid is False, (
-            "FULL verification must FAIL when a reasoning signature is transplanted "
-            "from one audit anchor to another"
+            "FULL verification must FAIL when a reasoning signature is transplanted from one audit anchor to another"
         )
         assert result.reasoning_verified is False
 
     @pytest.mark.asyncio
-    async def test_legitimate_bound_delegation_reasoning_passes(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_legitimate_bound_delegation_reasoning_passes(self, ops, reasoning_trace, keypair):
         """A properly bound reasoning signature on a delegation must pass FULL verification."""
         reasoning_constraint = Constraint(
             id=f"con-{uuid4()}",
@@ -538,9 +482,7 @@ class TestVerifyDetectsTransplantAttack:
             source="test",
         )
         await _establish_agent_with_capability(ops, "agent-root", ["analyze"])
-        await _establish_agent_with_capability(
-            ops, "agent-legit", ["analyze"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-legit", ["analyze"], constraints=[reasoning_constraint])
 
         await ops.delegate(
             delegator_id="agent-root",
@@ -559,9 +501,7 @@ class TestVerifyDetectsTransplantAttack:
         assert result.reasoning_verified is True
 
     @pytest.mark.asyncio
-    async def test_legitimate_bound_audit_reasoning_passes(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_legitimate_bound_audit_reasoning_passes(self, ops, reasoning_trace, keypair):
         """A properly bound reasoning signature on an audit anchor must pass FULL verification."""
         reasoning_constraint = Constraint(
             id=f"con-{uuid4()}",

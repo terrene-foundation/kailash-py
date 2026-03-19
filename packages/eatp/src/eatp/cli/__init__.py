@@ -56,13 +56,9 @@ def main(ctx: click.Context, store_dir: str | None, verbose: bool) -> None:
     ctx.obj["store_dir"] = store_dir
 
     if verbose:
-        logging.basicConfig(
-            level=logging.DEBUG, format="%(name)s %(levelname)s: %(message)s"
-        )
+        logging.basicConfig(level=logging.DEBUG, format="%(name)s %(levelname)s: %(message)s")
     else:
-        logging.basicConfig(
-            level=logging.WARNING, format="%(name)s %(levelname)s: %(message)s"
-        )
+        logging.basicConfig(level=logging.WARNING, format="%(name)s %(levelname)s: %(message)s")
 
 
 # Register commands

@@ -181,7 +181,8 @@ class TestBulkDeleteEmptyFilterBug:
 
         # Non-empty filter WORKS in v0.5.1
         result = await node.async_run(
-            filter={"status": "inactive"}, confirmed=True  # Non-empty filter
+            filter={"status": "inactive"},
+            confirmed=True,  # Non-empty filter
         )
 
         print("\n=== NON-EMPTY FILTER (SHOULD WORK) ===")
@@ -191,9 +192,9 @@ class TestBulkDeleteEmptyFilterBug:
 
         # This should work
         assert result["success"], f"Non-empty filter failed: {result.get('error')}"
-        assert (
-            result["deleted"] == 1
-        ), f"Expected 1 deletion but got {result.get('deleted')}"
+        assert result["deleted"] == 1, (
+            f"Expected 1 deletion but got {result.get('deleted')}"
+        )
 
 
 @pytest.mark.asyncio

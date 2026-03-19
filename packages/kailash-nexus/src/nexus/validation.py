@@ -170,8 +170,7 @@ def validate_workflow_name(name: str) -> str:
     # Check length
     if len(name) > 128:
         raise ValueError(
-            f"Workflow name too long: {len(name)} chars (max: 128). "
-            f"Use a shorter name."
+            f"Workflow name too long: {len(name)} chars (max: 128). Use a shorter name."
         )
 
     return name

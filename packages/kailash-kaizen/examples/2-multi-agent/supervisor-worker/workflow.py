@@ -600,14 +600,14 @@ def supervisor_worker_workflow(
     workers = []
     worker_ids = []
     for i in range(num_workers):
-        worker_id = f"worker_{i+1}"
+        worker_id = f"worker_{i + 1}"
         worker = WorkerAgent(config, shared_pool, agent_id=worker_id)
         workers.append(worker)
         worker_ids.append(worker_id)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Supervisor-Worker Pattern: {request}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Step 1: Supervisor delegates tasks
     print("Step 1: Supervisor delegating tasks...")
@@ -643,14 +643,14 @@ def supervisor_worker_workflow(
 
     # Show shared memory stats
     stats = shared_pool.get_stats()
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Shared Memory Statistics:")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  - Total insights: {stats['insight_count']}")
     print(f"  - Agents involved: {stats['agent_count']}")
     print(f"  - Tag distribution: {stats['tag_distribution']}")
     print(f"  - Segment distribution: {stats['segment_distribution']}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     return {
         "request": request,

@@ -334,7 +334,7 @@ class SimpleQAAgent:
 
         results = []
         for i, question in enumerate(questions):
-            logger.info(f"Processing question {i+1}/{len(questions)}")
+            logger.info(f"Processing question {i + 1}/{len(questions)}")
             result = self.ask(question, context)
 
             # Add batch-specific metadata
@@ -482,7 +482,7 @@ def performance_benchmark():
     agent_creation_times = []
 
     for i in range(5):
-        print(f"Benchmark run {i+1}/5...")
+        print(f"Benchmark run {i + 1}/5...")
 
         start_time = time.time()
         framework_config = kaizen.KaizenConfig(

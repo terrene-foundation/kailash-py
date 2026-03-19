@@ -340,13 +340,13 @@ async def test_interrupt_status_metadata():
     assert status.reason.metadata["budget_used"] == 105.0, "Should preserve metadata"
 
     # Check state metadata
-    assert (
-        "interrupt_reason" in agent_state.metadata
-    ), "State should include interrupt reason"
+    assert "interrupt_reason" in agent_state.metadata, (
+        "State should include interrupt reason"
+    )
     interrupt_data = agent_state.metadata["interrupt_reason"]
-    assert (
-        interrupt_data["message"] == "Budget limit exceeded"
-    ), "Should preserve message"
+    assert interrupt_data["message"] == "Budget limit exceeded", (
+        "Should preserve message"
+    )
     assert interrupt_data["source"] == "programmatic", "Should preserve source"
 
     # Cleanup
@@ -371,19 +371,19 @@ def test_autonomous_config_interrupt_defaults():
     config = AutonomousConfig()
 
     # Assert
-    assert hasattr(
-        config, "enable_interrupts"
-    ), "Should have enable_interrupts attribute"
+    assert hasattr(config, "enable_interrupts"), (
+        "Should have enable_interrupts attribute"
+    )
     assert config.enable_interrupts is True, "Should default to True"
 
-    assert hasattr(
-        config, "graceful_shutdown_timeout"
-    ), "Should have graceful_shutdown_timeout"
+    assert hasattr(config, "graceful_shutdown_timeout"), (
+        "Should have graceful_shutdown_timeout"
+    )
     assert config.graceful_shutdown_timeout == 5.0, "Should default to 5.0 seconds"
 
-    assert hasattr(
-        config, "checkpoint_on_interrupt"
-    ), "Should have checkpoint_on_interrupt"
+    assert hasattr(config, "checkpoint_on_interrupt"), (
+        "Should have checkpoint_on_interrupt"
+    )
     assert config.checkpoint_on_interrupt is True, "Should default to True"
 
 
@@ -435,9 +435,9 @@ async def test_disabled_interrupts_configuration():
 
     # Even if disabled, interrupt_manager should exist but not install signal handlers
     # This is for backward compatibility
-    assert isinstance(
-        agent.interrupt_manager, InterruptManager
-    ), "Should be InterruptManager instance"
+    assert isinstance(agent.interrupt_manager, InterruptManager), (
+        "Should be InterruptManager instance"
+    )
 
     # Cleanup
     if agent.interrupt_manager._signal_handlers_installed:

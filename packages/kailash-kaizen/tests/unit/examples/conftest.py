@@ -342,12 +342,12 @@ def assert_async_strategy():
 
     def _assert(agent: BaseAgent):
         """Assert that agent uses AsyncSingleShotStrategy."""
-        assert isinstance(
-            agent.strategy, AsyncSingleShotStrategy
-        ), f"Expected AsyncSingleShotStrategy, got {type(agent.strategy).__name__}"
-        assert inspect.iscoroutinefunction(
-            agent.strategy.execute
-        ), "Strategy execute method must be async"
+        assert isinstance(agent.strategy, AsyncSingleShotStrategy), (
+            f"Expected AsyncSingleShotStrategy, got {type(agent.strategy).__name__}"
+        )
+        assert inspect.iscoroutinefunction(agent.strategy.execute), (
+            "Strategy execute method must be async"
+        )
 
     return _assert
 
@@ -358,9 +358,9 @@ def assert_sync_strategy():
 
     def _assert(agent: BaseAgent):
         """Assert that agent uses SingleShotStrategy."""
-        assert isinstance(
-            agent.strategy, SingleShotStrategy
-        ), f"Expected SingleShotStrategy, got {type(agent.strategy).__name__}"
+        assert isinstance(agent.strategy, SingleShotStrategy), (
+            f"Expected SingleShotStrategy, got {type(agent.strategy).__name__}"
+        )
 
     return _assert
 
@@ -390,9 +390,9 @@ def assert_shared_memory():
             exclude_own=False,  # Include own insights for testing
         )
 
-        assert (
-            len(insights) >= expected_count
-        ), f"Expected at least {expected_count} insights, found {len(insights)}"
+        assert len(insights) >= expected_count, (
+            f"Expected at least {expected_count} insights, found {len(insights)}"
+        )
 
         # Verify insight structure
         for insight in insights:
@@ -424,9 +424,9 @@ def measure_performance():
         operation()
         duration_ms = (time.time() - start) * 1000
 
-        assert (
-            duration_ms <= max_duration_ms
-        ), f"Operation took {duration_ms:.2f}ms, exceeding {max_duration_ms}ms limit"
+        assert duration_ms <= max_duration_ms, (
+            f"Operation took {duration_ms:.2f}ms, exceeding {max_duration_ms}ms limit"
+        )
 
         return duration_ms
 
@@ -494,9 +494,9 @@ def validate_config():
         # Verify all fields are set
         for key, value in config_dict.items():
             if hasattr(config, key):
-                assert (
-                    getattr(config, key) == value
-                ), f"Config field {key} not set correctly"
+                assert getattr(config, key) == value, (
+                    f"Config field {key} not set correctly"
+                )
 
         return config
 
@@ -525,14 +525,14 @@ def validate_agent_initialization():
         assert hasattr(agent, "agent_id"), "Agent missing agent_id"
 
         # Verify config auto-extraction worked
-        assert isinstance(
-            agent.config, (BaseAgentConfig, dict)
-        ), "Agent config not properly initialized"
+        assert isinstance(agent.config, (BaseAgentConfig, dict)), (
+            "Agent config not properly initialized"
+        )
 
         # Verify signature
-        assert isinstance(
-            agent.signature, Signature
-        ), "Agent signature not properly initialized"
+        assert isinstance(agent.signature, Signature), (
+            "Agent signature not properly initialized"
+        )
 
         # Verify strategy
         assert agent.strategy is not None, "Agent strategy not initialized"

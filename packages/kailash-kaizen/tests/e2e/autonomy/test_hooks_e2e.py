@@ -318,9 +318,9 @@ class CustomLoggingHook(BaseHook):
         hook_manager = HookManager()
         discovered_count = await hook_manager.discover_filesystem_hooks(hooks_dir)
 
-        assert (
-            discovered_count > 0
-        ), f"Should discover custom hook, got {discovered_count}"
+        assert discovered_count > 0, (
+            f"Should discover custom hook, got {discovered_count}"
+        )
 
         # Create agent with discovered hooks
         agent = BaseAgent(
@@ -336,19 +336,19 @@ class CustomLoggingHook(BaseHook):
         # Assert: Hooks were discovered and registered
         # Note: discover_filesystem_hooks may discover multiple instances
         # (one per event type or one per hook class)
-        assert (
-            discovered_count >= 1
-        ), f"Should have discovered at least 1 hook, got {discovered_count}"
+        assert discovered_count >= 1, (
+            f"Should have discovered at least 1 hook, got {discovered_count}"
+        )
 
         # Verify hooks are registered for the expected events
         pre_hooks = hook_manager._hooks.get(HookEvent.PRE_AGENT_LOOP, [])
         post_hooks = hook_manager._hooks.get(HookEvent.POST_AGENT_LOOP, [])
-        assert (
-            len(pre_hooks) >= 1
-        ), f"PRE_AGENT_LOOP hook should be registered, got {len(pre_hooks)}"
-        assert (
-            len(post_hooks) >= 1
-        ), f"POST_AGENT_LOOP hook should be registered, got {len(post_hooks)}"
+        assert len(pre_hooks) >= 1, (
+            f"PRE_AGENT_LOOP hook should be registered, got {len(pre_hooks)}"
+        )
+        assert len(post_hooks) >= 1, (
+            f"POST_AGENT_LOOP hook should be registered, got {len(post_hooks)}"
+        )
 
         logger.info("✅ E2E Test 2: Filesystem hook discovery working")
 
@@ -539,7 +539,7 @@ def test_complete_hook_lifecycle_workflow(ollama_config, simple_signature):
     # Display lifecycle trace
     logger.info("Complete lifecycle trace:")
     for i, event in enumerate(lifecycle_hook.lifecycle_trace):
-        logger.info(f"  {i+1}. {event['event']} at {event['timestamp']:.3f}")
+        logger.info(f"  {i + 1}. {event['event']} at {event['timestamp']:.3f}")
 
     logger.info("✅ E2E Test 5: Complete lifecycle workflow verified")
 

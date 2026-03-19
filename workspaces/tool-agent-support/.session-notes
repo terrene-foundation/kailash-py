@@ -1,0 +1,33 @@
+# Session Notes — Tool Agent Support
+# Date: 2026-03-18
+
+## Accomplished
+- Phase 01 (analyze): 6 research docs, 1 plan, 3 user flows, 1 red team report (20 findings)
+- Phase 02 (todos): 27 todos across 4 milestones, red-teamed (16 gaps found and fixed)
+- Phase 03 (implement): All 6 deliverables shipped (P1-P6), 31 new production files, 304 tests passing
+  - P6 BudgetTracker (eatp.constraints.budget_tracker) — int microdollars, threading.Lock, 45 tests
+  - P5 PostureEvidence/EvaluationResult + SQLitePostureStore (eatp) — 45 tests
+  - P4 SQL Aggregation (dataflow.query) — count_by/sum_by/aggregate, 68 tests
+  - P1 Agent Manifest (kaizen.manifest) + Deploy Client (kaizen.deploy) — 72 tests
+  - P3 Composite Validation (kaizen.composition) — DAG/schema/cost, 32 tests
+  - P2 MCP Catalog Server (kaizen.mcp.catalog_server) — 11 tools, 42 tests
+- 3 key decisions resolved: MongoDB via dispatch (ADR-6), BudgetTracker as new primitive in eatp, 11 MCP tools
+
+## In Progress
+- Milestone 4 (integration/hardening): TODO-19 through TODO-24 not started
+  - Posture-budget integration, error hierarchies, import cycles, re-exports, security hardening, cross-deliverable E2E
+
+## Blockers
+- Pre-existing kailash core SDK import error (cannot import 'Node' from 'kailash.nodes.base') blocks:
+  - DataFlow/Kaizen integration tests from repo root
+  - Cross-deliverable E2E test (TODO-24)
+  - Kaizen agent introspection against real agents (TODO-07 Tier 2)
+
+## Next Steps
+1. Fix or work around kailash core SDK import error for integration tests
+2. Implement TODO-19 (posture-budget integration)
+3. Implement TODO-20-22 (error hierarchies, import cycles, default posture fix)
+4. Implement TODO-23 (security hardening pass)
+5. Implement TODO-24 (cross-deliverable E2E test)
+6. Phase 04 (redteam) the complete implementation
+7. Move milestone-4 to completed, write docs

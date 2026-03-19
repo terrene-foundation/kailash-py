@@ -258,9 +258,9 @@ async def test_resume_from_checkpoint_enabled():
 
     # Assert
     agent.state_manager.resume_from_latest.assert_called_once()
-    assert (
-        agent.current_step >= 5
-    ), "Should restore step from checkpoint (5) and continue execution"
+    assert agent.current_step >= 5, (
+        "Should restore step from checkpoint (5) and continue execution"
+    )
 
 
 @pytest.mark.asyncio
@@ -369,9 +369,9 @@ async def test_checkpoint_save_during_loop():
 
     # Assert
     # Should checkpoint at steps 2, 4, plus final checkpoint
-    assert (
-        agent.state_manager.save_checkpoint.call_count >= 2
-    ), "Should save checkpoints during loop"
+    assert agent.state_manager.save_checkpoint.call_count >= 2, (
+        "Should save checkpoints during loop"
+    )
     assert agent.current_step >= 5, "Should complete at least 5 steps"
 
 
@@ -407,9 +407,9 @@ async def test_final_checkpoint_save():
     calls = agent.state_manager.save_checkpoint.call_args_list
     assert len(calls) >= 1, "Should save final checkpoint"
     final_call = calls[-1]  # Last call is final checkpoint
-    assert (
-        final_call.kwargs.get("force") is True
-    ), "Final checkpoint should use force=True"
+    assert final_call.kwargs.get("force") is True, (
+        "Final checkpoint should use force=True"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════

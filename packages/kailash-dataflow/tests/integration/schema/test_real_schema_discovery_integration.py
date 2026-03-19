@@ -46,9 +46,9 @@ class TestRealSchemaDiscoveryIntegration:
 
         # Check for DataFlow system tables (should exist)
         dataflow_tables = [t for t in schema.keys() if t.startswith("dataflow_")]
-        assert (
-            len(dataflow_tables) >= 1
-        ), f"Expected DataFlow system tables, got: {list(schema.keys())}"
+        assert len(dataflow_tables) >= 1, (
+            f"Expected DataFlow system tables, got: {list(schema.keys())}"
+        )
 
         # If we have test tables from standard fixture, check their structure
         test_tables = [t for t in schema.keys() if t.startswith("test_")]

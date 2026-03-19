@@ -42,29 +42,29 @@ class TestBasicIntelligenceValidation:
 
         # MUST return intelligent answer, not template
         assert isinstance(result, dict), "Agent must return structured response"
-        assert "answer" in result or any(
-            "answer" in str(v) for v in result.values()
-        ), "Response must contain answer"
+        assert "answer" in result or any("answer" in str(v) for v in result.values()), (
+            "Response must contain answer"
+        )
 
         # Extract the actual response text
         response_text = self._extract_response_text(result)
 
         # CRITICAL: Must NOT return mock template
-        assert not response_text.startswith(
-            "I understand you want me to work with"
-        ), f"Agent returned mock template instead of intelligent answer: {response_text}"
+        assert not response_text.startswith("I understand you want me to work with"), (
+            f"Agent returned mock template instead of intelligent answer: {response_text}"
+        )
 
         # MUST contain intelligent answer
         response_lower = response_text.lower()
-        assert (
-            "4" in response_text or "four" in response_lower
-        ), f"Agent must answer '2+2=4', got: {response_text}"
+        assert "4" in response_text or "four" in response_lower, (
+            f"Agent must answer '2+2=4', got: {response_text}"
+        )
 
         # Additional intelligence validation
         assert len(response_text.strip()) > 0, "Response cannot be empty"
-        assert (
-            len(response_text.strip()) < 1000
-        ), "Response should be concise for simple questions"
+        assert len(response_text.strip()) < 1000, (
+            "Response should be concise for simple questions"
+        )
 
     def test_agent_contextual_understanding_multiple_questions(self):
         """Test that agent provides contextual answers to different questions."""
@@ -75,32 +75,32 @@ class TestBasicIntelligenceValidation:
         response_text = self._extract_response_text(result)
 
         # Must not be template response
-        assert not response_text.startswith(
-            "I understand you want me to work with"
-        ), f"Geography question returned template: {response_text}"
+        assert not response_text.startswith("I understand you want me to work with"), (
+            f"Geography question returned template: {response_text}"
+        )
 
         # Must contain correct answer
-        assert (
-            "Paris" in response_text
-        ), f"Must know Paris is capital of France, got: {response_text}"
+        assert "Paris" in response_text, (
+            f"Must know Paris is capital of France, got: {response_text}"
+        )
 
         # Test science knowledge
         result2 = agent.execute(question="What is H2O?")
         response_text2 = self._extract_response_text(result2)
 
-        assert not response_text2.startswith(
-            "I understand you want me to work with"
-        ), f"Science question returned template: {response_text2}"
+        assert not response_text2.startswith("I understand you want me to work with"), (
+            f"Science question returned template: {response_text2}"
+        )
 
         response_lower2 = response_text2.lower()
-        assert (
-            "water" in response_lower2
-        ), f"Must know H2O is water, got: {response_text2}"
+        assert "water" in response_lower2, (
+            f"Must know H2O is water, got: {response_text2}"
+        )
 
         # Responses must be different (not identical templates)
-        assert (
-            response_text != response_text2
-        ), "Different questions must yield different intelligent responses"
+        assert response_text != response_text2, (
+            "Different questions must yield different intelligent responses"
+        )
 
     def test_agent_intelligence_with_reasoning(self):
         """Test that agent can provide reasoning, not just answers."""
@@ -110,9 +110,9 @@ class TestBasicIntelligenceValidation:
         response_text = self._extract_response_text(result)
 
         # Must not be template
-        assert not response_text.startswith(
-            "I understand you want me to work with"
-        ), f"Reasoning question returned template: {response_text}"
+        assert not response_text.startswith("I understand you want me to work with"), (
+            f"Reasoning question returned template: {response_text}"
+        )
 
         # Must contain scientific explanation concepts
         response_lower = response_text.lower()
@@ -127,14 +127,14 @@ class TestBasicIntelligenceValidation:
             1 for indicator in intelligence_indicators if indicator in response_lower
         )
 
-        assert (
-            matches >= 2
-        ), f"Response must show scientific understanding, got: {response_text}"
+        assert matches >= 2, (
+            f"Response must show scientific understanding, got: {response_text}"
+        )
 
         # Must be substantive (not just a single word)
-        assert (
-            len(response_text.split()) >= 5
-        ), f"Reasoning response must be substantive, got: {response_text}"
+        assert len(response_text.split()) >= 5, (
+            f"Reasoning response must be substantive, got: {response_text}"
+        )
 
     def _extract_response_text(self, result: Dict[str, Any]) -> str:
         """Extract response text from agent result for validation."""
@@ -189,27 +189,27 @@ class TestSignatureBasedIntelligence:
         analysis = result["analysis"]
         solution = result["solution"]
 
-        assert not analysis.startswith(
-            "I understand"
-        ), f"Analysis is template: {analysis}"
-        assert not solution.startswith(
-            "I understand"
-        ), f"Solution is template: {solution}"
+        assert not analysis.startswith("I understand"), (
+            f"Analysis is template: {analysis}"
+        )
+        assert not solution.startswith("I understand"), (
+            f"Solution is template: {solution}"
+        )
 
         # Must contain domain knowledge
         analysis_lower = analysis.lower()
         solution.lower()
 
-        assert (
-            "database" in analysis_lower or "performance" in analysis_lower
-        ), f"Analysis must address database performance: {analysis}"
+        assert "database" in analysis_lower or "performance" in analysis_lower, (
+            f"Analysis must address database performance: {analysis}"
+        )
 
         assert len(solution) > 50, f"Solution must be substantive, got: {solution}"
 
         # Must be different content in analysis vs solution
-        assert (
-            analysis != solution
-        ), "Analysis and solution should be different intelligent responses"
+        assert analysis != solution, (
+            "Analysis and solution should be different intelligent responses"
+        )
 
     def test_complex_signature_intelligence(self):
         """Test complex signatures generate intelligent structured responses."""
@@ -242,9 +242,9 @@ class TestSignatureBasedIntelligence:
             content = result[field]
             assert isinstance(content, str), f"Field {field} must be string"
             assert len(content.strip()) > 0, f"Field {field} cannot be empty"
-            assert not content.startswith(
-                "I understand"
-            ), f"Field {field} is template: {content}"
+            assert not content.startswith("I understand"), (
+                f"Field {field} is template: {content}"
+            )
 
         # Verify intelligent content
         assessment = result["assessment"].lower()
@@ -258,12 +258,12 @@ class TestSignatureBasedIntelligence:
             1 for indicator in cloud_indicators if indicator in recommendations
         )
 
-        assert (
-            assessment_matches >= 2
-        ), f"Assessment lacks cloud migration intelligence: {result['assessment']}"
-        assert (
-            recommendation_matches >= 2
-        ), f"Recommendations lack domain intelligence: {result['recommendations']}"
+        assert assessment_matches >= 2, (
+            f"Assessment lacks cloud migration intelligence: {result['assessment']}"
+        )
+        assert recommendation_matches >= 2, (
+            f"Recommendations lack domain intelligence: {result['recommendations']}"
+        )
 
     def test_signature_error_handling_intelligence(self):
         """Test that invalid signatures provide intelligent error responses."""
@@ -279,9 +279,9 @@ class TestSignatureBasedIntelligence:
 
         # Error message should be intelligent, not template
         error_msg = str(exc_info.value).lower()
-        assert (
-            "signature" in error_msg or "invalid" in error_msg
-        ), f"Error should mention signature issue: {exc_info.value}"
+        assert "signature" in error_msg or "invalid" in error_msg, (
+            f"Error should mention signature issue: {exc_info.value}"
+        )
 
 
 class TestPatternSpecificIntelligence:
@@ -328,9 +328,9 @@ class TestPatternSpecificIntelligence:
             ):
                 reasoning_fields.append((key, value))
 
-        assert (
-            len(reasoning_fields) > 0
-        ), f"CoT must show reasoning steps, got: {result}"
+        assert len(reasoning_fields) > 0, (
+            f"CoT must show reasoning steps, got: {result}"
+        )
 
         # Look for final answer
         answer_fields = []
@@ -347,9 +347,9 @@ class TestPatternSpecificIntelligence:
         # Verify intelligent mathematical reasoning
         all_content = " ".join(str(v) for v in result.values()).lower()
 
-        assert not all_content.startswith(
-            "i understand"
-        ), f"CoT returned template: {result}"
+        assert not all_content.startswith("i understand"), (
+            f"CoT returned template: {result}"
+        )
 
         # Must contain actual mathematical reasoning
         math_indicators = ["60", "2", "120", "miles", "distance", "speed", "time"]
@@ -358,9 +358,9 @@ class TestPatternSpecificIntelligence:
         assert matches >= 3, f"CoT must show mathematical reasoning, got: {result}"
 
         # Final answer must be correct
-        assert (
-            "120" in all_content
-        ), f"CoT must calculate correct answer (120), got: {result}"
+        assert "120" in all_content, (
+            f"CoT must calculate correct answer (120), got: {result}"
+        )
 
     def test_react_pattern_intelligent_actions(self):
         """ReAct pattern must show actual thought-action-observation cycles."""
@@ -398,9 +398,9 @@ class TestPatternSpecificIntelligence:
                 react_components["observation"].append(value)
 
         # Must have at least thought and action/observation
-        assert (
-            len(react_components["thought"]) > 0
-        ), f"ReAct missing thought component: {result}"
+        assert len(react_components["thought"]) > 0, (
+            f"ReAct missing thought component: {result}"
+        )
         assert (
             len(react_components["action"]) > 0
             or len(react_components["observation"]) > 0
@@ -409,17 +409,17 @@ class TestPatternSpecificIntelligence:
         # Verify intelligent content about Python
         all_content = " ".join(str(v) for v in result.values()).lower()
 
-        assert not all_content.startswith(
-            "i understand"
-        ), f"ReAct returned template: {result}"
+        assert not all_content.startswith("i understand"), (
+            f"ReAct returned template: {result}"
+        )
 
         # Must contain actual research about Python
         python_indicators = ["python", "programming", "language", "code", "development"]
         matches = sum(1 for indicator in python_indicators if indicator in all_content)
 
-        assert (
-            matches >= 3
-        ), f"ReAct must show Python research intelligence, got: {result}"
+        assert matches >= 3, (
+            f"ReAct must show Python research intelligence, got: {result}"
+        )
 
     def test_pattern_reasoning_quality(self):
         """Test that reasoning patterns produce high-quality intelligent output."""
@@ -446,9 +446,9 @@ class TestPatternSpecificIntelligence:
         all_content = " ".join(str(v) for v in result.values())
 
         # Must not be template
-        assert not all_content.startswith(
-            "I understand"
-        ), f"Complex reasoning returned template: {result}"
+        assert not all_content.startswith("I understand"), (
+            f"Complex reasoning returned template: {result}"
+        )
 
         # Must show business intelligence
         business_concepts = [
@@ -467,9 +467,9 @@ class TestPatternSpecificIntelligence:
         assert matches >= 3, f"Must show business domain intelligence, got: {result}"
 
         # Must be substantive response
-        assert (
-            len(all_content.split()) >= 30
-        ), f"Complex reasoning must be detailed, got: {result}"
+        assert len(all_content.split()) >= 30, (
+            f"Complex reasoning must be detailed, got: {result}"
+        )
 
 
 @pytest.mark.skipif(
@@ -508,24 +508,24 @@ class TestLLMIntegrationValidation:
 
         # Responses must be different (not template duplicates)
         unique_responses = set(response_texts)
-        assert len(unique_responses) == len(
-            response_texts
-        ), f"All responses are identical templates. Got: {response_texts}"
+        assert len(unique_responses) == len(response_texts), (
+            f"All responses are identical templates. Got: {response_texts}"
+        )
 
         # Responses must be contextual to questions
 
         # Question 1: Square root of 144
-        assert (
-            "12" in response_texts[0] or "144" in response_texts[0]
-        ), f"Must answer square root correctly: {response_texts[0]}"
+        assert "12" in response_texts[0] or "144" in response_texts[0], (
+            f"Must answer square root correctly: {response_texts[0]}"
+        )
 
         # Question 2: Programming languages
         prog_langs = ["python", "java", "javascript", "c++", "ruby", "go", "rust"]
         response2_lower = response_texts[1].lower()
         lang_matches = sum(1 for lang in prog_langs if lang in response2_lower)
-        assert (
-            lang_matches >= 2
-        ), f"Must name programming languages: {response_texts[1]}"
+        assert lang_matches >= 2, (
+            f"Must name programming languages: {response_texts[1]}"
+        )
 
         # Question 3: Internet invention
         response_texts[2].lower()
@@ -550,15 +550,15 @@ class TestLLMIntegrationValidation:
 
         # Question 5: Largest planet
         response5_lower = response_texts[4].lower()
-        assert (
-            "jupiter" in response5_lower
-        ), f"Must know Jupiter is largest planet: {response_texts[4]}"
+        assert "jupiter" in response5_lower, (
+            f"Must know Jupiter is largest planet: {response_texts[4]}"
+        )
 
         # All responses must NOT be templates
         for i, response_text in enumerate(response_texts):
             assert not response_text.startswith(
                 "I understand you want me to work with"
-            ), f"Question {i+1} returned template: {response_text}"
+            ), f"Question {i + 1} returned template: {response_text}"
 
     def test_llm_provider_configuration_intelligence(self):
         """Test that different LLM configurations produce intelligent responses."""
@@ -579,7 +579,7 @@ class TestLLMIntegrationValidation:
 
         for model in models_to_test:
             agent = self.kaizen.create_agent(
-                f'test_{model.replace(".", "_")}',
+                f"test_{model.replace('.', '_')}",
                 {
                     "model": model,
                     "temperature": 0.3,  # Lower temperature for consistent testing
@@ -595,9 +595,9 @@ class TestLLMIntegrationValidation:
                 results_by_model[model] = response_text
 
                 # Each model must provide intelligent response
-                assert not response_text.startswith(
-                    "I understand"
-                ), f"Model {model} returned template: {response_text}"
+                assert not response_text.startswith("I understand"), (
+                    f"Model {model} returned template: {response_text}"
+                )
 
                 # Must show AI knowledge
                 response_lower = response_text.lower()
@@ -610,18 +610,18 @@ class TestLLMIntegrationValidation:
                     "computer",
                 ]
                 matches = sum(1 for concept in ai_concepts if concept in response_lower)
-                assert (
-                    matches >= 2
-                ), f"Model {model} lacks AI intelligence: {response_text}"
+                assert matches >= 2, (
+                    f"Model {model} lacks AI intelligence: {response_text}"
+                )
 
         # Different models should potentially give different responses (not identical templates)
         # Note: They may be similar due to similar training, but shouldn't be identical
         if len(results_by_model) > 1:
             response_values = list(results_by_model.values())
             # Allow some similarity but not exact duplicates
-            assert not all(
-                r == response_values[0] for r in response_values
-            ), f"All models returned identical responses (likely templates): {results_by_model}"
+            assert not all(r == response_values[0] for r in response_values), (
+                f"All models returned identical responses (likely templates): {results_by_model}"
+            )
 
     def test_streaming_and_advanced_features_intelligence(self):
         """Test that advanced LLM features produce intelligent responses."""
@@ -640,9 +640,9 @@ class TestLLMIntegrationValidation:
         response_text = self._extract_response_text(result)
 
         # Must not be template
-        assert not response_text.startswith(
-            "I understand"
-        ), f"Advanced features returned template: {response_text}"
+        assert not response_text.startswith("I understand"), (
+            f"Advanced features returned template: {response_text}"
+        )
 
         # Must show quantum computing intelligence
         response_lower = response_text.lower()
@@ -656,15 +656,15 @@ class TestLLMIntegrationValidation:
             "physics",
         ]
         matches = sum(1 for concept in quantum_concepts if concept in response_lower)
-        assert (
-            matches >= 3
-        ), f"Must explain quantum computing intelligently: {response_text}"
+        assert matches >= 3, (
+            f"Must explain quantum computing intelligently: {response_text}"
+        )
 
         # Should respect max_tokens (roughly)
         word_count = len(response_text.split())
-        assert (
-            word_count <= 200
-        ), f"Response should respect max_tokens, got {word_count} words: {response_text}"
+        assert word_count <= 200, (
+            f"Response should respect max_tokens, got {word_count} words: {response_text}"
+        )
 
     def _extract_response_text(self, result: Dict[str, Any]) -> str:
         """Extract response text from agent result for validation."""
@@ -709,12 +709,12 @@ class TestIntelligentResponsePerformance:
 
         # Must still be intelligent
         response_text = self._extract_response_text(result)
-        assert not response_text.startswith(
-            "I understand"
-        ), f"Fast response was template: {response_text}"
-        assert (
-            "12" in response_text or "twelve" in response_text.lower()
-        ), f"Fast response must be correct: {response_text}"
+        assert not response_text.startswith("I understand"), (
+            f"Fast response was template: {response_text}"
+        )
+        assert "12" in response_text or "twelve" in response_text.lower(), (
+            f"Fast response must be correct: {response_text}"
+        )
 
     def test_complex_question_intelligent_depth(self):
         """Test that complex questions get appropriately detailed intelligent responses."""
@@ -726,9 +726,9 @@ class TestIntelligentResponsePerformance:
         response_text = self._extract_response_text(result)
 
         # Must not be template
-        assert not response_text.startswith(
-            "I understand"
-        ), f"Complex question returned template: {response_text}"
+        assert not response_text.startswith("I understand"), (
+            f"Complex question returned template: {response_text}"
+        )
 
         # Must show deep understanding of relationships
         response_lower = response_text.lower()
@@ -738,15 +738,15 @@ class TestIntelligentResponsePerformance:
             "deep learning",
         ]
         missing_terms = [term for term in required_terms if term not in response_lower]
-        assert (
-            not missing_terms
-        ), f"Response missing key terms: {missing_terms}. Got: {response_text}"
+        assert not missing_terms, (
+            f"Response missing key terms: {missing_terms}. Got: {response_text}"
+        )
 
         # Must be substantive for complex question
         word_count = len(response_text.split())
-        assert (
-            word_count >= 50
-        ), f"Complex question needs detailed response, got {word_count} words: {response_text}"
+        assert word_count >= 50, (
+            f"Complex question needs detailed response, got {word_count} words: {response_text}"
+        )
 
         # Must show relationships/comparisons
         relationship_indicators = [

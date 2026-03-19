@@ -728,9 +728,9 @@ class KaizenImplementationTester:
 
         for test_method in test_methods:
             try:
-                logger.info(f"\n{'='*60}")
+                logger.info(f"\n{'=' * 60}")
                 test_method()
-                logger.info(f"{'='*60}\n")
+                logger.info(f"{'=' * 60}\n")
             except Exception as e:
                 logger.error(f"Test method {test_method.__name__} failed: {e}")
 

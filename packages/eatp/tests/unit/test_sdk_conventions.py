@@ -55,11 +55,7 @@ def _get_module_paths(subset: List[str] | None = None) -> List[Path]:
     if subset is not None:
         return [_EATP_SRC / m for m in subset if (_EATP_SRC / m).exists()]
     # All .py files excluding __pycache__ and __init__.py
-    return [
-        p
-        for p in _EATP_SRC.rglob("*.py")
-        if "__pycache__" not in str(p) and p.name != "__init__.py"
-    ]
+    return [p for p in _EATP_SRC.rglob("*.py") if "__pycache__" not in str(p) and p.name != "__init__.py"]
 
 
 def _read_lines(path: Path) -> List[str]:
@@ -107,9 +103,7 @@ class TestAllExports:
             tree = ast.parse(path.read_text())
             has_all = any(
                 isinstance(node, ast.Assign)
-                and any(
-                    isinstance(t, ast.Name) and t.id == "__all__" for t in node.targets
-                )
+                and any(isinstance(t, ast.Name) and t.id == "__all__" for t in node.targets)
                 for node in ast.walk(tree)
             )
             if not has_all:
@@ -163,11 +157,7 @@ def _find_dataclass_names(tree: ast.Module) -> List[str]:
 
 def _find_methods(cls_node: ast.ClassDef) -> Set[str]:
     """Find method names in a class definition."""
-    return {
-        node.name
-        for node in cls_node.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
+    return {node.name for node in cls_node.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
 
 
 class TestToDict:
@@ -189,13 +179,9 @@ class TestToDict:
                     if is_dataclass and "to_dict" not in _find_methods(node):
                         # Skip ABC/abstract classes
                         if not any(
-                            isinstance(d, ast.Name)
-                            and d.id in ("ABC", "abstractmethod")
-                            for d in node.decorator_list
+                            isinstance(d, ast.Name) and d.id in ("ABC", "abstractmethod") for d in node.decorator_list
                         ):
-                            missing.append(
-                                (str(path.relative_to(_EATP_SRC)), node.name)
-                            )
+                            missing.append((str(path.relative_to(_EATP_SRC)), node.name))
         assert not missing, f"@dataclass without to_dict(): {missing}"
 
 
@@ -218,20 +204,14 @@ class TestErrorInheritance:
                 if not issubclass(obj, trust_error):
                     non_compliant.append(name)
 
-        assert (
-            not non_compliant
-        ), f"Exceptions not inheriting from TrustError: {non_compliant}"
+        assert not non_compliant, f"Exceptions not inheriting from TrustError: {non_compliant}"
 
     def test_all_errors_have_details(self) -> None:
         """TrustError base provides .details; verify it works on all subclasses."""
         from eatp import exceptions
 
         for name, obj in inspect.getmembers(exceptions, inspect.isclass):
-            if (
-                name.endswith("Error")
-                and issubclass(obj, exceptions.TrustError)
-                and name != "TrustError"
-            ):
+            if name.endswith("Error") and issubclass(obj, exceptions.TrustError) and name != "TrustError":
                 # Just verify TrustError.__init__ provides .details
                 base = exceptions.TrustError("test", details={"key": "val"})
                 assert hasattr(base, "details"), f"{name} missing .details"

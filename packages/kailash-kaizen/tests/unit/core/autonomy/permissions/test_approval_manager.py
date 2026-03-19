@@ -87,7 +87,8 @@ async def test_prompt_generation_generic():
     tool_name = "CustomTool"
     tool_input = {"param1": "value1", "param2": "value2"}
     context = ExecutionContext(
-        mode=PermissionMode.DEFAULT, budget_limit=None  # Unlimited budget
+        mode=PermissionMode.DEFAULT,
+        budget_limit=None,  # Unlimited budget
     )
 
     # Generate prompt

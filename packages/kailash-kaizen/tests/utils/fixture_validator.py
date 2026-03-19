@@ -335,9 +335,7 @@ class FixtureValidator:
             with self.measure_performance("infrastructure_check"):
                 try:
                     # Try to import docker_config from parent SDK
-                    docker_config_path = Path(
-                        ""
-                    )
+                    docker_config_path = Path("")
                     if docker_config_path.exists():
                         spec = importlib.util.spec_from_file_location(
                             "docker_config", docker_config_path

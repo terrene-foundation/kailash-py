@@ -94,9 +94,9 @@ class TestEventLoopClosureBug:
 
             # Validate error message confirms event loop closure
             error_msg = str(e).lower()
-            assert (
-                "event loop" in error_msg or "closed" in error_msg
-            ), f"Expected 'event loop' or 'closed' in error, got: {e}"
+            assert "event loop" in error_msg or "closed" in error_msg, (
+                f"Expected 'event loop' or 'closed' in error, got: {e}"
+            )
 
             # This is the EXPECTED FAILURE until bug is fixed
             pytest.xfail(
@@ -300,9 +300,9 @@ class TestEventLoopCacheKeyValidation:
                 print(f"Different loops: {key1_loop_id != key2_loop_id}")
 
                 # This confirms the cache key hypothesis
-                assert (
-                    key1_loop_id != key2_loop_id
-                ), "BUG: Expected different event loop IDs between executions"
+                assert key1_loop_id != key2_loop_id, (
+                    "BUG: Expected different event loop IDs between executions"
+                )
 
                 print("✅ HYPOTHESIS CONFIRMED: Different event loop IDs per execution")
 

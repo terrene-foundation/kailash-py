@@ -244,9 +244,7 @@ class TestBehavioralWeights:
     def test_all_weights_are_positive_integers(self):
         """Each weight must be a positive integer."""
         for key, value in BEHAVIORAL_WEIGHTS.items():
-            assert isinstance(
-                value, int
-            ), f"Weight {key} is not an integer: {type(value)}"
+            assert isinstance(value, int), f"Weight {key} is not an integer: {type(value)}"
             assert value > 0, f"Weight {key} is not positive: {value}"
 
 
@@ -337,9 +335,9 @@ class TestZeroDataEdgeCase:
         """Zero-data breakdown must have all factors set to 0.0."""
         result = compute_behavioral_score("agent-001", BehavioralData())
         for key in BEHAVIORAL_WEIGHTS:
-            assert (
-                result.breakdown[key] == 0.0
-            ), f"Factor {key} should be 0.0 for zero data, got {result.breakdown[key]}"
+            assert result.breakdown[key] == 0.0, (
+                f"Factor {key} should be 0.0 for zero data, got {result.breakdown[key]}"
+            )
 
     def test_zero_data_preserves_agent_id(self):
         """Even zero-data results must carry the correct agent_id."""
@@ -852,9 +850,7 @@ class TestCombinedTrustScoreNoBehavioral:
     """Tests for CombinedTrustScore when no behavioral data is provided (backward compat)."""
 
     @pytest.mark.asyncio
-    async def test_combined_equals_structural_when_no_behavioral(
-        self, store, full_chain
-    ):
+    async def test_combined_equals_structural_when_no_behavioral(self, store, full_chain):
         """With no behavioral data, combined_score must equal structural score."""
         await store.store_chain(full_chain)
 
@@ -881,9 +877,7 @@ class TestCombinedTrustScoreNoBehavioral:
 
         result = await compute_combined_trust_score("agent-001", store)
 
-        assert (
-            result.breakdown["structural_contribution"] == result.structural_score.score
-        )
+        assert result.breakdown["structural_contribution"] == result.structural_score.score
 
     @pytest.mark.asyncio
     async def test_structural_score_is_valid(self, store, full_chain):
@@ -918,14 +912,10 @@ class TestCombinedTrustScoreWithBehavioral:
             observation_window_hours=720.0,
         )
 
-        result = await compute_combined_trust_score(
-            "agent-001", store, behavioral_data=behavioral_data
-        )
+        result = await compute_combined_trust_score("agent-001", store, behavioral_data=behavioral_data)
 
         assert result.behavioral_score is not None
-        expected = round(
-            result.structural_score.score * 0.6 + result.behavioral_score.score * 0.4
-        )
+        expected = round(result.structural_score.score * 0.6 + result.behavioral_score.score * 0.4)
         assert result.combined_score == max(0, min(100, expected))
 
     @pytest.mark.asyncio
@@ -939,9 +929,7 @@ class TestCombinedTrustScoreWithBehavioral:
             time_at_current_posture_hours=360.0,
         )
 
-        result = await compute_combined_trust_score(
-            "agent-001", store, behavioral_data=behavioral_data
-        )
+        result = await compute_combined_trust_score("agent-001", store, behavioral_data=behavioral_data)
 
         assert result.breakdown["structural_weight"] == 0.6
         assert result.breakdown["behavioral_weight"] == 0.4
@@ -959,9 +947,7 @@ class TestCombinedTrustScoreWithBehavioral:
             time_at_current_posture_hours=200.0,
         )
 
-        result = await compute_combined_trust_score(
-            "agent-001", store, behavioral_data=behavioral_data
-        )
+        result = await compute_combined_trust_score("agent-001", store, behavioral_data=behavioral_data)
 
         expected_structural = round(result.structural_score.score * 0.6, 2)
         assert result.breakdown["structural_contribution"] == expected_structural
@@ -979,9 +965,7 @@ class TestCombinedTrustScoreWithBehavioral:
             time_at_current_posture_hours=200.0,
         )
 
-        result = await compute_combined_trust_score(
-            "agent-001", store, behavioral_data=behavioral_data
-        )
+        result = await compute_combined_trust_score("agent-001", store, behavioral_data=behavioral_data)
 
         expected_behavioral = round(result.behavioral_score.score * 0.4, 2)
         assert result.breakdown["behavioral_contribution"] == expected_behavioral
@@ -1000,9 +984,7 @@ class TestCombinedTrustScoreWithBehavioral:
             observation_window_hours=720.0,
         )
 
-        result = await compute_combined_trust_score(
-            "agent-001", store, behavioral_data=behavioral_data
-        )
+        result = await compute_combined_trust_score("agent-001", store, behavioral_data=behavioral_data)
 
         assert result.combined_score <= 100
 
@@ -1012,9 +994,7 @@ class TestCombinedTrustScoreWithBehavioral:
         await store.store_chain(full_chain)
         behavioral_data = BehavioralData()  # zero data = score 0
 
-        result = await compute_combined_trust_score(
-            "agent-001", store, behavioral_data=behavioral_data
-        )
+        result = await compute_combined_trust_score("agent-001", store, behavioral_data=behavioral_data)
 
         assert result.combined_score >= 0
 
@@ -1041,9 +1021,7 @@ class TestCombinedTrustScoreWithBehavioral:
 
         assert result.breakdown["structural_weight"] == 0.3
         assert result.breakdown["behavioral_weight"] == 0.7
-        expected = round(
-            result.structural_score.score * 0.3 + result.behavioral_score.score * 0.7
-        )
+        expected = round(result.structural_score.score * 0.3 + result.behavioral_score.score * 0.7)
         assert result.combined_score == max(0, min(100, expected))
 
     @pytest.mark.asyncio
@@ -1053,12 +1031,8 @@ class TestCombinedTrustScoreWithBehavioral:
         await store.store_chain(full_chain)
         behavioral_data = BehavioralData()  # score = 0
 
-        combined = await compute_combined_trust_score(
-            "agent-001", store, behavioral_data=behavioral_data
-        )
-        structural_only = await compute_combined_trust_score(
-            "agent-001", store, behavioral_data=None
-        )
+        combined = await compute_combined_trust_score("agent-001", store, behavioral_data=behavioral_data)
+        structural_only = await compute_combined_trust_score("agent-001", store, behavioral_data=None)
 
         # With zero behavioral, the 40% behavioral drags the score down
         assert combined.combined_score <= structural_only.combined_score
@@ -1074,9 +1048,7 @@ class TestCombinedTrustScoreWithBehavioral:
             time_at_current_posture_hours=100.0,
         )
 
-        result = await compute_combined_trust_score(
-            "agent-001", store, behavioral_data=behavioral_data
-        )
+        result = await compute_combined_trust_score("agent-001", store, behavioral_data=behavioral_data)
 
         assert isinstance(result.structural_score, TrustScore)
         assert isinstance(result.behavioral_score, BehavioralScore)
@@ -1140,23 +1112,17 @@ class TestBehavioralDataValidation:
 
     def test_negative_posture_transitions_rejected(self):
         """Negative posture_transitions must raise ValueError."""
-        with pytest.raises(
-            ValueError, match="posture_transitions must be non-negative"
-        ):
+        with pytest.raises(ValueError, match="posture_transitions must be non-negative"):
             BehavioralData(posture_transitions=-1)
 
     def test_negative_time_at_posture_rejected(self):
         """Negative time_at_current_posture_hours must raise ValueError."""
-        with pytest.raises(
-            ValueError, match="time_at_current_posture_hours must be non-negative"
-        ):
+        with pytest.raises(ValueError, match="time_at_current_posture_hours must be non-negative"):
             BehavioralData(time_at_current_posture_hours=-1.0)
 
     def test_negative_observation_window_rejected(self):
         """Negative observation_window_hours must raise ValueError."""
-        with pytest.raises(
-            ValueError, match="observation_window_hours must be non-negative"
-        ):
+        with pytest.raises(ValueError, match="observation_window_hours must be non-negative"):
             BehavioralData(observation_window_hours=-1.0)
 
     def test_approved_plus_denied_exceeds_total_rejected(self):

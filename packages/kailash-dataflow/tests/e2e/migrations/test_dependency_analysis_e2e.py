@@ -251,9 +251,9 @@ class TestDependencyAnalysisE2E:
             )
 
             # **VALIDATION**: Comprehensive dependency detection
-            assert (
-                dependency_report.has_dependencies() is True
-            ), "Should detect multiple dependencies"
+            assert dependency_report.has_dependencies() is True, (
+                "Should detect multiple dependencies"
+            )
 
             # Verify foreign key dependencies (CRITICAL)
             # Note: email is not directly referenced by FK, but users table is
@@ -267,9 +267,9 @@ class TestDependencyAnalysisE2E:
             view_names = {dep.view_name for dep in view_deps}
 
             # Should detect views using email column
-            assert (
-                "e2e_user_activity_summary" in view_names
-            ), "Should detect view using email column"
+            assert "e2e_user_activity_summary" in view_names, (
+                "Should detect view using email column"
+            )
             logger.info(f"Detected view dependencies: {view_names}")
 
             # Verify index dependencies (MEDIUM impact)
@@ -287,9 +287,9 @@ class TestDependencyAnalysisE2E:
             constraint_names = {dep.constraint_name for dep in constraint_deps}
 
             # Should detect email format check constraint
-            assert (
-                "check_email_format" in constraint_names
-            ), "Should detect email format constraint"
+            assert "check_email_format" in constraint_names, (
+                "Should detect email format constraint"
+            )
             logger.info(f"Detected constraint dependencies: {constraint_names}")
 
             # Verify trigger dependencies (HIGH impact)
@@ -298,21 +298,21 @@ class TestDependencyAnalysisE2E:
             trigger_names = {dep.trigger_name for dep in trigger_deps}
 
             # Should detect email audit trigger
-            assert (
-                "e2e_user_email_audit_trigger" in trigger_names
-            ), "Should detect email audit trigger"
+            assert "e2e_user_email_audit_trigger" in trigger_names, (
+                "Should detect email audit trigger"
+            )
             logger.info(f"Detected trigger dependencies: {trigger_names}")
 
             # **E2E WORKFLOW VALIDATION**: Impact assessment
             impact_summary = dependency_report.generate_impact_summary()
 
             # Should have high-impact dependencies due to views and triggers
-            assert (
-                impact_summary[ImpactLevel.HIGH] > 0
-            ), "Should detect high-impact dependencies"
-            assert (
-                impact_summary[ImpactLevel.MEDIUM] > 0
-            ), "Should detect medium-impact dependencies"
+            assert impact_summary[ImpactLevel.HIGH] > 0, (
+                "Should detect high-impact dependencies"
+            )
+            assert impact_summary[ImpactLevel.MEDIUM] > 0, (
+                "Should detect medium-impact dependencies"
+            )
 
             # **E2E WORKFLOW VALIDATION**: Removal recommendation
             recommendation = dependency_report.get_removal_recommendation()
@@ -325,9 +325,9 @@ class TestDependencyAnalysisE2E:
 
             # **E2E WORKFLOW VALIDATION**: Total dependency count
             total_deps = dependency_report.get_total_dependency_count()
-            assert (
-                total_deps >= 5
-            ), f"Should detect at least 5 dependencies, found: {total_deps}"
+            assert total_deps >= 5, (
+                f"Should detect at least 5 dependencies, found: {total_deps}"
+            )
 
             logger.info("E2E Blog Platform Analysis Complete:")
             logger.info(f"  - Total dependencies: {total_deps}")
@@ -471,9 +471,9 @@ class TestDependencyAnalysisE2E:
             analysis_time = time.time() - start_time
 
             # **PERFORMANCE VALIDATION**: Should complete quickly even with many FKs
-            assert (
-                analysis_time < 10.0
-            ), f"Analysis took too long: {analysis_time:.2f} seconds"
+            assert analysis_time < 10.0, (
+                f"Analysis took too long: {analysis_time:.2f} seconds"
+            )
 
             # **CRITICAL VALIDATION**: Must detect all foreign key dependencies
             assert dependency_report.has_dependencies() is True
@@ -495,37 +495,37 @@ class TestDependencyAnalysisE2E:
             }
 
             found_constraints = expected_fk_constraints.intersection(fk_constraints)
-            assert (
-                len(found_constraints) >= 7
-            ), f"Should find at least 7 FK constraints, found: {len(found_constraints)}"
+            assert len(found_constraints) >= 7, (
+                f"Should find at least 7 FK constraints, found: {len(found_constraints)}"
+            )
 
             logger.info(f"Detected FK constraints: {fk_constraints}")
 
             # **CRITICAL VALIDATION**: All FK dependencies should be CRITICAL impact
             for fk_dep in fk_deps:
-                assert (
-                    fk_dep.impact_level == ImpactLevel.CRITICAL
-                ), f"FK dependency {fk_dep.constraint_name} should be CRITICAL"
+                assert fk_dep.impact_level == ImpactLevel.CRITICAL, (
+                    f"FK dependency {fk_dep.constraint_name} should be CRITICAL"
+                )
                 assert fk_dep.target_table == "e2e_customers"
                 assert fk_dep.target_column == "id"
 
             # **E2E WORKFLOW VALIDATION**: Critical dependencies detection
             critical_deps = dependency_report.get_critical_dependencies()
-            assert (
-                len(critical_deps) >= 7
-            ), f"Should find at least 7 critical dependencies, found: {len(critical_deps)}"
+            assert len(critical_deps) >= 7, (
+                f"Should find at least 7 critical dependencies, found: {len(critical_deps)}"
+            )
 
             # **E2E WORKFLOW VALIDATION**: Removal recommendation should be DANGEROUS
             recommendation = dependency_report.get_removal_recommendation()
-            assert (
-                recommendation == "DANGEROUS"
-            ), f"Should recommend DANGEROUS for FK target column, got: {recommendation}"
+            assert recommendation == "DANGEROUS", (
+                f"Should recommend DANGEROUS for FK target column, got: {recommendation}"
+            )
 
             # **E2E WORKFLOW VALIDATION**: Impact summary
             impact_summary = dependency_report.generate_impact_summary()
-            assert (
-                impact_summary[ImpactLevel.CRITICAL] >= 7
-            ), "Should have multiple critical dependencies"
+            assert impact_summary[ImpactLevel.CRITICAL] >= 7, (
+                "Should have multiple critical dependencies"
+            )
 
             # **DATA LOSS PREVENTION VALIDATION**: Verify cascade analysis
             cascade_fks = [dep for dep in fk_deps if dep.on_delete == "CASCADE"]
@@ -596,9 +596,9 @@ class TestDependencyAnalysisE2E:
             )
 
             # **SAFE REMOVAL VALIDATION**: Should detect no dependencies
-            assert (
-                dependency_report.has_dependencies() is False
-            ), "Unused column should have no dependencies"
+            assert dependency_report.has_dependencies() is False, (
+                "Unused column should have no dependencies"
+            )
 
             # **SAFE REMOVAL VALIDATION**: No critical dependencies
             critical_deps = dependency_report.get_critical_dependencies()
@@ -606,9 +606,9 @@ class TestDependencyAnalysisE2E:
 
             # **SAFE REMOVAL VALIDATION**: Removal recommendation should be SAFE
             recommendation = dependency_report.get_removal_recommendation()
-            assert (
-                recommendation == "SAFE"
-            ), f"Should recommend SAFE removal, got: {recommendation}"
+            assert recommendation == "SAFE", (
+                f"Should recommend SAFE removal, got: {recommendation}"
+            )
 
             # **SAFE REMOVAL VALIDATION**: Impact summary should be empty
             impact_summary = dependency_report.generate_impact_summary()
@@ -617,25 +617,25 @@ class TestDependencyAnalysisE2E:
 
             # **SAFE REMOVAL VALIDATION**: Total dependency count should be zero
             total_deps = dependency_report.get_total_dependency_count()
-            assert (
-                total_deps == 0
-            ), f"Should have zero dependencies, found: {total_deps}"
+            assert total_deps == 0, (
+                f"Should have zero dependencies, found: {total_deps}"
+            )
 
             # **WORKFLOW VALIDATION**: Verify other columns still have dependencies
             # (This ensures our analyzer isn't broken)
             name_report = await analyzer.analyze_column_dependencies(
                 "e2e_products", "name"
             )
-            assert (
-                name_report.has_dependencies() is True
-            ), "Name column should have dependencies (index, view)"
+            assert name_report.has_dependencies() is True, (
+                "Name column should have dependencies (index, view)"
+            )
 
             price_report = await analyzer.analyze_column_dependencies(
                 "e2e_products", "price"
             )
-            assert (
-                price_report.has_dependencies() is True
-            ), "Price column should have dependencies (constraint, view, index)"
+            assert price_report.has_dependencies() is True, (
+                "Price column should have dependencies (constraint, view, index)"
+            )
 
             logger.info("E2E Safe Removal Analysis Complete:")
             logger.info(f"  - Unused column dependencies: {total_deps}")
@@ -745,30 +745,30 @@ class TestDependencyAnalysisE2E:
             analysis_time = time.time() - start_time
 
             # **PERFORMANCE REQUIREMENT**: Must complete within 30 seconds per requirements
-            assert (
-                analysis_time < 30.0
-            ), f"Analysis took too long: {analysis_time:.2f} seconds (requirement: <30s)"
+            assert analysis_time < 30.0, (
+                f"Analysis took too long: {analysis_time:.2f} seconds (requirement: <30s)"
+            )
 
             # **ACCURACY VALIDATION**: Should detect all dependencies
             assert dependency_report.has_dependencies() is True
 
             # Should detect all FK dependencies
             fk_deps = dependency_report.dependencies.get(DependencyType.FOREIGN_KEY, [])
-            assert (
-                len(fk_deps) == num_dependent_tables
-            ), f"Should find {num_dependent_tables} FK deps, found {len(fk_deps)}"
+            assert len(fk_deps) == num_dependent_tables, (
+                f"Should find {num_dependent_tables} FK deps, found {len(fk_deps)}"
+            )
 
             # Should detect view dependencies
             view_deps = dependency_report.dependencies.get(DependencyType.VIEW, [])
-            assert (
-                len(view_deps) >= num_views
-            ), f"Should find at least {num_views} view deps, found {len(view_deps)}"
+            assert len(view_deps) >= num_views, (
+                f"Should find at least {num_views} view deps, found {len(view_deps)}"
+            )
 
             # Should detect index dependencies
             index_deps = dependency_report.dependencies.get(DependencyType.INDEX, [])
-            assert (
-                len(index_deps) >= num_dependent_tables
-            ), f"Should find many index deps, found {len(index_deps)}"
+            assert len(index_deps) >= num_dependent_tables, (
+                f"Should find many index deps, found {len(index_deps)}"
+            )
 
             # **PERFORMANCE METRICS**: Log detailed performance info
             total_deps = dependency_report.get_total_dependency_count()
@@ -789,9 +789,9 @@ class TestDependencyAnalysisE2E:
             # - Performance: <30 seconds (checked above)
             # - Accuracy: 100% FK detection
             fk_accuracy = (len(fk_deps) / num_dependent_tables) * 100
-            assert (
-                fk_accuracy == 100.0
-            ), f"FK detection accuracy: {fk_accuracy}% (requirement: 100%)"
+            assert fk_accuracy == 100.0, (
+                f"FK detection accuracy: {fk_accuracy}% (requirement: 100%)"
+            )
 
             logger.info(f"  - FK Detection Accuracy: {fk_accuracy}%")
 

@@ -118,9 +118,7 @@ class JsonRpcHandler:
                 if not auth_token:
                     from eatp.a2a.exceptions import AuthenticationError
 
-                    raise AuthenticationError(
-                        f"Authentication required for method: {request.method}"
-                    )
+                    raise AuthenticationError(f"Authentication required for method: {request.method}")
 
             # Dispatch to handler
             if request.method not in self._methods:
@@ -206,18 +204,14 @@ class JsonRpcHandler:
     def _validate_request(self, request: JsonRpcRequest) -> None:
         """Validate JSON-RPC request structure."""
         if request.jsonrpc != "2.0":
-            raise JsonRpcInvalidRequestError(
-                f"Invalid jsonrpc version: {request.jsonrpc}"
-            )
+            raise JsonRpcInvalidRequestError(f"Invalid jsonrpc version: {request.jsonrpc}")
         if not request.method:
             raise JsonRpcInvalidRequestError("Missing method")
         if not isinstance(request.method, str):
             raise JsonRpcInvalidRequestError("Method must be a string")
         if request.params is not None and not isinstance(request.params, dict):
             # We only support named params, not positional
-            raise JsonRpcInvalidParamsError(
-                "Parameters must be an object (named parameters)"
-            )
+            raise JsonRpcInvalidParamsError("Parameters must be an object (named parameters)")
 
 
 class A2AMethodHandlers:
@@ -291,8 +285,7 @@ class A2AMethodHandlers:
             level = VerificationLevel[level_str]
         except KeyError:
             raise JsonRpcInvalidParamsError(
-                f"Invalid verification_level: {level_str}. "
-                f"Must be one of: QUICK, STANDARD, FULL"
+                f"Invalid verification_level: {level_str}. Must be one of: QUICK, STANDARD, FULL"
             )
 
         start_time = time.time()
@@ -350,9 +343,7 @@ class A2AMethodHandlers:
         constraints = params.get("constraints", {})
 
         if not delegatee_id:
-            raise JsonRpcInvalidParamsError(
-                "Missing required parameter: delegatee_agent_id"
-            )
+            raise JsonRpcInvalidParamsError("Missing required parameter: delegatee_agent_id")
         if not task_id:
             raise JsonRpcInvalidParamsError("Missing required parameter: task_id")
         if not capabilities:

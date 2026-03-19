@@ -85,7 +85,7 @@ async def establish_trust_chains(trust_ops, authority_id, num_agents=3):
     agent_ids = []
 
     for i in range(num_agents):
-        agent_id = f"agent-{i+1:03d}"
+        agent_id = f"agent-{i + 1:03d}"
         agent_ids.append(agent_id)
 
         # Establish trust
@@ -209,9 +209,9 @@ async def demonstrate_key_revocation(rotation_manager, authority_id):
     # For demo purposes, manually expire a key
     for key_id, expiry in status.grace_period_keys.items():
         # Manually set expiry to past (for demo)
-        rotation_manager._grace_period_keys[authority_id][
-            key_id
-        ] = datetime.utcnow() - timedelta(hours=1)
+        rotation_manager._grace_period_keys[authority_id][key_id] = (
+            datetime.utcnow() - timedelta(hours=1)
+        )
         print(f"Simulating expired grace period for {key_id}...")
 
         # Revoke key

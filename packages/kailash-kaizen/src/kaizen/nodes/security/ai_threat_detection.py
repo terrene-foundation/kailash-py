@@ -163,7 +163,7 @@ class AIThreatDetectionNode(Node):
 
 Your task is to analyze detected security threats and provide clear, actionable intelligence for security teams.
 
-**Report Style:** {style_instructions.get(self.narrative_style, style_instructions['technical'])}
+**Report Style:** {style_instructions.get(self.narrative_style, style_instructions["technical"])}
 
 **Your Analysis Should Include:**
 1. Threat narrative explaining what happened and why it matters
@@ -193,16 +193,16 @@ Focus on delivering intelligence that enables effective security decision-making
 
 **Detection Summary:**
 - Total Threats Detected: {len(threats)}
-- High Severity: {sum(1 for t in threats if t.get('severity') == 'high')}
-- Medium Severity: {sum(1 for t in threats if t.get('severity') == 'medium')}
-- Low Severity: {sum(1 for t in threats if t.get('severity') == 'low')}
+- High Severity: {sum(1 for t in threats if t.get("severity") == "high")}
+- Medium Severity: {sum(1 for t in threats if t.get("severity") == "medium")}
+- Low Severity: {sum(1 for t in threats if t.get("severity") == "low")}
 
 **Detected Threats:**
 {threat_summary if threat_summary else "No threats detected"}
 
 **Detection Context:**
 - Real-time Detection: {self.real_time}
-- Detection Rules: {', '.join(self.detection_rules)}
+- Detection Rules: {", ".join(self.detection_rules)}
 - Severity Threshold: {self.severity_threshold}
 - Response Time Target: {self.response_time_target_ms}ms
 

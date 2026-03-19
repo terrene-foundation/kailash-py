@@ -208,10 +208,7 @@ class TestReasoningTraceToKnowledge:
         )
         assert entry.metadata["confidentiality"] == "restricted"
         assert entry.metadata["methodology"] == "cost_benefit"
-        assert (
-            entry.metadata["alternatives_considered"]
-            == simple_trace.alternatives_considered
-        )
+        assert entry.metadata["alternatives_considered"] == simple_trace.alternatives_considered
         assert entry.metadata["evidence"] == simple_trace.evidence
 
     @pytest.mark.asyncio

@@ -90,25 +90,15 @@ class TestSchemaConformance:
             if isinstance(field_type, list):
                 field_type = [t for t in field_type if t != "null"][0]
             if field_type == "string" and not isinstance(value, str):
-                errors.append(
-                    f"{field_name}: expected string, got {type(value).__name__}"
-                )
+                errors.append(f"{field_name}: expected string, got {type(value).__name__}")
             elif field_type == "integer" and not isinstance(value, int):
-                errors.append(
-                    f"{field_name}: expected integer, got {type(value).__name__}"
-                )
+                errors.append(f"{field_name}: expected integer, got {type(value).__name__}")
             elif field_type == "boolean" and not isinstance(value, bool):
-                errors.append(
-                    f"{field_name}: expected boolean, got {type(value).__name__}"
-                )
+                errors.append(f"{field_name}: expected boolean, got {type(value).__name__}")
             elif field_type == "array" and not isinstance(value, list):
-                errors.append(
-                    f"{field_name}: expected array, got {type(value).__name__}"
-                )
+                errors.append(f"{field_name}: expected array, got {type(value).__name__}")
             elif field_type == "object" and not isinstance(value, dict):
-                errors.append(
-                    f"{field_name}: expected object, got {type(value).__name__}"
-                )
+                errors.append(f"{field_name}: expected object, got {type(value).__name__}")
         return errors
 
     def test_genesis_record_schema(self):

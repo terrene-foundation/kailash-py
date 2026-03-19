@@ -99,9 +99,9 @@ class TestSQLiteTransactionDel:
         resource_warnings = [
             w for w in caught if issubclass(w.category, ResourceWarning)
         ]
-        assert (
-            len(resource_warnings) == 0
-        ), "No warning expected when connection is None"
+        assert len(resource_warnings) == 0, (
+            "No warning expected when connection is None"
+        )
 
     def test_del_warns_on_leaked_transaction(self):
         """__del__ must emit ResourceWarning when transaction has a connection but was never committed/rolled back."""
@@ -162,9 +162,9 @@ class TestSQLiteTransactionDel:
             warnings.simplefilter("always")
             txn.__del__()
 
-        assert (
-            fake_conn._conn.rollback_called
-        ), "Expected __del__ to call _conn.rollback()"
+        assert fake_conn._conn.rollback_called, (
+            "Expected __del__ to call _conn.rollback()"
+        )
 
     @pytest.mark.asyncio
     async def test_aexit_sets_committed_on_success(self):

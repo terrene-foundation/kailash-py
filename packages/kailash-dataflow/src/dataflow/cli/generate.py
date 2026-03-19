@@ -62,10 +62,10 @@ def report(workflow_path: str, output: str, format: str):
         else:
             # Text report
             report_text = f"""
-{report_data.get('title', 'Workflow Report')}
-{'=' * 60}
+{report_data.get("title", "Workflow Report")}
+{"=" * 60}
 
-{report_data.get('summary', 'No summary available')}
+{report_data.get("summary", "No summary available")}
 
 """
             for section in report_data.get("sections", []):

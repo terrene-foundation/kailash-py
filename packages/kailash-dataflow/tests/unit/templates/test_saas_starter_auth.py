@@ -126,9 +126,9 @@ class TestSaaSDataModels:
         - updated_at: datetime (auto-managed)
         """
         # Check model is registered
-        assert (
-            "Organization" in saas_dataflow._models
-        ), "Organization model not registered"
+        assert "Organization" in saas_dataflow._models, (
+            "Organization model not registered"
+        )
 
         # Check generated nodes
         assert "OrganizationCreateNode" in saas_dataflow._nodes
@@ -209,9 +209,9 @@ class TestSaaSDataModels:
         - updated_at: datetime
         """
         # Check model is registered
-        assert (
-            "Subscription" in saas_dataflow._models
-        ), "Subscription model not registered"
+        assert "Subscription" in saas_dataflow._models, (
+            "Subscription model not registered"
+        )
 
         # Check generated nodes
         assert "SubscriptionCreateNode" in saas_dataflow._nodes
@@ -327,15 +327,15 @@ class TestSaaSDataModels:
             if isinstance(user_result, dict)
             else user_result
         )
-        assert isinstance(
-            user_list, list
-        ), "UserListNode should return a list of records"
+        assert isinstance(user_list, list), (
+            "UserListNode should return a list of records"
+        )
         assert len(user_list) >= 1, "Should have at least one user"
         # Verify the user we just created is in the results
         user_ids_in_results = [u["id"] for u in user_list]
-        assert (
-            user_id in user_ids_in_results
-        ), f"Created user {user_id} should be in list results"
+        assert user_id in user_ids_in_results, (
+            f"Created user {user_id} should be in list results"
+        )
 
         sub_result = results["list_subscriptions"]
         sub_list = (
@@ -343,15 +343,15 @@ class TestSaaSDataModels:
             if isinstance(sub_result, dict)
             else sub_result
         )
-        assert isinstance(
-            sub_list, list
-        ), "SubscriptionListNode should return a list of records"
+        assert isinstance(sub_list, list), (
+            "SubscriptionListNode should return a list of records"
+        )
         assert len(sub_list) >= 1, "Should have at least one subscription"
         # Verify the subscription we just created is in the results
         sub_ids_in_results = [s["id"] for s in sub_list]
-        assert (
-            sub_id in sub_ids_in_results
-        ), f"Created subscription {sub_id} should be in list results"
+        assert sub_id in sub_ids_in_results, (
+            f"Created subscription {sub_id} should be in list results"
+        )
 
     def test_model_field_validation(self, saas_dataflow):
         """
@@ -526,9 +526,9 @@ class TestAuthenticationWorkflows:
         assert results["user"]["email"] == unique_email
         assert results["user"]["role"] == "owner"
         assert results["user"]["status"] == "active"
-        assert (
-            results["user"]["organization_id"] == results["organization"]["id"]
-        ), "User should belong to created org"
+        assert results["user"]["organization_id"] == results["organization"]["id"], (
+            "User should belong to created org"
+        )
 
         # Verify password was hashed (not plain text)
         assert results["user"]["password_hash"] != "securepassword123"
@@ -686,9 +686,9 @@ class TestAuthenticationWorkflows:
                 validate_result["result"], dict
             ):
                 # If result exists, it should indicate invalid
-                assert (
-                    validate_result["result"].get("valid") is False
-                ), "Expired token should be invalid"
+                assert validate_result["result"].get("valid") is False, (
+                    "Expired token should be invalid"
+                )
             else:
                 # Workflow executed without error indication - check for exception message
                 pytest.fail(
@@ -696,9 +696,9 @@ class TestAuthenticationWorkflows:
                 )
         except Exception as e:
             # Verify error is about expiration
-            assert (
-                "expired" in str(e).lower() or "invalid" in str(e).lower()
-            ), f"Should raise expiration error, got: {e}"
+            assert "expired" in str(e).lower() or "invalid" in str(e).lower(), (
+                f"Should raise expiration error, got: {e}"
+            )
 
     def test_password_reset_request_workflow(self, saas_dataflow, runtime):
         """
@@ -750,9 +750,9 @@ class TestAuthenticationWorkflows:
         exp_time = datetime.fromtimestamp(decoded["exp"])
         now = datetime.now()
         time_until_expiry = (exp_time - now).total_seconds()
-        assert (
-            time_until_expiry <= 15 * 60
-        ), "Reset token should expire within 15 minutes"
+        assert time_until_expiry <= 15 * 60, (
+            "Reset token should expire within 15 minutes"
+        )
 
         # Verify email sent (mocked in unit tests)
         assert "email_sent" in results
@@ -1096,15 +1096,15 @@ class TestMultiTenantIsolation:
 
         # Verify tenant B's user ID was NOT returned
         returned_user_ids = [r.get("id") for r in records]
-        assert (
-            two_tenants["tenant_b"]["user_id"] not in returned_user_ids
-        ), "Cross-tenant read should be prevented - Tenant B's user should not be returned"
+        assert two_tenants["tenant_b"]["user_id"] not in returned_user_ids, (
+            "Cross-tenant read should be prevented - Tenant B's user should not be returned"
+        )
 
         # If any users returned, they should belong to Tenant A (the token's tenant)
         for record in records:
-            assert (
-                record.get("organization_id") == two_tenants["tenant_a"]["org_id"]
-            ), "Any returned users should belong to the token's tenant"
+            assert record.get("organization_id") == two_tenants["tenant_a"]["org_id"], (
+                "Any returned users should belong to the token's tenant"
+            )
 
     def test_cross_tenant_update_prevention(self, saas_dataflow, runtime, two_tenants):
         """
@@ -1141,9 +1141,9 @@ class TestMultiTenantIsolation:
 
             # Tenant B's user should NOT be found when using Tenant A's context
             found_ids = [r.get("id") for r in records]
-            assert (
-                two_tenants["tenant_b"]["user_id"] not in found_ids
-            ), "Ownership check should not find Tenant B's user with Tenant A's token"
+            assert two_tenants["tenant_b"]["user_id"] not in found_ids, (
+                "Ownership check should not find Tenant B's user with Tenant A's token"
+            )
         except Exception as e:
             # If exception raised, verify it's about permissions/access
             err_msg = str(e).lower()
@@ -1185,9 +1185,9 @@ class TestMultiTenantIsolation:
 
             # Tenant B's user should NOT be found when using Tenant A's context
             found_ids = [r.get("id") for r in records]
-            assert (
-                two_tenants["tenant_b"]["user_id"] not in found_ids
-            ), "Ownership check should not find Tenant B's user with Tenant A's token"
+            assert two_tenants["tenant_b"]["user_id"] not in found_ids, (
+                "Ownership check should not find Tenant B's user with Tenant A's token"
+            )
         except Exception as e:
             # If exception raised, verify it's about permissions/access
             err_msg = str(e).lower()
@@ -1230,9 +1230,9 @@ class TestMultiTenantIsolation:
         # All users should belong to Tenant A
         tenant_a_org_id = two_tenants["tenant_a"]["org_id"]
         for user in users:
-            assert (
-                user["organization_id"] == tenant_a_org_id
-            ), f"Found user from wrong tenant: {user['organization_id']}"
+            assert user["organization_id"] == tenant_a_org_id, (
+                f"Found user from wrong tenant: {user['organization_id']}"
+            )
 
     def test_organization_switching(self, saas_dataflow, runtime, two_tenants):
         """
@@ -1334,6 +1334,6 @@ class TestMultiTenantIsolation:
         # Tenant B user should NOT have status="verified"
         # (bulk update should not have affected it)
         tenant_b_user = check_results["check_tenant_b_user"]
-        assert (
-            tenant_b_user["status"] != "verified"
-        ), "Bulk update should not affect other tenants"
+        assert tenant_b_user["status"] != "verified", (
+            "Bulk update should not affect other tenants"
+        )

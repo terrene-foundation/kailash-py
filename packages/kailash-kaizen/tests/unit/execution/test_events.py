@@ -1012,6 +1012,6 @@ class TestEventsSerialization:
         for event_class, expected_type in event_type_mapping.items():
             event = event_class(session_id="test")
             data = event.to_dict()
-            assert (
-                data["event_type"] == expected_type
-            ), f"{event_class.__name__} has wrong event_type"
+            assert data["event_type"] == expected_type, (
+                f"{event_class.__name__} has wrong event_type"
+            )

@@ -178,8 +178,7 @@ class ErrorHandlingMixin:
 
                 # Log retry attempt
                 self.logger.warning(
-                    f"Attempt {attempt} failed: {error}. "
-                    f"Retrying in {delay:.2f}s..."
+                    f"Attempt {attempt} failed: {error}. Retrying in {delay:.2f}s..."
                 )
 
                 # Wait before retry

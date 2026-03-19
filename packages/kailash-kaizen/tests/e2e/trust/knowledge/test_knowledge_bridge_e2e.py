@@ -240,9 +240,9 @@ class TestTrustworthyKnowledgeLedgerE2E:
 
         # High confidence entries (>= 0.9)
         high_confidence = await bridge.query_by_trust_level(min_confidence=0.9)
-        assert (
-            len(high_confidence) >= 3
-        ), "Should have at least 3 high-confidence entries"
+        assert len(high_confidence) >= 3, (
+            "Should have at least 3 high-confidence entries"
+        )
 
         # Medium confidence entries (>= 0.85)
         medium_confidence = await bridge.query_by_trust_level(min_confidence=0.85)
@@ -349,9 +349,9 @@ class TestTrustworthyKnowledgeLedgerE2E:
 
         for entry in entries:
             verification = await bridge.verify_knowledge_trust(entry.entry_id)
-            assert (
-                verification["valid"] is True
-            ), f"Entry {entry.entry_id} should have valid trust: {verification}"
+            assert verification["valid"] is True, (
+                f"Entry {entry.entry_id} should have valid trust: {verification}"
+            )
             assert verification["has_trust_operations"] is True
             assert "chain_hash" in verification
 

@@ -41,8 +41,10 @@ def main():
     constraints = finance["constraints"]
     print(f"\n  Max amount:     ${constraints['financial']['max_amount']:,}")
     print(f"  Daily limit:    ${constraints['financial']['daily_limit']:,}")
-    print(f"  Market hours:   {constraints['temporal']['market_hours_start']} - "
-          f"{constraints['temporal']['market_hours_end']} {constraints['temporal']['timezone']}")
+    print(
+        f"  Market hours:   {constraints['temporal']['market_hours_start']} - "
+        f"{constraints['temporal']['market_hours_end']} {constraints['temporal']['timezone']}"
+    )
     print(f"  Rate limit:     {constraints['communication']['rate_limit_per_minute']}/min")
     print(f"  Data ceiling:   {constraints['data_access']['classification_max']}")
 
@@ -76,16 +78,27 @@ def main():
     community = get_template("community")
 
     comparisons = [
-        ("External access", governance["constraints"]["communication"]["external_access"],
-         community["constraints"]["communication"]["external_access"]),
-        ("Rate limit/min", governance["constraints"]["communication"]["rate_limit_per_minute"],
-         community["constraints"]["communication"]["rate_limit_per_minute"]),
-        ("Data ceiling", governance["constraints"]["data_access"]["classification_max"],
-         community["constraints"]["data_access"]["classification_max"]),
-        ("Read only", governance["constraints"]["data_access"]["read_only"],
-         community["constraints"]["data_access"].get("read_only", False)),
-        ("Hours", governance["constraints"]["temporal"]["hours"],
-         community["constraints"]["temporal"]["hours"]),
+        (
+            "External access",
+            governance["constraints"]["communication"]["external_access"],
+            community["constraints"]["communication"]["external_access"],
+        ),
+        (
+            "Rate limit/min",
+            governance["constraints"]["communication"]["rate_limit_per_minute"],
+            community["constraints"]["communication"]["rate_limit_per_minute"],
+        ),
+        (
+            "Data ceiling",
+            governance["constraints"]["data_access"]["classification_max"],
+            community["constraints"]["data_access"]["classification_max"],
+        ),
+        (
+            "Read only",
+            governance["constraints"]["data_access"]["read_only"],
+            community["constraints"]["data_access"].get("read_only", False),
+        ),
+        ("Hours", governance["constraints"]["temporal"]["hours"], community["constraints"]["temporal"]["hours"]),
     ]
     print(f"  {'Dimension':20s} {'Governance':15s} {'Community':15s}")
     print(f"  {'-' * 20} {'-' * 15} {'-' * 15}")

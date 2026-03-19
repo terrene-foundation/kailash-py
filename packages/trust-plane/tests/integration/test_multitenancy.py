@@ -85,8 +85,15 @@ class TestTenantIsolation:
         result_a = runner.invoke(
             main,
             [
-                "--dir", trust_dir, "--tenant", "tenant-a",
-                "init", "--name", "Project A", "--author", "Alice",
+                "--dir",
+                trust_dir,
+                "--tenant",
+                "tenant-a",
+                "init",
+                "--name",
+                "Project A",
+                "--author",
+                "Alice",
             ],
         )
         assert result_a.exit_code == 0, result_a.output
@@ -95,11 +102,17 @@ class TestTenantIsolation:
         result_decide_a = runner.invoke(
             main,
             [
-                "--dir", trust_dir, "--tenant", "tenant-a",
+                "--dir",
+                trust_dir,
+                "--tenant",
+                "tenant-a",
                 "decide",
-                "--type", "scope",
-                "--decision", "Decision for A only",
-                "--rationale", "Tenant A rationale",
+                "--type",
+                "scope",
+                "--decision",
+                "Decision for A only",
+                "--rationale",
+                "Tenant A rationale",
             ],
         )
         assert result_decide_a.exit_code == 0, result_decide_a.output
@@ -112,8 +125,15 @@ class TestTenantIsolation:
         result_b = runner.invoke(
             main,
             [
-                "--dir", trust_dir, "--tenant", "tenant-b",
-                "init", "--name", "Project B", "--author", "Bob",
+                "--dir",
+                trust_dir,
+                "--tenant",
+                "tenant-b",
+                "init",
+                "--name",
+                "Project B",
+                "--author",
+                "Bob",
             ],
         )
         assert result_b.exit_code == 0, result_b.output
@@ -122,7 +142,10 @@ class TestTenantIsolation:
         result_decisions_b = runner.invoke(
             main,
             [
-                "--dir", trust_dir, "--tenant", "tenant-b",
+                "--dir",
+                trust_dir,
+                "--tenant",
+                "tenant-b",
                 "decisions",
             ],
         )
@@ -133,7 +156,10 @@ class TestTenantIsolation:
         result_decisions_a = runner.invoke(
             main,
             [
-                "--dir", trust_dir, "--tenant", "tenant-a",
+                "--dir",
+                trust_dir,
+                "--tenant",
+                "tenant-a",
                 "decisions",
             ],
         )
@@ -149,8 +175,15 @@ class TestTenantIsolation:
         runner.invoke(
             main,
             [
-                "--dir", trust_dir, "--tenant", "alpha",
-                "init", "--name", "Alpha Project", "--author", "Alice",
+                "--dir",
+                trust_dir,
+                "--tenant",
+                "alpha",
+                "init",
+                "--name",
+                "Alpha Project",
+                "--author",
+                "Alice",
             ],
         )
 
@@ -158,8 +191,15 @@ class TestTenantIsolation:
         runner.invoke(
             main,
             [
-                "--dir", trust_dir, "--tenant", "beta",
-                "init", "--name", "Beta Project", "--author", "Bob",
+                "--dir",
+                trust_dir,
+                "--tenant",
+                "beta",
+                "init",
+                "--name",
+                "Beta Project",
+                "--author",
+                "Bob",
             ],
         )
 
@@ -218,8 +258,15 @@ class TestTenantsListCommand:
         runner.invoke(
             main,
             [
-                "--dir", trust_dir, "--tenant", "init-tenant",
-                "init", "--name", "Test", "--author", "A",
+                "--dir",
+                trust_dir,
+                "--tenant",
+                "init-tenant",
+                "init",
+                "--name",
+                "Test",
+                "--author",
+                "A",
             ],
         )
 
@@ -307,8 +354,15 @@ class TestDefaultBehaviorWithoutTenant:
         runner.invoke(
             main,
             [
-                "--dir", trust_dir, "--tenant", "team1",
-                "init", "--name", "Team1 Project", "--author", "B",
+                "--dir",
+                trust_dir,
+                "--tenant",
+                "team1",
+                "init",
+                "--name",
+                "Team1 Project",
+                "--author",
+                "B",
             ],
         )
 
@@ -331,7 +385,10 @@ class TestDefaultBehaviorWithoutTenant:
         result = runner.invoke(
             main,
             [
-                "--dir", trust_dir, "--tenant", "bad..tenant",
+                "--dir",
+                trust_dir,
+                "--tenant",
+                "bad..tenant",
                 "status",
             ],
         )

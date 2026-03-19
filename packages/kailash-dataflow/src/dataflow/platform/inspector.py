@@ -1748,7 +1748,7 @@ class Inspector:
         # Usage example
         usage_example = f"""
 # Add node to workflow
-workflow.add_node("{model_name}{node_type.title().replace('_', '')}Node", "{node_id}", {{}})
+workflow.add_node("{model_name}{node_type.title().replace("_", "")}Node", "{node_id}", {{}})
 
 # Connect parameter
 workflow.add_connection("source_node", "output", "{node_id}", "data")

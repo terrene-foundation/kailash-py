@@ -110,9 +110,9 @@ def test_openai_complex_research_workflow(planning_agent):
     assert "final_result" in result, "Final result not produced"
 
     # Verify plan quality for complex task
-    assert (
-        len(result["plan"]) >= 5
-    ), f"Plan too simple for complex task: {len(result['plan'])} steps"
+    assert len(result["plan"]) >= 5, (
+        f"Plan too simple for complex task: {len(result['plan'])} steps"
+    )
     assert len(result["plan"]) <= 10, "Plan exceeds max_plan_steps"
 
     # Verify plan details
@@ -126,14 +126,14 @@ def test_openai_complex_research_workflow(planning_agent):
         assert len(step["description"]) > 30, f"Step {idx} description too brief"
 
     # Verify validation passed
-    assert (
-        result["validation_result"]["status"] == "valid"
-    ), f"Validation failed: {result['validation_result'].get('reason')}"
+    assert result["validation_result"]["status"] == "valid", (
+        f"Validation failed: {result['validation_result'].get('reason')}"
+    )
 
     # Verify execution results
-    assert len(result["execution_results"]) == len(
-        result["plan"]
-    ), "Not all steps executed"
+    assert len(result["execution_results"]) == len(result["plan"]), (
+        "Not all steps executed"
+    )
 
     # Verify final result quality
     assert result["final_result"], "Final result is empty"
@@ -263,9 +263,9 @@ def test_openai_real_world_scenario_event_planning(planning_agent):
     assert len(missing_aspects) == 0, f"Plan missing key aspects: {missing_aspects}"
 
     # Verify validation passed
-    assert (
-        result["validation_result"]["status"] == "valid"
-    ), "Event plan should be feasible"
+    assert result["validation_result"]["status"] == "valid", (
+        "Event plan should be feasible"
+    )
 
     # Verify execution results
     assert "execution_results" in result

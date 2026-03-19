@@ -371,9 +371,9 @@ def research_collaboration_workflow(topic: str) -> Dict[str, Any]:
     analyst = AnalystAgent(config, shared_pool, agent_id="analyst_1")
     synthesizer = SynthesizerAgent(config, shared_pool, agent_id="synthesizer_1")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Multi-Agent Research Collaboration: {topic}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Step 1: Research phase
     print(f"Step 1: Researching '{topic}'...")
@@ -397,14 +397,14 @@ def research_collaboration_workflow(topic: str) -> Dict[str, Any]:
 
     # Show shared memory stats
     stats = shared_pool.get_stats()
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Shared Memory Statistics:")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  - Total insights: {stats['insight_count']}")
     print(f"  - Agents involved: {stats['agent_count']}")
     print(f"  - Tag distribution: {stats['tag_distribution']}")
     print(f"  - Segment distribution: {stats['segment_distribution']}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     return {
         "research": research_result,

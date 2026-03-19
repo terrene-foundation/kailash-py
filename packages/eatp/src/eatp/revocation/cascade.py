@@ -73,9 +73,7 @@ class RevocationResult:
         }
 
 
-async def _snapshot_chains(
-    store: TrustStore, agent_ids: set[str]
-) -> Dict[str, TrustLineageChain]:
+async def _snapshot_chains(store: TrustStore, agent_ids: set[str]) -> Dict[str, TrustLineageChain]:
     """Take deep-copy snapshots of chains for rollback support.
 
     Args:
@@ -113,9 +111,7 @@ async def _rollback_chains(
     """
     for aid in deleted_agents:
         if aid not in snapshots:
-            logger.warning(
-                f"[REVOKE-ROLLBACK] No snapshot for agent '{aid}', cannot restore"
-            )
+            logger.warning(f"[REVOKE-ROLLBACK] No snapshot for agent '{aid}', cannot restore")
             continue
         try:
             await store.store_chain(snapshots[aid])
@@ -208,16 +204,12 @@ async def cascade_revoke(
         except TrustChainNotFoundError:
             # Chain doesn't exist or already deleted -- not an error
             logger.debug(
-                f"[REVOKE] Chain for agent '{affected_id}' not found "
-                f"(may not have a chain or already revoked)"
+                f"[REVOKE] Chain for agent '{affected_id}' not found (may not have a chain or already revoked)"
             )
         except Exception as exc:
             error_msg = f"{type(exc).__name__}: {exc}"
             errors[affected_id] = error_msg
-            logger.error(
-                f"[REVOKE] Failed to soft-delete chain for agent "
-                f"'{affected_id}': {error_msg}"
-            )
+            logger.error(f"[REVOKE] Failed to soft-delete chain for agent '{affected_id}': {error_msg}")
 
     # If any errors occurred, roll back all successful deletions
     if errors:

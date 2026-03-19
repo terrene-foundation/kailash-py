@@ -1,0 +1,29 @@
+# Session Notes — 2026-03-18
+
+## Accomplished
+- Milestone 4 integration/hardening: posture-budget wiring, error hierarchies, security hardening, cross-deliverable E2E
+- Exception hierarchy consolidated: 23 classes in exceptions.py with .details param
+- Budget enforcement wired: DecisionRecord.cost, AuditSession.session_cost, check() gate, BudgetExhaustedError
+- NaN bypass prevention (Pattern 12): math.isfinite on 7 runtime cost paths
+- Frozen constraint sub-dataclasses (Pattern 10 extended): all 5 frozen=True
+- Store KeyError → RecordNotFoundError (18 replacements, backward-compatible)
+- Postgres migration error sanitization, SQLite WAL/SHM permissions
+- 26 new E2E tests (1499 total, 0 failures)
+- Red team R15→R16 converged: 0 findings at ALL severity levels
+- /codify: updated 3 skills + 1 rule, COC sync to kailash-coc-claude-py
+- /deploy: fixed publish-pypi.yml (API token auth), set PYPI_API_TOKEN secret
+- /release: trust-plane v0.2.1 published to PyPI + GitHub Release
+
+## In Progress
+- Nothing — all phases complete
+
+## Blockers
+- None
+
+## Next Steps
+- Consider OIDC trusted publisher migration on PyPI (nice-to-have, tokens work)
+- v0.3.0 planning: Central Management Plane (V-3), ConstraintEnvelope frozen=True
+- EATP SDK alignment if spec changes land
+
+## Active Todo
+- All todos complete (61+ delivered). No active workspace todos.

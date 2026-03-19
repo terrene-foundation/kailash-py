@@ -729,9 +729,9 @@ class TestStdioTransportPerformance:
             # Should handle 20 messages in <5 seconds (includes subprocess startup ~500-1500ms)
             # Pure throughput would be <100ms, but subprocess startup dominates
             # Trio backend may be slower (~3-4s total)
-            assert (
-                elapsed < 5.0
-            ), f"Throughput too low: {elapsed:.3f}s for {num_messages} messages"
+            assert elapsed < 5.0, (
+                f"Throughput too low: {elapsed:.3f}s for {num_messages} messages"
+            )
 
             # Should receive all responses
             assert len(lines) >= num_messages

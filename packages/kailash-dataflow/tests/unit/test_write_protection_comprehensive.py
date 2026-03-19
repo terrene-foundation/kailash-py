@@ -416,9 +416,9 @@ class TestProtectedRuntimeIntegration:
         runtime = self.db.create_protected_runtime()
 
         # Debug runtime type
-        assert isinstance(
-            runtime, ProtectedDataFlowRuntime
-        ), f"Expected ProtectedDataFlowRuntime, got {type(runtime)}"
+        assert isinstance(runtime, ProtectedDataFlowRuntime), (
+            f"Expected ProtectedDataFlowRuntime, got {type(runtime)}"
+        )
 
         # Test that protection is working by checking the audit log
         # Execute the workflow - protection will log violations or raise database error
@@ -431,9 +431,9 @@ class TestProtectedRuntimeIntegration:
         is_database_error = "no such table" in exception_message
 
         # Either protection blocked the operation OR table doesn't exist (both valid)
-        assert (
-            is_protection_violation or is_database_error
-        ), f"Expected ProtectionViolation or database error, got: {exception_message}"
+        assert is_protection_violation or is_database_error, (
+            f"Expected ProtectionViolation or database error, got: {exception_message}"
+        )
 
         # Check audit log only if protection violation occurred
         if is_protection_violation:
@@ -445,9 +445,9 @@ class TestProtectedRuntimeIntegration:
                 "Global protection blocks create" in str(event)
                 for event in audit_events
             )
-            assert (
-                violation_logged
-            ), f"Expected 'Global protection blocks create' in audit log: {audit_events}"
+            assert violation_logged, (
+                f"Expected 'Global protection blocks create' in audit log: {audit_events}"
+            )
 
     def test_read_operations_allowed(self):
         """Test that read operations work with protection."""

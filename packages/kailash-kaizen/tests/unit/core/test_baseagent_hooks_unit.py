@@ -67,9 +67,9 @@ def test_register_hook():
     # Assert - Verify registration
     # (Should delegate to internal HookManager)
     assert hasattr(agent, "_hook_manager"), "BaseAgent should have _hook_manager"
-    assert (
-        len(agent._hook_manager._hooks[HookEvent.PRE_TOOL_USE]) > 0
-    ), "Hook should be registered"
+    assert len(agent._hook_manager._hooks[HookEvent.PRE_TOOL_USE]) > 0, (
+        "Hook should be registered"
+    )
 
 
 def test_register_hook_with_default_priority():
@@ -174,9 +174,9 @@ def test_hooks_disabled_by_default():
 
     # Assert - Hooks should be disabled by default
     assert config.hooks_enabled is False, "Hooks should be disabled by default"
-    assert (
-        not hasattr(agent, "_hook_manager") or agent._hook_manager is None
-    ), "HookManager should not be initialized when hooks disabled"
+    assert not hasattr(agent, "_hook_manager") or agent._hook_manager is None, (
+        "HookManager should not be initialized when hooks disabled"
+    )
 
 
 # ============================================
@@ -270,9 +270,9 @@ def test_register_multiple_hooks():
 
     # Assert - Both hooks should be registered
     assert hasattr(agent, "_hook_manager"), "BaseAgent should have _hook_manager"
-    assert (
-        len(agent._hook_manager._hooks[HookEvent.PRE_TOOL_USE]) >= 2
-    ), "Multiple hooks should be registered"
+    assert len(agent._hook_manager._hooks[HookEvent.PRE_TOOL_USE]) >= 2, (
+        "Multiple hooks should be registered"
+    )
 
 
 # ============================================

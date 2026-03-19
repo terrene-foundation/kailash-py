@@ -126,8 +126,7 @@ async def main():
         depth = len(chain.delegations)
         n_constraints = len(chain.constraint_envelope.active_constraints)
         print(
-            f"   {agent_id:20s} | analyze_data={result.valid!s:5s} | "
-            f"delegations={depth} | constraints={n_constraints}"
+            f"   {agent_id:20s} | analyze_data={result.valid!s:5s} | delegations={depth} | constraints={n_constraints}"
         )
 
     # Specialist cannot read_financials (was not delegated)

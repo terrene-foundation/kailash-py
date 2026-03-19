@@ -191,15 +191,15 @@ if __name__ == '__main__':
 
         # Discover MCP tools
         tools = await agent.discover_mcp_tools()
-        assert (
-            len(tools) >= 12
-        ), f"Should have at least 12 builtin tools, got {len(tools)}"
+        assert len(tools) >= 12, (
+            f"Should have at least 12 builtin tools, got {len(tools)}"
+        )
 
         # Filter file-related tools
         file_tools = [t for t in tools if "file" in t["name"]]
-        assert (
-            len(file_tools) >= 4
-        ), "Should have file_exists, read_file, write_file, delete_file"
+        assert len(file_tools) >= 4, (
+            "Should have file_exists, read_file, write_file, delete_file"
+        )
 
         print(f"✓ Discovered {len(file_tools)} file tools for code review:")
         for tool in file_tools[:5]:
@@ -215,14 +215,14 @@ if __name__ == '__main__':
             initial_delay=1.0,
         )
 
-        assert exists_result.get(
-            "success"
-        ), f"file_exists should succeed: {exists_result}"
+        assert exists_result.get("success"), (
+            f"file_exists should succeed: {exists_result}"
+        )
         # Parse JSON content to access nested exists field
         content_data = json.loads(exists_result.get("content", "{}"))
-        assert (
-            content_data.get("exists") is True
-        ), f"Code file should exist. Content: {content_data}"
+        assert content_data.get("exists") is True, (
+            f"Code file should exist. Content: {content_data}"
+        )
         print("✓ Step 1 (SAFE): file_exists executed without approval prompt")
 
         # Test 2: read_file (SAFE - auto-approved, no prompt)
@@ -238,9 +238,9 @@ if __name__ == '__main__':
         # Parse JSON content to access nested content field
         read_content_data = json.loads(read_result.get("content", "{}"))
         file_content = read_content_data.get("content", "")
-        assert (
-            "calculate_sum" in file_content
-        ), f"Should read code content: {file_content[:100]}"
+        assert "calculate_sum" in file_content, (
+            f"Should read code content: {file_content[:100]}"
+        )
         print("✓ Step 2 (SAFE): read_file executed without approval prompt")
 
         # Test 3: write_file (MEDIUM - requires approval prompt in DEFAULT policy)
@@ -370,9 +370,9 @@ async def test_data_analysis_agent_with_http_tools():
     # httpbin.org returns args with our params
     if isinstance(response_data, dict):
         args = response_data.get("args", {})
-        assert "dataset" in args or "sales" in str(
-            response_data
-        ), f"Should include query parameters: {response_data}"
+        assert "dataset" in args or "sales" in str(response_data), (
+            f"Should include query parameters: {response_data}"
+        )
         print("✓ Step 1 (SAFE): http_get fetched data successfully")
     else:
         # At minimum, verify we got a response
@@ -412,9 +412,9 @@ async def test_data_analysis_agent_with_http_tools():
     if isinstance(post_data, dict):
         # httpbin.org echoes back the JSON we sent
         json_echo = post_data.get("json", {})
-        assert "analysis_type" in json_echo or "sales_summary" in str(
-            post_data
-        ), f"Should echo POST data: {post_data}"
+        assert "analysis_type" in json_echo or "sales_summary" in str(post_data), (
+            f"Should echo POST data: {post_data}"
+        )
         print("✓ Step 2 (MEDIUM): http_post sent analysis results successfully")
     else:
         # At minimum, verify we got a response
@@ -510,9 +510,9 @@ async def test_devops_agent_with_bash_tools():
 
         if echo_result.get("success"):
             output = echo_result.get("stdout", echo_result.get("output", ""))
-            assert "DevOps automation" in str(
-                output
-            ), f"Should execute echo command: {output}"
+            assert "DevOps automation" in str(output), (
+                f"Should execute echo command: {output}"
+            )
             print("✓ Step 1 (SAFE command 'echo'): Executed without escalation")
         else:
             # Bash commands may require approval at HIGH level by default
@@ -535,9 +535,9 @@ async def test_devops_agent_with_bash_tools():
 
         if ls_result.get("success"):
             output = ls_result.get("stdout", ls_result.get("output", ""))
-            assert "deployment.yml" in str(output) or "config.txt" in str(
-                output
-            ), f"Should list directory contents: {output}"
+            assert "deployment.yml" in str(output) or "config.txt" in str(output), (
+                f"Should list directory contents: {output}"
+            )
             print("✓ Step 2 (SAFE command 'ls'): Listed directory contents")
         else:
             print("✓ Step 2 (HIGH level): ls command may require approval")
@@ -571,9 +571,9 @@ async def test_devops_agent_with_bash_tools():
 
         # Verify bash_command is HIGH danger level
         bash_danger = get_tool_danger_level("bash_command")
-        assert (
-            bash_danger == DangerLevel.HIGH
-        ), f"bash_command should be HIGH, got {bash_danger}"
+        assert bash_danger == DangerLevel.HIGH, (
+            f"bash_command should be HIGH, got {bash_danger}"
+        )
         assert requires_approval("bash_command", DangerLevel.HIGH) is True
         assert is_tool_safe("bash_command") is False
 
@@ -658,9 +658,9 @@ async def test_approval_workflow_with_control_protocol():
         assert safe_result.get("success"), "SAFE operation should succeed"
         # Parse JSON content to access nested exists field
         safe_content_data = json.loads(safe_result.get("content", "{}"))
-        assert (
-            safe_content_data.get("exists") is True
-        ), f"Safe file should exist. Content: {safe_content_data}"
+        assert safe_content_data.get("exists") is True, (
+            f"Safe file should exist. Content: {safe_content_data}"
+        )
         print("✓ Step 1 (SAFE): No approval needed, executed immediately")
 
         # Test 2: MEDIUM operation - Approval workflow triggered

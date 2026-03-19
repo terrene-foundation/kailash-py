@@ -877,7 +877,12 @@ async def optimized_test_context(
 
 async def cleanup_optimization_infrastructure():
     """Clean up all optimization infrastructure."""
-    global _pool_manager, _schema_cache, _parallel_manager, _performance_monitor, _memory_optimizer
+    global \
+        _pool_manager, \
+        _schema_cache, \
+        _parallel_manager, \
+        _performance_monitor, \
+        _memory_optimizer
 
     try:
         if _pool_manager:

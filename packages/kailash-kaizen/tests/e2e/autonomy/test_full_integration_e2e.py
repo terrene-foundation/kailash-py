@@ -896,16 +896,16 @@ async def test_enterprise_workflow_integration():
                 print(f"   ✓ Parameters: {params}")
 
                 # Validate correct tool was selected (should be read_file for this task)
-                assert (
-                    tool_name == "read_file"
-                ), f"Expected tool_name='read_file', got '{tool_name}'"
+                assert tool_name == "read_file", (
+                    f"Expected tool_name='read_file', got '{tool_name}'"
+                )
 
                 # Validate accurate parameter passing (should contain ticket_file path)
                 file_path = params.get("file_path") or params.get("path")
                 assert file_path is not None, "Expected 'file_path' or 'path' parameter"
-                assert str(ticket_file) in str(
-                    file_path
-                ), f"Expected path containing '{ticket_file}', got '{file_path}'"
+                assert str(ticket_file) in str(file_path), (
+                    f"Expected path containing '{ticket_file}', got '{file_path}'"
+                )
 
                 print(f"   ✓ Tool selection accurate: {tool_name}")
                 print(f"   ✓ Parameter accuracy validated: {file_path}")
@@ -967,9 +967,9 @@ async def test_enterprise_workflow_integration():
         # 4. OrchestrationRuntime with 4 agents (test_full_integration_e2e.py:615-705)
         # 5. Temperature set to 0.0 for deterministic behavior (test_full_integration_e2e.py:578)
         engaged_count = sum(1 for v in engagement.values() if v)
-        assert (
-            engaged_count == 6
-        ), f"Expected all 6/6 systems engaged, got {engaged_count}/6: {engagement}"
+        assert engaged_count == 6, (
+            f"Expected all 6/6 systems engaged, got {engaged_count}/6: {engagement}"
+        )
 
         # ─────────────────────────────────────────────────────────
         # Phase 6: Validate Checkpoints
@@ -1258,9 +1258,9 @@ async def test_multi_agent_research_pipeline():
             print(f"     {status} {system.replace('_', ' ').title()}: {engaged}")
 
         engaged_count = sum(1 for v in engagement.values() if v)
-        assert (
-            engaged_count >= 3
-        ), f"Expected at least 3/6 systems engaged, got {engaged_count}/6"
+        assert engaged_count >= 3, (
+            f"Expected at least 3/6 systems engaged, got {engaged_count}/6"
+        )
 
         # ─────────────────────────────────────────────────────────
         # Phase 7: Track Cost
@@ -1521,9 +1521,9 @@ async def test_autonomous_data_pipeline_error_recovery():
         engaged_count = sum(1 for v in engagement.values() if v)
 
         # Assert: At least 4/6 systems engaged (error recovery tests many systems)
-        assert (
-            engaged_count >= 4
-        ), f"Expected at least 4/6 systems engaged, got {engaged_count}/6"
+        assert engaged_count >= 4, (
+            f"Expected at least 4/6 systems engaged, got {engaged_count}/6"
+        )
 
         # ─────────────────────────────────────────────────────────
         # Phase 6: Validate Hooks Integration

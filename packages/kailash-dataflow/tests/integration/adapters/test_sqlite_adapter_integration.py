@@ -365,9 +365,9 @@ class TestSQLiteAdapterIntegration:
         import re
 
         version_pattern = r"\d+\.\d+\.\d+"
-        assert re.search(
-            version_pattern, version
-        ), f"No version number found in: {version}"
+        assert re.search(version_pattern, version), (
+            f"No version number found in: {version}"
+        )
 
     @pytest.mark.timeout(5)
     async def test_get_database_size(self, connected_adapter_file):

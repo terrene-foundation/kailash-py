@@ -55,9 +55,9 @@ class TestUpsertNodeConflictOnParameter:
         )
 
         # Assert: Parameter should be optional (not required)
-        assert (
-            params["conflict_on"].required is False
-        ), "'conflict_on' should be optional (defaults to where.keys() for backward compatibility)"
+        assert params["conflict_on"].required is False, (
+            "'conflict_on' should be optional (defaults to where.keys() for backward compatibility)"
+        )
 
     def test_custom_conflict_field_composite(self):
         """UT-2.1.2: Verify conflict_on accepts multiple fields (composite keys)."""
@@ -77,14 +77,14 @@ class TestUpsertNodeConflictOnParameter:
         params = node.get_parameters()
 
         # Assert: Should accept list of field names
-        assert (
-            params["conflict_on"].type == list
-        ), "conflict_on should accept list of strings for composite keys"
+        assert params["conflict_on"].type == list, (
+            "conflict_on should accept list of strings for composite keys"
+        )
 
         # Assert: Should be optional for backward compatibility
-        assert (
-            params["conflict_on"].required is False
-        ), "conflict_on should default to None (uses where.keys())"
+        assert params["conflict_on"].required is False, (
+            "conflict_on should default to None (uses where.keys())"
+        )
 
     def test_conflict_on_defaults_to_where_keys(self):
         """UT-2.1.3: Verify conflict_on defaults to None (backward compatibility)."""
@@ -103,9 +103,9 @@ class TestUpsertNodeConflictOnParameter:
         params = node.get_parameters()
 
         # Assert: Default should be None (not required)
-        assert (
-            params["conflict_on"].required is False
-        ), "conflict_on should be optional - defaults to None"
+        assert params["conflict_on"].required is False, (
+            "conflict_on should be optional - defaults to None"
+        )
 
         # Note: Runtime behavior (defaulting to list(where.keys())) will be tested
         # in integration tests. Unit test verifies parameter declaration only.
@@ -128,9 +128,9 @@ class TestUpsertNodeConflictOnParameter:
         params = node.get_parameters()
 
         # Assert: Parameter setup allows validation
-        assert (
-            params["conflict_on"].type == list
-        ), "conflict_on should be list type (validated at runtime)"
+        assert params["conflict_on"].type == list, (
+            "conflict_on should be list type (validated at runtime)"
+        )
 
         # Note: Actual validation error (non-existent field like 'username')
         # will be tested in integration tests with real workflow execution.
@@ -159,9 +159,9 @@ class TestUpsertNodeConflictOnParameter:
         )
 
         # Assert: Should be optional
-        assert (
-            params["conflict_on"].required is False
-        ), "conflict_on should be optional (backward compatibility with Phase 1)"
+        assert params["conflict_on"].required is False, (
+            "conflict_on should be optional (backward compatibility with Phase 1)"
+        )
 
         # Note: Type validation (rejecting dict, str, int) will be tested
         # in integration tests with actual workflow execution.
@@ -193,12 +193,12 @@ class TestUpsertNodeConflictOnParameter:
         params1 = node1.get_parameters()
         params2 = node2.get_parameters()
 
-        assert (
-            "conflict_on" in params1
-        ), "Node from db1 should have conflict_on parameter"
-        assert (
-            "conflict_on" in params2
-        ), "Node from db2 should have conflict_on parameter"
+        assert "conflict_on" in params1, (
+            "Node from db1 should have conflict_on parameter"
+        )
+        assert "conflict_on" in params2, (
+            "Node from db2 should have conflict_on parameter"
+        )
 
         # Assert: Both should have same type definition
         assert params1["conflict_on"].type == list

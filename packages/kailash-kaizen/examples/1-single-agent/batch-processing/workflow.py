@@ -141,12 +141,12 @@ def demo_batch_processing():
         elapsed = time.time() - start
 
         print(f"Completed {len(results)} items in {elapsed:.3f}s")
-        print(f"Throughput: {len(results)/elapsed:.1f} items/sec\n")
+        print(f"Throughput: {len(results) / elapsed:.1f} items/sec\n")
 
         # Show first few results
         print("Sample results:")
         for i, result in enumerate(results[:3]):
-            print(f"  {i+1}. {result}")
+            print(f"  {i + 1}. {result}")
 
     asyncio.run(batch_demo())
 
@@ -177,7 +177,7 @@ def demo_different_concurrency():
         for max_concurrent in [1, 3, 5, 10]:
             count, elapsed = await test_concurrency(max_concurrent)
             print(
-                f"max_concurrent={max_concurrent:2d}: {count} items in {elapsed:.3f}s ({count/elapsed:.1f} items/sec)"
+                f"max_concurrent={max_concurrent:2d}: {count} items in {elapsed:.3f}s ({count / elapsed:.1f} items/sec)"
             )
 
     asyncio.run(compare())

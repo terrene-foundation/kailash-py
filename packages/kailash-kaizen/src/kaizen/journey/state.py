@@ -659,8 +659,7 @@ class JourneyStateManager:
         journey_class_str = ""
         if session.journey_class:
             journey_class_str = (
-                f"{session.journey_class.__module__}."
-                f"{session.journey_class.__name__}"
+                f"{session.journey_class.__module__}.{session.journey_class.__name__}"
             )
 
         return {

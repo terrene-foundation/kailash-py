@@ -100,9 +100,7 @@ class RotationResult:
             "chains_updated": self.chains_updated,
             "started_at": self.started_at.isoformat(),
             "completed_at": self.completed_at.isoformat(),
-            "grace_period_end": (
-                self.grace_period_end.isoformat() if self.grace_period_end else None
-            ),
+            "grace_period_end": (self.grace_period_end.isoformat() if self.grace_period_end else None),
         }
 
 
@@ -127,26 +125,18 @@ class RotationStatusInfo:
     pending_revocations: List[str] = field(default_factory=list)
     rotation_period_days: int = 90
     status: RotationStatus = RotationStatus.COMPLETED
-    grace_period_keys: Dict[str, datetime] = field(
-        default_factory=dict
-    )  # key_id -> expiry
+    grace_period_keys: Dict[str, datetime] = field(default_factory=dict)  # key_id -> expiry
 
     def to_dict(self) -> Dict:
         """Convert to dictionary for serialization."""
         return {
-            "last_rotation": (
-                self.last_rotation.isoformat() if self.last_rotation else None
-            ),
-            "next_scheduled": (
-                self.next_scheduled.isoformat() if self.next_scheduled else None
-            ),
+            "last_rotation": (self.last_rotation.isoformat() if self.last_rotation else None),
+            "next_scheduled": (self.next_scheduled.isoformat() if self.next_scheduled else None),
             "current_key_id": self.current_key_id,
             "pending_revocations": self.pending_revocations,
             "rotation_period_days": self.rotation_period_days,
             "status": self.status.value,
-            "grace_period_keys": {
-                k: v.isoformat() for k, v in self.grace_period_keys.items()
-            },
+            "grace_period_keys": {k: v.isoformat() for k, v in self.grace_period_keys.items()},
         }
 
 
@@ -236,17 +226,11 @@ class CredentialRotationManager:
         self._rotation_locks: Dict[str, asyncio.Lock] = {}
 
         # Track rotation history and scheduled rotations
-        self._rotation_history: Dict[str, List[RotationResult]] = (
-            {}
-        )  # authority_id -> results
-        self._scheduled_rotations: Dict[str, List[ScheduledRotation]] = (
-            {}
-        )  # authority_id -> scheduled
+        self._rotation_history: Dict[str, List[RotationResult]] = {}  # authority_id -> results
+        self._scheduled_rotations: Dict[str, List[ScheduledRotation]] = {}  # authority_id -> scheduled
 
         # Track keys in grace period
-        self._grace_period_keys: Dict[str, Dict[str, datetime]] = (
-            {}
-        )  # authority_id -> {key_id: expiry}
+        self._grace_period_keys: Dict[str, Dict[str, datetime]] = {}  # authority_id -> {key_id: expiry}
 
         self._initialized = False
 
@@ -505,32 +489,22 @@ class CredentialRotationManager:
                 updated_chain = copy.deepcopy(chain)
 
                 # Re-sign genesis record
-                genesis_payload = serialize_for_signing(
-                    updated_chain.genesis.to_signing_payload()
-                )
+                genesis_payload = serialize_for_signing(updated_chain.genesis.to_signing_payload())
                 new_signature = await self.key_manager.sign(genesis_payload, new_key_id)
                 updated_chain.genesis.signature = new_signature
 
                 # Re-sign capability attestations
                 for capability in updated_chain.capabilities:
                     if capability.attester_id == authority_id:
-                        cap_payload = serialize_for_signing(
-                            capability.to_signing_payload()
-                        )
-                        new_signature = await self.key_manager.sign(
-                            cap_payload, new_key_id
-                        )
+                        cap_payload = serialize_for_signing(capability.to_signing_payload())
+                        new_signature = await self.key_manager.sign(cap_payload, new_key_id)
                         capability.signature = new_signature
 
                 # Re-sign delegations
                 for delegation in updated_chain.delegations:
                     if delegation.delegator_id == authority_id:
-                        del_payload = serialize_for_signing(
-                            delegation.to_signing_payload()
-                        )
-                        new_signature = await self.key_manager.sign(
-                            del_payload, new_key_id
-                        )
+                        del_payload = serialize_for_signing(delegation.to_signing_payload())
+                        new_signature = await self.key_manager.sign(del_payload, new_key_id)
                         delegation.signature = new_signature
 
                 chain_updates.append((updated_chain.genesis.agent_id, updated_chain))
@@ -605,9 +579,7 @@ class CredentialRotationManager:
             # Take snapshots of all chains we're about to update
             for agent_id, _ in chain_updates:
                 try:
-                    chain_snapshots[agent_id] = await self.trust_store.get_chain(
-                        agent_id
-                    )
+                    chain_snapshots[agent_id] = await self.trust_store.get_chain(agent_id)
                 except Exception as snapshot_err:
                     # If we can't snapshot, we can't safely proceed
                     raise RotationError(
@@ -648,14 +620,8 @@ class CredentialRotationManager:
                     if not hasattr(self, "_audit_logger"):
                         self._audit_logger = SecurityAuditLogger()
 
-                    inconsistent_chains = [
-                        agent_id for agent_id, _ in rollback_failures
-                    ]
-                    rolled_back_chains = [
-                        aid
-                        for aid in successfully_updated
-                        if aid not in inconsistent_chains
-                    ]
+                    inconsistent_chains = [agent_id for agent_id, _ in rollback_failures]
+                    rolled_back_chains = [aid for aid in successfully_updated if aid not in inconsistent_chains]
 
                     # Log CRITICAL error with full details
                     self._audit_logger.log_security_event(
@@ -664,14 +630,9 @@ class CredentialRotationManager:
                             "original_error": str(original_error),
                             "failed_at_chain": failed_agent_id,
                             "total_chains": len(chain_updates),
-                            "successfully_updated_before_failure": len(
-                                successfully_updated
-                            ),
+                            "successfully_updated_before_failure": len(successfully_updated),
                             "rolled_back_successfully": rolled_back_chains,
-                            "rollback_failures": [
-                                {"agent_id": aid, "error": err}
-                                for aid, err in rollback_failures
-                            ],
+                            "rollback_failures": [{"agent_id": aid, "error": err} for aid, err in rollback_failures],
                             "inconsistent_chains": inconsistent_chains,
                         },
                         severity=SecurityEventSeverity.CRITICAL,
@@ -770,20 +731,13 @@ class CredentialRotationManager:
 
         # Get last rotation
         last_rotation = None
-        if (
-            authority_id in self._rotation_history
-            and self._rotation_history[authority_id]
-        ):
+        if authority_id in self._rotation_history and self._rotation_history[authority_id]:
             last_rotation = self._rotation_history[authority_id][-1].completed_at
 
         # Get next scheduled
         next_scheduled = None
         if authority_id in self._scheduled_rotations:
-            pending = [
-                s
-                for s in self._scheduled_rotations[authority_id]
-                if s.status == RotationStatus.PENDING
-            ]
+            pending = [s for s in self._scheduled_rotations[authority_id] if s.status == RotationStatus.PENDING]
             if pending:
                 next_scheduled = min(s.scheduled_at for s in pending)
 
@@ -791,10 +745,7 @@ class CredentialRotationManager:
         status = RotationStatus.COMPLETED
         if authority_id in self._active_rotations:
             status = RotationStatus.IN_PROGRESS
-        elif (
-            authority_id in self._grace_period_keys
-            and self._grace_period_keys[authority_id]
-        ):
+        elif authority_id in self._grace_period_keys and self._grace_period_keys[authority_id]:
             status = RotationStatus.GRACE_PERIOD
 
         # Get pending revocations (keys past grace period)
@@ -895,10 +846,7 @@ class CredentialRotationManager:
 
         for authority_id, scheduled_list in self._scheduled_rotations.items():
             for scheduled in scheduled_list:
-                if (
-                    scheduled.status == RotationStatus.PENDING
-                    and scheduled.scheduled_at <= now
-                ):
+                if scheduled.status == RotationStatus.PENDING and scheduled.scheduled_at <= now:
                     try:
                         scheduled.status = RotationStatus.IN_PROGRESS
 

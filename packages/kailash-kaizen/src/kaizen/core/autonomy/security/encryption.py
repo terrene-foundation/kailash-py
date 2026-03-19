@@ -21,7 +21,7 @@ try:
 except ImportError:
     CRYPTOGRAPHY_AVAILABLE = False
     logger.warning(
-        "cryptography library not available. " "Install with: pip install cryptography"
+        "cryptography library not available. Install with: pip install cryptography"
     )
 
 
@@ -307,8 +307,7 @@ class KeyManager:
 
         if path.exists() and not overwrite:
             raise FileExistsError(
-                f"Key file already exists: {file_path}. "
-                "Set overwrite=True to replace."
+                f"Key file already exists: {file_path}. Set overwrite=True to replace."
             )
 
         try:

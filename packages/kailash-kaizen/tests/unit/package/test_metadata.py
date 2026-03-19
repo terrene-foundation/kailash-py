@@ -38,9 +38,9 @@ class TestPackageMetadata:
         assert "authors" in project, "Missing 'authors' in project metadata"
         assert "license" in project, "Missing 'license' in project metadata"
         assert "readme" in project, "Missing 'readme' in project metadata"
-        assert (
-            "requires-python" in project
-        ), "Missing 'requires-python' in project metadata"
+        assert "requires-python" in project, (
+            "Missing 'requires-python' in project metadata"
+        )
 
     def test_package_has_urls(self, pyproject_data):
         """Test that package has project URLs."""
@@ -49,9 +49,9 @@ class TestPackageMetadata:
 
         urls = project["urls"]
         # Check for essential URLs
-        assert (
-            "Homepage" in urls or "Repository" in urls
-        ), "Must have at least Homepage or Repository URL"
+        assert "Homepage" in urls or "Repository" in urls, (
+            "Must have at least Homepage or Repository URL"
+        )
 
     def test_package_has_keywords(self, pyproject_data):
         """Test that package has keywords for discoverability."""
@@ -63,7 +63,9 @@ class TestPackageMetadata:
         keywords_str = " ".join(project["keywords"]).lower()
         assert any(
             kw in keywords_str for kw in ["ai", "agent", "workflow", "kailash"]
-        ), "Keywords should include relevant terms like 'ai', 'agent', 'workflow', or 'kailash'"
+        ), (
+            "Keywords should include relevant terms like 'ai', 'agent', 'workflow', or 'kailash'"
+        )
 
     def test_dependencies_specified(self, pyproject_data):
         """Test that dependencies are correctly specified."""
@@ -75,23 +77,23 @@ class TestPackageMetadata:
         # Must depend on Core SDK
         core_sdk_dep = next((d for d in dependencies if d.startswith("kailash")), None)
         assert core_sdk_dep is not None, "Must depend on 'kailash' (Core SDK)"
-        assert (
-            ">=0.9.19" in core_sdk_dep or ">=" in core_sdk_dep
-        ), "Core SDK dependency must specify minimum version"
+        assert ">=0.9.19" in core_sdk_dep or ">=" in core_sdk_dep, (
+            "Core SDK dependency must specify minimum version"
+        )
 
         # Check for essential dependencies
         dep_str = " ".join(dependencies).lower()
         assert "pydantic" in dep_str, "Must depend on 'pydantic'"
-        assert (
-            "typing-extensions" in dep_str or "typing_extensions" in dep_str
-        ), "Must depend on 'typing-extensions'"
+        assert "typing-extensions" in dep_str or "typing_extensions" in dep_str, (
+            "Must depend on 'typing-extensions'"
+        )
 
     def test_optional_dependencies_dev(self, pyproject_data):
         """Test that dev optional dependencies are defined."""
         project = pyproject_data["project"]
-        assert (
-            "optional-dependencies" in project
-        ), "Missing 'optional-dependencies' in project metadata"
+        assert "optional-dependencies" in project, (
+            "Missing 'optional-dependencies' in project metadata"
+        )
 
         optional_deps = project["optional-dependencies"]
         assert "dev" in optional_deps, "Missing 'dev' optional dependencies"
@@ -113,9 +115,9 @@ class TestPackageMetadata:
         if "dataflow" in optional_deps:
             dataflow_deps = optional_deps["dataflow"]
             dataflow_deps_str = " ".join(dataflow_deps).lower()
-            assert (
-                "kailash-dataflow" in dataflow_deps_str
-            ), "DataFlow dependencies must include 'kailash-dataflow'"
+            assert "kailash-dataflow" in dataflow_deps_str, (
+                "DataFlow dependencies must include 'kailash-dataflow'"
+            )
 
     def test_optional_dependencies_nexus(self, pyproject_data):
         """Test that nexus optional dependencies are defined."""
@@ -125,9 +127,9 @@ class TestPackageMetadata:
         if "nexus" in optional_deps:
             nexus_deps = optional_deps["nexus"]
             nexus_deps_str = " ".join(nexus_deps).lower()
-            assert (
-                "kailash-nexus" in nexus_deps_str
-            ), "Nexus dependencies must include 'kailash-nexus'"
+            assert "kailash-nexus" in nexus_deps_str, (
+                "Nexus dependencies must include 'kailash-nexus'"
+            )
 
     def test_optional_dependencies_all(self, pyproject_data):
         """Test that 'all' optional dependencies are defined."""
@@ -147,22 +149,22 @@ class TestPackageMetadata:
         "\n".join(classifiers)
 
         # Check for essential classifiers
-        assert any(
-            "Development Status" in c for c in classifiers
-        ), "Must have 'Development Status' classifier"
+        assert any("Development Status" in c for c in classifiers), (
+            "Must have 'Development Status' classifier"
+        )
 
-        assert any(
-            "License ::" in c for c in classifiers
-        ), "Must have 'License' classifier"
+        assert any("License ::" in c for c in classifiers), (
+            "Must have 'License' classifier"
+        )
 
-        assert any(
-            "Programming Language :: Python" in c for c in classifiers
-        ), "Must have 'Programming Language :: Python' classifier"
+        assert any("Programming Language :: Python" in c for c in classifiers), (
+            "Must have 'Programming Language :: Python' classifier"
+        )
 
         # Should specify Python 3.11 support
-        assert any(
-            "3.11" in c for c in classifiers
-        ), "Should specify Python 3.11 support in classifiers"
+        assert any("3.11" in c for c in classifiers), (
+            "Should specify Python 3.11 support in classifiers"
+        )
 
     def test_license_classifier_matches_license(self, pyproject_data):
         """Test that license classifier matches license field."""
@@ -179,18 +181,18 @@ class TestPackageMetadata:
 
         # If license mentions Apache, classifier should too
         if "Apache" in license_text:
-            assert (
-                "Apache" in classifier_str
-            ), "License classifier should match license field (Apache)"
+            assert "Apache" in classifier_str, (
+                "License classifier should match license field (Apache)"
+            )
 
     def test_description_not_empty(self, pyproject_data):
         """Test that description is not empty."""
         project = pyproject_data["project"]
         description = project.get("description", "")
         assert len(description) > 0, "Description should not be empty"
-        assert (
-            len(description) < 200
-        ), "Description should be concise (< 200 chars), use README for details"
+        assert len(description) < 200, (
+            "Description should be concise (< 200 chars), use README for details"
+        )
 
     def test_authors_not_empty(self, pyproject_data):
         """Test that authors list is not empty."""
@@ -200,9 +202,9 @@ class TestPackageMetadata:
 
         # Check that authors have required fields
         for author in authors:
-            assert (
-                "name" in author or "email" in author
-            ), "Each author must have 'name' or 'email'"
+            assert "name" in author or "email" in author, (
+                "Each author must have 'name' or 'email'"
+            )
 
     def test_readme_specified(self, pyproject_data, package_root):
         """Test that readme is specified and file exists."""
@@ -235,15 +237,15 @@ class TestPackageMetadata:
 
         build_system = pyproject_data["build-system"]
         assert "requires" in build_system, "Missing 'requires' in build-system"
-        assert (
-            "build-backend" in build_system
-        ), "Missing 'build-backend' in build-system"
+        assert "build-backend" in build_system, (
+            "Missing 'build-backend' in build-system"
+        )
 
         # Should use setuptools or similar
         backend = build_system["build-backend"]
-        assert (
-            "setuptools" in backend or "flit" in backend or "poetry" in backend
-        ), f"Build backend '{backend}' should be setuptools, flit, or poetry"
+        assert "setuptools" in backend or "flit" in backend or "poetry" in backend, (
+            f"Build backend '{backend}' should be setuptools, flit, or poetry"
+        )
 
 
 class TestMetadataConsistency:
@@ -275,9 +277,9 @@ class TestMetadataConsistency:
         assert version_match, "No version found in setup.py"
         setup_version = version_match.group(1)
 
-        assert (
-            pyproject_version == setup_version
-        ), f"Version mismatch: pyproject.toml={pyproject_version}, setup.py={setup_version}"
+        assert pyproject_version == setup_version, (
+            f"Version mismatch: pyproject.toml={pyproject_version}, setup.py={setup_version}"
+        )
 
     def test_name_matches_setup_py(self, pyproject_data, setup_content):
         """Test that name in pyproject.toml matches setup.py."""
@@ -287,9 +289,9 @@ class TestMetadataConsistency:
         assert name_match, "No name found in setup.py"
         setup_name = name_match.group(1)
 
-        assert (
-            pyproject_name == setup_name
-        ), f"Name mismatch: pyproject.toml={pyproject_name}, setup.py={setup_name}"
+        assert pyproject_name == setup_name, (
+            f"Name mismatch: pyproject.toml={pyproject_name}, setup.py={setup_name}"
+        )
 
     def test_description_matches_setup_py(self, pyproject_data, setup_content):
         """Test that description in pyproject.toml matches setup.py."""
@@ -300,6 +302,6 @@ class TestMetadataConsistency:
         )
         if description_match:
             setup_description = description_match.group(1)
-            assert (
-                pyproject_description == setup_description
-            ), f"Description mismatch: pyproject.toml={pyproject_description}, setup.py={setup_description}"
+            assert pyproject_description == setup_description, (
+                f"Description mismatch: pyproject.toml={pyproject_description}, setup.py={setup_description}"
+            )

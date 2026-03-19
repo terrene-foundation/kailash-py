@@ -169,7 +169,7 @@ class TestSQLiteEnterpriseAdapter:
 
         assert len(results) == 3
         for i, result in enumerate(results):
-            assert result[0][f"test_query_{i+1}"] == i + 1
+            assert result[0][f"test_query_{i + 1}"] == i + 1
 
         # Check that pool stats were updated
         final_stats = enterprise_adapter.connection_pool_stats

@@ -116,8 +116,8 @@ class GraphRAGNode(WorkflowNode):
             config={
                 "system_prompt": f"""Extract entities and relationships from text.
 
-                Entity types: {', '.join(self.entity_types)}
-                Relationship types: {', '.join(self.relationship_types)}
+                Entity types: {", ".join(self.entity_types)}
+                Relationship types: {", ".join(self.relationship_types)}
 
                 Return JSON:
                 {{

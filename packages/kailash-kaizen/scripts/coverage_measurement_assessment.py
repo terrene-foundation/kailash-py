@@ -161,21 +161,21 @@ def generate_assessment_report(metrics, quality_assessment):
 ## 📊 COVERAGE IMPROVEMENT RESULTS
 
 ### Current Status After New Tests
-- **Current Coverage**: {metrics['current_coverage']:.2f}%
-- **Baseline Coverage**: {metrics['baseline_coverage']:.2f}%
-- **Improvement Achieved**: {metrics['coverage_improvement']:+.2f} percentage points
+- **Current Coverage**: {metrics["current_coverage"]:.2f}%
+- **Baseline Coverage**: {metrics["baseline_coverage"]:.2f}%
+- **Improvement Achieved**: {metrics["coverage_improvement"]:+.2f} percentage points
 
 ### Progress Toward Milestones
-- **85% Milestone Gap**: {metrics['milestone_85_gap']:.2f} percentage points remaining
-- **95% Target Gap**: {metrics['target_95_gap']:.2f} percentage points remaining
-- **Milestone Progress**: {metrics['milestone_85_progress']:.1f}% toward 85% target
+- **85% Milestone Gap**: {metrics["milestone_85_gap"]:.2f} percentage points remaining
+- **95% Target Gap**: {metrics["target_95_gap"]:.2f} percentage points remaining
+- **Milestone Progress**: {metrics["milestone_85_progress"]:.1f}% toward 85% target
 
 ### Statement Coverage Analysis
-- **Total Statements**: {metrics['total_statements']:,}
-- **Covered Statements**: {metrics['covered_statements']:,}
-- **Missing Statements**: {metrics['missing_statements']:,}
-- **Statements Needed for 85%**: {metrics['statements_for_85']:,}
-- **Statements Needed for 95%**: {metrics['statements_for_95']:,}
+- **Total Statements**: {metrics["total_statements"]:,}
+- **Covered Statements**: {metrics["covered_statements"]:,}
+- **Missing Statements**: {metrics["missing_statements"]:,}
+- **Statements Needed for 85%**: {metrics["statements_for_85"]:,}
+- **Statements Needed for 95%**: {metrics["statements_for_95"]:,}
 
 ## 🎯 MILESTONE ASSESSMENT
 
@@ -200,10 +200,10 @@ def generate_assessment_report(metrics, quality_assessment):
 """
 
     if quality_assessment:
-        report += f"""- **High-Coverage Modules (>90%)**: {len(quality_assessment['high_impact_modules'])} modules
-- **Medium-Coverage Modules (70-90%)**: {len(quality_assessment['medium_impact_modules'])} modules
-- **Low-Coverage Modules (<70%)**: {len(quality_assessment['low_impact_modules'])} modules
-- **Total Modules Analyzed**: {quality_assessment['total_modules']} modules
+        report += f"""- **High-Coverage Modules (>90%)**: {len(quality_assessment["high_impact_modules"])} modules
+- **Medium-Coverage Modules (70-90%)**: {len(quality_assessment["medium_impact_modules"])} modules
+- **Low-Coverage Modules (<70%)**: {len(quality_assessment["low_impact_modules"])} modules
+- **Total Modules Analyzed**: {quality_assessment["total_modules"]} modules
 
 ### Top Performing Modules
 """
@@ -284,8 +284,8 @@ def generate_assessment_report(metrics, quality_assessment):
     report += f"""
 ## 📊 EVIDENCE-BASED CONCLUSION
 
-**Coverage Improvement**: {metrics['coverage_improvement']:+.2f} percentage points from baseline
-**Milestone Progress**: {metrics['milestone_85_progress']:.1f}% toward 85% target
+**Coverage Improvement**: {metrics["coverage_improvement"]:+.2f} percentage points from baseline
+**Milestone Progress**: {metrics["milestone_85_progress"]:.1f}% toward 85% target
 **TODO-150 Completion**: {completion_pct:.1f}% of >95% target achieved
 
 **HONEST ASSESSMENT**: """

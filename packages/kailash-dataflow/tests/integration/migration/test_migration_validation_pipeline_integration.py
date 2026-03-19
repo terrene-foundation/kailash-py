@@ -395,7 +395,8 @@ class TestMigrationValidationPipelineIntegration:
         """Test complete staging environment lifecycle."""
         # Create staging environment
         staging_env = await real_staging_manager.create_staging_environment(
-            production_db=real_production_db, data_sample_size=0.01  # 1% sample
+            production_db=real_production_db,
+            data_sample_size=0.01,  # 1% sample
         )
 
         assert staging_env is not None

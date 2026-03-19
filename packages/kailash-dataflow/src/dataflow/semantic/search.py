@@ -434,7 +434,7 @@ class HybridSearchEngine:
                 # Fetch batch
                 fields = [id_field, content_field] + metadata_fields
                 query = f"""
-                    SELECT {', '.join(fields)}
+                    SELECT {", ".join(fields)}
                     FROM {table_name}
                     ORDER BY {id_field}
                     LIMIT {batch_size} OFFSET {offset}

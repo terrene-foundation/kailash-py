@@ -363,11 +363,7 @@ class TrustedAgent:
             )
             exec_context_dict["verification"] = {
                 "valid": verification_result.valid,
-                "level": (
-                    verification_result.level.value
-                    if verification_result.level
-                    else None
-                ),
+                "level": (verification_result.level.value if verification_result.level else None),
                 "capability_used": verification_result.capability_used,
             }
         except TrustChainNotFoundError:
@@ -474,17 +470,11 @@ class TrustedAgent:
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 future = pool.submit(
                     asyncio.run,
-                    self.execute_async(
-                        inputs=inputs, action=action, resource=resource, **kwargs
-                    ),
+                    self.execute_async(inputs=inputs, action=action, resource=resource, **kwargs),
                 )
                 return future.result()
         else:
-            return asyncio.run(
-                self.execute_async(
-                    inputs=inputs, action=action, resource=resource, **kwargs
-                )
-            )
+            return asyncio.run(self.execute_async(inputs=inputs, action=action, resource=resource, **kwargs))
 
     async def execute_tool(
         self,
@@ -570,9 +560,7 @@ class TrustedAgent:
         """
         # Get agent's constraints
         try:
-            constraints = await self._trust_ops.get_agent_constraints(
-                self._config.agent_id
-            )
+            constraints = await self._trust_ops.get_agent_constraints(self._config.agent_id)
         except TrustChainNotFoundError:
             return  # No constraints to enforce
 
@@ -762,9 +750,7 @@ class TrustedSupervisorAgent(TrustedAgent):
         """
         super().__init__(agent, trust_ops, config, audit_store)
         self._auto_establish_workers = auto_establish_workers
-        self._active_delegations: Dict[str, Set[str]] = (
-            {}
-        )  # worker_id -> delegation_ids
+        self._active_delegations: Dict[str, Set[str]] = {}  # worker_id -> delegation_ids
 
     async def delegate_to_worker(
         self,
@@ -833,9 +819,7 @@ class TrustedSupervisorAgent(TrustedAgent):
         # EATP: Create context for the worker with proper delegation chain
         worker_context = None
         if eatp_context:
-            worker_context = eatp_context.with_delegation(
-                worker_id, {c: True for c in (additional_constraints or [])}
-            )
+            worker_context = eatp_context.with_delegation(worker_id, {c: True for c in (additional_constraints or [])})
 
         return delegation, worker_context
 

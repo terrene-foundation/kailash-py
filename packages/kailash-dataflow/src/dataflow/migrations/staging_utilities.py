@@ -493,7 +493,7 @@ class StagingUtilities:
             if mb < 1024:
                 return f"{mb:.1f} MB"
             else:
-                return f"{mb/1024:.1f} GB"
+                return f"{mb / 1024:.1f} GB"
 
         return (
             f"Disk: {format_bytes(disk_mb)}, "

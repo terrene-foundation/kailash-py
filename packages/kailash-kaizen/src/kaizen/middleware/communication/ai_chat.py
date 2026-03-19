@@ -449,7 +449,7 @@ EXPLANATION:
                 # Make IDs unique
                 for i, node in enumerate(config["nodes"]):
                     if not node.get("id"):
-                        node["id"] = f"node_{i+1}"
+                        node["id"] = f"node_{i + 1}"
 
             return config
 
@@ -622,10 +622,11 @@ class AIChatMiddleware:
                     "similar_conversations": similar_conversations,
                 }
 
-                workflow_config, explanation = (
-                    await self.workflow_generator.generate_workflow_from_description(
-                        content, enhanced_context
-                    )
+                (
+                    workflow_config,
+                    explanation,
+                ) = await self.workflow_generator.generate_workflow_from_description(
+                    content, enhanced_context
                 )
 
                 response_content = f"I've created a workflow for you. {explanation}"

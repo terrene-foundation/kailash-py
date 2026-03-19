@@ -135,7 +135,9 @@ class PolicyParserAgent(BaseAgent):
             rules = (
                 rules_raw
                 if isinstance(rules_raw, list)
-                else [rules_raw] if rules_raw else []
+                else [rules_raw]
+                if rules_raw
+                else []
             )
 
         parse_result = {"parsed_policies": parsed_policies, "rules": rules}

@@ -484,9 +484,9 @@ class TestPattern8HmacCompareDigest:
 
         # Recovery should detect the tamper and NOT revoke
         recovered = mgr.recover_pending_revocations()
-        assert (
-            recovered == []
-        ), "Tampered WAL should be rejected; no delegates should be revoked"
+        assert recovered == [], (
+            "Tampered WAL should be rejected; no delegates should be revoked"
+        )
 
 
 # ---------------------------------------------------------------------------

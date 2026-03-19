@@ -82,7 +82,6 @@ class TestDataFlowSafetyParameters:
 
             # Mock database connection
             with patch.object(db, "_get_database_connection", return_value=AsyncMock()):
-
                 # Define model - should validate but not migrate
                 @db.model
                 class TestModel:

@@ -1653,7 +1653,7 @@ class A2AAgentNode(LLMAgentNode):
 Relevant shared context from other agents:
 {context_summary}
 
-{kwargs.get('system_prompt', '')}"""
+{kwargs.get("system_prompt", "")}"""
             kwargs["system_prompt"] = enhanced_system_prompt
 
         # Execute LLM agent
@@ -2214,7 +2214,7 @@ Focus on insights that would be valuable for other agents to know. Ensure the JS
         # Create a consolidated prompt for quality enhancement
         insights_text = "\n".join(
             [
-                f"{i+1}. {insight['content']} (Confidence: {insight['confidence']:.2f})"
+                f"{i + 1}. {insight['content']} (Confidence: {insight['confidence']:.2f})"
                 for i, insight in enumerate(insights)
             ]
         )

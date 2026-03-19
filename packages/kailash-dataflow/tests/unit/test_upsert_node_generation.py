@@ -50,9 +50,9 @@ class TestUpsertNodeGeneration:
             name: str
 
         # Assert: Node name should be ProductUpsertNode
-        assert (
-            "ProductUpsertNode" in db._nodes
-        ), "UpsertNode should follow ModelOperationNode naming convention"
+        assert "ProductUpsertNode" in db._nodes, (
+            "UpsertNode should follow ModelOperationNode naming convention"
+        )
 
         # Verify the node class has correct attributes
         node_class = db._nodes["ProductUpsertNode"]
@@ -79,12 +79,12 @@ class TestUpsertNodeGeneration:
 
         # Assert: Should have where, update, create parameters
         assert "where" in params, "UpsertNode should have 'where' parameter for lookup"
-        assert (
-            "update" in params
-        ), "UpsertNode should have 'update' parameter for existing records"
-        assert (
-            "create" in params
-        ), "UpsertNode should have 'create' parameter for new records"
+        assert "update" in params, (
+            "UpsertNode should have 'update' parameter for existing records"
+        )
+        assert "create" in params, (
+            "UpsertNode should have 'create' parameter for new records"
+        )
 
     def test_upsert_node_parameter_types(self):
         """Verify UpsertNode parameters have correct types."""
@@ -152,12 +152,12 @@ class TestUpsertNodeGeneration:
         node2 = node2_class()
 
         # Assert: Each node should be bound to its respective DataFlow instance
-        assert (
-            node1.dataflow_instance is db1
-        ), "Node from db1 should be bound to db1 instance"
-        assert (
-            node2.dataflow_instance is db2
-        ), "Node from db2 should be bound to db2 instance"
+        assert node1.dataflow_instance is db1, (
+            "Node from db1 should be bound to db1 instance"
+        )
+        assert node2.dataflow_instance is db2, (
+            "Node from db2 should be bound to db2 instance"
+        )
 
     def test_upsert_node_count_per_model(self):
         """Verify 11 nodes are generated per model (7 CRUD + 4 bulk)."""
@@ -193,9 +193,9 @@ class TestUpsertNodeGeneration:
 
         # Count user-related nodes (should be 11: 7 CRUD + 4 Bulk)
         user_nodes = [name for name in db._nodes.keys() if name.startswith("User")]
-        assert (
-            len(user_nodes) == 11
-        ), f"Should have exactly 11 nodes per model (7 CRUD + 4 Bulk), got {len(user_nodes)}: {user_nodes}"
+        assert len(user_nodes) == 11, (
+            f"Should have exactly 11 nodes per model (7 CRUD + 4 Bulk), got {len(user_nodes)}: {user_nodes}"
+        )
 
     def test_upsert_node_operation_attribute(self):
         """Verify UpsertNode has correct operation attribute."""
@@ -213,9 +213,9 @@ class TestUpsertNodeGeneration:
 
         # Assert: operation should be "upsert"
         assert hasattr(node, "operation"), "Node should have operation attribute"
-        assert (
-            node.operation == "upsert"
-        ), f"Operation should be 'upsert', got '{node.operation}'"
+        assert node.operation == "upsert", (
+            f"Operation should be 'upsert', got '{node.operation}'"
+        )
 
     def test_upsert_node_model_name_attribute(self):
         """Verify UpsertNode has correct model_name attribute."""
@@ -233,9 +233,9 @@ class TestUpsertNodeGeneration:
 
         # Assert: model_name should match registered model
         assert hasattr(node, "model_name"), "Node should have model_name attribute"
-        assert (
-            node.model_name == "Product"
-        ), f"model_name should be 'Product', got '{node.model_name}'"
+        assert node.model_name == "Product", (
+            f"model_name should be 'Product', got '{node.model_name}'"
+        )
 
     def test_upsert_node_database_url_parameter(self):
         """Verify UpsertNode has database_url parameter for connection override."""
@@ -253,9 +253,9 @@ class TestUpsertNodeGeneration:
         params = node.get_parameters()
 
         # Assert: Should have database_url parameter
-        assert (
-            "database_url" in params
-        ), "UpsertNode should have 'database_url' parameter for connection override"
-        assert (
-            params["database_url"].required is False
-        ), "database_url should be optional (uses instance default if not provided)"
+        assert "database_url" in params, (
+            "UpsertNode should have 'database_url' parameter for connection override"
+        )
+        assert params["database_url"].required is False, (
+            "database_url should be optional (uses instance default if not provided)"
+        )

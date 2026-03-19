@@ -133,14 +133,14 @@ async def demo_performance():
     print(f"\nPerforming {num_lookups} lookups WITHOUT cache...")
     time_without_cache = await simulate_without_cache(num_lookups)
     avg_without = (time_without_cache / num_lookups) * 1000
-    print(f"Total time: {time_without_cache*1000:.2f}ms")
+    print(f"Total time: {time_without_cache * 1000:.2f}ms")
     print(f"Average per lookup: {avg_without:.3f}ms")
 
     # With cache
     print(f"\nPerforming {num_lookups} lookups WITH cache...")
     time_with_cache = await simulate_with_cache(num_lookups)
     avg_with = (time_with_cache / num_lookups) * 1000
-    print(f"Total time: {time_with_cache*1000:.2f}ms")
+    print(f"Total time: {time_with_cache * 1000:.2f}ms")
     print(f"Average per lookup: {avg_with:.3f}ms")
 
     # Speedup
@@ -226,7 +226,7 @@ async def demo_concurrent_access():
     await asyncio.gather(*tasks)
     elapsed = time.perf_counter() - start
 
-    print(f"   Completed in: {elapsed*1000:.2f}ms")
+    print(f"   Completed in: {elapsed * 1000:.2f}ms")
     print("   Total reads: 50")
 
     stats = cache.get_stats()

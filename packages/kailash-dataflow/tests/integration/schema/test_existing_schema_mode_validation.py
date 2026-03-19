@@ -66,9 +66,9 @@ class TestExistingSchemaMode:
         schema = db.discover_schema(use_real_inspection=True)
 
         # Table name would be test_new_models
-        assert (
-            "test_new_models" not in schema
-        ), "Table was created despite existing_schema_mode=True!"
+        assert "test_new_models" not in schema, (
+            "Table was created despite existing_schema_mode=True!"
+        )
 
         print("✅ No table created with existing_schema_mode=True")
         print("✅ Model registered locally but database unchanged")
@@ -164,9 +164,9 @@ class TestExistingSchemaMode:
 
         # Verify no migration triggered
         schema = db.discover_schema(use_real_inspection=True)
-        assert (
-            "test_migration_controls" not in schema
-        ), "Migration occurred despite settings"
+        assert "test_migration_controls" not in schema, (
+            "Migration occurred despite settings"
+        )
         print("✅ Model registration did not trigger migration")
 
     @pytest.mark.asyncio

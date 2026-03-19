@@ -283,8 +283,7 @@ class ConstraintDimension(ABC):
         except (TypeError, ValueError):
             # Non-numeric: subclass should override
             logger.warning(
-                f"validate_tightening not implemented for non-numeric "
-                f"dimension {self.name}, returning False"
+                f"validate_tightening not implemented for non-numeric dimension {self.name}, returning False"
             )
             return False
 
@@ -324,9 +323,7 @@ class ConstraintDimension(ABC):
                 },
             )
         except (TypeError, ValueError) as e:
-            raise ValueError(
-                f"Cannot compose non-numeric constraints for dimension {self.name}: {e}"
-            )
+            raise ValueError(f"Cannot compose non-numeric constraints for dimension {self.name}: {e}")
 
 
 class ConstraintDimensionRegistry:

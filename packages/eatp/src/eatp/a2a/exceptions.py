@@ -14,9 +14,7 @@ from typing import Any, Dict, Optional
 class A2AError(Exception):
     """Base exception for A2A operations."""
 
-    def __init__(
-        self, message: str, code: int = -32000, data: Optional[Dict[str, Any]] = None
-    ):
+    def __init__(self, message: str, code: int = -32000, data: Optional[Dict[str, Any]] = None):
         self.message = message
         self.code = code
         self.data = data or {}
@@ -34,18 +32,14 @@ class A2AServiceError(A2AError):
 class JsonRpcParseError(A2AError):
     """Invalid JSON was received."""
 
-    def __init__(
-        self, message: str = "Parse error", data: Optional[Dict[str, Any]] = None
-    ):
+    def __init__(self, message: str = "Parse error", data: Optional[Dict[str, Any]] = None):
         super().__init__(message, code=-32700, data=data)
 
 
 class JsonRpcInvalidRequestError(A2AError):
     """The JSON sent is not a valid Request object."""
 
-    def __init__(
-        self, message: str = "Invalid Request", data: Optional[Dict[str, Any]] = None
-    ):
+    def __init__(self, message: str = "Invalid Request", data: Optional[Dict[str, Any]] = None):
         super().__init__(message, code=-32600, data=data)
 
 
@@ -59,18 +53,14 @@ class JsonRpcMethodNotFoundError(A2AError):
 class JsonRpcInvalidParamsError(A2AError):
     """Invalid method parameter(s)."""
 
-    def __init__(
-        self, message: str = "Invalid params", data: Optional[Dict[str, Any]] = None
-    ):
+    def __init__(self, message: str = "Invalid params", data: Optional[Dict[str, Any]] = None):
         super().__init__(message, code=-32602, data=data)
 
 
 class JsonRpcInternalError(A2AError):
     """Internal JSON-RPC error."""
 
-    def __init__(
-        self, message: str = "Internal error", data: Optional[Dict[str, Any]] = None
-    ):
+    def __init__(self, message: str = "Internal error", data: Optional[Dict[str, Any]] = None):
         super().__init__(message, code=-32603, data=data)
 
 
@@ -78,9 +68,7 @@ class JsonRpcInternalError(A2AError):
 class TrustVerificationError(A2AError):
     """Trust verification failed for agent."""
 
-    def __init__(
-        self, agent_id: str, reason: str, data: Optional[Dict[str, Any]] = None
-    ):
+    def __init__(self, agent_id: str, reason: str, data: Optional[Dict[str, Any]] = None):
         super().__init__(
             f"Trust verification failed for {agent_id}: {reason}",
             code=-40001,
@@ -134,7 +122,5 @@ class TokenExpiredError(AuthenticationError):
 class InvalidTokenError(AuthenticationError):
     """JWT token is invalid."""
 
-    def __init__(
-        self, reason: str = "Invalid token", data: Optional[Dict[str, Any]] = None
-    ):
+    def __init__(self, reason: str = "Invalid token", data: Optional[Dict[str, Any]] = None):
         super().__init__(reason, data)

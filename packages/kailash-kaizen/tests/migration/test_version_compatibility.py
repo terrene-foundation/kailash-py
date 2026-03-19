@@ -256,15 +256,15 @@ async def test_signature_inheritance_compatibility():
     for name in child.output_fields:
         print(f"     • {name}")
 
-    assert (
-        len(child.output_fields) == expected_output_fields
-    ), f"Child should have {expected_output_fields} output fields"
+    assert len(child.output_fields) == expected_output_fields, (
+        f"Child should have {expected_output_fields} output fields"
+    )
 
     # Verify parent fields are present
     assert "result" in child.output_fields, "Child should inherit 'result' from parent"
-    assert (
-        "metadata" in child.output_fields
-    ), "Child should inherit 'metadata' from parent"
+    assert "metadata" in child.output_fields, (
+        "Child should inherit 'metadata' from parent"
+    )
 
     # Verify child fields are present
     assert "confidence" in child.output_fields, "Child should have 'confidence'"
@@ -284,9 +284,9 @@ async def test_signature_inheritance_compatibility():
 
     print(f"   - Grandchild output fields: {len(grandchild.output_fields)}")
 
-    assert (
-        len(grandchild.output_fields) == expected_grandchild_fields
-    ), f"Grandchild should have {expected_grandchild_fields} output fields"
+    assert len(grandchild.output_fields) == expected_grandchild_fields, (
+        f"Grandchild should have {expected_grandchild_fields} output fields"
+    )
 
     # Verify all ancestor fields present
     assert "result" in grandchild.output_fields

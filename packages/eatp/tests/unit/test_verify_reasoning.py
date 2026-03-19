@@ -288,9 +288,7 @@ class TestVerifyQuickNoReasoningChecks:
             value="all_delegations",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-q2", ["analyze"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-q2", ["analyze"], constraints=[reasoning_constraint])
         result = await ops.verify(
             agent_id="agent-q2",
             action="analyze",
@@ -332,9 +330,7 @@ class TestVerifyStandardReasoningPresence:
             value="all_delegations",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-s2", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-s2", ["read_data"], constraints=[reasoning_constraint])
         result = await ops.verify(
             agent_id="agent-s2",
             action="read_data",
@@ -345,9 +341,7 @@ class TestVerifyStandardReasoningPresence:
         assert result.reasoning_present is None
 
     @pytest.mark.asyncio
-    async def test_standard_reasoning_required_delegation_with_trace(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_standard_reasoning_required_delegation_with_trace(self, ops, reasoning_trace, keypair):
         """REASONING_REQUIRED + delegation with reasoning_trace: reasoning_present=True."""
         private_key, _ = keypair
         reasoning_constraint = Constraint(
@@ -356,9 +350,7 @@ class TestVerifyStandardReasoningPresence:
             value="all_delegations",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-s3", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-s3", ["read_data"], constraints=[reasoning_constraint])
         # Add a delegation with reasoning trace to the chain
         chain = await ops.trust_store.get_chain("agent-s3")
         delegation = DelegationRecord(
@@ -386,9 +378,7 @@ class TestVerifyStandardReasoningPresence:
         assert result.reasoning_present is True
 
     @pytest.mark.asyncio
-    async def test_standard_reasoning_required_delegation_missing_trace(
-        self, ops, keypair
-    ):
+    async def test_standard_reasoning_required_delegation_missing_trace(self, ops, keypair):
         """REASONING_REQUIRED + delegation without reasoning_trace: reasoning_present=False."""
         private_key, _ = keypair
         reasoning_constraint = Constraint(
@@ -397,9 +387,7 @@ class TestVerifyStandardReasoningPresence:
             value="all_delegations",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-s4", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-s4", ["read_data"], constraints=[reasoning_constraint])
         # Add a delegation WITHOUT reasoning trace
         chain = await ops.trust_store.get_chain("agent-s4")
         delegation = DelegationRecord(
@@ -426,9 +414,7 @@ class TestVerifyStandardReasoningPresence:
         assert result.reasoning_present is False
 
     @pytest.mark.asyncio
-    async def test_standard_reasoning_required_audit_with_trace(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_standard_reasoning_required_audit_with_trace(self, ops, reasoning_trace, keypair):
         """REASONING_REQUIRED + audit anchor with reasoning_trace: reasoning_present=True."""
         private_key, _ = keypair
         reasoning_constraint = Constraint(
@@ -437,9 +423,7 @@ class TestVerifyStandardReasoningPresence:
             value="all_actions",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-s5", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-s5", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-s5")
         anchor = AuditAnchor(
             id=f"aud-{uuid4()}",
@@ -474,9 +458,7 @@ class TestVerifyStandardReasoningPresence:
             value="all_actions",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-s6", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-s6", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-s6")
         anchor = AuditAnchor(
             id=f"aud-{uuid4()}",
@@ -533,9 +515,7 @@ class TestVerifyFullReasoningCrypto:
         )
         # Establish delegator agent so _verify_signatures can resolve delegation chain
         await _establish_agent_with_capability(ops, "agent-root", ["read_data"])
-        await _establish_agent_with_capability(
-            ops, "agent-f2", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-f2", ["read_data"], constraints=[reasoning_constraint])
 
         chain = await ops.trust_store.get_chain("agent-f2")
         del_id = f"del-{uuid4()}"
@@ -587,9 +567,7 @@ class TestVerifyFullReasoningCrypto:
             source="test",
         )
         await _establish_agent_with_capability(ops, "agent-root", ["read_data"])
-        await _establish_agent_with_capability(
-            ops, "agent-f3", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-f3", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-f3")
         delegation = DelegationRecord(
             id=f"del-{uuid4()}",
@@ -619,9 +597,7 @@ class TestVerifyFullReasoningCrypto:
         assert "reasoning" in result.reason.lower()
 
     @pytest.mark.asyncio
-    async def test_full_delegation_missing_signature_with_trace(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_full_delegation_missing_signature_with_trace(self, ops, reasoning_trace, keypair):
         """FULL verify: trace present but signature missing: reasoning_verified=False."""
         private_key, _ = keypair
         reasoning_constraint = Constraint(
@@ -631,9 +607,7 @@ class TestVerifyFullReasoningCrypto:
             source="test",
         )
         await _establish_agent_with_capability(ops, "agent-root", ["read_data"])
-        await _establish_agent_with_capability(
-            ops, "agent-f4", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-f4", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-f4")
         delegation = DelegationRecord(
             id=f"del-{uuid4()}",
@@ -672,9 +646,7 @@ class TestVerifyFullReasoningCrypto:
             value="all_actions",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-f5", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-f5", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-f5")
         anchor_id = f"aud-{uuid4()}"
         anchor = AuditAnchor(
@@ -719,9 +691,7 @@ class TestVerifyFullReasoningCrypto:
             value="all_actions",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-f6", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-f6", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-f6")
         anchor = AuditAnchor(
             id=f"aud-{uuid4()}",
@@ -817,9 +787,7 @@ class TestVerifyMixedReasoningRecords:
     """Verify handles chains with mixed reasoning trace presence."""
 
     @pytest.mark.asyncio
-    async def test_standard_mixed_delegations_partial_reasoning(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_standard_mixed_delegations_partial_reasoning(self, ops, reasoning_trace, keypair):
         """With some delegations having traces and some not: reasoning_present=False."""
         private_key, _ = keypair
         reasoning_constraint = Constraint(
@@ -828,9 +796,7 @@ class TestVerifyMixedReasoningRecords:
             value="all_delegations",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-m1", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-m1", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-m1")
 
         # Delegation WITH reasoning trace
@@ -886,9 +852,7 @@ class TestVerifyFullReasoningSignatureCryptoVerification:
     """
 
     @pytest.mark.asyncio
-    async def test_full_delegation_invalid_reasoning_signature_fails(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_full_delegation_invalid_reasoning_signature_fails(self, ops, reasoning_trace, keypair):
         """FULL verify: valid hash but INVALID (random) reasoning_signature must fail."""
         private_key, _ = keypair
         reasoning_constraint = Constraint(
@@ -898,9 +862,7 @@ class TestVerifyFullReasoningSignatureCryptoVerification:
             source="test",
         )
         await _establish_agent_with_capability(ops, "agent-root", ["read_data"])
-        await _establish_agent_with_capability(
-            ops, "agent-sig1", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-sig1", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-sig1")
         delegation = DelegationRecord(
             id=f"del-{uuid4()}",
@@ -934,9 +896,7 @@ class TestVerifyFullReasoningSignatureCryptoVerification:
         assert "reasoning" in result.reason.lower()
 
     @pytest.mark.asyncio
-    async def test_full_audit_invalid_reasoning_signature_fails(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_full_audit_invalid_reasoning_signature_fails(self, ops, reasoning_trace, keypair):
         """FULL verify: audit anchor with valid hash but INVALID reasoning sig must fail."""
         private_key, _ = keypair
         reasoning_constraint = Constraint(
@@ -945,9 +905,7 @@ class TestVerifyFullReasoningSignatureCryptoVerification:
             value="all_actions",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-sig2", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-sig2", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-sig2")
         anchor = AuditAnchor(
             id=f"aud-{uuid4()}",
@@ -971,16 +929,13 @@ class TestVerifyFullReasoningSignatureCryptoVerification:
             level=VerificationLevel.FULL,
         )
         assert result.valid is False, (
-            "FULL verification must FAIL when audit anchor reasoning_signature "
-            "is not a valid Ed25519 signature"
+            "FULL verification must FAIL when audit anchor reasoning_signature is not a valid Ed25519 signature"
         )
         assert result.reasoning_verified is False
         assert "reasoning" in result.reason.lower()
 
     @pytest.mark.asyncio
-    async def test_full_delegation_wrong_key_reasoning_signature_fails(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_full_delegation_wrong_key_reasoning_signature_fails(self, ops, reasoning_trace, keypair):
         """FULL verify: reasoning signed with DIFFERENT key must fail verification."""
         private_key, _ = keypair
         # Generate a completely different keypair for the attacker
@@ -993,9 +948,7 @@ class TestVerifyFullReasoningSignatureCryptoVerification:
             source="test",
         )
         await _establish_agent_with_capability(ops, "agent-root", ["read_data"])
-        await _establish_agent_with_capability(
-            ops, "agent-sig3", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-sig3", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-sig3")
         delegation = DelegationRecord(
             id=f"del-{uuid4()}",
@@ -1009,9 +962,7 @@ class TestVerifyFullReasoningSignatureCryptoVerification:
             reasoning_trace=reasoning_trace,
             reasoning_trace_hash=hash_reasoning_trace(reasoning_trace),
             # Signed with attacker's key, not the authority's key
-            reasoning_signature=sign_reasoning_trace(
-                reasoning_trace, attacker_private_key
-            ),
+            reasoning_signature=sign_reasoning_trace(reasoning_trace, attacker_private_key),
         )
         del_payload = serialize_for_signing(delegation.to_signing_payload())
         delegation.signature = sign(del_payload, private_key)
@@ -1054,9 +1005,7 @@ class TestVerifyStandardMissingReasoningViolations:
             value="all_delegations",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-v1", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-v1", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-v1")
         delegation = DelegationRecord(
             id=f"del-{uuid4()}",
@@ -1082,8 +1031,7 @@ class TestVerifyStandardMissingReasoningViolations:
         assert result.reasoning_present is False
         # But violations list must contain the missing reasoning entry
         assert len(result.violations) > 0, (
-            "STANDARD verification must record a violation when "
-            "REASONING_REQUIRED is active but reasoning is missing"
+            "STANDARD verification must record a violation when REASONING_REQUIRED is active but reasoning is missing"
         )
         violation = result.violations[0]
         assert violation["constraint_type"] == "reasoning_required"
@@ -1091,9 +1039,7 @@ class TestVerifyStandardMissingReasoningViolations:
         assert "reasoning" in violation["reason"].lower()
 
     @pytest.mark.asyncio
-    async def test_standard_missing_reasoning_on_audit_records_violation(
-        self, ops, keypair
-    ):
+    async def test_standard_missing_reasoning_on_audit_records_violation(self, ops, keypair):
         """Missing reasoning on audit anchor with REASONING_REQUIRED must add violation."""
         private_key, _ = keypair
         reasoning_constraint = Constraint(
@@ -1102,9 +1048,7 @@ class TestVerifyStandardMissingReasoningViolations:
             value="all_actions",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-v2", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-v2", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-v2")
         anchor = AuditAnchor(
             id=f"aud-{uuid4()}",
@@ -1135,9 +1079,7 @@ class TestVerifyStandardMissingReasoningViolations:
         assert violation["severity"] == "warning"
 
     @pytest.mark.asyncio
-    async def test_standard_reasoning_present_no_violations(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_standard_reasoning_present_no_violations(self, ops, reasoning_trace, keypair):
         """When reasoning IS present, no reasoning violations should be added."""
         private_key, _ = keypair
         reasoning_constraint = Constraint(
@@ -1146,9 +1088,7 @@ class TestVerifyStandardMissingReasoningViolations:
             value="all_delegations",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-v3", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-v3", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-v3")
         delegation = DelegationRecord(
             id=f"del-{uuid4()}",
@@ -1174,11 +1114,7 @@ class TestVerifyStandardMissingReasoningViolations:
         assert result.valid is True
         assert result.reasoning_present is True
         # No violations should be present for reasoning
-        reasoning_violations = [
-            v
-            for v in result.violations
-            if v.get("constraint_type") == "reasoning_required"
-        ]
+        reasoning_violations = [v for v in result.violations if v.get("constraint_type") == "reasoning_required"]
         assert len(reasoning_violations) == 0
 
     @pytest.mark.asyncio
@@ -1191,11 +1127,7 @@ class TestVerifyStandardMissingReasoningViolations:
             level=VerificationLevel.STANDARD,
         )
         assert result.valid is True
-        reasoning_violations = [
-            v
-            for v in result.violations
-            if v.get("constraint_type") == "reasoning_required"
-        ]
+        reasoning_violations = [v for v in result.violations if v.get("constraint_type") == "reasoning_required"]
         assert len(reasoning_violations) == 0
 
 
@@ -1219,9 +1151,7 @@ class TestVerifyFullReasoningRequiredHardFailure:
     """
 
     @pytest.mark.asyncio
-    async def test_full_reasoning_required_missing_trace_hard_failure(
-        self, ops, keypair
-    ):
+    async def test_full_reasoning_required_missing_trace_hard_failure(self, ops, keypair):
         """FULL + REASONING_REQUIRED + no trace = failure."""
         private_key, _ = keypair
         reasoning_constraint = Constraint(
@@ -1230,9 +1160,7 @@ class TestVerifyFullReasoningRequiredHardFailure:
             value="all_delegations",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-hf1", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-hf1", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-hf1")
         delegation = DelegationRecord(
             id=f"del-{uuid4()}",
@@ -1254,17 +1182,14 @@ class TestVerifyFullReasoningRequiredHardFailure:
             level=VerificationLevel.FULL,
         )
         assert result.valid is False, (
-            "FULL verification MUST fail when REASONING_REQUIRED is active "
-            "and no reasoning trace is present"
+            "FULL verification MUST fail when REASONING_REQUIRED is active and no reasoning trace is present"
         )
         assert result.reasoning_present is False
         assert result.reasoning_verified is False
         assert "REASONING_REQUIRED" in result.reason
 
     @pytest.mark.asyncio
-    async def test_full_reasoning_required_with_valid_trace_succeeds(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_full_reasoning_required_with_valid_trace_succeeds(self, ops, reasoning_trace, keypair):
         """FULL + REASONING_REQUIRED + valid trace = success."""
         private_key, _ = keypair
         reasoning_constraint = Constraint(
@@ -1274,9 +1199,7 @@ class TestVerifyFullReasoningRequiredHardFailure:
             source="test",
         )
         await _establish_agent_with_capability(ops, "agent-root", ["read_data"])
-        await _establish_agent_with_capability(
-            ops, "agent-hf2", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-hf2", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-hf2")
         del_id = f"del-{uuid4()}"
         delegation = DelegationRecord(
@@ -1315,9 +1238,7 @@ class TestVerifyFullReasoningRequiredHardFailure:
         assert result.reasoning_verified is True
 
     @pytest.mark.asyncio
-    async def test_standard_reasoning_required_missing_trace_still_valid(
-        self, ops, keypair
-    ):
+    async def test_standard_reasoning_required_missing_trace_still_valid(self, ops, keypair):
         """STANDARD + REASONING_REQUIRED + no trace = valid with warning (unchanged)."""
         private_key, _ = keypair
         reasoning_constraint = Constraint(
@@ -1326,9 +1247,7 @@ class TestVerifyFullReasoningRequiredHardFailure:
             value="all_delegations",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-hf3", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-hf3", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-hf3")
         delegation = DelegationRecord(
             id=f"del-{uuid4()}",
@@ -1350,8 +1269,7 @@ class TestVerifyFullReasoningRequiredHardFailure:
             level=VerificationLevel.STANDARD,
         )
         assert result.valid is True, (
-            "STANDARD verification must remain valid (advisory) when "
-            "REASONING_REQUIRED + no trace"
+            "STANDARD verification must remain valid (advisory) when REASONING_REQUIRED + no trace"
         )
         assert result.reasoning_present is False
         # Warning violation must be recorded
@@ -1360,9 +1278,7 @@ class TestVerifyFullReasoningRequiredHardFailure:
         assert violation["severity"] == "warning"
 
     @pytest.mark.asyncio
-    async def test_full_reasoning_required_missing_trace_on_audit_anchor(
-        self, ops, keypair
-    ):
+    async def test_full_reasoning_required_missing_trace_on_audit_anchor(self, ops, keypair):
         """FULL + REASONING_REQUIRED + no trace on audit anchor = failure."""
         private_key, _ = keypair
         reasoning_constraint = Constraint(
@@ -1371,9 +1287,7 @@ class TestVerifyFullReasoningRequiredHardFailure:
             value="all_actions",
             source="test",
         )
-        await _establish_agent_with_capability(
-            ops, "agent-hf4", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-hf4", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-hf4")
         anchor = AuditAnchor(
             id=f"aud-{uuid4()}",
@@ -1402,9 +1316,7 @@ class TestVerifyFullReasoningRequiredHardFailure:
         assert "REASONING_REQUIRED" in result.reason
 
     @pytest.mark.asyncio
-    async def test_full_reasoning_required_mixed_records_hard_failure(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_full_reasoning_required_mixed_records_hard_failure(self, ops, reasoning_trace, keypair):
         """FULL + REASONING_REQUIRED + mixed records (some with, some without) = failure.
 
         When some delegations have reasoning traces and some do not, the chain
@@ -1418,9 +1330,7 @@ class TestVerifyFullReasoningRequiredHardFailure:
             source="test",
         )
         await _establish_agent_with_capability(ops, "agent-root", ["read_data"])
-        await _establish_agent_with_capability(
-            ops, "agent-hf5", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-hf5", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-hf5")
 
         # Delegation WITH reasoning trace
@@ -1476,9 +1386,7 @@ class TestVerifyFullReasoningRequiredHardFailure:
         assert result.reasoning_present is False
 
     @pytest.mark.asyncio
-    async def test_full_trace_present_but_hash_none_fails(
-        self, ops, reasoning_trace, keypair
-    ):
+    async def test_full_trace_present_but_hash_none_fails(self, ops, reasoning_trace, keypair):
         """FULL verify: reasoning_trace present but reasoning_trace_hash=None must fail.
 
         This simulates a record where someone forgot to compute the hash or
@@ -1492,9 +1400,7 @@ class TestVerifyFullReasoningRequiredHardFailure:
             source="test",
         )
         await _establish_agent_with_capability(ops, "agent-root", ["read_data"])
-        await _establish_agent_with_capability(
-            ops, "agent-hf6", ["read_data"], constraints=[reasoning_constraint]
-        )
+        await _establish_agent_with_capability(ops, "agent-hf6", ["read_data"], constraints=[reasoning_constraint])
         chain = await ops.trust_store.get_chain("agent-hf6")
         delegation = DelegationRecord(
             id=f"del-{uuid4()}",

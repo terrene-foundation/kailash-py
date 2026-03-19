@@ -262,14 +262,14 @@ class TestIntegrationCacheDisabled:
                 await db.initialize()
 
                 # Verify cache is disabled via config
-                assert (
-                    db.config.enable_query_cache is False
-                ), "Config enable_query_cache should be False when enable_caching=False"
+                assert db.config.enable_query_cache is False, (
+                    "Config enable_query_cache should be False when enable_caching=False"
+                )
 
                 # FIXED: Cache integration should be None when caching is disabled
-                assert (
-                    db._cache_integration is None
-                ), "Cache integration should be None when enable_caching=False"
+                assert db._cache_integration is None, (
+                    "Cache integration should be None when enable_caching=False"
+                )
 
                 # Check for any cache-related warnings
                 cache_warnings = [

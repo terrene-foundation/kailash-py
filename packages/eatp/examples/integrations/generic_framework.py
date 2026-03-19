@@ -86,15 +86,9 @@ async def setup_eatp() -> TrustOperations:
         agent_id="agent-001",
         authority_id="org-platform",
         capabilities=[
-            CapabilityRequest(
-                capability="analyze", capability_type=CapabilityType.ACTION
-            ),
-            CapabilityRequest(
-                capability="read_data", capability_type=CapabilityType.ACCESS
-            ),
-            CapabilityRequest(
-                capability="generate_report", capability_type=CapabilityType.ACTION
-            ),
+            CapabilityRequest(capability="analyze", capability_type=CapabilityType.ACTION),
+            CapabilityRequest(capability="read_data", capability_type=CapabilityType.ACCESS),
+            CapabilityRequest(capability="generate_report", capability_type=CapabilityType.ACTION),
         ],
         constraints=["audit_required"],
     )
@@ -308,12 +302,8 @@ async def main():
     print("\n" + "=" * 60)
     print("Summary: Three Integration Patterns")
     print("=" * 60)
-    print(
-        "  Pattern 1 (Decorators):     Lowest friction -- add @verified to any function"
-    )
-    print(
-        "  Pattern 2 (StrictEnforcer):  Full control -- verify + enforce in your flow"
-    )
+    print("  Pattern 1 (Decorators):     Lowest friction -- add @verified to any function")
+    print("  Pattern 2 (StrictEnforcer):  Full control -- verify + enforce in your flow")
     print("  Pattern 3 (ShadowEnforcer):  Zero risk -- observe before enforcing")
     print("\nGeneric framework integration completed.")
 

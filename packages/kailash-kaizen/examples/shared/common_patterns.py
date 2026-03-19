@@ -346,11 +346,11 @@ class ExampleTestHarness:
                     self._validate_expectations(result, test_case["expected"])
 
                 passed += 1
-                self.logger.info(f"Test case {i+1} passed")
+                self.logger.info(f"Test case {i + 1} passed")
 
             except Exception as e:
                 failed += 1
-                self.logger.error(f"Test case {i+1} failed: {e}")
+                self.logger.error(f"Test case {i + 1} failed: {e}")
                 self.test_results.append(
                     {"test_case": i + 1, "status": "failed", "error": str(e)}
                 )

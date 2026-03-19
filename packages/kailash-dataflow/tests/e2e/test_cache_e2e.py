@@ -33,7 +33,10 @@ class TestCacheE2E:
 
         # Configure Redis cache
         cache_config = CacheConfig(
-            host="localhost", port=6379, db=15, default_ttl=300  # Test database
+            host="localhost",
+            port=6379,
+            db=15,
+            default_ttl=300,  # Test database
         )
 
         # Enable caching
@@ -158,9 +161,9 @@ class TestCacheE2E:
         count_result = results["count_users"]
 
         # List operation works correctly
-        assert (
-            len(list_result["records"]) == 4
-        ), f"Expected 4 records, got {len(list_result['records'])}"
+        assert len(list_result["records"]) == 4, (
+            f"Expected 4 records, got {len(list_result['records'])}"
+        )
 
         # Count might have a bug with filters, skip for now as it's not critical
         # The list operation already returns the count correctly

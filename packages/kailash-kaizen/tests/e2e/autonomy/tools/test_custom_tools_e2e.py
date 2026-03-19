@@ -170,9 +170,7 @@ def create_custom_mcp_server(port: int = 18095) -> MCPServer:
                 }
 
             # Safe eval with restricted scope for calculator
-            result = eval(
-                expression, {"__builtins__": {}}, {}
-            )  # nosec B307  # noqa: PGH001
+            result = eval(expression, {"__builtins__": {}}, {})  # nosec B307  # noqa: PGH001
 
             return {
                 "success": True,
@@ -242,9 +240,9 @@ async def test_custom_tool_registration_e2e():
 
         # Verify custom tools discovered
         custom_tool_names = [t["name"] for t in tools if "custom_test" in t["name"]]
-        assert (
-            len(custom_tool_names) >= 3
-        ), f"Should discover at least 3 custom tools, got {len(custom_tool_names)}: {custom_tool_names}"
+        assert len(custom_tool_names) >= 3, (
+            f"Should discover at least 3 custom tools, got {len(custom_tool_names)}: {custom_tool_names}"
+        )
 
         print(f"\n✓ Discovered {len(custom_tool_names)} custom tools:")
         for name in custom_tool_names[:5]:
@@ -326,14 +324,14 @@ async def test_custom_tool_execution_e2e():
             initial_delay=2.0,
         )
 
-        assert transform_result.get(
-            "success"
-        ), f"transform_data should succeed: {transform_result}"
+        assert transform_result.get("success"), (
+            f"transform_data should succeed: {transform_result}"
+        )
 
         transformed = transform_result.get("transformed", "")
-        assert (
-            transformed == "HELLO WORLD"
-        ), f"Should transform to uppercase: {transformed}"
+        assert transformed == "HELLO WORLD", (
+            f"Should transform to uppercase: {transformed}"
+        )
         print(f"✓ transform_data executed: '{transformed}'")
 
         # Test 2: Execute validate_data tool
@@ -346,12 +344,12 @@ async def test_custom_tool_execution_e2e():
             max_attempts=3,
         )
 
-        assert validate_result.get(
-            "success"
-        ), f"validate_data should succeed: {validate_result}"
-        assert (
-            validate_result.get("valid") is True
-        ), f"Data should be valid: {validate_result}"
+        assert validate_result.get("success"), (
+            f"validate_data should succeed: {validate_result}"
+        )
+        assert validate_result.get("valid") is True, (
+            f"Data should be valid: {validate_result}"
+        )
         print(f"✓ validate_data executed: valid={validate_result.get('valid')}")
 
         # Test 3: Execute calculate tool
@@ -441,9 +439,9 @@ async def test_invalid_tool_handling_e2e():
         # Should return error result, not raise exception
         if not nonexistent_result.get("success"):
             error = nonexistent_result.get("error", "")
-            assert (
-                "not found" in error.lower() or "unknown" in error.lower()
-            ), f"Should indicate tool not found: {error}"
+            assert "not found" in error.lower() or "unknown" in error.lower(), (
+                f"Should indicate tool not found: {error}"
+            )
             print(f"✓ Non-existent tool handled: {error[:50]}...")
         else:
             print("ℹ Tool execution attempted (may succeed if fallback exists)")

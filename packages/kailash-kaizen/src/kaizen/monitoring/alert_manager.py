@@ -53,16 +53,16 @@ class EmailNotificationChannel(NotificationChannel):
         body = f"""
         Performance alert triggered:
 
-        Metric: {alert['metric']}
-        Severity: {alert['severity']}
-        Condition: {alert['condition']}
-        Threshold: {alert['threshold']}
-        Current Value: {alert['current_value']}
+        Metric: {alert["metric"]}
+        Severity: {alert["severity"]}
+        Condition: {alert["condition"]}
+        Threshold: {alert["threshold"]}
+        Current Value: {alert["current_value"]}
 
         Statistics:
-        {json.dumps(alert['stats'], indent=2)}
+        {json.dumps(alert["stats"], indent=2)}
 
-        Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(alert['timestamp']))}
+        Timestamp: {time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(alert["timestamp"]))}
         """
 
         # Log the alert (actual email sending would require SMTP setup)

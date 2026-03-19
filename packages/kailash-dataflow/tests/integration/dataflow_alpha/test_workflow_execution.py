@@ -246,12 +246,12 @@ class TestWorkflowExecution:
 
         except Exception as e:
             # Should not get AttributeError or configuration errors
-            assert "AttributeError" not in str(
-                e
-            ), f"Configuration error in workflow: {e}"
-            assert "'DataFlowConfig' object has no attribute" not in str(
-                e
-            ), f"Config error: {e}"
+            assert "AttributeError" not in str(e), (
+                f"Configuration error in workflow: {e}"
+            )
+            assert "'DataFlowConfig' object has no attribute" not in str(e), (
+                f"Config error: {e}"
+            )
 
     def test_parameter_passing_between_nodes(self, dataflow_with_model):
         """Test parameter passing between DataFlow nodes in workflow."""
@@ -407,8 +407,8 @@ result = {
         execution_time = time.time() - start_time
 
         # Should complete within reasonable time
-        assert (
-            execution_time < 5.0
-        ), f"Workflow execution too slow: {execution_time:.2f}s"
+        assert execution_time < 5.0, (
+            f"Workflow execution too slow: {execution_time:.2f}s"
+        )
         assert results is not None
         assert results["create"]["customer_name"] == "Performance Test"

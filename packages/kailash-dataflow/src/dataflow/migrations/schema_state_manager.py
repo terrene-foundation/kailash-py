@@ -894,7 +894,8 @@ class MigrationHistoryManager:
         try:
             # Phase 6: Use async_safe_run for proper event loop handling
             result = async_safe_run(
-                self._record_migration_async(migration), timeout=30  # 30 second timeout
+                self._record_migration_async(migration),
+                timeout=30,  # 30 second timeout
             )
             logger.debug("Migration recording successful")
             return result

@@ -66,13 +66,13 @@ def test_complete_chat_workflow_with_context():
             if "|" in expected_keyword:
                 # Any of the keywords
                 keywords = expected_keyword.split("|")
-                assert any(
-                    kw in answer_lower for kw in keywords
-                ), f"Expected one of {keywords} in response to '{question}'"
+                assert any(kw in answer_lower for kw in keywords), (
+                    f"Expected one of {keywords} in response to '{question}'"
+                )
             else:
-                assert (
-                    expected_keyword.lower() in answer_lower
-                ), f"Expected '{expected_keyword}' in response to '{question}'"
+                assert expected_keyword.lower() in answer_lower, (
+                    f"Expected '{expected_keyword}' in response to '{question}'"
+                )
 
         # All responses should be received
         assert len(results) == 5
@@ -128,9 +128,9 @@ def test_complete_chat_workflow_with_reasoning():
 
             # Verify reasoning is provided
             if step.get("check_reasoning"):
-                assert (
-                    len(result.get("reasoning", "")) > 0
-                ), "Reasoning should not be empty"
+                assert len(result.get("reasoning", "")) > 0, (
+                    "Reasoning should not be empty"
+                )
 
     finally:
         sys.path.remove(str(example_path))

@@ -125,17 +125,17 @@ class TestChainOfThoughtAgent:
 
             # Validate performance targets
             metrics = agent.get_performance_metrics()
-            assert (
-                metrics["framework_init_time"] < 100
-            ), f"Framework init took {metrics['framework_init_time']:.1f}ms (target: <100ms)"
-            assert (
-                metrics["agent_creation_time"] < 200
-            ), f"Agent creation took {metrics['agent_creation_time']:.1f}ms (target: <200ms)"
+            assert metrics["framework_init_time"] < 100, (
+                f"Framework init took {metrics['framework_init_time']:.1f}ms (target: <100ms)"
+            )
+            assert metrics["agent_creation_time"] < 200, (
+                f"Agent creation took {metrics['agent_creation_time']:.1f}ms (target: <200ms)"
+            )
 
             # Validate total initialization is reasonable
-            assert (
-                initialization_time < 300
-            ), f"Total initialization took {initialization_time:.1f}ms (target: <300ms)"
+            assert initialization_time < 300, (
+                f"Total initialization took {initialization_time:.1f}ms (target: <300ms)"
+            )
 
             logger.info(
                 f"Performance test passed - Framework: {metrics['framework_init_time']:.1f}ms, Agent: {metrics['agent_creation_time']:.1f}ms"
@@ -185,9 +185,9 @@ class TestChainOfThoughtAgent:
             assert len(result[step_key]) > 10  # Meaningful step content
 
         # Validate execution performance
-        assert (
-            result["execution_time_ms"] < 1000
-        ), f"Execution took {result['execution_time_ms']:.1f}ms (target: <1000ms)"
+        assert result["execution_time_ms"] < 1000, (
+            f"Execution took {result['execution_time_ms']:.1f}ms (target: <1000ms)"
+        )
 
         logger.info(
             f"Mathematical reasoning test passed - Answer: {result['final_answer']}, Confidence: {result['confidence']:.2f}"
@@ -380,9 +380,9 @@ class TestPerformanceValidation:
             agent.cleanup()
 
         avg_time = sum(times) / len(times)
-        assert (
-            avg_time < 100
-        ), f"Average framework init time {avg_time:.1f}ms exceeds 100ms target"
+        assert avg_time < 100, (
+            f"Average framework init time {avg_time:.1f}ms exceeds 100ms target"
+        )
 
         logger.info(
             f"Framework benchmark passed - Average: {avg_time:.1f}ms, Range: {min(times):.1f}-{max(times):.1f}ms"
@@ -400,9 +400,9 @@ class TestPerformanceValidation:
             agent.cleanup()
 
         avg_time = sum(times) / len(times)
-        assert (
-            avg_time < 200
-        ), f"Average agent creation time {avg_time:.1f}ms exceeds 200ms target"
+        assert avg_time < 200, (
+            f"Average agent creation time {avg_time:.1f}ms exceeds 200ms target"
+        )
 
         logger.info(
             f"Agent creation benchmark passed - Average: {avg_time:.1f}ms, Range: {min(times):.1f}-{max(times):.1f}ms"
@@ -428,9 +428,9 @@ class TestPerformanceValidation:
                 execution_times.append(result["execution_time_ms"])
 
             avg_execution_time = sum(execution_times) / len(execution_times)
-            assert (
-                avg_execution_time < 1000
-            ), f"Average execution time {avg_execution_time:.1f}ms exceeds 1000ms target"
+            assert avg_execution_time < 1000, (
+                f"Average execution time {avg_execution_time:.1f}ms exceeds 1000ms target"
+            )
 
             logger.info(
                 f"Execution benchmark passed - Average: {avg_execution_time:.1f}ms, Range: {min(execution_times):.1f}-{max(execution_times):.1f}ms"

@@ -41,9 +41,7 @@ class AuditAnchorNotFoundError(AuditStoreError):
     """Raised when an audit anchor is not found."""
 
     def __init__(self, anchor_id: str):
-        super().__init__(
-            f"Audit anchor not found: {anchor_id}", details={"anchor_id": anchor_id}
-        )
+        super().__init__(f"Audit anchor not found: {anchor_id}", details={"anchor_id": anchor_id})
         self.anchor_id = anchor_id
 
 
@@ -246,9 +244,7 @@ class AppendOnlyAuditStore:
             return record
 
         except Exception as e:
-            raise AuditStoreError(
-                f"Failed to append audit anchor {anchor.id}: {str(e)}"
-            ) from e
+            raise AuditStoreError(f"Failed to append audit anchor {anchor.id}: {str(e)}") from e
 
     async def get(self, record_id: str) -> Optional[AuditRecord]:
         """
@@ -367,8 +363,7 @@ class AppendOnlyAuditStore:
                 if first_invalid is None:
                     first_invalid = record.sequence_number
                 errors.append(
-                    f"Sequence gap at position {i}: expected {expected_sequence}, "
-                    f"got {record.sequence_number}"
+                    f"Sequence gap at position {i}: expected {expected_sequence}, got {record.sequence_number}"
                 )
                 continue
 
@@ -401,8 +396,7 @@ class AppendOnlyAuditStore:
                 if first_invalid is None:
                     first_invalid = record.sequence_number
                 errors.append(
-                    f"Integrity hash mismatch at sequence {record.sequence_number}: "
-                    f"record may have been tampered with"
+                    f"Integrity hash mismatch at sequence {record.sequence_number}: record may have been tampered with"
                 )
                 continue
 

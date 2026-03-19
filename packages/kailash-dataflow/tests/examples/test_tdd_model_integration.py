@@ -127,9 +127,9 @@ class TestTDDModelIntegration:
             execution_time = (datetime.now() - start_time).total_seconds() * 1000
 
             # Verify performance goal: <100ms
-            assert (
-                execution_time < 100
-            ), f"Execution took {execution_time}ms, should be <100ms"
+            assert execution_time < 100, (
+                f"Execution took {execution_time}ms, should be <100ms"
+            )
 
             # Verify results
             assert results["create_product"]["name"] == "Test Product"
@@ -173,9 +173,9 @@ class TestTDDModelIntegration:
             execution_time = (datetime.now() - start_time).total_seconds() * 1000
 
             # Verify performance goal: <100ms
-            assert (
-                execution_time < 100
-            ), f"List execution took {execution_time}ms, should be <100ms"
+            assert execution_time < 100, (
+                f"List execution took {execution_time}ms, should be <100ms"
+            )
 
             # Verify results structure
             assert "records" in results["list_customers"]
@@ -250,9 +250,9 @@ class TestTDDModelIntegration:
             execution_time = (datetime.now() - start_time).total_seconds() * 1000
 
             # Verify performance goal: <100ms for bulk operations
-            assert (
-                execution_time < 100
-            ), f"Bulk execution took {execution_time}ms, should be <100ms"
+            assert execution_time < 100, (
+                f"Bulk execution took {execution_time}ms, should be <100ms"
+            )
 
             # Verify results
             assert results["bulk_create_orders"]["success"]
@@ -367,9 +367,9 @@ class TestTDDModelIntegration:
             execution_time = (datetime.now() - start_time).total_seconds() * 1000
 
             # Verify performance and correctness
-            assert (
-                execution_time < 100
-            ), f"Workflow execution took {execution_time}ms, should be <100ms"
+            assert execution_time < 100, (
+                f"Workflow execution took {execution_time}ms, should be <100ms"
+            )
             assert results["create_item"]["name"] == "Workflow Item"
             assert results["read_item"]["found"]
             assert results["update_item"]["updated"]
@@ -416,9 +416,9 @@ class TestTDDModelIntegration:
             execution_time = (datetime.now() - start_time).total_seconds() * 1000
 
             # With connection reuse, 20 operations should still be <100ms
-            assert (
-                execution_time < 100
-            ), f"20 operations took {execution_time}ms, should be <100ms with connection reuse"
+            assert execution_time < 100, (
+                f"20 operations took {execution_time}ms, should be <100ms with connection reuse"
+            )
 
             # Verify all operations completed successfully
             for op_id in operations:

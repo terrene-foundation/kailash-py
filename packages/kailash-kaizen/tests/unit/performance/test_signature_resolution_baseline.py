@@ -373,9 +373,9 @@ class TestEndToEndResolutionBaseline:
 
         assert "node_type" in perf["result"]
         assert "parameters" in perf["result"]
-        assert (
-            perf["p95"] < 100
-        ), f"P95 latency {perf['p95']:.2f}ms exceeds 100ms target"
+        assert perf["p95"] < 100, (
+            f"P95 latency {perf['p95']:.2f}ms exceeds 100ms target"
+        )
         print(f"  ✓ Simple end-to-end P95: {perf['p95']:.3f}ms (target: <100ms)")
 
     def test_complex_end_to_end_resolution_baseline(self):
@@ -407,9 +407,9 @@ class TestEndToEndResolutionBaseline:
 
         assert len(perf["result"]["parameters"]["inputs"]) == 3
         assert len(perf["result"]["parameters"]["outputs"]) == 3
-        assert (
-            perf["p95"] < 100
-        ), f"P95 latency {perf['p95']:.2f}ms exceeds 100ms target"
+        assert perf["p95"] < 100, (
+            f"P95 latency {perf['p95']:.2f}ms exceeds 100ms target"
+        )
         print(f"  ✓ Complex end-to-end P95: {perf['p95']:.3f}ms (target: <100ms)")
 
     def test_multimodal_end_to_end_resolution_baseline(self):
@@ -442,9 +442,9 @@ class TestEndToEndResolutionBaseline:
         perf = measure_performance(resolve_signature, signature_text)
 
         assert perf["result"]["parameters"].get("supports_vision") == True
-        assert (
-            perf["p95"] < 100
-        ), f"P95 latency {perf['p95']:.2f}ms exceeds 100ms target"
+        assert perf["p95"] < 100, (
+            f"P95 latency {perf['p95']:.2f}ms exceeds 100ms target"
+        )
         print(f"  ✓ Multi-modal end-to-end P95: {perf['p95']:.3f}ms (target: <100ms)")
 
 
@@ -466,9 +466,9 @@ class TestRegressionDetection:
         perf = measure_performance(parser.parse, signature_text, iterations=100)
 
         # Regression thresholds
-        assert (
-            perf["p95"] < 1.0
-        ), f"REGRESSION: P95 latency {perf['p95']:.2f}ms exceeds 1ms threshold"
+        assert perf["p95"] < 1.0, (
+            f"REGRESSION: P95 latency {perf['p95']:.2f}ms exceeds 1ms threshold"
+        )
         if perf["p95"] > 0.5:
             print(
                 f"  ⚠️  WARNING: P95 latency {perf['p95']:.2f}ms approaching 1ms threshold"
@@ -508,9 +508,9 @@ class TestRegressionDetection:
         perf = measure_performance(resolve_signature, signature_text, iterations=100)
 
         # Regression thresholds
-        assert (
-            perf["p95"] < 2.0
-        ), f"REGRESSION: P95 latency {perf['p95']:.2f}ms exceeds 2ms threshold"
+        assert perf["p95"] < 2.0, (
+            f"REGRESSION: P95 latency {perf['p95']:.2f}ms exceeds 2ms threshold"
+        )
         if perf["p95"] > 1.0:
             print(
                 f"  ⚠️  WARNING: P95 latency {perf['p95']:.2f}ms approaching 2ms threshold"

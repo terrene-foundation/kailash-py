@@ -220,7 +220,7 @@ def main():
     print("SIMPLE VALIDATION SUMMARY")
     print("=" * 60)
     print(f"Tests passed: {passed}/{total}")
-    print(f"Success rate: {passed/total*100:.1f}%")
+    print(f"Success rate: {passed / total * 100:.1f}%")
 
     if passed == total:
         print("\n🎉 ALL BASIC COMPONENTS WORKING")

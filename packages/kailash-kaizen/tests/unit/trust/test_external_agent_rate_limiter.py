@@ -244,7 +244,7 @@ class TestRateLimitCheckUnderLimit:
                 user_id="user-123",
             )
 
-            assert result.allowed is True, f"Request {i+1} should be allowed"
+            assert result.allowed is True, f"Request {i + 1} should be allowed"
             assert result.limit_exceeded is None
             assert result.remaining >= 2  # At least 2 requests remaining
             assert result.retry_after_seconds is None

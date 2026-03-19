@@ -407,12 +407,12 @@ def test_migration_completeness():
         assert hasattr(node, "get_parameters"), "Node should have get_parameters method"
         assert hasattr(node, "run"), "Node should have run method"
         assert hasattr(node, "execute"), "Node should have execute method"
-        assert hasattr(
-            node, "pre_execution_hook"
-        ), "Node should have pre_execution_hook"
-        assert hasattr(
-            node, "post_execution_hook"
-        ), "Node should have post_execution_hook"
+        assert hasattr(node, "pre_execution_hook"), (
+            "Node should have pre_execution_hook"
+        )
+        assert hasattr(node, "post_execution_hook"), (
+            "Node should have post_execution_hook"
+        )
 
     # Test basic execution works for each node
     test_params = {
@@ -444,6 +444,6 @@ def test_migration_completeness():
 
         result = node.execute(**params)
         assert isinstance(result, dict), f"{node_class} should return dict result"
-        assert (
-            "signature_optimized" in result
-        ), f"{node_class} should include signature_optimized flag"
+        assert "signature_optimized" in result, (
+            f"{node_class} should include signature_optimized flag"
+        )

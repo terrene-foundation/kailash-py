@@ -137,9 +137,9 @@ class TestDataFlowUserFlows:
             )
             migrations_after_count = migrations_after[0]
 
-            assert (
-                migrations_after_count == migrations_before_count
-            ), "Auto-migration should not run again"
+            assert migrations_after_count == migrations_before_count, (
+                "Auto-migration should not run again"
+            )
         finally:
             await conn.close()
 
@@ -317,9 +317,9 @@ class TestDataFlowUserFlows:
         discovered_col_names = [col["name"] for col in table_columns]
 
         for random_col in random_cols:
-            assert (
-                random_col in discovered_col_names
-            ), f"Random column {random_col} not discovered"
+            assert random_col in discovered_col_names, (
+                f"Random column {random_col} not discovered"
+            )
 
         # Register the random table as a model
         result = db.register_schema_as_models(tables=[random_table])

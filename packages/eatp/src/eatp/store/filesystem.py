@@ -85,23 +85,16 @@ def validate_id(id_value: str, id_name: str = "id") -> str:
         raise ValueError(f"Invalid {id_name}: must not be empty")
 
     if len(stripped) > 1024:
-        raise ValueError(
-            f"Invalid {id_name}: exceeds maximum length of 1024 characters "
-            f"(got {len(stripped)})"
-        )
+        raise ValueError(f"Invalid {id_name}: exceeds maximum length of 1024 characters (got {len(stripped)})")
 
     if "\x00" in stripped:
-        raise ValueError(
-            f"Invalid {id_name}: must not contain null bytes, got: {id_value!r}"
-        )
+        raise ValueError(f"Invalid {id_name}: must not contain null bytes, got: {id_value!r}")
 
     # Check for path traversal components by splitting on path separators
     parts = stripped.replace("\\", "/").split("/")
     for part in parts:
         if part in (".", ".."):
-            raise ValueError(
-                f"Invalid {id_name}: path traversal detected in {id_value!r}"
-            )
+            raise ValueError(f"Invalid {id_name}: path traversal detected in {id_value!r}")
 
     # Reject absolute paths
     if stripped.startswith("/") or (len(stripped) >= 2 and stripped[1] == ":"):
@@ -183,8 +176,7 @@ class FilesystemStore(TrustStore):
         """Raise RuntimeError if the store has not been initialized."""
         if not self._initialized:
             raise RuntimeError(
-                "FilesystemStore is not initialized. "
-                "Call await store.initialize() before performing operations."
+                "FilesystemStore is not initialized. Call await store.initialize() before performing operations."
             )
 
     def _chain_path(self, agent_id: str) -> Path:
@@ -245,9 +237,7 @@ class FilesystemStore(TrustStore):
         content = json.dumps(envelope, indent=2, sort_keys=False, default=str)
 
         # Write to a temp file in the same directory so rename is atomic
-        fd, tmp_path = tempfile.mkstemp(
-            dir=str(self._base_dir), suffix=".tmp", prefix=".chain_"
-        )
+        fd, tmp_path = tempfile.mkstemp(dir=str(self._base_dir), suffix=".tmp", prefix=".chain_")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(content)

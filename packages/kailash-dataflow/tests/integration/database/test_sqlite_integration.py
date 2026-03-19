@@ -123,9 +123,9 @@ class TestSQLiteConnection:
             results, run_id = runtime.execute(workflow.build())
 
             assert "create_product" in results, "Create node result missing"
-            assert not results["create_product"].get(
-                "error"
-            ), f"ProductCreateNode failed: {results['create_product']}"
+            assert not results["create_product"].get("error"), (
+                f"ProductCreateNode failed: {results['create_product']}"
+            )
 
             # Test LIST node
             workflow = WorkflowBuilder()
@@ -138,9 +138,9 @@ class TestSQLiteConnection:
             results, run_id = runtime.execute(workflow.build())
 
             assert "list_products" in results, "List node result missing"
-            assert not results["list_products"].get(
-                "error"
-            ), f"ProductListNode failed: {results['list_products']}"
+            assert not results["list_products"].get("error"), (
+                f"ProductListNode failed: {results['list_products']}"
+            )
 
             product_list = results["list_products"].get("result", {}).get("data", [])
             # Note: May be empty if CREATE and LIST use different database instances

@@ -47,9 +47,9 @@ class TestErrorEnhancerCatalogIntegration:
             "configuration",
             "runtime",
         }
-        assert expected_categories.issubset(
-            categories
-        ), f"Missing categories: {expected_categories - categories}"
+        assert expected_categories.issubset(categories), (
+            f"Missing categories: {expected_categories - categories}"
+        )
 
     def test_all_catalog_entries_have_complete_structure(self):
         """Test that all catalog entries have required fields."""
@@ -65,14 +65,14 @@ class TestErrorEnhancerCatalogIntegration:
 
             # Verify causes and solutions are not empty
             assert len(error_def["causes"]) > 0, f"Error {error_code} has no causes"
-            assert (
-                len(error_def["solutions"]) > 0
-            ), f"Error {error_code} has no solutions"
+            assert len(error_def["solutions"]) > 0, (
+                f"Error {error_code} has no solutions"
+            )
 
             # Verify at least one solution has a description
-            assert any(
-                sol.get("description") for sol in error_def["solutions"]
-            ), f"Error {error_code} has no solution descriptions"
+            assert any(sol.get("description") for sol in error_def["solutions"]), (
+                f"Error {error_code} has no solution descriptions"
+            )
 
     def test_catalog_caching_works_correctly(self):
         """Test that catalog is cached after first load."""
@@ -258,9 +258,9 @@ class TestErrorEnhancerMessageQuality:
 
         # Every solution should have either code example or description
         for solution in enhanced.solutions:
-            assert (
-                solution.description or solution.code_example
-            ), "Solution should have description or code example"
+            assert solution.description or solution.code_example, (
+                "Solution should have description or code example"
+            )
 
 
 @pytest.mark.integration
@@ -284,9 +284,9 @@ class TestErrorEnhancerPerformance:
         avg_time = duration / iterations
 
         # Should be very fast (< 1ms per enhancement on average)
-        assert (
-            avg_time < 0.001
-        ), f"Error enhancement too slow: {avg_time*1000:.2f}ms per enhancement"
+        assert avg_time < 0.001, (
+            f"Error enhancement too slow: {avg_time * 1000:.2f}ms per enhancement"
+        )
 
     def test_catalog_loading_performance(self):
         """Test that catalog loading is reasonably fast."""
@@ -303,7 +303,7 @@ class TestErrorEnhancerPerformance:
         load_time = end - start
 
         # Should load in reasonable time (< 100ms)
-        assert load_time < 0.1, f"Catalog loading too slow: {load_time*1000:.2f}ms"
+        assert load_time < 0.1, f"Catalog loading too slow: {load_time * 1000:.2f}ms"
         assert len(catalog) > 0, "Catalog should not be empty"
 
     def test_catalog_caching_provides_performance_benefit(self):
@@ -327,9 +327,9 @@ class TestErrorEnhancerPerformance:
         cached_load = end2 - start2
 
         # Cached load should be at least 10x faster
-        assert (
-            cached_load < first_load / 10
-        ), f"Cache not effective: first={first_load*1000:.2f}ms, cached={cached_load*1000:.2f}ms"
+        assert cached_load < first_load / 10, (
+            f"Cache not effective: first={first_load * 1000:.2f}ms, cached={cached_load * 1000:.2f}ms"
+        )
 
 
 @pytest.mark.integration

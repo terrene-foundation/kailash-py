@@ -859,11 +859,11 @@ class AtomicMigrationExecutor:
                     await self.connection_manager.execute_query(operation.sql)
                     operations_completed += 1
                     logger.debug(
-                        f"Completed operation {i+1}/{len(operations)}: {operation.type}"
+                        f"Completed operation {i + 1}/{len(operations)}: {operation.type}"
                     )
 
                 except Exception as op_error:
-                    logger.error(f"Operation {i+1} failed: {op_error}")
+                    logger.error(f"Operation {i + 1} failed: {op_error}")
                     # Rollback transaction
                     await self.connection_manager.rollback_transaction()
                     rollback_executed = True

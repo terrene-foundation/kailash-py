@@ -149,9 +149,7 @@ class TestMetricsCollectorBackwardCompat:
         collector = TrustMetricsCollector(max_agents=100)
         collector.record_posture("agent-001", TrustPosture.DELEGATED)
         collector.record_transition("upgrade")
-        collector.record_constraint_evaluation(
-            passed=False, failed_dimensions=["test"], gaming_flags=["flag"]
-        )
+        collector.record_constraint_evaluation(passed=False, failed_dimensions=["test"], gaming_flags=["flag"])
 
         collector.reset()
 

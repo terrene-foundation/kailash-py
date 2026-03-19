@@ -4,6 +4,7 @@
 Validates that environment configuration files have all required variables
 and follow security best practices.
 """
+
 import argparse
 import sys
 from pathlib import Path

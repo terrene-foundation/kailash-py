@@ -56,12 +56,12 @@ class TestHotMemoryTier:
         print(f"Hot tier 99th percentile: {p99_time:.4f}ms")
 
         # Performance requirements
-        assert (
-            avg_time < 1.0
-        ), f"Hot tier average access time {avg_time:.4f}ms exceeds 1ms requirement"
-        assert (
-            p99_time < 1.0
-        ), f"Hot tier 99th percentile {p99_time:.4f}ms exceeds 1ms requirement"
+        assert avg_time < 1.0, (
+            f"Hot tier average access time {avg_time:.4f}ms exceeds 1ms requirement"
+        )
+        assert p99_time < 1.0, (
+            f"Hot tier 99th percentile {p99_time:.4f}ms exceeds 1ms requirement"
+        )
 
     @pytest.mark.asyncio
     async def test_hot_tier_eviction_policies(self):
@@ -80,9 +80,9 @@ class TestHotMemoryTier:
         await lru_tier.put("key4", "value4")
 
         assert await lru_tier.exists("key1"), "Recently used key1 should not be evicted"
-        assert not await lru_tier.exists(
-            "key2"
-        ), "Least recently used key2 should be evicted"
+        assert not await lru_tier.exists("key2"), (
+            "Least recently used key2 should be evicted"
+        )
         assert await lru_tier.exists("key3"), "Key3 should still exist"
         assert await lru_tier.exists("key4"), "New key4 should exist"
 
@@ -160,12 +160,12 @@ class TestWarmMemoryTier:
         print(f"Warm tier 99th percentile: {p99_time:.4f}ms")
 
         # Performance requirements
-        assert (
-            avg_time < 10.0
-        ), f"Warm tier average access time {avg_time:.4f}ms exceeds 10ms requirement"
-        assert (
-            p99_time < 10.0
-        ), f"Warm tier 99th percentile {p99_time:.4f}ms exceeds 10ms requirement"
+        assert avg_time < 10.0, (
+            f"Warm tier average access time {avg_time:.4f}ms exceeds 10ms requirement"
+        )
+        assert p99_time < 10.0, (
+            f"Warm tier 99th percentile {p99_time:.4f}ms exceeds 10ms requirement"
+        )
 
     @pytest.mark.asyncio
     async def test_warm_tier_persistence(self, warm_tier):
@@ -226,12 +226,12 @@ class TestColdMemoryTier:
         print(f"Cold tier 99th percentile: {p99_time:.4f}ms")
 
         # Performance requirements
-        assert (
-            avg_time < 100.0
-        ), f"Cold tier average access time {avg_time:.4f}ms exceeds 100ms requirement"
-        assert (
-            p99_time < 100.0
-        ), f"Cold tier 99th percentile {p99_time:.4f}ms exceeds 100ms requirement"
+        assert avg_time < 100.0, (
+            f"Cold tier average access time {avg_time:.4f}ms exceeds 100ms requirement"
+        )
+        assert p99_time < 100.0, (
+            f"Cold tier 99th percentile {p99_time:.4f}ms exceeds 100ms requirement"
+        )
 
     @pytest.mark.asyncio
     async def test_cold_tier_compression(self, cold_tier):
@@ -244,9 +244,9 @@ class TestColdMemoryTier:
 
         # Should retrieve correct data despite compression
         result = await cold_tier.get(test_key)
-        assert (
-            result == large_value
-        ), "Cold tier should correctly compress and decompress data"
+        assert result == large_value, (
+            "Cold tier should correctly compress and decompress data"
+        )
 
 
 class TestTierManager:
@@ -274,9 +274,9 @@ class TestTierManager:
 
         patterns = tier_manager.get_access_patterns()
         assert test_key in patterns, "Access pattern should be tracked"
-        assert (
-            patterns[test_key]["recent_accesses"] == 3
-        ), "Should track correct number of accesses"
+        assert patterns[test_key]["recent_accesses"] == 3, (
+            "Should track correct number of accesses"
+        )
 
     @pytest.mark.asyncio
     async def test_promotion_logic(self, tier_manager):
@@ -291,17 +291,17 @@ class TestTierManager:
         should_promote_to_warm = await tier_manager.should_promote(
             test_key, "cold", "warm"
         )
-        assert (
-            should_promote_to_warm
-        ), "Should promote from cold to warm after sufficient accesses"
+        assert should_promote_to_warm, (
+            "Should promote from cold to warm after sufficient accesses"
+        )
 
         # Should also promote from cold to hot
         should_promote_to_hot = await tier_manager.should_promote(
             test_key, "cold", "hot"
         )
-        assert (
-            should_promote_to_hot
-        ), "Should promote from cold to hot after sufficient accesses"
+        assert should_promote_to_hot, (
+            "Should promote from cold to hot after sufficient accesses"
+        )
 
 
 class TestEnterpriseMemorySystem:
@@ -469,9 +469,9 @@ class TestSignatureMemoryIntegration:
         # High computation cost should get hot tier hint
         mock_signature.metadata = {"computation_cost": "high"}
         tier_hint = memory_integration._determine_tier_hint(mock_signature, "result")
-        assert (
-            tier_hint == "hot"
-        ), "High computation cost signature should get hot tier hint"
+        assert tier_hint == "hot", (
+            "High computation cost signature should get hot tier hint"
+        )
 
     @pytest.mark.asyncio
     async def test_cache_key_generation(self, memory_integration, mock_signature):
@@ -480,26 +480,26 @@ class TestSignatureMemoryIntegration:
 
         # Test exact key generation
         exact_key = memory_integration._generate_exact_key(mock_signature, inputs)
-        assert exact_key.startswith(
-            "sig_exact:"
-        ), "Exact key should have correct prefix"
+        assert exact_key.startswith("sig_exact:"), (
+            "Exact key should have correct prefix"
+        )
 
         # Test semantic key generation
         semantic_key = memory_integration._generate_semantic_key(mock_signature, inputs)
-        assert semantic_key.startswith(
-            "sig_semantic:"
-        ), "Semantic key should have correct prefix"
+        assert semantic_key.startswith("sig_semantic:"), (
+            "Semantic key should have correct prefix"
+        )
 
         # Test fuzzy key generation
         fuzzy_key = memory_integration._generate_fuzzy_key(mock_signature, inputs)
-        assert fuzzy_key.startswith(
-            "sig_fuzzy:"
-        ), "Fuzzy key should have correct prefix"
+        assert fuzzy_key.startswith("sig_fuzzy:"), (
+            "Fuzzy key should have correct prefix"
+        )
 
         # Keys should be different
-        assert (
-            exact_key != semantic_key != fuzzy_key
-        ), "Different strategies should generate different keys"
+        assert exact_key != semantic_key != fuzzy_key, (
+            "Different strategies should generate different keys"
+        )
 
 
 class TestPerformanceRequirements:
@@ -544,17 +544,17 @@ class TestPerformanceRequirements:
         results, elapsed = await concurrent_access()
 
         # Verify all results are correct
-        assert len([r for r in results if r is not None]) == len(
-            test_data
-        ), "All data should be retrievable"
+        assert len([r for r in results if r is not None]) == len(test_data), (
+            "All data should be retrievable"
+        )
 
         # Performance requirement: Should handle 100 concurrent operations efficiently
         print(
-            f"100 concurrent operations completed in {elapsed:.4f}s ({elapsed*10:.2f}ms avg)"
+            f"100 concurrent operations completed in {elapsed:.4f}s ({elapsed * 10:.2f}ms avg)"
         )
-        assert (
-            elapsed < 1.0
-        ), f"Concurrent operations took {elapsed:.4f}s, should be under 1 second"
+        assert elapsed < 1.0, (
+            f"Concurrent operations took {elapsed:.4f}s, should be under 1 second"
+        )
 
     @pytest.mark.asyncio
     async def test_memory_usage_limits(self):
@@ -573,9 +573,9 @@ class TestPerformanceRequirements:
         hot_size = stats["tiers"]["hot"]["size"]
 
         # Hot tier should not exceed configured limit
-        assert (
-            hot_size <= config["hot_max_size"]
-        ), f"Hot tier size {hot_size} exceeds limit {config['hot_max_size']}"
+        assert hot_size <= config["hot_max_size"], (
+            f"Hot tier size {hot_size} exceeds limit {config['hot_max_size']}"
+        )
 
     @pytest.mark.asyncio
     async def test_end_to_end_performance(self):
@@ -600,7 +600,7 @@ class TestPerformanceRequirements:
                     f"workload_key_{i}", {"data": f"workload_value_{i}", "id": i}
                 )
             else:  # 67% reads
-                await memory_system.get(f"workload_key_{i//3}")
+                await memory_system.get(f"workload_key_{i // 3}")
 
         elapsed = time.perf_counter() - start_time
         ops_per_second = operations_count / elapsed
@@ -610,9 +610,9 @@ class TestPerformanceRequirements:
         )
 
         # Performance requirement: Should handle reasonable throughput
-        assert (
-            ops_per_second > 100
-        ), f"Throughput {ops_per_second:.0f} ops/sec is below minimum requirement of 100 ops/sec"
+        assert ops_per_second > 100, (
+            f"Throughput {ops_per_second:.0f} ops/sec is below minimum requirement of 100 ops/sec"
+        )
 
         # Get final statistics
         final_stats = await memory_system.get_system_stats()
@@ -646,9 +646,9 @@ class TestPerformanceBenchmarks:
         avg_latency_us = (elapsed / iterations) * 1000000  # microseconds
 
         print(f"Hot tier average latency: {avg_latency_us:.2f}μs")
-        assert (
-            avg_latency_us < 100
-        ), f"Hot tier latency {avg_latency_us:.2f}μs exceeds 100μs benchmark"
+        assert avg_latency_us < 100, (
+            f"Hot tier latency {avg_latency_us:.2f}μs exceeds 100μs benchmark"
+        )
 
     @pytest.mark.asyncio
     async def test_system_throughput_benchmark(self):
@@ -679,9 +679,9 @@ class TestPerformanceBenchmarks:
         throughput = reads / elapsed
 
         print(f"System read throughput: {throughput:.0f} ops/sec")
-        assert (
-            throughput > 1000
-        ), f"Read throughput {throughput:.0f} ops/sec is below 1000 ops/sec benchmark"
+        assert throughput > 1000, (
+            f"Read throughput {throughput:.0f} ops/sec is below 1000 ops/sec benchmark"
+        )
 
 
 if __name__ == "__main__":

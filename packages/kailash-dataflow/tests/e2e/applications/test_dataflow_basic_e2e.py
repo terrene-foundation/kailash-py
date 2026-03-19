@@ -93,9 +93,9 @@ async def test_basic_dataflow_operations(db_config):
         users = list_result.get("records", [])
         print(f"DEBUG: users = {users}")
         assert len(users) >= 1, f"Expected at least 1 user, got {len(users)}"
-        assert any(
-            u.get("email") == "test@example.com" for u in users
-        ), f"Could not find user with email test@example.com in {users}"
+        assert any(u.get("email") == "test@example.com" for u in users), (
+            f"Could not find user with email test@example.com in {users}"
+        )
     elif db_config["type"] == "sqlite":
         # SQLite may have different response format, verify operation completed
         assert list_result is not None

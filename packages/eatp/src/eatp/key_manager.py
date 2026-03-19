@@ -778,10 +778,7 @@ class AWSKMSKeyManager(KeyManagerInterface):
             self._kms_client = kms_client
         else:
             if not BOTO3_AVAILABLE:
-                raise ImportError(
-                    "boto3 is required for AWS KMS key management. "
-                    "Install with: pip install boto3"
-                )
+                raise ImportError("boto3 is required for AWS KMS key management. Install with: pip install boto3")
             self._kms_client = boto3.client("kms", region_name=region_name)
 
         self._pending_deletion_days = pending_deletion_days
@@ -857,8 +854,7 @@ class AWSKMSKeyManager(KeyManagerInterface):
             return payload
         else:
             raise KeyManagerError(
-                message=f"Unsupported payload type: {type(payload).__name__}. "
-                "Expected str, dict, or bytes.",
+                message=f"Unsupported payload type: {type(payload).__name__}. Expected str, dict, or bytes.",
                 operation="payload_conversion",
             )
 
@@ -995,9 +991,7 @@ class AWSKMSKeyManager(KeyManagerInterface):
         ) as e:
             raise self._handle_kms_error(e, "sign", key_id) from e
 
-    async def verify(
-        self, payload: Union[str, dict, bytes], signature: str, public_key: str
-    ) -> bool:
+    async def verify(self, payload: Union[str, dict, bytes], signature: str, public_key: str) -> bool:
         """
         Verify an ECDSA P-256 signature using AWS KMS Verify API.
 

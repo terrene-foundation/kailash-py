@@ -24,9 +24,9 @@ class TestActualDataFlowAPI:
         assert hasattr(db, "get_model_info"), "get_model_info method should exist"
         assert hasattr(db, "model"), "model decorator should exist"
         assert hasattr(db, "discover_schema"), "discover_schema method should exist"
-        assert hasattr(
-            db, "register_schema_as_models"
-        ), "register_schema_as_models should exist"
+        assert hasattr(db, "register_schema_as_models"), (
+            "register_schema_as_models should exist"
+        )
 
         # Verify actual properties exist
         assert hasattr(db, "config"), "config property should exist"

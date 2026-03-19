@@ -216,7 +216,7 @@ async def demonstrate_regression_detection():
             )
 
             baseline_metrics.append(metrics)
-            print(f"   Baseline {i+1}: {metrics.execution_time_ms:.2f}ms")
+            print(f"   Baseline {i + 1}: {metrics.execution_time_ms:.2f}ms")
 
         # Create migration that simulates performance regression
         print("\\n⚠️  Simulating performance regression...")
@@ -318,7 +318,7 @@ async def demonstrate_historical_analysis():
 
             historical_metrics.append(metrics)
             print(
-                f"   Migration {i+1} ({complexity}): {metrics.execution_time_ms:.2f}ms"
+                f"   Migration {i + 1} ({complexity}): {metrics.execution_time_ms:.2f}ms"
             )
 
         # Analyze trends

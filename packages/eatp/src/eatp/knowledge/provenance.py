@@ -234,9 +234,7 @@ class ProvenanceRecord:
         # wasDerivedFrom relationships
         if ProvRelation.WAS_DERIVED_FROM.value in self.relations:
             prov_json["wasDerivedFrom"] = {}
-            for i, source_id in enumerate(
-                self.relations[ProvRelation.WAS_DERIVED_FROM.value]
-            ):
+            for i, source_id in enumerate(self.relations[ProvRelation.WAS_DERIVED_FROM.value]):
                 rel_id = f"_:{self.entity_id}_der_{i}"
                 prov_json["wasDerivedFrom"][rel_id] = {
                     "prov:generatedEntity": self.entity_id,
@@ -309,9 +307,7 @@ class ProvenanceChain:
         """
         self._store = provenance_store
 
-    async def get_lineage(
-        self, entity_id: str, max_depth: int = 10
-    ) -> List[ProvenanceRecord]:
+    async def get_lineage(self, entity_id: str, max_depth: int = 10) -> List[ProvenanceRecord]:
         """
         Get the complete lineage of an entity using BFS traversal.
 
@@ -353,9 +349,7 @@ class ProvenanceChain:
 
         return lineage
 
-    async def verify_chain_integrity(
-        self, entity_id: str, max_depth: int = 100
-    ) -> bool:
+    async def verify_chain_integrity(self, entity_id: str, max_depth: int = 100) -> bool:
         """
         Verify that all entities in the derivation chain exist.
 

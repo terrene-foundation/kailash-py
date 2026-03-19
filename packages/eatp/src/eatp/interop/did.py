@@ -380,8 +380,7 @@ def _validate_did_string(did: str) -> tuple[str, str]:
 
     if method not in SUPPORTED_DID_METHODS:
         raise DIDValidationError(
-            f"Unsupported DID method '{method}'. "
-            f"Supported methods: {', '.join(sorted(SUPPORTED_DID_METHODS))}",
+            f"Unsupported DID method '{method}'. Supported methods: {', '.join(sorted(SUPPORTED_DID_METHODS))}",
             details={"did": did, "method": method},
         )
 

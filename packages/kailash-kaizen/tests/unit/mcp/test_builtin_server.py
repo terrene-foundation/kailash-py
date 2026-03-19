@@ -88,9 +88,9 @@ class TestToolMetadata:
             file.file_exists,
         ]
         for tool_func in tools:
-            assert hasattr(
-                tool_func, "_is_mcp_tool"
-            ), f"{tool_func.__name__} missing _is_mcp_tool attribute"
+            assert hasattr(tool_func, "_is_mcp_tool"), (
+                f"{tool_func.__name__} missing _is_mcp_tool attribute"
+            )
             assert tool_func._is_mcp_tool is True
             assert hasattr(tool_func, "_mcp_name")
             assert hasattr(tool_func, "_mcp_description")
@@ -137,9 +137,9 @@ class TestToolMetadata:
             web.extract_links,
         ]
         for tool_func in all_tools:
-            assert inspect.iscoroutinefunction(
-                tool_func
-            ), f"{tool_func.__name__} is not async"
+            assert inspect.iscoroutinefunction(tool_func), (
+                f"{tool_func.__name__} is not async"
+            )
 
 
 class TestMCPToolDecorator:

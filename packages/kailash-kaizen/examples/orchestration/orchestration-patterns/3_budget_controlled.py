@@ -165,7 +165,7 @@ async def main():
             print(
                 f"    Spent: ${metadata.budget_spent_usd:.6f} / ${metadata.budget_limit_usd:.2f}"
             )
-            print(f"    Remaining: ${budget_remaining:.6f} ({100-budget_pct:.1f}%)")
+            print(f"    Remaining: ${budget_remaining:.6f} ({100 - budget_pct:.1f}%)")
             print(f"    Status: {metadata.status.value}")
             print(f"    Tasks completed: {metadata.completed_tasks}")
 

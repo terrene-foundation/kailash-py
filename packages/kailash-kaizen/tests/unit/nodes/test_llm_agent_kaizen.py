@@ -20,9 +20,9 @@ class TestLLMAgentKaizenExtensions:
         agent = LLMAgentNode()
 
         # Check for extension point method
-        assert hasattr(
-            agent, "_get_extension_points"
-        ), "LLMAgentNode should have _get_extension_points method"
+        assert hasattr(agent, "_get_extension_points"), (
+            "LLMAgentNode should have _get_extension_points method"
+        )
 
     def test_extension_points_structure(self):
         """Test that extension points have expected structure."""
@@ -30,17 +30,17 @@ class TestLLMAgentKaizenExtensions:
         extension_points = agent._get_extension_points()
 
         # Should be a dictionary
-        assert isinstance(
-            extension_points, dict
-        ), "Extension points should be a dictionary"
+        assert isinstance(extension_points, dict), (
+            "Extension points should be a dictionary"
+        )
 
         # Should have expected keys
         expected_keys = ["pre_execute", "post_execute", "on_error"]
         for key in expected_keys:
             assert key in extension_points, f"Extension points should include '{key}'"
-            assert callable(
-                extension_points[key]
-            ), f"Extension point '{key}' should be callable"
+            assert callable(extension_points[key]), (
+                f"Extension point '{key}' should be callable"
+            )
 
     def test_pre_execute_hook_called(self):
         """Test that pre_execute hook is called during execution."""
@@ -68,9 +68,9 @@ class TestLLMAgentKaizenExtensions:
 
         # Verify hook was called
         assert hook_called["called"], "pre_execute_hook should be called"
-        assert (
-            hook_called["inputs"] is not None
-        ), "pre_execute_hook should receive inputs"
+        assert hook_called["inputs"] is not None, (
+            "pre_execute_hook should receive inputs"
+        )
 
     def test_post_execute_hook_called(self):
         """Test that post_execute hook is called after execution."""
@@ -98,9 +98,9 @@ class TestLLMAgentKaizenExtensions:
 
         # Verify hook was called
         assert hook_called["called"], "post_execute_hook should be called"
-        assert (
-            hook_called["result"] is not None
-        ), "post_execute_hook should receive result"
+        assert hook_called["result"] is not None, (
+            "post_execute_hook should receive result"
+        )
 
     def test_on_error_hook_called_on_failure(self):
         """Test that on_error hook is called when errors occur."""

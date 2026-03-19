@@ -426,12 +426,12 @@ async def test_timeout_interrupt():
 
             # Verify interrupt reason from exception
             assert e.reason is not None, "InterruptedError should have reason"
-            assert (
-                e.reason.source == InterruptSource.TIMEOUT
-            ), f"Should be timeout interrupt, got: {e.reason.source}"
-            assert (
-                "timeout" in e.reason.message.lower()
-            ), f"Message should mention timeout, got: {e.reason.message}"
+            assert e.reason.source == InterruptSource.TIMEOUT, (
+                f"Should be timeout interrupt, got: {e.reason.source}"
+            )
+            assert "timeout" in e.reason.message.lower(), (
+                f"Message should mention timeout, got: {e.reason.message}"
+            )
 
             print("   ✓ Timeout interrupt triggered:")
             print(f"     Source: {e.reason.source.value}")
@@ -455,18 +455,18 @@ async def test_timeout_interrupt():
 
         if interrupted:
             # Verify checkpoint has interrupt metadata
-            assert (
-                state.status == "interrupted"
-            ), f"Checkpoint status should be interrupted, got: {state.status}"
-            assert (
-                "interrupt_reason" in state.metadata
-            ), "Checkpoint should have interrupt_reason metadata"
+            assert state.status == "interrupted", (
+                f"Checkpoint status should be interrupted, got: {state.status}"
+            )
+            assert "interrupt_reason" in state.metadata, (
+                "Checkpoint should have interrupt_reason metadata"
+            )
 
             # Verify interrupt metadata structure
             interrupt_metadata = state.metadata["interrupt_reason"]
-            assert (
-                interrupt_metadata["source"] == "timeout"
-            ), f"Interrupt source should be timeout, got: {interrupt_metadata['source']}"
+            assert interrupt_metadata["source"] == "timeout", (
+                f"Interrupt source should be timeout, got: {interrupt_metadata['source']}"
+            )
 
         timeout_step = state.step_number
         if interrupted:
@@ -753,15 +753,15 @@ async def test_budget_enforcement_interrupt():
         child2_reason = child_manager2.get_interrupt_reason()
 
         if child1_reason and interrupted_count > 0:
-            assert (
-                "Propagated from parent" in child1_reason.message
-            ), f"Child 1 should have propagated message, got: {child1_reason.message}"
+            assert "Propagated from parent" in child1_reason.message, (
+                f"Child 1 should have propagated message, got: {child1_reason.message}"
+            )
             print(f"     ✓ Child 1 interrupt propagated")
 
         if child2_reason and interrupted_count > 0:
-            assert (
-                "Propagated from parent" in child2_reason.message
-            ), f"Child 2 should have propagated message, got: {child2_reason.message}"
+            assert "Propagated from parent" in child2_reason.message, (
+                f"Child 2 should have propagated message, got: {child2_reason.message}"
+            )
             print(f"     ✓ Child 2 interrupt propagated")
 
         # Verify all checkpoints saved

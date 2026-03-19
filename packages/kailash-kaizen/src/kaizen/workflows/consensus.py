@@ -112,7 +112,7 @@ class ConsensusWorkflow:
                         "max_tokens": agent.config.get("max_tokens", 600),
                     },
                 ),
-                "role": getattr(agent, "role", f"Expert {i+1}"),
+                "role": getattr(agent, "role", f"Expert {i + 1}"),
                 "consensus_context": {
                     "topic": self.topic,
                     "expertise": agent.config.get("expertise", "general"),
@@ -121,7 +121,7 @@ class ConsensusWorkflow:
                 "coordinator_id": "consensus_coordinator",
                 "a2a_enabled": True,
                 "system_prompt": (
-                    f"You are {getattr(agent, 'role', f'Expert {i+1}')} participating in consensus building. "
+                    f"You are {getattr(agent, 'role', f'Expert {i + 1}')} participating in consensus building. "
                     f"Topic: {self.topic}. "
                     f"Your expertise: {agent.config.get('expertise', 'general analysis')}. "
                     f"Work collaboratively to reach consensus. Present your perspective clearly, "

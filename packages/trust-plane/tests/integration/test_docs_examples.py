@@ -276,9 +276,9 @@ class TestDocumentationCompleteness:
             "What's Next",
         ]
         for section in required_sections:
-            assert (
-                section in content
-            ), f"tutorial.md missing required section: '{section}'"
+            assert section in content, (
+                f"tutorial.md missing required section: '{section}'"
+            )
 
     def test_concepts_has_all_sections(self):
         content = CONCEPTS_PATH.read_text(encoding="utf-8")
@@ -291,31 +291,31 @@ class TestDocumentationCompleteness:
             "Glossary",
         ]
         for section in required_sections:
-            assert (
-                section in content
-            ), f"concepts.md missing required section: '{section}'"
+            assert section in content, (
+                f"concepts.md missing required section: '{section}'"
+            )
 
     def test_demo_has_before_and_after(self):
         content = DEMO_PATH.read_text(encoding="utf-8")
-        assert (
-            "WITHOUT TrustPlane" in content
-        ), "demo-script.md must have a 'WITHOUT TrustPlane' section"
-        assert (
-            "WITH TrustPlane" in content
-        ), "demo-script.md must have a 'WITH TrustPlane' section"
+        assert "WITHOUT TrustPlane" in content, (
+            "demo-script.md must have a 'WITHOUT TrustPlane' section"
+        )
+        assert "WITH TrustPlane" in content, (
+            "demo-script.md must have a 'WITH TrustPlane' section"
+        )
 
     def test_tutorial_minimum_length(self):
         """Tutorial should be substantial (at least 500 lines)."""
         content = TUTORIAL_PATH.read_text(encoding="utf-8")
         line_count = content.count("\n")
-        assert (
-            line_count >= 500
-        ), f"tutorial.md has {line_count} lines, expected at least 500"
+        assert line_count >= 500, (
+            f"tutorial.md has {line_count} lines, expected at least 500"
+        )
 
     def test_concepts_minimum_length(self):
         """Concepts doc should be substantial (at least 200 lines)."""
         content = CONCEPTS_PATH.read_text(encoding="utf-8")
         line_count = content.count("\n")
-        assert (
-            line_count >= 200
-        ), f"concepts.md has {line_count} lines, expected at least 200"
+        assert line_count >= 200, (
+            f"concepts.md has {line_count} lines, expected at least 200"
+        )

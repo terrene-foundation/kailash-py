@@ -207,7 +207,7 @@ result = {'processed': True, 'id': parameters.get('id', 0)}
             success_rate = success_count / len(results)
 
             # Should handle most requests successfully
-            assert success_rate > 0.95, f"Only {success_rate*100:.1f}% success"
+            assert success_rate > 0.95, f"Only {success_rate * 100:.1f}% success"
 
             # Should complete reasonably fast
             assert duration < 30, f"Took {duration:.1f}s for 1000 requests"
@@ -357,9 +357,9 @@ result = {'success': True}
 
             # Enterprise execution should handle random errors gracefully
             # We test that the system is resilient and can execute successfully
-            assert (
-                success_count + error_count
-            ) == 20, f"Should complete all executions (successes: {success_count}, errors: {error_count})"
+            assert (success_count + error_count) == 20, (
+                f"Should complete all executions (successes: {success_count}, errors: {error_count})"
+            )
 
             # But safe workflow should still work
             for _ in range(3):  # Test fewer iterations for speed

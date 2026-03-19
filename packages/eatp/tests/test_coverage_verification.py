@@ -21,9 +21,7 @@ def _get_module_names():
     import eatp
 
     modules = set()
-    for importer, modname, ispkg in pkgutil.walk_packages(
-        eatp.__path__, prefix="eatp."
-    ):
+    for importer, modname, ispkg in pkgutil.walk_packages(eatp.__path__, prefix="eatp."):
         modules.add(modname)
     return sorted(modules)
 

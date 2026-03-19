@@ -297,7 +297,7 @@ result = {{
                     # Connect nodes sequentially
                     if node_index > 0:
                         prev_node = (
-                            f"node_{agent_index}_{workflow_index}_{node_index-1}"
+                            f"node_{agent_index}_{workflow_index}_{node_index - 1}"
                         )
                         workflow.add_edge(prev_node, node_id)
 

@@ -207,9 +207,9 @@ class TestConditionTriggers:
                 booking_complete_transition = t
                 break
 
-        assert (
-            booking_complete_transition is not None
-        ), "Booking complete transition not found"
+        assert booking_complete_transition is not None, (
+            "Booking complete transition not found"
+        )
 
         trigger = booking_complete_transition.trigger
 
@@ -268,9 +268,9 @@ class TestTransitionPriority:
         assert cancel_priority is not None
         for pathway, priority in priorities:
             if pathway is not None:
-                assert (
-                    cancel_priority >= priority
-                ), f"Cancel priority ({cancel_priority}) should be >= {pathway} priority ({priority})"
+                assert cancel_priority >= priority, (
+                    f"Cancel priority ({cancel_priority}) should be >= {pathway} priority ({priority})"
+                )
 
     def test_faq_has_moderate_priority(self):
         """Test that FAQ has moderate priority."""

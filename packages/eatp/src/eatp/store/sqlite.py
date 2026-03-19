@@ -93,8 +93,7 @@ class SqliteTrustStore(TrustStore):
         """Raise RuntimeError if the store has not been initialized."""
         if not self._initialized:
             raise RuntimeError(
-                "SqliteTrustStore is not initialized. "
-                "Call await store.initialize() before performing operations."
+                "SqliteTrustStore is not initialized. Call await store.initialize() before performing operations."
             )
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -381,9 +380,7 @@ class SqliteTrustStore(TrustStore):
         self._require_initialized()
         conn = self._get_connection()
 
-        cursor = conn.execute(
-            "SELECT agent_id, chain_data FROM trust_chains WHERE active = 1"
-        )
+        cursor = conn.execute("SELECT agent_id, chain_data FROM trust_chains WHERE active = 1")
         missing: List[str] = []
         for row in cursor.fetchall():
             chain = self._deserialize_chain(row["chain_data"])
@@ -500,9 +497,7 @@ class SqliteTrustStore(TrustStore):
         Raises:
             RuntimeError: If the store is not initialized.
         """
-        return await asyncio.to_thread(
-            self._sync_list_chains, authority_id, active_only, limit, offset
-        )
+        return await asyncio.to_thread(self._sync_list_chains, authority_id, active_only, limit, offset)
 
     async def count_chains(
         self,
@@ -522,9 +517,7 @@ class SqliteTrustStore(TrustStore):
         Raises:
             RuntimeError: If the store is not initialized.
         """
-        return await asyncio.to_thread(
-            self._sync_count_chains, authority_id, active_only
-        )
+        return await asyncio.to_thread(self._sync_count_chains, authority_id, active_only)
 
     async def close(self) -> None:
         """Close the database connection and reset state."""

@@ -75,7 +75,7 @@ class FallbackStrategy:
         for i, (strategy, error) in enumerate(self.last_errors):
             strategy_name = strategy.__class__.__name__
             truncated = str(error)[:200]
-            error_msg += f"  {i+1}. {strategy_name}: {truncated}\n"
+            error_msg += f"  {i + 1}. {strategy_name}: {truncated}\n"
 
         raise RuntimeError(error_msg)
 

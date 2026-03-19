@@ -36,14 +36,14 @@ def test_registration_logging_includes_full_urls(caplog):
     log_output = caplog.text
 
     # Should contain host and port
-    assert (
-        "http://localhost:8000" in log_output
-    ), "Logging should include full URL with host and port"
+    assert "http://localhost:8000" in log_output, (
+        "Logging should include full URL with host and port"
+    )
 
     # Should contain workflow name in path
-    assert (
-        "/workflows/test_workflow" in log_output
-    ), "Logging should include workflow name in endpoint path"
+    assert "/workflows/test_workflow" in log_output, (
+        "Logging should include workflow name in endpoint path"
+    )
 
 
 def test_registration_logging_includes_all_endpoints(caplog):
@@ -61,9 +61,9 @@ def test_registration_logging_includes_all_endpoints(caplog):
 
     # Should mention all three standard endpoints
     assert "/execute" in log_output, "Logging should mention /execute endpoint"
-    assert (
-        "/workflow/info" in log_output
-    ), "Logging should mention /workflow/info endpoint"
+    assert "/workflow/info" in log_output, (
+        "Logging should mention /workflow/info endpoint"
+    )
     assert "/health" in log_output, "Logging should mention /health endpoint"
 
 
@@ -85,9 +85,9 @@ def test_registration_logging_shows_http_methods(caplog):
     has_post = "POST" in log_output or "post" in log_output.lower()
     has_get = "GET" in log_output or "get" in log_output.lower()
 
-    assert (
-        has_post or has_get
-    ), "Logging should indicate HTTP methods (POST/GET) for endpoints"
+    assert has_post or has_get, (
+        "Logging should indicate HTTP methods (POST/GET) for endpoints"
+    )
 
 
 def test_registration_logging_includes_multi_channel_info(caplog):
@@ -111,9 +111,9 @@ def test_registration_logging_includes_multi_channel_info(caplog):
 
     channel_count = sum([mentions_api, mentions_cli, mentions_mcp])
 
-    assert (
-        channel_count >= 2
-    ), "Logging should mention multiple channels (API, CLI, MCP)"
+    assert channel_count >= 2, (
+        "Logging should mention multiple channels (API, CLI, MCP)"
+    )
 
 
 def test_registration_logging_is_human_readable(caplog):
@@ -138,9 +138,9 @@ def test_registration_logging_is_human_readable(caplog):
     has_spacing = "  " in log_output  # Multiple spaces indicate indentation
 
     # At least one formatting indicator should be present
-    assert (
-        has_newlines or has_bullets or has_spacing
-    ), "Logging should be formatted for readability (newlines, bullets, or indentation)"
+    assert has_newlines or has_bullets or has_spacing, (
+        "Logging should be formatted for readability (newlines, bullets, or indentation)"
+    )
 
 
 def test_registration_logging_respects_different_ports(caplog):
@@ -161,6 +161,6 @@ def test_registration_logging_respects_different_ports(caplog):
     assert "9999" in log_output, "Logging should reflect custom port number"
 
     # Should show full URL with custom port
-    assert (
-        "localhost:9999" in log_output or "127.0.0.1:9999" in log_output
-    ), "Logging should include full URL with custom port"
+    assert "localhost:9999" in log_output or "127.0.0.1:9999" in log_output, (
+        "Logging should include full URL with custom port"
+    )

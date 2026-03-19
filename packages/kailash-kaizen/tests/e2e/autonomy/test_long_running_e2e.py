@@ -488,8 +488,7 @@ Provide a detailed summary with:
         # 1. Validate checkpoint creation
         checkpoints = await storage.list_checkpoints()
         assert len(checkpoints) >= 4, (
-            f"Should have at least 4 checkpoints for 2h+ run, "
-            f"got {len(checkpoints)}"
+            f"Should have at least 4 checkpoints for 2h+ run, got {len(checkpoints)}"
         )
         print(f"   ✓ Checkpoints created: {len(checkpoints)}")
 
@@ -516,9 +515,9 @@ Provide a detailed summary with:
         if config.planning_enabled:
             # Planning system creates TODO items
             # We validate by checking agent execution history
-            assert (
-                agent.current_step >= 5
-            ), "Planning should create multi-step execution"
+            assert agent.current_step >= 5, (
+                "Planning should create multi-step execution"
+            )
             print(f"   ✓ Planning system: {agent.current_step} planning cycles")
 
         # 4. Validate meta-controller engagement
@@ -817,9 +816,9 @@ Provide detailed summary with:
         print("\n[Phase 4] Validating autonomy systems...")
 
         checkpoints = await storage.list_checkpoints()
-        assert (
-            len(checkpoints) >= 4
-        ), f"Expected >=4 checkpoints, got {len(checkpoints)}"
+        assert len(checkpoints) >= 4, (
+            f"Expected >=4 checkpoints, got {len(checkpoints)}"
+        )
         print(f"   ✓ Checkpoints: {len(checkpoints)}")
 
         latest_checkpoint = checkpoints[0]
@@ -1055,9 +1054,9 @@ Provide comprehensive synthesis report with:
 
             # Verify checkpoint saved
             checkpoints_after_interrupt = await storage.list_checkpoints()
-            assert (
-                len(checkpoints_after_interrupt) > 0
-            ), "Should have checkpoint after interrupt"
+            assert len(checkpoints_after_interrupt) > 0, (
+                "Should have checkpoint after interrupt"
+            )
 
             print("   ✓ Checkpoint saved after interrupt")
 
@@ -1109,9 +1108,9 @@ Provide comprehensive synthesis report with:
         # Resume from checkpoint
         await agent2._autonomous_loop("Complete research synthesis")
 
-        assert (
-            agent2.current_step >= checkpoint_step
-        ), f"Should resume from step {checkpoint_step}"
+        assert agent2.current_step >= checkpoint_step, (
+            f"Should resume from step {checkpoint_step}"
+        )
 
         print(f"   ✓ Workflow restored: step {checkpoint_step} → {agent2.current_step}")
 

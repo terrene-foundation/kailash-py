@@ -71,8 +71,7 @@ class EATPMigration:
         self.database_url = database_url or os.getenv("POSTGRES_URL")
         if not self.database_url:
             raise ValueError(
-                "No database URL provided. Set POSTGRES_URL environment variable "
-                "or pass database_url parameter."
+                "No database URL provided. Set POSTGRES_URL environment variable or pass database_url parameter."
             )
 
     async def run(self) -> dict:
@@ -202,9 +201,7 @@ class EATPMigration:
                 )
 
                 if not column_exists:
-                    await conn.execute(
-                        f"ALTER TABLE delegation_records ADD COLUMN {column_name} {column_type}"
-                    )
+                    await conn.execute(f"ALTER TABLE delegation_records ADD COLUMN {column_name} {column_type}")
                     changes.append(f"Added column {column_name} to delegation_records")
 
         return changes
@@ -270,9 +267,7 @@ class EATPMigration:
                 )
 
                 if not column_exists:
-                    await conn.execute(
-                        f"ALTER TABLE audit_anchors ADD COLUMN {column_name} {column_type}"
-                    )
+                    await conn.execute(f"ALTER TABLE audit_anchors ADD COLUMN {column_name} {column_type}")
                     changes.append(f"Added column {column_name} to audit_anchors")
 
         return changes
@@ -318,9 +313,7 @@ class EATPMigration:
             )
 
             if not index_exists:
-                await conn.execute(
-                    f"CREATE INDEX {index_name} ON {table_name} ({column_name})"
-                )
+                await conn.execute(f"CREATE INDEX {index_name} ON {table_name} ({column_name})")
                 changes.append(f"Created index {index_name} on {table_name}")
 
         return changes

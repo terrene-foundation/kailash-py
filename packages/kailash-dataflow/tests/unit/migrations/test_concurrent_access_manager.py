@@ -178,7 +178,6 @@ class TestMigrationLockManager:
             patch.object(lock_manager, "acquire_migration_lock", return_value=True),
             patch.object(lock_manager, "release_migration_lock") as mock_release,
         ):
-
             async with lock_manager.migration_lock("test_schema"):
                 # Lock should be acquired at this point
                 pass
@@ -192,7 +191,6 @@ class TestMigrationLockManager:
     ):
         """Test migration lock context manager when acquisition fails."""
         with patch.object(lock_manager, "acquire_migration_lock", return_value=False):
-
             with pytest.raises(RuntimeError, match="Failed to acquire migration lock"):
                 async with lock_manager.migration_lock("test_schema"):
                     pass
@@ -206,7 +204,6 @@ class TestMigrationLockManager:
             patch.object(lock_manager, "acquire_migration_lock", return_value=True),
             patch.object(lock_manager, "release_migration_lock") as mock_release,
         ):
-
             with pytest.raises(ValueError):
                 async with lock_manager.migration_lock("test_schema"):
                     raise ValueError("Test exception")
@@ -301,7 +298,6 @@ class TestConcurrentMigrationQueue:
             "_execute_migration",
             return_value=MigrationResult(success=True, queue_id=queue_id),
         ):
-
             # Process queue
             results = await migration_queue.process_migration_queue()
 
@@ -342,7 +338,6 @@ class TestConcurrentMigrationQueue:
         with patch.object(
             migration_queue, "_execute_migration", side_effect=mock_execute
         ):
-
             # Process queue
             results = await migration_queue.process_migration_queue()
 
@@ -547,7 +542,6 @@ class TestDeadlockDetector:
                 )
             },
         ):
-
             # Test dependency monitoring
             dependency_graph = deadlock_detector.monitor_lock_dependencies()
 
@@ -793,9 +787,9 @@ class TestConcurrentAccessPerformance:
         execution_time = (end_time - start_time) * 1000  # Convert to milliseconds
 
         # Verify performance requirement (<1000ms for unit tests)
-        assert (
-            execution_time < 1000
-        ), f"Lock manager operations took {execution_time:.2f}ms"
+        assert execution_time < 1000, (
+            f"Lock manager operations took {execution_time:.2f}ms"
+        )
 
     @pytest.mark.timeout(1)
     def test_queue_manager_performance(self):
@@ -837,7 +831,7 @@ class TestConcurrentAccessPerformance:
                 schema_name=f"schema_{i}",
                 holder_process_id=f"process_{i}",
                 acquired_at=datetime.now(),
-                dependencies=[f"schema_{(i+1) % 20}"] if i < 19 else [],
+                dependencies=[f"schema_{(i + 1) % 20}"] if i < 19 else [],
             )
 
         # Test deadlock detection

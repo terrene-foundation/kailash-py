@@ -969,7 +969,7 @@ class SignatureValidator:
             # Check if current outputs can feed into next inputs
             # This is a simplified validation - real implementation would be more sophisticated
             if not self._check_flow_compatibility(current_sig, next_sig):
-                errors.append(f"Flow incompatibility between signature {i} and {i+1}")
+                errors.append(f"Flow incompatibility between signature {i} and {i + 1}")
 
         return errors
 
@@ -1316,9 +1316,9 @@ class SignatureCompiler:
 
         # Generate mock results for each output
         for output in outputs:
-            signature_result["result"][
-                output
-            ] = f"Generated {output} from signature processing of {inputs_str}"
+            signature_result["result"][output] = (
+                f"Generated {output} from signature processing of {inputs_str}"
+            )
 
         # Create a temporary file with the signature result
         temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)

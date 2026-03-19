@@ -29,8 +29,7 @@ class TrustVerificationFailedError(OrchestrationTrustError):
         cause: Optional[Exception] = None,
     ):
         super().__init__(
-            f"Trust verification failed for agent '{agent_id}' "
-            f"attempting action '{action}': {reason}",
+            f"Trust verification failed for agent '{agent_id}' attempting action '{action}': {reason}",
             cause=cause,
         )
         self.agent_id = agent_id
@@ -101,8 +100,7 @@ class ContextPropagationError(OrchestrationTrustError):
         cause: Optional[Exception] = None,
     ):
         super().__init__(
-            f"Failed to propagate context from '{parent_agent_id}' "
-            f"to '{child_agent_id}': {reason}",
+            f"Failed to propagate context from '{parent_agent_id}' to '{child_agent_id}': {reason}",
             cause=cause,
         )
         self.parent_agent_id = parent_agent_id

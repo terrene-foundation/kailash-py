@@ -108,7 +108,7 @@ class DebateWorkflow:
                         "max_tokens": agent.config.get("max_tokens", 800),
                     },
                 ),
-                "role": getattr(agent, "role", f"Participant {i+1}"),
+                "role": getattr(agent, "role", f"Participant {i + 1}"),
                 "debate_context": {
                     "topic": self.topic,
                     "stance": agent.config.get("stance", "neutral"),

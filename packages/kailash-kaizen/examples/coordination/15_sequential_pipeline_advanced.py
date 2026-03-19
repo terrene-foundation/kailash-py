@@ -287,7 +287,7 @@ def main():
     # Test 3: Very long pipeline (10 stages)
     pipeline6c = create_sequential_pipeline()
     for i in range(10):
-        pipeline6c.add_stage(PipelineStageAgent(BaseAgentConfig(), f"stage_{i+1}"))
+        pipeline6c.add_stage(PipelineStageAgent(BaseAgentConfig(), f"stage_{i + 1}"))
 
     result6c = pipeline6c.execute_pipeline("Test with 10 stages")
 

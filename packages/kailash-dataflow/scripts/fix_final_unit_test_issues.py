@@ -48,9 +48,7 @@ def apply_fixes():
     """Apply all fixes to test files."""
 
     # Fix test_migration_trigger_system.py
-    trigger_file = Path(
-        ""
-    )
+    trigger_file = Path("")
     if trigger_file.exists():
         with open(trigger_file, "r") as f:
             content = f.read()
@@ -71,9 +69,7 @@ def apply_fixes():
                 print(f"Fixed {trigger_file.name}")
 
     # Fix test_migration_history_manager.py
-    history_file = Path(
-        ""
-    )
+    history_file = Path("")
     if history_file.exists():
         with open(history_file, "r") as f:
             content = f.read()
@@ -97,9 +93,7 @@ def apply_fixes():
         print(f"Fixed {history_file.name}")
 
     # Fix test_batched_migration_executor_integration.py
-    executor_file = Path(
-        ""
-    )
+    executor_file = Path("")
     if executor_file.exists():
         with open(executor_file, "r") as f:
             lines = f.readlines()

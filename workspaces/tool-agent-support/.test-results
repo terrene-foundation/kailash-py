@@ -1,0 +1,30 @@
+commit: 33af3d5a205b1043358433b979e8f5a657075d49
+timestamp: 2026-03-18T23:59:00+08:00
+baseline_pass: 2768 (EATP from repo root)
+baseline_fail: 0
+final_pass: 2837 (EATP from package dir, excl pre-existing test_quickstart fail)
+final_fail: 0
+new_tests: 304
+regressions: 0
+command: pytest tests/ -x --tb=short -q --timeout=30
+
+# Test breakdown by module:
+# EATP BudgetTracker:       45 passed (packages/eatp/tests/unit/test_budget_tracker.py)
+# EATP PostureEvidence:     23 passed (packages/eatp/tests/unit/test_posture_evidence.py)
+# EATP PostureStore:        22 passed (packages/eatp/tests/integration/test_posture_store.py)
+# DataFlow SQL Aggregation: 68 passed (packages/kailash-dataflow/tests/unit/query/test_sql_builder.py)
+# Kaizen Manifest:          42 passed (packages/kailash-kaizen/tests/unit/test_manifest.py)
+# Kaizen Deploy:            30 passed (packages/kailash-kaizen/tests/unit/deploy/test_deploy.py)
+# Kaizen Composition:       32 passed (packages/kailash-kaizen/tests/unit/composition/)
+# Kaizen MCP Catalog:       42 passed (packages/kailash-kaizen/tests/unit/mcp/test_catalog_server.py)
+# Total new tests:          304
+
+# Pre-existing failures (NOT our regressions):
+# - kailash.nodes.base.Node import error affects DataFlow and Kaizen test suites
+#   when run from repo root (conftest cross-contamination)
+# - test_quickstart.py::TestMain::test_module_runnable_as_script (EATP pre-existing)
+
+# Notes:
+# - DataFlow/Kaizen tests require --noconftest or running from package dir
+#   to avoid pre-existing kailash core SDK import error
+# - All new modules are self-contained and don't depend on broken import chain

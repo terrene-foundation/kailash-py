@@ -224,9 +224,12 @@ class BaseAutonomousAgent(BaseAgent):
         self.cycle_count: int = 0
 
         # State persistence (TODO-168)
-        self.state_manager = state_manager or StateManager(
-            checkpoint_frequency=config.checkpoint_frequency,
-            checkpoint_interval=config.checkpoint_interval_seconds,  # StateManager uses 'checkpoint_interval'
+        self.state_manager = (
+            state_manager
+            or StateManager(
+                checkpoint_frequency=config.checkpoint_frequency,
+                checkpoint_interval=config.checkpoint_interval_seconds,  # StateManager uses 'checkpoint_interval'
+            )
         )
         self.current_step: int = 0
 

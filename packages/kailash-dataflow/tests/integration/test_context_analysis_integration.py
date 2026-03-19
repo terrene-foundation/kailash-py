@@ -70,7 +70,9 @@ async def test_parameter_error_with_inspector(db, capture, categorizer, analyzer
     # Create workflow with missing parameter (missing 'id')
     workflow = WorkflowBuilder()
     workflow.add_node(
-        "UserCreateNode", "create", {"name": "Alice"}  # Missing required 'id' parameter
+        "UserCreateNode",
+        "create",
+        {"name": "Alice"},  # Missing required 'id' parameter
     )
 
     runtime = LocalRuntime()

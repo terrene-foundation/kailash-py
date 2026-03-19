@@ -160,8 +160,7 @@ class LandingAIProvider(BaseDocumentProvider):
         cost = page_count * self.COST_PER_PAGE
 
         logger.info(
-            f"Extracting {file_path} with Landing AI "
-            f"({page_count} pages, ${cost:.3f})"
+            f"Extracting {file_path} with Landing AI ({page_count} pages, ${cost:.3f})"
         )
 
         # Import httpx for async HTTP calls

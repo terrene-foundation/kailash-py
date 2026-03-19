@@ -878,9 +878,9 @@ class TestCLITransportPerformance:
             elapsed = time.time() - start
 
             # Should handle 20 messages in <1 second
-            assert (
-                elapsed < 1.0
-            ), f"Throughput too low: {elapsed:.3f}s for {num_messages} messages"
+            assert elapsed < 1.0, (
+                f"Throughput too low: {elapsed:.3f}s for {num_messages} messages"
+            )
 
             # Should receive all responses
             assert len(lines) >= num_messages

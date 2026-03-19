@@ -143,9 +143,9 @@ async def test_auto_checkpoint_during_execution():
         # Validate checkpoints created
         checkpoints = await storage.list_checkpoints()
         print(f"   Checkpoints found: {len(checkpoints)}")
-        assert (
-            len(checkpoints) >= 1
-        ), f"Expected at least 1 checkpoint, got {len(checkpoints)}"
+        assert len(checkpoints) >= 1, (
+            f"Expected at least 1 checkpoint, got {len(checkpoints)}"
+        )
         print("   ✓ At least 1 checkpoint created")
 
         # Validate checkpoint structure
@@ -201,9 +201,9 @@ async def test_auto_checkpoint_during_execution():
 
         # Validate multiple checkpoints
         checkpoints2 = await storage.list_checkpoints()
-        assert (
-            len(checkpoints2) >= 1
-        ), f"Should create checkpoints, found {len(checkpoints2)}"
+        assert len(checkpoints2) >= 1, (
+            f"Should create checkpoints, found {len(checkpoints2)}"
+        )
         print(f"   ✓ {len(checkpoints2)} checkpoints created during execution")
 
         # Validate each checkpoint is loadable
@@ -291,9 +291,9 @@ async def test_auto_checkpoint_during_execution():
 
         # Validate retention limit enforced
         checkpoints4 = await storage.list_checkpoints()
-        assert (
-            len(checkpoints4) <= 3
-        ), f"Should keep max 3 checkpoints, found {len(checkpoints4)}"
+        assert len(checkpoints4) <= 3, (
+            f"Should keep max 3 checkpoints, found {len(checkpoints4)}"
+        )
         print(f"   ✓ Retention enforced: {len(checkpoints4)} <= 3 checkpoints")
 
         # Validate latest checkpoint still loadable
@@ -421,16 +421,16 @@ async def test_resume_from_checkpoint():
         print(f"   ✓ Agent 2 completed {agent2.current_step} steps")
 
         # Validate resumed from interruption point
-        assert (
-            agent2.current_step >= interruption_step
-        ), f"Should resume from step {interruption_step}, got {agent2.current_step}"
+        assert agent2.current_step >= interruption_step, (
+            f"Should resume from step {interruption_step}, got {agent2.current_step}"
+        )
         print("   ✓ Step counter continued from checkpoint")
 
         # Validate checkpoint history
         final_checkpoints = await storage.list_checkpoints()
-        assert len(final_checkpoints) > len(
-            checkpoints
-        ), "Should have more checkpoints after resume"
+        assert len(final_checkpoints) > len(checkpoints), (
+            "Should have more checkpoints after resume"
+        )
         print(f"   ✓ Additional checkpoints created: {len(final_checkpoints)}")
 
         # Phase 3: Multiple resume cycles
@@ -495,9 +495,9 @@ async def test_resume_from_checkpoint():
 
         # Assert: Checkpoint exists (created before any error)
         error_checkpoints = await storage.list_checkpoints()
-        assert (
-            len(error_checkpoints) > 0
-        ), "Should have checkpoint even if errors occurred"
+        assert len(error_checkpoints) > 0, (
+            "Should have checkpoint even if errors occurred"
+        )
         print("   ✓ Checkpoint exists after potential error")
 
         # Resume and continue
@@ -561,9 +561,9 @@ async def test_resume_from_checkpoint():
         await agent7._autonomous_loop("Finish writing the AI summary")
 
         # Assert: Complete workflow succeeded
-        assert (
-            agent7.current_step >= step_after_phase1
-        ), "Agent 2 should continue from Agent 1's progress"
+        assert agent7.current_step >= step_after_phase1, (
+            "Agent 2 should continue from Agent 1's progress"
+        )
         print(f"   ✓ Phase 2 completed at step {agent7.current_step}")
 
         # Assert: Final checkpoint exists
@@ -660,9 +660,9 @@ async def test_checkpoint_compression():
 
             # Get uncompressed checkpoint size
             uncompressed_files = list(Path(tmpdir_uncompressed).glob("*.jsonl"))
-            assert (
-                len(uncompressed_files) > 0
-            ), "Should have uncompressed checkpoint files"
+            assert len(uncompressed_files) > 0, (
+                "Should have uncompressed checkpoint files"
+            )
 
             uncompressed_size = sum(f.stat().st_size for f in uncompressed_files)
             print(f"   ✓ Uncompressed size: {uncompressed_size:,} bytes")
@@ -712,9 +712,9 @@ async def test_checkpoint_compression():
             )
             print(f"   Compression ratio: {compression_ratio:.1f}% reduction")
 
-            assert (
-                compressed_size < uncompressed_size
-            ), "Compressed should be smaller than uncompressed"
+            assert compressed_size < uncompressed_size, (
+                "Compressed should be smaller than uncompressed"
+            )
             print(f"   ✓ Compression achieved: {compressed_size} < {uncompressed_size}")
 
             # Phase 3: Test resume from compressed checkpoint
@@ -832,9 +832,9 @@ async def test_checkpoint_compression():
 
                 # Verify POST hooks have checkpoint_id
                 for post_event in post_events:
-                    assert (
-                        post_event["checkpoint_id"] is not None
-                    ), "POST hook should have checkpoint_id"
+                    assert post_event["checkpoint_id"] is not None, (
+                        "POST hook should have checkpoint_id"
+                    )
                 print("   ✓ POST hooks contain checkpoint_id")
 
             # Track cost

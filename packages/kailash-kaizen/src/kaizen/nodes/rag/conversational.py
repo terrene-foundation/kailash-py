@@ -862,9 +862,9 @@ class ConversationMemoryNode(Node):
                 key = fact_update.get("key")
                 if key in user_memory["semantic"]:
                     user_memory["semantic"][key].update(fact_update.get("updates", {}))
-                    user_memory["semantic"][key][
-                        "timestamp"
-                    ] = datetime.now().isoformat()
+                    user_memory["semantic"][key]["timestamp"] = (
+                        datetime.now().isoformat()
+                    )
                     updated["semantic"] += 1
 
         # Update preferences

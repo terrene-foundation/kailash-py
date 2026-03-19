@@ -285,9 +285,9 @@ class TestBug006Integration:
                 count = row["count"]
                 print(f"   - Migrations for TestProduct_{test_id}: {count}")
                 # Should only have one migration for this specific test
-                assert (
-                    count <= 2
-                ), f"Too many migrations detected for TestProduct_{test_id}: {count}"
+                assert count <= 2, (
+                    f"Too many migrations detected for TestProduct_{test_id}: {count}"
+                )
 
                 # Cleanup test table while connection is still open
                 await conn.execute(

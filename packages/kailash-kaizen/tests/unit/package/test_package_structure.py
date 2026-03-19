@@ -89,9 +89,9 @@ class TestPackageStructure:
         setup_version = setup_version_match.group(1)
 
         # All versions must match
-        assert (
-            init_version == pyproject_version == setup_version
-        ), f"Version mismatch: __init__.py={init_version}, pyproject.toml={pyproject_version}, setup.py={setup_version}"
+        assert init_version == pyproject_version == setup_version, (
+            f"Version mismatch: __init__.py={init_version}, pyproject.toml={pyproject_version}, setup.py={setup_version}"
+        )
 
     def test_version_follows_semver(self, package_root):
         """Test that version follows semantic versioning (X.Y.Z or X.Y.Z-suffix)."""
@@ -105,9 +105,9 @@ class TestPackageStructure:
 
         # Semantic versioning pattern: X.Y.Z, X.Y.Z-suffix, or PEP 440 (X.Y.Zb1, X.Y.Za1, X.Y.Zrc1)
         semver_pattern = r"^\d+\.\d+\.\d+([-.]?[a-zA-Z0-9.-]+)?$"
-        assert re.match(
-            semver_pattern, version
-        ), f"Version '{version}' does not follow semantic versioning"
+        assert re.match(semver_pattern, version), (
+            f"Version '{version}' does not follow semantic versioning"
+        )
 
     def test_python_version_requirements(self, package_root):
         """Test that Python version requirements are correct and aligned with Core SDK."""
@@ -136,9 +136,9 @@ class TestPackageStructure:
         manifest_content = manifest_file.read_text()
 
         # Check for recursive include of examples
-        assert (
-            "examples" in manifest_content
-        ), "MANIFEST.in must include examples directory"
+        assert "examples" in manifest_content, (
+            "MANIFEST.in must include examples directory"
+        )
 
     def test_manifest_includes_docs(self, package_root):
         """Test that MANIFEST.in includes docs directory."""
@@ -146,9 +146,9 @@ class TestPackageStructure:
         manifest_content = manifest_file.read_text()
 
         # Check for recursive include of docs
-        assert (
-            "docs" in manifest_content or "README" in manifest_content
-        ), "MANIFEST.in must include docs/README files"
+        assert "docs" in manifest_content or "README" in manifest_content, (
+            "MANIFEST.in must include docs/README files"
+        )
 
     def test_manifest_includes_tests(self, package_root):
         """Test that MANIFEST.in includes tests directory."""
@@ -187,9 +187,9 @@ class TestPackageStructure:
             pyproject_data = tomllib.load(f)
 
         package_name = pyproject_data["project"]["name"]
-        assert (
-            package_name == "kailash-kaizen"
-        ), f"Package name must be 'kailash-kaizen', got '{package_name}'"
+        assert package_name == "kailash-kaizen", (
+            f"Package name must be 'kailash-kaizen', got '{package_name}'"
+        )
 
 
 class TestPackageStructureIntegrity:
@@ -225,6 +225,6 @@ class TestPackageStructureIntegrity:
         """Test that CHANGELOG is in Markdown format."""
         changelog_file = package_root / "CHANGELOG.md"
         assert changelog_file.exists(), "CHANGELOG.md must exist"
-        assert (
-            changelog_file.suffix == ".md"
-        ), "CHANGELOG must be in Markdown format (.md)"
+        assert changelog_file.suffix == ".md", (
+            "CHANGELOG must be in Markdown format (.md)"
+        )

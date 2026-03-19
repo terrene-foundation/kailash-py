@@ -107,9 +107,7 @@ async def basic_test_table(memory_test_suite):
 @pytest.fixture
 async def constrained_test_tables(memory_test_suite):
     """Create test tables with constraints and foreign keys."""
-    tables = (
-        await memory_test_suite.dataflow_harness.table_factory.create_constrained_table()
-    )
+    tables = await memory_test_suite.dataflow_harness.table_factory.create_constrained_table()
     yield tables
 
 

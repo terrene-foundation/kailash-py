@@ -164,20 +164,14 @@ class CapabilityDiscoverer(ABC):
                     cache_ttl_seconds=self._cache.remaining_ttl_seconds(),
                     metadata={
                         "cached": True,
-                        "cache_age_seconds": int(
-                            (
-                                datetime.now(timezone.utc) - self._cache.cached_at
-                            ).total_seconds()
-                        ),
+                        "cache_age_seconds": int((datetime.now(timezone.utc) - self._cache.cached_at).total_seconds()),
                     },
                 )
 
         # Perform discovery
         start_time = datetime.now(timezone.utc)
         result = await self.discover_capabilities()
-        duration_ms = int(
-            (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
-        )
+        duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
         result.discovery_duration_ms = duration_ms
 
         # Update cache
@@ -186,8 +180,7 @@ class CapabilityDiscoverer(ABC):
                 capabilities=result.capabilities,
                 capability_metadata=result.capability_metadata,
                 cached_at=result.discovered_at,
-                expires_at=result.discovered_at
-                + timedelta(seconds=self.cache_ttl_seconds),
+                expires_at=result.discovered_at + timedelta(seconds=self.cache_ttl_seconds),
             )
 
         return result
@@ -378,14 +371,8 @@ class DatabaseCapabilityDiscoverer(CapabilityDiscoverer):
                 metadata={
                     "database_type": self.database_type,
                     "tables_count": len(tables),
-                    "views_count": (
-                        len(await self._discover_views()) if self.include_views else 0
-                    ),
-                    "procedures_count": (
-                        len(await self._discover_procedures())
-                        if self.include_procedures
-                        else 0
-                    ),
+                    "views_count": (len(await self._discover_views()) if self.include_views else 0),
+                    "procedures_count": (len(await self._discover_procedures()) if self.include_procedures else 0),
                 },
             )
 
@@ -482,11 +469,7 @@ class DatabaseCapabilityDiscoverer(CapabilityDiscoverer):
 
         rows = await self.db_connection.fetch(query)
         return [
-            (
-                row[0]
-                if isinstance(row, tuple)
-                else row["table_name"] if "table_name" in row else row["name"]
-            )
+            (row[0] if isinstance(row, tuple) else row["table_name"] if "table_name" in row else row["name"])
             for row in rows
         ]
 
@@ -521,10 +504,7 @@ class DatabaseCapabilityDiscoverer(CapabilityDiscoverer):
 
         try:
             rows = await self.db_connection.fetch(query)
-            return [
-                row[0] if isinstance(row, tuple) else row["routine_name"]
-                for row in rows
-            ]
+            return [row[0] if isinstance(row, tuple) else row["routine_name"] for row in rows]
         except Exception:
             return []
 
@@ -581,17 +561,11 @@ class APICapabilityDiscoverer(CapabilityDiscoverer):
                         continue
 
                     # Create capability name
-                    operation_id = operation_spec.get(
-                        "operationId", f"{method}_{path.replace('/', '_')}"
-                    )
+                    operation_id = operation_spec.get("operationId", f"{method}_{path.replace('/', '_')}")
                     capability = operation_id
 
                     # Determine capability type
-                    cap_type = (
-                        CapabilityType.ACCESS
-                        if method.lower() == "get"
-                        else CapabilityType.ACTION
-                    )
+                    cap_type = CapabilityType.ACCESS if method.lower() == "get" else CapabilityType.ACTION
 
                     # Extract parameters
                     parameters = {}
@@ -614,9 +588,7 @@ class APICapabilityDiscoverer(CapabilityDiscoverer):
                     capabilities.append(capability)
                     capability_metadata[capability] = CapabilityMetadata(
                         capability=capability,
-                        description=operation_spec.get(
-                            "summary", f"{method.upper()} {path}"
-                        ),
+                        description=operation_spec.get("summary", f"{method.upper()} {path}"),
                         capability_type=cap_type,
                         parameters=parameters,
                         constraints=constraints,

@@ -59,39 +59,25 @@ CREW_ROLES = {
     "researcher": {
         "agent_id": "crew-researcher",
         "capabilities": [
-            CapabilityRequest(
-                capability="search_web", capability_type=CapabilityType.ACTION
-            ),
-            CapabilityRequest(
-                capability="read_documents", capability_type=CapabilityType.ACCESS
-            ),
-            CapabilityRequest(
-                capability="analyze_data", capability_type=CapabilityType.ACTION
-            ),
+            CapabilityRequest(capability="search_web", capability_type=CapabilityType.ACTION),
+            CapabilityRequest(capability="read_documents", capability_type=CapabilityType.ACCESS),
+            CapabilityRequest(capability="analyze_data", capability_type=CapabilityType.ACTION),
         ],
         "constraints": ["audit_required", "no_pii_export"],
     },
     "writer": {
         "agent_id": "crew-writer",
         "capabilities": [
-            CapabilityRequest(
-                capability="generate_content", capability_type=CapabilityType.ACTION
-            ),
-            CapabilityRequest(
-                capability="edit_document", capability_type=CapabilityType.ACTION
-            ),
+            CapabilityRequest(capability="generate_content", capability_type=CapabilityType.ACTION),
+            CapabilityRequest(capability="edit_document", capability_type=CapabilityType.ACTION),
         ],
         "constraints": ["audit_required"],
     },
     "reviewer": {
         "agent_id": "crew-reviewer",
         "capabilities": [
-            CapabilityRequest(
-                capability="review_content", capability_type=CapabilityType.ACTION
-            ),
-            CapabilityRequest(
-                capability="approve_publication", capability_type=CapabilityType.ACTION
-            ),
+            CapabilityRequest(capability="review_content", capability_type=CapabilityType.ACTION),
+            CapabilityRequest(capability="approve_publication", capability_type=CapabilityType.ACTION),
         ],
         "constraints": ["audit_required", "read_only"],
     },
@@ -155,9 +141,7 @@ async def execute_task_with_trust(
     )
 
     verdict = enforcer.classify(result)
-    print(
-        f"  VERIFY: agent={agent_id} action={task.required_action} -> {verdict.value}"
-    )
+    print(f"  VERIFY: agent={agent_id} action={task.required_action} -> {verdict.value}")
 
     if not result.valid:
         print(f"  BLOCKED: {result.reason}")

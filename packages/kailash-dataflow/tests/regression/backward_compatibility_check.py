@@ -391,7 +391,9 @@ def main():
     print("=" * 60)
     print(f"Tests passed: {checker.passed}")
     print(f"Tests failed: {checker.failed}")
-    print(f"Success rate: {checker.passed/(checker.passed+checker.failed)*100:.1f}%")
+    print(
+        f"Success rate: {checker.passed / (checker.passed + checker.failed) * 100:.1f}%"
+    )
 
     if checker.failed == 0:
         print("\n🎉 ALL COMPATIBILITY TESTS PASSED")

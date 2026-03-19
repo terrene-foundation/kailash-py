@@ -263,7 +263,7 @@ def main():
     print("Performance Metrics:")
     print(f"  - Processing time: {processing_time:.2f}s")
     print(f"  - Throughput: {docs_per_second:.1f} docs/sec")
-    print(f"  - Avg time per doc: {(processing_time/total_documents)*1000:.0f}ms")
+    print(f"  - Avg time per doc: {(processing_time / total_documents) * 1000:.0f}ms")
     print()
 
     # ==================================================================

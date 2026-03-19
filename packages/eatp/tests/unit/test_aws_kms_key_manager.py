@@ -173,9 +173,7 @@ class TestAWSKMSKeyManagerInit:
             with patch("eatp.key_manager.boto3") as mock_boto3:
                 mock_boto3.client.return_value = MagicMock()
                 manager = AWSKMSKeyManager(region_name="us-west-2")
-                mock_boto3.client.assert_called_once_with(
-                    "kms", region_name="us-west-2"
-                )
+                mock_boto3.client.assert_called_once_with("kms", region_name="us-west-2")
 
     def test_init_default_pending_deletion_days(self):
         """Default pending_deletion_days is 7."""
@@ -254,9 +252,7 @@ class TestAWSKMSGenerateKeypair:
         assert arn == expected_arn
 
         # Public key should be base64-encoded version of the raw bytes
-        expected_pub = base64.b64encode(
-            b"fake-der-encoded-public-key-bytes-for-testing"
-        ).decode("utf-8")
+        expected_pub = base64.b64encode(b"fake-der-encoded-public-key-bytes-for-testing").decode("utf-8")
         assert public_key == expected_pub
 
     @pytest.mark.asyncio
@@ -300,9 +296,7 @@ class TestAWSKMSGenerateKeypair:
     async def test_generate_keypair_kms_error_raises_key_manager_error(self):
         """KMS ClientError is wrapped in KeyManagerError."""
         mock_client = _make_mock_kms_client()
-        mock_client.create_key.side_effect = _make_client_error(
-            "AccessDeniedException", "Access denied"
-        )
+        mock_client.create_key.side_effect = _make_client_error("AccessDeniedException", "Access denied")
         manager = AWSKMSKeyManager(kms_client=mock_client)
 
         with pytest.raises(KeyManagerError, match="Access denied"):
@@ -401,9 +395,7 @@ class TestAWSKMSSign:
         manager = AWSKMSKeyManager(kms_client=mock_client)
         await manager.generate_keypair("agent-001")
 
-        mock_client.sign.side_effect = _make_client_error(
-            "DisabledException", "Key is disabled"
-        )
+        mock_client.sign.side_effect = _make_client_error("DisabledException", "Key is disabled")
 
         with pytest.raises(KeyManagerError, match="disabled"):
             await manager.sign("test", "agent-001")
@@ -474,9 +466,7 @@ class TestAWSKMSVerify:
         manager = AWSKMSKeyManager(kms_client=mock_client)
         _arn, pub_key = await manager.generate_keypair("agent-001")
 
-        mock_client.verify.side_effect = _make_client_error(
-            "KMSInternalException", "KMS internal error"
-        )
+        mock_client.verify.side_effect = _make_client_error("KMSInternalException", "KMS internal error")
 
         sig = base64.b64encode(b"sig").decode("utf-8")
         with pytest.raises(KeyManagerError, match="KMS"):
@@ -567,10 +557,7 @@ class TestAWSKMSRotateKey:
 
         await manager.rotate_key("agent-001")
 
-        assert (
-            manager._key_arns["agent-001"]
-            == "arn:aws:kms:us-east-1:123456789012:key/mrk-new-key-456"
-        )
+        assert manager._key_arns["agent-001"] == "arn:aws:kms:us-east-1:123456789012:key/mrk-new-key-456"
 
     @pytest.mark.asyncio
     async def test_rotate_key_updates_metadata_with_rotation_info(self):
@@ -682,9 +669,7 @@ class TestAWSKMSRevokeKey:
         manager = AWSKMSKeyManager(kms_client=mock_client)
         await manager.generate_keypair("agent-001")
 
-        mock_client.schedule_key_deletion.side_effect = _make_client_error(
-            "NotFoundException", "Key not found in KMS"
-        )
+        mock_client.schedule_key_deletion.side_effect = _make_client_error("NotFoundException", "Key not found in KMS")
 
         with pytest.raises(KeyManagerError, match="not found"):
             await manager.revoke_key("agent-001")
@@ -829,9 +814,7 @@ class TestAWSKMSErrorHandling:
     async def test_access_denied_error_message(self):
         """AccessDeniedException produces clear error message."""
         mock_client = _make_mock_kms_client()
-        mock_client.create_key.side_effect = _make_client_error(
-            "AccessDeniedException", "User is not authorized"
-        )
+        mock_client.create_key.side_effect = _make_client_error("AccessDeniedException", "User is not authorized")
         manager = AWSKMSKeyManager(kms_client=mock_client)
 
         with pytest.raises(KeyManagerError, match="[Aa]ccess denied"):
@@ -844,9 +827,7 @@ class TestAWSKMSErrorHandling:
         manager = AWSKMSKeyManager(kms_client=mock_client)
         await manager.generate_keypair("agent-001")
 
-        mock_client.sign.side_effect = _make_client_error(
-            "NotFoundException", "Key ARN not found"
-        )
+        mock_client.sign.side_effect = _make_client_error("NotFoundException", "Key ARN not found")
 
         with pytest.raises(KeyManagerError, match="[Nn]ot found"):
             await manager.sign("test", "agent-001")
@@ -858,9 +839,7 @@ class TestAWSKMSErrorHandling:
         manager = AWSKMSKeyManager(kms_client=mock_client)
         await manager.generate_keypair("agent-001")
 
-        mock_client.sign.side_effect = _make_client_error(
-            "DisabledException", "Key is disabled"
-        )
+        mock_client.sign.side_effect = _make_client_error("DisabledException", "Key is disabled")
 
         with pytest.raises(KeyManagerError, match="disabled"):
             await manager.sign("test", "agent-001")
@@ -869,9 +848,7 @@ class TestAWSKMSErrorHandling:
     async def test_kms_internal_error_message(self):
         """KMSInternalException produces clear error message."""
         mock_client = _make_mock_kms_client()
-        mock_client.create_key.side_effect = _make_client_error(
-            "KMSInternalException", "Internal service error"
-        )
+        mock_client.create_key.side_effect = _make_client_error("KMSInternalException", "Internal service error")
         manager = AWSKMSKeyManager(kms_client=mock_client)
 
         with pytest.raises(KeyManagerError, match="[Ss]ervice error"):
@@ -881,9 +858,7 @@ class TestAWSKMSErrorHandling:
     async def test_fail_closed_no_fallback(self):
         """When KMS is unreachable, raises error -- never falls back to in-memory."""
         mock_client = _make_mock_kms_client()
-        mock_client.create_key.side_effect = _make_client_error(
-            "KMSInternalException", "Service unavailable"
-        )
+        mock_client.create_key.side_effect = _make_client_error("KMSInternalException", "Service unavailable")
         manager = AWSKMSKeyManager(kms_client=mock_client)
 
         with pytest.raises(KeyManagerError):
@@ -905,9 +880,7 @@ class TestAWSKMSAlgorithm:
     def test_class_docstring_documents_algorithm_mismatch(self):
         """Class docstring mentions ECDSA P-256 vs Ed25519 difference."""
         docstring = AWSKMSKeyManager.__doc__
-        assert (
-            "ECDSA" in docstring or "P-256" in docstring or "ECC_NIST_P256" in docstring
-        )
+        assert "ECDSA" in docstring or "P-256" in docstring or "ECC_NIST_P256" in docstring
 
     @pytest.mark.asyncio
     async def test_metadata_uses_ecdsa_p256_algorithm(self):

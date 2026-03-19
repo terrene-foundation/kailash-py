@@ -124,9 +124,9 @@ class TestStagingEnvironmentManagerIntegration:
     def teardown_method(self):
         """Cleanup after each test method."""
         test_duration = time.time() - self.test_start_time
-        assert (
-            test_duration < 5.0
-        ), f"Test exceeded 5 second timeout: {test_duration:.2f}s"
+        assert test_duration < 5.0, (
+            f"Test exceeded 5 second timeout: {test_duration:.2f}s"
+        )
 
     @pytest.mark.asyncio
     async def test_production_database_connection_validation(
@@ -527,9 +527,9 @@ class TestStagingEnvironmentPerformanceValidation:
             creation_time = time.time() - start_time
 
             # Verify creation completed within performance bounds
-            assert (
-                creation_time < 5.0
-            ), f"Staging environment creation took {creation_time:.2f}s (exceeds 5s limit)"
+            assert creation_time < 5.0, (
+                f"Staging environment creation took {creation_time:.2f}s (exceeds 5s limit)"
+            )
             assert staging_env.status == StagingEnvironmentStatus.ACTIVE
 
         finally:
@@ -537,9 +537,9 @@ class TestStagingEnvironmentPerformanceValidation:
                 cleanup_start = time.time()
                 await self.manager.cleanup_staging_environment(staging_env.staging_id)
                 cleanup_time = time.time() - cleanup_start
-                assert (
-                    cleanup_time < 2.0
-                ), f"Cleanup took {cleanup_time:.2f}s (exceeds 2s limit)"
+                assert cleanup_time < 2.0, (
+                    f"Cleanup took {cleanup_time:.2f}s (exceeds 2s limit)"
+                )
 
     @pytest.mark.asyncio
     async def test_concurrent_staging_environment_operations(self):
@@ -564,9 +564,9 @@ class TestStagingEnvironmentPerformanceValidation:
             creation_time = time.time() - start_time
 
             # Verify concurrent creation performance
-            assert (
-                creation_time < 8.0
-            ), f"Concurrent creation took {creation_time:.2f}s (exceeds 8s limit)"
+            assert creation_time < 8.0, (
+                f"Concurrent creation took {creation_time:.2f}s (exceeds 8s limit)"
+            )
             assert len(environments) == 2
 
             # Verify all environments are active

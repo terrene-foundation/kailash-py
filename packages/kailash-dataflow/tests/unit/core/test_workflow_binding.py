@@ -597,9 +597,9 @@ class TestDataFlowWorkflowBinder:
 
         for op_name, expected_node_type in expected_ops:
             resolved = binder._resolve_node_type("Entity", op_name)
-            assert (
-                resolved == expected_node_type
-            ), f"Operation {op_name} should resolve to {expected_node_type}"
+            assert resolved == expected_node_type, (
+                f"Operation {op_name} should resolve to {expected_node_type}"
+            )
 
     def test_all_operations_in_operation_map(self, memory_dataflow):
         """Verify OPERATION_MAP has exactly 11 operations."""

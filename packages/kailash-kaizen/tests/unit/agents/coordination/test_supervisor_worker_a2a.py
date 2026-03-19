@@ -301,9 +301,9 @@ class TestA2ACoordinatorIntegration:
         )
 
         # EXPECTED: Pattern has a2a_coordinator attribute
-        assert hasattr(
-            pattern, "a2a_coordinator"
-        ), "SupervisorWorkerPattern missing a2a_coordinator attribute"
+        assert hasattr(pattern, "a2a_coordinator"), (
+            "SupervisorWorkerPattern missing a2a_coordinator attribute"
+        )
 
     def test_a2a_coordinator_is_initialized(self, mock_shared_memory):
         """A2A coordinator should be properly initialized."""
@@ -312,9 +312,9 @@ class TestA2ACoordinatorIntegration:
         )
 
         # EXPECTED: a2a_coordinator is not None
-        assert (
-            pattern.a2a_coordinator is not None
-        ), "a2a_coordinator should be initialized, not None"
+        assert pattern.a2a_coordinator is not None, (
+            "a2a_coordinator should be initialized, not None"
+        )
 
     def test_supervisor_has_a2a_coordinator(self, mock_config, mock_shared_memory):
         """SupervisorAgent should have access to A2A coordinator."""
@@ -325,9 +325,9 @@ class TestA2ACoordinatorIntegration:
         )
 
         # EXPECTED: Supervisor has a2a_coordinator attribute
-        assert hasattr(
-            supervisor, "a2a_coordinator"
-        ), "SupervisorAgent missing a2a_coordinator attribute"
+        assert hasattr(supervisor, "a2a_coordinator"), (
+            "SupervisorAgent missing a2a_coordinator attribute"
+        )
 
 
 # ============================================================================
@@ -350,9 +350,9 @@ class TestCapabilityBasedSelection:
         pattern.workers = [code_expert_agent, data_expert_agent, writing_expert_agent]
 
         # EXPECTED: select_worker_for_task method exists
-        assert hasattr(
-            pattern.supervisor, "select_worker_for_task"
-        ), "SupervisorAgent missing select_worker_for_task method"
+        assert hasattr(pattern.supervisor, "select_worker_for_task"), (
+            "SupervisorAgent missing select_worker_for_task method"
+        )
 
         # Test code task selection
         code_task = "Write a Python function to parse JSON"
@@ -361,9 +361,9 @@ class TestCapabilityBasedSelection:
         )
 
         # EXPECTED: Should select code expert (semantic matching)
-        assert (
-            selected_worker.agent_id == "code_expert"
-        ), f"Expected code_expert for code task, got {selected_worker.agent_id}"
+        assert selected_worker.agent_id == "code_expert", (
+            f"Expected code_expert for code task, got {selected_worker.agent_id}"
+        )
 
     def test_select_worker_uses_a2a_scoring(
         self, mock_shared_memory, code_expert_agent, data_expert_agent
@@ -390,9 +390,9 @@ class TestCapabilityBasedSelection:
         assert 0.0 <= score <= 1.0, f"Score {score} not in range [0.0, 1.0]"
 
         # EXPECTED: Selected data expert
-        assert (
-            result["worker"].agent_id == "data_expert"
-        ), "Should select data_expert for data task"
+        assert result["worker"].agent_id == "data_expert", (
+            "Should select data_expert for data task"
+        )
 
     def test_select_best_match_from_multiple_workers(
         self,
@@ -412,13 +412,13 @@ class TestCapabilityBasedSelection:
         )
 
         # EXPECTED: Selected code expert (semantic match with "code" and "implementation")
-        assert (
-            result["worker"].agent_id == "code_expert"
-        ), "Should select code_expert for code implementation task"
+        assert result["worker"].agent_id == "code_expert", (
+            "Should select code_expert for code implementation task"
+        )
         # With semantic matching: "code" keyword match (0.6+) and "implementation" keyword match
-        assert (
-            result["score"] >= 0.6
-        ), f"Expected keyword match score (>= 0.6), got {result['score']}"
+        assert result["score"] >= 0.6, (
+            f"Expected keyword match score (>= 0.6), got {result['score']}"
+        )
 
 
 # ============================================================================
@@ -495,9 +495,9 @@ class TestSemanticScoring:
             )
 
             score = result["score"]
-            assert (
-                0.0 <= score <= 1.0
-            ), f"Score {score} out of range [0.0, 1.0] for task: {task}"
+            assert 0.0 <= score <= 1.0, (
+                f"Score {score} out of range [0.0, 1.0] for task: {task}"
+            )
 
     def test_higher_score_for_better_match(self, mock_shared_memory, code_expert_agent):
         """More relevant tasks should get higher scores."""
@@ -517,9 +517,9 @@ class TestSemanticScoring:
         )
 
         # EXPECTED: Relevant task has higher score
-        assert (
-            relevant_result["score"] > irrelevant_result["score"]
-        ), f"Relevant task score ({relevant_result['score']}) should be higher than irrelevant ({irrelevant_result['score']})"
+        assert relevant_result["score"] > irrelevant_result["score"], (
+            f"Relevant task score ({relevant_result['score']}) should be higher than irrelevant ({irrelevant_result['score']})"
+        )
 
 
 # ============================================================================
@@ -553,9 +553,9 @@ class TestMultiAgentCoordination:
                 task=task["description"], available_workers=pattern.workers
             )
 
-            assert (
-                result.agent_id == task["expected"]
-            ), f"Task '{task['description']}' should be delegated to {task['expected']}, got {result.agent_id}"
+            assert result.agent_id == task["expected"], (
+                f"Task '{task['description']}' should be delegated to {task['expected']}, got {result.agent_id}"
+            )
 
     def test_coordination_with_overlapping_capabilities(
         self, mock_shared_memory, code_expert_agent, writing_expert_agent
@@ -576,9 +576,9 @@ class TestMultiAgentCoordination:
         )
 
         # EXPECTED: Should select writing expert (higher score for writing)
-        assert (
-            result["worker"].agent_id == "writing_expert"
-        ), "Should select specialist with higher capability match"
+        assert result["worker"].agent_id == "writing_expert", (
+            "Should select specialist with higher capability match"
+        )
         assert result["score"] > 0.7, "Should have high confidence in selection"
 
 

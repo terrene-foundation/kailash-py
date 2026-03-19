@@ -479,6 +479,6 @@ class TestAllAgentsToolRegistryIntegration:
         all_agents = specialized_agents + coordination_agents
 
         for agent in all_agents:
-            assert (
-                agent is not None
-            ), f"{agent.__class__.__name__} should have None tool_registry by default"
+            assert agent is not None, (
+                f"{agent.__class__.__name__} should have None tool_registry by default"
+            )

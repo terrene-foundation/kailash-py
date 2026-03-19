@@ -326,7 +326,9 @@ class TestGeneratedNodeIntegration:
 
         # Test read non-existent record
         workflow.add_node(
-            "ErrorTestModelReadNode", "error_read", {"id": "999999"}  # Non-existent ID
+            "ErrorTestModelReadNode",
+            "error_read",
+            {"id": "999999"},  # Non-existent ID
         )
 
         workflow.add_connection("error_create", "output", "error_read", "input")

@@ -143,7 +143,7 @@ def search_traces_by_tag(
     Returns:
         List of matching traces
     """
-    params = {"service": service_name, "tags": f'{{"{ tag_key}":"{tag_value}"}}'}
+    params = {"service": service_name, "tags": f'{{"{tag_key}":"{tag_value}"}}'}
 
     data = query_jaeger_api("/api/traces", params=params, timeout=15)
 
@@ -244,7 +244,7 @@ class TestJaegerUIValidation:
                 agent_id=agent_id,
                 timestamp=time.time(),
                 trace_id=trace_id,
-                data={"tool_name": f"step_{i+1}"},
+                data={"tool_name": f"step_{i + 1}"},
                 metadata={"parent_span_id": parent_span_id},
             )
 
@@ -258,7 +258,7 @@ class TestJaegerUIValidation:
                     agent_id=agent_id,
                     timestamp=time.time(),
                     trace_id=trace_id,
-                    data={"tool_name": f"substep_{i+1}_{j+1}"},
+                    data={"tool_name": f"substep_{i + 1}_{j + 1}"},
                     metadata={"parent_span_id": child_span_id},
                 )
 
@@ -271,7 +271,7 @@ class TestJaegerUIValidation:
                     agent_id=agent_id,
                     timestamp=time.time(),
                     trace_id=trace_id,
-                    data={"tool_name": f"substep_{i+1}_{j+1}"},
+                    data={"tool_name": f"substep_{i + 1}_{j + 1}"},
                     metadata={"parent_span_id": child_span_id},
                 )
                 await tracing_hook.handle(nested_post_context)
@@ -284,7 +284,7 @@ class TestJaegerUIValidation:
                 agent_id=agent_id,
                 timestamp=time.time(),
                 trace_id=trace_id,
-                data={"tool_name": f"step_{i+1}"},
+                data={"tool_name": f"step_{i + 1}"},
                 metadata={"parent_span_id": parent_span_id},
             )
             await tracing_hook.handle(child_post_context)
@@ -377,9 +377,9 @@ class TestJaegerUIValidation:
             for span in trace.get("spans", []):
                 tags = {tag["key"]: tag["value"] for tag in span.get("tags", [])}
                 if tags.get("agent_id"):
-                    assert (
-                        tags["agent_id"] == target_agent
-                    ), f"Found span from wrong agent: {tags['agent_id']}"
+                    assert tags["agent_id"] == target_agent, (
+                        f"Found span from wrong agent: {tags['agent_id']}"
+                    )
 
     @pytest.mark.asyncio
     @pytest.mark.slow
@@ -413,7 +413,7 @@ class TestJaegerUIValidation:
                 timestamp=time.time(),
                 trace_id=trace_id,
                 data={
-                    "tool_name": f"checkpoint_{i+1}",
+                    "tool_name": f"checkpoint_{i + 1}",
                     "checkpoint": i + 1,
                     "progress_percent": ((i + 1) / updates) * 100,
                     "elapsed_seconds": (i + 1) * interval,
@@ -430,7 +430,7 @@ class TestJaegerUIValidation:
                 timestamp=time.time(),
                 trace_id=trace_id,
                 data={
-                    "tool_name": f"checkpoint_{i+1}",
+                    "tool_name": f"checkpoint_{i + 1}",
                     "checkpoint": i + 1,
                     "progress_percent": ((i + 1) / updates) * 100,
                     "elapsed_seconds": (i + 1) * interval,
@@ -464,9 +464,9 @@ class TestJaegerUIValidation:
 
         # Assert: All checkpoints recorded
         # Expected: 1 PRE_AGENT_LOOP + 10 PRE_TOOL_USE + 10 POST_TOOL_USE + 1 POST_AGENT_LOOP = 22 spans
-        assert (
-            len(spans) >= 20
-        ), f"Expected 20+ spans (start + 10 PRE checkpoints + 10 POST checkpoints + end), got {len(spans)}"
+        assert len(spans) >= 20, (
+            f"Expected 20+ spans (start + 10 PRE checkpoints + 10 POST checkpoints + end), got {len(spans)}"
+        )
 
         # Assert: Trace duration reflects long-running nature
         # Find start and end timestamps
@@ -475,9 +475,9 @@ class TestJaegerUIValidation:
         duration_seconds = duration_us / 1_000_000
 
         # Should be at least 10 seconds (our compressed timeline)
-        assert (
-            duration_seconds >= 9.0
-        ), f"Expected duration >=9s, got {duration_seconds:.2f}s"
+        assert duration_seconds >= 9.0, (
+            f"Expected duration >=9s, got {duration_seconds:.2f}s"
+        )
 
     @pytest.mark.asyncio
     async def test_error_span_visualization(self, tracing_hook):
@@ -506,7 +506,7 @@ class TestJaegerUIValidation:
                 agent_id=agent_id,
                 timestamp=time.time(),
                 trace_id=trace_id,
-                data={"tool_name": f"step_{i+1}", "status": "success"},
+                data={"tool_name": f"step_{i + 1}", "status": "success"},
             )
 
             await tracing_hook.handle(success_pre_context)
@@ -518,7 +518,7 @@ class TestJaegerUIValidation:
                 agent_id=agent_id,
                 timestamp=time.time(),
                 trace_id=trace_id,
-                data={"tool_name": f"step_{i+1}", "status": "success"},
+                data={"tool_name": f"step_{i + 1}", "status": "success"},
             )
 
             await tracing_hook.handle(success_post_context)
@@ -566,7 +566,7 @@ class TestJaegerUIValidation:
                 agent_id=agent_id,
                 timestamp=time.time(),
                 trace_id=trace_id,
-                data={"tool_name": f"recovery_{i+1}", "status": "success"},
+                data={"tool_name": f"recovery_{i + 1}", "status": "success"},
             )
 
             await tracing_hook.handle(recovery_pre_context)
@@ -578,7 +578,7 @@ class TestJaegerUIValidation:
                 agent_id=agent_id,
                 timestamp=time.time(),
                 trace_id=trace_id,
-                data={"tool_name": f"recovery_{i+1}", "status": "success"},
+                data={"tool_name": f"recovery_{i + 1}", "status": "success"},
             )
 
             await tracing_hook.handle(recovery_post_context)

@@ -152,9 +152,7 @@ def blocked_result_with_reasoning_violations() -> VerificationResult:
 class TestStrictEnforcerReasoningPropagation:
     """Tests that StrictEnforcer propagates reasoning fields in records/logs."""
 
-    def test_enforce_propagates_reasoning_present_in_record(
-        self, result_with_reasoning_present: VerificationResult
-    ):
+    def test_enforce_propagates_reasoning_present_in_record(self, result_with_reasoning_present: VerificationResult):
         """EnforcementRecord metadata must contain reasoning_present from result."""
         enforcer = StrictEnforcer()
         verdict = enforcer.enforce(
@@ -166,9 +164,7 @@ class TestStrictEnforcerReasoningPropagation:
         record = enforcer.records[-1]
         assert record.metadata["reasoning_present"] is True
 
-    def test_enforce_propagates_reasoning_verified_in_record(
-        self, result_with_reasoning_verified: VerificationResult
-    ):
+    def test_enforce_propagates_reasoning_verified_in_record(self, result_with_reasoning_verified: VerificationResult):
         """EnforcementRecord metadata must contain reasoning_verified from result."""
         enforcer = StrictEnforcer()
         verdict = enforcer.enforce(
@@ -181,9 +177,7 @@ class TestStrictEnforcerReasoningPropagation:
         assert record.metadata["reasoning_present"] is True
         assert record.metadata["reasoning_verified"] is True
 
-    def test_enforce_propagates_reasoning_absent_in_record(
-        self, result_without_reasoning: VerificationResult
-    ):
+    def test_enforce_propagates_reasoning_absent_in_record(self, result_without_reasoning: VerificationResult):
         """EnforcementRecord metadata must reflect reasoning_present=False."""
         enforcer = StrictEnforcer()
         verdict = enforcer.enforce(
@@ -277,9 +271,7 @@ class TestShadowEnforcerReasoningMetrics:
         assert metrics.reasoning_absent_count == 0
         assert metrics.reasoning_verification_failed_count == 0
 
-    def test_check_increments_reasoning_present(
-        self, result_with_reasoning_present: VerificationResult
-    ):
+    def test_check_increments_reasoning_present(self, result_with_reasoning_present: VerificationResult):
         """Checking a result with reasoning_present=True increments the counter."""
         shadow = ShadowEnforcer()
         shadow.check(
@@ -290,9 +282,7 @@ class TestShadowEnforcerReasoningMetrics:
         assert shadow.metrics.reasoning_present_count == 1
         assert shadow.metrics.reasoning_absent_count == 0
 
-    def test_check_increments_reasoning_absent(
-        self, result_without_reasoning: VerificationResult
-    ):
+    def test_check_increments_reasoning_absent(self, result_without_reasoning: VerificationResult):
         """Checking a result with reasoning_present=False increments absent counter."""
         shadow = ShadowEnforcer()
         shadow.check(
@@ -334,14 +324,10 @@ class TestShadowEnforcerReasoningMetrics:
         shadow = ShadowEnforcer()
         shadow.check(agent_id="a1", action="r", result=result_with_reasoning_present)
         shadow.check(agent_id="a2", action="r", result=result_without_reasoning)
-        shadow.check(
-            agent_id="a3", action="r", result=result_reasoning_verification_failed
-        )
+        shadow.check(agent_id="a3", action="r", result=result_reasoning_verification_failed)
         shadow.check(agent_id="a4", action="r", result=result_with_reasoning_present)
 
-        assert (
-            shadow.metrics.reasoning_present_count == 3
-        )  # 2 present + 1 failed-but-present
+        assert shadow.metrics.reasoning_present_count == 3  # 2 present + 1 failed-but-present
         assert shadow.metrics.reasoning_absent_count == 1
         assert shadow.metrics.reasoning_verification_failed_count == 1
 
@@ -357,9 +343,7 @@ class TestShadowEnforcerReasoningMetrics:
         report = shadow.report()
         assert "reasoning" in report.lower()
 
-    def test_reset_clears_reasoning_metrics(
-        self, result_with_reasoning_present: VerificationResult
-    ):
+    def test_reset_clears_reasoning_metrics(self, result_with_reasoning_present: VerificationResult):
         """Reset must zero out all reasoning metrics."""
         shadow = ShadowEnforcer()
         shadow.check(agent_id="a1", action="r", result=result_with_reasoning_present)
@@ -377,9 +361,7 @@ class TestShadowEnforcerReasoningMetrics:
 class TestSelectiveDisclosureReasoningRedaction:
     """Tests that selective disclosure handles reasoning trace redaction."""
 
-    def test_public_reasoning_trace_is_kept(
-        self, reasoning_trace_public: ReasoningTrace
-    ):
+    def test_public_reasoning_trace_is_kept(self, reasoning_trace_public: ReasoningTrace):
         """PUBLIC reasoning traces must be preserved in disclosed records."""
         from eatp.enforce.selective_disclosure import _redact_record
 
@@ -425,9 +407,7 @@ class TestSelectiveDisclosureReasoningRedaction:
         assert rt_value is not None
         assert not (isinstance(rt_value, str) and rt_value.startswith("REDACTED:"))
 
-    def test_confidential_reasoning_trace_is_redacted(
-        self, reasoning_trace_confidential: ReasoningTrace
-    ):
+    def test_confidential_reasoning_trace_is_redacted(self, reasoning_trace_confidential: ReasoningTrace):
         """CONFIDENTIAL reasoning traces must be redacted to hash only."""
         from eatp.enforce.selective_disclosure import _redact_record
 
@@ -445,9 +425,7 @@ class TestSelectiveDisclosureReasoningRedaction:
         assert isinstance(rt_value, str)
         assert rt_value.startswith("REDACTED:sha256:")
 
-    def test_secret_reasoning_trace_is_redacted(
-        self, reasoning_trace_secret: ReasoningTrace
-    ):
+    def test_secret_reasoning_trace_is_redacted(self, reasoning_trace_secret: ReasoningTrace):
         """SECRET reasoning traces must be redacted to hash only."""
         from eatp.enforce.selective_disclosure import _redact_record
 

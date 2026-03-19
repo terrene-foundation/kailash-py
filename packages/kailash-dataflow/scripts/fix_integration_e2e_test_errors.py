@@ -16,9 +16,7 @@ from pathlib import Path
 
 def add_test_database_config_to_conftest():
     """Add TEST_DATABASE_CONFIG to conftest.py."""
-    conftest_path = Path(
-        ""
-    )
+    conftest_path = Path("")
 
     with open(conftest_path, "r") as f:
         content = f.read()
@@ -74,9 +72,7 @@ TEST_DATABASE_CONFIG = {
 
 def create_real_infrastructure_module():
     """Create the missing real_infrastructure test utility module."""
-    utils_dir = Path(
-        ""
-    )
+    utils_dir = Path("")
     utils_dir.mkdir(exist_ok=True)
 
     # Create __init__.py if it doesn't exist
@@ -226,9 +222,7 @@ def postgres_url(postgres_container):
 
 def fix_field_import_in_schema():
     """Add Field class to dataflow.core.schema if missing."""
-    schema_path = Path(
-        ""
-    )
+    schema_path = Path("")
 
     if not schema_path.exists():
         # Create schema.py with Field and Model classes
@@ -345,9 +339,7 @@ class Field:
 
 def fix_cli_test_imports():
     """Fix imports in CLI test file."""
-    cli_test_path = Path(
-        ""
-    )
+    cli_test_path = Path("")
 
     if cli_test_path.exists():
         with open(cli_test_path, "r") as f:
@@ -376,9 +368,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
 
 def fix_e2e_test_skips():
     """Add skip markers to problematic E2E tests."""
-    e2e_dir = Path(
-        ""
-    )
+    e2e_dir = Path("")
 
     # Files that need skip markers
     files_to_skip = [

@@ -188,9 +188,9 @@ class TestPostgreSQLMigrationEngineIntegration:
             )
             tables = cursor.fetchall()
             cursor.close()
-            assert (
-                len(tables) == 0
-            ), "Transaction rollback failed - table exists when it shouldn't"
+            assert len(tables) == 0, (
+                "Transaction rollback failed - table exists when it shouldn't"
+            )
 
         finally:
             # Cleanup any remaining tables
@@ -395,9 +395,9 @@ class TestPostgreSQLMigrationEngineIntegration:
             execution_time = end_time - start_time
 
             # Should complete within reasonable time (< 10 seconds for PostgreSQL integration test)
-            assert (
-                execution_time < 10.0
-            ), f"PostgreSQL migration system too slow: {execution_time} seconds"
+            assert execution_time < 10.0, (
+                f"PostgreSQL migration system too slow: {execution_time} seconds"
+            )
 
             # Verify PostgreSQL migration system is still functional
             assert hasattr(dataflow, "_migration_system")

@@ -110,9 +110,7 @@ class MerkleProof:
         Returns:
             Reconstructed MerkleProof
         """
-        proof_hashes = [
-            (item["hash"], item["position"]) for item in data.get("proof_hashes", [])
-        ]
+        proof_hashes = [(item["hash"], item["position"]) for item in data.get("proof_hashes", [])]
         return cls(
             leaf_hash=data["leaf_hash"],
             leaf_index=data["leaf_index"],
@@ -172,10 +170,7 @@ class MerkleTree:
             return
 
         # Create leaf nodes
-        nodes: List[MerkleNode] = [
-            MerkleNode(hash=leaf_hash, data_index=i)
-            for i, leaf_hash in enumerate(self._leaves)
-        ]
+        nodes: List[MerkleNode] = [MerkleNode(hash=leaf_hash, data_index=i) for i, leaf_hash in enumerate(self._leaves)]
 
         # Build up tree by hashing pairs
         while len(nodes) > 1:
@@ -261,9 +256,7 @@ class MerkleTree:
             IndexError: If index is out of range
         """
         if index < 0 or index >= len(self._leaves):
-            raise IndexError(
-                f"Leaf index {index} out of range [0, {len(self._leaves)})"
-            )
+            raise IndexError(f"Leaf index {index} out of range [0, {len(self._leaves)})")
         return self._leaves[index]
 
     def generate_proof(self, index: int) -> Optional[MerkleProof]:
@@ -298,9 +291,7 @@ class MerkleTree:
             return None
 
         if index < 0 or index >= len(self._leaves):
-            raise IndexError(
-                f"Leaf index {index} out of range [0, {len(self._leaves)})"
-            )
+            raise IndexError(f"Leaf index {index} out of range [0, {len(self._leaves)})")
 
         leaf_hash = self._leaves[index]
         proof_hashes: List[Tuple[str, str]] = []

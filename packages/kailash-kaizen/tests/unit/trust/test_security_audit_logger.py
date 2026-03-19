@@ -164,13 +164,13 @@ class TestSecurityAuditLoggerThreadSafety:
 
         # Verify writes and reads happened
         expected_writes = num_writers * events_per_writer
-        assert (
-            write_count == expected_writes
-        ), f"Expected {expected_writes} writes, got {write_count}"
+        assert write_count == expected_writes, (
+            f"Expected {expected_writes} writes, got {write_count}"
+        )
         expected_reads = num_readers * reads_per_reader
-        assert (
-            read_count == expected_reads
-        ), f"Expected {expected_reads} reads, got {read_count}"
+        assert read_count == expected_reads, (
+            f"Expected {expected_reads} reads, got {read_count}"
+        )
 
     def test_trimming_under_concurrent_access(self):
         """ROUND5-005: Small max_events triggers frequent trimming under concurrent access.
@@ -222,26 +222,26 @@ class TestSecurityAuditLoggerThreadSafety:
 
         # Verify total logged
         expected_total = num_threads * events_per_thread
-        assert (
-            total_logged == expected_total
-        ), f"Expected {expected_total} total logged, got {total_logged}"
+        assert total_logged == expected_total, (
+            f"Expected {expected_total} total logged, got {total_logged}"
+        )
 
         # Verify events were trimmed correctly (should have at most max_events)
         all_events = logger.get_recent_events(count=max_events + 100)
-        assert (
-            len(all_events) <= max_events
-        ), f"Events not trimmed correctly: {len(all_events)} > {max_events}"
+        assert len(all_events) <= max_events, (
+            f"Events not trimmed correctly: {len(all_events)} > {max_events}"
+        )
 
     def test_logger_has_lock_attribute(self):
         """ROUND5-005: Verify SecurityAuditLogger has a threading lock for thread-safety."""
         logger = SecurityAuditLogger()
 
-        assert hasattr(
-            logger, "_lock"
-        ), "SecurityAuditLogger missing _lock attribute for thread-safety"
-        assert isinstance(
-            logger._lock, type(threading.Lock())
-        ), "_lock should be a threading.Lock instance"
+        assert hasattr(logger, "_lock"), (
+            "SecurityAuditLogger missing _lock attribute for thread-safety"
+        )
+        assert isinstance(logger._lock, type(threading.Lock())), (
+            "_lock should be a threading.Lock instance"
+        )
 
     def test_get_recent_events_returns_copy(self):
         """ROUND5-005: Verify get_recent_events returns a copy, not internal list.
@@ -264,18 +264,18 @@ class TestSecurityAuditLoggerThreadSafety:
         # Should be equal but not the same object
         assert len(events1) == 1
         assert len(events2) == 1
-        assert (
-            events1 is not events2
-        ), "get_recent_events should return different list objects"
+        assert events1 is not events2, (
+            "get_recent_events should return different list objects"
+        )
 
         # Modifying returned list should not affect internal state
         events1.clear()
         assert len(events1) == 0
 
         events3 = logger.get_recent_events(count=10)
-        assert (
-            len(events3) == 1
-        ), "Clearing returned list affected internal state - not a copy!"
+        assert len(events3) == 1, (
+            "Clearing returned list affected internal state - not a copy!"
+        )
 
 
 class TestSecurityAuditLoggerBasic:

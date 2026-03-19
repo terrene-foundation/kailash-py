@@ -341,9 +341,7 @@ class TestConstraintBenchmarks:
         constraints = {"cost_limit": 1000, "rate_limit": 100}
         context = {"cost_used": 500, "requests_in_period": 50}
 
-        result = benchmark(
-            evaluator.evaluate, constraints, context, InteractionMode.CONJUNCTIVE
-        )
+        result = benchmark(evaluator.evaluate, constraints, context, InteractionMode.CONJUNCTIVE)
         assert result.satisfied is True
 
     def test_multi_dimension_evaluator_all_builtins(self, benchmark):
@@ -361,9 +359,7 @@ class TestConstraintBenchmarks:
             "requests_in_period": 500,
         }
 
-        result = benchmark(
-            evaluator.evaluate, constraints, context, InteractionMode.CONJUNCTIVE
-        )
+        result = benchmark(evaluator.evaluate, constraints, context, InteractionMode.CONJUNCTIVE)
         assert result.satisfied is True
 
 

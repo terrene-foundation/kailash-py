@@ -79,7 +79,9 @@ async def test_end_to_end_solution_generation(
     # Create workflow with missing parameter
     workflow = WorkflowBuilder()
     workflow.add_node(
-        "UserCreateNode", "create", {"name": "Alice"}  # Missing required 'id' parameter
+        "UserCreateNode",
+        "create",
+        {"name": "Alice"},  # Missing required 'id' parameter
     )
 
     runtime = LocalRuntime()

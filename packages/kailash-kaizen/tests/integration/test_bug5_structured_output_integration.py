@@ -76,9 +76,9 @@ class TestBug5FixWithRealOpenAI:
 
         # Verify Bug #5 fix: strict=False returns correct format
         config = create_structured_output_config(SimpleSignature(), strict=False)
-        assert config == {
-            "type": "json_object"
-        }, "Bug #5 fix: strict=False should return only type:json_object"
+        assert config == {"type": "json_object"}, (
+            "Bug #5 fix: strict=False should return only type:json_object"
+        )
         assert "schema" not in config, "Bug #5 fix: schema key should not exist"
 
         # Test with REAL OpenAI API
@@ -157,16 +157,16 @@ class TestBug5FixWithRealOpenAI:
         # Verify types
         assert isinstance(result["category"], str), "category must be string"
         assert isinstance(result["price_range"], str), "price_range must be string"
-        assert isinstance(
-            result["confidence"], (int, float)
-        ), "confidence must be number"
+        assert isinstance(result["confidence"], (int, float)), (
+            "confidence must be number"
+        )
 
         # Verify content quality
         assert len(result["category"]) > 0, "category cannot be empty"
         assert len(result["price_range"]) > 0, "price_range cannot be empty"
-        assert (
-            0 <= result["confidence"] <= 1
-        ), f"confidence out of range: {result['confidence']}"
+        assert 0 <= result["confidence"] <= 1, (
+            f"confidence out of range: {result['confidence']}"
+        )
 
         print(
             f"✅ Test 2 passed: Complex signature returned: {json.dumps(result, indent=2)}"
@@ -220,12 +220,12 @@ class TestBug5FixWithRealOpenAI:
         assert "confidence_score" in result, "Missing 'confidence_score' field"
 
         # Verify Dict field is dict
-        assert isinstance(
-            result["extracted_fields"], dict
-        ), "extracted_fields must be dict"
-        assert isinstance(
-            result["confidence_score"], (int, float)
-        ), "confidence_score must be number"
+        assert isinstance(result["extracted_fields"], dict), (
+            "extracted_fields must be dict"
+        )
+        assert isinstance(result["confidence_score"], (int, float)), (
+            "confidence_score must be number"
+        )
 
         # Verify Dict has content
         assert len(result["extracted_fields"]) > 0, "extracted_fields cannot be empty"
@@ -345,9 +345,9 @@ class TestBug5FixWithRealOpenAI:
         ], f"Invalid sentiment: {result['sentiment']}"
 
         # Verify correct classification
-        assert (
-            result["sentiment"] == "positive"
-        ), f"Should be positive: {result['sentiment']}"
+        assert result["sentiment"] == "positive", (
+            f"Should be positive: {result['sentiment']}"
+        )
 
         print(
             f"✅ Test 5 passed: Error handling works, sentiment: {result['sentiment']}"
@@ -531,12 +531,12 @@ class TestBug5RealWorldScenarios:
 
         # Verify types
         assert isinstance(result["text_output"], str), "text_output must be string"
-        assert isinstance(
-            result["number_output"], (int, float)
-        ), "number_output must be number"
-        assert isinstance(
-            result["boolean_output"], bool
-        ), "boolean_output must be boolean"
+        assert isinstance(result["number_output"], (int, float)), (
+            "number_output must be number"
+        )
+        assert isinstance(result["boolean_output"], bool), (
+            "boolean_output must be boolean"
+        )
         assert result["category"] in [
             "A",
             "B",

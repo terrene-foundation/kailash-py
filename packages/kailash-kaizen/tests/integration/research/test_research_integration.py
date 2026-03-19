@@ -238,9 +238,9 @@ class TestResearchIntegrationWorkflow:
             )
 
         validate_time = validate_timer.stop()
-        assert (
-            validate_time < 300
-        ), f"Validation took {validate_time:.1f}s (target: <300s)"
+        assert validate_time < 300, (
+            f"Validation took {validate_time:.1f}s (target: <300s)"
+        )
 
         # Adapt (<1s)
         adapter = ResearchAdapter()
@@ -265,9 +265,9 @@ class TestResearchIntegrationWorkflow:
         )
 
         register_time = register_timer.stop()
-        assert (
-            register_time < 0.1
-        ), f"Registration took {register_time:.3f}s (target: <0.1s)"
+        assert register_time < 0.1, (
+            f"Registration took {register_time:.3f}s (target: <0.1s)"
+        )
 
         # Search (<0.1s)
         search_timer = performance_timer()

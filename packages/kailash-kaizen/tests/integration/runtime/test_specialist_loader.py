@@ -377,7 +377,7 @@ Aim for high coverage.
             (skill_dir / "SKILL.md").write_text(
                 f"""---
 name: {skill_name}
-description: {skill_name.replace('-', ' ').title()} expertise
+description: {skill_name.replace("-", " ").title()} expertise
 ---
 # {skill_name.title()} Skill
 Content for {skill_name}.

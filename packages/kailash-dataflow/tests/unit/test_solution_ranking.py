@@ -491,7 +491,7 @@ def test_top_3_selection(ranking_engine, mock_llm_agent):
         context={},
         causes=["Cause 1", "Cause 2", "Cause 3"],
         solutions=[
-            ErrorSolution(f"Solution {i+1}", f"code_{i+1}", False, i + 1)
+            ErrorSolution(f"Solution {i + 1}", f"code_{i + 1}", False, i + 1)
             for i in range(5)
         ],
         severity="error",

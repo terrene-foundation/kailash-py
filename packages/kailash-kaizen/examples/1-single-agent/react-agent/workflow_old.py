@@ -346,8 +346,8 @@ class KaizenReActAgent:
 
         prompt = f"""You are a ReAct agent that solves tasks by reasoning and acting.
 
-Task: {signature_input['task']}
-Context: {signature_input['context']}
+Task: {signature_input["task"]}
+Context: {signature_input["context"]}
 Available tools: {tools_list}
 {previous_actions_text}
 
@@ -572,7 +572,7 @@ def performance_benchmark():
     solve_times = []
 
     for i in range(3):
-        print(f"Benchmark run {i+1}/3...")
+        print(f"Benchmark run {i + 1}/3...")
 
         # Time initialization
         start_time = time.time()

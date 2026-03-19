@@ -54,7 +54,6 @@ class ProtectedDataFlowRuntime(LocalRuntime):
                     or "Connection protection blocks" in error_msg
                     or "Field protection blocks" in error_msg
                 ):
-
                     # Extract operation from message
                     operation_type = OperationType.CREATE  # Default
                     if "create" in error_msg.lower():

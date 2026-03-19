@@ -100,9 +100,7 @@ class TestCircuitBreakerFailuresBounded:
 
         # Record maxlen + 10 failures
         for i in range(maxlen + 10):
-            await breaker.record_failure(
-                "agent-001", "TestError", f"fail-{i}", "action", "low"
-            )
+            await breaker.record_failure("agent-001", "TestError", f"fail-{i}", "action", "low")
 
         assert len(breaker._failures.get("agent-001", [])) <= maxlen
 
@@ -120,9 +118,7 @@ class TestCircuitBreakerFailuresBounded:
         )
 
         for i in range(maxlen + 5):
-            await breaker.record_failure(
-                "agent-001", "TestError", f"fail-{i}", "action", "low"
-            )
+            await breaker.record_failure("agent-001", "TestError", f"fail-{i}", "action", "low")
 
         failures = breaker._failures["agent-001"]
         messages = [f.error_message for f in failures]
@@ -148,15 +144,11 @@ class TestCircuitBreakerFailuresBounded:
 
         # Fill agent-001 to capacity
         for i in range(maxlen + 5):
-            await breaker.record_failure(
-                "agent-001", "TestError", f"fail-{i}", "action", "low"
-            )
+            await breaker.record_failure("agent-001", "TestError", f"fail-{i}", "action", "low")
 
         # agent-002 should be unaffected
         for i in range(5):
-            await breaker.record_failure(
-                "agent-002", "TestError", f"fail-{i}", "action", "low"
-            )
+            await breaker.record_failure("agent-002", "TestError", f"fail-{i}", "action", "low")
 
         assert len(breaker._failures.get("agent-001", [])) <= maxlen
         assert len(breaker._failures.get("agent-002", [])) == 5
@@ -220,12 +212,8 @@ class TestMonotonicEscalationOnRecovery:
         breaker = PostureCircuitBreaker(posture_machine=machine, config=config)
 
         # Step 1: Record enough failures to open the circuit
-        await breaker.record_failure(
-            "agent-001", "Error", "fail1", "action", "critical"
-        )
-        await breaker.record_failure(
-            "agent-001", "Error", "fail2", "action", "critical"
-        )
+        await breaker.record_failure("agent-001", "Error", "fail1", "action", "critical")
+        await breaker.record_failure("agent-001", "Error", "fail2", "action", "critical")
         assert breaker.get_state("agent-001") == CircuitState.OPEN
 
         # Step 2: External authority further downgrades to PSEUDO_AGENT
@@ -263,12 +251,8 @@ class TestMonotonicEscalationOnRecovery:
         breaker = PostureCircuitBreaker(posture_machine=machine, config=config)
 
         # Open the circuit (downgrades from DELEGATED to SUPERVISED)
-        await breaker.record_failure(
-            "agent-001", "Error", "fail1", "action", "critical"
-        )
-        await breaker.record_failure(
-            "agent-001", "Error", "fail2", "action", "critical"
-        )
+        await breaker.record_failure("agent-001", "Error", "fail1", "action", "critical")
+        await breaker.record_failure("agent-001", "Error", "fail2", "action", "critical")
         assert breaker.get_state("agent-001") == CircuitState.OPEN
         assert machine.get_posture("agent-001") == TrustPosture.SUPERVISED
 
@@ -281,10 +265,7 @@ class TestMonotonicEscalationOnRecovery:
         # Posture should NOT have been silently restored to DELEGATED
         # The circuit breaker must only log a suggestion, never auto-restore
         current_posture = machine.get_posture("agent-001")
-        assert (
-            current_posture != TrustPosture.DELEGATED
-            or current_posture == TrustPosture.SUPERVISED
-        ), (
+        assert current_posture != TrustPosture.DELEGATED or current_posture == TrustPosture.SUPERVISED, (
             f"Circuit breaker should not auto-restore posture to original. "
             f"Got {current_posture.value}, expected supervised (downgraded level)"
         )
@@ -303,19 +284,12 @@ class TestMonotonicEscalationOnRecovery:
         breaker = PostureCircuitBreaker(posture_machine=machine, config=config)
 
         # Open and recover
-        await breaker.record_failure(
-            "agent-001", "Error", "fail1", "action", "critical"
-        )
-        await breaker.record_failure(
-            "agent-001", "Error", "fail2", "action", "critical"
-        )
+        await breaker.record_failure("agent-001", "Error", "fail1", "action", "critical")
+        await breaker.record_failure("agent-001", "Error", "fail2", "action", "critical")
 
         with caplog.at_level(logging.INFO, logger="eatp.circuit_breaker"):
             can = await breaker.can_proceed("agent-001")
             await breaker.record_success("agent-001")
 
         # Should log a suggestion to consider restoring posture
-        assert (
-            "consider restoring" in caplog.text.lower()
-            or "circuit closed" in caplog.text.lower()
-        )
+        assert "consider restoring" in caplog.text.lower() or "circuit closed" in caplog.text.lower()

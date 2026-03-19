@@ -220,9 +220,9 @@ def test_crud_operations():
         update_results, _ = runtime.execute(update_workflow.build())
         updated_task = update_results["update_task"]["output"]
         assert updated_task["completed"] is True, "Task should be completed"
-        assert (
-            updated_task["priority"] == 3
-        ), f"Priority should be 3, got {updated_task['priority']}"
+        assert updated_task["priority"] == 3, (
+            f"Priority should be 3, got {updated_task['priority']}"
+        )
 
         # LIST
         list_workflow = WorkflowBuilder()
@@ -269,9 +269,9 @@ def test_performance_baseline():
         db = DataFlow(":memory:")
         instantiation_time = (time.time() - start_time) * 1000  # ms
 
-        assert (
-            instantiation_time < 100
-        ), f"Instantiation took {instantiation_time:.2f}ms (should be <100ms)"
+        assert instantiation_time < 100, (
+            f"Instantiation took {instantiation_time:.2f}ms (should be <100ms)"
+        )
 
         # Test model registration performance
         start_time = time.time()
@@ -283,9 +283,9 @@ def test_performance_baseline():
 
         registration_time = (time.time() - start_time) * 1000  # ms
 
-        assert (
-            registration_time < 50
-        ), f"Model registration took {registration_time:.2f}ms (should be <50ms)"
+        assert registration_time < 50, (
+            f"Model registration took {registration_time:.2f}ms (should be <50ms)"
+        )
 
         # Test workflow execution performance
         workflow = WorkflowBuilder()
@@ -300,9 +300,9 @@ def test_performance_baseline():
         results, _ = runtime.execute(workflow.build())
         execution_time = (time.time() - start_time) * 1000  # ms
 
-        assert (
-            execution_time < 200
-        ), f"Workflow execution took {execution_time:.2f}ms (should be <200ms)"
+        assert execution_time < 200, (
+            f"Workflow execution took {execution_time:.2f}ms (should be <200ms)"
+        )
 
         print("✅ Performance baseline: PASS")
         print(f"   Instantiation: {instantiation_time:.2f}ms")
@@ -352,7 +352,7 @@ def main():
     print("=" * 60)
     print(f"Tests passed: {passed}")
     print(f"Tests failed: {failed}")
-    print(f"Success rate: {passed/(passed+failed)*100:.1f}%")
+    print(f"Success rate: {passed / (passed + failed) * 100:.1f}%")
 
     if failed == 0:
         print("\n🎉 ALL CORE FUNCTIONALITY TESTS PASSED")

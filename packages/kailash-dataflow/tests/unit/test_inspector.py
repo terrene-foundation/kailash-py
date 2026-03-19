@@ -1265,7 +1265,7 @@ class TestAdvancedWorkflowPatterns:
             )
 
         for i in range(chain_length - 1):
-            workflow.add_connection(f"node_{i}", "value", f"node_{i+1}", "input_val")
+            workflow.add_connection(f"node_{i}", "value", f"node_{i + 1}", "input_val")
 
         inspector = Inspector(MockDataFlow())
         inspector.workflow_obj = workflow.build()
@@ -1314,7 +1314,7 @@ class TestInspectorPerformance:
 
         # Create connections (each node connects to next)
         for i in range(num_nodes - 1):
-            workflow.add_connection(f"node_{i}", "value", f"node_{i+1}", "input")
+            workflow.add_connection(f"node_{i}", "value", f"node_{i + 1}", "input")
 
         inspector = Inspector(MockDataFlow())
         inspector.workflow_obj = workflow.build()

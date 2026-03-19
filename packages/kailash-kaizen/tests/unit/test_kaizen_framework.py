@@ -365,9 +365,9 @@ class TestKaizenPerformanceBaseline:
 
         # Framework initialization should be very fast (<100ms per fixture standards)
         performance_tracker.assert_performance("framework_init", 100)
-        assert (
-            init_time_ms < 100
-        ), f"Framework initialization took {init_time_ms:.2f}ms, expected <100ms"
+        assert init_time_ms < 100, (
+            f"Framework initialization took {init_time_ms:.2f}ms, expected <100ms"
+        )
 
     def test_agent_creation_performance(self, performance_tracker):
         """Test agent creation performance baseline."""
@@ -389,9 +389,9 @@ class TestKaizenPerformanceBaseline:
 
         # Creating 10 agents should be fast (<100ms per agent standards)
         avg_time_per_agent = batch_time_ms / 10
-        assert (
-            avg_time_per_agent < 100
-        ), f"Average agent creation took {avg_time_per_agent:.2f}ms, expected <100ms"
+        assert avg_time_per_agent < 100, (
+            f"Average agent creation took {avg_time_per_agent:.2f}ms, expected <100ms"
+        )
 
     def test_workflow_creation_performance(self, performance_tracker):
         """Test workflow creation performance baseline."""
@@ -407,9 +407,9 @@ class TestKaizenPerformanceBaseline:
 
         # Creating 5 workflows should be fast (<200ms per workflow standards)
         avg_time_per_workflow = batch_time_ms / 5
-        assert (
-            avg_time_per_workflow < 200
-        ), f"Average workflow creation took {avg_time_per_workflow:.2f}ms, expected <200ms"
+        assert avg_time_per_workflow < 200, (
+            f"Average workflow creation took {avg_time_per_workflow:.2f}ms, expected <200ms"
+        )
 
 
 # Performance and isolation tests
@@ -421,9 +421,9 @@ def test_kaizen_import_performance(performance_tracker):
     import_time_ms = performance_tracker.end_timer("package_import")
 
     # Package import should be very fast (<50ms per fixture standards)
-    assert (
-        import_time_ms < 50
-    ), f"Package import took {import_time_ms:.2f}ms, expected <50ms"
+    assert import_time_ms < 50, (
+        f"Package import took {import_time_ms:.2f}ms, expected <50ms"
+    )
 
 
 def test_kaizen_memory_usage(performance_tracker):

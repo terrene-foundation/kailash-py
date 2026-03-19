@@ -492,7 +492,7 @@ class SignatureProfiler:
                 ):
                     recommendations.append(
                         f"OPTIMIZATION: Pre-compile regex patterns in {func['file']} "
-                        f"(saves ~{func['total_time']/bottleneck['sample_count']:.2f}ms per call)"
+                        f"(saves ~{func['total_time'] / bottleneck['sample_count']:.2f}ms per call)"
                     )
 
                 # Check for repeated parsing
@@ -599,7 +599,7 @@ class SignatureProfiler:
             for func in bottleneck["top_functions"][:3]:
                 print(
                     f"     - {func['function']} ({func['file']}): "
-                    f"{func['total_time']/bottleneck['sample_count']:.2f}ms avg"
+                    f"{func['total_time'] / bottleneck['sample_count']:.2f}ms avg"
                 )
 
         print("\n" + "-" * 80)

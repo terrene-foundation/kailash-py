@@ -309,11 +309,7 @@ class TrustPolicyEngine:
             "total_evaluations": self._evaluation_count,
             "cache_hits": self._cache_hits,
             "cache_entries": len(self._cache),
-            "hit_rate": (
-                self._cache_hits / self._evaluation_count
-                if self._evaluation_count > 0
-                else 0.0
-            ),
+            "hit_rate": (self._cache_hits / self._evaluation_count if self._evaluation_count > 0 else 0.0),
         }
 
     async def evaluate_policy(
@@ -360,8 +356,7 @@ class TrustPolicyEngine:
         if self._enable_cache:
             self._cache[cache_key] = CacheEntry(
                 result=result,
-                expires_at=datetime.now(timezone.utc)
-                + timedelta(seconds=self._cache_ttl),
+                expires_at=datetime.now(timezone.utc) + timedelta(seconds=self._cache_ttl),
             )
 
         return result
@@ -449,9 +444,7 @@ class TrustPolicyEngine:
             )
 
         elif policy._composition_type == "not":
-            result = await self.evaluate_policy(
-                policy._composed_policies[0], agent_id, context
-            )
+            result = await self.evaluate_policy(policy._composed_policies[0], agent_id, context)
             if result.allowed:
                 return PolicyResult.deny(
                     policy.policy_name,
@@ -542,10 +535,7 @@ class TrustPolicyEngine:
                 for attestation in chain.capability_attestations:
                     if attestation.capability == required_cap:
                         # Check expiration
-                        if (
-                            attestation.expires_at
-                            and attestation.expires_at < datetime.now(timezone.utc)
-                        ):
+                        if attestation.expires_at and attestation.expires_at < datetime.now(timezone.utc):
                             continue
                         return PolicyResult.allow(
                             policy.policy_name,
@@ -592,17 +582,13 @@ class TrustPolicyEngine:
             )
 
         # Compare constraint values
-        if isinstance(required_value, (int, float)) and isinstance(
-            actual_value, (int, float)
-        ):
+        if isinstance(required_value, (int, float)) and isinstance(actual_value, (int, float)):
             if actual_value > required_value:
                 return PolicyResult.deny(
                     policy.policy_name,
                     f"Constraint '{constraint_type}' value {actual_value} exceeds limit {required_value}",
                 )
-        elif isinstance(required_value, (list, set)) and isinstance(
-            actual_value, (list, set)
-        ):
+        elif isinstance(required_value, (list, set)) and isinstance(actual_value, (list, set)):
             if not set(actual_value).issubset(set(required_value)):
                 return PolicyResult.deny(
                     policy.policy_name,

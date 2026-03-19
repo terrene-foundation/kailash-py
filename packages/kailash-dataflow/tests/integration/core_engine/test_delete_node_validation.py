@@ -128,9 +128,9 @@ class TestDeleteNodeValidation:
         node_result = results["delete_product"]
 
         # Check if node failed
-        assert (
-            node_result.get("failed") is True
-        ), f"DeleteNode should have failed. Got result: {node_result}"
+        assert node_result.get("failed") is True, (
+            f"DeleteNode should have failed. Got result: {node_result}"
+        )
 
         # Verify error message mentions missing ID
         error_msg = node_result.get("error", "").lower()
@@ -297,7 +297,9 @@ class TestDeleteNodeValidation:
         # Delete record with id=5 (NOT id=1)
         workflow = WorkflowBuilder()
         workflow.add_node(
-            "ProductDeleteNode", "delete_five", {"record_id": 5}  # Explicit ID provided
+            "ProductDeleteNode",
+            "delete_five",
+            {"record_id": 5},  # Explicit ID provided
         )
 
         # Execute deletion
@@ -393,9 +395,9 @@ class TestDeleteNodeValidation:
             id7_exists = await conn.fetchval(
                 "SELECT EXISTS(SELECT 1 FROM products WHERE id = 7)"
             )
-            assert (
-                not id7_exists
-            ), "Record with id=7 should be deleted when using 'id' parameter"
+            assert not id7_exists, (
+                "Record with id=7 should be deleted when using 'id' parameter"
+            )
 
             # id=1 should NOT be deleted (critical check!)
             id1_exists = await conn.fetchval(
@@ -502,9 +504,9 @@ class TestDeleteNodeValidation:
             created_exists = await conn.fetchval(
                 f"SELECT EXISTS(SELECT 1 FROM products WHERE id = {created_id})"
             )
-            assert (
-                not created_exists
-            ), f"Created product (id={created_id}) should be deleted"
+            assert not created_exists, (
+                f"Created product (id={created_id}) should be deleted"
+            )
 
             # CRITICAL: Canary (id=1) must still exist
             canary_exists = await conn.fetchval(

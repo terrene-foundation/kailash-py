@@ -152,7 +152,7 @@ def main():
     with PerformanceMonitor(metrics, "deployment") as monitor:
         app = Nexus(auto_discovery=False)
 
-    print(f"      Platform initialized in {metrics.deployment_times[-1]*1000:.1f}ms")
+    print(f"      Platform initialized in {metrics.deployment_times[-1] * 1000:.1f}ms")
     print()
 
     # =========================================================================
@@ -160,7 +160,8 @@ def main():
     # =========================================================================
     print("[3/8] Configuring session management...")
     session_manager = NexusSessionManager(
-        cleanup_interval=300, session_ttl=7200  # 5 minutes  # 2 hours
+        cleanup_interval=300,
+        session_ttl=7200,  # 5 minutes  # 2 hours
     )
     print("      Session management configured")
     print("      - Cleanup interval: 5 minutes")
@@ -192,7 +193,7 @@ def main():
         )
 
     deployment_time = metrics.deployment_times[-1]
-    print(f"      Deployment completed in {deployment_time*1000:.1f}ms")
+    print(f"      Deployment completed in {deployment_time * 1000:.1f}ms")
     print()
     print("      Channels available:")
     for channel, identifier in channels.items():
@@ -233,7 +234,7 @@ def main():
         )
 
     api_time = metrics.api_latencies[-1]
-    print(f"      [API] Response time: {api_time*1000:.1f}ms")
+    print(f"      [API] Response time: {api_time * 1000:.1f}ms")
     print(f"      [API] Response: {result['response'][:50]}...")
     print()
 
@@ -251,7 +252,7 @@ def main():
         )
 
     cli_time = metrics.cli_latencies[-1]
-    print(f"      [CLI] Response time: {cli_time*1000:.1f}ms")
+    print(f"      [CLI] Response time: {cli_time * 1000:.1f}ms")
     print(f"      [CLI] Context preserved: {state.get('query', 'N/A')[:40]}...")
     print()
 
@@ -269,7 +270,7 @@ def main():
         )
 
     mcp_time = metrics.mcp_latencies[-1]
-    print(f"      [MCP] Response time: {mcp_time*1000:.1f}ms")
+    print(f"      [MCP] Response time: {mcp_time * 1000:.1f}ms")
     print(f"      [MCP] Full context available: {len(state)} keys")
     print()
 
@@ -288,13 +289,13 @@ def main():
 
     print()
     print("      Deployment Performance:")
-    print(f"      - Mean:   {summary['deployment']['mean']*1000:.1f}ms")
-    print(f"      - Median: {summary['deployment']['median']*1000:.1f}ms")
+    print(f"      - Mean:   {summary['deployment']['mean'] * 1000:.1f}ms")
+    print(f"      - Median: {summary['deployment']['median'] * 1000:.1f}ms")
     print(f"      - Count:  {summary['deployment']['count']}")
 
     print()
     print("      API Latency:")
-    print(f"      - Mean:   {summary['api']['mean']*1000:.1f}ms")
+    print(f"      - Mean:   {summary['api']['mean'] * 1000:.1f}ms")
     print(
         "      - Target: <500ms ✓"
         if summary["api"]["mean"] < 0.5
@@ -303,7 +304,7 @@ def main():
 
     print()
     print("      CLI Latency:")
-    print(f"      - Mean:   {summary['cli']['mean']*1000:.1f}ms")
+    print(f"      - Mean:   {summary['cli']['mean'] * 1000:.1f}ms")
     print(
         "      - Target: <500ms ✓"
         if summary["cli"]["mean"] < 0.5
@@ -312,7 +313,7 @@ def main():
 
     print()
     print("      MCP Latency:")
-    print(f"      - Mean:   {summary['mcp']['mean']*1000:.1f}ms")
+    print(f"      - Mean:   {summary['mcp']['mean'] * 1000:.1f}ms")
     print(
         "      - Target: <500ms ✓"
         if summary["mcp"]["mean"] < 0.5

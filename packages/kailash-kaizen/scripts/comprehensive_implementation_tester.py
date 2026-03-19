@@ -767,7 +767,7 @@ class ComprehensiveKaizenTester:
         # Execute all test methods
         for test_method in test_methods:
             try:
-                logger.info(f"\n{'='*80}")
+                logger.info(f"\n{'=' * 80}")
                 result = test_method()
                 self.test_results.append(result)
 
@@ -778,7 +778,7 @@ class ComprehensiveKaizenTester:
                         f"❌ FAILED: {result.example_name} - {len(result.gaps_found)} gaps found"
                     )
 
-                logger.info(f"{'='*80}\n")
+                logger.info(f"{'=' * 80}\n")
 
             except Exception as e:
                 logger.error(f"Test method {test_method.__name__} crashed: {e}")
@@ -802,7 +802,7 @@ class ComprehensiveKaizenTester:
         logger.info(f"  - Total Tests Run: {total_tests}")
         logger.info(f"  - Tests Passed: {passed_tests}")
         logger.info(f"  - Tests Failed: {total_tests - passed_tests}")
-        logger.info(f"  - Success Rate: {(passed_tests/total_tests*100):.1f}%")
+        logger.info(f"  - Success Rate: {(passed_tests / total_tests * 100):.1f}%")
         logger.info(f"  - Total Gaps Found: {total_gaps}")
         logger.info(f"  - Total Errors: {total_errors}")
         logger.info(f"  - Blocking Issues: {len(self.blocking_issues)}")

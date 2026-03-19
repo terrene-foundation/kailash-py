@@ -239,9 +239,9 @@ class TestREADMEQuality:
             assert readme_path.exists(), f"Missing README: {readme_path}"
             content = readme_path.read_text()
             line_count = len(content.splitlines())
-            assert (
-                line_count >= 100
-            ), f"README too short ({line_count} lines): {readme_path.name}"
+            assert line_count >= 100, (
+                f"README too short ({line_count} lines): {readme_path.name}"
+            )
 
     def test_all_readmes_have_expected_sections(self):
         """Verify READMEs have standard sections."""
@@ -268,9 +268,9 @@ class TestREADMEQuality:
             ]
 
             for pattern in expected_patterns:
-                assert (
-                    pattern in content
-                ), f"README missing '{pattern}': {readme_path.name}"
+                assert pattern in content, (
+                    f"README missing '{pattern}': {readme_path.name}"
+                )
 
 
 class TestPythonSyntax:

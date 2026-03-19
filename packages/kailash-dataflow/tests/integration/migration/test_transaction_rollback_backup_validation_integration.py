@@ -244,9 +244,9 @@ class TestTransactionRollbackBackupValidation:
 
             assert len(initial_state) == 5, "Initial data validation"
             assert initial_index_count == 1, "Initial index validation"
-            assert (
-                sum(row["account_balance"] for row in initial_state) == 310000.00
-            ), "Initial balance validation"
+            assert sum(row["account_balance"] for row in initial_state) == 310000.00, (
+                "Initial balance validation"
+            )
 
             logger.info(
                 f"Initial state captured: {len(initial_state)} rows, total balance: $310,000"
@@ -292,9 +292,9 @@ class TestTransactionRollbackBackupValidation:
                     RemovalResult.TRANSACTION_FAILED,
                     RemovalResult.SYSTEM_ERROR,
                 ]
-                assert (
-                    result.rollback_executed is True
-                ), "CRITICAL: Rollback must be executed on failure"
+                assert result.rollback_executed is True, (
+                    "CRITICAL: Rollback must be executed on failure"
+                )
                 assert "SIMULATED SYSTEM FAILURE" in result.error_message
 
                 logger.info(
@@ -313,14 +313,14 @@ class TestTransactionRollbackBackupValidation:
                 test_connection, f"txn_business_data_{test_id}"
             )
 
-            assert len(final_state) == len(
-                initial_state
-            ), "CRITICAL: Row count must be unchanged after rollback"
+            assert len(final_state) == len(initial_state), (
+                "CRITICAL: Row count must be unchanged after rollback"
+            )
 
             for initial_row, final_row in zip(initial_state, final_state):
-                assert (
-                    initial_row == final_row
-                ), f"CRITICAL: Data corruption detected - row {initial_row['id']} changed"
+                assert initial_row == final_row, (
+                    f"CRITICAL: Data corruption detected - row {initial_row['id']} changed"
+                )
 
             # 2. Verify column still exists (rollback undid removal)
             column_exists = await test_connection.fetchval(
@@ -342,26 +342,26 @@ class TestTransactionRollbackBackupValidation:
                 AND indexname = 'txn_target_column_idx_{test_id}'
             """
             )
-            assert (
-                final_index_count == initial_index_count
-            ), "CRITICAL: Index must be restored after rollback"
+            assert final_index_count == initial_index_count, (
+                "CRITICAL: Index must be restored after rollback"
+            )
 
             # 4. Verify business data integrity
             final_total_balance = sum(row["account_balance"] for row in final_state)
             initial_total_balance = sum(row["account_balance"] for row in initial_state)
 
-            assert (
-                final_total_balance == initial_total_balance
-            ), "CRITICAL: Business data must be unchanged"
+            assert final_total_balance == initial_total_balance, (
+                "CRITICAL: Business data must be unchanged"
+            )
 
             # 5. Verify all customer data is intact
             for row in final_state:
-                assert row["critical_data"].startswith(
-                    "CRITICAL:"
-                ), "CRITICAL: Business critical data must be preserved"
-                assert (
-                    row["account_balance"] > 0
-                ), "CRITICAL: Account balances must be preserved"
+                assert row["critical_data"].startswith("CRITICAL:"), (
+                    "CRITICAL: Business critical data must be preserved"
+                )
+                assert row["account_balance"] > 0, (
+                    "CRITICAL: Account balances must be preserved"
+                )
 
             logger.info(
                 "✅ CRITICAL SAFETY VALIDATED: Complete transaction rollback successful"
@@ -507,12 +507,12 @@ class TestTransactionRollbackBackupValidation:
             )
 
             # **CRITICAL VALIDATION**: Backup data must be identical to original
-            assert len(table_backup_data) == len(
-                original_data
-            ), "Table backup must contain all rows"
-            assert len(column_backup_data) == len(
-                original_data
-            ), "Column backup must contain all rows"
+            assert len(table_backup_data) == len(original_data), (
+                "Table backup must contain all rows"
+            )
+            assert len(column_backup_data) == len(original_data), (
+                "Column backup must contain all rows"
+            )
 
             for i, (orig, backup) in enumerate(zip(original_data, table_backup_data)):
                 for column_name in orig.keys():
@@ -521,25 +521,25 @@ class TestTransactionRollbackBackupValidation:
 
                     # Handle different data types properly
                     if orig_val is None:
-                        assert (
-                            backup_val is None
-                        ), f"NULL value mismatch in row {i}, column {column_name}"
+                        assert backup_val is None, (
+                            f"NULL value mismatch in row {i}, column {column_name}"
+                        )
                     elif isinstance(orig_val, (bytes, bytearray)):
-                        assert (
-                            orig_val == backup_val
-                        ), f"Binary data mismatch in row {i}, column {column_name}"
+                        assert orig_val == backup_val, (
+                            f"Binary data mismatch in row {i}, column {column_name}"
+                        )
                     elif isinstance(orig_val, dict):  # JSONB
-                        assert (
-                            orig_val == backup_val
-                        ), f"JSON data mismatch in row {i}, column {column_name}"
+                        assert orig_val == backup_val, (
+                            f"JSON data mismatch in row {i}, column {column_name}"
+                        )
                     elif isinstance(orig_val, list):  # Arrays
-                        assert (
-                            orig_val == backup_val
-                        ), f"Array data mismatch in row {i}, column {column_name}"
+                        assert orig_val == backup_val, (
+                            f"Array data mismatch in row {i}, column {column_name}"
+                        )
                     else:
-                        assert (
-                            orig_val == backup_val
-                        ), f"Data mismatch in row {i}, column {column_name}: {orig_val} != {backup_val}"
+                        assert orig_val == backup_val, (
+                            f"Data mismatch in row {i}, column {column_name}: {orig_val} != {backup_val}"
+                        )
 
             # **STEP 4**: Test backup recovery under simulated data loss
             logger.info("Step 4: Testing backup recovery accuracy")
@@ -569,12 +569,12 @@ class TestTransactionRollbackBackupValidation:
             """
             )
 
-            assert (
-                len(corrupted_data) == 2
-            ), "Should have 2 rows after simulated deletion"
-            assert (
-                corrupted_data[0]["text_data"] == "CORRUPTED DATA"
-            ), "Corruption should be applied"
+            assert len(corrupted_data) == 2, (
+                "Should have 2 rows after simulated deletion"
+            )
+            assert corrupted_data[0]["text_data"] == "CORRUPTED DATA", (
+                "Corruption should be applied"
+            )
 
             # **STEP 5**: Perform 100% accurate recovery from backup
             logger.info("Step 5: Performing complete data recovery from backup")
@@ -598,9 +598,9 @@ class TestTransactionRollbackBackupValidation:
             )
 
             # **CRITICAL VALIDATION**: Recovery must be 100% accurate
-            assert len(recovered_data) == len(
-                original_data
-            ), "CRITICAL: All rows must be recovered"
+            assert len(recovered_data) == len(original_data), (
+                "CRITICAL: All rows must be recovered"
+            )
 
             for i, (orig, recovered) in enumerate(zip(original_data, recovered_data)):
                 for column_name in orig.keys():
@@ -612,25 +612,25 @@ class TestTransactionRollbackBackupValidation:
                     recovered_val = recovered[column_name]
 
                     if orig_val is None:
-                        assert (
-                            recovered_val is None
-                        ), f"RECOVERY ERROR: NULL mismatch in row {i}, column {column_name}"
+                        assert recovered_val is None, (
+                            f"RECOVERY ERROR: NULL mismatch in row {i}, column {column_name}"
+                        )
                     elif isinstance(orig_val, (bytes, bytearray)):
-                        assert (
-                            orig_val == recovered_val
-                        ), f"RECOVERY ERROR: Binary mismatch in row {i}, column {column_name}"
+                        assert orig_val == recovered_val, (
+                            f"RECOVERY ERROR: Binary mismatch in row {i}, column {column_name}"
+                        )
                     elif isinstance(orig_val, dict):  # JSONB
-                        assert (
-                            orig_val == recovered_val
-                        ), f"RECOVERY ERROR: JSON mismatch in row {i}, column {column_name}"
+                        assert orig_val == recovered_val, (
+                            f"RECOVERY ERROR: JSON mismatch in row {i}, column {column_name}"
+                        )
                     elif isinstance(orig_val, list):  # Arrays
-                        assert (
-                            orig_val == recovered_val
-                        ), f"RECOVERY ERROR: Array mismatch in row {i}, column {column_name}"
+                        assert orig_val == recovered_val, (
+                            f"RECOVERY ERROR: Array mismatch in row {i}, column {column_name}"
+                        )
                     else:
-                        assert (
-                            orig_val == recovered_val
-                        ), f"RECOVERY ERROR: Data mismatch in row {i}, column {column_name}"
+                        assert orig_val == recovered_val, (
+                            f"RECOVERY ERROR: Data mismatch in row {i}, column {column_name}"
+                        )
 
             # **STEP 6**: Validate backup verification queries
             logger.info("Step 6: Testing backup verification mechanisms")
@@ -640,18 +640,18 @@ class TestTransactionRollbackBackupValidation:
                 verification_result = await test_connection.fetchval(
                     table_backup.verification_query
                 )
-                assert (
-                    verification_result == table_backup.backup_size
-                ), "Table backup verification failed"
+                assert verification_result == table_backup.backup_size, (
+                    "Table backup verification failed"
+                )
 
             # Test column backup verification
             if column_backup.verification_query:
                 verification_result = await test_connection.fetchval(
                     column_backup.verification_query
                 )
-                assert (
-                    verification_result == column_backup.backup_size
-                ), "Column backup verification failed"
+                assert verification_result == column_backup.backup_size, (
+                    "Column backup verification failed"
+                )
 
             logger.info(
                 "✅ BACKUP INTEGRITY VALIDATED: 100% recovery accuracy confirmed"
@@ -764,9 +764,9 @@ class TestTransactionRollbackBackupValidation:
             }
 
             actual_stages = set(removal_plan.execution_stages)
-            assert (
-                len(actual_stages.intersection(expected_stages)) >= 4
-            ), "Should have multi-stage plan"
+            assert len(actual_stages.intersection(expected_stages)) >= 4, (
+                "Should have multi-stage plan"
+            )
 
             # Inject failure at specific stage (after some stages complete)
             original_execute_stage = column_removal_manager._execute_removal_stage
@@ -826,15 +826,15 @@ class TestTransactionRollbackBackupValidation:
             logger.info("Validating granular savepoint rollback...")
 
             # 1. Verify stages that completed were properly rolled back
-            assert (
-                RemovalStage.BACKUP_CREATION in stages_completed
-            ), "Backup stage should have been attempted"
-            assert (
-                RemovalStage.CONSTRAINT_REMOVAL in stages_completed
-            ), "Constraint removal should have been attempted"
-            assert (
-                RemovalStage.INDEX_REMOVAL in stages_completed
-            ), "Index removal should have been attempted (and failed)"
+            assert RemovalStage.BACKUP_CREATION in stages_completed, (
+                "Backup stage should have been attempted"
+            )
+            assert RemovalStage.CONSTRAINT_REMOVAL in stages_completed, (
+                "Constraint removal should have been attempted"
+            )
+            assert RemovalStage.INDEX_REMOVAL in stages_completed, (
+                "Index removal should have been attempted (and failed)"
+            )
 
             # 2. Verify complete rollback - constraint should still exist
             final_constraint_count = await test_connection.fetchval(
@@ -844,9 +844,9 @@ class TestTransactionRollbackBackupValidation:
                 AND constraint_name = 'check_target_format_{test_id}'
             """
             )
-            assert (
-                final_constraint_count == 1
-            ), "CRITICAL: Constraint must be restored after rollback"
+            assert final_constraint_count == 1, (
+                "CRITICAL: Constraint must be restored after rollback"
+            )
 
             # 3. Verify all indexes still exist
             final_index_count = await test_connection.fetchval(
@@ -856,17 +856,17 @@ class TestTransactionRollbackBackupValidation:
                 AND indexname LIKE '%target%'
             """
             )
-            assert (
-                final_index_count == 2
-            ), "CRITICAL: All indexes must be restored after rollback"
+            assert final_index_count == 2, (
+                "CRITICAL: All indexes must be restored after rollback"
+            )
 
             # 4. Verify view still works
             final_view_count = await test_connection.fetchval(
                 f"SELECT COUNT(*) FROM txn_multi_stage_view_{test_id}"
             )
-            assert (
-                final_view_count == initial_view_count
-            ), "CRITICAL: View must still work after rollback"
+            assert final_view_count == initial_view_count, (
+                "CRITICAL: View must still work after rollback"
+            )
 
             # 5. Verify column still exists
             column_exists = await test_connection.fetchval(
@@ -878,28 +878,28 @@ class TestTransactionRollbackBackupValidation:
                 )
             """
             )
-            assert (
-                column_exists is True
-            ), "CRITICAL: Target column must exist after rollback"
+            assert column_exists is True, (
+                "CRITICAL: Target column must exist after rollback"
+            )
 
             # 6. Verify ALL data is unchanged
             final_state = await self._capture_table_state(
                 test_connection, f"txn_multi_stage_{test_id}"
             )
 
-            assert len(final_state) == len(
-                initial_state
-            ), "CRITICAL: Row count must be unchanged"
+            assert len(final_state) == len(initial_state), (
+                "CRITICAL: Row count must be unchanged"
+            )
             for initial_row, final_row in zip(initial_state, final_state):
-                assert (
-                    initial_row == final_row
-                ), f"CRITICAL: Data corruption in row {initial_row['id']}"
+                assert initial_row == final_row, (
+                    f"CRITICAL: Data corruption in row {initial_row['id']}"
+                )
 
             # 7. Verify business data integrity
             total_financial_value = sum(row["financial_data"] for row in final_state)
-            assert (
-                total_financial_value == 900000.00
-            ), "CRITICAL: Business financial data must be preserved"
+            assert total_financial_value == 900000.00, (
+                "CRITICAL: Business financial data must be preserved"
+            )
 
             logger.info(
                 "✅ SAVEPOINT MANAGEMENT VALIDATED: Granular rollback successful"
@@ -1032,15 +1032,15 @@ class TestTransactionRollbackBackupValidation:
                 if isinstance(result, dict) and "error" in result:
                     error_count += 1
                     logger.info(
-                        f"Manager {result.get('manager', i+1)} failed: {result['error'][:100]}"
+                        f"Manager {result.get('manager', i + 1)} failed: {result['error'][:100]}"
                     )
                 elif (
                     hasattr(result, "result") and result.result == RemovalResult.SUCCESS
                 ):
                     success_count += 1
-                    logger.info(f"Manager {i+1} succeeded")
+                    logger.info(f"Manager {i + 1} succeeded")
                 else:
-                    logger.info(f"Manager {i+1} had unexpected result: {result}")
+                    logger.info(f"Manager {i + 1} had unexpected result: {result}")
 
             # Verify database consistency after concurrent operations
             async with test_database._pool.acquire() as conn:
@@ -1049,9 +1049,9 @@ class TestTransactionRollbackBackupValidation:
                 )
 
                 # **CRITICAL**: Data must be consistent regardless of success/failure pattern
-                assert len(final_state) == len(
-                    initial_state
-                ), "CRITICAL: Row count must remain consistent"
+                assert len(final_state) == len(initial_state), (
+                    "CRITICAL: Row count must remain consistent"
+                )
 
                 # Verify business data integrity
                 final_total_value = sum(row["business_value"] for row in final_state)
@@ -1059,15 +1059,15 @@ class TestTransactionRollbackBackupValidation:
                     row["business_value"] for row in initial_state
                 )
 
-                assert (
-                    final_total_value == initial_total_value
-                ), "CRITICAL: Business value must be preserved"
+                assert final_total_value == initial_total_value, (
+                    "CRITICAL: Business value must be preserved"
+                )
 
                 # Verify shared data is unchanged
                 for initial_row, final_row in zip(initial_state, final_state):
-                    assert (
-                        initial_row["shared_data"] == final_row["shared_data"]
-                    ), "CRITICAL: Shared data must be unchanged"
+                    assert initial_row["shared_data"] == final_row["shared_data"], (
+                        "CRITICAL: Shared data must be unchanged"
+                    )
                     assert (
                         initial_row["business_value"] == final_row["business_value"]
                     ), "CRITICAL: Business values must be unchanged"

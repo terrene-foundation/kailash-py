@@ -229,10 +229,7 @@ async def generate_soc2_evidence(
         ValueError: If start_time is after end_time.
     """
     if start_time >= end_time:
-        raise ValueError(
-            f"start_time ({start_time.isoformat()}) must be before "
-            f"end_time ({end_time.isoformat()})"
-        )
+        raise ValueError(f"start_time ({start_time.isoformat()}) must be before end_time ({end_time.isoformat()})")
 
     # Query the audit service for the compliance report
     compliance_report = await audit_service.generate_compliance_report(
@@ -293,8 +290,7 @@ async def generate_soc2_evidence(
     )
 
     logger.info(
-        "Generated SOC 2 evidence report %s: %d records, %d controls covered, "
-        "period %s to %s",
+        "Generated SOC 2 evidence report %s: %d records, %d controls covered, period %s to %s",
         report.report_id,
         len(records),
         len(control_coverage),

@@ -185,9 +185,9 @@ async def test_postgres_vs_sqlite_persistence(
 
     # Validate data integrity
     print("\n5. Validating data integrity across backends...")
-    assert (
-        sqlite_loaded[0]["user"] == postgres_loaded[0]["user"]
-    ), "Data should match across backends"
+    assert sqlite_loaded[0]["user"] == postgres_loaded[0]["user"], (
+        "Data should match across backends"
+    )
     assert (
         sqlite_loaded[1]["metadata"]["topic"] == postgres_loaded[1]["metadata"]["topic"]
     ), "Metadata should match"
@@ -288,9 +288,9 @@ async def test_postgres_vs_sqlite_performance(
 
     # Both should be under cold tier target (<100ms per operation)
     assert sqlite_read_time < 500, f"SQLite read too slow: {sqlite_read_time:.2f}ms"
-    assert (
-        postgres_read_time < 500
-    ), f"PostgreSQL read too slow: {postgres_read_time:.2f}ms"
+    assert postgres_read_time < 500, (
+        f"PostgreSQL read too slow: {postgres_read_time:.2f}ms"
+    )
 
     print("\n" + "=" * 70)
     print("✓ PostgreSQL vs SQLite - Performance: PASSED")

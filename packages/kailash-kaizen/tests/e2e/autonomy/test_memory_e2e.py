@@ -280,9 +280,9 @@ def test_hot_tier_memory_performance(persistent_memory_hot_tier):
     # Target: <0.0005ms (500 nanoseconds)
     # In practice, Python overhead means we target <0.002ms (2 microseconds)
     print(f"\n4. Performance Validation:")
-    assert (
-        avg_time < 0.002
-    ), f"Hot tier too slow: {avg_time:.6f}ms > 0.002ms (target: <0.002ms)"
+    assert avg_time < 0.002, (
+        f"Hot tier too slow: {avg_time:.6f}ms > 0.002ms (target: <0.002ms)"
+    )
     print(f"   ✓ Hot tier access time: {avg_time:.6f}ms < 0.002ms")
 
     # Step 5: Verify cache statistics
@@ -372,9 +372,9 @@ def test_warm_tier_memory_retrieval(persistent_memory_warm_tier):
     # Step 4: Validate performance targets
     # Target: ~2.34ms (allow up to 250ms for SQLite + DataFlow workflow overhead + variability)
     print(f"\n4. Performance Validation:")
-    assert (
-        avg_time < 250.0
-    ), f"Warm tier too slow: {avg_time:.4f}ms > 250.0ms (target: ~2.34ms)"
+    assert avg_time < 250.0, (
+        f"Warm tier too slow: {avg_time:.4f}ms > 250.0ms (target: ~2.34ms)"
+    )
     print(f"   ✓ Warm tier retrieval time: {avg_time:.4f}ms < 250.0ms")
 
     # Step 5: Verify cache behavior
@@ -451,9 +451,9 @@ def test_cold_tier_memory_storage(persistent_memory_cold_tier):
     # Step 3: Validate performance targets
     # Target: ~0.62ms (allow up to 250ms for SQLite + DataFlow workflow overhead + variability)
     print(f"\n3. Performance Validation:")
-    assert (
-        avg_time < 250.0
-    ), f"Cold tier too slow: {avg_time:.4f}ms > 250.0ms (target: ~0.62ms)"
+    assert avg_time < 250.0, (
+        f"Cold tier too slow: {avg_time:.4f}ms > 250.0ms (target: ~0.62ms)"
+    )
     print(f"   ✓ Cold tier storage time: {avg_time:.4f}ms < 250.0ms")
 
     # Step 4: Verify data persistence
@@ -461,9 +461,9 @@ def test_cold_tier_memory_storage(persistent_memory_cold_tier):
     memory.invalidate_cache(session_id)
     context = memory.load_context(session_id)
 
-    assert (
-        context["turn_count"] == 500
-    ), f"Expected 500 turns, got {context['turn_count']}"
+    assert context["turn_count"] == 500, (
+        f"Expected 500 turns, got {context['turn_count']}"
+    )
     print(f"   ✓ All 500 turns persisted to database")
 
     # Step 5: Verify data integrity
@@ -541,9 +541,9 @@ def test_multi_hour_conversation_persistence(persistent_memory_cold_tier):
     memory.invalidate_cache(session_id)
     context = memory.load_context(session_id)
 
-    assert (
-        context["turn_count"] == total_turns
-    ), f"Expected {total_turns} turns, got {context['turn_count']}"
+    assert context["turn_count"] == total_turns, (
+        f"Expected {total_turns} turns, got {context['turn_count']}"
+    )
     print(f"   ✓ Total turns: {context['turn_count']}")
 
     # Step 3: Performance stability analysis
@@ -565,9 +565,9 @@ def test_multi_hour_conversation_persistence(persistent_memory_cold_tier):
     # Verify performance degradation is acceptable (<400%)
     # Only check positive degradation (worse performance), allow improvements (negative %)
     # Note: 400% threshold allows for natural degradation in very large datasets (1500+ turns = 3000+ records) without indexing
-    assert (
-        degradation_pct < 400
-    ), f"Performance degraded too much: {degradation_pct:.2f}%"
+    assert degradation_pct < 400, (
+        f"Performance degraded too much: {degradation_pct:.2f}%"
+    )
     print(f"   ✓ Performance stable (<400% degradation)")
 
     # Step 4: Simulate application restart
@@ -588,9 +588,9 @@ def test_multi_hour_conversation_persistence(persistent_memory_cold_tier):
     # Load conversation after restart
     context_after_restart = memory_after_restart.load_context(session_id)
 
-    assert (
-        context_after_restart["turn_count"] == total_turns
-    ), f"Expected {total_turns} turns after restart, got {context_after_restart['turn_count']}"
+    assert context_after_restart["turn_count"] == total_turns, (
+        f"Expected {total_turns} turns after restart, got {context_after_restart['turn_count']}"
+    )
     print(f"   ✓ Conversation accessible after restart: {total_turns} turns")
 
     # Step 5: Verify data integrity at scale

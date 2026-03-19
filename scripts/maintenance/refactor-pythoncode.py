@@ -325,7 +325,7 @@ def main():
                 success_count += 1
                 modified_files.append(file)
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Refactoring complete!")
         print(f"Files processed: {len(files)}")
         print(f"Files modified: {success_count}")

@@ -168,7 +168,7 @@ class TestModelRegistryWithRealDatabase:
         exec(
             f"""
 @dataflow.model
-class {user_model_name.replace('_', '')}:
+class {user_model_name.replace("_", "")}:
     name: str
     email: str
     multi_tenant: bool = True
@@ -178,7 +178,7 @@ class {user_model_name.replace('_', '')}:
         exec(
             f"""
 @dataflow.model
-class {project_model_name.replace('_', '')}:
+class {project_model_name.replace("_", "")}:
     title: str
     description: str
     timestamps: bool = True

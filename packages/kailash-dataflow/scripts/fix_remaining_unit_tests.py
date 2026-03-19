@@ -141,9 +141,7 @@ def fix_undefined_variables(file_path):
 
 def main():
     """Main function to fix all unit test issues."""
-    test_dir = Path(
-        ""
-    )
+    test_dir = Path("")
 
     if not test_dir.exists():
         print(f"Test directory not found: {test_dir}")

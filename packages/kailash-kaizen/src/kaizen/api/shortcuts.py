@@ -358,8 +358,7 @@ def resolve_tool_access_shortcut(
     except ValueError:
         valid = ", ".join(f'"{ta.value}"' for ta in ToolAccess)
         raise ValueError(
-            f"Unknown tool access level: '{tool_access}'. "
-            f"Valid levels are: {valid}."
+            f"Unknown tool access level: '{tool_access}'. Valid levels are: {valid}."
         )
 
 
@@ -404,9 +403,7 @@ def resolve_execution_mode(
         return ExecutionMode(shortcut)
     except ValueError:
         valid = ", ".join(f'"{em.value}"' for em in ExecutionMode)
-        raise ValueError(
-            f"Unknown execution mode: '{mode}'. " f"Valid modes are: {valid}."
-        )
+        raise ValueError(f"Unknown execution mode: '{mode}'. Valid modes are: {valid}.")
 
 
 # === Model Shortcuts ===

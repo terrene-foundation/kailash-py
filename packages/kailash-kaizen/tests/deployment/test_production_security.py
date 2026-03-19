@@ -53,9 +53,9 @@ class TestSecurityHardening:
                 if "securityContext" in container:
                     sec_context = container["securityContext"]
                     # Should have readOnlyRootFilesystem set to true
-                    assert (
-                        sec_context.get("readOnlyRootFilesystem") == True
-                    ), f"Container {container['name']} should use read-only filesystem"
+                    assert sec_context.get("readOnlyRootFilesystem") == True, (
+                        f"Container {container['name']} should use read-only filesystem"
+                    )
 
     def test_dockerfile_minimal_base_image(self):
         """PROD-011.4: Dockerfile uses minimal base image."""
@@ -69,9 +69,9 @@ class TestSecurityHardening:
             minimal_images = ["alpine", "slim", "distroless"]
             uses_minimal = any(img in content.lower() for img in minimal_images)
 
-            assert (
-                uses_minimal
-            ), "Dockerfile should use minimal base image (alpine/slim/distroless)"
+            assert uses_minimal, (
+                "Dockerfile should use minimal base image (alpine/slim/distroless)"
+            )
 
     def test_security_context_non_privileged(self):
         """PROD-011.5: Containers run without privileged mode."""
@@ -86,9 +86,9 @@ class TestSecurityHardening:
                 if "securityContext" in container:
                     sec_context = container["securityContext"]
                     # Should explicitly set privileged to false or not set it
-                    assert (
-                        sec_context.get("privileged", False) == False
-                    ), f"Container {container['name']} must not be privileged"
+                    assert sec_context.get("privileged", False) == False, (
+                        f"Container {container['name']} must not be privileged"
+                    )
 
     def test_security_context_capabilities_dropped(self):
         """PROD-011.6: Unnecessary Linux capabilities are dropped."""
@@ -105,9 +105,9 @@ class TestSecurityHardening:
                     if "capabilities" in sec_context:
                         caps = sec_context["capabilities"]
                         # Should drop ALL capabilities or specific ones
-                        assert (
-                            "drop" in caps
-                        ), f"Container {container['name']} should drop capabilities"
+                        assert "drop" in caps, (
+                            f"Container {container['name']} should drop capabilities"
+                        )
 
     def test_network_policy_exists(self):
         """PROD-011.7: Network policy is defined."""
@@ -136,9 +136,9 @@ class TestSecurityHardening:
 
             spec = doc["spec"]
             # Should have ingress rules defined
-            assert (
-                "ingress" in spec or "policyTypes" in spec
-            ), "NetworkPolicy should restrict ingress"
+            assert "ingress" in spec or "policyTypes" in spec, (
+                "NetworkPolicy should restrict ingress"
+            )
 
     def test_secrets_not_in_configmap(self):
         """PROD-011.10: Secrets are not stored in ConfigMap."""
@@ -154,9 +154,9 @@ class TestSecurityHardening:
             secret_keywords = ["password", "secret", "key", "token", "credential"]
             for key in data.keys():
                 for keyword in secret_keywords:
-                    assert (
-                        keyword not in key.lower()
-                    ), f"ConfigMap should not contain secret: {key}"
+                    assert keyword not in key.lower(), (
+                        f"ConfigMap should not contain secret: {key}"
+                    )
 
     def test_secret_manifest_exists(self):
         """PROD-011.11: Kubernetes Secret manifest template exists."""
@@ -207,9 +207,9 @@ class TestSecurityHardening:
             ]
 
             for pattern in secret_patterns:
-                assert (
-                    pattern not in content.lower()
-                ), f"Dockerfile should not contain secrets: {pattern}"
+                assert pattern not in content.lower(), (
+                    f"Dockerfile should not contain secrets: {pattern}"
+                )
 
     def test_security_readme_exists(self):
         """PROD-011.14: Security documentation exists."""
@@ -231,9 +231,9 @@ class TestOperationalRunbooks:
         """PROD-012.2: Incident response runbook exists."""
         project_root = get_project_root()
         incident_runbook = project_root / "docs" / "runbooks" / "incident-response.md"
-        assert (
-            incident_runbook.exists()
-        ), "docs/runbooks/incident-response.md must exist"
+        assert incident_runbook.exists(), (
+            "docs/runbooks/incident-response.md must exist"
+        )
 
     def test_incident_response_has_escalation(self):
         """PROD-012.3: Incident response includes escalation procedures."""
@@ -243,9 +243,9 @@ class TestOperationalRunbooks:
         with open(incident_runbook) as f:
             content = f.read()
             assert "escalation" in content.lower(), "Must include escalation procedures"
-            assert (
-                "severity" in content.lower() or "priority" in content.lower()
-            ), "Must define severity levels"
+            assert "severity" in content.lower() or "priority" in content.lower(), (
+                "Must define severity levels"
+            )
 
     def test_troubleshooting_runbook_exists(self):
         """PROD-012.4: Troubleshooting runbook exists."""
@@ -269,9 +269,9 @@ class TestOperationalRunbooks:
             ]
 
             for issue in common_issues:
-                assert (
-                    issue in content.lower()
-                ), f"Troubleshooting should cover: {issue}"
+                assert issue in content.lower(), (
+                    f"Troubleshooting should cover: {issue}"
+                )
 
     def test_deployment_runbook_exists(self):
         """PROD-012.6: Deployment runbook exists."""
@@ -295,9 +295,9 @@ class TestOperationalRunbooks:
             ]
 
             for step in deployment_steps:
-                assert (
-                    step in content.lower()
-                ), f"Deployment runbook should include: {step}"
+                assert step in content.lower(), (
+                    f"Deployment runbook should include: {step}"
+                )
 
     def test_rollback_runbook_exists(self):
         """PROD-012.8: Rollback procedures are documented."""
@@ -447,9 +447,9 @@ class TestDocumentation:
             ]
 
             for component in components:
-                assert (
-                    component in content.lower()
-                ), f"Architecture should describe: {component}"
+                assert component in content.lower(), (
+                    f"Architecture should describe: {component}"
+                )
 
     def test_configuration_guide_exists(self):
         """PROD-013.11: Configuration guide exists."""
@@ -471,9 +471,9 @@ class TestDocumentation:
                 # At least mention environment variables concept
                 pass  # Basic check that guide exists
 
-            assert (
-                "environment" in content.lower()
-            ), "Configuration guide should mention environment variables"
+            assert "environment" in content.lower(), (
+                "Configuration guide should mention environment variables"
+            )
 
     def test_main_readme_links_docs(self):
         """PROD-013.13: Main README links to documentation."""

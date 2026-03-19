@@ -512,9 +512,9 @@ class TestNodeIdNamespaceIsolation:
         )
 
         # Record ID should be a database-generated value (typically int for auto-increment)
-        assert isinstance(
-            record_id, (int, str)
-        ), f"Record ID has unexpected type: {type(record_id)}"
+        assert isinstance(record_id, (int, str)), (
+            f"Record ID has unexpected type: {type(record_id)}"
+        )
 
         # If it's a string, it should NOT be the node identifier
         if isinstance(record_id, str):

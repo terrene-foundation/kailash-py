@@ -266,7 +266,7 @@ def get_agent_type_preset(agent_type: str) -> AgentTypePreset:
     if agent_type not in AGENT_TYPE_PRESETS:
         available_types = ", ".join(AGENT_TYPE_PRESETS.keys())
         raise ValueError(
-            f"Unknown agent type: {agent_type}. " f"Available types: {available_types}"
+            f"Unknown agent type: {agent_type}. Available types: {available_types}"
         )
 
     return AGENT_TYPE_PRESETS[agent_type]

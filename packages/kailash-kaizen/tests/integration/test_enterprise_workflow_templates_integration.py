@@ -188,9 +188,9 @@ class TestEnterpriseWorkflowTemplateIntegration:
                 [node_id for node_id in results.keys() if stage in node_id.lower()]
             )
 
-        assert (
-            len(stage_nodes) >= 4
-        ), f"Not all processing stages implemented. Found: {stage_nodes}"
+        assert len(stage_nodes) >= 4, (
+            f"Not all processing stages implemented. Found: {stage_nodes}"
+        )
 
         # Verify compliance check nodes
         compliance_nodes = [
@@ -351,9 +351,9 @@ class TestEnterpriseWorkflowSecurityIntegration:
         # Verify all security checks passed
         for node_id in security_nodes:
             result = results[node_id]
-            assert (
-                result["status"] == "completed"
-            ), f"Security node {node_id} failed: {result}"
+            assert result["status"] == "completed", (
+                f"Security node {node_id} failed: {result}"
+            )
 
     def test_enterprise_workflow_digital_signature_integration(self):
         """Test digital signature integration with enterprise workflows."""
@@ -387,9 +387,9 @@ class TestEnterpriseWorkflowSecurityIntegration:
         # Verify signature validation nodes
         for node_id in signature_nodes:
             result = results[node_id]
-            assert (
-                result["status"] == "completed"
-            ), f"Signature node {node_id} failed: {result}"
+            assert result["status"] == "completed", (
+                f"Signature node {node_id} failed: {result}"
+            )
 
 
 class TestEnterpriseWorkflowMultiTenantIntegration:
@@ -448,9 +448,9 @@ class TestEnterpriseWorkflowMultiTenantIntegration:
                 for node_id in workflow_results.keys()
                 if "tenant" in node_id.lower()
             ]
-            assert (
-                len(tenant_nodes) > 0
-            ), f"No tenant isolation nodes found for run {run_id}"
+            assert len(tenant_nodes) > 0, (
+                f"No tenant isolation nodes found for run {run_id}"
+            )
 
     def test_enterprise_workflow_cross_tenant_validation(self):
         """Test cross-tenant access validation in enterprise workflows."""
@@ -486,9 +486,9 @@ class TestEnterpriseWorkflowMultiTenantIntegration:
         # Verify all validation checks passed
         for node_id in validation_nodes:
             result = results[node_id]
-            assert (
-                result["status"] == "completed"
-            ), f"Tenant validation node {node_id} failed: {result}"
+            assert result["status"] == "completed", (
+                f"Tenant validation node {node_id} failed: {result}"
+            )
 
 
 class TestEnterpriseWorkflowPerformanceIntegration:
@@ -536,12 +536,12 @@ class TestEnterpriseWorkflowPerformanceIntegration:
         execution_time = time.time() - exec_start
 
         # Verify performance requirements
-        assert (
-            creation_time < 1.0
-        ), f"Workflow creation took {creation_time:.2f}s (should be <1s)"
-        assert (
-            execution_time < 5.0
-        ), f"Workflow execution took {execution_time:.2f}s (should be <5s)"
+        assert creation_time < 1.0, (
+            f"Workflow creation took {creation_time:.2f}s (should be <1s)"
+        )
+        assert execution_time < 5.0, (
+            f"Workflow execution took {execution_time:.2f}s (should be <5s)"
+        )
 
         # Verify workflow complexity was handled correctly
         assert len(results) >= 5, "Not all approval levels were processed"
@@ -597,9 +597,9 @@ class TestEnterpriseWorkflowPerformanceIntegration:
         assert len(completed_workflows) == num_workflows
 
         # Verify performance (all workflows should complete in <5 seconds total)
-        assert (
-            total_time < 5.0
-        ), f"Concurrent execution took {total_time:.2f}s (should be <5s)"
+        assert total_time < 5.0, (
+            f"Concurrent execution took {total_time:.2f}s (should be <5s)"
+        )
 
         # Verify unique run IDs
         run_ids = [run_id for _, _, run_id in completed_workflows]
@@ -610,9 +610,9 @@ class TestEnterpriseWorkflowPerformanceIntegration:
             assert results is not None
             assert run_id is not None
             for node_id, result in results.items():
-                assert (
-                    result["status"] == "completed"
-                ), f"Node {node_id} in {workflow_id} failed: {result}"
+                assert result["status"] == "completed", (
+                    f"Node {node_id} in {workflow_id} failed: {result}"
+                )
 
 
 # Test fixtures for integration tests

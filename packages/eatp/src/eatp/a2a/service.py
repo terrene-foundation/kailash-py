@@ -171,9 +171,7 @@ class A2AService:
                 "status": "healthy",
                 "agent_id": self._agent_id,
                 "version": self._agent_version,
-                "started_at": (
-                    self._started_at.isoformat() if self._started_at else None
-                ),
+                "started_at": (self._started_at.isoformat() if self._started_at else None),
             }
 
         @app.get("/.well-known/agent.json")
@@ -241,9 +239,7 @@ class A2AService:
 
             except JsonRpcParseError as e:
                 return JSONResponse(
-                    content=JsonRpcResponse.create_error(
-                        None, e.code, e.message, e.data
-                    ).to_dict(),
+                    content=JsonRpcResponse.create_error(None, e.code, e.message, e.data).to_dict(),
                     status_code=400,
                 )
 
@@ -268,9 +264,7 @@ class A2AService:
 
             except JsonRpcParseError as e:
                 return JSONResponse(
-                    content=JsonRpcResponse.create_error(
-                        None, e.code, e.message, e.data
-                    ).to_dict(),
+                    content=JsonRpcResponse.create_error(None, e.code, e.message, e.data).to_dict(),
                     status_code=400,
                 )
 

@@ -313,9 +313,9 @@ class TestReplayOldDelegationRecord:
         result = verify_signature(
             replayed_payload, replayed_delegation.signature, public_key
         )
-        assert (
-            result is False
-        ), "Replayed delegation with different timestamp should not verify"
+        assert result is False, (
+            "Replayed delegation with different timestamp should not verify"
+        )
 
 
 class TestSelfDelegationCycleDetected:
@@ -527,11 +527,11 @@ class TestDeepChainBeyondMaxDepth:
             # The chain goes: del-0 <- del-1 <- del-2 (leaf)
             delegations = []
             for i in range(3):  # 3 levels of delegation
-                parent_id = f"del-{i-1}" if i > 0 else None
+                parent_id = f"del-{i - 1}" if i > 0 else None
                 delegation = DelegationRecord(
                     id=f"del-{i}",
                     delegator_id=f"agent-{i}",
-                    delegatee_id=f"agent-{i+1}",
+                    delegatee_id=f"agent-{i + 1}",
                     task_id=f"task-{i}",
                     capabilities_delegated=["read_data"],
                     constraint_subset=[],
@@ -542,7 +542,7 @@ class TestDeepChainBeyondMaxDepth:
                             {
                                 "id": f"del-{i}",
                                 "delegator_id": f"agent-{i}",
-                                "delegatee_id": f"agent-{i+1}",
+                                "delegatee_id": f"agent-{i + 1}",
                             }
                         ),
                         private_key,
@@ -886,9 +886,9 @@ class TestDelegationWithFutureTimestampRejected:
 
         # The delegation is dated in the future - this is suspicious
         # Systems should check that delegated_at <= current_time
-        assert future_delegation.delegated_at > datetime.now(
-            timezone.utc
-        ), "Delegation is dated in the future"
+        assert future_delegation.delegated_at > datetime.now(timezone.utc), (
+            "Delegation is dated in the future"
+        )
 
 
 class TestEmptyConstraintSetBlocksEverything:
@@ -916,9 +916,9 @@ class TestEmptyConstraintSetBlocksEverything:
 
         # Empty child constraints means "inherit parent's" - this is VALID
         # The child is NOT saying "no constraints" but "inherit constraints"
-        assert (
-            result.valid is True
-        ), "Empty child constraints should inherit parent's (not remove all)"
+        assert result.valid is True, (
+            "Empty child constraints should inherit parent's (not remove all)"
+        )
 
     def test_child_cannot_remove_all_constraints(self):
         """
@@ -937,7 +937,7 @@ class TestEmptyConstraintSetBlocksEverything:
 
         result = validator.validate_inheritance(parent_constraints, child_constraints)
 
-        assert (
-            result.valid is False
-        ), "Child should not be able to remove parent's forbidden_actions"
+        assert result.valid is False, (
+            "Child should not be able to remove parent's forbidden_actions"
+        )
         assert ConstraintViolation.FORBIDDEN_ACTION_REMOVED in result.violations

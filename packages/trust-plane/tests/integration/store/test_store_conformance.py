@@ -82,8 +82,15 @@ def _conformance_params():
 def _clean_pg_tables(dsn: str) -> None:
     """Drop all trust-plane tables to ensure a clean state for conformance tests."""
     tables = [
-        "decisions", "milestones", "holds", "delegates",
-        "reviews", "anchors", "manifest", "delegates_wal", "meta",
+        "decisions",
+        "milestones",
+        "holds",
+        "delegates",
+        "reviews",
+        "anchors",
+        "manifest",
+        "delegates_wal",
+        "meta",
     ]
     conn = psycopg.connect(dsn)
     for table in tables:

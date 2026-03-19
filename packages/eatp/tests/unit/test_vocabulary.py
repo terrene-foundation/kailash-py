@@ -48,9 +48,7 @@ class TestPostureVocabulary:
     def test_every_posture_has_entry(self):
         """Every TrustPosture member must have a vocabulary entry."""
         for posture in TrustPosture:
-            assert (
-                posture.value in POSTURE_VOCABULARY
-            ), f"Missing vocabulary entry for posture: {posture.value}"
+            assert posture.value in POSTURE_VOCABULARY, f"Missing vocabulary entry for posture: {posture.value}"
 
     def test_no_extra_entries(self):
         """POSTURE_VOCABULARY must not contain entries for non-existent postures."""
@@ -68,9 +66,7 @@ class TestPostureVocabulary:
         """Each entry must have an autonomy_level matching the posture."""
         for posture in TrustPosture:
             entry = POSTURE_VOCABULARY[posture.value]
-            assert (
-                "autonomy_level" in entry
-            ), f"Missing autonomy_level for posture {posture.value}"
+            assert "autonomy_level" in entry, f"Missing autonomy_level for posture {posture.value}"
             assert entry["autonomy_level"] == posture.autonomy_level
 
     def test_entry_has_description(self):
@@ -78,16 +74,14 @@ class TestPostureVocabulary:
         for name, entry in POSTURE_VOCABULARY.items():
             assert "description" in entry, f"Missing description for posture {name}"
             assert isinstance(entry["description"], str)
-            assert (
-                len(entry["description"]) > 0
-            ), f"Empty description for posture {name}"
+            assert len(entry["description"]) > 0, f"Empty description for posture {name}"
 
     def test_eatp_ids_follow_prefix_convention(self):
         """All posture eatp_ids must start with 'eatp:posture:'."""
         for name, entry in POSTURE_VOCABULARY.items():
-            assert entry["eatp_id"].startswith(
-                "eatp:posture:"
-            ), f"Invalid eatp_id prefix for posture {name}: {entry['eatp_id']}"
+            assert entry["eatp_id"].startswith("eatp:posture:"), (
+                f"Invalid eatp_id prefix for posture {name}: {entry['eatp_id']}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -130,15 +124,9 @@ class TestPostureMapping:
         """Verify specific well-known mappings."""
         assert posture_to_eatp(TrustPosture.DELEGATED) == "eatp:posture:delegated"
         assert posture_to_eatp(TrustPosture.PSEUDO_AGENT) == "eatp:posture:pseudo_agent"
-        assert (
-            posture_to_eatp(TrustPosture.SHARED_PLANNING)
-            == "eatp:posture:shared_planning"
-        )
+        assert posture_to_eatp(TrustPosture.SHARED_PLANNING) == "eatp:posture:shared_planning"
         assert posture_to_eatp(TrustPosture.SUPERVISED) == "eatp:posture:supervised"
-        assert (
-            posture_to_eatp(TrustPosture.CONTINUOUS_INSIGHT)
-            == "eatp:posture:continuous_insight"
-        )
+        assert posture_to_eatp(TrustPosture.CONTINUOUS_INSIGHT) == "eatp:posture:continuous_insight"
 
 
 # ---------------------------------------------------------------------------
@@ -152,9 +140,7 @@ class TestConstraintVocabulary:
     def test_every_constraint_type_has_entry(self):
         """Every ConstraintType member must have a vocabulary entry."""
         for ct in ConstraintType:
-            assert (
-                ct.value in CONSTRAINT_VOCABULARY
-            ), f"Missing vocabulary entry for constraint type: {ct.value}"
+            assert ct.value in CONSTRAINT_VOCABULARY, f"Missing vocabulary entry for constraint type: {ct.value}"
 
     def test_no_extra_entries(self):
         """CONSTRAINT_VOCABULARY must not contain entries for non-existent types."""
@@ -173,9 +159,7 @@ class TestConstraintVocabulary:
         for name, entry in CONSTRAINT_VOCABULARY.items():
             assert "description" in entry, f"Missing description for constraint {name}"
             assert isinstance(entry["description"], str)
-            assert (
-                len(entry["description"]) > 0
-            ), f"Empty description for constraint {name}"
+            assert len(entry["description"]) > 0, f"Empty description for constraint {name}"
 
     def test_entry_has_dimension(self):
         """Each entry must have a dimension field mapping to constraint dimension names."""
@@ -186,9 +170,9 @@ class TestConstraintVocabulary:
     def test_eatp_ids_follow_prefix_convention(self):
         """All constraint eatp_ids must start with 'eatp:constraint:'."""
         for name, entry in CONSTRAINT_VOCABULARY.items():
-            assert entry["eatp_id"].startswith(
-                "eatp:constraint:"
-            ), f"Invalid eatp_id prefix for constraint {name}: {entry['eatp_id']}"
+            assert entry["eatp_id"].startswith("eatp:constraint:"), (
+                f"Invalid eatp_id prefix for constraint {name}: {entry['eatp_id']}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -229,14 +213,9 @@ class TestConstraintMapping:
 
     def test_specific_mappings(self):
         """Verify specific well-known mappings."""
-        assert (
-            constraint_to_eatp(ConstraintType.FINANCIAL) == "eatp:constraint:financial"
-        )
+        assert constraint_to_eatp(ConstraintType.FINANCIAL) == "eatp:constraint:financial"
         assert constraint_to_eatp(ConstraintType.TEMPORAL) == "eatp:constraint:temporal"
-        assert (
-            constraint_to_eatp(ConstraintType.REASONING_REQUIRED)
-            == "eatp:constraint:reasoning_required"
-        )
+        assert constraint_to_eatp(ConstraintType.REASONING_REQUIRED) == "eatp:constraint:reasoning_required"
 
 
 # ---------------------------------------------------------------------------
@@ -253,6 +232,6 @@ class TestAdapterScopeDocumentation:
 
         assert vocabulary.__doc__ is not None
         docstring = vocabulary.__doc__
-        assert (
-            "adapter" in docstring.lower() or "bridge" in docstring.lower()
-        ), "vocabulary module docstring must mention adapter/bridge scope"
+        assert "adapter" in docstring.lower() or "bridge" in docstring.lower(), (
+            "vocabulary module docstring must mention adapter/bridge scope"
+        )

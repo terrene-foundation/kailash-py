@@ -275,9 +275,9 @@ async def test_planning_agent_multi_step_research():
     plan = result["plan"]
     assert validate_plan_structure(plan), "Plan structure is invalid"
     assert len(plan) > 0, "Plan is empty"
-    assert (
-        len(plan) <= config.max_plan_steps
-    ), f"Plan exceeds max_plan_steps ({len(plan)} > {config.max_plan_steps})"
+    assert len(plan) <= config.max_plan_steps, (
+        f"Plan exceeds max_plan_steps ({len(plan)} > {config.max_plan_steps})"
+    )
 
     print(f"✓ Step 1 (Plan): Generated {len(plan)}-step research plan")
 
@@ -288,9 +288,9 @@ async def test_planning_agent_multi_step_research():
         assert "description" in step, f"Step {i} missing 'description'"
         assert isinstance(step["step"], int), f"Step {i} 'step' should be int"
         assert isinstance(step["action"], str), f"Step {i} 'action' should be string"
-        assert isinstance(
-            step["description"], str
-        ), f"Step {i} 'description' should be string"
+        assert isinstance(step["description"], str), (
+            f"Step {i} 'description' should be string"
+        )
         assert len(step["description"]) > 0, f"Step {i} has empty description"
 
         print(f"  Step {step['step']}: {step['action']}")
@@ -325,9 +325,9 @@ async def test_planning_agent_multi_step_research():
 
         # If completed, should have output
         if exec_result["status"] == "completed":
-            assert (
-                "output" in exec_result
-            ), f"Execution {i} completed but missing output"
+            assert "output" in exec_result, (
+                f"Execution {i} completed but missing output"
+            )
             assert len(exec_result["output"]) > 0, f"Execution {i} has empty output"
 
         print(f"  Execution {exec_result['step']}: {exec_result['status']}")
@@ -458,13 +458,13 @@ async def test_pev_agent_content_creation():
     # Validate Verify phase (verification)
     verification = result["verification"]
     assert "passed" in verification, "Verification missing 'passed' key"
-    assert isinstance(
-        verification["passed"], bool
-    ), "Verification 'passed' should be boolean"
+    assert isinstance(verification["passed"], bool), (
+        "Verification 'passed' should be boolean"
+    )
     assert "issues" in verification, "Verification missing 'issues' key"
-    assert isinstance(
-        verification["issues"], list
-    ), "Verification 'issues' should be list"
+    assert isinstance(verification["issues"], list), (
+        "Verification 'issues' should be list"
+    )
 
     print(f"✓ Verify Phase: Verification passed = {verification['passed']}")
 
@@ -476,9 +476,9 @@ async def test_pev_agent_content_creation():
     # Validate Refine phase (refinements)
     refinements = result["refinements"]
     assert isinstance(refinements, list), "Refinements should be list"
-    assert (
-        len(refinements) <= config.max_iterations
-    ), f"Refinements exceed max_iterations ({len(refinements)} > {config.max_iterations})"
+    assert len(refinements) <= config.max_iterations, (
+        f"Refinements exceed max_iterations ({len(refinements)} > {config.max_iterations})"
+    )
 
     print(f"✓ Refine Phase: Made {len(refinements)} refinement(s)")
 
@@ -486,7 +486,7 @@ async def test_pev_agent_content_creation():
     for i, refinement in enumerate(refinements):
         assert isinstance(refinement, str), f"Refinement {i} should be string"
         assert len(refinement) > 0, f"Refinement {i} is empty"
-        print(f"  Iteration {i+1}: {refinement[:80]}...")
+        print(f"  Iteration {i + 1}: {refinement[:80]}...")
 
     # Validate final result
     final_result = result["final_result"]
@@ -497,9 +497,9 @@ async def test_pev_agent_content_creation():
 
     # Key PEV validation: Agent should show iterative behavior
     # Either verification passed OR refinements were made
-    assert (
-        verification["passed"] or len(refinements) > 0
-    ), "PEV agent should either pass verification or make refinements"
+    assert verification["passed"] or len(refinements) > 0, (
+        "PEV agent should either pass verification or make refinements"
+    )
 
     # If verification passed, content should be substantial
     if verification["passed"]:
@@ -613,9 +613,9 @@ async def test_tot_agent_problem_solving():
 
     # Validate paths (multiple solution paths explored)
     paths = result["paths"]
-    assert (
-        len(paths) == config.num_paths
-    ), f"Expected {config.num_paths} paths, got {len(paths)}"
+    assert len(paths) == config.num_paths, (
+        f"Expected {config.num_paths} paths, got {len(paths)}"
+    )
 
     print(f"✓ Generate Phase: Created {len(paths)} solution paths")
 
@@ -623,20 +623,20 @@ async def test_tot_agent_problem_solving():
     for i, path in enumerate(paths):
         assert "path_id" in path, f"Path {i} missing path_id"
         assert "reasoning" in path, f"Path {i} missing reasoning"
-        assert isinstance(
-            path["reasoning"], str
-        ), f"Path {i} reasoning should be string"
+        assert isinstance(path["reasoning"], str), (
+            f"Path {i} reasoning should be string"
+        )
 
         # Path should have non-empty reasoning (unless error)
         if "error" not in path:
             assert len(path["reasoning"]) > 0, f"Path {i} has empty reasoning"
-            print(f"  Path {i+1}: {path['reasoning'][:60]}...")
+            print(f"  Path {i + 1}: {path['reasoning'][:60]}...")
 
     # Validate evaluations (path scoring)
     evaluations = result["evaluations"]
-    assert len(evaluations) == len(
-        paths
-    ), f"Evaluations count mismatch ({len(evaluations)} != {len(paths)})"
+    assert len(evaluations) == len(paths), (
+        f"Evaluations count mismatch ({len(evaluations)} != {len(paths)})"
+    )
 
     print(f"✓ Evaluate Phase: Scored all {len(evaluations)} paths")
 
@@ -646,11 +646,11 @@ async def test_tot_agent_problem_solving():
         assert "score" in evaluation, f"Evaluation {i} missing score"
         assert "path" in evaluation, f"Evaluation {i} missing path"
         score = evaluation["score"]
-        assert (
-            0.0 <= score <= 1.0
-        ), f"Evaluation {i} score {score} out of range [0.0, 1.0]"
+        assert 0.0 <= score <= 1.0, (
+            f"Evaluation {i} score {score} out of range [0.0, 1.0]"
+        )
         all_scores.append(score)
-        print(f"  Path {i+1} score: {score:.2f}")
+        print(f"  Path {i + 1} score: {score:.2f}")
 
     # Validate best path selection
     best_path = result["best_path"]
@@ -660,9 +660,9 @@ async def test_tot_agent_problem_solving():
     best_score = best_path["score"]
 
     # Best path should have the highest score (backtracking evidence)
-    assert best_score == max(
-        all_scores
-    ), f"Best path score {best_score:.2f} is not highest (max: {max(all_scores):.2f})"
+    assert best_score == max(all_scores), (
+        f"Best path score {best_score:.2f} is not highest (max: {max(all_scores):.2f})"
+    )
 
     print(f"✓ Select Phase: Best path selected (score: {best_score:.2f})")
     print(f"  Path ID: {best_path['path'].get('path_id', 'unknown')}")
@@ -693,9 +693,9 @@ async def test_tot_agent_problem_solving():
 
     # 4. Check for parallel execution evidence (if enabled)
     if config.parallel_execution:
-        assert (
-            len(paths) == config.num_paths
-        ), "Parallel execution should generate all paths"
+        assert len(paths) == config.num_paths, (
+            "Parallel execution should generate all paths"
+        )
         print(f"  ✓ Parallel execution: All {config.num_paths} paths generated")
 
     # 5. Validate score distribution (should have differentiation)

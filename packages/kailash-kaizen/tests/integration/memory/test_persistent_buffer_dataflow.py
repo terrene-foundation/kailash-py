@@ -337,7 +337,8 @@ def test_invalid_turn_missing_agent(persistent_memory):
     """Test that turn missing 'agent' key raises ValueError."""
     with pytest.raises(ValueError, match="user.*agent"):
         persistent_memory.save_turn(
-            "session_1", {"user": "Question"}  # Missing 'agent'
+            "session_1",
+            {"user": "Question"},  # Missing 'agent'
         )
 
 
@@ -351,7 +352,8 @@ def test_invalid_turn_non_string_values(persistent_memory):
     """Test that non-string user/agent values raise ValueError."""
     with pytest.raises(ValueError, match="must be strings"):
         persistent_memory.save_turn(
-            "session_1", {"user": 123, "agent": "Answer"}  # Not a string
+            "session_1",
+            {"user": 123, "agent": "Answer"},  # Not a string
         )
 
 

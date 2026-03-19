@@ -72,9 +72,9 @@ def test_remove_child_manager():
     # Assert
     assert len(parent_manager._child_managers) == 1, "Should have 1 child"
     assert child_manager_2 in parent_manager._child_managers, "Should contain child 2"
-    assert (
-        child_manager_1 not in parent_manager._child_managers
-    ), "Should not contain child 1"
+    assert child_manager_1 not in parent_manager._child_managers, (
+        "Should not contain child 1"
+    )
 
     # Act: Remove non-existent child (should not error)
     parent_manager.remove_child_manager(child_manager_1)  # Already removed
@@ -126,9 +126,9 @@ def test_propagate_to_children_graceful():
     reason_1 = child_manager_1.get_interrupt_reason()
     assert reason_1 is not None, "Child 1 should have interrupt reason"
     assert reason_1.mode == InterruptMode.GRACEFUL, "Child 1 should have GRACEFUL mode"
-    assert (
-        "propagated" in reason_1.message.lower()
-    ), "Child 1 should indicate propagation"
+    assert "propagated" in reason_1.message.lower(), (
+        "Child 1 should indicate propagation"
+    )
 
 
 def test_propagate_to_children_immediate():
@@ -166,14 +166,14 @@ def test_propagate_to_children_immediate():
 
     # Verify children have IMMEDIATE mode
     reason_1 = child_manager_1.get_interrupt_reason()
-    assert (
-        reason_1.mode == InterruptMode.IMMEDIATE
-    ), "Child 1 should have IMMEDIATE mode"
+    assert reason_1.mode == InterruptMode.IMMEDIATE, (
+        "Child 1 should have IMMEDIATE mode"
+    )
 
     reason_2 = child_manager_2.get_interrupt_reason()
-    assert (
-        reason_2.mode == InterruptMode.IMMEDIATE
-    ), "Child 2 should have IMMEDIATE mode"
+    assert reason_2.mode == InterruptMode.IMMEDIATE, (
+        "Child 2 should have IMMEDIATE mode"
+    )
 
 
 def test_propagate_with_no_children():
@@ -200,6 +200,6 @@ def test_propagate_with_no_children():
 
     # Assert
     assert parent_manager.is_interrupted(), "Parent should still be interrupted"
-    assert (
-        len(parent_manager._child_managers) == 0
-    ), "Should have no children (no initialization)"
+    assert len(parent_manager._child_managers) == 0, (
+        "Should have no children (no initialization)"
+    )

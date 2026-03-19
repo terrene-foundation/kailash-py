@@ -384,9 +384,9 @@ class TestRiskAssessmentEngine:
 
         for score, expected_level in test_cases:
             risk_level = engine._determine_risk_level(score)
-            assert (
-                risk_level == expected_level
-            ), f"Score {score} should be {expected_level}, got {risk_level}"
+            assert risk_level == expected_level, (
+                f"Score {score} should be {expected_level}, got {risk_level}"
+            )
 
     def test_risk_weight_configuration(self):
         """Test configurable risk weights for different categories."""
@@ -427,9 +427,9 @@ class TestRiskAssessmentEngine:
         elapsed_time = (time.time() - start_time) * 1000  # Convert to milliseconds
 
         # Should complete in under 100ms as per requirements
-        assert (
-            elapsed_time < 100
-        ), f"Risk calculation took {elapsed_time}ms, should be <100ms"
+        assert elapsed_time < 100, (
+            f"Risk calculation took {elapsed_time}ms, should be <100ms"
+        )
 
         # Verify the result is valid
         assert 0 <= risk_score.score <= 100

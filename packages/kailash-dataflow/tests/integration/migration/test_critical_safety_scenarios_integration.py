@@ -259,12 +259,12 @@ class TestCriticalSafetyScenarios:
             )
 
             # **CRITICAL VALIDATION 1**: Must detect ALL foreign key dependencies
-            assert (
-                dependency_report.has_dependencies() is True
-            ), "CRITICAL: Must detect FK dependencies"
-            assert (
-                DependencyType.FOREIGN_KEY in dependency_report.dependencies
-            ), "CRITICAL: Must detect FK type"
+            assert dependency_report.has_dependencies() is True, (
+                "CRITICAL: Must detect FK dependencies"
+            )
+            assert DependencyType.FOREIGN_KEY in dependency_report.dependencies, (
+                "CRITICAL: Must detect FK type"
+            )
 
             fk_deps = dependency_report.dependencies[DependencyType.FOREIGN_KEY]
             fk_names = {dep.constraint_name for dep in fk_deps}
@@ -277,43 +277,43 @@ class TestCriticalSafetyScenarios:
                 "fk_audit_user_id",
             }
             found_fks = expected_fks.intersection(fk_names)
-            assert (
-                len(found_fks) == 4
-            ), f"CRITICAL: Must find all 4 FK constraints, found: {found_fks}"
+            assert len(found_fks) == 4, (
+                f"CRITICAL: Must find all 4 FK constraints, found: {found_fks}"
+            )
 
             # **CRITICAL VALIDATION 2**: ALL foreign keys must be marked CRITICAL
             for fk_dep in fk_deps:
-                assert (
-                    fk_dep.impact_level == ImpactLevel.CRITICAL
-                ), f"CRITICAL: FK {fk_dep.constraint_name} must be CRITICAL impact"
-                assert (
-                    fk_dep.target_table == "critical_users"
-                ), "CRITICAL: FK must target critical_users"
-                assert (
-                    fk_dep.target_column == "id"
-                ), "CRITICAL: FK must target id column"
+                assert fk_dep.impact_level == ImpactLevel.CRITICAL, (
+                    f"CRITICAL: FK {fk_dep.constraint_name} must be CRITICAL impact"
+                )
+                assert fk_dep.target_table == "critical_users", (
+                    "CRITICAL: FK must target critical_users"
+                )
+                assert fk_dep.target_column == "id", (
+                    "CRITICAL: FK must target id column"
+                )
 
             # Verify CASCADE vs RESTRICT detection
             cascade_fks = [fk for fk in fk_deps if fk.on_delete == "CASCADE"]
             restrict_fks = [fk for fk in fk_deps if fk.on_delete == "RESTRICT"]
 
-            assert (
-                len(cascade_fks) == 3
-            ), f"CRITICAL: Must detect 3 CASCADE FKs (data loss risk), found: {len(cascade_fks)}"
-            assert (
-                len(restrict_fks) == 1
-            ), f"CRITICAL: Must detect 1 RESTRICT FK, found: {len(restrict_fks)}"
+            assert len(cascade_fks) == 3, (
+                f"CRITICAL: Must detect 3 CASCADE FKs (data loss risk), found: {len(cascade_fks)}"
+            )
+            assert len(restrict_fks) == 1, (
+                f"CRITICAL: Must detect 1 RESTRICT FK, found: {len(restrict_fks)}"
+            )
 
             # **CRITICAL VALIDATION 3**: Overall recommendation must be DANGEROUS
             recommendation = dependency_report.get_removal_recommendation()
-            assert (
-                recommendation == "DANGEROUS"
-            ), f"CRITICAL: Must recommend DANGEROUS, got: {recommendation}"
+            assert recommendation == "DANGEROUS", (
+                f"CRITICAL: Must recommend DANGEROUS, got: {recommendation}"
+            )
 
             critical_deps = dependency_report.get_critical_dependencies()
-            assert (
-                len(critical_deps) >= 4
-            ), f"CRITICAL: Must identify at least 4 critical deps, found: {len(critical_deps)}"
+            assert len(critical_deps) >= 4, (
+                f"CRITICAL: Must identify at least 4 critical deps, found: {len(critical_deps)}"
+            )
 
             logger.warning(
                 f"✅ Phase 1 CRITICAL validation passed: {len(fk_deps)} FK dependencies detected"
@@ -327,21 +327,21 @@ class TestCriticalSafetyScenarios:
             impact_report = impact_reporter.generate_impact_report(dependency_report)
 
             # **CRITICAL VALIDATION 4**: Impact assessment must be CRITICAL
-            assert (
-                impact_report.assessment.overall_risk == ImpactLevel.CRITICAL
-            ), "CRITICAL: Impact must be CRITICAL"
-            assert (
-                impact_report.assessment.critical_dependencies >= 4
-            ), "CRITICAL: Must count all critical deps"
+            assert impact_report.assessment.overall_risk == ImpactLevel.CRITICAL, (
+                "CRITICAL: Impact must be CRITICAL"
+            )
+            assert impact_report.assessment.critical_dependencies >= 4, (
+                "CRITICAL: Must count all critical deps"
+            )
 
             # Primary recommendation MUST be DO NOT REMOVE
             primary_rec = impact_report.recommendations[0]
-            assert (
-                primary_rec.type == RecommendationType.DO_NOT_REMOVE
-            ), "CRITICAL: Must recommend DO NOT REMOVE"
-            assert (
-                "CRITICAL" in primary_rec.title.upper()
-            ), "CRITICAL: Title must emphasize CRITICAL"
+            assert primary_rec.type == RecommendationType.DO_NOT_REMOVE, (
+                "CRITICAL: Must recommend DO NOT REMOVE"
+            )
+            assert "CRITICAL" in primary_rec.title.upper(), (
+                "CRITICAL: Title must emphasize CRITICAL"
+            )
 
             # Generate user-facing reports
             console_report = impact_reporter.format_user_friendly_report(
@@ -349,16 +349,16 @@ class TestCriticalSafetyScenarios:
             )
 
             # **CRITICAL VALIDATION 5**: Console report must clearly warn of danger
-            assert (
-                "CRITICAL IMPACT DETECTED" in console_report
-            ), "CRITICAL: Must show critical impact"
-            assert (
-                "DO NOT REMOVE" in console_report
-            ), "CRITICAL: Must show DO NOT REMOVE"
+            assert "CRITICAL IMPACT DETECTED" in console_report, (
+                "CRITICAL: Must show critical impact"
+            )
+            assert "DO NOT REMOVE" in console_report, (
+                "CRITICAL: Must show DO NOT REMOVE"
+            )
             assert "🔴" in console_report, "CRITICAL: Must show critical icon"
-            assert (
-                "critical_users.id" in console_report
-            ), "CRITICAL: Must identify specific column"
+            assert "critical_users.id" in console_report, (
+                "CRITICAL: Must identify specific column"
+            )
 
             logger.warning(
                 "✅ Phase 3 CRITICAL validation passed: Impact assessment shows CRITICAL danger"
@@ -378,18 +378,18 @@ class TestCriticalSafetyScenarios:
             )
 
             # **CRITICAL VALIDATION 6**: Safety validation MUST block removal
-            assert (
-                safety_validation.is_safe is False
-            ), "CRITICAL SAFETY VIOLATION: Must block primary key removal"
-            assert (
-                safety_validation.risk_level == ImpactLevel.CRITICAL
-            ), "CRITICAL: Risk must be CRITICAL"
-            assert (
-                len(safety_validation.blocking_dependencies) >= 4
-            ), "CRITICAL: Must list all blocking deps"
-            assert (
-                safety_validation.requires_confirmation is True
-            ), "CRITICAL: Must require confirmation"
+            assert safety_validation.is_safe is False, (
+                "CRITICAL SAFETY VIOLATION: Must block primary key removal"
+            )
+            assert safety_validation.risk_level == ImpactLevel.CRITICAL, (
+                "CRITICAL: Risk must be CRITICAL"
+            )
+            assert len(safety_validation.blocking_dependencies) >= 4, (
+                "CRITICAL: Must list all blocking deps"
+            )
+            assert safety_validation.requires_confirmation is True, (
+                "CRITICAL: Must require confirmation"
+            )
 
             # Must have critical warnings
             assert len(safety_validation.warnings) > 0, "CRITICAL: Must have warnings"
@@ -400,9 +400,9 @@ class TestCriticalSafetyScenarios:
             ), "CRITICAL: Warnings must mention data loss risk"
 
             # Must have specific recommendations
-            assert (
-                len(safety_validation.recommendations) > 0
-            ), "CRITICAL: Must have safety recommendations"
+            assert len(safety_validation.recommendations) > 0, (
+                "CRITICAL: Must have safety recommendations"
+            )
             rec_text = " ".join(safety_validation.recommendations).lower()
             assert any(
                 word in rec_text
@@ -422,9 +422,9 @@ class TestCriticalSafetyScenarios:
             result = await column_removal_manager.execute_safe_removal(removal_plan)
 
             # **CRITICAL VALIDATION 7**: Execution MUST fail at safety validation
-            assert (
-                result.result != RemovalResult.SUCCESS
-            ), "CRITICAL SAFETY VIOLATION: Execution must not succeed"
+            assert result.result != RemovalResult.SUCCESS, (
+                "CRITICAL SAFETY VIOLATION: Execution must not succeed"
+            )
             assert result.result in [
                 RemovalResult.SAFETY_VALIDATION_FAILED,
                 RemovalResult.TRANSACTION_FAILED,
@@ -439,9 +439,9 @@ class TestCriticalSafetyScenarios:
                 )
             """
             )
-            assert (
-                column_exists is True
-            ), "CRITICAL SAFETY VIOLATION: Column must still exist after blocked removal"
+            assert column_exists is True, (
+                "CRITICAL SAFETY VIOLATION: Column must still exist after blocked removal"
+            )
 
             # Data must be intact
             user_count = await test_connection.fetchval(
@@ -550,9 +550,9 @@ class TestCriticalSafetyScenarios:
             assert DependencyType.FOREIGN_KEY in dependency_report.dependencies
 
             fk_deps = dependency_report.dependencies[DependencyType.FOREIGN_KEY]
-            assert (
-                len(fk_deps) >= 2
-            ), "CRITICAL: Must detect both FK dependencies on unique constraint"
+            assert len(fk_deps) >= 2, (
+                "CRITICAL: Must detect both FK dependencies on unique constraint"
+            )
 
             # All FKs referencing unique constraint must be CRITICAL
             for fk_dep in fk_deps:
@@ -573,9 +573,9 @@ class TestCriticalSafetyScenarios:
                 removal_plan
             )
 
-            assert (
-                safety_validation.is_safe is False
-            ), "CRITICAL: Must block unique constraint target removal"
+            assert safety_validation.is_safe is False, (
+                "CRITICAL: Must block unique constraint target removal"
+            )
             assert safety_validation.risk_level == ImpactLevel.CRITICAL
 
             logger.warning(
@@ -686,9 +686,9 @@ class TestCriticalSafetyScenarios:
             assert len(cascade_fks) >= 2, "CRITICAL: Must detect CASCADE foreign keys"
 
             for fk_dep in cascade_fks:
-                assert (
-                    fk_dep.impact_level == ImpactLevel.CRITICAL
-                ), "CRITICAL: CASCADE FKs must be CRITICAL impact"
+                assert fk_dep.impact_level == ImpactLevel.CRITICAL, (
+                    "CRITICAL: CASCADE FKs must be CRITICAL impact"
+                )
 
             # Impact assessment should recognize cascade danger
             impact_report = impact_reporter.generate_impact_report(dependency_report)
@@ -712,9 +712,9 @@ class TestCriticalSafetyScenarios:
                 removal_plan
             )
 
-            assert (
-                safety_validation.is_safe is False
-            ), "CRITICAL: Must block cascade deletion root"
+            assert safety_validation.is_safe is False, (
+                "CRITICAL: Must block cascade deletion root"
+            )
 
             # Verify data exists that would be lost
             timesheet_count = await test_connection.fetchval(
@@ -724,9 +724,9 @@ class TestCriticalSafetyScenarios:
                 "SELECT COUNT(*) FROM critical_employees"
             )
 
-            assert (
-                timesheet_count >= 200
-            ), "Should have substantial data that would be lost"
+            assert timesheet_count >= 200, (
+                "Should have substantial data that would be lost"
+            )
             assert employee_count >= 7, "Should have employee data that would be lost"
 
             logger.warning(
@@ -798,9 +798,9 @@ class TestCriticalSafetyScenarios:
 
             assert initial_customer_count == 3, "Initial data setup validation"
             assert initial_transaction_count == 5, "Initial transaction data validation"
-            assert (
-                initial_total_value == 1550000.00
-            ), "Initial business value validation"
+            assert initial_total_value == 1550000.00, (
+                "Initial business value validation"
+            )
 
             # Attempt to remove business critical column
             dependency_report = await dependency_analyzer.analyze_column_dependencies(
@@ -819,18 +819,18 @@ class TestCriticalSafetyScenarios:
             safety_validation = await column_removal_manager.validate_removal_safety(
                 removal_plan
             )
-            assert (
-                safety_validation.is_safe is False
-            ), "CRITICAL: Must protect business data"
+            assert safety_validation.is_safe is False, (
+                "CRITICAL: Must protect business data"
+            )
 
             # Even if we force attempt execution (simulate system malfunction), data must be preserved
             try:
                 result = await column_removal_manager.execute_safe_removal(removal_plan)
 
                 # If execution somehow proceeded, it must have failed safely
-                assert (
-                    result.result != RemovalResult.SUCCESS
-                ), "CRITICAL: Execution must not succeed with critical data"
+                assert result.result != RemovalResult.SUCCESS, (
+                    "CRITICAL: Execution must not succeed with critical data"
+                )
 
             except Exception as e:
                 # Exception during execution is acceptable - prevents data loss
@@ -849,15 +849,15 @@ class TestCriticalSafetyScenarios:
                 "SELECT SUM(total_value) FROM critical_customers"
             )
 
-            assert (
-                final_customer_count == initial_customer_count
-            ), "CRITICAL DATA LOSS: Customer count changed"
-            assert (
-                final_transaction_count == initial_transaction_count
-            ), "CRITICAL DATA LOSS: Transaction count changed"
-            assert (
-                final_total_value == initial_total_value
-            ), "CRITICAL DATA LOSS: Business value changed"
+            assert final_customer_count == initial_customer_count, (
+                "CRITICAL DATA LOSS: Customer count changed"
+            )
+            assert final_transaction_count == initial_transaction_count, (
+                "CRITICAL DATA LOSS: Transaction count changed"
+            )
+            assert final_total_value == initial_total_value, (
+                "CRITICAL DATA LOSS: Business value changed"
+            )
 
             # Verify column still exists
             column_exists = await test_connection.fetchval(
@@ -868,9 +868,9 @@ class TestCriticalSafetyScenarios:
                 )
             """
             )
-            assert (
-                column_exists is True
-            ), "CRITICAL: Business critical column must be preserved"
+            assert column_exists is True, (
+                "CRITICAL: Business critical column must be preserved"
+            )
 
             # Verify referential integrity is intact
             orphaned_transactions = await test_connection.fetchval(
@@ -880,9 +880,9 @@ class TestCriticalSafetyScenarios:
                 WHERE c.customer_id IS NULL
             """
             )
-            assert (
-                orphaned_transactions == 0
-            ), "CRITICAL: No orphaned transactions (referential integrity preserved)"
+            assert orphaned_transactions == 0, (
+                "CRITICAL: No orphaned transactions (referential integrity preserved)"
+            )
 
             logger.warning(
                 "✅ CRITICAL SAFETY: Data integrity preserved - 0% data loss validated"
@@ -969,9 +969,9 @@ class TestCriticalSafetyScenarios:
                     RemovalResult.TRANSACTION_FAILED,
                     RemovalResult.SYSTEM_ERROR,
                 ]
-                assert (
-                    result.rollback_executed is True
-                ), "CRITICAL: System must rollback on failure"
+                assert result.rollback_executed is True, (
+                    "CRITICAL: System must rollback on failure"
+                )
 
             finally:
                 # Restore original method
@@ -985,15 +985,15 @@ class TestCriticalSafetyScenarios:
                 "SELECT * FROM critical_recovery_test ORDER BY id"
             )
 
-            assert (
-                post_failure_count == initial_count
-            ), "CRITICAL RECOVERY FAILURE: Row count changed after recovery"
+            assert post_failure_count == initial_count, (
+                "CRITICAL RECOVERY FAILURE: Row count changed after recovery"
+            )
 
             # Verify data is identical
             for initial_row, recovered_row in zip(initial_data, post_failure_data):
-                assert dict(initial_row) == dict(
-                    recovered_row
-                ), "CRITICAL RECOVERY FAILURE: Data corrupted during recovery"
+                assert dict(initial_row) == dict(recovered_row), (
+                    "CRITICAL RECOVERY FAILURE: Data corrupted during recovery"
+                )
 
             # Verify schema integrity
             column_exists = await test_connection.fetchval(
@@ -1004,9 +1004,9 @@ class TestCriticalSafetyScenarios:
                 )
             """
             )
-            assert (
-                column_exists is True
-            ), "CRITICAL RECOVERY FAILURE: Column lost during recovery"
+            assert column_exists is True, (
+                "CRITICAL RECOVERY FAILURE: Column lost during recovery"
+            )
 
             logger.warning(
                 "✅ CRITICAL SAFETY: System recovery validated - no data loss during failure"

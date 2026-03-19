@@ -287,7 +287,7 @@ async def main() -> None:
         # Simulate cost tracking (would be real with OpenAI API)
         # With Ollama, cost is $0.00, so we simulate for demonstration
         for i in range(result.get("cycle_count", 0)):
-            monitoring_hook.track_operation_cost(f"llm_call_cycle_{i+1}", 0.0)
+            monitoring_hook.track_operation_cost(f"llm_call_cycle_{i + 1}", 0.0)
 
         # Check if budget exceeded
         if result["status"] == "interrupted":

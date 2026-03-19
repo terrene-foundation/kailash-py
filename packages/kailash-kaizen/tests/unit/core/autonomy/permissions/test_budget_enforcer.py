@@ -43,9 +43,9 @@ class TestCostEstimation:
             "LLMAgentNode", {"prompt": long_prompt}
         )
         assert long_cost > short_cost, "Longer prompts should cost more"
-        assert (
-            long_cost >= 0.01
-        ), "Long prompts should cost at least $0.01 per 1000 tokens"
+        assert long_cost >= 0.01, (
+            "Long prompts should cost at least $0.01 per 1000 tokens"
+        )
 
     def test_estimate_unknown_tool_cost(self):
         """Test 5: Unknown tools default to $0.00."""
@@ -68,9 +68,9 @@ class TestCostEstimation:
         estimated_cost = BudgetEnforcer.estimate_cost("Write", {"path": "test.txt"})
 
         # Should include buffer (actual implementation may vary)
-        assert (
-            estimated_cost >= base_cost
-        ), "Estimated cost should be at least base cost"
+        assert estimated_cost >= base_cost, (
+            "Estimated cost should be at least base cost"
+        )
 
 
 class TestBudgetChecking:
@@ -248,9 +248,9 @@ class TestThreadSafety:
 
         # Total should be 10 threads * 100 operations * $0.1 = $100.0
         # Use approximate comparison due to floating point precision
-        assert (
-            abs(context.budget_used - 100.0) < 0.001
-        ), "Budget should be correctly updated by all threads"
+        assert abs(context.budget_used - 100.0) < 0.001, (
+            "Budget should be correctly updated by all threads"
+        )
 
         # Each tool should have 100 uses
         for i in range(10):

@@ -298,7 +298,7 @@ class BenchmarkCase:
             try:
                 self.func()
             except Exception as e:
-                logger.error(f"Warmup iteration {i+1} failed: {e}")
+                logger.error(f"Warmup iteration {i + 1} failed: {e}")
                 raise
 
         # Phase 2: Measurement
@@ -312,7 +312,7 @@ class BenchmarkCase:
             try:
                 self.func()
             except Exception as e:
-                logger.error(f"Measurement iteration {i+1} failed: {e}")
+                logger.error(f"Measurement iteration {i + 1} failed: {e}")
                 raise
             iter_elapsed = (time.perf_counter() - iter_start) * 1000  # Convert to ms
 

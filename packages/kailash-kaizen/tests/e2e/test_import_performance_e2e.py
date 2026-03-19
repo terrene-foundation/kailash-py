@@ -179,12 +179,12 @@ print(f"AGENTS_CREATED:{len([data_processor, compliance_reviewer])}")
             print(f"Agents created: {features.get('AGENTS_CREATED', 0)}")
 
             # Validate enterprise performance requirements
-            assert (
-                metrics.get("STARTUP_TIME", float("inf")) < 120
-            ), f"Startup too slow: {metrics.get('STARTUP_TIME'):.1f}ms"
-            assert (
-                metrics.get("TOTAL_TIME", float("inf")) < 500
-            ), f"Total workflow too slow: {metrics.get('TOTAL_TIME'):.1f}ms"
+            assert metrics.get("STARTUP_TIME", float("inf")) < 120, (
+                f"Startup too slow: {metrics.get('STARTUP_TIME'):.1f}ms"
+            )
+            assert metrics.get("TOTAL_TIME", float("inf")) < 500, (
+                f"Total workflow too slow: {metrics.get('TOTAL_TIME'):.1f}ms"
+            )
             assert features.get("AGENTS_CREATED", 0) == 2, "Should create 2 agents"
             assert all(
                 features.get(key, False)
@@ -320,15 +320,15 @@ print(f"STARTUP_VARIANCE:{max_startup - min_startup:.1f}")
 
             # Validate production requirements
             assert metrics.get("PROCESS_COUNT", 0) == 3, "Should simulate 3 processes"
-            assert (
-                metrics.get("AVG_STARTUP", float("inf")) < 150
-            ), f"Average startup too slow: {metrics.get('AVG_STARTUP'):.1f}ms"
-            assert (
-                metrics.get("MAX_STARTUP", float("inf")) < 200
-            ), f"Max startup too slow: {metrics.get('MAX_STARTUP'):.1f}ms"
-            assert (
-                metrics.get("STARTUP_VARIANCE", float("inf")) < 100
-            ), f"Startup variance too high: {metrics.get('STARTUP_VARIANCE'):.1f}ms"
+            assert metrics.get("AVG_STARTUP", float("inf")) < 150, (
+                f"Average startup too slow: {metrics.get('AVG_STARTUP'):.1f}ms"
+            )
+            assert metrics.get("MAX_STARTUP", float("inf")) < 200, (
+                f"Max startup too slow: {metrics.get('MAX_STARTUP'):.1f}ms"
+            )
+            assert metrics.get("STARTUP_VARIANCE", float("inf")) < 100, (
+                f"Startup variance too high: {metrics.get('STARTUP_VARIANCE'):.1f}ms"
+            )
 
             print("✓ Production deployment simulation passed")
 
@@ -433,12 +433,12 @@ print(f"REGRESSION_CHECK:{'PASS' if improvement_percent >= TARGET_IMPROVEMENT_PE
             print(f"Regression check: {metrics.get('REGRESSION_CHECK', 'UNKNOWN')}")
 
             # Validate regression requirements
-            assert (
-                metrics.get("REGRESSION_CHECK") == "PASS"
-            ), f"Performance regression detected! Only {metrics.get('IMPROVEMENT_PERCENT', 0):.1f}% improvement"
-            assert (
-                metrics.get("IMPROVEMENT_PERCENT", 0) >= 40
-            ), f"Improvement below expectation: {metrics.get('IMPROVEMENT_PERCENT', 0):.1f}% (expected ≥40%)"
+            assert metrics.get("REGRESSION_CHECK") == "PASS", (
+                f"Performance regression detected! Only {metrics.get('IMPROVEMENT_PERCENT', 0):.1f}% improvement"
+            )
+            assert metrics.get("IMPROVEMENT_PERCENT", 0) >= 40, (
+                f"Improvement below expectation: {metrics.get('IMPROVEMENT_PERCENT', 0):.1f}% (expected ≥40%)"
+            )
 
             print("✓ Performance regression test passed")
 

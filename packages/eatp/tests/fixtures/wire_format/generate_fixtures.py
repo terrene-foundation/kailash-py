@@ -187,9 +187,7 @@ def generate_constraint_envelope() -> dict:
             }
             for c in envelope.active_constraints
         ],
-        "computed_at": (
-            envelope.computed_at.isoformat() if envelope.computed_at else None
-        ),
+        "computed_at": (envelope.computed_at.isoformat() if envelope.computed_at else None),
         "valid_until": envelope.valid_until,
     }
 

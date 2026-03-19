@@ -45,9 +45,9 @@ class TestJourneyDefinition:
         transitions = HealthcareReferralJourney._transitions
 
         # Should have at least FAQ, hesitation, and cancellation transitions
-        assert (
-            len(transitions) >= 3
-        ), f"Expected at least 3 transitions, got {len(transitions)}"
+        assert len(transitions) >= 3, (
+            f"Expected at least 3 transitions, got {len(transitions)}"
+        )
 
     def test_pathway_id_conversion(self):
         """Test that pathway class names are converted to snake_case IDs."""
@@ -197,9 +197,9 @@ class TestPipelineConfiguration:
         ]
 
         for pathway in pathways:
-            assert (
-                pathway._pipeline == "sequential"
-            ), f"{pathway.__name__} should use sequential pipeline"
+            assert pathway._pipeline == "sequential", (
+                f"{pathway.__name__} should use sequential pipeline"
+            )
 
 
 class TestJourneyConfig:

@@ -344,7 +344,7 @@ def validate_configuration(
                 message=f"Invalid execution_mode: '{execution_mode}'.",
                 field="execution_mode",
                 value=execution_mode,
-                suggestions=[f'Valid modes: {", ".join(valid_modes)}'],
+                suggestions=[f"Valid modes: {', '.join(valid_modes)}"],
             )
         )
 
@@ -357,7 +357,7 @@ def validate_configuration(
                 field="memory",
                 value=memory,
                 suggestions=[
-                    f'Valid shortcuts: {", ".join(valid_memory)}',
+                    f"Valid shortcuts: {', '.join(valid_memory)}",
                     "Or pass a MemoryProvider instance directly",
                 ],
             )
@@ -371,7 +371,7 @@ def validate_configuration(
                 message=f"Invalid tool_access: '{tool_access}'.",
                 field="tool_access",
                 value=tool_access,
-                suggestions=[f'Valid levels: {", ".join(valid_access)}'],
+                suggestions=[f"Valid levels: {', '.join(valid_access)}"],
             )
         )
 
@@ -515,8 +515,7 @@ def validate_execution_mode_for_task(
 
     if has_simple and mode == ExecutionMode.AUTONOMOUS:
         return True, (
-            "Task appears simple. Consider execution_mode='single' "
-            "to reduce overhead."
+            "Task appears simple. Consider execution_mode='single' to reduce overhead."
         )
 
     return True, None

@@ -744,7 +744,7 @@ def create_consensus_pattern(
         VoterAgent(
             config=voter_cfg,
             shared_memory=shared_memory,
-            agent_id=f"voter_{i+1}",
+            agent_id=f"voter_{i + 1}",
             perspective=perspectives[i],
         )
         for i in range(num_voters)

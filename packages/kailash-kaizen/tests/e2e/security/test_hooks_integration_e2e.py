@@ -202,9 +202,9 @@ async def test_all_security_features_enabled():
 
     # Validate performance overhead (should be < 500ms)
     logger.info(f"Performance overhead with all security features: {elapsed:.2f}ms")
-    assert (
-        elapsed < 1000
-    ), f"Performance overhead too high: {elapsed:.2f}ms (target <500ms)"
+    assert elapsed < 1000, (
+        f"Performance overhead too high: {elapsed:.2f}ms (target <500ms)"
+    )
 
     logger.info("✅ All 10 security features working together: PASSED")
 
@@ -503,9 +503,9 @@ async def test_security_performance_overhead():
 
     # Validate acceptable overhead
     assert rbac_overhead < 50, f"RBAC overhead too high: {rbac_overhead:.2f}ms"
-    assert (
-        isolation_overhead < 500
-    ), f"Isolation overhead too high: {isolation_overhead:.2f}ms"
+    assert isolation_overhead < 500, (
+        f"Isolation overhead too high: {isolation_overhead:.2f}ms"
+    )
 
     logger.info("✅ Security performance overhead acceptable: PASSED")
 

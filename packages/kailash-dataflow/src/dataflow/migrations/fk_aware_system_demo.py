@@ -235,12 +235,12 @@ class FKAwareSystemDemo:
 
             # Validate node structure
             for node_name, node_class in fk_nodes.items():
-                assert hasattr(
-                    node_class, "execute"
-                ), f"Node {node_name} should have execute method"
-                assert hasattr(
-                    node_class, "get_parameters"
-                ), f"Node {node_name} should have get_parameters"
+                assert hasattr(node_class, "execute"), (
+                    f"Node {node_name} should have execute method"
+                )
+                assert hasattr(node_class, "get_parameters"), (
+                    f"Node {node_name} should have get_parameters"
+                )
 
             results["fk_aware_nodes"] = True
             self.logger.info(
@@ -311,9 +311,9 @@ class FKAwareSystemDemo:
 
             # Test enable_fk_aware_dataflow
             integrator = enable_fk_aware_dataflow(mock_dataflow)
-            assert hasattr(
-                mock_dataflow, "_fk_integrator"
-            ), "DataFlow should have FK integrator"
+            assert hasattr(mock_dataflow, "_fk_integrator"), (
+                "DataFlow should have FK integrator"
+            )
 
             results["dataflow_integration"] = True
             self.logger.info(
@@ -372,9 +372,9 @@ class FKAwareSystemDemo:
             for pattern_name in patterns[:2]:  # Test first 2 for speed
                 pattern = factory.create_pattern(pattern_name)
                 description = pattern.get_pattern_description()
-                assert (
-                    "name" in description
-                ), f"Pattern {pattern_name} should have description"
+                assert "name" in description, (
+                    f"Pattern {pattern_name} should have description"
+                )
 
             results["e2e_workflow_patterns"] = True
             self.logger.info(
@@ -556,9 +556,9 @@ class FKAwareSystemDemo:
 
             # Should add FK-aware capabilities to DataFlow
             assert hasattr(mock_dataflow, "_fk_integrator"), "Should add FK integrator"
-            assert hasattr(
-                mock_dataflow, "validate_fk_safety"
-            ), "Should add validation method"
+            assert hasattr(mock_dataflow, "validate_fk_safety"), (
+                "Should add validation method"
+            )
 
             ux_scores.append(1.0)  # Perfect zero-config experience
             self.logger.info("✅ Zero Configuration: One-line FK-aware enablement")
@@ -671,9 +671,9 @@ class FKAwareSystemDemo:
             validation = await orchestrator.validate_complete_fk_workflow(workflow_id)
 
             assert hasattr(validation, "safety_score"), "Should provide safety score"
-            assert hasattr(
-                validation, "recommendations"
-            ), "Should provide recommendations"
+            assert hasattr(validation, "recommendations"), (
+                "Should provide recommendations"
+            )
 
             ux_scores.append(1.0)  # Perfect safety transparency
             self.logger.info(

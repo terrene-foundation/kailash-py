@@ -87,11 +87,7 @@ class CRLEntry:
             revoked_at=datetime.fromisoformat(data["revoked_at"]),
             reason=data["reason"],
             revoked_by=data["revoked_by"],
-            expires_at=(
-                datetime.fromisoformat(data["expires_at"])
-                if data.get("expires_at")
-                else None
-            ),
+            expires_at=(datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None),
         )
 
 
@@ -148,11 +144,7 @@ class CRLMetadata:
             crl_id=data["crl_id"],
             issuer_id=data["issuer_id"],
             issued_at=datetime.fromisoformat(data["issued_at"]),
-            next_update=(
-                datetime.fromisoformat(data["next_update"])
-                if data.get("next_update")
-                else None
-            ),
+            next_update=(datetime.fromisoformat(data["next_update"]) if data.get("next_update") else None),
             entry_count=data.get("entry_count", 0),
             signature=data.get("signature"),
         )
@@ -284,9 +276,7 @@ class CertificateRevocationList:
         self._metadata.entry_count = len(self._entries)
         self._metadata.signature = None  # Invalidate signature on change
 
-        logger.debug(
-            f"Added revocation for delegation_id={delegation_id}, agent_id={agent_id}"
-        )
+        logger.debug(f"Added revocation for delegation_id={delegation_id}, agent_id={agent_id}")
 
         return entry
 
@@ -378,11 +368,7 @@ class CertificateRevocationList:
         if agent_id not in self._agent_index:
             return []
 
-        return [
-            self._entries[del_id]
-            for del_id in self._agent_index[agent_id]
-            if del_id in self._entries
-        ]
+        return [self._entries[del_id] for del_id in self._agent_index[agent_id] if del_id in self._entries]
 
     def list_entries(self, limit: int = 100, offset: int = 0) -> List[CRLEntry]:
         """
@@ -479,9 +465,7 @@ class CertificateRevocationList:
         Returns:
             Count of entries removed
         """
-        expired_ids = [
-            del_id for del_id, entry in self._entries.items() if entry.is_expired()
-        ]
+        expired_ids = [del_id for del_id, entry in self._entries.items() if entry.is_expired()]
 
         for del_id in expired_ids:
             self.remove_revocation(del_id)
@@ -557,9 +541,7 @@ class CertificateRevocationList:
             "entries": [entry.to_dict() for entry in self._entries.values()],
             "agent_index": {k: list(v) for k, v in self._agent_index.items()},
             "cache_ttl_seconds": self._cache_ttl,
-            "last_refresh": (
-                self._last_refresh.isoformat() if self._last_refresh else None
-            ),
+            "last_refresh": (self._last_refresh.isoformat() if self._last_refresh else None),
             "version": "1.0",
         }
 
@@ -624,9 +606,7 @@ class CertificateRevocationList:
             lines.append(f"  Revoked At: {entry.revoked_at.isoformat()}")
             lines.append(f"  Reason: {entry.reason}")
             lines.append(f"  Revoked By: {entry.revoked_by}")
-            lines.append(
-                f"  Expires At: {entry.expires_at.isoformat() if entry.expires_at else 'Never'}"
-            )
+            lines.append(f"  Expires At: {entry.expires_at.isoformat() if entry.expires_at else 'Never'}")
             lines.append("-" * 60)
 
         lines.append("-----END CERTIFICATE REVOCATION LIST-----")
@@ -634,9 +614,7 @@ class CertificateRevocationList:
         return "\n".join(lines)
 
 
-def verify_delegation_with_crl(
-    delegation_id: str, crl: CertificateRevocationList
-) -> CRLVerificationResult:
+def verify_delegation_with_crl(delegation_id: str, crl: CertificateRevocationList) -> CRLVerificationResult:
     """
     Verify a delegation against the CRL.
 

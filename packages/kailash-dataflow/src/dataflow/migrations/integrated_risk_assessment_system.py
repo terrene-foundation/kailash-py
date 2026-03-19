@@ -671,7 +671,7 @@ class IntegratedRiskAssessmentSystem:
         return (
             f"IntegratedRiskAssessmentSystem("
             f"assessments={self.stats['total_assessments']}, "
-            f"success_rate={self.stats['successful_assessments']/max(self.stats['total_assessments'], 1)*100:.1f}%, "
+            f"success_rate={self.stats['successful_assessments'] / max(self.stats['total_assessments'], 1) * 100:.1f}%, "
             f"avg_time={self.stats['average_processing_time']:.3f}s)"
         )
 

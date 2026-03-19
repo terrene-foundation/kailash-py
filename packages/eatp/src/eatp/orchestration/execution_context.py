@@ -54,9 +54,7 @@ from eatp.orchestration.exceptions import (
 class ContextMergeStrategy(str, Enum):
     """Strategy for merging parallel execution contexts."""
 
-    INTERSECTION = (
-        "intersection"  # Capabilities: intersection, Constraints: most restrictive
-    )
+    INTERSECTION = "intersection"  # Capabilities: intersection, Constraints: most restrictive
     UNION = "union"  # Capabilities: union (requires all sources), Constraints: most restrictive
     FIRST_WINS = "first_wins"  # Use first context's values
 
@@ -327,9 +325,7 @@ class TrustExecutionContext:
             result = existing.copy()
             for k, v in new.items():
                 if k in result:
-                    result[k] = self._tighten_constraint(
-                        f"{constraint_type}.{k}", result[k], v
-                    )
+                    result[k] = self._tighten_constraint(f"{constraint_type}.{k}", result[k], v)
                 else:
                     result[k] = v
             return result
@@ -415,13 +411,9 @@ class TrustExecutionContext:
                 if key in merged_constraints:
                     # Take more restrictive
                     existing = merged_constraints[key]
-                    if isinstance(existing, (int, float)) and isinstance(
-                        value, (int, float)
-                    ):
+                    if isinstance(existing, (int, float)) and isinstance(value, (int, float)):
                         merged_constraints[key] = min(existing, value)
-                    elif isinstance(existing, (list, set)) and isinstance(
-                        value, (list, set)
-                    ):
+                    elif isinstance(existing, (list, set)) and isinstance(value, (list, set)):
                         merged_constraints[key] = list(set(existing) & set(value))
                     elif isinstance(existing, bool) and isinstance(value, bool):
                         merged_constraints[key] = existing and value
@@ -494,9 +486,7 @@ class TrustExecutionContext:
             task_id=data["task_id"],
             delegated_capabilities=set(data["delegated_capabilities"]),
             inherited_constraints=data.get("inherited_constraints", {}),
-            delegation_chain=[
-                DelegationEntry.from_dict(e) for e in data.get("delegation_chain", [])
-            ],
+            delegation_chain=[DelegationEntry.from_dict(e) for e in data.get("delegation_chain", [])],
             created_at=datetime.fromisoformat(data["created_at"]),
             metadata=data.get("metadata", {}),
         )

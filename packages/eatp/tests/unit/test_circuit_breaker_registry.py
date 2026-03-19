@@ -59,9 +59,7 @@ class TestCircuitBreakerRegistryCreation:
     def test_default_config_propagated(self, machine):
         """Custom default config must be used for new breakers."""
         custom_config = CircuitBreakerConfig(failure_threshold=3, recovery_timeout=30)
-        reg = CircuitBreakerRegistry(
-            posture_machine=machine, default_config=custom_config
-        )
+        reg = CircuitBreakerRegistry(posture_machine=machine, default_config=custom_config)
         breaker = reg.get_or_create("agent-001")
         # Verify by checking metrics (which expose config values)
         metrics = breaker.get_metrics("agent-001")
@@ -119,9 +117,7 @@ class TestCircuitBreakerRegistryBulkStatus:
         """Agents in OPEN state after threshold exceeded."""
         breaker = registry.get_or_create("agent-001")
         for _ in range(10):
-            await breaker.record_failure(
-                "agent-001", "Error", "fail", "action", "critical"
-            )
+            await breaker.record_failure("agent-001", "Error", "fail", "action", "critical")
         result = registry.get_all_open()
         assert "agent-001" in result
         assert isinstance(result["agent-001"], PostureCircuitBreaker)
@@ -142,9 +138,7 @@ class TestCircuitBreakerRegistryBulkStatus:
         # Open agent-001's circuit
         breaker1 = registry.get_or_create("agent-001")
         for _ in range(10):
-            await breaker1.record_failure(
-                "agent-001", "Error", "fail", "action", "critical"
-            )
+            await breaker1.record_failure("agent-001", "Error", "fail", "action", "critical")
 
         summary = registry.get_status_summary()
         assert summary["total"] == 2

@@ -171,9 +171,7 @@ class TestForgedSignatureAttack:
         # Tamper: change the action
         tampered_payload = {"action": "delete_all", "agent": "agent-1"}
         result = verify_signature(tampered_payload, signature, public_key)
-        assert (
-            result is False
-        ), "Signature verification MUST reject a payload that was modified after signing"
+        assert result is False, "Signature verification MUST reject a payload that was modified after signing"
 
     def test_wrong_key_detected(self):
         """Sign with key A, verify with key B -- must return False."""
@@ -184,9 +182,7 @@ class TestForgedSignatureAttack:
         signature = sign(payload, priv_a)
 
         result = verify_signature(payload, signature, pub_b)
-        assert (
-            result is False
-        ), "Signature verification MUST reject when verified with a different key"
+        assert result is False, "Signature verification MUST reject when verified with a different key"
 
     def test_corrupted_signature_detected(self):
         """Corrupt the signature bytes -- verify must return False or raise."""
@@ -231,9 +227,7 @@ class TestReplayAttackOnAuditChain:
         # Attempt replay: pretend hash_A was replayed in place of hash_C
         replayed_hashes = ["hash_A", "hash_B", "hash_A"]
         valid, idx = chain.verify_chain_linkage(replayed_hashes)
-        assert (
-            valid is False
-        ), "Replayed hash (hash_A in slot 2) must fail linkage verification"
+        assert valid is False, "Replayed hash (hash_A in slot 2) must fail linkage verification"
         assert idx == 2, "Break must be detected at the replayed index"
 
     def test_reordered_entries_detected(self):
@@ -295,14 +289,12 @@ class TestPrivilegeEscalationViaDelegation:
         )
 
         # The parent does NOT have "delete_all"
-        assert (
-            parent_chain.has_capability("delete_all") is False
-        ), "Parent must not have 'delete_all' capability"
+        assert parent_chain.has_capability("delete_all") is False, "Parent must not have 'delete_all' capability"
         # The delegation claims it -- proper enforcement must catch this
         assert "delete_all" in escalation_delegation.capabilities_delegated
-        assert "delete_all" not in [
-            c.capability for c in parent_chain.capabilities
-        ], "Escalated capability must not match any parent capability"
+        assert "delete_all" not in [c.capability for c in parent_chain.capabilities], (
+            "Escalated capability must not match any parent capability"
+        )
 
     def test_constraint_tightening_invariant(self):
         """Delegated constraints should be at least as restrictive as parent.
@@ -338,8 +330,7 @@ class TestPrivilegeEscalationViaDelegation:
 
         # Proper enforcement: delegated constraints must be a superset of parent
         assert not parent_constraints.issubset(delegated_constraints), (
-            "Delegation with fewer constraints than parent represents privilege "
-            "escalation and must be detectable"
+            "Delegation with fewer constraints than parent represents privilege escalation and must be detectable"
         )
 
 
@@ -378,9 +369,9 @@ class TestChainSplicingAttack:
         delegation.signature = sign(signing_payload, priv)
 
         # Verify the original payload succeeds
-        assert (
-            verify_signature(signing_payload, delegation.signature, _pub) is True
-        ), "Original delegation payload must verify with the signing key"
+        assert verify_signature(signing_payload, delegation.signature, _pub) is True, (
+            "Original delegation payload must verify with the signing key"
+        )
 
         # Tamper: change delegatee_id
         delegation.delegatee_id = "agent-attacker"
@@ -392,9 +383,7 @@ class TestChainSplicingAttack:
             delegation.signature,
             _pub,
         )
-        assert (
-            sig_valid_tampered is False
-        ), "Signature must NOT verify against a tampered delegation payload"
+        assert sig_valid_tampered is False, "Signature must NOT verify against a tampered delegation payload"
 
     def test_from_dict_tampered_chain_hash_mismatch(self):
         """Serialize, tamper with a field, deserialize: chain hash must differ."""
@@ -416,9 +405,7 @@ class TestChainSplicingAttack:
         chain_dict2["genesis"]["id"] = "gen-injected"
         reconstructed2 = TrustLineageChain.from_dict(chain_dict2)
 
-        assert (
-            reconstructed2.hash() != original_chain_hash
-        ), "Tampered genesis ID must produce a different chain hash"
+        assert reconstructed2.hash() != original_chain_hash, "Tampered genesis ID must produce a different chain hash"
 
 
 # ===========================================================================
@@ -473,9 +460,7 @@ class TestTimeManipulation:
         chain = TrustLineageChain(genesis=genesis, capabilities=[cap])
 
         # get_capability returns None for expired capabilities
-        assert (
-            chain.get_capability("read_data") is None
-        ), "Expired capability must not be returned by get_capability()"
+        assert chain.get_capability("read_data") is None, "Expired capability must not be returned by get_capability()"
         assert chain.has_capability("read_data") is False
 
     def test_expired_delegation_detected(self):
@@ -506,9 +491,7 @@ class TestTimeManipulation:
             signature="sig",
         )
         # Even with a future attested_at, if expires_at is in the past, it is expired
-        assert (
-            cap.is_expired() is True
-        ), "Capability must be expired regardless of future attested_at"
+        assert cap.is_expired() is True, "Capability must be expired regardless of future attested_at"
 
 
 # ===========================================================================
@@ -531,9 +514,9 @@ class TestKeySubstitution:
         assert verify_signature(payload, signature, pub_a) is True
 
         # Verify with substituted key fails
-        assert (
-            verify_signature(payload, signature, pub_b) is False
-        ), "Substituted public key must cause verification to fail"
+        assert verify_signature(payload, signature, pub_b) is False, (
+            "Substituted public key must cause verification to fail"
+        )
 
     def test_key_substitution_in_challenge_response(self):
         """Challenge-response protocol must reject key substitution."""
@@ -547,9 +530,7 @@ class TestKeySubstitution:
             private_key=priv_a,
         )
 
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
         response = protocol.respond_to_challenge(challenge, priv_a, chain)
 
         # Verify with correct key
@@ -557,15 +538,11 @@ class TestKeySubstitution:
 
         # Attempt with substituted key -- create a fresh protocol to avoid nonce replay
         protocol2 = ChallengeProtocol()
-        challenge2 = protocol2.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge2 = protocol2.create_challenge("verifier", "agent-target", "analyze_data")
         response2 = protocol2.respond_to_challenge(challenge2, priv_a, chain)
 
         result = protocol2.verify_response(challenge2, response2, pub_b)
-        assert (
-            result is False
-        ), "Challenge-response must reject when verified with a substituted key"
+        assert result is False, "Challenge-response must reject when verified with a substituted key"
 
 
 # ===========================================================================
@@ -591,9 +568,7 @@ class TestCrossChainContamination:
 
         hash_b_contaminated = chain_b.hash()
 
-        assert (
-            hash_b_contaminated != hash_b_original
-        ), "Injecting a foreign capability must change the chain hash"
+        assert hash_b_contaminated != hash_b_original, "Injecting a foreign capability must change the chain hash"
 
     def test_mixed_delegations_change_hash(self):
         """Injecting a delegation from chain A into chain B must change B's hash."""
@@ -621,9 +596,7 @@ class TestCrossChainContamination:
         chain_b.delegations.append(chain_a.delegations[0])
         hash_b_contaminated = chain_b.hash()
 
-        assert (
-            hash_b_contaminated != hash_b_original
-        ), "Injecting a foreign delegation must change the chain hash"
+        assert hash_b_contaminated != hash_b_original, "Injecting a foreign delegation must change the chain hash"
 
     async def test_store_isolates_chains(self):
         """InMemoryTrustStore must isolate chains by agent_id."""
@@ -661,13 +634,9 @@ class TestChallengeResponseReplay:
         """After successful verification, reusing the same response must raise."""
         priv, pub = generate_keypair()
         protocol = ChallengeProtocol()
-        chain = _make_chain(
-            "agent-target", capabilities=["analyze_data"], private_key=priv
-        )
+        chain = _make_chain("agent-target", capabilities=["analyze_data"], private_key=priv)
 
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
         response = protocol.respond_to_challenge(challenge, priv, chain)
 
         # First verification succeeds
@@ -681,13 +650,9 @@ class TestChallengeResponseReplay:
         """Responding to an expired challenge must raise ChallengeError."""
         priv, pub = generate_keypair()
         protocol = ChallengeProtocol(challenge_timeout_seconds=0)
-        chain = _make_chain(
-            "agent-target", capabilities=["analyze_data"], private_key=priv
-        )
+        chain = _make_chain("agent-target", capabilities=["analyze_data"], private_key=priv)
 
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
         time.sleep(0.01)  # Ensure expiration
 
         with pytest.raises(ChallengeError, match="expired"):
@@ -697,9 +662,7 @@ class TestChallengeResponseReplay:
         """A response for challenge 1 must not verify against challenge 2."""
         priv, pub = generate_keypair()
         protocol = ChallengeProtocol()
-        chain = _make_chain(
-            "agent-target", capabilities=["analyze_data"], private_key=priv
-        )
+        chain = _make_chain("agent-target", capabilities=["analyze_data"], private_key=priv)
 
         ch1 = protocol.create_challenge("verifier-A", "agent-target", "analyze_data")
         ch2 = protocol.create_challenge("verifier-B", "agent-target", "analyze_data")
@@ -708,21 +671,15 @@ class TestChallengeResponseReplay:
 
         # Try to verify resp1 against ch2 -- different nonce means signature mismatch
         result = protocol.verify_response(ch2, resp1, pub)
-        assert (
-            result is False
-        ), "Response to one challenge must not verify against a different challenge"
+        assert result is False, "Response to one challenge must not verify against a different challenge"
 
     def test_forged_challenge_id_in_response(self):
         """A response with a fake challenge_id must fail verification."""
         priv, pub = generate_keypair()
         protocol = ChallengeProtocol()
-        chain = _make_chain(
-            "agent-target", capabilities=["analyze_data"], private_key=priv
-        )
+        chain = _make_chain("agent-target", capabilities=["analyze_data"], private_key=priv)
 
-        challenge = protocol.create_challenge(
-            "verifier", "agent-target", "analyze_data"
-        )
+        challenge = protocol.create_challenge("verifier", "agent-target", "analyze_data")
         response = protocol.respond_to_challenge(challenge, priv, chain)
 
         forged_response = ChallengeResponse(
@@ -769,9 +726,7 @@ class TestPathTraversalOnFilesystemStore:
 
         # Verify no file was created outside the chains directory
         etc_path = tmp_path / "etc" / "passwd.json"
-        assert (
-            not etc_path.exists()
-        ), "Path traversal must NOT create files outside the store directory"
+        assert not etc_path.exists(), "Path traversal must NOT create files outside the store directory"
 
     async def test_path_traversal_with_backslash(self, tmp_path):
         """Agent IDs with backslashes must be rejected with ValueError."""
@@ -1036,18 +991,14 @@ class TestSelectiveDisclosureTampering:
 
         # Verify original is valid
         result = verify_witness_export(export, pub)
-        assert (
-            result.valid is True
-        ), f"Original export must be valid. Errors: {result.errors}"
+        assert result.valid is True, f"Original export must be valid. Errors: {result.errors}"
 
         # Tamper: modify a record's disclosed data
         export.records[1].data["action"] = "TAMPERED_ACTION"
 
         # Verification must detect the tampering
         result = verify_witness_export(export, pub)
-        assert (
-            result.chain_integrity_valid is False
-        ), "Tampered record must break chain integrity verification"
+        assert result.chain_integrity_valid is False, "Tampered record must break chain integrity verification"
 
     def test_tampered_redacted_field_detected(self):
         """Modifying a redacted field must break chain hash verification."""
@@ -1063,15 +1014,11 @@ class TestSelectiveDisclosureTampering:
         # Find a redacted field and tamper with it
         record = export.records[0]
         for field_name in record.redacted_fields:
-            record.data[field_name] = (
-                "REDACTED:sha256:0000000000000000000000000000000000000000000000000000000000000000"
-            )
+            record.data[field_name] = "REDACTED:sha256:0000000000000000000000000000000000000000000000000000000000000000"
             break
 
         result = verify_witness_export(export, pub)
-        assert (
-            result.chain_integrity_valid is False
-        ), "Tampered redacted field must break chain integrity"
+        assert result.chain_integrity_valid is False, "Tampered redacted field must break chain integrity"
 
     def test_wrong_authority_key_detected(self):
         """Export signed with key A must fail verification with key B."""
@@ -1087,9 +1034,7 @@ class TestSelectiveDisclosureTampering:
 
         # Verify with wrong key
         result = verify_witness_export(export, pub_b)
-        assert (
-            result.signature_valid is False
-        ), "Export must fail signature verification with wrong authority key"
+        assert result.signature_valid is False, "Export must fail signature verification with wrong authority key"
         assert result.valid is False
 
     def test_added_record_detected(self):

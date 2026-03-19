@@ -243,8 +243,7 @@ class SecureChannel:
                 await self._audit_message("receive", envelope, result)
 
             logger.debug(
-                f"Received message {envelope.message_id} from "
-                f"{envelope.sender_agent_id}: valid={result.is_valid()}"
+                f"Received message {envelope.message_id} from {envelope.sender_agent_id}: valid={result.is_valid()}"
             )
 
             return result
@@ -342,10 +341,7 @@ class SecureChannel:
             return reply
 
         except asyncio.TimeoutError:
-            logger.warning(
-                f"Timeout waiting for reply to {request.message_id} "
-                f"after {timeout_seconds}s"
-            )
+            logger.warning(f"Timeout waiting for reply to {request.message_id} after {timeout_seconds}s")
             raise
 
         finally:
@@ -364,10 +360,7 @@ class SecureChannel:
             future = self._pending_replies.get(correlation_id)
             if future and not future.done():
                 future.set_result(envelope)
-                logger.debug(
-                    f"Matched reply {envelope.message_id} to "
-                    f"request {correlation_id}"
-                )
+                logger.debug(f"Matched reply {envelope.message_id} to request {correlation_id}")
 
     async def _audit_message(
         self,

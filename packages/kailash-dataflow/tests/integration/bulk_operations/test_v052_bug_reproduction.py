@@ -146,12 +146,12 @@ class TestBug1_BulkDeleteEmptyFilter:
         assert delete_result is not None, "No result returned from bulk delete"
 
         # Should have deleted all 5 records
-        assert delete_result.get(
-            "success"
-        ), f"Delete failed: {delete_result.get('error')}"
-        assert (
-            delete_result.get("deleted") == 5
-        ), f"Expected 5 deleted, got {delete_result.get('deleted')}"
+        assert delete_result.get("success"), (
+            f"Delete failed: {delete_result.get('error')}"
+        )
+        assert delete_result.get("deleted") == 5, (
+            f"Expected 5 deleted, got {delete_result.get('deleted')}"
+        )
 
     @pytest.mark.asyncio
     async def test_bulk_delete_empty_filter_without_confirmation_fails(
@@ -199,9 +199,9 @@ class TestBug1_BulkDeleteEmptyFilter:
         assert (
             "confirmed" in error_msg.lower() or "confirmation" in error_msg.lower()
         ), f"Error should mention confirmation requirement, got: {error_msg}"
-        assert (
-            "empty filter" in error_msg.lower()
-        ), f"Error should mention empty filter, got: {error_msg}"
+        assert "empty filter" in error_msg.lower(), (
+            f"Error should mention empty filter, got: {error_msg}"
+        )
 
 
 class TestBug2_BulkCreateUnsupportedOperation:
@@ -260,12 +260,12 @@ class TestBug2_BulkCreateUnsupportedOperation:
         assert create_result is not None, "No result returned from bulk create"
 
         # Should have created 1 record
-        assert create_result.get(
-            "success"
-        ), f"Create failed: {create_result.get('error')}"
-        assert (
-            create_result.get("inserted") == 1
-        ), f"Expected 1 inserted, got {create_result.get('inserted')}"
+        assert create_result.get("success"), (
+            f"Create failed: {create_result.get('error')}"
+        )
+        assert create_result.get("inserted") == 1, (
+            f"Expected 1 inserted, got {create_result.get('inserted')}"
+        )
 
     @pytest.mark.asyncio
     async def test_bulk_create_with_empty_data_list(self, setup_agent_memory_table):
@@ -303,17 +303,17 @@ class TestBug2_BulkCreateUnsupportedOperation:
 
         # Should either succeed with 0 inserted OR have clear error (not "Unsupported operation")
         if create_result.get("success"):
-            assert (
-                create_result.get("inserted", 0) == 0
-            ), "Should have 0 insertions for empty data"
+            assert create_result.get("inserted", 0) == 0, (
+                "Should have 0 insertions for empty data"
+            )
         else:
             error_msg = create_result.get("error", "")
-            assert (
-                "Unsupported bulk operation" not in error_msg
-            ), f"Should not report 'Unsupported operation', got: {error_msg}"
-            assert (
-                "No data" in error_msg or "empty" in error_msg.lower()
-            ), f"Error should mention empty data, got: {error_msg}"
+            assert "Unsupported bulk operation" not in error_msg, (
+                f"Should not report 'Unsupported operation', got: {error_msg}"
+            )
+            assert "No data" in error_msg or "empty" in error_msg.lower(), (
+                f"Error should mention empty data, got: {error_msg}"
+            )
 
 
 class TestBug3_GenericErrorMessages:
@@ -371,15 +371,15 @@ class TestBug3_GenericErrorMessages:
 
         # Error should NOT be generic
         assert error_msg != "Operation failed", f"Error too generic: {error_msg}"
-        assert (
-            error_msg != "Operation failed (no error details provided)"
-        ), f"No details provided: {error_msg}"
+        assert error_msg != "Operation failed (no error details provided)", (
+            f"No details provided: {error_msg}"
+        )
 
         # Error should mention what went wrong with specific details
         assert len(error_msg) > 20, f"Error message too short: {error_msg}"
-        assert (
-            "confirmed" in error_msg.lower()
-        ), f"Error should mention 'confirmed' requirement: {error_msg}"
-        assert (
-            "empty filter" in error_msg.lower()
-        ), f"Error should mention 'empty filter': {error_msg}"
+        assert "confirmed" in error_msg.lower(), (
+            f"Error should mention 'confirmed' requirement: {error_msg}"
+        )
+        assert "empty filter" in error_msg.lower(), (
+            f"Error should mention 'empty filter': {error_msg}"
+        )

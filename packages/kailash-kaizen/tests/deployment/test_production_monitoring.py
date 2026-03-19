@@ -39,9 +39,9 @@ class TestHealthChecks:
             content = f.read()
             assert "liveness" in content.lower(), "Must implement liveness probe"
             assert "readiness" in content.lower(), "Must implement readiness probe"
-            assert (
-                "startup" in content.lower() or "health" in content.lower()
-            ), "Must implement startup/health probe"
+            assert "startup" in content.lower() or "health" in content.lower(), (
+                "Must implement startup/health probe"
+            )
 
     def test_health_check_returns_status(self):
         """PROD-008.3: Health check returns proper status."""
@@ -75,9 +75,9 @@ class TestHealthChecks:
         health = HealthCheck()
         liveness = health.liveness()
 
-        assert (
-            "alive" in liveness or "status" in liveness
-        ), "Liveness probe must return alive status"
+        assert "alive" in liveness or "status" in liveness, (
+            "Liveness probe must return alive status"
+        )
 
     def test_readiness_probe_implementation(self):
         """PROD-008.5: Readiness probe checks if service can handle requests."""
@@ -91,9 +91,9 @@ class TestHealthChecks:
         health = HealthCheck()
         readiness = health.readiness()
 
-        assert (
-            "ready" in readiness or "status" in readiness
-        ), "Readiness probe must return ready status"
+        assert "ready" in readiness or "status" in readiness, (
+            "Readiness probe must return ready status"
+        )
 
     def test_startup_probe_implementation(self):
         """PROD-008.6: Startup probe checks if service has started successfully."""
@@ -107,9 +107,9 @@ class TestHealthChecks:
         health = HealthCheck()
         startup = health.startup()
 
-        assert (
-            "started" in startup or "status" in startup
-        ), "Startup probe must return started status"
+        assert "started" in startup or "status" in startup, (
+            "Startup probe must return started status"
+        )
 
     def test_dependency_health_checks(self):
         """PROD-008.7: Health checks include dependency status."""
@@ -156,9 +156,9 @@ class TestHealthChecks:
 
         # Should timeout within 2 seconds (1 second timeout + overhead)
         assert duration < 2.0, "Health check should timeout on slow dependencies"
-        assert (
-            status["dependencies"]["slow_service"]["status"] == "timeout"
-        ), "Should mark slow dependency as timeout"
+        assert status["dependencies"]["slow_service"]["status"] == "timeout", (
+            "Should mark slow dependency as timeout"
+        )
 
     def test_health_check_error_handling(self):
         """PROD-008.9: Health checks handle dependency errors gracefully."""
@@ -180,12 +180,12 @@ class TestHealthChecks:
         # Should not raise, should return error in status
         status = health.check()
 
-        assert (
-            status["dependencies"]["failing_service"]["status"] == "unhealthy"
-        ), "Should mark failing dependency as unhealthy"
-        assert (
-            "error" in status["dependencies"]["failing_service"]
-        ), "Should include error message"
+        assert status["dependencies"]["failing_service"]["status"] == "unhealthy", (
+            "Should mark failing dependency as unhealthy"
+        )
+        assert "error" in status["dependencies"]["failing_service"], (
+            "Should include error message"
+        )
 
     def test_health_endpoint_in_k8s_deployment(self):
         """PROD-008.10: Kubernetes deployment uses health endpoints."""
@@ -204,9 +204,9 @@ class TestHealthChecks:
                         "httpGet" in probe
                         and "/health" in probe["httpGet"].get("path", "")
                     ) or ("exec" in probe)
-                    assert (
-                        has_health_check
-                    ), f"Container {container['name']} liveness probe should use health endpoint"
+                    assert has_health_check, (
+                        f"Container {container['name']} liveness probe should use health endpoint"
+                    )
 
 
 class TestPerformanceMetrics:
@@ -239,14 +239,14 @@ class TestPerformanceMetrics:
         metrics = MetricsCollector()
 
         # Rate metrics
-        assert hasattr(metrics, "request_rate") or hasattr(
-            metrics, "track_request"
-        ), "Must track request rate"
+        assert hasattr(metrics, "request_rate") or hasattr(metrics, "track_request"), (
+            "Must track request rate"
+        )
 
         # Error metrics
-        assert hasattr(metrics, "error_rate") or hasattr(
-            metrics, "track_error"
-        ), "Must track error rate"
+        assert hasattr(metrics, "error_rate") or hasattr(metrics, "track_error"), (
+            "Must track error rate"
+        )
 
         # Duration metrics
         assert hasattr(metrics, "request_duration") or hasattr(
@@ -361,9 +361,9 @@ class TestPerformanceMetrics:
 
         # Also verify total count across all labels
         total_count = metrics.get_request_count("agent")
-        assert (
-            total_count >= 2
-        ), "Should track total requests across all label combinations"
+        assert total_count >= 2, (
+            "Should track total requests across all label combinations"
+        )
 
     def test_metrics_endpoint_available(self):
         """PROD-009.9: Prometheus metrics endpoint is available."""
@@ -421,9 +421,9 @@ class TestMonitoringDashboards:
         prometheus_config = (
             project_root / "monitoring" / "prometheus" / "prometheus.yml"
         )
-        assert (
-            prometheus_config.exists()
-        ), "monitoring/prometheus/prometheus.yml must exist"
+        assert prometheus_config.exists(), (
+            "monitoring/prometheus/prometheus.yml must exist"
+        )
 
     def test_prometheus_config_valid(self):
         """PROD-010.3: Prometheus configuration is valid YAML."""
@@ -435,9 +435,9 @@ class TestMonitoringDashboards:
         with open(prometheus_config) as f:
             config = yaml.safe_load(f)
             assert "global" in config, "Prometheus config must have global section"
-            assert (
-                "scrape_configs" in config
-            ), "Prometheus config must have scrape_configs"
+            assert "scrape_configs" in config, (
+                "Prometheus config must have scrape_configs"
+            )
 
     def test_prometheus_scrapes_kaizen(self):
         """PROD-010.4: Prometheus is configured to scrape Kaizen metrics."""
@@ -517,9 +517,9 @@ class TestMonitoringDashboards:
         # Validate first dashboard
         with open(dashboards[0]) as f:
             dashboard = json.load(f)
-            assert (
-                "title" in dashboard or "dashboard" in dashboard
-            ), "Dashboard must have title or dashboard object"
+            assert "title" in dashboard or "dashboard" in dashboard, (
+                "Dashboard must have title or dashboard object"
+            )
 
     def test_grafana_dashboard_has_panels(self):
         """PROD-010.10: Grafana dashboard has monitoring panels."""
@@ -540,9 +540,9 @@ class TestMonitoringDashboards:
                 dashboard = data
 
             assert "panels" in dashboard, "Dashboard must have panels"
-            assert (
-                len(dashboard["panels"]) > 0
-            ), "Dashboard must have at least one panel"
+            assert len(dashboard["panels"]) > 0, (
+                "Dashboard must have at least one panel"
+            )
 
     def test_monitoring_docker_compose_exists(self):
         """PROD-010.11: Docker Compose for monitoring stack exists."""
@@ -559,9 +559,9 @@ class TestMonitoringDashboards:
             compose = yaml.safe_load(f)
 
             assert "services" in compose, "docker-compose.yml must have services"
-            assert (
-                "prometheus" in compose["services"]
-            ), "Must include Prometheus service"
+            assert "prometheus" in compose["services"], (
+                "Must include Prometheus service"
+            )
             assert "grafana" in compose["services"], "Must include Grafana service"
 
     def test_monitoring_readme_exists(self):
@@ -579,6 +579,6 @@ class TestMonitoringDashboards:
             content = f.read()
             assert "prometheus" in content.lower(), "README must mention Prometheus"
             assert "grafana" in content.lower(), "README must mention Grafana"
-            assert (
-                "docker-compose" in content.lower()
-            ), "README must have docker-compose instructions"
+            assert "docker-compose" in content.lower(), (
+                "README must have docker-compose instructions"
+            )

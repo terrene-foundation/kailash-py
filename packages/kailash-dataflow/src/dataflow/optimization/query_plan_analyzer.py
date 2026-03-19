@@ -801,7 +801,9 @@ class QueryPlanAnalyzer:
             status = (
                 "✅"
                 if analysis.optimization_score >= 80
-                else "⚠️" if analysis.optimization_score >= 60 else "❌"
+                else "⚠️"
+                if analysis.optimization_score >= 60
+                else "❌"
             )
             report += f"{i}. {status} Score: {analysis.optimization_score:.1f} - {analysis.execution_time_ms:.1f}ms\n"
             if len(analysis.query_sql) > 50:

@@ -83,9 +83,7 @@ class TestRolePermissions:
     def test_no_extra_roles_in_permissions(self):
         """ROLE_PERMISSIONS must not contain keys that are not TrustRole members."""
         for key in ROLE_PERMISSIONS:
-            assert isinstance(
-                key, TrustRole
-            ), f"Unexpected key {key!r} in ROLE_PERMISSIONS"
+            assert isinstance(key, TrustRole), f"Unexpected key {key!r} in ROLE_PERMISSIONS"
 
     def test_admin_has_all_operations(self):
         admin_perms = ROLE_PERMISSIONS[TrustRole.ADMIN]
@@ -115,13 +113,9 @@ class TestRolePermissions:
     def test_permissions_are_frozensets_or_sets(self):
         """All permission values must be sets (or frozensets) of strings."""
         for role, perms in ROLE_PERMISSIONS.items():
-            assert isinstance(
-                perms, (set, frozenset)
-            ), f"Permissions for {role.value} must be a set, got {type(perms)}"
+            assert isinstance(perms, (set, frozenset)), f"Permissions for {role.value} must be a set, got {type(perms)}"
             for perm in perms:
-                assert isinstance(
-                    perm, str
-                ), f"Permission {perm!r} for {role.value} must be a string"
+                assert isinstance(perm, str), f"Permission {perm!r} for {role.value} must be a string"
 
 
 # ---------------------------------------------------------------------------
@@ -133,9 +127,7 @@ class TestCheckPermission:
     """check_permission must validate role against operation."""
 
     # --- ADMIN: all operations permitted ---
-    @pytest.mark.parametrize(
-        "operation", ["establish", "delegate", "verify", "audit", "read"]
-    )
+    @pytest.mark.parametrize("operation", ["establish", "delegate", "verify", "audit", "read"])
     def test_admin_allowed_all(self, operation: str):
         assert check_permission(TrustRole.ADMIN, operation) is True
 
@@ -166,9 +158,7 @@ class TestCheckPermission:
         assert check_permission(TrustRole.AUDITOR, operation) is False
 
     # --- None role: backward-compatible all-access ---
-    @pytest.mark.parametrize(
-        "operation", ["establish", "delegate", "verify", "audit", "read"]
-    )
+    @pytest.mark.parametrize("operation", ["establish", "delegate", "verify", "audit", "read"])
     def test_none_role_allows_all(self, operation: str):
         """None role means no RBAC enforcement (backward compatibility)."""
         assert check_permission(None, operation) is True
@@ -195,9 +185,7 @@ class TestRequirePermission:
     """require_permission must raise PermissionError on denial, pass silently on success."""
 
     # --- Successful calls (no exception) ---
-    @pytest.mark.parametrize(
-        "operation", ["establish", "delegate", "verify", "audit", "read"]
-    )
+    @pytest.mark.parametrize("operation", ["establish", "delegate", "verify", "audit", "read"])
     def test_admin_does_not_raise(self, operation: str):
         require_permission(TrustRole.ADMIN, operation)  # should not raise
 
@@ -249,8 +237,7 @@ class TestRoleEscalationPrevention:
         for role in TrustRole:
             role_perms = ROLE_PERMISSIONS[role]
             assert role_perms.issubset(admin_perms), (
-                f"Role {role.value} has permissions {role_perms - admin_perms} "
-                f"not present in ADMIN"
+                f"Role {role.value} has permissions {role_perms - admin_perms} not present in ADMIN"
             )
 
     def test_observer_is_subset_of_operator(self):
@@ -262,6 +249,4 @@ class TestRoleEscalationPrevention:
     def test_all_roles_have_read(self):
         """Every role must have at least read permission."""
         for role in TrustRole:
-            assert (
-                "read" in ROLE_PERMISSIONS[role]
-            ), f"Role {role.value} must have read permission"
+            assert "read" in ROLE_PERMISSIONS[role], f"Role {role.value} must have read permission"

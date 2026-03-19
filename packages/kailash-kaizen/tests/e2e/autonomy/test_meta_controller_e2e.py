@@ -359,9 +359,9 @@ async def test_semantic_routing_to_specialists():
     # Verify result structure
     assert coding_result is not None, "Coding result should not be None"
     assert isinstance(coding_result, dict), "Result should be a dictionary"
-    assert (
-        "error" not in coding_result
-    ), f"Should not have error: {coding_result.get('error')}"
+    assert "error" not in coding_result, (
+        f"Should not have error: {coding_result.get('error')}"
+    )
 
     print("✓ Coding task executed successfully")
 
@@ -383,9 +383,9 @@ async def test_semantic_routing_to_specialists():
     # Verify result structure
     assert data_result is not None, "Data result should not be None"
     assert isinstance(data_result, dict), "Result should be a dictionary"
-    assert (
-        "error" not in data_result
-    ), f"Should not have error: {data_result.get('error')}"
+    assert "error" not in data_result, (
+        f"Should not have error: {data_result.get('error')}"
+    )
 
     print("✓ Data analysis task executed successfully")
 
@@ -407,9 +407,9 @@ async def test_semantic_routing_to_specialists():
     # Verify result structure
     assert writing_result is not None, "Writing result should not be None"
     assert isinstance(writing_result, dict), "Result should be a dictionary"
-    assert (
-        "error" not in writing_result
-    ), f"Should not have error: {writing_result.get('error')}"
+    assert "error" not in writing_result, (
+        f"Should not have error: {writing_result.get('error')}"
+    )
 
     print("✓ Writing task executed successfully")
 
@@ -642,9 +642,9 @@ async def test_task_decomposition_multi_specialist():
     # Verify decomposition
     assert decomposition_result is not None, "Decomposition result should not be None"
     assert isinstance(decomposition_result, dict), "Result should be a dictionary"
-    assert (
-        "error" not in decomposition_result
-    ), f"Should not have error: {decomposition_result.get('error')}"
+    assert "error" not in decomposition_result, (
+        f"Should not have error: {decomposition_result.get('error')}"
+    )
 
     # Extract subtasks from result
     subtasks_text = decomposition_result.get(
@@ -684,11 +684,11 @@ async def test_task_decomposition_multi_specialist():
     # Execute each subtask via meta-controller
     subtask_results = []
     for i, subtask in enumerate(subtasks):
-        print(f"\n  Routing subtask {i+1}/{len(subtasks)}: {subtask}")
+        print(f"\n  Routing subtask {i + 1}/{len(subtasks)}: {subtask}")
 
         async def execute_via_router():
             return meta_controller.run(
-                task=subtask, subtask=subtask, input=f"data_{i+1}"
+                task=subtask, subtask=subtask, input=f"data_{i + 1}"
             )
 
         result = await async_retry_with_backoff(
@@ -699,11 +699,11 @@ async def test_task_decomposition_multi_specialist():
         subtask_results.append(result)
 
         # Verify execution
-        assert result is not None, f"Subtask {i+1} result should not be None"
+        assert result is not None, f"Subtask {i + 1} result should not be None"
         assert isinstance(result, dict), "Result should be a dictionary"
-        assert (
-            "error" not in result
-        ), f"Subtask {i+1} should not have error: {result.get('error')}"
+        assert "error" not in result, (
+            f"Subtask {i + 1} should not have error: {result.get('error')}"
+        )
 
     print(f"\n✓ Executed {len(subtask_results)} subtasks successfully")
 
@@ -713,7 +713,7 @@ async def test_task_decomposition_multi_specialist():
     # Prepare results for aggregation
     results_summary = "\n".join(
         [
-            f"{i+1}. {subtasks[i]}: {result.get('result', result.get('output', 'Done'))[:50]}"
+            f"{i + 1}. {subtasks[i]}: {result.get('result', result.get('output', 'Done'))[:50]}"
             for i, result in enumerate(subtask_results)
         ]
     )
@@ -731,9 +731,9 @@ async def test_task_decomposition_multi_specialist():
     # Verify aggregation
     assert final_result is not None, "Final result should not be None"
     assert isinstance(final_result, dict), "Result should be a dictionary"
-    assert (
-        "error" not in final_result
-    ), f"Should not have error: {final_result.get('error')}"
+    assert "error" not in final_result, (
+        f"Should not have error: {final_result.get('error')}"
+    )
 
     final_output = final_result.get("final_result", final_result.get("output", ""))
     print(f"Final aggregated result: {final_output[:200]}...")

@@ -323,9 +323,7 @@ class TestDelegateReasoning:
         # reasoning_trace should NOT be in output when not provided
         assert "reasoning_trace" not in data
 
-    async def test_delegate_reasoning_requires_both_decision_and_rationale(
-        self, server, trust_ops
-    ):
+    async def test_delegate_reasoning_requires_both_decision_and_rationale(self, server, trust_ops):
         """Providing only decision without rationale does NOT create a trace."""
         await _initialize_server(server)
         await _establish_agent(trust_ops, "delegator-agent", ["read"])
@@ -352,9 +350,7 @@ class TestDelegateReasoning:
         # No reasoning trace since rationale was not provided
         assert "reasoning_trace" not in data
 
-    async def test_delegate_invalid_confidentiality_returns_error(
-        self, server, trust_ops
-    ):
+    async def test_delegate_invalid_confidentiality_returns_error(self, server, trust_ops):
         """Invalid confidentiality level returns a descriptive error."""
         await _initialize_server(server)
         await _establish_agent(trust_ops, "delegator-agent", ["read"])
@@ -381,9 +377,7 @@ class TestDelegateReasoning:
         assert "ultra_secret" in data["error"]
         assert "reasoning_confidentiality" in data["error"]
 
-    async def test_delegate_default_confidentiality_is_restricted(
-        self, server, trust_ops
-    ):
+    async def test_delegate_default_confidentiality_is_restricted(self, server, trust_ops):
         """When reasoning is provided without confidentiality, default is 'restricted'."""
         await _initialize_server(server)
         await _establish_agent(trust_ops, "delegator-agent", ["read"])
@@ -412,9 +406,7 @@ class TestDelegateReasoning:
     async def test_delegate_all_confidentiality_levels(self, server, trust_ops):
         """All valid confidentiality levels are accepted."""
         await _initialize_server(server)
-        await _establish_agent(
-            trust_ops, "delegator-agent", ["read", "write", "exec", "admin", "deploy"]
-        )
+        await _establish_agent(trust_ops, "delegator-agent", ["read", "write", "exec", "admin", "deploy"])
 
         for level in ["public", "restricted", "confidential", "secret", "top_secret"]:
             request = _make_request(
@@ -435,9 +427,7 @@ class TestDelegateReasoning:
             response = _parse_response(raw)
             data = _get_tool_result_data(response)
 
-            assert (
-                "error" not in data
-            ), f"Level '{level}' should be valid, got: {data.get('error')}"
+            assert "error" not in data, f"Level '{level}' should be valid, got: {data.get('error')}"
             assert data["reasoning_trace"]["confidentiality"] == level
 
 
@@ -483,9 +473,7 @@ class TestVerifyReasoning:
 class TestAuditQueryReasoning:
     """Tests for reasoning trace output in eatp_audit_query."""
 
-    async def test_audit_query_includes_reasoning_trace_on_anchor(
-        self, server, trust_ops, audit_store
-    ):
+    async def test_audit_query_includes_reasoning_trace_on_anchor(self, server, trust_ops, audit_store):
         """When an audit anchor has a reasoning trace, it appears in query results."""
         await _initialize_server(server)
 
@@ -530,9 +518,7 @@ class TestAuditQueryReasoning:
         assert anchor_data["reasoning_trace"]["confidentiality"] == "public"
         assert anchor_data["reasoning_trace_hash"] == "hash-placeholder"
 
-    async def test_audit_query_filters_confidential_reasoning_trace(
-        self, server, trust_ops, audit_store
-    ):
+    async def test_audit_query_filters_confidential_reasoning_trace(self, server, trust_ops, audit_store):
         """CONFIDENTIAL+ reasoning traces are filtered from MCP response (only hash included)."""
         await _initialize_server(server)
 
@@ -573,9 +559,7 @@ class TestAuditQueryReasoning:
         # But hash should still be present
         assert anchor_data["reasoning_trace_hash"] == "hash-confidential"
 
-    async def test_audit_query_includes_restricted_reasoning_trace(
-        self, server, trust_ops, audit_store
-    ):
+    async def test_audit_query_includes_restricted_reasoning_trace(self, server, trust_ops, audit_store):
         """RESTRICTED reasoning traces should be included in MCP response (boundary test)."""
         await _initialize_server(server)
 
@@ -611,9 +595,7 @@ class TestAuditQueryReasoning:
         assert "reasoning_trace" in anchor_data
         assert anchor_data["reasoning_trace"]["confidentiality"] == "restricted"
 
-    async def test_audit_query_filters_secret_reasoning_trace(
-        self, server, trust_ops, audit_store
-    ):
+    async def test_audit_query_filters_secret_reasoning_trace(self, server, trust_ops, audit_store):
         """SECRET reasoning traces should be filtered from MCP response."""
         await _initialize_server(server)
 
@@ -650,9 +632,7 @@ class TestAuditQueryReasoning:
         # Hash should still be present
         assert anchor_data["reasoning_trace_hash"] == "hash-secret"
 
-    async def test_audit_query_filters_top_secret_reasoning_trace(
-        self, server, trust_ops, audit_store
-    ):
+    async def test_audit_query_filters_top_secret_reasoning_trace(self, server, trust_ops, audit_store):
         """TOP_SECRET reasoning traces should be filtered from MCP response."""
         await _initialize_server(server)
 
@@ -688,9 +668,7 @@ class TestAuditQueryReasoning:
         assert "reasoning_trace" not in anchor_data
         assert anchor_data["reasoning_trace_hash"] == "hash-ts"
 
-    async def test_audit_query_omits_reasoning_when_absent(
-        self, server, trust_ops, audit_store
-    ):
+    async def test_audit_query_omits_reasoning_when_absent(self, server, trust_ops, audit_store):
         """When an audit anchor has no reasoning trace, the field is absent."""
         await _initialize_server(server)
 

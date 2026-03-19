@@ -416,7 +416,7 @@ class RollbackExecutor:
         # Check estimated time requirements
         if rollback_plan.estimated_total_time > 3600:  # Over 1 hour
             validation_results["warnings"].append(
-                f"Rollback estimated to take {rollback_plan.estimated_total_time/60:.1f} minutes - "
+                f"Rollback estimated to take {rollback_plan.estimated_total_time / 60:.1f} minutes - "
                 "consider scheduling during maintenance window"
             )
 

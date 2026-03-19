@@ -115,9 +115,9 @@ class TestMCPOpenAIFunctionCalling:
                 print(f"  OpenAI function calling format: Ready")
 
                 # Validate result
-                assert read_result.get(
-                    "success"
-                ), f"Tool execution should succeed: {read_result}"
+                assert read_result.get("success"), (
+                    f"Tool execution should succeed: {read_result}"
+                )
 
             else:
                 pytest.skip("No file tools discovered - MCP may not be configured")

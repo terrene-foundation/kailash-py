@@ -187,9 +187,9 @@ class TestHookPerformance:
         print(f"   Overhead:      {overhead:.3f}ms")
 
         # NFR-3 validation
-        assert (
-            overhead < 0.1
-        ), f"Stats tracking overhead {overhead:.3f}ms exceeds 0.1ms target"
+        assert overhead < 0.1, (
+            f"Stats tracking overhead {overhead:.3f}ms exceeds 0.1ms target"
+        )
 
     # NFR-4: Concurrent execution >50 hooks
     @pytest.mark.asyncio
@@ -298,9 +298,9 @@ class TestHookPerformance:
         tracemalloc.stop()
 
         # NFR-5 validation
-        assert (
-            memory_per_hook_kb < 100.0
-        ), f"Per-hook memory {memory_per_hook_kb:.2f}KB exceeds 100KB target"
+        assert memory_per_hook_kb < 100.0, (
+            f"Per-hook memory {memory_per_hook_kb:.2f}KB exceeds 100KB target"
+        )
 
     # Scalability test: 1000 hooks
     @pytest.mark.asyncio

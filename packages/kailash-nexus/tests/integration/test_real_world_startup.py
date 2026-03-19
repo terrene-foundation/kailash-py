@@ -143,15 +143,15 @@ app.start()
                 json={"inputs": {}},
                 timeout=10,
             )
-            assert (
-                response.status_code == 200
-            ), f"Workflow execution failed: {response.status_code}"
+            assert response.status_code == 200, (
+                f"Workflow execution failed: {response.status_code}"
+            )
 
             result = response.json()
             # Check for either run_id or workflow_id (both indicate successful execution)
-            assert (
-                "workflow_id" in result or "run_id" in result
-            ), f"No workflow_id/run_id in response: {result}"
+            assert "workflow_id" in result or "run_id" in result, (
+                f"No workflow_id/run_id in response: {result}"
+            )
             # Verify the workflow executed successfully
             assert "outputs" in result, f"No outputs in response: {result}"
         except requests.exceptions.ReadTimeout:

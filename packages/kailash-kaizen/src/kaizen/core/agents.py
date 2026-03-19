@@ -1064,7 +1064,7 @@ Final Answer: The train travels 120 miles."""
                 return f"""Thought: I need to identify the top programming languages for AI applications based on their library ecosystems, community support, and industry adoption.
 Action: Analyze the most popular languages used in AI development, considering factors like machine learning libraries, community size, and industry usage.
 Observation: Python dominates AI development with libraries like TensorFlow, PyTorch, and scikit-learn. R is strong for data analysis and statistics. JavaScript is increasingly used for AI in web applications.
-Final Answer: The top 3 programming languages for AI applications are: {', '.join(languages[:3])}. Python leads with extensive ML libraries, R excels in statistical computing, and JavaScript enables AI in web environments."""
+Final Answer: The top 3 programming languages for AI applications are: {", ".join(languages[:3])}. Python leads with extensive ML libraries, R excels in statistical computing, and JavaScript enables AI in web environments."""
             else:
                 return (
                     f"Three popular programming languages are: {', '.join(languages)}."

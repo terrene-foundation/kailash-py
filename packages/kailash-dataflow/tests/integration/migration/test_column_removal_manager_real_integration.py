@@ -297,9 +297,9 @@ class TestColumnRemovalManagerRealIntegration:
         safety_validation = await removal_manager.validate_removal_safety(removal_plan)
 
         # **CRITICAL SAFETY VALIDATION**: Must block removal
-        assert (
-            safety_validation.is_safe is False
-        ), "Must block removal of FK target column with data"
+        assert safety_validation.is_safe is False, (
+            "Must block removal of FK target column with data"
+        )
         assert safety_validation.risk_level == ImpactLevel.CRITICAL
         assert len(safety_validation.blocking_dependencies) >= 2  # Both FK constraints
         assert safety_validation.requires_confirmation is True
@@ -357,9 +357,9 @@ class TestColumnRemovalManagerRealIntegration:
         safety_validation = await removal_manager.validate_removal_safety(removal_plan)
 
         # **SAFE REMOVAL VALIDATION**: Should allow removal
-        assert (
-            safety_validation.is_safe is True
-        ), "Should allow removal of unused column"
+        assert safety_validation.is_safe is True, (
+            "Should allow removal of unused column"
+        )
         assert safety_validation.risk_level in [
             ImpactLevel.LOW,
             ImpactLevel.INFORMATIONAL,
@@ -622,9 +622,9 @@ class TestColumnRemovalManagerRealIntegration:
             completed_stages = [s for s in result.stages_completed if s.success]
             failed_stages = [s for s in result.stages_completed if not s.success]
 
-            assert (
-                len(completed_stages) >= 1
-            ), "Some stages should have completed before failure"
+            assert len(completed_stages) >= 1, (
+                "Some stages should have completed before failure"
+            )
             assert len(failed_stages) >= 1, "Failed stage should be recorded"
 
             logger.info(
@@ -783,9 +783,9 @@ class TestColumnRemovalManagerRealIntegration:
         error_count = sum(1 for r in results if isinstance(r, dict) and "error" in r)
 
         # At most one should succeed (safe concurrency)
-        assert (
-            success_count <= 1
-        ), f"Too many concurrent removals succeeded: {success_count}"
+        assert success_count <= 1, (
+            f"Too many concurrent removals succeeded: {success_count}"
+        )
 
         # Verify final database state is consistent
         async with test_database._pool.acquire() as conn:

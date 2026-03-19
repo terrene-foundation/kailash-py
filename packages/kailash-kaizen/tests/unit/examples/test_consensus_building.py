@@ -263,9 +263,9 @@ class TestFacilitatorConsensus:
         for i in range(3):
             pool.write_insight(
                 {
-                    "agent_id": f"reviewer_{i+1}",
+                    "agent_id": f"reviewer_{i + 1}",
                     "content": '{"vote": "approve", "feedback": "Looks good"}',
-                    "tags": ["vote", f"reviewer_{i+1}", "proposal_1"],
+                    "tags": ["vote", f"reviewer_{i + 1}", "proposal_1"],
                     "importance": 0.8,
                     "segment": "votes",
                     "metadata": {"proposal_id": "proposal_1"},
@@ -340,9 +340,9 @@ class TestFacilitatorConsensus:
         for i in range(3):
             pool.write_insight(
                 {
-                    "agent_id": f"reviewer_{i+1}",
+                    "agent_id": f"reviewer_{i + 1}",
                     "content": '{"vote": "reject", "feedback": "Not viable"}',
-                    "tags": ["vote", f"reviewer_{i+1}", "proposal_1"],
+                    "tags": ["vote", f"reviewer_{i + 1}", "proposal_1"],
                     "importance": 0.8,
                     "segment": "votes",
                     "metadata": {"proposal_id": "proposal_1"},

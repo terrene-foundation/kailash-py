@@ -132,9 +132,9 @@ class TestBroadcasterThreadSafety:
     def test_lock_is_threading_lock(self):
         """The broadcaster's _lock attribute must be a threading.Lock."""
         broadcaster = InMemoryRevocationBroadcaster()
-        assert isinstance(
-            broadcaster._lock, type(threading.Lock())
-        ), f"Expected threading.Lock, got {type(broadcaster._lock)}"
+        assert isinstance(broadcaster._lock, type(threading.Lock())), (
+            f"Expected threading.Lock, got {type(broadcaster._lock)}"
+        )
 
     def test_broadcast_is_thread_safe(self):
         """Concurrent broadcast calls must not corrupt state."""
@@ -218,7 +218,7 @@ class TestCascadeRevocationDepthLimit:
 
         # Build a linear chain: agent-0 -> agent-1 -> ... -> agent-200
         for i in range(200):
-            registry.register_delegation(f"agent-{i}", f"agent-{i+1}")
+            registry.register_delegation(f"agent-{i}", f"agent-{i + 1}")
 
         manager = CascadeRevocationManager(broadcaster, registry)
         events = manager.cascade_revoke(
@@ -230,9 +230,7 @@ class TestCascadeRevocationDepthLimit:
 
         # Should have the initial event + at most 5 levels of cascade
         # agent-0 (initial) + agent-1 (depth 1) through agent-5 (depth 5) = 6
-        assert (
-            len(events) <= 6
-        ), f"Expected at most 6 events (initial + 5 depth), got {len(events)}"
+        assert len(events) <= 6, f"Expected at most 6 events (initial + 5 depth), got {len(events)}"
 
     def test_cascade_default_max_depth(self):
         """Default max_depth should be 100 (not unlimited)."""
@@ -241,7 +239,7 @@ class TestCascadeRevocationDepthLimit:
 
         # Build a chain longer than 100
         for i in range(150):
-            registry.register_delegation(f"agent-{i}", f"agent-{i+1}")
+            registry.register_delegation(f"agent-{i}", f"agent-{i + 1}")
 
         manager = CascadeRevocationManager(broadcaster, registry)
         events = manager.cascade_revoke(
@@ -251,9 +249,7 @@ class TestCascadeRevocationDepthLimit:
         )
 
         # Should stop at default depth limit (100), not traverse all 150
-        assert (
-            len(events) <= 101
-        ), f"Expected at most 101 events (initial + 100 depth), got {len(events)}"
+        assert len(events) <= 101, f"Expected at most 101 events (initial + 100 depth), got {len(events)}"
 
     def test_cascade_max_depth_zero_stops_immediately(self):
         """max_depth=0 should only produce the initial event, no cascades."""
@@ -347,9 +343,9 @@ class TestToolConstraintExactMatching:
             "http_response_handler",
         ]
         for tool_name in false_positive_names:
-            assert (
-                tool_name.lower() not in write_tools
-            ), f"'{tool_name}' should NOT be blocked - it is not an exact match"
+            assert tool_name.lower() not in write_tools, (
+                f"'{tool_name}' should NOT be blocked - it is not an exact match"
+            )
 
     def test_exact_network_tool_blocked(self):
         """Tools exactly matching network tool names must be blocked."""
@@ -368,9 +364,7 @@ class TestToolConstraintExactMatching:
             "api_docs_viewer",
         ]
         for tool_name in false_positives:
-            assert (
-                tool_name.lower() not in network_tools
-            ), f"'{tool_name}' should NOT match network tools exactly"
+            assert tool_name.lower() not in network_tools, f"'{tool_name}' should NOT match network tools exactly"
 
     def test_case_insensitive_exact_match(self):
         """Exact matching must be case-insensitive."""
@@ -558,10 +552,7 @@ class TestBehavioralScoringLowSampleSize:
 
         # Both should have the same error_rate contribution in breakdown
         # because both use pessimistic default 0.5
-        assert (
-            score_no_errors.breakdown["error_rate"]
-            == score_many_errors.breakdown["error_rate"]
-        ), (
+        assert score_no_errors.breakdown["error_rate"] == score_many_errors.breakdown["error_rate"], (
             f"Below threshold, error_rate contribution should be identical "
             f"(pessimistic default), but got "
             f"{score_no_errors.breakdown['error_rate']} vs "
@@ -594,9 +585,9 @@ class TestBehavioralScoringLowSampleSize:
         score_errors = compute_behavioral_score("agent-errors", data_errors)
 
         # At or above threshold, error_rate should differ based on actual data
-        assert (
-            score_clean.breakdown["error_rate"] != score_errors.breakdown["error_rate"]
-        ), "At threshold, actual error rates should be used, producing different scores"
+        assert score_clean.breakdown["error_rate"] != score_errors.breakdown["error_rate"], (
+            "At threshold, actual error rates should be used, producing different scores"
+        )
 
     def test_above_threshold_uses_actual_data(self):
         """With total_actions > MIN_RELIABLE_SAMPLE, actual error rates

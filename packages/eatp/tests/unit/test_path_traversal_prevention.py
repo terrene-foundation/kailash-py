@@ -106,10 +106,7 @@ class TestValidateIdBackwardCompat:
 
     def test_accepts_uuid_format(self):
         """UUID-formatted IDs must pass."""
-        assert (
-            validate_id("550e8400-e29b-41d4-a716-446655440000")
-            == "550e8400-e29b-41d4-a716-446655440000"
-        )
+        assert validate_id("550e8400-e29b-41d4-a716-446655440000") == "550e8400-e29b-41d4-a716-446655440000"
 
     def test_returns_stripped_id(self):
         """Leading/trailing whitespace should be stripped."""
@@ -123,9 +120,7 @@ class TestValidateIdErrorMessages:
         """Error should mention the problematic ID."""
         with pytest.raises(ValueError, match="path traversal") as exc_info:
             validate_id("../secret")
-        assert "../secret" in str(exc_info.value) or "path traversal" in str(
-            exc_info.value
-        )
+        assert "../secret" in str(exc_info.value) or "path traversal" in str(exc_info.value)
 
     def test_null_byte_error_is_clear(self):
         """Error should clearly indicate null byte issue."""

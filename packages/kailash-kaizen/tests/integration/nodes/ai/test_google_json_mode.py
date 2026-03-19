@@ -159,9 +159,9 @@ class TestGoogleGeminiJSONMode:
         # Should NOT contain markdown formatting
         assert "**" not in content, "Response should not contain markdown bold"
         assert "```" not in content, "Response should not contain code blocks"
-        assert content.strip().startswith("{") or content.strip().startswith(
-            "["
-        ), "Response should start with JSON object or array"
+        assert content.strip().startswith("{") or content.strip().startswith("["), (
+            "Response should start with JSON object or array"
+        )
 
         # Should be valid JSON (array or object both acceptable)
         parsed = json.loads(content)

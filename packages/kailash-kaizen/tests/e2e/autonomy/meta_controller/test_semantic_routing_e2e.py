@@ -234,9 +234,9 @@ async def test_semantic_routing_to_correct_specialist():
     # Verify result structure
     assert coding_result is not None, "Coding result should not be None"
     assert isinstance(coding_result, dict), "Result should be a dictionary"
-    assert (
-        "error" not in coding_result
-    ), f"Should not have error: {coding_result.get('error')}"
+    assert "error" not in coding_result, (
+        f"Should not have error: {coding_result.get('error')}"
+    )
 
     # Test 2: Data analysis task should route to data specialist
     print("\n--- Test 2: Data Analysis Task ---")
@@ -256,9 +256,9 @@ async def test_semantic_routing_to_correct_specialist():
     # Verify result structure
     assert data_result is not None, "Data result should not be None"
     assert isinstance(data_result, dict), "Result should be a dictionary"
-    assert (
-        "error" not in data_result
-    ), f"Should not have error: {data_result.get('error')}"
+    assert "error" not in data_result, (
+        f"Should not have error: {data_result.get('error')}"
+    )
 
     # Test 3: Writing task should route to writing specialist
     print("\n--- Test 3: Writing Task ---")
@@ -278,9 +278,9 @@ async def test_semantic_routing_to_correct_specialist():
     # Verify result structure
     assert writing_result is not None, "Writing result should not be None"
     assert isinstance(writing_result, dict), "Result should be a dictionary"
-    assert (
-        "error" not in writing_result
-    ), f"Should not have error: {writing_result.get('error')}"
+    assert "error" not in writing_result, (
+        f"Should not have error: {writing_result.get('error')}"
+    )
 
     # Track cost (3 routing decisions × ~1000 tokens each)
     track_openai_usage(
@@ -344,9 +344,9 @@ async def test_dynamic_agent_selection_by_complexity():
     # Verify result structure
     assert simple_result is not None, "Simple result should not be None"
     assert isinstance(simple_result, dict), "Result should be a dictionary"
-    assert (
-        "error" not in simple_result
-    ), f"Should not have error: {simple_result.get('error')}"
+    assert "error" not in simple_result, (
+        f"Should not have error: {simple_result.get('error')}"
+    )
 
     # Test 2: Complex coding task requiring specialist
     print("\n--- Test 2: Complex Coding Task ---")
@@ -371,9 +371,9 @@ async def test_dynamic_agent_selection_by_complexity():
     # Verify result structure
     assert complex_coding_result is not None, "Complex coding result should not be None"
     assert isinstance(complex_coding_result, dict), "Result should be a dictionary"
-    assert (
-        "error" not in complex_coding_result
-    ), f"Should not have error: {complex_coding_result.get('error')}"
+    assert "error" not in complex_coding_result, (
+        f"Should not have error: {complex_coding_result.get('error')}"
+    )
 
     # Test 3: Complex data task requiring specialist
     print("\n--- Test 3: Complex Data Analysis Task ---")
@@ -396,9 +396,9 @@ async def test_dynamic_agent_selection_by_complexity():
     # Verify result structure
     assert complex_data_result is not None, "Complex data result should not be None"
     assert isinstance(complex_data_result, dict), "Result should be a dictionary"
-    assert (
-        "error" not in complex_data_result
-    ), f"Should not have error: {complex_data_result.get('error')}"
+    assert "error" not in complex_data_result, (
+        f"Should not have error: {complex_data_result.get('error')}"
+    )
 
     # Track cost (3 routing decisions × ~1000 tokens each)
     track_openai_usage(

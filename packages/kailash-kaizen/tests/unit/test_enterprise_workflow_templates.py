@@ -622,7 +622,6 @@ def mock_enterprise_nodes():
         patch("kailash.nodes.compliance.GDPRComplianceNode") as mock_gdpr,
         patch("kailash.nodes.security.ABACEvaluatorNode") as mock_abac,
     ):
-
         # Configure mocks
         mock_audit.return_value.get_parameters.return_value = {}
         mock_admin_audit.return_value.get_parameters.return_value = {}

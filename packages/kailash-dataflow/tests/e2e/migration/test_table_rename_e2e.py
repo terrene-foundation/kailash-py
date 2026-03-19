@@ -190,9 +190,9 @@ class TestTableRenameEngineE2E:
             assert isinstance(rename_report, TableRenameReport)
             assert rename_report.old_table_name == users_table
             assert rename_report.new_table_name == "customers"
-            assert (
-                analysis_time < 10.0
-            ), f"Analysis took {analysis_time:.2f}s, should be <10s"
+            assert analysis_time < 10.0, (
+                f"Analysis took {analysis_time:.2f}s, should be <10s"
+            )
 
             print(f"Analysis completed in {analysis_time:.3f}s")
             print(f"Found {len(rename_report.schema_objects)} dependent objects")
@@ -210,9 +210,9 @@ class TestTableRenameEngineE2E:
                 for obj in rename_report.schema_objects
                 if obj.object_type == SchemaObjectType.FOREIGN_KEY
             ]
-            assert (
-                len(fk_objects) >= 2
-            ), f"Expected ≥2 FK constraints, found {len(fk_objects)}"
+            assert len(fk_objects) >= 2, (
+                f"Expected ≥2 FK constraints, found {len(fk_objects)}"
+            )
 
             # Must find indexes (performance critical)
             index_objects = [
@@ -220,9 +220,9 @@ class TestTableRenameEngineE2E:
                 for obj in rename_report.schema_objects
                 if obj.object_type == SchemaObjectType.INDEX
             ]
-            assert (
-                len(index_objects) >= 4
-            ), f"Expected ≥4 indexes, found {len(index_objects)}"
+            assert len(index_objects) >= 4, (
+                f"Expected ≥4 indexes, found {len(index_objects)}"
+            )
 
             # Validate CASCADE constraint detection (data loss risk)
             cascade_constraints = [
@@ -231,9 +231,9 @@ class TestTableRenameEngineE2E:
                 if "CASCADE" in fk.definition
                 and fk.impact_level == RenameImpactLevel.CRITICAL
             ]
-            assert (
-                len(cascade_constraints) >= 1
-            ), "Must detect CASCADE constraints as CRITICAL"
+            assert len(cascade_constraints) >= 1, (
+                "Must detect CASCADE constraints as CRITICAL"
+            )
 
             print(
                 f"✓ Found {len(fk_objects)} FK constraints ({len(cascade_constraints)} CASCADE)"
@@ -253,17 +253,17 @@ class TestTableRenameEngineE2E:
             )
 
             # Must be CRITICAL due to CASCADE constraints
-            assert (
-                impact_summary.overall_risk == RenameImpactLevel.CRITICAL
-            ), f"Expected CRITICAL risk due to CASCADE constraints, got {impact_summary.overall_risk.value}"
+            assert impact_summary.overall_risk == RenameImpactLevel.CRITICAL, (
+                f"Expected CRITICAL risk due to CASCADE constraints, got {impact_summary.overall_risk.value}"
+            )
 
             # Must have coordination requirements
-            assert (
-                impact_summary.requires_coordination
-            ), "Complex rename must require coordination"
-            assert (
-                impact_summary.total_objects > 5
-            ), "Should find multiple dependent objects"
+            assert impact_summary.requires_coordination, (
+                "Complex rename must require coordination"
+            )
+            assert impact_summary.total_objects > 5, (
+                "Should find multiple dependent objects"
+            )
 
             # Phase 4: Dependency Graph Analysis
             print("\\n=== PHASE 4: DEPENDENCY GRAPH ANALYSIS ===")
@@ -301,23 +301,23 @@ class TestTableRenameEngineE2E:
                 print(f"  {factor}: {value}")
 
             # Must identify high business impact
-            assert business_risk_factors[
-                "data_loss_risk"
-            ], "Must identify data loss risk"
-            assert business_risk_factors[
-                "downtime_required"
-            ], "Must identify downtime requirements"
-            assert (
-                business_risk_factors["complexity_score"] > 5
-            ), "Must identify complexity"
+            assert business_risk_factors["data_loss_risk"], (
+                "Must identify data loss risk"
+            )
+            assert business_risk_factors["downtime_required"], (
+                "Must identify downtime requirements"
+            )
+            assert business_risk_factors["complexity_score"] > 5, (
+                "Must identify complexity"
+            )
 
             # Phase 6: Validation and Safety Checks
             print("\\n=== PHASE 6: VALIDATION AND SAFETY CHECKS ===")
 
             validation = rename_report.validation
-            assert (
-                validation.is_valid
-            ), f"Valid rename should pass validation: {validation.violations}"
+            assert validation.is_valid, (
+                f"Valid rename should pass validation: {validation.violations}"
+            )
 
             # Test invalid scenarios
             invalid_validation = await rename_analyzer.validate_rename_operation(
@@ -332,14 +332,14 @@ class TestTableRenameEngineE2E:
             print("\\n=== PHASE 7: PERFORMANCE VALIDATION ===")
 
             # Verify analysis completes within reasonable time for production use
-            assert (
-                analysis_time < 5.0
-            ), f"Analysis too slow for production: {analysis_time:.2f}s"
+            assert analysis_time < 5.0, (
+                f"Analysis too slow for production: {analysis_time:.2f}s"
+            )
 
             # Verify memory efficiency (schema objects should be reasonable)
-            assert (
-                len(rename_report.schema_objects) < 100
-            ), "Too many objects found - may indicate inefficient queries"
+            assert len(rename_report.schema_objects) < 100, (
+                "Too many objects found - may indicate inefficient queries"
+            )
 
             print(f"✓ Analysis performance: {analysis_time:.3f}s")
             print(f"✓ Memory efficiency: {len(rename_report.schema_objects)} objects")
@@ -433,9 +433,9 @@ class TestTableRenameEngineE2E:
         assert all(isinstance(r, TableRenameReport) for r in reports)
 
         # Performance should not degrade significantly
-        assert (
-            concurrent_time < 2.0
-        ), f"Concurrent analysis too slow: {concurrent_time:.2f}s"
+        assert concurrent_time < 2.0, (
+            f"Concurrent analysis too slow: {concurrent_time:.2f}s"
+        )
 
         print(f"✓ Concurrent analysis: {concurrent_time:.3f}s for 3 tables")
         print("✓ Production readiness validated")

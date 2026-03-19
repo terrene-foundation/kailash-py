@@ -203,7 +203,9 @@ class TestDataValidationEngine:
     async def test_check_type_compatibility_null_constraints(self, engine):
         """Test type compatibility checking for null constraints."""
         column_stats = ColumnStatistics(
-            total_rows=1000, null_count=100, unique_count=900  # Has null values
+            total_rows=1000,
+            null_count=100,
+            unique_count=900,  # Has null values
         )
 
         issues = await engine._check_type_compatibility(column_stats, "text", "integer")

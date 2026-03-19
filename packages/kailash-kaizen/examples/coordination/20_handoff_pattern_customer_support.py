@@ -150,9 +150,9 @@ def main():
     support_reports = []
 
     for idx, ticket in enumerate(SUPPORT_TICKETS, 1):
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         print(f"TICKET {idx}/{len(SUPPORT_TICKETS)}: {ticket['id']}")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         print()
 
         print(f"Customer: {ticket['customer']}")

@@ -126,9 +126,9 @@ class TestRAGWorkflowOllama:
         chunks_large = result_large["chunks"]
 
         # More chunks with smaller size
-        assert len(chunks_small) >= len(
-            chunks_large
-        ), "Smaller chunk size should produce more or equal chunks"
+        assert len(chunks_small) >= len(chunks_large), (
+            "Smaller chunk size should produce more or equal chunks"
+        )
 
     def test_rag_with_page_citations(self, multi_page_document):
         """
@@ -215,9 +215,9 @@ class TestRAGWorkflowLandingAI:
         # At least some chunks should have bounding boxes
         # This is the unique value proposition of Landing AI
         # (Note: For txt files, bboxes may be limited - PDF would have more)
-        assert (
-            len(chunks_with_bbox) >= 0
-        ), "Landing AI should attempt to provide bounding boxes"
+        assert len(chunks_with_bbox) >= 0, (
+            "Landing AI should attempt to provide bounding boxes"
+        )
 
     def test_rag_spatial_grounding(self, multi_page_document):
         """
@@ -246,9 +246,9 @@ class TestRAGWorkflowLandingAI:
                 x1, y1, x2, y2 = bbox
                 assert x2 > x1, "x2 should be greater than x1"
                 assert y2 > y1, "y2 should be greater than y1"
-                assert all(
-                    isinstance(coord, (int, float)) for coord in bbox
-                ), "Coordinates should be numeric"
+                assert all(isinstance(coord, (int, float)) for coord in bbox), (
+                    "Coordinates should be numeric"
+                )
 
 
 @pytest.mark.e2e

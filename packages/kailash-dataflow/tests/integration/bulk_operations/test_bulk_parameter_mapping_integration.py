@@ -115,15 +115,15 @@ class TestBulkParameterMappingIntegration:
             # Test with 'records' parameter for each operation
             try:
                 result = node.run(records=test_data)
-                assert isinstance(
-                    result, dict
-                ), f"{operation} failed to handle 'records' parameter"
+                assert isinstance(result, dict), (
+                    f"{operation} failed to handle 'records' parameter"
+                )
             except Exception as e:
                 # Some operations might fail due to missing required parameters
                 # but they should not fail due to parameter mapping issues
-                assert (
-                    "data" not in str(e).lower()
-                ), f"{operation} failed due to parameter mapping: {e}"
+                assert "data" not in str(e).lower(), (
+                    f"{operation} failed due to parameter mapping: {e}"
+                )
 
     def test_parameter_validation_consistency(self):
         """Test that parameter validation is consistent across operations."""
@@ -135,9 +135,9 @@ class TestBulkParameterMappingIntegration:
             assert "data" in params, f"{node_name} missing 'data' parameter"
 
             data_param = params["data"]
-            assert hasattr(
-                data_param, "auto_map_from"
-            ), f"{node_name} missing auto_map_from"
+            assert hasattr(data_param, "auto_map_from"), (
+                f"{node_name} missing auto_map_from"
+            )
             assert data_param.auto_map_from == [
                 "records",
                 "rows",

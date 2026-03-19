@@ -520,9 +520,9 @@ def test_clear_schema_cache_subsequent_operations_miss(runtime):
     assert "session2" in results
 
     metrics_after_clear = db.get_schema_cache_metrics()
-    assert (
-        metrics_after_clear["misses"] > misses_before
-    ), "Should have new cache miss after clear"
+    assert metrics_after_clear["misses"] > misses_before, (
+        "Should have new cache miss after clear"
+    )
     assert metrics_after_clear["cache_size"] >= 1, "Cache should be repopulated"
 
     print(
@@ -632,9 +632,9 @@ def test_get_schema_cache_metrics_accuracy(runtime):
     expected_hit_rate = (
         (metrics["hits"] / total_requests * 100) if total_requests > 0 else 0
     )
-    assert (
-        abs(metrics["hit_rate_percent"] - expected_hit_rate) < 0.01
-    ), "Hit rate calculation incorrect"
+    assert abs(metrics["hit_rate_percent"] - expected_hit_rate) < 0.01, (
+        "Hit rate calculation incorrect"
+    )
 
     # Cache should contain Event table
     assert metrics["cache_size"] >= 1, "Cache should have at least 1 entry"
@@ -766,9 +766,9 @@ def test_get_cached_tables_entry_details(runtime):
     assert log_entry is not None, "Log model should be in cache"
 
     # Verify state
-    assert (
-        log_entry["state"] == "ensured"
-    ), "State should be 'ensured' after successful operation"
+    assert log_entry["state"] == "ensured", (
+        "State should be 'ensured' after successful operation"
+    )
 
     # Verify timestamps
     assert log_entry["first_ensured_at"] > 0, "first_ensured_at should be set"
@@ -900,9 +900,9 @@ def test_clear_table_cache_nonexistent_returns_false(runtime):
 
     # Verify cache unchanged
     metrics_after = db.get_schema_cache_metrics()
-    assert (
-        metrics_after["cache_size"] == cache_size_before
-    ), "Cache size should be unchanged"
+    assert metrics_after["cache_size"] == cache_size_before, (
+        "Cache size should be unchanged"
+    )
 
     # Verify Tag still cached
     cached_tables = db.get_cached_tables()
@@ -994,9 +994,9 @@ def test_e2e_blog_workflow_cache_performance(runtime):
         assert f"create_post_{i}" in results
 
     metrics_after_posts = db.get_schema_cache_metrics()
-    assert (
-        metrics_after_posts["hits"] > metrics_after_user["hits"]
-    ), "Posts should hit cache"
+    assert metrics_after_posts["hits"] > metrics_after_user["hits"], (
+        "Posts should hit cache"
+    )
 
     # Step 3: Create comments (should hit cache for BlogComment)
     for i in range(5):
@@ -1016,9 +1016,9 @@ def test_e2e_blog_workflow_cache_performance(runtime):
         assert f"create_comment_{i}" in results
 
     metrics_after_comments = db.get_schema_cache_metrics()
-    assert (
-        metrics_after_comments["hits"] > metrics_after_posts["hits"]
-    ), "Comments should hit cache"
+    assert metrics_after_comments["hits"] > metrics_after_posts["hits"], (
+        "Comments should hit cache"
+    )
 
     # Step 4: List operations (all should hit cache)
     workflow = WorkflowBuilder()

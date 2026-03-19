@@ -1017,8 +1017,7 @@ class WebMigrationAPI:
 
         if stage_num < 0 or stage_num >= len(stages):
             raise ValidationError(
-                f"Stage {stage_num} out of range. "
-                f"Available stages: 0-{len(stages) - 1}"
+                f"Stage {stage_num} out of range. Available stages: 0-{len(stages) - 1}"
             )
 
         stage = stages[stage_num]

@@ -205,7 +205,7 @@ def main():
 
     print("Abstention Analysis:")
     print(
-        f"  - Abstentions: {abstentions}/{len(votes3)} ({abstentions/len(votes3)*100:.1f}%)"
+        f"  - Abstentions: {abstentions}/{len(votes3)} ({abstentions / len(votes3) * 100:.1f}%)"
     )
     print(f"  - Active votes: {active_votes}/{len(votes3)}")
     print()

@@ -50,7 +50,7 @@ async def create_order(customer_id: str, items: list) -> dict:
 
     # Create order
     order = {
-        "order_id": f'ORD-{datetime.now().strftime("%Y%m%d%H%M%S")}',
+        "order_id": f"ORD-{datetime.now().strftime('%Y%m%d%H%M%S')}",
         "customer_id": customer_id,
         "items": validated_items,
         "subtotal": round(subtotal, 2),

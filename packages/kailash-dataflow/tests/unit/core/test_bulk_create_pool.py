@@ -207,7 +207,6 @@ class TestBulkCreatePoolNode:
             "_execute_batch_with_connection",
             return_value={"created_count": 2, "created_ids": [1, 2]},
         ) as mock_execute_batch:
-
             result = await node.execute_async(
                 data=test_data, use_pooled_connection=True, return_ids=True
             )
@@ -273,7 +272,6 @@ class TestBulkCreatePoolNode:
             "_execute_batch_with_connection",
             return_value={"created_count": 2, "created_ids": [1, 2]},
         ) as mock_execute_batch:
-
             result = await node._execute_batched_inserts_with_pool(
                 pool=mock_pool,
                 data=test_data,
@@ -335,7 +333,6 @@ class TestBulkCreatePoolNode:
             "_execute_batch_with_connection",
             side_effect=Exception("Connection error"),
         ):
-
             result = await node._execute_batched_inserts_with_pool(
                 pool=mock_pool,
                 data=test_data,
@@ -365,7 +362,6 @@ class TestBulkCreatePoolNode:
                 "dry_run": False,
             },
         ) as mock_validate:
-
             result = await node.execute_async(
                 data=[{"name": "Alice"}], tenant_id="tenant_123"
             )
@@ -382,7 +378,6 @@ class TestBulkCreatePoolNode:
         with patch.object(
             node, "_process_direct", side_effect=Exception("Database error")
         ):
-
             with pytest.raises(
                 NodeExecutionError, match="Bulk create operation failed"
             ):
@@ -535,7 +530,6 @@ class TestBulkCreatePoolNodeAdvanced:
                 "errors": [],
             },
         ):
-
             result = await node.execute_async(data=[{"name": "Alice"}, {"name": "Bob"}])
 
         # Should not be successful if nothing was created and not dry run

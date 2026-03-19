@@ -88,11 +88,11 @@ async def main():
         # (action, should_exist) -- for context
         ("read_data", True),
         ("generate_report", True),
-        ("delete_records", False),      # agent does not have this
+        ("delete_records", False),  # agent does not have this
         ("read_data", True),
-        ("write_database", False),       # agent does not have this
+        ("write_database", False),  # agent does not have this
         ("generate_report", True),
-        ("admin_override", False),       # agent does not have this
+        ("admin_override", False),  # agent does not have this
         ("read_data", True),
     ]
 

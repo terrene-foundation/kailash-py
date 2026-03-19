@@ -657,9 +657,9 @@ def domain_specialists_workflow(question: str) -> Dict[str, Any]:
         "security": security_expert,
     }
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Domain-Specialists Pattern: {question}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Step 1: Router classifies and routes
     print("Step 1: Router analyzing question...")
@@ -701,14 +701,14 @@ def domain_specialists_workflow(question: str) -> Dict[str, Any]:
 
     # Show shared memory stats
     stats = shared_pool.get_stats()
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Shared Memory Statistics:")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  - Total insights: {stats['insight_count']}")
     print(f"  - Agents involved: {stats['agent_count']}")
     print(f"  - Tag distribution: {stats['tag_distribution']}")
     print(f"  - Segment distribution: {stats['segment_distribution']}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     return {
         "question": question,

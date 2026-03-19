@@ -272,14 +272,14 @@ class TestRiskAssessmentEngineIntegration:
             calculation_time = time.time() - start_time
 
         # Verify performance requirement (<5 seconds)
-        assert (
-            calculation_time < 5.0
-        ), f"Risk calculation took {calculation_time}s, should be <5s"
+        assert calculation_time < 5.0, (
+            f"Risk calculation took {calculation_time}s, should be <5s"
+        )
 
         # Verify CRITICAL risk detection
-        assert (
-            risk_assessment.overall_score >= 70
-        ), f"Expected high risk score, got {risk_assessment.overall_score}"
+        assert risk_assessment.overall_score >= 70, (
+            f"Expected high risk score, got {risk_assessment.overall_score}"
+        )
         assert risk_assessment.risk_level in [
             RiskLevel.HIGH,
             RiskLevel.CRITICAL,
@@ -288,12 +288,12 @@ class TestRiskAssessmentEngineIntegration:
         # Verify data loss risk is CRITICAL
         data_loss_score = risk_assessment.category_scores.get(RiskCategory.DATA_LOSS)
         assert data_loss_score is not None, "Should have data loss risk score"
-        assert (
-            data_loss_score.score >= 80
-        ), f"Expected CRITICAL data loss score, got {data_loss_score.score}"
-        assert (
-            data_loss_score.level == RiskLevel.CRITICAL
-        ), "Data loss risk should be CRITICAL for CASCADE"
+        assert data_loss_score.score >= 80, (
+            f"Expected CRITICAL data loss score, got {data_loss_score.score}"
+        )
+        assert data_loss_score.level == RiskLevel.CRITICAL, (
+            "Data loss risk should be CRITICAL for CASCADE"
+        )
 
         # Verify risk factors mention CASCADE
         risk_factors = [rf.description for rf in risk_assessment.risk_factors]
@@ -346,18 +346,18 @@ class TestRiskAssessmentEngineIntegration:
         )
 
         # Verify moderate risk level (not CRITICAL due to dev environment)
-        assert (
-            risk_assessment.overall_score >= 30
-        ), "Should have elevated risk due to view dependency"
+        assert risk_assessment.overall_score >= 30, (
+            "Should have elevated risk due to view dependency"
+        )
 
         # Verify system availability risk accounts for view breakage
         availability_score = risk_assessment.category_scores.get(
             RiskCategory.SYSTEM_AVAILABILITY
         )
         assert availability_score is not None, "Should have system availability risk"
-        assert (
-            availability_score.score >= 20
-        ), "Should have elevated availability risk for view dependency"
+        assert availability_score.score >= 20, (
+            "Should have elevated availability risk for view dependency"
+        )
 
         # Verify risk factors mention views
         risk_factors = [rf.description for rf in risk_assessment.risk_factors]
@@ -402,9 +402,9 @@ class TestRiskAssessmentEngineIntegration:
             RiskCategory.PERFORMANCE_DEGRADATION
         )
         assert performance_score is not None, "Should have performance degradation risk"
-        assert (
-            performance_score.score >= 40
-        ), "Should have significant performance risk for index removal"
+        assert performance_score.score >= 40, (
+            "Should have significant performance risk for index removal"
+        )
 
         # Verify risk factors mention indexes
         risk_factors = [rf.description for rf in risk_assessment.risk_factors]
@@ -442,9 +442,9 @@ class TestRiskAssessmentEngineIntegration:
         )
 
         # Verify LOW risk classification
-        assert (
-            risk_assessment.overall_score <= 35
-        ), f"Expected low risk score, got {risk_assessment.overall_score}"
+        assert risk_assessment.overall_score <= 35, (
+            f"Expected low risk score, got {risk_assessment.overall_score}"
+        )
         assert risk_assessment.risk_level in [
             RiskLevel.LOW,
             RiskLevel.MEDIUM,
@@ -500,14 +500,14 @@ class TestRiskAssessmentEngineIntegration:
         calculation_time = time.time() - start_time
 
         # Verify performance requirements
-        assert (
-            calculation_time < 5.0
-        ), f"Complex risk calculation took {calculation_time}s, should be <5s"
+        assert calculation_time < 5.0, (
+            f"Complex risk calculation took {calculation_time}s, should be <5s"
+        )
 
         # Verify comprehensive risk analysis
-        assert (
-            len(risk_assessment.category_scores) == 4
-        ), "Should analyze all 4 risk categories"
+        assert len(risk_assessment.category_scores) == 4, (
+            "Should analyze all 4 risk categories"
+        )
 
         required_categories = [
             RiskCategory.DATA_LOSS,
@@ -517,31 +517,31 @@ class TestRiskAssessmentEngineIntegration:
         ]
 
         for category in required_categories:
-            assert (
-                category in risk_assessment.category_scores
-            ), f"Missing risk category: {category}"
+            assert category in risk_assessment.category_scores, (
+                f"Missing risk category: {category}"
+            )
             score = risk_assessment.category_scores[category]
-            assert (
-                0 <= score.score <= 100
-            ), f"Invalid score range for {category}: {score.score}"
+            assert 0 <= score.score <= 100, (
+                f"Invalid score range for {category}: {score.score}"
+            )
 
         # Verify high overall risk due to production + no backup + FK CASCADE
-        assert (
-            risk_assessment.overall_score >= 70
-        ), "Should have high overall risk for complex operation"
+        assert risk_assessment.overall_score >= 70, (
+            "Should have high overall risk for complex operation"
+        )
 
         # Verify multiple risk factors identified
-        assert (
-            len(risk_assessment.risk_factors) >= 3
-        ), "Should identify multiple risk factors"
+        assert len(risk_assessment.risk_factors) >= 3, (
+            "Should identify multiple risk factors"
+        )
 
         # Verify rollback complexity is CRITICAL due to no backup + CASCADE
         rollback_score = risk_assessment.category_scores[
             RiskCategory.ROLLBACK_COMPLEXITY
         ]
-        assert (
-            rollback_score.score >= 60
-        ), "Rollback complexity should be high with no backup + CASCADE"
+        assert rollback_score.score >= 60, (
+            "Rollback complexity should be high with no backup + CASCADE"
+        )
 
     @pytest.mark.asyncio
     async def test_integration_batch_risk_assessment_performance(
@@ -583,9 +583,9 @@ class TestRiskAssessmentEngineIntegration:
 
         # Verify all assessments are valid
         for i, assessment in enumerate(assessments):
-            assert (
-                0 <= assessment.overall_score <= 100
-            ), f"Assessment {i} has invalid score: {assessment.overall_score}"
+            assert 0 <= assessment.overall_score <= 100, (
+                f"Assessment {i} has invalid score: {assessment.overall_score}"
+            )
             assert assessment.risk_level in [
                 RiskLevel.LOW,
                 RiskLevel.MEDIUM,
@@ -611,9 +611,9 @@ class TestRiskAssessmentEngineIntegration:
         # Should return empty dependency report without crashing
         assert dependency_report.table_name == "nonexistent_table"
         assert dependency_report.column_name == "nonexistent_column"
-        assert (
-            not dependency_report.has_dependencies()
-        ), "Should have no dependencies for non-existent table"
+        assert not dependency_report.has_dependencies(), (
+            "Should have no dependencies for non-existent table"
+        )
 
         # Risk assessment should handle empty report gracefully
         operation = IntegrationMigrationOperation(
@@ -625,12 +625,12 @@ class TestRiskAssessmentEngineIntegration:
         )
 
         # Should return valid but low risk assessment
-        assert (
-            0 <= risk_assessment.overall_score <= 25
-        ), "Non-existent objects should have low risk"
-        assert (
-            risk_assessment.risk_level == RiskLevel.LOW
-        ), "Should classify non-existent objects as low risk"
+        assert 0 <= risk_assessment.overall_score <= 25, (
+            "Non-existent objects should have low risk"
+        )
+        assert risk_assessment.risk_level == RiskLevel.LOW, (
+            "Should classify non-existent objects as low risk"
+        )
 
     @pytest.mark.asyncio
     async def test_integration_real_migration_workflow_simulation(
@@ -704,9 +704,9 @@ class TestRiskAssessmentEngineIntegration:
             in ["BLOCK", "REQUIRES_APPROVAL", "PROCEED_WITH_CAUTION"]
         ]
         for report in high_risk_reports:
-            assert (
-                len(report["risk_assessment"].risk_factors) > 0
-            ), f"High-risk operations should have detailed risk factors, got {report['recommended_action']}"
+            assert len(report["risk_assessment"].risk_factors) > 0, (
+                f"High-risk operations should have detailed risk factors, got {report['recommended_action']}"
+            )
 
     def _determine_migration_action(
         self, risk_assessment: ComprehensiveRiskAssessment

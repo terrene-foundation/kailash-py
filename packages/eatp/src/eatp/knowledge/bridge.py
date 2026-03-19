@@ -224,9 +224,7 @@ class TrustKnowledgeBridge:
             knowledge_type = KnowledgeType(content_type)
         except ValueError as e:
             valid_types = [kt.value for kt in KnowledgeType]
-            raise ValueError(
-                f"Invalid content_type '{content_type}'. Must be one of: {valid_types}"
-            ) from e
+            raise ValueError(f"Invalid content_type '{content_type}'. Must be one of: {valid_types}") from e
 
         # Determine trust chain reference and constraint envelope reference
         trust_chain_ref: str
@@ -357,9 +355,7 @@ class TrustKnowledgeBridge:
                 continue
 
             # Check if derived from any of the agent's entries
-            derived_from = prov_record.relations.get(
-                ProvRelation.WAS_DERIVED_FROM.value, []
-            )
+            derived_from = prov_record.relations.get(ProvRelation.WAS_DERIVED_FROM.value, [])
             for source_id in derived_from:
                 if source_id in source_ids:
                     # Get the knowledge entry
@@ -441,9 +437,7 @@ class TrustKnowledgeBridge:
 
         # Verify source agent has valid trust chain
         try:
-            chain = await self._trust_operations.trust_store.get_chain(
-                entry.source_agent_id
-            )
+            chain = await self._trust_operations.trust_store.get_chain(entry.source_agent_id)
 
             # Check chain exists and is not expired
             if chain.is_expired():

@@ -239,7 +239,8 @@ def validate_connection_parameters(
 
 
 def validate_dot_notation(
-    parameter: str, parameter_type: str  # "source_output" or "destination_input"
+    parameter: str,
+    parameter_type: str,  # "source_output" or "destination_input"
 ) -> List[ConnectionValidationResult]:
     """
     Validate dot notation for nested field access.

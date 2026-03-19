@@ -286,9 +286,9 @@ class TestOrgIdSpoofingDetected:
         # The SIGNING PAYLOAD should differ (used for signature verification)
         tampered_payload = tampered_chain.genesis.to_signing_payload()
 
-        assert (
-            original_payload != tampered_payload
-        ), "Signing payload must change when org_id is modified - tampering detectable"
+        assert original_payload != tampered_payload, (
+            "Signing payload must change when org_id is modified - tampering detectable"
+        )
 
         # The serialized form (to_dict) should also differ
         original_dict = legitimate_chain.to_dict()
@@ -330,9 +330,9 @@ class TestOrgIdSpoofingDetected:
         tampered_payload = tampered_delegation.to_signing_payload()
 
         # Payloads must differ
-        assert (
-            original_payload != tampered_payload
-        ), "Signing payload must change when constraints are modified"
+        assert original_payload != tampered_payload, (
+            "Signing payload must change when constraints are modified"
+        )
 
 
 # =============================================================================
@@ -563,9 +563,9 @@ class TestMixedOrgChainRejected:
         )
 
         assert not has_cross_org_grants, "No cross-org grants present"
-        assert (
-            len(mixed_orgs) == 3
-        ), "Chain contains 3 different org scopes without authorization"
+        assert len(mixed_orgs) == 3, (
+            "Chain contains 3 different org scopes without authorization"
+        )
 
 
 # =============================================================================
@@ -681,16 +681,16 @@ class TestOrgAdminCannotModifyOtherOrgChains:
 
         # The hash should change
         modified_hash = modified_chain.hash()
-        assert (
-            original_hash != modified_hash
-        ), "Any modification to chain should change hash"
+        assert original_hash != modified_hash, (
+            "Any modification to chain should change hash"
+        )
 
         # If we were to store this modified chain, org verification should catch it
         # The original chain should still be intact
         current_chain = await store.get_chain("agent-org-b")
-        assert (
-            current_chain.hash() == original_hash
-        ), "Original chain should be unchanged"
+        assert current_chain.hash() == original_hash, (
+            "Original chain should be unchanged"
+        )
         assert current_chain.genesis.metadata.get("org_id") == original_org
 
 
@@ -743,14 +743,14 @@ class TestGenesisRecordOrgImmutable:
 
         # Signing payload must differ (this is what signatures verify)
         tampered_payload = tampered_chain.genesis.to_signing_payload()
-        assert (
-            original_payload != tampered_payload
-        ), "Changing org_id must change signing payload - detectable via signature"
+        assert original_payload != tampered_payload, (
+            "Changing org_id must change signing payload - detectable via signature"
+        )
 
         # Metadata must differ
-        assert (
-            original_metadata != tampered_chain.genesis.metadata
-        ), "Metadata should be different after tampering"
+        assert original_metadata != tampered_chain.genesis.metadata, (
+            "Metadata should be different after tampering"
+        )
 
         # The stored chain should still have original org_id
         stored_chain = await store.get_chain("agent-test")
@@ -989,16 +989,16 @@ class TestOrgIdWithSpecialCharacters:
                 stored_org = retrieved.genesis.metadata.get("org_id")
 
                 # The malicious string should be treated as data, not code
-                assert (
-                    stored_org == malicious_org
-                ), f"Org ID should be stored as literal data: {malicious_org}"
+                assert stored_org == malicious_org, (
+                    f"Org ID should be stored as literal data: {malicious_org}"
+                )
 
             except Exception as e:
                 # If the system rejects malicious input, that's also acceptable
                 # Just ensure it doesn't execute the injection
-                assert "DROP TABLE" not in str(
-                    type(e)
-                ), "SQL injection should not affect system"
+                assert "DROP TABLE" not in str(type(e)), (
+                    "SQL injection should not affect system"
+                )
 
         # Verify the store still works correctly
         normal_chain = create_trust_chain(
@@ -1076,9 +1076,9 @@ class TestUnicodeOrgIdNormalization:
                 pass
             else:
                 # If they're truly different, they should be isolated
-                assert (
-                    org1 != org2
-                ), f"Different org_ids should remain distinct: {org1} vs {org2}"
+                assert org1 != org2, (
+                    f"Different org_ids should remain distinct: {org1} vs {org2}"
+                )
 
         # Verify store integrity
         all_chains = await store.list_chains()

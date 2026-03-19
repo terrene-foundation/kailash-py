@@ -65,7 +65,7 @@ def main():
     - Average Quantity per Order: {avg_quantity:.1f}
     - Top Product: {top_product}
     - Number of Transactions: {len(df)}
-    - Regions: {df['Region'].nunique()} ({', '.join(df['Region'].unique())})
+    - Regions: {df["Region"].nunique()} ({", ".join(df["Region"].unique())})
 
     Detailed Data:
     {df.to_string()}

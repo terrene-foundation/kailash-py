@@ -136,7 +136,9 @@ def test_integration_multi_service(
     # Cache the result in Redis
     cache_key = f"integration_test:record:{test_id}"
     integration_redis_connection.setex(
-        cache_key, 300, f"cached_data_for_{test_id}"  # 5 minute expiration
+        cache_key,
+        300,
+        f"cached_data_for_{test_id}",  # 5 minute expiration
     )
 
     # Verify both services

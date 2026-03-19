@@ -101,9 +101,9 @@ class TestDefaultPermissions:
     def test_admin_has_all_operations(self):
         admin_perm = ROLE_PERMISSIONS[Role.ADMIN]
         for op in OPERATIONS:
-            assert (
-                op in admin_perm.allowed_operations
-            ), f"Admin should have '{op}' permission"
+            assert op in admin_perm.allowed_operations, (
+                f"Admin should have '{op}' permission"
+            )
 
     def test_auditor_read_only(self):
         auditor_perm = ROLE_PERMISSIONS[Role.AUDITOR]
@@ -200,9 +200,9 @@ class TestRBACManagerPermissions:
     def test_admin_can_do_anything(self, mgr):
         mgr.assign_role("alice", Role.ADMIN)
         for op in OPERATIONS:
-            assert (
-                mgr.check_permission("alice", op) is True
-            ), f"Admin should have '{op}' permission"
+            assert mgr.check_permission("alice", op) is True, (
+                f"Admin should have '{op}' permission"
+            )
 
     def test_auditor_can_verify(self, mgr):
         mgr.assign_role("bob", Role.AUDITOR)

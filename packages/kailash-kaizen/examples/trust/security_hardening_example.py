@@ -139,7 +139,7 @@ async def demo_rate_limiting():
         operation = "establish"
 
         can_proceed = await limiter.check_rate(operation, authority_id)
-        print(f"  Operation {i+1}: can_proceed={can_proceed}")
+        print(f"  Operation {i + 1}: can_proceed={can_proceed}")
 
         if can_proceed:
             try:

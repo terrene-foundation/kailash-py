@@ -305,7 +305,6 @@ class IterativeLLMAgentNode(LLMAgentNode):
         convergence_reason = "max_iterations_reached"
 
         try:
-
             # Main iterative loop
             for iteration_num in range(1, max_iterations + 1):
                 iteration_state = IterationState(
@@ -863,9 +862,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                                 "tool_outputs", {}
                             ).get(tool, step_result["output"])
                         else:
-                            execution_results["tool_outputs"][
-                                tool
-                            ] = f"Error executing {tool}: {step_result.get('error', 'Unknown error')}"
+                            execution_results["tool_outputs"][tool] = (
+                                f"Error executing {tool}: {step_result.get('error', 'Unknown error')}"
+                            )
                 else:
                     # Store LLM response output
                     execution_results["tool_outputs"][f"step_{step_num}_llm"] = (
@@ -1470,9 +1469,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 improvement = current_score - previous_score
 
                 diminishing_returns = improvement < min_improvement
-                convergence_result["criteria_met"][
-                    "diminishing_returns"
-                ] = diminishing_returns
+                convergence_result["criteria_met"]["diminishing_returns"] = (
+                    diminishing_returns
+                )
 
                 # Only stop for diminishing returns if we already have decent confidence
                 if (
@@ -1587,7 +1586,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
                         total_custom_weight += criterion_weight
                         convergence_result["criteria_met"][
                             f"custom_{criterion_name}"
-                        ] = (criterion_score > 0.5)
+                        ] = criterion_score > 0.5
 
                     except Exception as e:
                         self.logger.warning(

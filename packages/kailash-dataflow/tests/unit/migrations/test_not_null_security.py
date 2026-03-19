@@ -71,7 +71,7 @@ class TestSQLInjectionPrevention:
             assert (
                 "DROP TABLE" not in strategy.sql_expression.upper()
                 or strategy.sql_expression.startswith("'")
-            ), (f"Malicious value not properly escaped: {malicious_value}")
+            ), f"Malicious value not properly escaped: {malicious_value}"
 
             # Should be wrapped in quotes with escaping
             assert strategy.sql_expression.startswith("'")
@@ -314,7 +314,8 @@ class TestInputValidation:
         # Test null handling - ColumnDefinition should validate in __post_init__
         try:
             column = ColumnDefinition(
-                name=None, data_type="VARCHAR(50)"  # Null name should be rejected
+                name=None,
+                data_type="VARCHAR(50)",  # Null name should be rejected
             )
             # If no validation in ColumnDefinition, test strategy manager validation
             with pytest.raises(ValueError, match="Sequence name is required"):

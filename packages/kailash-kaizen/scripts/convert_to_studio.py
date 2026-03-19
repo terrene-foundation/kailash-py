@@ -78,7 +78,6 @@ class WorkflowConverter:
                     isinstance(node.func, ast.Attribute)
                     and node.func.attr == "add_node"
                 ):
-
                     if len(node.args) >= 3:
                         node_type = self._get_string_value(node.args[0])
                         node_id = self._get_string_value(node.args[1])
@@ -102,7 +101,6 @@ class WorkflowConverter:
                     isinstance(node.func, ast.Attribute)
                     and node.func.attr == "add_edge"
                 ):
-
                     if len(node.args) >= 2:
                         source = self._get_string_value(node.args[0])
                         target = self._get_string_value(node.args[1])

@@ -674,9 +674,9 @@ class TestMCPHandlerThreadSafety:
         # Verify all created contexts are in history
         history_session_ids = {ctx.mcp_session_id for ctx in history}
         for i in range(num_calls):
-            assert (
-                f"session-{i}" in history_session_ids
-            ), f"session-{i} missing from history"
+            assert f"session-{i}" in history_session_ids, (
+                f"session-{i} missing from history"
+            )
 
     def test_get_call_history_returns_copy(self):
         """ROUND5-001: get_call_history returns a copy, not the internal list.
@@ -706,9 +706,9 @@ class TestMCPHandlerThreadSafety:
         # Should be equal in content but not same object
         assert len(history1) == 1
         assert len(history2) == 1
-        assert (
-            history1 is not history2
-        ), "get_call_history should return a copy, not the same list object"
+        assert history1 is not history2, (
+            "get_call_history should return a copy, not the same list object"
+        )
 
         # Modifying returned list should not affect internal state
         history1.clear()
@@ -716,9 +716,9 @@ class TestMCPHandlerThreadSafety:
 
         # Internal state should be unaffected
         history3 = handler.get_call_history()
-        assert (
-            len(history3) == 1
-        ), "Clearing returned list affected internal state - not a copy!"
+        assert len(history3) == 1, (
+            "Clearing returned list affected internal state - not a copy!"
+        )
 
     def test_handler_has_lock_attribute(self):
         """ROUND5-001: Verify MCPEATPHandler has a threading lock for thread-safety."""
@@ -726,9 +726,9 @@ class TestMCPHandlerThreadSafety:
 
         handler = MCPEATPHandler()
 
-        assert hasattr(
-            handler, "_lock"
-        ), "MCPEATPHandler missing _lock attribute for thread-safety"
-        assert isinstance(
-            handler._lock, type(threading.Lock())
-        ), "_lock should be a threading.Lock instance"
+        assert hasattr(handler, "_lock"), (
+            "MCPEATPHandler missing _lock attribute for thread-safety"
+        )
+        assert isinstance(handler._lock, type(threading.Lock())), (
+            "_lock should be a threading.Lock instance"
+        )

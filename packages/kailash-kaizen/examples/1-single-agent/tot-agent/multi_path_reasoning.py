@@ -109,7 +109,7 @@ def main():
     print("\n📈 Score Distribution:")
     print(f"   - Min: {min(scores):.2f}")
     print(f"   - Max: {max(scores):.2f}")
-    print(f"   - Avg: {sum(scores)/len(scores):.2f}")
+    print(f"   - Avg: {sum(scores) / len(scores):.2f}")
     print(f"   - Range: {max(scores) - min(scores):.2f}")
 
 

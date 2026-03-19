@@ -69,10 +69,10 @@ async def main():
         )
 
         if result.allowed:
-            print(f"✅ Request {i+1}: Allowed (remaining: {result.remaining})")
+            print(f"✅ Request {i + 1}: Allowed (remaining: {result.remaining})")
             await limiter.record_invocation(agent_id, user_id)
         else:
-            print(f"❌ Request {i+1}: Blocked ({result.limit_exceeded})")
+            print(f"❌ Request {i + 1}: Blocked ({result.limit_exceeded})")
 
     print("\n" + "=" * 70)
     print("Demo 2: Burst Handling")
@@ -86,10 +86,10 @@ async def main():
         )
 
         if result.allowed:
-            print(f"✅ Burst request {i+1}: Allowed (remaining: {result.remaining})")
+            print(f"✅ Burst request {i + 1}: Allowed (remaining: {result.remaining})")
             await limiter.record_invocation(agent_id, user_id)
         else:
-            print(f"❌ Burst request {i+1}: Blocked ({result.limit_exceeded})")
+            print(f"❌ Burst request {i + 1}: Blocked ({result.limit_exceeded})")
 
     print("\n" + "=" * 70)
     print("Demo 3: Rate Limit Exceeded")

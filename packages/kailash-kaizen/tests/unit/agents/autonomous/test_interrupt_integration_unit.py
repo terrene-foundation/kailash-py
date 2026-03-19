@@ -53,12 +53,12 @@ def test_interrupt_manager_default_initialization():
 
     # Assert
     assert hasattr(agent, "interrupt_manager"), "Should have interrupt_manager field"
-    assert isinstance(
-        agent.interrupt_manager, InterruptManager
-    ), "Should be InterruptManager instance"
-    assert (
-        agent.interrupt_manager._signal_handlers_installed
-    ), "Signal handlers should be installed"
+    assert isinstance(agent.interrupt_manager, InterruptManager), (
+        "Should be InterruptManager instance"
+    )
+    assert agent.interrupt_manager._signal_handlers_installed, (
+        "Signal handlers should be installed"
+    )
 
     # Cleanup
     agent.interrupt_manager.uninstall_signal_handlers()
@@ -86,12 +86,12 @@ def test_interrupt_manager_custom_instance():
 
     # Assert
     assert agent.interrupt_manager is custom_manager, "Should use custom manager"
-    assert hasattr(
-        agent.interrupt_manager, "custom_marker"
-    ), "Should preserve custom instance"
-    assert (
-        agent.interrupt_manager.custom_marker == "test_marker"
-    ), "Should be same instance"
+    assert hasattr(agent.interrupt_manager, "custom_marker"), (
+        "Should preserve custom instance"
+    )
+    assert agent.interrupt_manager.custom_marker == "test_marker", (
+        "Should be same instance"
+    )
 
 
 def test_interrupt_manager_signal_handlers_installed():
@@ -111,9 +111,9 @@ def test_interrupt_manager_signal_handlers_installed():
     agent = BaseAutonomousAgent(config=config, signature=TaskSignature())
 
     # Assert
-    assert (
-        agent.interrupt_manager._signal_handlers_installed
-    ), "Signal handlers should be installed"
+    assert agent.interrupt_manager._signal_handlers_installed, (
+        "Signal handlers should be installed"
+    )
 
     # Cleanup
     agent.interrupt_manager.uninstall_signal_handlers()
@@ -141,14 +141,14 @@ def test_on_shutdown_callback_registered():
     agent = BaseAutonomousAgent(config=config, signature=TaskSignature())
 
     # Assert
-    assert (
-        len(agent.interrupt_manager._shutdown_callbacks) > 0
-    ), "Should have shutdown callbacks"
+    assert len(agent.interrupt_manager._shutdown_callbacks) > 0, (
+        "Should have shutdown callbacks"
+    )
     # Verify _on_shutdown is in callbacks
     callback_names = [cb.__name__ for cb in agent.interrupt_manager._shutdown_callbacks]
-    assert (
-        "_on_shutdown" in callback_names
-    ), "_on_shutdown should be registered as callback"
+    assert "_on_shutdown" in callback_names, (
+        "_on_shutdown should be registered as callback"
+    )
 
     # Cleanup
     agent.interrupt_manager.uninstall_signal_handlers()
@@ -240,9 +240,9 @@ async def test_interrupt_detection_graceful_mode():
         await agent._autonomous_loop("Test task")
 
     # Verify interrupt message
-    assert "Test graceful interrupt" in str(
-        exc_info.value
-    ), "Should include interrupt message"
+    assert "Test graceful interrupt" in str(exc_info.value), (
+        "Should include interrupt message"
+    )
 
     # Verify checkpoint was saved
     assert checkpoint_saved, "Should save final checkpoint before exit"
@@ -290,9 +290,9 @@ async def test_interrupt_detection_immediate_mode():
         await agent._autonomous_loop("Test task")
 
     # Verify interrupt message
-    assert "Test immediate interrupt" in str(
-        exc_info.value
-    ), "Should include interrupt message"
+    assert "Test immediate interrupt" in str(exc_info.value), (
+        "Should include interrupt message"
+    )
 
     # Verify checkpoint was saved
     assert checkpoint_saved, "Should save final checkpoint before exit"
@@ -411,9 +411,9 @@ async def test_save_final_checkpoint_without_interrupt():
 
     assert saved_state is not None, "Should save checkpoint"
     assert saved_state.status != "interrupted", "Status should NOT be 'interrupted'"
-    assert (
-        "interrupt_reason" not in saved_state.metadata
-    ), "Should NOT include interrupt_reason"
+    assert "interrupt_reason" not in saved_state.metadata, (
+        "Should NOT include interrupt_reason"
+    )
 
     # Cleanup
     agent.interrupt_manager.uninstall_signal_handlers()

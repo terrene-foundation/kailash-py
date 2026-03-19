@@ -120,9 +120,9 @@ async def test_warm_memory_operations():
 
         # Warm tier should be faster than 10ms on average
         # Note: First access might be slower due to DB setup, so we check max is reasonable
-        assert (
-            max_retrieval_time < 50.0
-        ), f"Warm tier too slow: {max_retrieval_time:.4f}ms > 50ms"
+        assert max_retrieval_time < 50.0, (
+            f"Warm tier too slow: {max_retrieval_time:.4f}ms > 50ms"
+        )
 
         # Test 3: Exists check
         print("\n4. Testing exists check...")
@@ -152,7 +152,9 @@ async def test_warm_memory_operations():
         # Test 5: TTL expiration
         print("\n6. Testing TTL expiration...")
         await warm_tier.put(
-            "ttl_key", {"content": "expires in 1 second"}, ttl=1  # 1 second
+            "ttl_key",
+            {"content": "expires in 1 second"},
+            ttl=1,  # 1 second
         )
         assert await warm_tier.exists("ttl_key")
         print("   ✓ TTL entry added")

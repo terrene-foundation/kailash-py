@@ -123,9 +123,9 @@ class TestRealDatabaseOperations:
 
         # CRITICAL: Table must actually exist in real database
         table_exists = asyncio.run(check_table_exists())
-        assert (
-            table_exists
-        ), "Table was not created in real database - still using simulation"
+        assert table_exists, (
+            "Table was not created in real database - still using simulation"
+        )
 
     def test_generated_nodes_execute_real_database_operations(
         self, test_user_model, test_suite
@@ -159,22 +159,22 @@ class TestRealDatabaseOperations:
 
         # CRITICAL: Data must actually be in real database
         exists, records = asyncio.run(verify_real_insertion())
-        assert (
-            exists
-        ), "Record was not inserted into real database - still using simulation"
+        assert exists, (
+            "Record was not inserted into real database - still using simulation"
+        )
 
         # Verify actual data matches
         record = records[0] if records else {}
         assert record.get("name") == "John Doe", "Real database data doesn't match"
-        assert (
-            record.get("email") == "john@example.com"
-        ), "Real database data doesn't match"
+        assert record.get("email") == "john@example.com", (
+            "Real database data doesn't match"
+        )
         assert record.get("age") == 30, "Real database data doesn't match"
 
         # Verify result contains real ID, not simulation ID (1)
-        assert (
-            result.get("id") != 1 or len(records) == 1
-        ), "Using simulation ID instead of real database ID"
+        assert result.get("id") != 1 or len(records) == 1, (
+            "Using simulation ID instead of real database ID"
+        )
 
     def test_read_operations_return_real_data(self, test_user_model, test_suite):
         """Test that read operations return actual database data."""
@@ -217,9 +217,9 @@ class TestRealDatabaseOperations:
         # CRITICAL: Should return real data from database, not simulation
         assert result is not None, "Read operation returned None"
         assert result.get("name") == "Jane Smith", "Not returning real database data"
-        assert (
-            result.get("email") == "jane@example.com"
-        ), "Not returning real database data"
+        assert result.get("email") == "jane@example.com", (
+            "Not returning real database data"
+        )
         assert result.get("age") == 28, "Not returning real database data"
         assert result.get("found") is True, "Record should be found in real database"
 
@@ -271,9 +271,9 @@ class TestRealDatabaseOperations:
         assert updated_record is not None, "Record not found after update"
         assert updated_record["name"] == "Robert Wilson", "Real database not updated"
         assert updated_record["age"] == 36, "Real database not updated"
-        assert (
-            updated_record["email"] == "bob@example.com"
-        ), "Email should remain unchanged"
+        assert updated_record["email"] == "bob@example.com", (
+            "Email should remain unchanged"
+        )
 
         # Verify operation result indicates real update
         assert result.get("updated") is True, "Update result should indicate success"
@@ -308,9 +308,9 @@ class TestRealDatabaseOperations:
                 exists_before = await conn.fetchrow(
                     "SELECT id FROM test_users WHERE id = $1", record_id
                 )
-                assert (
-                    exists_before is not None
-                ), "Test record not found before deletion"
+                assert exists_before is not None, (
+                    "Test record not found before deletion"
+                )
 
                 # Execute delete via DataFlow
                 delete_node_class = test_user_model._nodes.get("TestUserDeleteNode")
@@ -330,9 +330,9 @@ class TestRealDatabaseOperations:
         result, exists_after = asyncio.run(setup_and_verify_delete())
 
         # CRITICAL: Record must be actually deleted from real database
-        assert (
-            exists_after is None
-        ), "Record still exists in real database - delete operation failed"
+        assert exists_after is None, (
+            "Record still exists in real database - delete operation failed"
+        )
         assert result.get("deleted") is True, "Delete result should indicate success"
 
     def test_list_operations_query_real_data(self, test_user_model, test_suite):
@@ -389,9 +389,9 @@ class TestRealDatabaseOperations:
 
         # Should have real records, not empty list
         records = result["records"]
-        assert (
-            len(records) >= 3
-        ), f"Expected at least 3 records, got {len(records)} - not querying real database"
+        assert len(records) >= 3, (
+            f"Expected at least 3 records, got {len(records)} - not querying real database"
+        )
 
         # Verify actual data content
         found_emails = [record.get("email") for record in records]
@@ -441,9 +441,9 @@ class TestRealDatabaseOperations:
             return record_after is None
 
         rollback_worked = asyncio.run(test_transaction_rollback())
-        assert (
-            rollback_worked
-        ), "Transaction rollback failed - not using real database transactions"
+        assert rollback_worked, (
+            "Transaction rollback failed - not using real database transactions"
+        )
 
     def test_performance_with_real_database(self, test_user_model):
         """Test that real database operations have acceptable performance."""
@@ -462,9 +462,9 @@ class TestRealDatabaseOperations:
         execution_time = time.time() - start_time
 
         # Should complete within reasonable time (not infinite simulation loop)
-        assert (
-            execution_time < 5.0
-        ), f"Operation too slow: {execution_time:.2f}s - may be using simulation"
+        assert execution_time < 5.0, (
+            f"Operation too slow: {execution_time:.2f}s - may be using simulation"
+        )
         assert result is not None, "Operation failed"
 
     def test_concurrent_operations_with_real_database(self, test_user_model):

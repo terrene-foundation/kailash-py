@@ -31,9 +31,7 @@ class TestDimensionRegistryAlignment:
         register_builtin_dimensions(registry)
 
         pending = registry.pending_review()
-        assert (
-            pending == []
-        ), f"Built-in dimensions should not be pending review: {pending}"
+        assert pending == [], f"Built-in dimensions should not be pending review: {pending}"
 
     def test_all_registered_are_retrievable(self):
         """All registered built-in dimensions should be retrievable via get()."""

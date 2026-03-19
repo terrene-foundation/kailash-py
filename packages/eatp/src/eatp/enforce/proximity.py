@@ -52,40 +52,24 @@ class ProximityConfig:
     def __post_init__(self):
         """Validate thresholds and dimension overrides."""
         if not 0.0 < self.flag_threshold < 1.0:
-            raise ValueError(
-                f"flag_threshold must be between 0 and 1, got {self.flag_threshold}"
-            )
+            raise ValueError(f"flag_threshold must be between 0 and 1, got {self.flag_threshold}")
         if not 0.0 < self.hold_threshold <= 1.0:
-            raise ValueError(
-                f"hold_threshold must be between 0 and 1, got {self.hold_threshold}"
-            )
+            raise ValueError(f"hold_threshold must be between 0 and 1, got {self.hold_threshold}")
         if self.flag_threshold >= self.hold_threshold:
             raise ValueError(
-                f"flag_threshold ({self.flag_threshold}) must be less than "
-                f"hold_threshold ({self.hold_threshold})"
+                f"flag_threshold ({self.flag_threshold}) must be less than hold_threshold ({self.hold_threshold})"
             )
         # Validate per-dimension overrides
         for dim_name, thresholds in self.dimension_overrides.items():
             if not isinstance(thresholds, tuple) or len(thresholds) != 2:
-                raise ValueError(
-                    f"dimension_overrides['{dim_name}'] must be a (flag, hold) tuple"
-                )
+                raise ValueError(f"dimension_overrides['{dim_name}'] must be a (flag, hold) tuple")
             flag, hold = thresholds
             if not 0.0 < flag < 1.0:
-                raise ValueError(
-                    f"dimension_overrides['{dim_name}'] flag must be between 0 and 1, "
-                    f"got {flag}"
-                )
+                raise ValueError(f"dimension_overrides['{dim_name}'] flag must be between 0 and 1, got {flag}")
             if not 0.0 < hold <= 1.0:
-                raise ValueError(
-                    f"dimension_overrides['{dim_name}'] hold must be between 0 and 1, "
-                    f"got {hold}"
-                )
+                raise ValueError(f"dimension_overrides['{dim_name}'] hold must be between 0 and 1, got {hold}")
             if flag >= hold:
-                raise ValueError(
-                    f"dimension_overrides['{dim_name}'] flag ({flag}) must be less "
-                    f"than hold ({hold})"
-                )
+                raise ValueError(f"dimension_overrides['{dim_name}'] flag ({flag}) must be less than hold ({hold})")
 
 
 CONSERVATIVE_PROXIMITY = ProximityConfig(flag_threshold=0.70, hold_threshold=0.90)
@@ -210,8 +194,7 @@ class ProximityScanner:
                     )
                 )
                 logger.warning(
-                    f"[PROXIMITY] HOLD alert: {dim_name} at "
-                    f"{usage_ratio:.1%} (threshold: {hold_thresh:.0%})"
+                    f"[PROXIMITY] HOLD alert: {dim_name} at {usage_ratio:.1%} (threshold: {hold_thresh:.0%})"
                 )
             elif usage_ratio >= flag_thresh:
                 alerts.append(
@@ -224,10 +207,7 @@ class ProximityScanner:
                         original_verdict=Verdict.AUTO_APPROVED,
                     )
                 )
-                logger.info(
-                    f"[PROXIMITY] FLAG alert: {dim_name} at "
-                    f"{usage_ratio:.1%} (threshold: {flag_thresh:.0%})"
-                )
+                logger.info(f"[PROXIMITY] FLAG alert: {dim_name} at {usage_ratio:.1%} (threshold: {flag_thresh:.0%})")
 
         return alerts
 
@@ -273,16 +253,12 @@ class ProximityScanner:
             return base_verdict
 
         # Find the highest escalation level from alerts
-        max_alert_level = max(
-            _VERDICT_ORDER.get(a.escalated_verdict, 0) for a in alerts
-        )
+        max_alert_level = max(_VERDICT_ORDER.get(a.escalated_verdict, 0) for a in alerts)
         base_level = _VERDICT_ORDER.get(base_verdict, 0)
 
         # Monotonic: only escalate, never downgrade
         if max_alert_level > base_level:
-            escalated = [
-                v for v, level in _VERDICT_ORDER.items() if level == max_alert_level
-            ][0]
+            escalated = [v for v, level in _VERDICT_ORDER.items() if level == max_alert_level][0]
             logger.info(
                 f"[PROXIMITY] Escalating verdict from {base_verdict.value} "
                 f"to {escalated.value} based on {len(alerts)} alert(s)"

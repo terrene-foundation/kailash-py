@@ -547,9 +547,9 @@ def debate_decision_workflow(question: str, rounds: int = 2) -> Dict[str, Any]:
     opponent = OpponentAgent(config, shared_pool, agent_id="opponent")
     judge = JudgeAgent(config, shared_pool, agent_id="judge")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Debate-Decision Pattern: {question}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Round 1: Initial Arguments
     print("Round 1: Initial Arguments")
@@ -594,14 +594,14 @@ def debate_decision_workflow(question: str, rounds: int = 2) -> Dict[str, Any]:
 
     # Show shared memory stats
     stats = shared_pool.get_stats()
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Shared Memory Statistics:")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"  - Total insights: {stats['insight_count']}")
     print(f"  - Agents involved: {stats['agent_count']}")
     print(f"  - Tag distribution: {stats['tag_distribution']}")
     print(f"  - Segment distribution: {stats['segment_distribution']}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     return {
         "question": question,

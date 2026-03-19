@@ -65,8 +65,7 @@ class WhisperProcessor:
             self._whisper_available = True
         except ImportError:
             warnings.warn(
-                "faster-whisper not installed. Install with: "
-                "pip install faster-whisper"
+                "faster-whisper not installed. Install with: pip install faster-whisper"
             )
             self._whisper_available = False
 
@@ -77,8 +76,7 @@ class WhisperProcessor:
 
         if not self._whisper_available:
             raise RuntimeError(
-                "faster-whisper not available. Install with: "
-                "pip install faster-whisper"
+                "faster-whisper not available. Install with: pip install faster-whisper"
             )
 
         try:

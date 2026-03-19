@@ -155,8 +155,8 @@ def import_cheatsheets(source_dir: str, target_dir: str, limit: int = None):
 
         # Add header with original filename reference
         header = f""".. meta::
-   :description: {md_file.stem.replace('-', ' ').replace('_', ' ')}
-   :keywords: kailash, workflow, {get_cheatsheet_category(md_file.name).replace('_', ' ')}
+   :description: {md_file.stem.replace("-", " ").replace("_", " ")}
+   :keywords: kailash, workflow, {get_cheatsheet_category(md_file.name).replace("_", " ")}
 
 .. note::
    This cheatsheet was imported from ``.claude/skills/06-cheatsheets/{md_file.name}``

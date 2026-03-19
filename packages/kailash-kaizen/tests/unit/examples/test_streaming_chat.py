@@ -38,9 +38,9 @@ class TestStreamingChatAgent:
         config = ChatConfig(streaming=True, llm_provider="mock", model="gpt-3.5-turbo")
         agent = StreamChatAgent(config)
 
-        assert isinstance(
-            agent.strategy, StreamingStrategy
-        ), f"Agent should use StreamingStrategy when streaming=True, got {type(agent.strategy)}"
+        assert isinstance(agent.strategy, StreamingStrategy), (
+            f"Agent should use StreamingStrategy when streaming=True, got {type(agent.strategy)}"
+        )
 
     def test_agent_initializes_without_streaming_strategy(self):
         """Test agent initializes without StreamingStrategy when streaming=False."""
@@ -48,9 +48,9 @@ class TestStreamingChatAgent:
         agent = StreamChatAgent(config)
 
         # Should use default strategy (not StreamingStrategy)
-        assert not isinstance(
-            agent.strategy, StreamingStrategy
-        ), "Agent should not use StreamingStrategy when streaming=False"
+        assert not isinstance(agent.strategy, StreamingStrategy), (
+            "Agent should not use StreamingStrategy when streaming=False"
+        )
 
     def test_config_parameters_work_correctly(self):
         """Test that config parameters are properly set."""
@@ -145,9 +145,9 @@ class TestStreamingChatAgent:
         config = ChatConfig(streaming=True, llm_provider="mock", model="gpt-3.5-turbo")
         agent = StreamChatAgent(config)
 
-        assert isinstance(
-            agent.signature, ChatSignature
-        ), f"Agent should use ChatSignature, got {type(agent.signature)}"
+        assert isinstance(agent.signature, ChatSignature), (
+            f"Agent should use ChatSignature, got {type(agent.signature)}"
+        )
 
     def test_empty_message_handling(self):
         """Test handling of empty message input.
@@ -220,6 +220,6 @@ class TestStreamingChatAgent:
         config = ChatConfig(streaming=True, llm_provider="mock", model="gpt-3.5-turbo")
         agent = StreamChatAgent(config)
 
-        assert isinstance(
-            agent, BaseAgent
-        ), "StreamChatAgent should inherit from BaseAgent"
+        assert isinstance(agent, BaseAgent), (
+            "StreamChatAgent should inherit from BaseAgent"
+        )

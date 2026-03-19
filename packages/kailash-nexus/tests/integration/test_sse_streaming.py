@@ -153,16 +153,16 @@ class TestSSEStreamingFormat:
             # Filter out keepalive comments
             real_events = [e for e in events if e.get("type") != "comment"]
 
-            assert (
-                len(real_events) >= 2
-            ), "Should have at least start and complete events"
+            assert len(real_events) >= 2, (
+                "Should have at least start and complete events"
+            )
 
             # Verify event types
             event_types = [e.get("event") for e in real_events]
             assert "start" in event_types, "Should have 'start' event"
-            assert (
-                "complete" in event_types or "error" in event_types
-            ), "Should have 'complete' or 'error' event"
+            assert "complete" in event_types or "error" in event_types, (
+                "Should have 'complete' or 'error' event"
+            )
 
             # Verify order: start should be first
             assert event_types[0] == "start", "First event should be 'start'"
@@ -201,18 +201,18 @@ class TestSSEStreamingFormat:
             ids = [int(e["id"]) for e in events_with_ids]
 
             # Verify IDs are monotonically increasing
-            assert ids == sorted(
-                ids
-            ), f"Event IDs must be monotonically increasing: {ids}"
+            assert ids == sorted(ids), (
+                f"Event IDs must be monotonically increasing: {ids}"
+            )
 
             # Verify IDs start from 1
             assert ids[0] == 1, f"First event ID should be 1, got {ids[0]}"
 
             # Verify IDs are consecutive
             for i in range(len(ids) - 1):
-                assert (
-                    ids[i + 1] == ids[i] + 1
-                ), f"Event IDs must be consecutive: {ids[i]} -> {ids[i+1]}"
+                assert ids[i + 1] == ids[i] + 1, (
+                    f"Event IDs must be consecutive: {ids[i]} -> {ids[i + 1]}"
+                )
 
     def test_sse_multiple_events_sequence(self):
         """Test that multiple SSE events are sent in correct sequence.
@@ -287,9 +287,9 @@ class TestSSEStreamingFormat:
             # But format should support it
             # This test verifies the format is correct when keepalives are present
             if has_keepalive:
-                assert (
-                    "\n\n" in events_raw
-                ), "Keepalive must be followed by double newline"
+                assert "\n\n" in events_raw, (
+                    "Keepalive must be followed by double newline"
+                )
 
     def _parse_sse_stream(self, raw_stream: str) -> List[Dict[str, str]]:
         """Parse raw SSE stream into structured events.
@@ -373,9 +373,9 @@ class TestSSEHeaders:
 
         assert response.status_code == 200
         content_type = response.headers.get("content-type", "")
-        assert (
-            "text/event-stream" in content_type
-        ), f"Expected text/event-stream, got {content_type}"
+        assert "text/event-stream" in content_type, (
+            f"Expected text/event-stream, got {content_type}"
+        )
 
     def test_sse_cache_control_header(self):
         """Test that SSE response has Cache-Control: no-cache.
@@ -389,9 +389,9 @@ class TestSSEHeaders:
         )
 
         cache_control = response.headers.get("cache-control", "")
-        assert (
-            "no-cache" in cache_control
-        ), f"Expected no-cache in Cache-Control, got {cache_control}"
+        assert "no-cache" in cache_control, (
+            f"Expected no-cache in Cache-Control, got {cache_control}"
+        )
 
     def test_sse_connection_header(self):
         """Test that SSE response has Connection: keep-alive.
@@ -649,9 +649,9 @@ class TestSSEPerformance:
             # First event should be delivered quickly
             # Note: In real deployment, this should be < 10ms
             # In tests, network overhead is minimal
-            assert (
-                first_chunk_time < 1.0
-            ), f"First event took {first_chunk_time:.3f}s, expected < 1s"
+            assert first_chunk_time < 1.0, (
+                f"First event took {first_chunk_time:.3f}s, expected < 1s"
+            )
 
     def test_sse_throughput(self):
         """Test that SSE can handle rapid event generation.
@@ -757,9 +757,9 @@ class TestSSEClientCompatibility:
             for event in events:
                 # Browser EventSource expects these fields
                 if event.get("type") != "comment":
-                    assert (
-                        "data" in event or "event" in event
-                    ), "Event must have data or event field"
+                    assert "data" in event or "event" in event, (
+                        "Event must have data or event field"
+                    )
 
     def test_sse_json_data_parsing(self):
         """Test that event data is valid JSON parseable by clients."""
@@ -777,9 +777,9 @@ class TestSSEClientCompatibility:
                     # Verify data is valid JSON
                     try:
                         data = json.loads(event["data"])
-                        assert isinstance(
-                            data, dict
-                        ), "Event data should be JSON object"
+                        assert isinstance(data, dict), (
+                            "Event data should be JSON object"
+                        )
                     except json.JSONDecodeError as e:
                         pytest.fail(f"Invalid JSON in event data: {e}")
 
@@ -803,9 +803,9 @@ class TestSSEClientCompatibility:
             events_with_ids = [e for e in events if "id" in e]
 
             # Should have IDs for reconnection support
-            assert (
-                len(events_with_ids) > 0
-            ), "Events should have IDs for reconnection support"
+            assert len(events_with_ids) > 0, (
+                "Events should have IDs for reconnection support"
+            )
 
     def _parse_sse_like_browser(self, raw_stream: str) -> List[Dict[str, str]]:
         """Parse SSE stream like a browser EventSource would.

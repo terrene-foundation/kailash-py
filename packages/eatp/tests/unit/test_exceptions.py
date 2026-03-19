@@ -450,9 +450,7 @@ class TestExistingExceptionsUnaffected:
             PathTraversalError,
         ]
         for exc_class in new_exceptions:
-            assert issubclass(
-                exc_class, TrustError
-            ), f"{exc_class.__name__} must inherit from TrustError"
+            assert issubclass(exc_class, TrustError), f"{exc_class.__name__} must inherit from TrustError"
 
     def test_hook_timeout_is_subclass_of_hook_error(self):
         """HookTimeoutError -> HookError -> TrustError chain."""

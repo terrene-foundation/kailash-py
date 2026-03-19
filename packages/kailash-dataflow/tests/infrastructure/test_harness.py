@@ -480,9 +480,9 @@ class PerformanceMeasurement:
     ):
         """Assert minimum throughput requirements."""
         actual_throughput = rows / duration if duration > 0 else 0
-        assert (
-            actual_throughput >= min_rows_per_second
-        ), f"{operation_name} throughput {actual_throughput:.0f} rows/s below minimum {min_rows_per_second} rows/s"
+        assert actual_throughput >= min_rows_per_second, (
+            f"{operation_name} throughput {actual_throughput:.0f} rows/s below minimum {min_rows_per_second} rows/s"
+        )
 
 
 # Integration test decorators and markers

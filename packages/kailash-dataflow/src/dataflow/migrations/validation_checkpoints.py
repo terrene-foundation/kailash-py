@@ -640,11 +640,11 @@ class DataIntegrityCheckpoint(BaseValidationCheckpoint):
             for fk in fk_constraints:
                 violation_check_sql = f"""
                 SELECT COUNT(*) as violation_count
-                FROM {fk['table_name']} t1
-                LEFT JOIN {fk['foreign_table_name']} t2
-                    ON t1.{fk['column_name']} = t2.{fk['foreign_column_name']}
-                WHERE t1.{fk['column_name']} IS NOT NULL
-                    AND t2.{fk['foreign_column_name']} IS NULL
+                FROM {fk["table_name"]} t1
+                LEFT JOIN {fk["foreign_table_name"]} t2
+                    ON t1.{fk["column_name"]} = t2.{fk["foreign_column_name"]}
+                WHERE t1.{fk["column_name"]} IS NOT NULL
+                    AND t2.{fk["foreign_column_name"]} IS NULL
                 """
 
                 violation_result = await conn.fetchval(violation_check_sql)
@@ -734,7 +734,7 @@ class DataIntegrityCheckpoint(BaseValidationCheckpoint):
                 null_violation_sql = f"""
                 SELECT COUNT(*) as null_count
                 FROM {table_name}
-                WHERE {column['column_name']} IS NULL
+                WHERE {column["column_name"]} IS NULL
                 """
 
                 null_count = await conn.fetchval(null_violation_sql)

@@ -185,9 +185,9 @@ async def test_concurrent_async_execution_performance():
         f"Expected concurrent execution in <3.0s, got {execution_time:.2f}s. "
         "Possible thread pool serialization."
     )
-    assert (
-        len(successful_results) >= 8
-    ), f"Expected at least 8/10 successful, got {len(successful_results)}/10"
+    assert len(successful_results) >= 8, (
+        f"Expected at least 8/10 successful, got {len(successful_results)}/10"
+    )
 
 
 # =============================================================================
@@ -372,9 +372,9 @@ async def test_simple_execute_async_fallback_uses_async_openai():
         # Then: Should complete successfully with AsyncOpenAI
         assert result is not None, "Fallback path returned None"
         assert isinstance(result, dict), f"Expected dict, got {type(result)}"
-        assert (
-            "answer" in result or "response" in result
-        ), f"Expected 'answer' or 'response' in result, got keys: {result.keys()}"
+        assert "answer" in result or "response" in result, (
+            f"Expected 'answer' or 'response' in result, got keys: {result.keys()}"
+        )
 
     finally:
         # Restore strategy
@@ -452,9 +452,9 @@ async def test_run_async_detects_async_strategy_correctly():
             )
 
         # Verify result
-        assert (
-            result["answer"] == "Mock async response"
-        ), "Wrong method was called - expected execute_async() result"
+        assert result["answer"] == "Mock async response", (
+            "Wrong method was called - expected execute_async() result"
+        )
 
     finally:
         # Restore strategy

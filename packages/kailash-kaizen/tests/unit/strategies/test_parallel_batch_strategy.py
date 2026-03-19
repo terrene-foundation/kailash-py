@@ -54,9 +54,9 @@ async def test_results_in_same_order_as_inputs():
     # Verify order by checking the prompts in responses
     for i, result in enumerate(results):
         expected_response = f"Processed: Q{i}"
-        assert (
-            result["response"] == expected_response
-        ), f"Result {i} out of order: expected '{expected_response}', got '{result['response']}'"
+        assert result["response"] == expected_response, (
+            f"Result {i} out of order: expected '{expected_response}', got '{result['response']}'"
+        )
 
 
 @pytest.mark.asyncio
@@ -75,9 +75,9 @@ async def test_max_concurrent_limits_concurrency():
     # Each item takes 0.01s, so 5 concurrent = 0.01s per batch
     # 10 items / 5 concurrent = 2 batches = ~0.02s minimum
     assert len(results) == 10
-    assert (
-        elapsed >= 0.015
-    ), f"Should take at least 0.015s with concurrency limiting, took {elapsed:.3f}s"
+    assert elapsed >= 0.015, (
+        f"Should take at least 0.015s with concurrency limiting, took {elapsed:.3f}s"
+    )
 
 
 @pytest.mark.asyncio
@@ -158,9 +158,9 @@ async def test_verify_concurrent_execution_timing():
 
     assert len(results) == 10
     # Should complete in ~0.01s (concurrent), not 0.1s (sequential)
-    assert (
-        elapsed < 0.05
-    ), f"Concurrent execution should be fast (<0.05s), took {elapsed:.3f}s"
+    assert elapsed < 0.05, (
+        f"Concurrent execution should be fast (<0.05s), took {elapsed:.3f}s"
+    )
 
 
 @pytest.mark.asyncio
@@ -176,9 +176,9 @@ async def test_max_concurrent_1():
 
     assert len(results) == 5
     # With max_concurrent=1, should be sequential: 5 * 0.01s = 0.05s
-    assert (
-        elapsed >= 0.045
-    ), f"Sequential execution should take >=0.045s, took {elapsed:.3f}s"
+    assert elapsed >= 0.045, (
+        f"Sequential execution should take >=0.045s, took {elapsed:.3f}s"
+    )
 
 
 @pytest.mark.asyncio
@@ -296,6 +296,6 @@ async def test_different_batch_sizes_maintain_order():
         assert len(results) == batch_size
         for i, result in enumerate(results):
             expected = f"Processed: Q{i}"
-            assert (
-                result["response"] == expected
-            ), f"Batch size {batch_size}, index {i}: expected '{expected}', got '{result['response']}'"
+            assert result["response"] == expected, (
+                f"Batch size {batch_size}, index {i}: expected '{expected}', got '{result['response']}'"
+            )

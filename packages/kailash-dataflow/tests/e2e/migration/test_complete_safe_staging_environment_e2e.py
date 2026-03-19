@@ -767,7 +767,7 @@ class TestCompleteSafeStagingEnvironmentE2E:
         performance_results = []
 
         for i, scenario in enumerate(business_scenarios[:2]):  # Test first 2 scenarios
-            print(f"\nPerformance Test {i+1}: {scenario.name}")
+            print(f"\nPerformance Test {i + 1}: {scenario.name}")
 
             start_time = time.time()
 

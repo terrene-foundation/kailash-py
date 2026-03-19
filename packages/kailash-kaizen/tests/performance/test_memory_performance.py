@@ -246,9 +246,9 @@ async def test_cold_tier_latency():
 
         # Allow 100% tolerance for file I/O variance (SQLite has significant variance based on system load)
         # The regression detection test handles ±10% enforcement between runs
-        assert (
-            avg_write < COLD_TIER_TARGET_MS * 2.0
-        ), f"Write too slow: {avg_write:.2f}ms (target: <{COLD_TIER_TARGET_MS * 2.0:.0f}ms)"
+        assert avg_write < COLD_TIER_TARGET_MS * 2.0, (
+            f"Write too slow: {avg_write:.2f}ms (target: <{COLD_TIER_TARGET_MS * 2.0:.0f}ms)"
+        )
 
         print("\n2. Measuring read latency (full conversation)...")
         read_times = []
@@ -292,9 +292,9 @@ async def test_cold_tier_latency():
 
         # Allow 100% tolerance for bulk operations due to I/O variance
         # The regression detection test handles ±10% enforcement between runs
-        assert (
-            avg_bulk_write < COLD_TIER_TARGET_MS * 2.0
-        ), f"Bulk write too slow: {avg_bulk_write:.2f}ms (target: <{COLD_TIER_TARGET_MS * 2.0:.0f}ms)"
+        assert avg_bulk_write < COLD_TIER_TARGET_MS * 2.0, (
+            f"Bulk write too slow: {avg_bulk_write:.2f}ms (target: <{COLD_TIER_TARGET_MS * 2.0:.0f}ms)"
+        )
 
         print("\n" + "=" * 70)
         print("✓ Cold Tier Latency: PASSED")
@@ -413,12 +413,12 @@ async def test_security_feature_overhead():
     )
 
     # Validate acceptable overhead (< 50ms for 100 operations)
-    assert (
-        validation_overhead < 50
-    ), f"Validation overhead too high: {validation_overhead:.2f}ms"
-    assert (
-        redaction_overhead < 50
-    ), f"Redaction overhead too high: {redaction_overhead:.2f}ms"
+    assert validation_overhead < 50, (
+        f"Validation overhead too high: {validation_overhead:.2f}ms"
+    )
+    assert redaction_overhead < 50, (
+        f"Redaction overhead too high: {redaction_overhead:.2f}ms"
+    )
 
     print("\n" + "=" * 70)
     print("✓ Security Feature Overhead: PASSED")

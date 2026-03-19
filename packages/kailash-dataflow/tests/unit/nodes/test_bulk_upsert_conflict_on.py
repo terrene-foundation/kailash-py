@@ -271,7 +271,12 @@ class TestBulkUpsertBackwardCompatibility:
 
         # When conflict_on=None, should use config conflict_columns
         query = node._build_upsert_query(
-            batch, columns, column_names, False, "update", ["email"]  # From config
+            batch,
+            columns,
+            column_names,
+            False,
+            "update",
+            ["email"],  # From config
         )
 
         # Should use config default
@@ -291,7 +296,12 @@ class TestBulkUpsertBackwardCompatibility:
 
         # Runtime override with username instead of email
         query = node._build_upsert_query(
-            batch, columns, column_names, False, "update", ["username"]  # Override
+            batch,
+            columns,
+            column_names,
+            False,
+            "update",
+            ["username"],  # Override
         )
 
         # Should use runtime override, not config

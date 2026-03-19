@@ -3097,7 +3097,7 @@ class DataFlow:
                         )
                     else:
                         lines.append(
-                            f'    {field_name}: {type_annotation} = {column["default"]}'
+                            f"    {field_name}: {type_annotation} = {column['default']}"
                         )
                 else:
                     lines.append(f"    {field_name}: {type_annotation}")
@@ -5413,7 +5413,7 @@ class DataFlow:
 
         # Database-specific parameter placeholders
         if database_type.lower() == "postgresql":
-            placeholders = ", ".join([f"${i+1}" for i in range(len(field_names))])
+            placeholders = ", ".join([f"${i + 1}" for i in range(len(field_names))])
         elif database_type.lower() == "mysql":
             placeholders = ", ".join(["%s"] * len(field_names))
         else:  # sqlite
@@ -5608,8 +5608,8 @@ class DataFlow:
 
         # Database-specific parameter placeholders and SET clauses
         if database_type.lower() == "postgresql":
-            set_clauses = [f"{name} = ${i+1}" for i, name in enumerate(field_names)]
-            where_clause = f"WHERE id = ${len(field_names)+1}"
+            set_clauses = [f"{name} = ${i + 1}" for i, name in enumerate(field_names)]
+            where_clause = f"WHERE id = ${len(field_names) + 1}"
             updated_at_clause = (
                 "updated_at = CURRENT_TIMESTAMP" if has_updated_at else None
             )
@@ -5724,7 +5724,7 @@ class DataFlow:
         if database_type.lower() == "postgresql":
             # PostgreSQL supports UNNEST for bulk inserts
             placeholders = ", ".join(
-                [f"UNNEST(${i+1}::text[])" for i in range(len(field_names))]
+                [f"UNNEST(${i + 1}::text[])" for i in range(len(field_names))]
             )
             bulk_sql["bulk_insert"] = (
                 f"INSERT INTO {table_name} ({columns}) SELECT {placeholders}"
@@ -5732,25 +5732,21 @@ class DataFlow:
 
             # Bulk update using UPDATE ... FROM
             set_clauses = ", ".join([f"{name} = data.{name}" for name in field_names])
-            bulk_sql["bulk_update"] = (
-                f"""
+            bulk_sql["bulk_update"] = f"""
                 UPDATE {table_name} SET {set_clauses}
-                FROM (SELECT UNNEST($1::integer[]) as id, {', '.join([f'UNNEST(${i+2}::text[]) as {name}' for i, name in enumerate(field_names)])}) as data
+                FROM (SELECT UNNEST($1::integer[]) as id, {", ".join([f"UNNEST(${i + 2}::text[]) as {name}" for i, name in enumerate(field_names)])}) as data
                 WHERE {table_name}.id = data.id
             """.strip()
-            )
 
         elif database_type.lower() == "mysql":
             # MySQL supports VALUES() for bulk operations
             bulk_sql["bulk_insert"] = (
                 f"INSERT INTO {table_name} ({columns}) VALUES {{values_list}}"
             )
-            bulk_sql["bulk_update"] = (
-                f"""
+            bulk_sql["bulk_update"] = f"""
                 INSERT INTO {table_name} (id, {columns}) VALUES {{values_list}}
-                ON DUPLICATE KEY UPDATE {', '.join([f'{name} = VALUES({name})' for name in field_names])}
+                ON DUPLICATE KEY UPDATE {", ".join([f"{name} = VALUES({name})" for name in field_names])}
             """.strip()
-            )
 
         else:  # sqlite
             # SQLite supports INSERT OR REPLACE

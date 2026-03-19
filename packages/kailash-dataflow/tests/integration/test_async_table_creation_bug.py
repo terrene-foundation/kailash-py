@@ -237,9 +237,9 @@ class TestThreadPoolExecutorAsyncRunBug:
             new_loop = future.result()
 
         # The new loop is DIFFERENT from the original - this is the bug!
-        assert (
-            new_loop is not original_loop
-        ), "ThreadPoolExecutor + asyncio.run should create new loop (demonstrating bug)"
+        assert new_loop is not original_loop, (
+            "ThreadPoolExecutor + asyncio.run should create new loop (demonstrating bug)"
+        )
 
         # This means any async resources (connection pools, etc.) tied to
         # original_loop CANNOT be used in the new_loop - causing the errors
@@ -268,9 +268,9 @@ class TestProposedFixes:
             name: str
 
         # DF-501 FIX: This should now exist
-        assert hasattr(
-            db, "create_tables_async"
-        ), "create_tables_async() should exist after DF-501 fix"
+        assert hasattr(db, "create_tables_async"), (
+            "create_tables_async() should exist after DF-501 fix"
+        )
 
         # Test it works
         await db.create_tables_async()
@@ -295,9 +295,9 @@ class TestProposedFixes:
             name: str
 
         # DF-501 FIX: This should now exist
-        assert hasattr(
-            db, "_ensure_migration_tables_async"
-        ), "_ensure_migration_tables_async() should exist after DF-501 fix"
+        assert hasattr(db, "_ensure_migration_tables_async"), (
+            "_ensure_migration_tables_async() should exist after DF-501 fix"
+        )
 
         # Test it works
         await db._ensure_migration_tables_async("sqlite")
@@ -327,9 +327,9 @@ class TestProposedFixes:
             db.create_tables()
 
         # Verify the error message is helpful
-        assert "create_tables_async()" in str(
-            exc_info.value
-        ), "Error should mention the async alternative"
+        assert "create_tables_async()" in str(exc_info.value), (
+            "Error should mention the async alternative"
+        )
         assert "DF-501" in str(exc_info.value), "Error should reference the fix code"
 
     @pytest.mark.asyncio
@@ -350,9 +350,9 @@ class TestProposedFixes:
             name: str
 
         # DF-501 FIX: This should now exist
-        assert hasattr(
-            db, "_execute_ddl_async"
-        ), "_execute_ddl_async() should exist after DF-501 fix"
+        assert hasattr(db, "_execute_ddl_async"), (
+            "_execute_ddl_async() should exist after DF-501 fix"
+        )
 
 
 class TestDF501FixComplete:
@@ -409,6 +409,6 @@ class TestDF501FixComplete:
             db._ensure_migration_tables("sqlite")
 
         # Verify the error message is helpful
-        assert "_ensure_migration_tables_async()" in str(
-            exc_info.value
-        ), "Error should mention the async alternative"
+        assert "_ensure_migration_tables_async()" in str(exc_info.value), (
+            "Error should mention the async alternative"
+        )

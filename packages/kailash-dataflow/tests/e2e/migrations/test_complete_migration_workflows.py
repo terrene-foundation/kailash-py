@@ -93,9 +93,9 @@ class TestCompleteMigrationWorkflows:
         )
 
         results, _ = runtime.execute(workflow.build())
-        assert not results["create_table"].get(
-            "error"
-        ), f"Table creation failed: {results['create_table'].get('error')}"
+        assert not results["create_table"].get("error"), (
+            f"Table creation failed: {results['create_table'].get('error')}"
+        )
 
         # Insert test data with various scenarios
         insert_sql = f"""
@@ -125,9 +125,9 @@ class TestCompleteMigrationWorkflows:
         )
 
         results, _ = runtime.execute(workflow.build())
-        assert not results["insert_data"].get(
-            "error"
-        ), f"Data insertion failed: {results['insert_data'].get('error')}"
+        assert not results["insert_data"].get("error"), (
+            f"Data insertion failed: {results['insert_data'].get('error')}"
+        )
 
     async def cleanup_test_table(
         self, connection_string: str, table_name: str, runtime: LocalRuntime

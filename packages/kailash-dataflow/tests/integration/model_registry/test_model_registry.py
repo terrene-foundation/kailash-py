@@ -85,7 +85,6 @@ class TestModelRegistry:
         """Test registry initialization."""
         # Mock the workflow builder and runtime calls
         with patch.object(self.registry, "runtime") as mock_runtime:
-
             # Mock workflow builder
             # TODO: Use real workflow from real_infra
             mock_workflow = Mock()

@@ -80,9 +80,9 @@ class TestEndToEndStrictModeWorkflow:
 
         # Verify error contains strict mode code
         error = str(exc_info.value)
-        assert (
-            "STRICT-001" in error
-        ), "Should raise STRICT-001 error for primary key naming"
+        assert "STRICT-001" in error, (
+            "Should raise STRICT-001 error for primary key naming"
+        )
         assert "primary key" in error.lower() or "must be named 'id'" in error.lower()
 
     def test_workflow_with_strict_mode_detects_connection_errors(self):
@@ -169,9 +169,9 @@ class TestEndToEndStrictModeWorkflow:
                 for w in caught_warnings
                 if issubclass(w.category, DataFlowValidationWarning)
             ]
-            assert (
-                len(strict_warnings) > 0
-            ), "Should raise validation warnings for auto-managed field"
+            assert len(strict_warnings) > 0, (
+                "Should raise validation warnings for auto-managed field"
+            )
 
     def test_successful_execution_with_valid_models_workflows(self):
         """Test complete successful execution with strict mode enabled."""
@@ -423,7 +423,7 @@ class TestProductionDeploymentScenarios:
                     f"""
 @db.model(strict=True)
 class {model_name}:
-    {chr(10).join(f'{k}: {v}' for k, v in fields.items())}
+    {chr(10).join(f"{k}: {v}" for k, v in fields.items())}
 """
                 )
                 validation_results.append((model_name, "PASS"))
@@ -431,9 +431,9 @@ class {model_name}:
                 validation_results.append((model_name, f"FAIL: {e}"))
 
         # Assert: All models should validate successfully
-        assert all(
-            result[1] == "PASS" for result in validation_results
-        ), f"CI/CD validation failed: {[r for r in validation_results if r[1] != 'PASS']}"
+        assert all(result[1] == "PASS" for result in validation_results), (
+            f"CI/CD validation failed: {[r for r in validation_results if r[1] != 'PASS']}"
+        )
 
     def test_health_check_integration_report_strict_mode_violations(self):
         """Test health check reports strict mode violations."""
@@ -998,9 +998,9 @@ class TestErrorMessageQualityInProduction:
             error_message = str(e)
 
             # Assert: Error message should include key information
-            assert (
-                "STRICT-001" in error_message or "VAL-003" in error_message
-            ), "Should include error code"
+            assert "STRICT-001" in error_message or "VAL-003" in error_message, (
+                "Should include error code"
+            )
             assert (
                 "id" in error_message.lower() or "primary key" in error_message.lower()
             ), "Should mention field name or primary key"
@@ -1054,9 +1054,9 @@ class TestStrictModePerformance:
         validation_time = (time.time() - start_time) * 1000  # Convert to ms
 
         # Assert: Validation should be fast (<100ms)
-        assert (
-            validation_time < 100
-        ), f"Validation took {validation_time}ms (should be <100ms)"
+        assert validation_time < 100, (
+            f"Validation took {validation_time}ms (should be <100ms)"
+        )
 
     def test_stress_test_with_100_models(self):
         """Test strict mode with 100+ models (stress test)."""
@@ -1065,7 +1065,6 @@ class TestStrictModePerformance:
 
         # Act: Register 100 models with strict mode
         for i in range(100):
-
             exec(
                 f"""
 @db.model(strict=True)

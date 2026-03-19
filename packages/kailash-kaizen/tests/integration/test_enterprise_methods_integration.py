@@ -75,9 +75,9 @@ class TestEnterpriseMethodsIntegration:
         # 5. Test memory system operations
         memory_system.store("test_key", "test_value")
         retrieved_value = memory_system.retrieve("test_key")
-        assert (
-            retrieved_value == "test_value"
-        ), "Memory system should store and retrieve values"
+        assert retrieved_value == "test_value", (
+            "Memory system should store and retrieve values"
+        )
 
         # 6. Test session with agents
         session.add_agent(agents[0])
@@ -88,9 +88,9 @@ class TestEnterpriseMethodsIntegration:
         audit_trail = kaizen.get_audit_trail()
 
         # Verify all operations are captured in audit trail
-        assert (
-            len(audit_trail) >= 6
-        ), "Audit trail should capture all enterprise operations"
+        assert len(audit_trail) >= 6, (
+            "Audit trail should capture all enterprise operations"
+        )
 
         # Verify audit trail contains expected operations
         action_types = [entry.get("action") for entry in audit_trail]
@@ -102,9 +102,9 @@ class TestEnterpriseMethodsIntegration:
         ]
 
         for expected_action in expected_actions:
-            assert any(
-                expected_action in action for action in action_types
-            ), f"Audit trail should contain {expected_action} operations"
+            assert any(expected_action in action for action in action_types), (
+                f"Audit trail should contain {expected_action} operations"
+            )
 
         # 8. Test enterprise workflow execution through session
         try:
@@ -122,12 +122,12 @@ class TestEnterpriseMethodsIntegration:
 
         # Verify enterprise configuration integration
         for agent in agents:
-            assert hasattr(
-                agent, "enterprise_config"
-            ), "Agents should have enterprise configuration"
-            assert (
-                agent.enterprise_config is not None
-            ), "Enterprise config should be attached"
+            assert hasattr(agent, "enterprise_config"), (
+                "Agents should have enterprise configuration"
+            )
+            assert agent.enterprise_config is not None, (
+                "Enterprise config should be attached"
+            )
 
     def test_audit_trail_comprehensive_tracking(self):
         """Test that audit trail comprehensively tracks all enterprise operations."""
@@ -166,18 +166,18 @@ class TestEnterpriseMethodsIntegration:
         audit_trail = kaizen.get_audit_trail()
 
         # Verify comprehensive tracking
-        assert (
-            len(audit_trail) >= 5
-        ), f"Expected at least 5 audit entries, got {len(audit_trail)}"
+        assert len(audit_trail) >= 5, (
+            f"Expected at least 5 audit entries, got {len(audit_trail)}"
+        )
 
         # Verify operation sequencing
         timestamps = [entry.get("timestamp", 0) for entry in audit_trail]
-        assert all(
-            ts >= operations_start for ts in timestamps
-        ), "All operations should be after start time"
-        assert all(
-            ts <= operations_end for ts in timestamps
-        ), "All operations should be before end time"
+        assert all(ts >= operations_start for ts in timestamps), (
+            "All operations should be after start time"
+        )
+        assert all(ts <= operations_end for ts in timestamps), (
+            "All operations should be before end time"
+        )
 
         # Verify audit entry completeness
         for entry in audit_trail:
@@ -187,9 +187,9 @@ class TestEnterpriseMethodsIntegration:
 
         # Verify specific operations are tracked
         actions = [entry["action"] for entry in audit_trail]
-        assert (
-            "create_memory_system" in actions
-        ), "Memory system creation should be tracked"
+        assert "create_memory_system" in actions, (
+            "Memory system creation should be tracked"
+        )
         assert "create_session" in actions, "Session creation should be tracked"
         assert "create_agent" in actions, "Agent creation should be tracked"
         assert "create_coordinator" in actions, "Coordinator creation should be tracked"
@@ -286,12 +286,12 @@ class TestEnterpriseMethodsIntegration:
 
         # Verify agents have enterprise configuration
         for agent in agents:
-            assert hasattr(
-                agent, "enterprise_config"
-            ), "Agent should have enterprise config"
-            assert (
-                agent.enterprise_config is not None
-            ), "Enterprise config should be populated"
+            assert hasattr(agent, "enterprise_config"), (
+                "Agent should have enterprise config"
+            )
+            assert agent.enterprise_config is not None, (
+                "Enterprise config should be populated"
+            )
 
     def test_coordinator_enterprise_patterns(self):
         """Test coordinator with enterprise coordination patterns."""
@@ -331,9 +331,9 @@ class TestEnterpriseMethodsIntegration:
 
             # Verify coordinator creation
             assert coordinator is not None, f"Should create {pattern} coordinator"
-            assert (
-                coordinator.pattern == pattern
-            ), "Coordinator should have correct pattern"
+            assert coordinator.pattern == pattern, (
+                "Coordinator should have correct pattern"
+            )
             assert len(coordinator.agents) == 3, "Coordinator should have all agents"
 
             # Verify enterprise configuration
@@ -347,9 +347,9 @@ class TestEnterpriseMethodsIntegration:
             for entry in audit_trail
             if entry.get("action") == "create_coordinator"
         ]
-        assert (
-            len(coordinator_actions) == 4
-        ), "Should have audit entries for all coordinator creations"
+        assert len(coordinator_actions) == 4, (
+            "Should have audit entries for all coordinator creations"
+        )
 
 
 class TestEnterpriseMethodsWithRealWorkflows:
@@ -574,17 +574,17 @@ class TestEnterpriseMethodsWithRealWorkflows:
 
         audit_actions = [entry.get("action") for entry in audit_trail]
         for expected_action in expected_actions:
-            assert any(
-                expected_action in action for action in audit_actions
-            ), f"Audit trail should contain {expected_action}"
+            assert any(expected_action in action for action in audit_actions), (
+                f"Audit trail should contain {expected_action}"
+            )
 
         # Verify enterprise features are enabled in audit entries
         enterprise_entries = [
             entry for entry in audit_trail if entry.get("success") == True
         ]
-        assert (
-            len(enterprise_entries) >= 4
-        ), "Should have successful enterprise operations in audit"
+        assert len(enterprise_entries) >= 4, (
+            "Should have successful enterprise operations in audit"
+        )
 
 
 if __name__ == "__main__":

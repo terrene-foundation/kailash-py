@@ -147,10 +147,7 @@ class SpendTracker:
         """
         budget = self._budgets.get(agent_id)
         if budget is None:
-            raise ValueError(
-                f"No budget configured for agent '{agent_id}'. "
-                f"Call set_budget() first."
-            )
+            raise ValueError(f"No budget configured for agent '{agent_id}'. Call set_budget() first.")
 
         # Check for period reset
         self._check_period_reset(budget)
@@ -217,9 +214,7 @@ class SpendTracker:
             warning_threshold_pct=budget.warning_threshold_pct,
         )
 
-    def reset_budget(
-        self, agent_id: str, period: Optional[BudgetPeriod] = None
-    ) -> None:
+    def reset_budget(self, agent_id: str, period: Optional[BudgetPeriod] = None) -> None:
         """Reset an agent's budget.
 
         Args:
@@ -290,8 +285,7 @@ class SpendTracker:
 
         if period_end and now >= period_end:
             logger.info(
-                f"[SPEND] Auto-resetting budget for agent={budget.agent_id} "
-                f"(period={budget.period.value} elapsed)"
+                f"[SPEND] Auto-resetting budget for agent={budget.agent_id} (period={budget.period.value} elapsed)"
             )
             budget.spent = 0.0
             budget.period_start = now

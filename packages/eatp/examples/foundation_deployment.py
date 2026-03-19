@@ -169,9 +169,7 @@ async def main() -> None:
     )
     print(f"    Genesis ID     : {research_chain.genesis.id}")
     print(f"    Capabilities   : {len(research_chain.capabilities)}")
-    all_constraints = list(
-        dict.fromkeys(c for cap in research_chain.capabilities for c in cap.constraints)
-    )
+    all_constraints = list(dict.fromkeys(c for cap in research_chain.capabilities for c in cap.constraints))
     print(f"    Constraints    : {all_constraints}")
 
     # --- Agent 2: Code Review Agent ----------------------------------------

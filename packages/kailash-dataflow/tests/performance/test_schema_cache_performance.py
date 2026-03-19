@@ -97,8 +97,8 @@ class TestCacheHitPerformance:
         speedup = miss_time / hit_time if hit_time > 0 else 0
 
         print("\\nCache Performance:")
-        print(f"  Miss time (100 ops): {miss_time*1000:.2f}ms")
-        print(f"  Hit time (100 ops): {hit_time*1000:.2f}ms")
+        print(f"  Miss time (100 ops): {miss_time * 1000:.2f}ms")
+        print(f"  Hit time (100 ops): {hit_time * 1000:.2f}ms")
         print(f"  Speedup ratio: {speedup:.1f}x")
 
         # Cache hits should be significantly faster
@@ -180,8 +180,8 @@ class TestMultiOperationWorkflow:
         )
 
         print("\\nWorkflow Performance (10 operations):")
-        print(f"  Without cache: {no_cache_time*1000:.2f}ms")
-        print(f"  With cache: {cache_time*1000:.2f}ms")
+        print(f"  Without cache: {no_cache_time * 1000:.2f}ms")
+        print(f"  With cache: {cache_time * 1000:.2f}ms")
         print(f"  Improvement: {improvement:.1f}%")
 
         # Should see significant improvement
@@ -215,9 +215,9 @@ class TestCacheOverhead:
         print(f"  Overhead per entry: ~{overhead_per_entry:.1f} bytes")
 
         # Overhead should be reasonable (<1KB per entry)
-        assert (
-            overhead_per_entry < 1024
-        ), f"Overhead too high: {overhead_per_entry} bytes"
+        assert overhead_per_entry < 1024, (
+            f"Overhead too high: {overhead_per_entry} bytes"
+        )
 
     def test_cache_operation_overhead(self, db_with_cache, benchmark):
         """Measure overhead of cache operations."""
@@ -254,13 +254,13 @@ class TestCacheScalability:
         start = time.perf_counter()
         for _ in range(100):
             # Lookup middle entry
-            cache.is_table_ensured(f"Model{cache_size//2}", ":memory:")
+            cache.is_table_ensured(f"Model{cache_size // 2}", ":memory:")
         elapsed = time.perf_counter() - start
 
-        print(f"\\nCache size {cache_size}: {elapsed*1000:.2f}ms for 100 lookups")
+        print(f"\\nCache size {cache_size}: {elapsed * 1000:.2f}ms for 100 lookups")
 
         # Lookups should remain fast even with large cache
-        assert elapsed < 0.01, f"Lookups too slow: {elapsed*1000:.2f}ms"
+        assert elapsed < 0.01, f"Lookups too slow: {elapsed * 1000:.2f}ms"
 
     def test_lru_eviction_performance(self, db_with_cache):
         """Measure performance of LRU eviction."""
@@ -278,10 +278,10 @@ class TestCacheScalability:
             cache.mark_table_ensured(f"Model{i}", ":memory:")
         eviction_time = time.perf_counter() - start
 
-        print(f"\\nLRU Eviction Time (11 entries): {eviction_time*1000:.2f}ms")
+        print(f"\\nLRU Eviction Time (11 entries): {eviction_time * 1000:.2f}ms")
 
         # Eviction should be fast (<10ms)
-        assert eviction_time < 0.01, f"Eviction too slow: {eviction_time*1000:.2f}ms"
+        assert eviction_time < 0.01, f"Eviction too slow: {eviction_time * 1000:.2f}ms"
 
 
 class TestConcurrentAccess:
@@ -308,10 +308,10 @@ class TestConcurrentAccess:
             concurrent.futures.wait(futures)
         elapsed = time.perf_counter() - start
 
-        print(f"\\nConcurrent Reads (10 threads × 100 ops): {elapsed*1000:.2f}ms")
+        print(f"\\nConcurrent Reads (10 threads × 100 ops): {elapsed * 1000:.2f}ms")
 
         # Should handle concurrent access efficiently
-        assert elapsed < 0.1, f"Concurrent access too slow: {elapsed*1000:.2f}ms"
+        assert elapsed < 0.1, f"Concurrent access too slow: {elapsed * 1000:.2f}ms"
 
 
 # Performance benchmark summary
@@ -357,7 +357,7 @@ def test_performance_summary(db_with_cache):
     print("=" * 60)
 
     # Validate performance expectations
-    assert (
-        metrics["hit_rate_percent"] > 90
-    ), "Hit rate should be >90% for repeated operations"
+    assert metrics["hit_rate_percent"] > 90, (
+        "Hit rate should be >90% for repeated operations"
+    )
     assert metrics["hits"] >= 10, "Should have at least 10 cache hits"

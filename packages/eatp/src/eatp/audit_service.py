@@ -560,21 +560,15 @@ class AuditQueryService:
             current_end = min(current_start + period_delta, end_time)
 
             # Count actions in this period
-            period_anchors = [
-                a for a in history if current_start <= a.timestamp < current_end
-            ]
+            period_anchors = [a for a in history if current_start <= a.timestamp < current_end]
 
             periods.append(
                 {
                     "period_start": current_start.isoformat(),
                     "period_end": current_end.isoformat(),
                     "total_actions": len(period_anchors),
-                    "success_count": sum(
-                        1 for a in period_anchors if a.result == ActionResult.SUCCESS
-                    ),
-                    "failure_count": sum(
-                        1 for a in period_anchors if a.result == ActionResult.FAILURE
-                    ),
+                    "success_count": sum(1 for a in period_anchors if a.result == ActionResult.SUCCESS),
+                    "failure_count": sum(1 for a in period_anchors if a.result == ActionResult.FAILURE),
                 }
             )
 

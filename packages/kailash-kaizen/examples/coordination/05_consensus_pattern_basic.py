@@ -141,10 +141,14 @@ def main():
     abstentions = sum(1 for v in votes if v["vote"] == "abstain")
 
     print("Vote Distribution:")
-    print(f"  - Approve: {approvals}/{len(votes)} ({approvals/len(votes)*100:.1f}%)")
-    print(f"  - Reject: {rejections}/{len(votes)} ({rejections/len(votes)*100:.1f}%)")
     print(
-        f"  - Abstain: {abstentions}/{len(votes)} ({abstentions/len(votes)*100:.1f}%)"
+        f"  - Approve: {approvals}/{len(votes)} ({approvals / len(votes) * 100:.1f}%)"
+    )
+    print(
+        f"  - Reject: {rejections}/{len(votes)} ({rejections / len(votes) * 100:.1f}%)"
+    )
+    print(
+        f"  - Abstain: {abstentions}/{len(votes)} ({abstentions / len(votes) * 100:.1f}%)"
     )
     print()
 

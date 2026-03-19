@@ -1324,7 +1324,7 @@ class NodeGenerator:
                         # Database-specific parameter placeholders
                         if database_type.lower() == "postgresql":
                             placeholders = ", ".join(
-                                [f"${i+1}" for i in range(len(field_names))]
+                                [f"${i + 1}" for i in range(len(field_names))]
                             )
                             # RETURNING clause: all provided fields plus timestamps if they exist in model
                             returning_fields = ["id"] + [
@@ -1428,7 +1428,7 @@ class NodeGenerator:
                                 else repr(value)
                             )
                             value_debug.append(
-                                f"${i+1} {field}={value_repr} (type={value_type})"
+                                f"${i + 1} {field}={value_repr} (type={value_type})"
                             )
 
                         # ADR-002: Changed from WARNING to DEBUG - parameter tracing
@@ -2127,9 +2127,10 @@ class NodeGenerator:
                         field_names = list(updates.keys())
                         if database_type.lower() == "postgresql":
                             set_clauses = [
-                                f"{name} = ${i+1}" for i, name in enumerate(field_names)
+                                f"{name} = ${i + 1}"
+                                for i, name in enumerate(field_names)
                             ]
-                            where_clause = f"WHERE id = ${len(field_names)+1}"
+                            where_clause = f"WHERE id = ${len(field_names) + 1}"
                             updated_at_clause = (
                                 "updated_at = CURRENT_TIMESTAMP"
                                 if has_updated_at

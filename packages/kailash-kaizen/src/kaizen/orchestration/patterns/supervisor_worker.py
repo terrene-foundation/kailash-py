@@ -896,7 +896,7 @@ def create_supervisor_worker_pattern(
 
     workers = [
         WorkerAgent(
-            config=worker_cfg, shared_memory=shared_memory, agent_id=f"worker_{i+1}"
+            config=worker_cfg, shared_memory=shared_memory, agent_id=f"worker_{i + 1}"
         )
         for i in range(num_workers)
     ]

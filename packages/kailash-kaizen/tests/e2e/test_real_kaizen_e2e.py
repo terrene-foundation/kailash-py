@@ -120,9 +120,9 @@ class TestRealKaizenE2EScenarios(DockerE2ETestBase):
         total_time = time.time() - start_time
 
         # Performance requirement: <10 seconds for complete workflow
-        assert (
-            total_time < 10
-        ), f"Complete workflow took {total_time:.2f}s, expected <10s"
+        assert total_time < 10, (
+            f"Complete workflow took {total_time:.2f}s, expected <10s"
+        )
 
         # Cleanup
         kaizen.cleanup()
@@ -225,9 +225,9 @@ class TestRealKaizenE2EScenarios(DockerE2ETestBase):
         total_time = time.time() - start_time
 
         # Performance requirement: <10 seconds for complete pipeline
-        assert (
-            total_time < 10
-        ), f"Enterprise pipeline took {total_time:.2f}s, expected <10s"
+        assert total_time < 10, (
+            f"Enterprise pipeline took {total_time:.2f}s, expected <10s"
+        )
 
         # Cleanup
         kaizen.cleanup()
@@ -307,9 +307,9 @@ class TestRealKaizenE2EScenarios(DockerE2ETestBase):
         total_time = time.time() - start_time
 
         # Performance requirement: <10 seconds for complete collaboration
-        assert (
-            total_time < 10
-        ), f"Multi-agent collaboration took {total_time:.2f}s, expected <10s"
+        assert total_time < 10, (
+            f"Multi-agent collaboration took {total_time:.2f}s, expected <10s"
+        )
 
         # Cleanup
         kaizen.cleanup_enterprise_resources()
@@ -538,9 +538,9 @@ class TestRealKaizenE2EScenarios(DockerE2ETestBase):
         avg_execution_time = sum(execution_times) / len(execution_times)
 
         # Each workflow should be fast (<1 second)
-        assert (
-            avg_execution_time < 1.0
-        ), f"Average execution time: {avg_execution_time:.3f}s"
+        assert avg_execution_time < 1.0, (
+            f"Average execution time: {avg_execution_time:.3f}s"
+        )
 
         # Step 6: Verify framework state after optimization testing
         final_state = kaizen.state
@@ -550,9 +550,9 @@ class TestRealKaizenE2EScenarios(DockerE2ETestBase):
         total_time = time.time() - start_time
 
         # Performance requirement: <10 seconds for complete optimization test
-        assert (
-            total_time < 10
-        ), f"Optimization test took {total_time:.2f}s, expected <10s"
+        assert total_time < 10, (
+            f"Optimization test took {total_time:.2f}s, expected <10s"
+        )
 
         # Cleanup
         kaizen.cleanup()

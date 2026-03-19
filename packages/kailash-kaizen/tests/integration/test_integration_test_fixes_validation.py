@@ -761,9 +761,9 @@ class TestIntegrationTestPassRateValidation:
 
             if passed + failed > 0:
                 pass_rate = passed / (passed + failed)
-                assert (
-                    pass_rate > 0.9
-                ), f"Integration test pass rate too low: {pass_rate:.1%} (passed: {passed}, failed: {failed})"
+                assert pass_rate > 0.9, (
+                    f"Integration test pass rate too low: {pass_rate:.1%} (passed: {passed}, failed: {failed})"
+                )
 
     def test_critical_integration_patterns_success(self):
         """Critical integration patterns must work successfully."""
@@ -829,9 +829,9 @@ class TestIntegrationTestPassRateValidation:
 
         # At least majority should succeed
         success_rate = successful_executions / len(test_inputs)
-        assert (
-            success_rate >= 0.6
-        ), f"Error recovery success rate too low: {success_rate:.1%}"
+        assert success_rate >= 0.6, (
+            f"Error recovery success rate too low: {success_rate:.1%}"
+        )
 
 
 if __name__ == "__main__":

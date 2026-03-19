@@ -292,6 +292,6 @@ class TestAudioFormatsE2E:
 
         for filename, expected_mime in test_cases:
             actual_mime = get_audio_media_type(filename)
-            assert (
-                actual_mime == expected_mime
-            ), f"Expected {expected_mime} for {filename}, got {actual_mime}"
+            assert actual_mime == expected_mime, (
+                f"Expected {expected_mime} for {filename}, got {actual_mime}"
+            )

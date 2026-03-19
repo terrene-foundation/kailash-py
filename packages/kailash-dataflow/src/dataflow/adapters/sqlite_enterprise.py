@@ -506,7 +506,7 @@ class SQLiteEnterpriseAdapter(DatabaseAdapter):
                         query_time = time.time() - query_start
                         if query_time > 0.5:  # 500ms threshold for transaction queries
                             logger.warning(
-                                f"Slow query in transaction ({i+1}/{len(queries)}): {query_time:.2f}s"
+                                f"Slow query in transaction ({i + 1}/{len(queries)}): {query_time:.2f}s"
                             )
 
                     # Commit transaction
@@ -772,7 +772,6 @@ class SQLiteEnterpriseAdapter(DatabaseAdapter):
             self._query_count % 1000 == 0
             or current_time - self._last_vacuum_check > 3600
         ):
-
             self._last_vacuum_check = current_time
 
             # Check if vacuum is needed

@@ -403,9 +403,9 @@ class FKAwareWorkflowOrchestrator:
 
             # Update workflow context with DataFlow instance
             if workflow_id in self._active_workflows:
-                self._active_workflows[workflow_id].dataflow_instance = (
-                    dataflow_instance
-                )
+                self._active_workflows[
+                    workflow_id
+                ].dataflow_instance = dataflow_instance
 
             # Analyze DataFlow models for FK dependencies
             models_analyzed = await self._analyze_dataflow_models(dataflow_instance)

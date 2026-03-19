@@ -167,7 +167,7 @@ class SupervisorWorkerWorkflow:
                         "max_tokens": worker.config.get("max_tokens", 600),
                     },
                 ),
-                "role": getattr(worker, "role", f"Worker {i+1}"),
+                "role": getattr(worker, "role", f"Worker {i + 1}"),
                 "work_context": {
                     "task": self.task,
                     "specialization": worker.config.get("specialization", "general"),
@@ -177,7 +177,7 @@ class SupervisorWorkerWorkflow:
                 "coordinator_id": "supervisor_coordinator",
                 "a2a_enabled": True,
                 "system_prompt": (
-                    f"You are {getattr(worker, 'role', f'Worker {i+1}')} on a coordinated team. "
+                    f"You are {getattr(worker, 'role', f'Worker {i + 1}')} on a coordinated team. "
                     f"Task: {self.task}. "
                     f"Your specialization: {worker.config.get('specialization', 'general work')}. "
                     f"You report to the supervisor and work collaboratively with other team members. "

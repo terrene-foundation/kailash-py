@@ -125,7 +125,7 @@ def create_test_data(
             workflow.add_node(f"{model_name}CreateNode", f"create_{idx}", record)
 
             if idx > 0:
-                workflow.add_connection(f"create_{idx-1}", f"create_{idx}")
+                workflow.add_connection(f"create_{idx - 1}", f"create_{idx}")
 
         results, _ = runtime.execute(workflow.build())
         return results

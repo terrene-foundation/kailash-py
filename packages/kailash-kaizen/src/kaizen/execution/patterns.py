@@ -53,7 +53,7 @@ class ChainOfThoughtExecutor(PatternExecutor):
 
 {input_text}
 
-I need to provide structured output with these fields: {', '.join(output_fields)}
+I need to provide structured output with these fields: {", ".join(output_fields)}
 
 Let me work through this step by step:
 
@@ -170,7 +170,7 @@ class ReActExecutor(PatternExecutor):
 
 {input_text}
 
-I need to provide structured output with these fields: {', '.join(output_fields)}
+I need to provide structured output with these fields: {", ".join(output_fields)}
 
 I'll work through this using Thought, Action, Observation cycles:
 
@@ -299,7 +299,7 @@ class DefaultExecutor(PatternExecutor):
 
 {input_text}
 
-I need to provide responses for these specific fields: {', '.join(output_fields)}
+I need to provide responses for these specific fields: {", ".join(output_fields)}
 
 Let me address each field systematically:
 

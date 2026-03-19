@@ -86,9 +86,9 @@ class TestGenerateDidKey:
         # After 'did:key:' the identifier is a multibase-encoded value
         identifier = did[len("did:key:") :]
         # Must start with 'z' (base58btc) followed by '6Mk' (ed25519 multicodec)
-        assert identifier.startswith(
-            "z6Mk"
-        ), f"Expected identifier to start with 'z6Mk' for Ed25519, got '{identifier[:10]}'"
+        assert identifier.startswith("z6Mk"), (
+            f"Expected identifier to start with 'z6Mk' for Ed25519, got '{identifier[:10]}'"
+        )
 
     def test_deterministic_for_same_key(self):
         """Same public key must always produce the same did:key."""
@@ -198,9 +198,7 @@ class TestCreateDidDocument:
         doc = create_did_document("agent-001", pub)
         vm = doc.verification_method[0]
 
-        assert vm.public_key_multibase.startswith(
-            "z"
-        ), "Multibase encoding must start with 'z' for base58btc"
+        assert vm.public_key_multibase.startswith("z"), "Multibase encoding must start with 'z' for base58btc"
 
 
 class TestDidFromAuthority:
@@ -277,9 +275,7 @@ class TestResolveDid:
     def test_resolve_did_key_format_raises_when_not_in_registry(self):
         """did:key is supported for generation but resolution requires a registry entry."""
         with pytest.raises(DIDResolutionError):
-            resolve_did(
-                "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK", registry={}
-            )
+            resolve_did("did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK", registry={})
 
 
 class TestDidDocumentSerialization:
@@ -335,9 +331,7 @@ class TestDidDocumentSerialization:
         assert len(data["service"]) == 1
         assert data["service"][0]["id"] == "did:eatp:agent-svc#trust-api"
         assert data["service"][0]["type"] == "TrustVerification"
-        assert (
-            data["service"][0]["serviceEndpoint"] == "https://trust.example.com/verify"
-        )
+        assert data["service"][0]["serviceEndpoint"] == "https://trust.example.com/verify"
 
     def test_from_dict_with_missing_id_raises(self):
         """Deserialization of dict without 'id' must raise DIDValidationError."""

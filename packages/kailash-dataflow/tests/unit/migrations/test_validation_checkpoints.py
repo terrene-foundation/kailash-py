@@ -756,7 +756,6 @@ class TestDataIntegrityCheckpoint:
                 data_integrity_checkpoint, "_check_constraint_violations"
             ) as mock_constraint_check,
         ):
-
             # Mock successful validation responses
             mock_ref_check.return_value = {"valid": True, "violations": []}
             mock_constraint_check.return_value = {"valid": True, "violations": []}
@@ -796,7 +795,6 @@ class TestDataIntegrityCheckpoint:
                 data_integrity_checkpoint, "_check_constraint_violations"
             ) as mock_constraint_check,
         ):
-
             # Mock referential integrity violations
             mock_ref_check.return_value = {
                 "valid": False,

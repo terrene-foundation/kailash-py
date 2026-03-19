@@ -133,14 +133,14 @@ class TestNLQueryPerformance:
         second_elapsed_ms = (time.time() - second_start) * 1000
 
         # Cache should provide significant speedup
-        assert (
-            second_elapsed_ms < first_elapsed_ms * 0.1
-        ), f"Cached query took {second_elapsed_ms:.2f}ms, expected <{first_elapsed_ms * 0.1:.2f}ms"
+        assert second_elapsed_ms < first_elapsed_ms * 0.1, (
+            f"Cached query took {second_elapsed_ms:.2f}ms, expected <{first_elapsed_ms * 0.1:.2f}ms"
+        )
 
         # Absolute performance target
-        assert (
-            second_elapsed_ms < 5
-        ), f"Cached query took {second_elapsed_ms:.2f}ms, expected <5ms"
+        assert second_elapsed_ms < 5, (
+            f"Cached query took {second_elapsed_ms:.2f}ms, expected <5ms"
+        )
 
 
 class TestBulkTransformationPerformance:
@@ -176,9 +176,9 @@ class TestBulkTransformationPerformance:
         assert result["inserted_count"] == len(test_records)
 
         # Performance assertion
-        assert (
-            throughput > 1000
-        ), f"Throughput was {throughput:.2f} records/sec, expected >1000 records/sec"
+        assert throughput > 1000, (
+            f"Throughput was {throughput:.2f} records/sec, expected >1000 records/sec"
+        )
 
     @pytest.mark.integration
     @pytest.mark.performance
@@ -211,9 +211,9 @@ class TestBulkTransformationPerformance:
 
         # Verify throughput improves with larger batches
         # (up to a point - may plateau at optimal batch size)
-        assert (
-            throughputs[-1] >= throughputs[0]
-        ), "Larger batches should not decrease throughput"
+        assert throughputs[-1] >= throughputs[0], (
+            "Larger batches should not decrease throughput"
+        )
 
 
 class TestTrainingPipelinePerformance:
@@ -275,9 +275,9 @@ class TestTrainingPipelinePerformance:
 
         # Data fetch should not be bottleneck
         # (Most time should be in actual training)
-        assert (
-            elapsed < 60
-        ), f"Training pipeline took {elapsed:.2f}s, data fetch likely bottleneck"
+        assert elapsed < 60, (
+            f"Training pipeline took {elapsed:.2f}s, data fetch likely bottleneck"
+        )
 
 
 class TestInferencePerformance:
@@ -351,9 +351,9 @@ class TestInferencePerformance:
             )
 
             # Batch should be significantly faster
-            assert (
-                batch_throughput > individual_throughput * 2
-            ), "Batch inference should be at least 2x faster than individual"
+            assert batch_throughput > individual_throughput * 2, (
+                "Batch inference should be at least 2x faster than individual"
+            )
 
 
 class TestConcurrentOperations:
@@ -397,9 +397,9 @@ class TestConcurrentOperations:
 
         # Performance should not degrade significantly with concurrent access
         avg_time_per_op = elapsed / 30
-        assert (
-            avg_time_per_op < 1.0
-        ), f"Average time per operation {avg_time_per_op:.2f}s suggests contention"
+        assert avg_time_per_op < 1.0, (
+            f"Average time per operation {avg_time_per_op:.2f}s suggests contention"
+        )
 
     @pytest.mark.integration
     @pytest.mark.performance
@@ -427,9 +427,9 @@ class TestConcurrentOperations:
         elapsed = time.time() - start
 
         # Should complete efficiently despite limited pool
-        assert (
-            elapsed < 10
-        ), f"Connection pool operation took {elapsed:.2f}s, suggests inefficiency"
+        assert elapsed < 10, (
+            f"Connection pool operation took {elapsed:.2f}s, suggests inefficiency"
+        )
 
     @pytest.mark.integration
     @pytest.mark.performance
@@ -463,9 +463,9 @@ class TestConcurrentOperations:
         avg_early = sum(times[:5]) / 5
         avg_late = sum(times[5:]) / 5
 
-        assert (
-            avg_late <= avg_early * 1.5
-        ), f"Performance degraded over time: {avg_early:.3f}s → {avg_late:.3f}s"
+        assert avg_late <= avg_early * 1.5, (
+            f"Performance degraded over time: {avg_early:.3f}s → {avg_late:.3f}s"
+        )
 
 
 if __name__ == "__main__":

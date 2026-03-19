@@ -149,7 +149,6 @@ class TestIterativeLLMAgentMCPDemonstration:
                             "_phase_synthesis",
                             return_value="Research complete: Found healthcare AI applications",
                         ):
-
                             # Execute with real MCP enabled
                             result = agent.run(
                                 provider="test",
@@ -251,7 +250,6 @@ class TestIterativeLLMAgentMCPDemonstration:
                         with patch.object(
                             agent, "_phase_synthesis", return_value="Mock response"
                         ):
-
                             mock_result = agent.run(
                                 provider="test",
                                 model="test-model",
@@ -302,7 +300,6 @@ class TestIterativeLLMAgentMCPDemonstration:
                             with patch.object(
                                 agent, "_phase_synthesis", return_value="Real response"
                             ):
-
                                 real_result = agent.run(
                                     provider="test",
                                     model="test-model",

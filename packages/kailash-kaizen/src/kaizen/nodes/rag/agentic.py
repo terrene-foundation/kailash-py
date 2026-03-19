@@ -106,7 +106,7 @@ class AgenticRAGNode(WorkflowNode):
             config={
                 "system_prompt": f"""You are a research planning agent. Given a query, create a step-by-step plan.
 
-Available tools: {', '.join(self.tools)}
+Available tools: {", ".join(self.tools)}
 
 For each step, specify:
 1. What information is needed

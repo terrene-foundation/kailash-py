@@ -287,9 +287,9 @@ class TestPerformanceDashboardRefreshLatency:
         aggregator._running = False
 
         # Should complete in <1s
-        assert (
-            duration < 1.0
-        ), f"Dashboard refresh took {duration:.3f}s, exceeds 1s target"
+        assert duration < 1.0, (
+            f"Dashboard refresh took {duration:.3f}s, exceeds 1s target"
+        )
 
 
 class TestPerformanceDashboardVisualization:

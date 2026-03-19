@@ -28,9 +28,9 @@ class TimeWindow:
             duration_seconds: Window duration in seconds
         """
         self.duration_seconds = duration_seconds
-        self._samples: Dict[str, List[Tuple[float, float]]] = (
-            {}
-        )  # metric -> [(timestamp, value)]
+        self._samples: Dict[
+            str, List[Tuple[float, float]]
+        ] = {}  # metric -> [(timestamp, value)]
         self._lock = threading.RLock()
 
     def add_sample(self, metric_name: str, value: float, tags: Dict, timestamp: float):

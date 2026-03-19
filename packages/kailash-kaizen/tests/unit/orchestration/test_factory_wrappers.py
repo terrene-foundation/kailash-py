@@ -164,9 +164,9 @@ class TestSupervisorWorkerFactoryWrapper:
 
         assert pattern is not None
         assert hasattr(pattern, "delegate"), "Should have delegate() method"
-        assert hasattr(
-            pattern, "aggregate_results"
-        ), "Should have aggregate_results() method"
+        assert hasattr(pattern, "aggregate_results"), (
+            "Should have aggregate_results() method"
+        )
         assert pattern.supervisor == supervisor
         assert pattern.workers == workers
 
@@ -218,12 +218,12 @@ class TestConsensusFactoryWrapper:
         )
 
         assert pattern is not None
-        assert hasattr(
-            pattern, "create_proposal"
-        ), "Should have create_proposal() method"
-        assert hasattr(
-            pattern, "determine_consensus"
-        ), "Should have determine_consensus() method"
+        assert hasattr(pattern, "create_proposal"), (
+            "Should have create_proposal() method"
+        )
+        assert hasattr(pattern, "determine_consensus"), (
+            "Should have determine_consensus() method"
+        )
         # Note: create_consensus_pattern creates its own voter agents internally
         assert hasattr(pattern, "voters")
 
@@ -310,9 +310,9 @@ class TestHandoffFactoryWrapper:
         pattern = Pipeline.handoff(agents=mock_agents[:3])  # Creates 3-tier handoff
 
         assert pattern is not None
-        assert hasattr(
-            pattern, "execute_with_handoff"
-        ), "Should have execute_with_handoff() method"
+        assert hasattr(pattern, "execute_with_handoff"), (
+            "Should have execute_with_handoff() method"
+        )
         # Note: create_handoff_pattern creates its own tier agents internally
         assert hasattr(pattern, "tiers")
 

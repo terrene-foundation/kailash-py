@@ -499,9 +499,9 @@ class TestChainContinuity:
             actual_parent = data.get("parent_anchor_id") or data.get("context", {}).get(
                 "parent_anchor_id"
             )
-            assert (
-                actual_parent == expected_parent
-            ), f"Anchor {af.name}: expected parent {expected_parent}, got {actual_parent}"
+            assert actual_parent == expected_parent, (
+                f"Anchor {af.name}: expected parent {expected_parent}, got {actual_parent}"
+            )
             expected_parent = data["anchor_id"]
 
     async def test_verify_detects_deleted_anchor(self, trust_dir):

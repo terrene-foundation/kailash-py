@@ -88,12 +88,12 @@ class TestListNodeFilterBug:
         users = results["query"]["records"]
 
         # Assertion
-        assert (
-            len(users) == 1
-        ), f"BUG CONFIRMED: Expected 1 user, got {len(users)} users"
-        assert (
-            users[0]["status"] == "active"
-        ), f"Expected active user, got {users[0]['status']}"
+        assert len(users) == 1, (
+            f"BUG CONFIRMED: Expected 1 user, got {len(users)} users"
+        )
+        assert users[0]["status"] == "active", (
+            f"Expected active user, got {users[0]['status']}"
+        )
 
     def test_nin_operator_broken(self, setup_test_data):
         """
@@ -121,9 +121,9 @@ class TestListNodeFilterBug:
         users = results["query"]["records"]
 
         # Assertion
-        assert (
-            len(users) == 1
-        ), f"BUG CONFIRMED: Expected 1 user, got {len(users)} users"
+        assert len(users) == 1, (
+            f"BUG CONFIRMED: Expected 1 user, got {len(users)} users"
+        )
         assert users[0]["status"] == "active"
 
     def test_in_operator_broken(self, setup_test_data):
@@ -152,9 +152,9 @@ class TestListNodeFilterBug:
         users = results["query"]["records"]
 
         # Assertion
-        assert (
-            len(users) == 1
-        ), f"BUG CONFIRMED: Expected 1 user, got {len(users)} users"
+        assert len(users) == 1, (
+            f"BUG CONFIRMED: Expected 1 user, got {len(users)} users"
+        )
         assert users[0]["status"] == "active"
 
     def test_eq_operator_works(self, setup_test_data):

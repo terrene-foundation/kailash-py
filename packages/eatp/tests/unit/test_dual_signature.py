@@ -256,9 +256,7 @@ class TestHmacSign:
         assert isinstance(result, str)
         assert len(base64.b64decode(result)) == 32
 
-    def test_dict_payload_uses_serialize_for_signing(
-        self, hmac_key, sample_dict_payload
-    ):
+    def test_dict_payload_uses_serialize_for_signing(self, hmac_key, sample_dict_payload):
         """hmac_sign on dict must use serialize_for_signing for canonical representation."""
         import hmac as hmac_mod
 
@@ -275,9 +273,7 @@ class TestHmacSign:
         import hmac as hmac_mod
 
         payload_str = "test string"
-        expected_mac = hmac_mod.new(
-            hmac_key, payload_str.encode("utf-8"), hashlib.sha256
-        )
+        expected_mac = hmac_mod.new(hmac_key, payload_str.encode("utf-8"), hashlib.sha256)
         expected = base64.b64encode(expected_mac.digest()).decode("utf-8")
 
         actual = hmac_sign(payload_str, hmac_key)
@@ -357,9 +353,7 @@ class TestDualSign:
         assert ds.hmac_signature is None
         assert ds.has_hmac is False
 
-    def test_both_signatures_when_hmac_key_provided(
-        self, keypair, hmac_key, sample_dict_payload
-    ):
+    def test_both_signatures_when_hmac_key_provided(self, keypair, hmac_key, sample_dict_payload):
         """dual_sign with hmac_key must produce DualSignature with both signatures."""
         private_key, _ = keypair
         ds = dual_sign(sample_dict_payload, private_key, hmac_key=hmac_key)
@@ -375,9 +369,7 @@ class TestDualSign:
         standalone_sig = sign(sample_dict_payload, private_key)
         assert ds.ed25519_signature == standalone_sig
 
-    def test_hmac_matches_standalone_hmac_sign(
-        self, keypair, hmac_key, sample_dict_payload
-    ):
+    def test_hmac_matches_standalone_hmac_sign(self, keypair, hmac_key, sample_dict_payload):
         """The HMAC component of dual_sign must match standalone hmac_sign()."""
         private_key, _ = keypair
         ds = dual_sign(sample_dict_payload, private_key, hmac_key=hmac_key)
@@ -433,9 +425,7 @@ class TestDualVerify:
         """dual_verify must return True when both Ed25519 and HMAC are valid."""
         private_key, public_key = keypair
         ds = dual_sign(sample_dict_payload, private_key, hmac_key=hmac_key)
-        assert (
-            dual_verify(sample_dict_payload, ds, public_key, hmac_key=hmac_key) is True
-        )
+        assert dual_verify(sample_dict_payload, ds, public_key, hmac_key=hmac_key) is True
 
     def test_invalid_ed25519_fails(self, keypair, sample_dict_payload):
         """dual_verify must return False when Ed25519 signature is invalid."""
@@ -451,9 +441,7 @@ class TestDualVerify:
         ed_sig = sign(sample_dict_payload, private_key)
         bogus_hmac = base64.b64encode(b"\x00" * 32).decode("utf-8")
         ds = DualSignature(ed25519_signature=ed_sig, hmac_signature=bogus_hmac)
-        assert (
-            dual_verify(sample_dict_payload, ds, public_key, hmac_key=hmac_key) is False
-        )
+        assert dual_verify(sample_dict_payload, ds, public_key, hmac_key=hmac_key) is False
 
     def test_ed25519_always_checked(self, keypair, hmac_key, sample_dict_payload):
         """Ed25519 is always mandatory. Invalid Ed25519 must fail even with valid HMAC."""
@@ -461,30 +449,22 @@ class TestDualVerify:
         valid_hmac = hmac_sign(sample_dict_payload, hmac_key)
         bogus_ed = base64.b64encode(b"\x00" * 64).decode("utf-8")
         ds = DualSignature(ed25519_signature=bogus_ed, hmac_signature=valid_hmac)
-        assert (
-            dual_verify(sample_dict_payload, ds, public_key, hmac_key=hmac_key) is False
-        )
+        assert dual_verify(sample_dict_payload, ds, public_key, hmac_key=hmac_key) is False
 
-    def test_hmac_skipped_when_no_key_provided(
-        self, keypair, hmac_key, sample_dict_payload
-    ):
+    def test_hmac_skipped_when_no_key_provided(self, keypair, hmac_key, sample_dict_payload):
         """When hmac_key is not provided to dual_verify, HMAC check must be skipped."""
         private_key, public_key = keypair
         ds = dual_sign(sample_dict_payload, private_key, hmac_key=hmac_key)
         # Verify without providing hmac_key -- should succeed (HMAC check skipped)
         assert dual_verify(sample_dict_payload, ds, public_key) is True
 
-    def test_hmac_skipped_when_no_hmac_in_signature(
-        self, keypair, hmac_key, sample_dict_payload
-    ):
+    def test_hmac_skipped_when_no_hmac_in_signature(self, keypair, hmac_key, sample_dict_payload):
         """When DualSignature has no HMAC, providing hmac_key should not cause failure."""
         private_key, public_key = keypair
         ds = dual_sign(sample_dict_payload, private_key)  # No HMAC key
         assert ds.has_hmac is False
         # Verify with hmac_key -- should succeed since there's no HMAC to check
-        assert (
-            dual_verify(sample_dict_payload, ds, public_key, hmac_key=hmac_key) is True
-        )
+        assert dual_verify(sample_dict_payload, ds, public_key, hmac_key=hmac_key) is True
 
     def test_tampered_payload_fails_ed25519(self, keypair, sample_dict_payload):
         """Tampered payload must fail Ed25519 verification."""
@@ -514,26 +494,19 @@ class TestDualVerify:
         private_key, public_key = keypair
         ds = dual_sign(sample_dict_payload, private_key, hmac_key=hmac_key)
         wrong_hmac_key = secrets.token_bytes(32)
-        assert (
-            dual_verify(sample_dict_payload, ds, public_key, hmac_key=wrong_hmac_key)
-            is False
-        )
+        assert dual_verify(sample_dict_payload, ds, public_key, hmac_key=wrong_hmac_key) is False
 
     def test_string_payload_round_trip(self, keypair, hmac_key, sample_str_payload):
         """dual_sign + dual_verify must work end-to-end with string payload."""
         private_key, public_key = keypair
         ds = dual_sign(sample_str_payload, private_key, hmac_key=hmac_key)
-        assert (
-            dual_verify(sample_str_payload, ds, public_key, hmac_key=hmac_key) is True
-        )
+        assert dual_verify(sample_str_payload, ds, public_key, hmac_key=hmac_key) is True
 
     def test_bytes_payload_round_trip(self, keypair, hmac_key, sample_bytes_payload):
         """dual_sign + dual_verify must work end-to-end with bytes payload."""
         private_key, public_key = keypair
         ds = dual_sign(sample_bytes_payload, private_key, hmac_key=hmac_key)
-        assert (
-            dual_verify(sample_bytes_payload, ds, public_key, hmac_key=hmac_key) is True
-        )
+        assert dual_verify(sample_bytes_payload, ds, public_key, hmac_key=hmac_key) is True
 
 
 # ===========================================================================
@@ -544,9 +517,7 @@ class TestDualVerify:
 class TestDualSignatureSerializationWithRealSigs:
     """Tests for DualSignature serialization round-trip using real cryptographic signatures."""
 
-    def test_to_dict_from_dict_preserves_verification_ed25519_only(
-        self, keypair, sample_dict_payload
-    ):
+    def test_to_dict_from_dict_preserves_verification_ed25519_only(self, keypair, sample_dict_payload):
         """Serialized and deserialized DualSignature must still verify (Ed25519 only)."""
         private_key, public_key = keypair
         ds = dual_sign(sample_dict_payload, private_key)
@@ -554,18 +525,13 @@ class TestDualSignatureSerializationWithRealSigs:
         restored = DualSignature.from_dict(d)
         assert dual_verify(sample_dict_payload, restored, public_key) is True
 
-    def test_to_dict_from_dict_preserves_verification_both(
-        self, keypair, hmac_key, sample_dict_payload
-    ):
+    def test_to_dict_from_dict_preserves_verification_both(self, keypair, hmac_key, sample_dict_payload):
         """Serialized and deserialized DualSignature must still verify (both signatures)."""
         private_key, public_key = keypair
         ds = dual_sign(sample_dict_payload, private_key, hmac_key=hmac_key)
         d = ds.to_dict()
         restored = DualSignature.from_dict(d)
-        assert (
-            dual_verify(sample_dict_payload, restored, public_key, hmac_key=hmac_key)
-            is True
-        )
+        assert dual_verify(sample_dict_payload, restored, public_key, hmac_key=hmac_key) is True
 
 
 # ===========================================================================
@@ -595,9 +561,7 @@ class TestDualSignatureSecurity:
         tampered_sig = base64.b64encode(tampered_bytes).decode("utf-8")
         assert hmac_verify(payload, tampered_sig, hmac_key) is False
 
-    def test_hmac_alone_not_sufficient_for_external_verification(
-        self, keypair, hmac_key
-    ):
+    def test_hmac_alone_not_sufficient_for_external_verification(self, keypair, hmac_key):
         """Ed25519 is always required. HMAC alone is not sufficient.
 
         This tests that dual_verify always checks Ed25519, regardless
@@ -612,9 +576,7 @@ class TestDualSignatureSecurity:
         # Must fail -- Ed25519 is mandatory
         assert dual_verify(payload, ds, public_key, hmac_key=hmac_key) is False
 
-    def test_multiple_agents_dual_sign_same_payload(
-        self, hmac_key, sample_dict_payload
-    ):
+    def test_multiple_agents_dual_sign_same_payload(self, hmac_key, sample_dict_payload):
         """Multiple agents with different Ed25519 keys can dual-sign the same payload."""
         priv1, pub1 = generate_keypair()
         priv2, pub2 = generate_keypair()

@@ -667,8 +667,7 @@ class TestPerformanceBenchmarks:
 
         # Assert: Average time < 0.5ms per metric
         assert avg_time_per_metric_ms < 0.5, (
-            f"Metric collection took {avg_time_per_metric_ms:.3f}ms "
-            f"(target: <0.5ms)"
+            f"Metric collection took {avg_time_per_metric_ms:.3f}ms (target: <0.5ms)"
         )
 
     @pytest.mark.asyncio
@@ -693,7 +692,7 @@ class TestPerformanceBenchmarks:
         export_time_ms = (end_time - start_time) * 1000
 
         # Assert: Export generation < 100ms
-        assert (
-            export_time_ms < 100
-        ), f"Export took {export_time_ms:.3f}ms (target: <100ms)"
+        assert export_time_ms < 100, (
+            f"Export took {export_time_ms:.3f}ms (target: <100ms)"
+        )
         assert len(metrics) > 0

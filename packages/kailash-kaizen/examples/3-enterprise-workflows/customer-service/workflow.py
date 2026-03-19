@@ -169,7 +169,9 @@ class KnowledgeSearchAgent(BaseAgent):
             articles = (
                 articles_raw
                 if isinstance(articles_raw, list)
-                else [articles_raw] if articles_raw else []
+                else [articles_raw]
+                if articles_raw
+                else []
             )
 
         solutions_raw = result.get("solutions", "[]")
@@ -182,7 +184,9 @@ class KnowledgeSearchAgent(BaseAgent):
             solutions = (
                 solutions_raw
                 if isinstance(solutions_raw, list)
-                else [solutions_raw] if solutions_raw else []
+                else [solutions_raw]
+                if solutions_raw
+                else []
             )
 
         search_result = {

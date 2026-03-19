@@ -236,9 +236,7 @@ class AgentHealthMonitor:
         """
         try:
             # Get stale agents
-            stale_agents = await self._registry.get_stale_agents(
-                timeout=self._stale_timeout
-            )
+            stale_agents = await self._registry.get_stale_agents(timeout=self._stale_timeout)
 
             if not stale_agents:
                 logger.debug("Health check: no stale agents found")
@@ -255,22 +253,14 @@ class AgentHealthMonitor:
                             AgentStatus.SUSPENDED,
                             reason=f"No heartbeat for {self._stale_timeout}s",
                         )
-                        logger.warning(
-                            f"Auto-suspended stale agent: {agent.agent_id} "
-                            f"(last seen: {agent.last_seen})"
-                        )
+                        logger.warning(f"Auto-suspended stale agent: {agent.agent_id} (last seen: {agent.last_seen})")
 
                     except Exception as e:
-                        logger.error(
-                            f"Failed to suspend stale agent {agent.agent_id}: {e}"
-                        )
+                        logger.error(f"Failed to suspend stale agent {agent.agent_id}: {e}")
             else:
                 # Just log the stale agents
                 for agent in stale_agents:
-                    logger.warning(
-                        f"Stale agent detected: {agent.agent_id} "
-                        f"(last seen: {agent.last_seen})"
-                    )
+                    logger.warning(f"Stale agent detected: {agent.agent_id} (last seen: {agent.last_seen})")
 
         except Exception as e:
             logger.error(f"Error during health check: {e}")
@@ -283,9 +273,7 @@ class AgentHealthMonitor:
         Returns:
             Number of stale agents found (and optionally suspended).
         """
-        stale_agents = await self._registry.get_stale_agents(
-            timeout=self._stale_timeout
-        )
+        stale_agents = await self._registry.get_stale_agents(timeout=self._stale_timeout)
 
         if self._auto_suspend_stale:
             for agent in stale_agents:
@@ -321,9 +309,7 @@ class AgentHealthMonitor:
                 return False
 
             if metadata.status != AgentStatus.SUSPENDED:
-                logger.warning(
-                    f"Cannot reactivate {agent_id}: status is {metadata.status.value}"
-                )
+                logger.warning(f"Cannot reactivate {agent_id}: status is {metadata.status.value}")
                 return False
 
             await self._registry.update_status(

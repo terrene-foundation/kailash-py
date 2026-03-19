@@ -172,7 +172,9 @@ def format_arb_report(
             "reject": rejections,
             "abstain": abstentions,
             "total": len(votes),
-            "approval_rate": f"{(approvals/len(votes)*100):.1f}%" if votes else "0%",
+            "approval_rate": f"{(approvals / len(votes) * 100):.1f}%"
+            if votes
+            else "0%",
         },
         "confidence_metrics": {
             "average": round(avg_confidence, 2),
@@ -261,9 +263,9 @@ def main():
     arb_reports = []
 
     for idx, arch_proposal in enumerate(ARCHITECTURE_PROPOSALS, 1):
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         print(f"PROPOSAL {idx}/{len(ARCHITECTURE_PROPOSALS)}: {arch_proposal['title']}")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
         print()
 
         # Create formal proposal
@@ -349,10 +351,10 @@ def main():
 
     print("Session Statistics:")
     print(
-        f"  - Approved: {approved}/{len(arb_reports)} ({approved/len(arb_reports)*100:.1f}%)"
+        f"  - Approved: {approved}/{len(arb_reports)} ({approved / len(arb_reports) * 100:.1f}%)"
     )
     print(
-        f"  - Rejected: {rejected}/{len(arb_reports)} ({rejected/len(arb_reports)*100:.1f}%)"
+        f"  - Rejected: {rejected}/{len(arb_reports)} ({rejected / len(arb_reports) * 100:.1f}%)"
     )
     print()
 

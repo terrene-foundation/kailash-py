@@ -137,9 +137,9 @@ class TestDataFlowCRUDIntegration:
         read_id = results["read_user"].get("id") if results["read_user"] else None
 
         assert create_id is not None, "Create operation should return an ID"
-        assert (
-            read_id is not None
-        ), f"Read operation should return an ID, got: {results['read_user']}"
+        assert read_id is not None, (
+            f"Read operation should return an ID, got: {results['read_user']}"
+        )
         assert read_id == create_id
 
         # PostgreSQL-specific validations
@@ -463,9 +463,9 @@ class TestDataFlowCRUDIntegration:
             or (isinstance(read_result, dict) and read_result.get("found") is False)
             or (isinstance(read_result, dict) and read_result.get("deleted") is True)
         )
-        assert (
-            is_not_found
-        ), f"Expected deleted record not to be found, got: {read_result}"
+        assert is_not_found, (
+            f"Expected deleted record not to be found, got: {read_result}"
+        )
 
     @pytest.mark.asyncio
     async def test_transaction_workflow(self, test_suite):

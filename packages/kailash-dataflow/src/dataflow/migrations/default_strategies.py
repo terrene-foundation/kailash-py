@@ -174,7 +174,7 @@ class ConditionalDefaultStrategy(DefaultValueStrategy):
         if value is None:
             return "NULL"
         elif data_type_upper in ["VARCHAR", "TEXT", "CHAR"]:
-            return f"'{str(value).replace(chr(39), chr(39)+chr(39))}'"
+            return f"'{str(value).replace(chr(39), chr(39) + chr(39))}'"
         elif data_type_upper in ["INTEGER", "INT", "BIGINT", "SMALLINT"]:
             return str(int(value))
         elif data_type_upper in ["BOOLEAN", "BOOL"]:
@@ -187,7 +187,7 @@ class ConditionalDefaultStrategy(DefaultValueStrategy):
             return f"'{str(value)}'"
         else:
             # Generic string handling
-            return f"'{str(value).replace(chr(39), chr(39)+chr(39))}'"
+            return f"'{str(value).replace(chr(39), chr(39) + chr(39))}'"
 
     def _get_type_default(self, data_type: str) -> str:
         """Get appropriate default value for data type."""
@@ -444,7 +444,7 @@ class DefaultValueStrategyManager:
         if isinstance(value, bool):
             sql_expr = "TRUE" if value else "FALSE"
         elif isinstance(value, str):
-            sql_expr = f"'{value.replace(chr(39), chr(39)+chr(39))}'"
+            sql_expr = f"'{value.replace(chr(39), chr(39) + chr(39))}'"
         elif isinstance(value, (int, float, Decimal)):
             sql_expr = str(value)
         elif isinstance(value, datetime):
@@ -454,7 +454,7 @@ class DefaultValueStrategyManager:
         elif value is None:
             sql_expr = "NULL"
         else:
-            sql_expr = f"'{str(value).replace(chr(39), chr(39)+chr(39))}'"
+            sql_expr = f"'{str(value).replace(chr(39), chr(39) + chr(39))}'"
 
         return DefaultStrategy(
             strategy_type=DefaultValueType.STATIC,
@@ -547,7 +547,7 @@ class DefaultValueStrategyManager:
 
             # Format value appropriately
             if isinstance(value, str):
-                formatted_value = f"'{value.replace(chr(39), chr(39)+chr(39))}'"
+                formatted_value = f"'{value.replace(chr(39), chr(39) + chr(39))}'"
             else:
                 formatted_value = str(value)
 

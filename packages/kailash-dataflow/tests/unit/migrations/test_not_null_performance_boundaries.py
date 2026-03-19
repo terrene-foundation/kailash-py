@@ -308,9 +308,9 @@ class TestProductionScalePerformance:
                 plan = await self.handler.plan_not_null_addition("test_table", column)
 
                 # Verify estimation is within reasonable bounds
-                assert (
-                    min_time <= plan.estimated_duration <= max_time
-                ), f"Estimation {plan.estimated_duration}s out of range [{min_time}, {max_time}] for {row_count} rows with {default_type}"
+                assert min_time <= plan.estimated_duration <= max_time, (
+                    f"Estimation {plan.estimated_duration}s out of range [{min_time}, {max_time}] for {row_count} rows with {default_type}"
+                )
 
 
 class TestMemoryUsagePatterns:
@@ -379,9 +379,9 @@ class TestMemoryUsagePatterns:
                 memory_growth_ratio = (
                     avg_last_10 / avg_first_10 if avg_first_10 > 0 else 1
                 )
-                assert (
-                    memory_growth_ratio < 2.0
-                ), f"Memory grew too much: {memory_growth_ratio}x"
+                assert memory_growth_ratio < 2.0, (
+                    f"Memory grew too much: {memory_growth_ratio}x"
+                )
 
     @pytest.mark.asyncio
     async def test_batch_size_optimization(self):
@@ -420,9 +420,9 @@ class TestMemoryUsagePatterns:
                 plan = await self.handler.plan_not_null_addition("test_table", column)
 
                 # Verify batch size is optimized for table size
-                assert (
-                    plan.batch_size == expected_batch_size
-                ), f"Expected batch size {expected_batch_size} for {row_count} rows, got {plan.batch_size}"
+                assert plan.batch_size == expected_batch_size, (
+                    f"Expected batch size {expected_batch_size} for {row_count} rows, got {plan.batch_size}"
+                )
 
 
 class TestTimeoutAndCancellation:

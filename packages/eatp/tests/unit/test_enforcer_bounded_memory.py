@@ -133,9 +133,7 @@ class TestShadowEnforcerBoundedMemory:
         for i in range(40):
             shadow.check(agent_id=f"agent-{i}", action="read", result=valid_result)
         for i in range(20):
-            shadow.check(
-                agent_id=f"agent-bad-{i}", action="read", result=invalid_result
-            )
+            shadow.check(agent_id=f"agent-bad-{i}", action="read", result=invalid_result)
 
         # Metrics track totals, not just in-record counts
         assert shadow.metrics.total_checks == 60

@@ -50,9 +50,9 @@ class TestReActAgentMultiCycleStrategy:
         agent = KaizenReActAgent(config=config)
 
         # Should use MultiCycleStrategy, NOT AsyncSingleShotStrategy
-        assert isinstance(
-            agent.strategy, MultiCycleStrategy
-        ), f"Expected MultiCycleStrategy, got {type(agent.strategy).__name__}"
+        assert isinstance(agent.strategy, MultiCycleStrategy), (
+            f"Expected MultiCycleStrategy, got {type(agent.strategy).__name__}"
+        )
 
     def test_react_multi_cycle_is_synchronous(self):
         """
@@ -65,9 +65,9 @@ class TestReActAgentMultiCycleStrategy:
         agent = KaizenReActAgent(config=config)
 
         # MultiCycleStrategy.execute should be sync (not async)
-        assert not inspect.iscoroutinefunction(
-            agent.strategy.execute
-        ), "MultiCycleStrategy should be synchronous (Phase 0A)"
+        assert not inspect.iscoroutinefunction(agent.strategy.execute), (
+            "MultiCycleStrategy should be synchronous (Phase 0A)"
+        )
 
     def test_react_solve_method_works(self):
         """Test that ReAct solve() method works with MultiCycleStrategy."""
@@ -104,9 +104,9 @@ class TestSelfReflectionAgentMultiCycleStrategy:
         agent = SelfReflectionAgent(config=config)
 
         # Should use MultiCycleStrategy, NOT AsyncSingleShotStrategy
-        assert isinstance(
-            agent.strategy, MultiCycleStrategy
-        ), f"Expected MultiCycleStrategy, got {type(agent.strategy).__name__}"
+        assert isinstance(agent.strategy, MultiCycleStrategy), (
+            f"Expected MultiCycleStrategy, got {type(agent.strategy).__name__}"
+        )
 
     def test_reflection_multi_cycle_is_synchronous(self):
         """
@@ -118,9 +118,9 @@ class TestSelfReflectionAgentMultiCycleStrategy:
         agent = SelfReflectionAgent(config=config)
 
         # MultiCycleStrategy.execute should be sync (not async)
-        assert not inspect.iscoroutinefunction(
-            agent.strategy.execute
-        ), "MultiCycleStrategy should be synchronous (Phase 0A)"
+        assert not inspect.iscoroutinefunction(agent.strategy.execute), (
+            "MultiCycleStrategy should be synchronous (Phase 0A)"
+        )
 
     def test_reflection_method_works(self):
         """Test that reflect_and_improve() method works with MultiCycleStrategy."""
@@ -168,9 +168,9 @@ class TestMultiCycleStrategyPhase0AStatus:
         - code-generation (✓ migrated)
         """
         # This is a documentation test - always passes
-        assert (
-            True
-        ), "MultiCycleStrategy examples documented as not needing Phase 0A migration"
+        assert True, (
+            "MultiCycleStrategy examples documented as not needing Phase 0A migration"
+        )
 
     def test_phase_0a_migration_summary(self):
         """

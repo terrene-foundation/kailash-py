@@ -155,11 +155,11 @@ class AIBehaviorAnalysisNode(Node):
 Your task is to analyze user behavior patterns and provide clear, actionable insights.
 
 **User Profile Summary:**
-- User ID: {user_profile.get('user_id', 'Unknown')}
-- Analysis Period: {user_profile.get('analysis_period', 'Unknown')}
-- Behavioral Baseline: {user_profile.get('baseline_summary', 'Not established')}
+- User ID: {user_profile.get("user_id", "Unknown")}
+- Analysis Period: {user_profile.get("analysis_period", "Unknown")}
+- Behavioral Baseline: {user_profile.get("baseline_summary", "Not established")}
 
-**Analysis Depth:** {depth_instructions.get(self.explanation_depth, depth_instructions['detailed'])}
+**Analysis Depth:** {depth_instructions.get(self.explanation_depth, depth_instructions["detailed"])}
 
 **Your Response Should Include:**
 1. Clear explanation of detected anomalies and their significance
@@ -186,7 +186,7 @@ Focus on actionable insights that security teams can use to make informed decisi
         return f"""Analyze the following behavioral anomaly detection results:
 
 **Statistical Analysis Results:**
-- Overall Risk Score: {statistical_results.get('risk_score', 0):.2f}
+- Overall Risk Score: {statistical_results.get("risk_score", 0):.2f}
 - Anomalies Detected: {len(anomalies)}
 - Detection Threshold: {self.anomaly_threshold}
 
@@ -196,7 +196,7 @@ Focus on actionable insights that security teams can use to make informed decisi
 **Additional Context:**
 - Baseline Period: {self.baseline_period.days} days
 - Learning Enabled: {self.learning_enabled}
-- Analysis Method: {statistical_results.get('analysis_method', 'Statistical ML')}
+- Analysis Method: {statistical_results.get("analysis_method", "Statistical ML")}
 
 Based on this statistical analysis, provide:
 1. A clear explanation of what these patterns indicate about user behavior

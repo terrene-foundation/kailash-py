@@ -288,7 +288,7 @@ class ContentCreator:
     </style>
 </head>
 <body>
-    {'<br>'.join(content.split('\n'))}
+    {"<br>".join(content.split("\n"))}
 </body>
 </html>"""
                 file_path = output_dir / f"content_{timestamp}.html"

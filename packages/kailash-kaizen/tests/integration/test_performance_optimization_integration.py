@@ -438,9 +438,9 @@ class TestPerformanceUnderLoad:
 
         # Verify all components were created successfully
         assert len(frameworks) == 3, "All frameworks must be created"
-        assert (
-            len(all_agents) == 15
-        ), "All agents must be created (3 frameworks * 5 agents)"
+        assert len(all_agents) == 15, (
+            "All agents must be created (3 frameworks * 5 agents)"
+        )
         assert len(workflows) == 5, "All workflows must be built"
 
         # ASSERTION: Performance under load must be reasonable

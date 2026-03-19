@@ -463,9 +463,9 @@ class TestCreateFallbackRouter:
         expected_primary = os.environ.get(
             "OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL")
         )
-        assert (
-            expected_primary is not None
-        ), "OPENAI_PROD_MODEL or DEFAULT_LLM_MODEL must be set in .env"
+        assert expected_primary is not None, (
+            "OPENAI_PROD_MODEL or DEFAULT_LLM_MODEL must be set in .env"
+        )
         assert router.default_model == expected_primary
         # Chain length = 1 (primary) + number of FALLBACK env vars set
         assert len(router.fallback_chain) >= 1

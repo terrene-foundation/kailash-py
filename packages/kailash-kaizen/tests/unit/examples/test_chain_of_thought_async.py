@@ -40,9 +40,9 @@ class TestChainOfThoughtAsyncMigration:
         agent = ChainOfThoughtAgent(config=config)
 
         # Should use async strategy after migration
-        assert isinstance(
-            agent.strategy, AsyncSingleShotStrategy
-        ), f"Expected AsyncSingleShotStrategy, got {type(agent.strategy).__name__}"
+        assert isinstance(agent.strategy, AsyncSingleShotStrategy), (
+            f"Expected AsyncSingleShotStrategy, got {type(agent.strategy).__name__}"
+        )
 
     def test_cot_no_explicit_strategy_override(self):
         """
@@ -168,9 +168,9 @@ class TestChainOfThoughtReasoningConsistency:
             ]
             # At least some of these should be present
             found_fields = [field for field in expected_fields if field in result]
-            assert (
-                len(found_fields) > 0
-            ), f"Missing CoT fields. Got: {list(result.keys())}"
+            assert len(found_fields) > 0, (
+                f"Missing CoT fields. Got: {list(result.keys())}"
+            )
 
     def test_cot_confidence_threshold_logic(self):
         """

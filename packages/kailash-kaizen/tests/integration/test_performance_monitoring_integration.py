@@ -198,7 +198,8 @@ async def test_performance_monitor_concurrent_access():
 async def test_performance_monitor_short_duration():
     """Test monitor works correctly for short durations."""
     async with PerformanceMonitor(
-        update_interval=5.0, sampling_interval=0.1  # Longer than test duration
+        update_interval=5.0,
+        sampling_interval=0.1,  # Longer than test duration
     ) as monitor:
         await asyncio.sleep(0.3)
 

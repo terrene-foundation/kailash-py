@@ -132,9 +132,9 @@ class TestSDKIntegrationReal:
                 # Should not have parameter validation warnings for properly structured parameters
                 for warning in parameter_warnings:
                     # Some warnings might still exist from signature compilation, but core parameters should be valid
-                    assert (
-                        "generation_config" not in str(warning.message).lower()
-                    ), f"generation_config parameter warning: {warning.message}"
+                    assert "generation_config" not in str(warning.message).lower(), (
+                        f"generation_config parameter warning: {warning.message}"
+                    )
 
             except Exception:
                 # Mock provider might fail, but no parameter warnings should occur
@@ -144,9 +144,9 @@ class TestSDKIntegrationReal:
                     if "parameter" in str(w.message).lower()
                 ]
                 for warning in parameter_warnings:
-                    assert (
-                        "generation_config" not in str(warning.message).lower()
-                    ), f"Parameter warning despite exception: {warning.message}"
+                    assert "generation_config" not in str(warning.message).lower(), (
+                        f"Parameter warning despite exception: {warning.message}"
+                    )
 
     def test_template_methods_integration_with_patterns(self):
         """Test that template methods integrate properly with pattern execution."""
@@ -221,9 +221,9 @@ class TestSDKIntegrationReal:
             # Even if execution fails, run_id should still be generated properly
             # and no attribute errors should occur
             assert "create_run" not in str(e), f"create_run attribute error: {e}"
-            assert "dict" not in str(e) or "attribute" not in str(
-                e
-            ), f"Dict attribute error: {e}"
+            assert "dict" not in str(e) or "attribute" not in str(e), (
+                f"Dict attribute error: {e}"
+            )
 
     def test_workflow_builder_integration_comprehensive(self):
         """Test comprehensive WorkflowBuilder integration with various node types."""
@@ -421,9 +421,9 @@ result = {
 
         except Exception as e:
             # Mock provider expected to fail, but structure should be valid
-            assert (
-                "parameter" not in str(e).lower()
-            ), f"Parameter error in real execution: {e}"
+            assert "parameter" not in str(e).lower(), (
+                f"Parameter error in real execution: {e}"
+            )
 
     def test_multi_agent_coordination_workflow(self):
         """Test multi-agent coordination with real workflow execution."""
@@ -510,9 +510,9 @@ result = {
         except Exception as e:
             # LLM nodes might fail with mock provider, but Python nodes should work
             assert "data_prep" in str(results) if "results" in locals() else True
-            assert (
-                "parameter" not in str(e).lower()
-            ), f"Parameter error in multi-agent workflow: {e}"
+            assert "parameter" not in str(e).lower(), (
+                f"Parameter error in multi-agent workflow: {e}"
+            )
 
     def test_performance_under_real_conditions(self):
         """Test performance characteristics under real execution conditions."""

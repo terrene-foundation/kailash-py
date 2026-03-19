@@ -310,7 +310,7 @@ async def rag_pipeline_example(db):
     # 2. Build context from retrieved documents
     context_docs = results["search"]["results"]
     context = "\n\n".join(
-        [f"Document {i+1}:\n{doc['content']}" for i, doc in enumerate(context_docs)]
+        [f"Document {i + 1}:\n{doc['content']}" for i, doc in enumerate(context_docs)]
     )
 
     print("\n📚 Retrieved Context:")

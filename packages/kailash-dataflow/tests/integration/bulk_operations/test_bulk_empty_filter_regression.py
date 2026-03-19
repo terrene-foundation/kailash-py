@@ -140,12 +140,12 @@ class TestEmptyFilterRegression:
         )
 
         # Verify success
-        assert result[
-            "success"
-        ], f"Expected success but got error: {result.get('error')}"
-        assert (
-            result["deleted"] == 5
-        ), f"Expected 5 deletions but got {result.get('deleted')}"
+        assert result["success"], (
+            f"Expected success but got error: {result.get('error')}"
+        )
+        assert result["deleted"] == 5, (
+            f"Expected 5 deletions but got {result.get('deleted')}"
+        )
 
         # Verify all records deleted
         verify_node = AsyncSQLDatabaseNode(
@@ -186,12 +186,12 @@ class TestEmptyFilterRegression:
         )
 
         # Verify success
-        assert result[
-            "success"
-        ], f"Expected success but got error: {result.get('error')}"
-        assert (
-            result["updated"] == 5
-        ), f"Expected 5 updates but got {result.get('updated')}"
+        assert result["success"], (
+            f"Expected success but got error: {result.get('error')}"
+        )
+        assert result["updated"] == 5, (
+            f"Expected 5 updates but got {result.get('updated')}"
+        )
 
         # Verify all records updated
         verify_node = AsyncSQLDatabaseNode(
@@ -300,12 +300,12 @@ class TestEmptyFilterRegression:
         )
 
         # Verify success
-        assert result[
-            "success"
-        ], f"Bulk create without filter failed: {result.get('error')}"
-        assert (
-            result["inserted"] == 2
-        ), f"Expected 2 inserted but got {result.get('inserted')}"
+        assert result["success"], (
+            f"Bulk create without filter failed: {result.get('error')}"
+        )
+        assert result["inserted"] == 2, (
+            f"Expected 2 inserted but got {result.get('inserted')}"
+        )
 
         # Verify records created
         verify_node = AsyncSQLDatabaseNode(

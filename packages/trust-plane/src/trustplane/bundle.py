@@ -263,7 +263,7 @@ class VerificationBundle:
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>TrustPlane Verification Bundle — {esc(str(m.get('project_name', 'Unknown')))}</title>
+<title>TrustPlane Verification Bundle — {esc(str(m.get("project_name", "Unknown")))}</title>
 <style>
 body {{ font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }}
 h1 {{ color: #1a1a2e; }}
@@ -279,15 +279,15 @@ pre {{ background: #f8f9fa; padding: 1rem; overflow-x: auto; font-size: 0.85rem;
 </head>
 <body>
 <h1>TrustPlane Verification Bundle</h1>
-<h2>Project: {esc(str(m.get('project_name', 'Unknown')))}</h2>
+<h2>Project: {esc(str(m.get("project_name", "Unknown")))}</h2>
 <table>
-<tr><td><strong>Project ID</strong></td><td>{esc(str(m.get('project_id', '')))}</td></tr>
-<tr><td><strong>Author</strong></td><td>{esc(str(m.get('author', '')))}</td></tr>
-<tr><td><strong>Created</strong></td><td>{esc(str(m.get('created_at', '')))}</td></tr>
-<tr><td><strong>Decisions</strong></td><td>{m.get('total_decisions', 0)}</td></tr>
-<tr><td><strong>Milestones</strong></td><td>{m.get('total_milestones', 0)}</td></tr>
-<tr><td><strong>Audit Anchors</strong></td><td>{data.get('anchor_count', 0)}</td></tr>
-<tr><td><strong>Chain Hash</strong></td><td><code>{esc(str(data.get('chain_hash', '')))}</code></td></tr>
+<tr><td><strong>Project ID</strong></td><td>{esc(str(m.get("project_id", "")))}</td></tr>
+<tr><td><strong>Author</strong></td><td>{esc(str(m.get("author", "")))}</td></tr>
+<tr><td><strong>Created</strong></td><td>{esc(str(m.get("created_at", "")))}</td></tr>
+<tr><td><strong>Decisions</strong></td><td>{m.get("total_decisions", 0)}</td></tr>
+<tr><td><strong>Milestones</strong></td><td>{m.get("total_milestones", 0)}</td></tr>
+<tr><td><strong>Audit Anchors</strong></td><td>{data.get("anchor_count", 0)}</td></tr>
+<tr><td><strong>Chain Hash</strong></td><td><code>{esc(str(data.get("chain_hash", "")))}</code></td></tr>
 </table>
 
 <h2>Anchor Timeline</h2>
@@ -297,7 +297,7 @@ pre {{ background: #f8f9fa; padding: 1rem; overflow-x: auto; font-size: 0.85rem;
 </table>
 
 <h2>Verification</h2>
-<p>{esc(str(data['verification']['instructions']))}</p>
+<p>{esc(str(data["verification"]["instructions"]))}</p>
 <button onclick="verifyBundle()">Verify Chain Integrity</button>
 <div id="verify-result"></div>
 

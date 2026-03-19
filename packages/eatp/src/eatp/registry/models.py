@@ -332,9 +332,7 @@ class RegistrationRequest:
             errors.append("capabilities cannot be empty")
 
         # Check trust_chain_hash (required if verify_trust is True)
-        if self.verify_trust and (
-            not self.trust_chain_hash or not self.trust_chain_hash.strip()
-        ):
+        if self.verify_trust and (not self.trust_chain_hash or not self.trust_chain_hash.strip()):
             errors.append("trust_chain_hash cannot be empty when verify_trust is True")
 
         return errors

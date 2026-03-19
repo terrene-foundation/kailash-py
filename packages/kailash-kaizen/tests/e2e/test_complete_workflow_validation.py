@@ -69,9 +69,9 @@ class TestCompleteUserJourneys:
 
         except Exception as e:
             # Mock provider expected to fail, but journey structure should work
-            assert "signature" not in str(e) or "missing" not in str(
-                e
-            ), f"Signature structure error: {e}"
+            assert "signature" not in str(e) or "missing" not in str(e), (
+                f"Signature structure error: {e}"
+            )
 
     def test_multi_round_conversation_journey(self):
         """Test complete multi-round conversation journey."""
@@ -120,9 +120,9 @@ class TestCompleteUserJourneys:
 
         except Exception as e:
             # Mock provider might fail, but multi-round structure should work
-            assert "rounds" not in str(e) or "missing" not in str(
-                e
-            ), f"Multi-round structure error: {e}"
+            assert "rounds" not in str(e) or "missing" not in str(e), (
+                f"Multi-round structure error: {e}"
+            )
 
     def test_chain_of_thought_reasoning_journey(self):
         """Test complete Chain-of-Thought reasoning journey."""
@@ -154,9 +154,9 @@ class TestCompleteUserJourneys:
             journey_time = time.time() - start_time
 
             # Reasoning journey should complete within limit
-            assert (
-                journey_time < 10.0
-            ), f"CoT reasoning journey too slow: {journey_time}s"
+            assert journey_time < 10.0, (
+                f"CoT reasoning journey too slow: {journey_time}s"
+            )
 
             # Should return structured reasoning steps
             assert isinstance(result, dict)
@@ -167,9 +167,9 @@ class TestCompleteUserJourneys:
 
         except Exception as e:
             # Test that CoT structure is attempted even if mock fails
-            assert (
-                "cot" not in str(e).lower() or "template" not in str(e).lower()
-            ), f"CoT template error: {e}"
+            assert "cot" not in str(e).lower() or "template" not in str(e).lower(), (
+                f"CoT template error: {e}"
+            )
 
     def test_react_pattern_journey(self):
         """Test complete ReAct (Reasoning + Acting) pattern journey."""
@@ -206,9 +206,9 @@ class TestCompleteUserJourneys:
 
         except Exception as e:
             # Test that ReAct structure is attempted even if mock fails
-            assert (
-                "react" not in str(e).lower() or "template" not in str(e).lower()
-            ), f"ReAct template error: {e}"
+            assert "react" not in str(e).lower() or "template" not in str(e).lower(), (
+                f"ReAct template error: {e}"
+            )
 
     def test_workflow_composition_journey(self):
         """Test complete workflow composition and execution journey."""
@@ -314,9 +314,9 @@ result = {
             journey_time = time.time() - start_time
 
             # Complete workflow should execute within limit
-            assert (
-                journey_time < 10.0
-            ), f"Workflow composition journey too slow: {journey_time}s"
+            assert journey_time < 10.0, (
+                f"Workflow composition journey too slow: {journey_time}s"
+            )
 
             # Should have executed all stages
             assert isinstance(results, dict)
@@ -328,9 +328,9 @@ result = {
             assert len(executed_nodes) > 0, "No workflow nodes executed successfully"
 
         except Exception as e:
-            assert (
-                "parameter" not in str(e).lower()
-            ), f"Parameter error in workflow composition: {e}"
+            assert "parameter" not in str(e).lower(), (
+                f"Parameter error in workflow composition: {e}"
+            )
 
 
 class TestBusinessScenarios:
@@ -423,9 +423,9 @@ result = {
                 scenario_time = time.time() - start_time
 
                 # Each ticket should be processed quickly
-                assert (
-                    scenario_time < 10.0
-                ), f"Customer service scenario too slow: {scenario_time}s"
+                assert scenario_time < 10.0, (
+                    f"Customer service scenario too slow: {scenario_time}s"
+                )
 
                 # Should process the ticket
                 assert isinstance(results, dict)
@@ -441,9 +441,9 @@ result = {
 
             except Exception as e:
                 # Should not have parameter errors
-                assert (
-                    "parameter" not in str(e).lower()
-                ), f"Parameter error in customer service: {e}"
+                assert "parameter" not in str(e).lower(), (
+                    f"Parameter error in customer service: {e}"
+                )
 
     def test_content_analysis_pipeline_scenario(self):
         """Test complete content analysis pipeline scenario."""
@@ -547,9 +547,9 @@ result = {
                 assert preprocess_result["ready_for_analysis"] is True
 
             except Exception as e:
-                assert (
-                    "parameter" not in str(e).lower()
-                ), f"Parameter error in content analysis: {e}"
+                assert "parameter" not in str(e).lower(), (
+                    f"Parameter error in content analysis: {e}"
+                )
 
         total_time = time.time() - start_time
         assert total_time < 10.0, f"Content analysis pipeline too slow: {total_time}s"
@@ -641,9 +641,9 @@ result = {
             integration_time = time.time() - start_time
 
             # Integration should complete within limit
-            assert (
-                integration_time < 10.0
-            ), f"Integration scenario too slow: {integration_time}s"
+            assert integration_time < 10.0, (
+                f"Integration scenario too slow: {integration_time}s"
+            )
 
             # Should execute integration chain
             assert isinstance(results, dict)
@@ -703,9 +703,9 @@ result = {
                 load_time = time.time() - start_time
 
                 # Should handle load within time limit
-                assert (
-                    load_time < 10.0
-                ), f"Load test too slow for batch {load}: {load_time}s"
+                assert load_time < 10.0, (
+                    f"Load test too slow for batch {load}: {load_time}s"
+                )
 
                 # Should process the load
                 assert isinstance(results, dict)
@@ -715,9 +715,9 @@ result = {
                 assert len(load_result["processed_items"]) == load
 
             except Exception as e:
-                assert (
-                    "timeout" not in str(e).lower()
-                ), f"Performance timeout at load {load}: {e}"
+                assert "timeout" not in str(e).lower(), (
+                    f"Performance timeout at load {load}: {e}"
+                )
 
 
 if __name__ == "__main__":

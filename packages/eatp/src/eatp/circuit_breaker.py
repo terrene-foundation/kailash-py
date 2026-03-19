@@ -80,9 +80,7 @@ class FailureEvent:
         """Validate severity."""
         valid_severities = {"low", "medium", "high", "critical"}
         if self.severity not in valid_severities:
-            raise ValueError(
-                f"Invalid severity '{self.severity}'. Must be one of: {valid_severities}"
-            )
+            raise ValueError(f"Invalid severity '{self.severity}'. Must be one of: {valid_severities}")
 
 
 @dataclass
@@ -126,10 +124,7 @@ class CircuitBreakerConfig:
         # Validate downgrade_on_open is a valid posture
         valid_postures = {p.value for p in TrustPosture}
         if self.downgrade_on_open not in valid_postures:
-            raise ValueError(
-                f"Invalid downgrade_on_open '{self.downgrade_on_open}'. "
-                f"Must be one of: {valid_postures}"
-            )
+            raise ValueError(f"Invalid downgrade_on_open '{self.downgrade_on_open}'. Must be one of: {valid_postures}")
 
 
 class PostureCircuitBreaker:
@@ -250,9 +245,7 @@ class PostureCircuitBreaker:
 
             if current_state == CircuitState.HALF_OPEN:
                 # Any failure in half-open reopens the circuit
-                await self._open_circuit(
-                    agent_id, f"Failure during half-open test: {error_message}"
-                )
+                await self._open_circuit(agent_id, f"Failure during half-open test: {error_message}")
             elif current_state == CircuitState.CLOSED:
                 # Check if we should open the circuit
                 weighted_failures = self._calculate_weighted_failures(agent_id)
@@ -264,8 +257,7 @@ class PostureCircuitBreaker:
                     )
 
             logger.debug(
-                f"Recorded failure for agent {agent_id}: "
-                f"{error_type} - {error_message} (severity: {severity})"
+                f"Recorded failure for agent {agent_id}: {error_type} - {error_message} (severity: {severity})"
             )
 
     async def record_success(self, agent_id: str) -> None:
@@ -281,15 +273,10 @@ class PostureCircuitBreaker:
             current_state = self.get_state(agent_id)
 
             if current_state == CircuitState.HALF_OPEN:
-                self._half_open_successes[agent_id] = (
-                    self._half_open_successes.get(agent_id, 0) + 1
-                )
+                self._half_open_successes[agent_id] = self._half_open_successes.get(agent_id, 0) + 1
 
                 # If we've had enough successes, close the circuit
-                if (
-                    self._half_open_successes[agent_id]
-                    >= self._config.half_open_max_calls
-                ):
+                if self._half_open_successes[agent_id] >= self._config.half_open_max_calls:
                     await self._close_circuit(agent_id)
 
             logger.debug(f"Recorded success for agent {agent_id}")
@@ -345,9 +332,7 @@ class PostureCircuitBreaker:
         """
         # Store original posture if not already stored
         if agent_id not in self._original_postures:
-            self._original_postures[agent_id] = self._posture_machine.get_posture(
-                agent_id
-            )
+            self._original_postures[agent_id] = self._posture_machine.get_posture(agent_id)
 
         # Transition state
         self._states[agent_id] = CircuitState.OPEN
@@ -380,13 +365,11 @@ class PostureCircuitBreaker:
                 # If transition fails due to guards, force set the posture
                 self._posture_machine.set_posture(agent_id, target_posture)
                 logger.warning(
-                    f"Circuit opened for agent {agent_id}: {reason}. "
-                    f"Posture force-set to {target_posture.value}"
+                    f"Circuit opened for agent {agent_id}: {reason}. Posture force-set to {target_posture.value}"
                 )
         else:
             logger.warning(
-                f"Circuit opened for agent {agent_id}: {reason}. "
-                f"Posture already at or below {target_posture.value}"
+                f"Circuit opened for agent {agent_id}: {reason}. Posture already at or below {target_posture.value}"
             )
 
     async def _transition_to_half_open(self, agent_id: str) -> None:
@@ -450,13 +433,9 @@ class PostureCircuitBreaker:
         if agent_id not in self._failures:
             return
 
-        cutoff = datetime.now(timezone.utc) - timedelta(
-            seconds=self._config.failure_window_seconds
-        )
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=self._config.failure_window_seconds)
 
-        self._failures[agent_id] = [
-            f for f in self._failures[agent_id] if f.timestamp >= cutoff
-        ]
+        self._failures[agent_id] = [f for f in self._failures[agent_id] if f.timestamp >= cutoff]
 
     def _calculate_weighted_failures(self, agent_id: str) -> float:
         """Calculate the weighted failure count for an agent.
@@ -509,9 +488,7 @@ class PostureCircuitBreaker:
             if open_time:
                 elapsed = (datetime.now(timezone.utc) - open_time).total_seconds()
                 metrics["time_in_open_state"] = elapsed
-                metrics["time_until_half_open"] = max(
-                    0, self._config.recovery_timeout - elapsed
-                )
+                metrics["time_until_half_open"] = max(0, self._config.recovery_timeout - elapsed)
 
         if state == CircuitState.HALF_OPEN:
             metrics["half_open_calls"] = self._half_open_calls.get(agent_id, 0)
@@ -526,9 +503,7 @@ class PostureCircuitBreaker:
         # Add failure breakdown by severity
         severity_counts: Dict[str, int] = {}
         for failure in failures:
-            severity_counts[failure.severity] = (
-                severity_counts.get(failure.severity, 0) + 1
-            )
+            severity_counts[failure.severity] = severity_counts.get(failure.severity, 0) + 1
         metrics["failures_by_severity"] = severity_counts
 
         return metrics
@@ -599,10 +574,7 @@ class CircuitBreakerRegistry:
                 keys_to_remove = list(self._breakers.keys())[:trim_count]
                 for key in keys_to_remove:
                     del self._breakers[key]
-                logger.debug(
-                    f"Trimmed {trim_count} oldest breakers "
-                    f"(capacity {self._max_breakers} exceeded)"
-                )
+                logger.debug(f"Trimmed {trim_count} oldest breakers (capacity {self._max_breakers} exceeded)")
 
             effective_config = config or self._default_config
             self._breakers[agent_id] = PostureCircuitBreaker(

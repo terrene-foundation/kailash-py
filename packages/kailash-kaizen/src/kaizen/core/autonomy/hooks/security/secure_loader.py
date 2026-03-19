@@ -189,7 +189,7 @@ class SecureHookLoader:
         # Check signer whitelist
         if self.trusted_signers and sig.signer not in self.trusted_signers:
             raise ValueError(
-                f"Untrusted signer: {sig.signer} " f"(allowed: {self.trusted_signers})"
+                f"Untrusted signer: {sig.signer} (allowed: {self.trusted_signers})"
             )
 
         # Check public key whitelist
@@ -216,12 +216,12 @@ class SecureHookLoader:
         try:
             public_key.verify(signature_bytes, hook_content)
             logger.info(
-                f"✅ Signature verified for {hook_file.name} " f"(signer: {sig.signer})"
+                f"✅ Signature verified for {hook_file.name} (signer: {sig.signer})"
             )
             return True
         except InvalidSignature:
             raise ValueError(
-                f"Invalid signature for {hook_file.name} " f"(signer: {sig.signer})"
+                f"Invalid signature for {hook_file.name} (signer: {sig.signer})"
             )
 
     def load_hook(

@@ -182,9 +182,9 @@ class TestDirectBulkCreateNodePhase1Fixes:
         # CRITICAL: Verify rows_affected extraction
         assert result["success"] is True, f"Expected success=True, got {result}"
         assert result["inserted"] == 3, f"Expected inserted=3, got {result['inserted']}"
-        assert (
-            result["rows_affected"] == 3
-        ), f"Expected rows_affected=3, got {result['rows_affected']}"
+        assert result["rows_affected"] == 3, (
+            f"Expected rows_affected=3, got {result['rows_affected']}"
+        )
         assert result["failed"] == 0, f"Expected failed=0, got {result['failed']}"
         assert result["total"] == 3, f"Expected total=3, got {result['total']}"
 
@@ -202,9 +202,9 @@ class TestDirectBulkCreateNodePhase1Fixes:
         count_result = verify_result.get("result", {}).get("data", [])
         assert len(count_result) > 0, "Expected result from COUNT query"
         actual_count = count_result[0].get("count", 0)
-        assert (
-            actual_count == 3
-        ), f"Expected 3 records in database, found {actual_count}"
+        assert actual_count == 3, (
+            f"Expected 3 records in database, found {actual_count}"
+        )
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -251,15 +251,15 @@ class TestDirectBulkCreateNodePhase1Fixes:
         result2 = await node.async_run(data=data2)
 
         # CRITICAL: Default conflict_resolution="error" should cause failure
-        assert (
-            result2["success"] is False
-        ), f"Expected success=False with duplicate key, got {result2}"
-        assert (
-            result2["inserted"] == 0
-        ), f"Expected inserted=0 with duplicate, got {result2['inserted']}"
-        assert (
-            result2["failed"] > 0
-        ), f"Expected failed>0 with duplicate, got {result2['failed']}"
+        assert result2["success"] is False, (
+            f"Expected success=False with duplicate key, got {result2}"
+        )
+        assert result2["inserted"] == 0, (
+            f"Expected inserted=0 with duplicate, got {result2['inserted']}"
+        )
+        assert result2["failed"] > 0, (
+            f"Expected failed>0 with duplicate, got {result2['failed']}"
+        )
 
         # Verify database still has only 1 record (duplicate was rejected)
         verify_node = AsyncSQLDatabaseNode(
@@ -273,9 +273,9 @@ class TestDirectBulkCreateNodePhase1Fixes:
 
         count_result = verify_result.get("result", {}).get("data", [])
         actual_count = count_result[0].get("count", 0)
-        assert (
-            actual_count == 1
-        ), f"Expected 1 record in database (duplicate rejected), found {actual_count}"
+        assert actual_count == 1, (
+            f"Expected 1 record in database (duplicate rejected), found {actual_count}"
+        )
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -327,15 +327,15 @@ class TestDirectBulkCreateNodePhase1Fixes:
         result = await node.async_run(data=data)
 
         # CRITICAL: success=False when inserted=0
-        assert (
-            result["success"] is False
-        ), f"Expected success=False when inserted=0, got {result}"
-        assert (
-            result["inserted"] == 0
-        ), f"Expected inserted=0 (skipped), got {result['inserted']}"
-        assert (
-            result["rows_affected"] == 0
-        ), f"Expected rows_affected=0, got {result['rows_affected']}"
+        assert result["success"] is False, (
+            f"Expected success=False when inserted=0, got {result}"
+        )
+        assert result["inserted"] == 0, (
+            f"Expected inserted=0 (skipped), got {result['inserted']}"
+        )
+        assert result["rows_affected"] == 0, (
+            f"Expected rows_affected=0, got {result['rows_affected']}"
+        )
         assert result["total"] == 1, f"Expected total=1, got {result['total']}"
 
         # Verify database still has only 1 record (no new inserts)
@@ -350,9 +350,9 @@ class TestDirectBulkCreateNodePhase1Fixes:
 
         count_result = verify_result.get("result", {}).get("data", [])
         actual_count = count_result[0].get("count", 0)
-        assert (
-            actual_count == 1
-        ), f"Expected 1 record in database (no new inserts), found {actual_count}"
+        assert actual_count == 1, (
+            f"Expected 1 record in database (no new inserts), found {actual_count}"
+        )
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -374,15 +374,15 @@ class TestDirectBulkCreateNodePhase1Fixes:
         result = await node.async_run(data=[])
 
         # Should report success=False with empty data
-        assert (
-            result["success"] is False
-        ), f"Expected success=False with empty data, got {result}"
-        assert (
-            result["inserted"] == 0
-        ), f"Expected inserted=0 with empty data, got {result['inserted']}"
-        assert (
-            result["total"] == 0
-        ), f"Expected total=0 with empty data, got {result['total']}"
+        assert result["success"] is False, (
+            f"Expected success=False with empty data, got {result}"
+        )
+        assert result["inserted"] == 0, (
+            f"Expected inserted=0 with empty data, got {result['inserted']}"
+        )
+        assert result["total"] == 0, (
+            f"Expected total=0 with empty data, got {result['total']}"
+        )
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -415,17 +415,17 @@ class TestDirectBulkCreateNodePhase1Fixes:
 
         # Verify all 150 records inserted
         assert result["success"] is True, f"Expected success=True, got {result}"
-        assert (
-            result["inserted"] == 150
-        ), f"Expected inserted=150, got {result['inserted']}"
-        assert (
-            result["rows_affected"] == 150
-        ), f"Expected rows_affected=150, got {result['rows_affected']}"
+        assert result["inserted"] == 150, (
+            f"Expected inserted=150, got {result['inserted']}"
+        )
+        assert result["rows_affected"] == 150, (
+            f"Expected rows_affected=150, got {result['rows_affected']}"
+        )
         assert result["failed"] == 0, f"Expected failed=0, got {result['failed']}"
         assert result["total"] == 150, f"Expected total=150, got {result['total']}"
-        assert (
-            result["batch_count"] == 3
-        ), f"Expected 3 batches, got {result['batch_count']}"
+        assert result["batch_count"] == 3, (
+            f"Expected 3 batches, got {result['batch_count']}"
+        )
 
         # Verify actual database state
         verify_node = AsyncSQLDatabaseNode(
@@ -439,9 +439,9 @@ class TestDirectBulkCreateNodePhase1Fixes:
 
         count_result = verify_result.get("result", {}).get("data", [])
         actual_count = count_result[0].get("count", 0)
-        assert (
-            actual_count == 150
-        ), f"Expected 150 records in database, found {actual_count}"
+        assert actual_count == 150, (
+            f"Expected 150 records in database, found {actual_count}"
+        )
 
 
 class TestDataFlowGeneratedBulkCreateNodePhase1Fixes:
@@ -517,9 +517,9 @@ class TestDataFlowGeneratedBulkCreateNodePhase1Fixes:
         results2, _ = await runtime.execute_workflow_async(workflow2.build(), inputs={})
 
         # FIX: ListNode returns dict with 'records' key, not a list directly
-        assert (
-            len(results2["list"]["records"]) == 3
-        ), f"Expected 3 records in database, found {len(results2['list']['records'])}"
+        assert len(results2["list"]["records"]) == 3, (
+            f"Expected 3 records in database, found {len(results2['list']['records'])}"
+        )
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -556,12 +556,12 @@ class TestDataFlowGeneratedBulkCreateNodePhase1Fixes:
 
         runtime = AsyncLocalRuntime()
         results1, _ = await runtime.execute_workflow_async(workflow1.build(), inputs={})
-        assert (
-            results1["bulk_create_1"]["success"] is True
-        ), "First insert should succeed"
-        assert (
-            results1["bulk_create_1"]["inserted"] == 1
-        ), "First insert should insert 1 record"
+        assert results1["bulk_create_1"]["success"] is True, (
+            "First insert should succeed"
+        )
+        assert results1["bulk_create_1"]["inserted"] == 1, (
+            "First insert should insert 1 record"
+        )
 
         # Attempt duplicate insert
         workflow2 = WorkflowBuilder()
@@ -584,12 +584,12 @@ class TestDataFlowGeneratedBulkCreateNodePhase1Fixes:
 
         # CRITICAL: Default conflict_resolution="error" should cause failure
         result2 = results2["bulk_create_2"]
-        assert (
-            result2["success"] is False
-        ), f"Expected success=False with duplicate key, got {result2}"
-        assert (
-            result2["inserted"] == 0
-        ), f"Expected inserted=0 with duplicate, got {result2['inserted']}"
+        assert result2["success"] is False, (
+            f"Expected success=False with duplicate key, got {result2}"
+        )
+        assert result2["inserted"] == 0, (
+            f"Expected inserted=0 with duplicate, got {result2['inserted']}"
+        )
         # NOTE: API inconsistency - Generated node doesn't return 'failed' yet
         # assert result2["failed"] > 0, f"Expected failed>0 with duplicate, got {result2['failed']}"
 
@@ -599,9 +599,9 @@ class TestDataFlowGeneratedBulkCreateNodePhase1Fixes:
         results3, _ = await runtime.execute_workflow_async(workflow3.build(), inputs={})
 
         # FIX: ListNode returns dict with 'records' key, not a list directly
-        assert (
-            len(results3["list"]["records"]) == 1
-        ), f"Expected 1 record in database (duplicate rejected), found {len(results3['list']['records'])}"
+        assert len(results3["list"]["records"]) == 1, (
+            f"Expected 1 record in database (duplicate rejected), found {len(results3['list']['records'])}"
+        )
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -631,9 +631,9 @@ class TestDataFlowGeneratedBulkCreateNodePhase1Fixes:
 
         runtime = AsyncLocalRuntime()
         results1, _ = await runtime.execute_workflow_async(workflow1.build(), inputs={})
-        assert (
-            results1["bulk_create_1"]["success"] is True
-        ), "First insert should succeed"
+        assert results1["bulk_create_1"]["success"] is True, (
+            "First insert should succeed"
+        )
 
         # Attempt duplicate with conflict_resolution="skip"
         workflow2 = WorkflowBuilder()
@@ -656,12 +656,12 @@ class TestDataFlowGeneratedBulkCreateNodePhase1Fixes:
 
         # CRITICAL: success=False when inserted=0
         result2 = results2["bulk_create_2"]
-        assert (
-            result2["success"] is False
-        ), f"Expected success=False when inserted=0, got {result2}"
-        assert (
-            result2["inserted"] == 0
-        ), f"Expected inserted=0 (skipped), got {result2['inserted']}"
+        assert result2["success"] is False, (
+            f"Expected success=False when inserted=0, got {result2}"
+        )
+        assert result2["inserted"] == 0, (
+            f"Expected inserted=0 (skipped), got {result2['inserted']}"
+        )
         # NOTE: API inconsistency - Generated node doesn't return 'rows_affected' yet
         # assert result2["rows_affected"] == 0, f"Expected rows_affected=0, got {result2['rows_affected']}"
 
@@ -671,9 +671,9 @@ class TestDataFlowGeneratedBulkCreateNodePhase1Fixes:
         results3, _ = await runtime.execute_workflow_async(workflow3.build(), inputs={})
 
         # FIX: ListNode returns dict with 'records' key, not a list directly
-        assert (
-            len(results3["list"]["records"]) == 1
-        ), f"Expected 1 record in database (no new inserts), found {len(results3['list']['records'])}"
+        assert len(results3["list"]["records"]) == 1, (
+            f"Expected 1 record in database (no new inserts), found {len(results3['list']['records'])}"
+        )
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -728,12 +728,12 @@ class TestDataFlowGeneratedBulkCreateNodePhase1Fixes:
         )
 
         # Verify field types for fields that ARE present
-        assert isinstance(
-            result["success"], bool
-        ), f"'success' should be bool, got {type(result['success'])}"
-        assert isinstance(
-            result["inserted"], int
-        ), f"'inserted' should be int, got {type(result['inserted'])}"
+        assert isinstance(result["success"], bool), (
+            f"'success' should be bool, got {type(result['success'])}"
+        )
+        assert isinstance(result["inserted"], int), (
+            f"'inserted' should be int, got {type(result['inserted'])}"
+        )
 
 
 class TestBulkCreateConflictResolution:
@@ -799,9 +799,9 @@ class TestBulkCreateConflictResolution:
         assert result["total"] == 3, f"Expected total=3, got {result['total']}"
         # inserted could be 2 (only new records) or 0 (if all skipped)
         # Just verify it's not 3 (which would mean duplicate was inserted)
-        assert (
-            result["inserted"] < 3
-        ), f"Expected inserted<3 (duplicate skipped), got {result['inserted']}"
+        assert result["inserted"] < 3, (
+            f"Expected inserted<3 (duplicate skipped), got {result['inserted']}"
+        )
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -854,9 +854,9 @@ class TestBulkCreateConflictResolution:
 
         # Should update 1, insert 1 (total 2 rows affected)
         assert result["success"] is True, f"Expected success=True, got {result}"
-        assert (
-            result["rows_affected"] >= 2
-        ), f"Expected rows_affected>=2 (upsert), got {result['rows_affected']}"
+        assert result["rows_affected"] >= 2, (
+            f"Expected rows_affected>=2 (upsert), got {result['rows_affected']}"
+        )
 
         # Verify database has 2 records total
         verify_node = AsyncSQLDatabaseNode(
@@ -870,9 +870,9 @@ class TestBulkCreateConflictResolution:
 
         count_result = verify_result.get("result", {}).get("data", [])
         actual_count = count_result[0].get("count", 0)
-        assert (
-            actual_count == 2
-        ), f"Expected 2 records in database, found {actual_count}"
+        assert actual_count == 2, (
+            f"Expected 2 records in database, found {actual_count}"
+        )
 
         # Verify update happened (check name)
         select_node = AsyncSQLDatabaseNode(
@@ -886,6 +886,6 @@ class TestBulkCreateConflictResolution:
 
         name_result = select_result.get("result", {}).get("data", [])
         updated_name = name_result[0].get("name", "")
-        assert (
-            updated_name == "Alice Updated"
-        ), f"Expected name='Alice Updated', got '{updated_name}'"
+        assert updated_name == "Alice Updated", (
+            f"Expected name='Alice Updated', got '{updated_name}'"
+        )

@@ -310,7 +310,7 @@ FROM {primary_table} p
 
         optimized_sql = f"""
 -- Optimized to eliminate redundant operations
--- Original nodes: {', '.join(opportunity.nodes_involved)}
+-- Original nodes: {", ".join(opportunity.nodes_involved)}
 -- This query should be executed once and cached
 SELECT * FROM (
     -- Single execution of previously redundant operation
@@ -350,7 +350,7 @@ SELECT * FROM (
         # Generate optimized join with proper indexing strategy
         optimized_sql = f"""
 -- Optimized join pattern with proper indexing
--- Original nodes: {', '.join(opportunity.nodes_involved)}
+-- Original nodes: {", ".join(opportunity.nodes_involved)}
 SELECT t1.*, t2.*
 FROM {table1} t1
 INNER JOIN {table2} t2 ON t1.{left_key} = t2.{right_key}

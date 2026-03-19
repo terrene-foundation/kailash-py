@@ -1226,7 +1226,7 @@ def generate_control_mapping_json(framework: str = "soc2") -> dict[str, Any]:
         }
     else:
         raise ValueError(
-            f"Unsupported framework: {framework!r}. " f"Supported: 'soc2', 'iso27001'"
+            f"Unsupported framework: {framework!r}. Supported: 'soc2', 'iso27001'"
         )
 
 

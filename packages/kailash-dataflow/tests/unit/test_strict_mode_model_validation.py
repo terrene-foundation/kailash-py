@@ -401,9 +401,9 @@ def test_warning_message_includes_code(base):
             user_id = Column(Integer, primary_key=True)
 
         warning_msgs = [str(warning.message) for warning in w]
-        assert any(
-            "VAL-003" in msg for msg in warning_msgs
-        ), "Warning should include VAL code"
+        assert any("VAL-003" in msg for msg in warning_msgs), (
+            "Warning should include VAL code"
+        )
 
 
 def test_warning_message_is_actionable(base):

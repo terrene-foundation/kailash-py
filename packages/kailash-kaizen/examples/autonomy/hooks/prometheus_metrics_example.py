@@ -120,7 +120,7 @@ class PrometheusMetricsHook:
 
         print(
             f"✅ [METRICS] Loop ended: agent={agent_id} "
-            f"duration={duration*1000:.1f}ms "
+            f"duration={duration * 1000:.1f}ms "
             f"errors={self.error_counts[agent_id]}"
         )
 

@@ -547,9 +547,7 @@ class EnterpriseSystemAgent(ABC):
 
         finally:
             # 5. Audit the operation (even if it failed)
-            duration_ms = int(
-                (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
-            )
+            duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
             if self.config.auto_audit:
                 audit_anchor = await self.trust_ops.audit(
@@ -705,9 +703,7 @@ class EnterpriseSystemAgent(ABC):
         if not self._capability_cache_time or not self.config.cache_capabilities:
             return False
 
-        cache_age = (
-            datetime.now(timezone.utc) - self._capability_cache_time
-        ).total_seconds()
+        cache_age = (datetime.now(timezone.utc) - self._capability_cache_time).total_seconds()
         return cache_age < self.config.capability_cache_ttl_seconds
 
     # =========================================================================
@@ -785,11 +781,7 @@ class EnterpriseSystemAgent(ABC):
         health["checks"]["capability_cache"] = {
             "cached": self.is_capability_cached(),
             "count": len(self._capabilities),
-            "last_updated": (
-                self._capability_cache_time.isoformat()
-                if self._capability_cache_time
-                else None
-            ),
+            "last_updated": (self._capability_cache_time.isoformat() if self._capability_cache_time else None),
         }
 
         # Add statistics

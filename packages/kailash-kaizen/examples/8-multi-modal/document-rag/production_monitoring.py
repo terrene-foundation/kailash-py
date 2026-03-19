@@ -62,16 +62,16 @@ def main():
     print("\nProcessing documents with monitoring...")
     for i in range(3):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as tmp:
-            tmp.write(f"Document #{i+1} content here")
+            tmp.write(f"Document #{i + 1} content here")
             doc_path = tmp.name
 
         try:
             result = agent.extract(doc_path, extract_tables=False, chunk_for_rag=False)
             metrics.record(result)
-            print(f"  ✅ Document {i+1}: ${result['cost']:.3f}")
+            print(f"  ✅ Document {i + 1}: ${result['cost']:.3f}")
         except Exception as e:
             metrics.errors.append(str(e))
-            print(f"  ❌ Document {i+1}: {str(e)}")
+            print(f"  ❌ Document {i + 1}: {str(e)}")
 
         import os
 

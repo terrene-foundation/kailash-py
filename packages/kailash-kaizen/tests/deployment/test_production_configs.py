@@ -33,15 +33,15 @@ class TestEnvironmentConfigs:
         """PROD-002.2: Config files exist for all environments."""
         project_root = get_project_root()
 
-        assert (
-            project_root / "config" / "dev.env"
-        ).exists(), "config/dev.env must exist"
-        assert (
-            project_root / "config" / "staging.env"
-        ).exists(), "config/staging.env must exist"
-        assert (
-            project_root / "config" / "prod.env"
-        ).exists(), "config/prod.env must exist"
+        assert (project_root / "config" / "dev.env").exists(), (
+            "config/dev.env must exist"
+        )
+        assert (project_root / "config" / "staging.env").exists(), (
+            "config/staging.env must exist"
+        )
+        assert (project_root / "config" / "prod.env").exists(), (
+            "config/prod.env must exist"
+        )
 
     def test_env_configs_have_required_vars(self):
         """PROD-002.3: Environment configs contain all required variables."""
@@ -105,9 +105,9 @@ class TestEnvironmentConfigs:
             with open(env_file) as f:
                 content = f.read()
                 # Should use placeholders like "your-key-here" or "${VAR_NAME}"
-                assert (
-                    "your-" in content.lower() or "${" in content
-                ), f"{env_file.name} should use placeholders for secrets"
+                assert "your-" in content.lower() or "${" in content, (
+                    f"{env_file.name} should use placeholders for secrets"
+                )
 
     def test_env_validation_script_exists(self):
         """PROD-002.6: Environment validation script exists."""
@@ -127,9 +127,9 @@ class TestEnvironmentConfigs:
         )
 
         assert result.returncode == 0, f"Validation failed: {result.stderr}"
-        assert (
-            "VALID" in result.stdout or "OK" in result.stdout
-        ), "Validation script should confirm config is valid"
+        assert "VALID" in result.stdout or "OK" in result.stdout, (
+            "Validation script should confirm config is valid"
+        )
 
 
 class TestExampleDeployments:
@@ -157,9 +157,9 @@ class TestExampleDeployments:
         multi_dir = project_root / "examples" / "deployment" / "multi-agent"
 
         assert multi_dir.exists(), "examples/deployment/multi-agent/ must exist"
-        assert (
-            multi_dir / "docker-compose.yml"
-        ).exists(), "docker-compose.yml must exist"
+        assert (multi_dir / "docker-compose.yml").exists(), (
+            "docker-compose.yml must exist"
+        )
         assert (multi_dir / "README.md").exists(), "README.md must exist"
 
     def test_rag_agent_example_exists(self):
@@ -168,9 +168,9 @@ class TestExampleDeployments:
         rag_dir = project_root / "examples" / "deployment" / "rag-agent"
 
         assert rag_dir.exists(), "examples/deployment/rag-agent/ must exist"
-        assert (
-            rag_dir / "docker-compose.yml"
-        ).exists(), "docker-compose.yml must exist"
+        assert (rag_dir / "docker-compose.yml").exists(), (
+            "docker-compose.yml must exist"
+        )
         assert (rag_dir / "README.md").exists(), "README.md must exist"
 
     def test_mcp_integration_example_exists(self):
@@ -179,9 +179,9 @@ class TestExampleDeployments:
         mcp_dir = project_root / "examples" / "deployment" / "mcp-integration"
 
         assert mcp_dir.exists(), "examples/deployment/mcp-integration/ must exist"
-        assert (
-            mcp_dir / "docker-compose.yml"
-        ).exists(), "docker-compose.yml must exist"
+        assert (mcp_dir / "docker-compose.yml").exists(), (
+            "docker-compose.yml must exist"
+        )
         assert (mcp_dir / "README.md").exists(), "README.md must exist"
 
     def test_qa_agent_compose_valid(self):
@@ -198,9 +198,9 @@ class TestExampleDeployments:
         with open(compose_file) as f:
             data = yaml.safe_load(f)
             assert "services" in data, "docker-compose.yml must have services"
-            assert (
-                "kaizen" in data["services"] or "qa-agent" in data["services"]
-            ), "Must have kaizen or qa-agent service"
+            assert "kaizen" in data["services"] or "qa-agent" in data["services"], (
+                "Must have kaizen or qa-agent service"
+            )
 
     def test_qa_agent_readme_has_instructions(self):
         """PROD-003.7: QA agent README has deployment instructions."""
@@ -209,12 +209,12 @@ class TestExampleDeployments:
 
         with open(readme) as f:
             content = f.read()
-            assert (
-                "docker-compose up" in content.lower()
-            ), "README must have docker-compose up command"
-            assert (
-                "environment" in content.lower() or "env" in content.lower()
-            ), "README must mention environment configuration"
+            assert "docker-compose up" in content.lower(), (
+                "README must have docker-compose up command"
+            )
+            assert "environment" in content.lower() or "env" in content.lower(), (
+                "README must mention environment configuration"
+            )
 
     @pytest.mark.slow
     def test_qa_agent_deployment_builds(self):
@@ -321,15 +321,15 @@ class TestKubernetesManifests:
             assert len(containers) > 0, "Deployment must have at least one container"
 
             for container in containers:
-                assert (
-                    "resources" in container
-                ), f"Container {container['name']} missing resources"
-                assert (
-                    "limits" in container["resources"]
-                ), f"Container {container['name']} missing resource limits"
-                assert (
-                    "requests" in container["resources"]
-                ), f"Container {container['name']} missing resource requests"
+                assert "resources" in container, (
+                    f"Container {container['name']} missing resources"
+                )
+                assert "limits" in container["resources"], (
+                    f"Container {container['name']} missing resource limits"
+                )
+                assert "requests" in container["resources"], (
+                    f"Container {container['name']} missing resource requests"
+                )
 
     def test_deployment_has_health_probes(self):
         """PROD-004.7: Deployment has health probes configured."""
@@ -346,9 +346,9 @@ class TestKubernetesManifests:
                 has_liveness = "livenessProbe" in container
                 has_readiness = "readinessProbe" in container
 
-                assert (
-                    has_liveness or has_readiness
-                ), f"Container {container['name']} should have health probes"
+                assert has_liveness or has_readiness, (
+                    f"Container {container['name']} should have health probes"
+                )
 
     def test_deployment_uses_configmap(self):
         """PROD-004.8: Deployment references ConfigMap for configuration."""
@@ -379,9 +379,9 @@ class TestKubernetesManifests:
                             uses_configmap = True
                             break
 
-            assert (
-                uses_configmap
-            ), "Deployment should reference ConfigMap for configuration"
+            assert uses_configmap, (
+                "Deployment should reference ConfigMap for configuration"
+            )
 
     def test_k8s_readme_exists(self):
         """PROD-004.9: Kubernetes deployment README exists."""
@@ -398,6 +398,6 @@ class TestKubernetesManifests:
             content = f.read()
             assert "kubectl apply" in content, "README must have kubectl apply command"
             assert "namespace" in content.lower(), "README should mention namespace"
-            assert (
-                "configmap" in content.lower()
-            ), "README should mention ConfigMap setup"
+            assert "configmap" in content.lower(), (
+                "README should mention ConfigMap setup"
+            )

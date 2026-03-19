@@ -364,9 +364,9 @@ class TestCriticalWriteProtectionE2E:
         # Verify runtime is protected type
         from dataflow.core.protection_middleware import ProtectedDataFlowRuntime
 
-        assert isinstance(
-            protected_runtime, ProtectedDataFlowRuntime
-        ), "Runtime is not ProtectedDataFlowRuntime"
+        assert isinstance(protected_runtime, ProtectedDataFlowRuntime), (
+            "Runtime is not ProtectedDataFlowRuntime"
+        )
 
         # The runtime should intercept and enforce protection
         try:
@@ -418,9 +418,9 @@ class TestCriticalWriteProtectionE2E:
             )
 
         # Assert all levels pass for test success
-        assert (
-            passed_count >= 5
-        ), f"Critical capability verification failed: only {passed_count}/6 levels working"
+        assert passed_count >= 5, (
+            f"Critical capability verification failed: only {passed_count}/6 levels working"
+        )
 
         return results
 

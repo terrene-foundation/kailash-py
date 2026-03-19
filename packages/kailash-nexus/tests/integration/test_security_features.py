@@ -147,13 +147,13 @@ class TestSecurityFeatures:
             response = self.client.post("/api/secure-test", json=payload)
 
             # Verify rejection
-            assert (
-                response.status_code == 400
-            ), f"Key '{dangerous_key}' should be blocked with 400, got {response.status_code}"
+            assert response.status_code == 400, (
+                f"Key '{dangerous_key}' should be blocked with 400, got {response.status_code}"
+            )
             response_text = response.text.lower()
-            assert (
-                "dangerous" in response_text or "invalid" in response_text
-            ), f"Response should mention dangerous/invalid key, got: {response.text}"
+            assert "dangerous" in response_text or "invalid" in response_text, (
+                f"Response should mention dangerous/invalid key, got: {response.text}"
+            )
 
             blocked_count += 1
 
@@ -187,9 +187,9 @@ class TestSecurityFeatures:
         response = self.client.post("/api/secure-test", json=payload)
 
         # Verify rejection
-        assert (
-            response.status_code == 400
-        ), f"Expected 400 Bad Request, got {response.status_code}"
+        assert response.status_code == 400, (
+            f"Expected 400 Bad Request, got {response.status_code}"
+        )
         assert "too long" in response.text.lower() or "key" in response.text.lower()
 
         print(f"✓ Key length limit enforced: {len(long_key)} characters rejected")
@@ -217,22 +217,22 @@ class TestSecurityFeatures:
         # Make requests up to the limit - should all succeed
         for i in range(rate_limit):
             response = self.client.post("/api/secure-test", json=payload)
-            assert (
-                response.status_code == 200
-            ), f"Request {i+1}/{rate_limit} should succeed, got {response.status_code}"
-            print(f"  Request {i+1}/{rate_limit}: 200 OK")
+            assert response.status_code == 200, (
+                f"Request {i + 1}/{rate_limit} should succeed, got {response.status_code}"
+            )
+            print(f"  Request {i + 1}/{rate_limit}: 200 OK")
 
         # Next request should be rate limited
         response = self.client.post("/api/secure-test", json=payload)
-        assert (
-            response.status_code == 429
-        ), f"Request {rate_limit+1} should be rate limited (429), got {response.status_code}"
+        assert response.status_code == 429, (
+            f"Request {rate_limit + 1} should be rate limited (429), got {response.status_code}"
+        )
         assert (
             "rate limit" in response.text.lower() or "too many" in response.text.lower()
         )
 
         print(
-            f"✓ Rate limiting enforced: {rate_limit} requests allowed, {rate_limit+1}th rejected"
+            f"✓ Rate limiting enforced: {rate_limit} requests allowed, {rate_limit + 1}th rejected"
         )
 
         # Verify rate limit resets after cleanup
@@ -296,9 +296,9 @@ class TestSecurityFeatures:
         response = self.client.post("/api/secure-test", json=valid_payload)
 
         # Verify success
-        assert (
-            response.status_code == 200
-        ), f"Valid request should succeed, got {response.status_code}"
+        assert response.status_code == 200, (
+            f"Valid request should succeed, got {response.status_code}"
+        )
         result = response.json()
         # Workflow output format: {node_id: {"result": ...}} or {"results": ..., "status": ...}
         assert isinstance(result, dict), f"Expected dict result, got {type(result)}"

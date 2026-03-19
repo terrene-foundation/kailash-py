@@ -709,7 +709,7 @@ class ImpactReporter:
         html = f"""
         <div class="impact-report {risk_class}-risk">
             <div class="report-header">
-                <h2>{self.impact_icons.get(assessment.overall_risk, '')} Column Removal Impact Report</h2>
+                <h2>{self.impact_icons.get(assessment.overall_risk, "")} Column Removal Impact Report</h2>
                 <p class="target-column">Target: <code>{assessment.table_name}.{assessment.column_name}</code></p>
             </div>
 
@@ -749,7 +749,7 @@ class ImpactReporter:
                     icon = self.dependency_icons.get(DependencyType(dep_type), "📋")
                     html += f"""
                         <div class="dependency-group">
-                            <h4>{icon} {dep_type.replace('_', ' ').title()} ({len(dep_list)})</h4>
+                            <h4>{icon} {dep_type.replace("_", " ").title()} ({len(dep_list)})</h4>
                             <ul>
                     """
                     for dep in dep_list:

@@ -271,11 +271,11 @@ Use empty strings "" for missing text fields. Return ONLY the JSON object, no ex
         prompt = f"""Analyze this user profile and assign appropriate system roles.
 
 User Profile:
-- Name: {attributes.get('first_name', '')} {attributes.get('last_name', '')}
-- Email: {attributes.get('email', '')}
-- Job Title: {attributes.get('job_title', '')}
-- Department: {attributes.get('department', '')}
-- Groups: {', '.join(attributes.get('groups', []))}
+- Name: {attributes.get("first_name", "")} {attributes.get("last_name", "")}
+- Email: {attributes.get("email", "")}
+- Job Title: {attributes.get("job_title", "")}
+- Department: {attributes.get("department", "")}
+- Groups: {", ".join(attributes.get("groups", []))}
 
 Available Roles:
 - user: Default role for all users

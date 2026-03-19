@@ -171,14 +171,8 @@ from cryptography.hazmat.primitives.serialization import (
 )
 
 _ed25519_key = Ed25519PrivateKey.generate()
-SIGNING_KEY = _ed25519_key.private_bytes(
-    Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()
-).decode()
-VERIFY_KEY = (
-    _ed25519_key.public_key()
-    .public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
-    .decode()
-)
+SIGNING_KEY = _ed25519_key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()).decode()
+VERIFY_KEY = _ed25519_key.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo).decode()
 ALGORITHM = "EdDSA"
 
 
@@ -227,9 +221,7 @@ class TestExportChainAsJWT:
     def test_exp_claim_present_when_chain_has_expiry(self):
         chain = _make_chain(expires_at=_FUTURE)
         token = export_chain_as_jwt(chain, SIGNING_KEY, algorithm=ALGORITHM)
-        payload = jwt.decode(
-            token, VERIFY_KEY, algorithms=[ALGORITHM], options={"verify_exp": False}
-        )
+        payload = jwt.decode(token, VERIFY_KEY, algorithms=[ALGORITHM], options={"verify_exp": False})
         assert "exp" in payload
         assert isinstance(payload["exp"], (int, float))
 
@@ -358,9 +350,7 @@ class TestImportChainFromJWT:
 
         assert restored.constraint_envelope is not None
         assert restored.constraint_envelope.id == chain.constraint_envelope.id
-        assert (
-            restored.constraint_envelope.agent_id == chain.constraint_envelope.agent_id
-        )
+        assert restored.constraint_envelope.agent_id == chain.constraint_envelope.agent_id
 
     def test_round_trip_minimal_chain(self):
         chain = _make_chain(with_capabilities=False, with_delegations=False)
@@ -498,9 +488,7 @@ class TestExportCapabilityAsJWT:
     def test_exp_claim_when_capability_expires(self):
         cap = _make_capability(expires_at=_FUTURE)
         token = export_capability_as_jwt(cap, SIGNING_KEY, algorithm=ALGORITHM)
-        payload = jwt.decode(
-            token, VERIFY_KEY, algorithms=[ALGORITHM], options={"verify_exp": False}
-        )
+        payload = jwt.decode(token, VERIFY_KEY, algorithms=[ALGORITHM], options={"verify_exp": False})
         assert "exp" in payload
 
     def test_no_exp_when_no_expiry(self):
@@ -554,9 +542,7 @@ class TestExportDelegationAsJWT:
     def test_exp_claim_when_delegation_expires(self):
         deleg = _make_delegation(expires_at=_FUTURE)
         token = export_delegation_as_jwt(deleg, SIGNING_KEY, algorithm=ALGORITHM)
-        payload = jwt.decode(
-            token, VERIFY_KEY, algorithms=[ALGORITHM], options={"verify_exp": False}
-        )
+        payload = jwt.decode(token, VERIFY_KEY, algorithms=[ALGORITHM], options={"verify_exp": False})
         assert "exp" in payload
 
     def test_no_exp_when_no_expiry(self):
@@ -592,9 +578,7 @@ class TestEdgeCases:
 
     def test_chain_with_multiple_capabilities(self):
         genesis = _make_genesis()
-        caps = [
-            _make_capability(cap_id=f"cap-{i}", capability=f"cap_{i}") for i in range(5)
-        ]
+        caps = [_make_capability(cap_id=f"cap-{i}", capability=f"cap_{i}") for i in range(5)]
         chain = TrustLineageChain(genesis=genesis, capabilities=caps)
         token = export_chain_as_jwt(chain, SIGNING_KEY, algorithm=ALGORITHM)
         restored = import_chain_from_jwt(token, VERIFY_KEY, algorithm=ALGORITHM)
@@ -761,12 +745,8 @@ class TestJWTReasoningConfidentiality:
         payload = jwt.decode(token, VERIFY_KEY, algorithms=[ALGORITHM])
 
         delegation_data = payload["eatp_chain"]["delegations"][0]
-        assert (
-            "reasoning_trace" in delegation_data
-        ), "PUBLIC reasoning trace must be included in JWT claims"
-        assert (
-            delegation_data["reasoning_trace"]["decision"] == "delegate analysis task"
-        )
+        assert "reasoning_trace" in delegation_data, "PUBLIC reasoning trace must be included in JWT claims"
+        assert delegation_data["reasoning_trace"]["decision"] == "delegate analysis task"
         assert delegation_data["reasoning_trace"]["confidentiality"] == "public"
         # Hash and signature must also be present
         assert "reasoning_trace_hash" in delegation_data
@@ -779,9 +759,9 @@ class TestJWTReasoningConfidentiality:
         payload = jwt.decode(token, VERIFY_KEY, algorithms=[ALGORITHM])
 
         delegation_data = payload["eatp_chain"]["delegations"][0]
-        assert (
-            "reasoning_trace" in delegation_data
-        ), "RESTRICTED reasoning trace must be included (boundary: <= RESTRICTED)"
+        assert "reasoning_trace" in delegation_data, (
+            "RESTRICTED reasoning trace must be included (boundary: <= RESTRICTED)"
+        )
         assert delegation_data["reasoning_trace"]["confidentiality"] == "restricted"
         # Hash and signature must also be present
         assert "reasoning_trace_hash" in delegation_data
@@ -794,14 +774,10 @@ class TestJWTReasoningConfidentiality:
         payload = jwt.decode(token, VERIFY_KEY, algorithms=[ALGORITHM])
 
         delegation_data = payload["eatp_chain"]["delegations"][0]
-        assert (
-            "reasoning_trace" not in delegation_data
-        ), "CONFIDENTIAL reasoning trace must NOT appear in JWT claims"
+        assert "reasoning_trace" not in delegation_data, "CONFIDENTIAL reasoning trace must NOT appear in JWT claims"
         # Hash and signature are integrity proofs, not confidential -- always present
         assert "reasoning_trace_hash" in delegation_data
-        assert delegation_data["reasoning_trace_hash"] == hash_reasoning_trace(
-            chain.delegations[0].reasoning_trace
-        )
+        assert delegation_data["reasoning_trace_hash"] == hash_reasoning_trace(chain.delegations[0].reasoning_trace)
         assert "reasoning_signature" in delegation_data
 
     def test_jwt_export_strips_secret_reasoning_trace(self):
@@ -811,9 +787,7 @@ class TestJWTReasoningConfidentiality:
         payload = jwt.decode(token, VERIFY_KEY, algorithms=[ALGORITHM])
 
         delegation_data = payload["eatp_chain"]["delegations"][0]
-        assert (
-            "reasoning_trace" not in delegation_data
-        ), "SECRET reasoning trace must NOT appear in JWT claims"
+        assert "reasoning_trace" not in delegation_data, "SECRET reasoning trace must NOT appear in JWT claims"
         # Hash and signature still present for integrity verification
         assert "reasoning_trace_hash" in delegation_data
         assert "reasoning_signature" in delegation_data
@@ -825,14 +799,10 @@ class TestJWTReasoningConfidentiality:
         payload = jwt.decode(token, VERIFY_KEY, algorithms=[ALGORITHM])
 
         audit_data = payload["eatp_chain"]["audit_anchors"][0]
-        assert (
-            "reasoning_trace" not in audit_data
-        ), "CONFIDENTIAL reasoning trace on audit anchor must be stripped"
+        assert "reasoning_trace" not in audit_data, "CONFIDENTIAL reasoning trace on audit anchor must be stripped"
         # Hash and signature survive filtering
         assert "reasoning_trace_hash" in audit_data
-        assert audit_data["reasoning_trace_hash"] == hash_reasoning_trace(
-            chain.audit_anchors[0].reasoning_trace
-        )
+        assert audit_data["reasoning_trace_hash"] == hash_reasoning_trace(chain.audit_anchors[0].reasoning_trace)
         assert "reasoning_signature" in audit_data
 
     def test_jwt_roundtrip_preserves_public_reasoning(self):
@@ -845,25 +815,14 @@ class TestJWTReasoningConfidentiality:
         restored_deleg = restored.delegations[0]
 
         # The reasoning trace must survive the round trip
-        assert (
-            restored_deleg.reasoning_trace is not None
-        ), "PUBLIC reasoning trace must survive JWT round-trip"
+        assert restored_deleg.reasoning_trace is not None, "PUBLIC reasoning trace must survive JWT round-trip"
         assert restored_deleg.reasoning_trace.decision == "delegate analysis task"
-        assert restored_deleg.reasoning_trace.rationale == (
-            "agent-002 has required capability and capacity"
-        )
-        assert (
-            restored_deleg.reasoning_trace.confidentiality
-            == ConfidentialityLevel.PUBLIC
-        )
+        assert restored_deleg.reasoning_trace.rationale == ("agent-002 has required capability and capacity")
+        assert restored_deleg.reasoning_trace.confidentiality == ConfidentialityLevel.PUBLIC
         assert restored_deleg.reasoning_trace.confidence == 0.92
         assert restored_deleg.reasoning_trace.methodology == "capability_matching"
-        assert restored_deleg.reasoning_trace.alternatives_considered == [
-            "agent-003 was busy"
-        ]
+        assert restored_deleg.reasoning_trace.alternatives_considered == ["agent-003 was busy"]
         # Hash and signature also preserved
         assert restored_deleg.reasoning_trace_hash is not None
-        assert restored_deleg.reasoning_trace_hash == hash_reasoning_trace(
-            chain.delegations[0].reasoning_trace
-        )
+        assert restored_deleg.reasoning_trace_hash == hash_reasoning_trace(chain.delegations[0].reasoning_trace)
         assert restored_deleg.reasoning_signature == "sig-reasoning-placeholder"

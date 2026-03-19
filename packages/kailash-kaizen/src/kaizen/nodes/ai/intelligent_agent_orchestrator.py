@@ -2127,7 +2127,9 @@ class ConvergenceDetectorNode(Node):
                 "trend": (
                     "improving"
                     if improvement > 0
-                    else "declining" if improvement < 0 else "stable"
+                    else "declining"
+                    if improvement < 0
+                    else "stable"
                 ),
                 "rate": improvement,
                 "total_improvement": improvement,
@@ -2153,7 +2155,9 @@ class ConvergenceDetectorNode(Node):
             "trend": (
                 "improving"
                 if slope > 0.01
-                else "declining" if slope < -0.01 else "stable"
+                else "declining"
+                if slope < -0.01
+                else "stable"
             ),
             "rate": slope,
             "total_improvement": scores[-1] - scores[0],

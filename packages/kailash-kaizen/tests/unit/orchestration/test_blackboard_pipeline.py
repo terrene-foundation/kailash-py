@@ -167,9 +167,9 @@ class TestBlackboardCreation:
 
     def test_blackboard_factory_method_exists(self):
         """Test that Pipeline.blackboard() factory method exists."""
-        assert hasattr(
-            Pipeline, "blackboard"
-        ), "Pipeline.blackboard() factory method not found"
+        assert hasattr(Pipeline, "blackboard"), (
+            "Pipeline.blackboard() factory method not found"
+        )
         assert callable(Pipeline.blackboard), "Pipeline.blackboard is not callable"
 
     def test_blackboard_creates_blackboard_pipeline(
@@ -182,9 +182,9 @@ class TestBlackboardCreation:
 
         assert pipeline is not None
         assert hasattr(pipeline, "run"), "BlackboardPipeline must have run() method"
-        assert isinstance(
-            pipeline, Pipeline
-        ), "BlackboardPipeline must inherit from Pipeline"
+        assert isinstance(pipeline, Pipeline), (
+            "BlackboardPipeline must inherit from Pipeline"
+        )
 
     def test_blackboard_requires_specialists_parameter(self, mock_controller):
         """Test that blackboard() requires specialists parameter."""
@@ -283,9 +283,9 @@ class TestA2ASpecialistSelection:
 
         # Should select problem_solver first (highest A2A score for problem_solving capability)
         assert result is not None
-        assert (
-            mock_specialists[0]._call_count >= 1
-        ), "problem_solver should be selected first"
+        assert mock_specialists[0]._call_count >= 1, (
+            "problem_solver should be selected first"
+        )
 
     def test_blackboard_iterative_specialist_selection(self, mock_specialists):
         """Test that blackboard iteratively selects specialists based on evolving needs."""
@@ -332,12 +332,12 @@ class TestA2ASpecialistSelection:
         assert controller.iteration >= 3, "Should iterate at least 3 times"
 
         # Different specialists should be called based on needs
-        assert (
-            mock_specialists[1]._call_count >= 1
-        ), "data_analyst should be called (2nd iteration)"
-        assert (
-            mock_specialists[2]._call_count >= 1
-        ), "optimizer should be called (3rd iteration)"
+        assert mock_specialists[1]._call_count >= 1, (
+            "data_analyst should be called (2nd iteration)"
+        )
+        assert mock_specialists[2]._call_count >= 1, (
+            "optimizer should be called (3rd iteration)"
+        )
 
     def test_blackboard_specialist_selection_based_on_blackboard_state(
         self, mock_specialists, mock_controller
@@ -410,9 +410,9 @@ class TestControllerIntegration:
 
         # Should stop after 1 iteration (controller said complete)
         total_specialist_calls = sum(s._call_count for s in mock_specialists)
-        assert (
-            total_specialist_calls <= 2
-        ), "Should stop early when controller signals complete"
+        assert total_specialist_calls <= 2, (
+            "Should stop early when controller signals complete"
+        )
 
     def test_blackboard_respects_max_iterations(self, mock_specialists):
         """Test that blackboard respects max_iterations limit."""
@@ -834,9 +834,9 @@ class TestBlackboardPerformance:
         duration = time.time() - start
 
         # Should be fast even with many specialists
-        assert (
-            duration < 0.2
-        ), f"Specialist selection took {duration:.3f}s (target: <200ms)"
+        assert duration < 0.2, (
+            f"Specialist selection took {duration:.3f}s (target: <200ms)"
+        )
         assert result is not None
 
 

@@ -297,7 +297,8 @@ class TestChainOfThoughtAgentVerification:
         from kaizen.agents.specialized.chain_of_thought import ChainOfThoughtAgent
 
         agent = ChainOfThoughtAgent(
-            enable_verification=True, confidence_threshold=0.99  # Very high threshold
+            enable_verification=True,
+            confidence_threshold=0.99,  # Very high threshold
         )
         result = agent.run(problem="Complex uncertain problem")
 

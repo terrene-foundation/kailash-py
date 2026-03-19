@@ -826,7 +826,7 @@ async def example_data_processing_pipeline():
 
     # Display results
     print("\n📊 Workflow Results:")
-    print(f"   Success rate: {result['metrics']['success_rate']*100:.1f}%")
+    print(f"   Success rate: {result['metrics']['success_rate'] * 100:.1f}%")
     print(f"   Total execution time: {result['metrics']['total_execution_time']:.2f}s")
     print(f"   Average task time: {result['metrics']['average_task_time']:.2f}s")
     print(f"   Dependency levels: {result['metrics']['dependency_levels']}")
@@ -836,7 +836,7 @@ async def example_data_processing_pipeline():
         avg_efficiency = sum(result["metrics"]["parallel_efficiency"]) / len(
             result["metrics"]["parallel_efficiency"]
         )
-        print(f"   Parallel efficiency: {avg_efficiency*100:.1f}%")
+        print(f"   Parallel efficiency: {avg_efficiency * 100:.1f}%")
 
     print("\n✅ Example 1 complete")
 
@@ -1103,7 +1103,7 @@ async def example_complex_enterprise_workflow():
 
     # Display detailed results
     print("\n📊 Complex Workflow Results:")
-    print(f"   ✅ Success rate: {result['metrics']['success_rate']*100:.1f}%")
+    print(f"   ✅ Success rate: {result['metrics']['success_rate'] * 100:.1f}%")
     print(
         f"   ⏱️  Total execution time: {result['metrics']['total_execution_time']:.2f}s"
     )
@@ -1115,7 +1115,7 @@ async def example_complex_enterprise_workflow():
         avg_efficiency = sum(result["metrics"]["parallel_efficiency"]) / len(
             result["metrics"]["parallel_efficiency"]
         )
-        print(f"   ⚡ Average parallel efficiency: {avg_efficiency*100:.1f}%")
+        print(f"   ⚡ Average parallel efficiency: {avg_efficiency * 100:.1f}%")
 
     # Display server status
     server_status = agent.get_server_status()
@@ -1130,7 +1130,7 @@ async def example_complex_enterprise_workflow():
     metrics = agent.get_orchestration_metrics()
     print("\n📈 Orchestration Metrics:")
     print(f"   Total workflows executed: {metrics['total_workflows']}")
-    print(f"   Workflow success rate: {metrics['workflow_success_rate']*100:.1f}%")
+    print(f"   Workflow success rate: {metrics['workflow_success_rate'] * 100:.1f}%")
 
     print("\n✅ Complex enterprise workflow complete")
 

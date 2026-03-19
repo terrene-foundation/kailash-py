@@ -209,9 +209,9 @@ def test_error_analysis_engine_extract_category():
     for error_code, expected_category in test_cases:
         error = create_test_error(error_code=error_code, message="Test error")
         analysis = engine.analyze_error(error)
-        assert (
-            analysis.category == expected_category
-        ), f"Error code {error_code} should map to category {expected_category}"
+        assert analysis.category == expected_category, (
+            f"Error code {error_code} should map to category {expected_category}"
+        )
 
 
 # Test 8: ErrorAnalysisEngine - Extract Context

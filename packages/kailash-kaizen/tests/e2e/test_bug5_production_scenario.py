@@ -122,9 +122,9 @@ class TestBug5ProductionScenario:
         config = create_structured_output_config(
             MedicalReferralSignature(), strict=True
         )
-        assert config == {
-            "type": "json_object"
-        }, "Auto-fallback to strict=False due to Dict field"
+        assert config == {"type": "json_object"}, (
+            "Auto-fallback to strict=False due to Dict field"
+        )
         assert "schema" not in config, "Bug #5 fix: no schema key in strict=False"
 
         # Create agent with REAL OpenAI API
@@ -155,9 +155,9 @@ class TestBug5ProductionScenario:
         result = agent.run(conversation_text=production_conversation)
 
         # CRITICAL: Verify response is dict (not str requiring manual parsing)
-        assert isinstance(
-            result, dict
-        ), "FAIL: OpenAI returned text instead of JSON (Bug #5 not fixed)"
+        assert isinstance(result, dict), (
+            "FAIL: OpenAI returned text instead of JSON (Bug #5 not fixed)"
+        )
 
         # Verify all production fields are present
         required_fields = [
@@ -168,9 +168,9 @@ class TestBug5ProductionScenario:
             "confidence_score",
         ]
         for field in required_fields:
-            assert (
-                field in result
-            ), f"Missing production field: {field} (JSON parsing failed)"
+            assert field in result, (
+                f"Missing production field: {field} (JSON parsing failed)"
+            )
 
         # Verify medical specialty extraction
         assert result["referral_specialty"] in [
@@ -195,24 +195,24 @@ class TestBug5ProductionScenario:
         assert len(result["extracted_info"]) > 0, "extracted_info cannot be empty"
 
         # Verify confidence score
-        assert isinstance(
-            result["confidence_score"], (int, float)
-        ), "confidence_score must be number"
-        assert (
-            0 <= result["confidence_score"] <= 1
-        ), f"confidence_score out of range: {result['confidence_score']}"
+        assert isinstance(result["confidence_score"], (int, float)), (
+            "confidence_score must be number"
+        )
+        assert 0 <= result["confidence_score"] <= 1, (
+            f"confidence_score out of range: {result['confidence_score']}"
+        )
 
         # Verify extraction quality (production validation)
         extracted = result["extracted_info"]
 
         # Expected extractions (flexible matching - LLM might use different keys)
         extracted_str = json.dumps(extracted).lower()
-        assert (
-            "sarah" in extracted_str or "johnson" in extracted_str
-        ), f"Patient name not extracted: {extracted}"
-        assert (
-            "555-0123" in extracted_str or "5550123" in extracted_str
-        ), f"Phone number not extracted: {extracted}"
+        assert "sarah" in extracted_str or "johnson" in extracted_str, (
+            f"Patient name not extracted: {extracted}"
+        )
+        assert "555-0123" in extracted_str or "5550123" in extracted_str, (
+            f"Phone number not extracted: {extracted}"
+        )
 
         # Verify correct medical assessment
         assert result["referral_specialty"] in [
@@ -439,9 +439,9 @@ class TestBug5ProductionScenario:
         result = agent.run(raw_conversation=production_input)
 
         # CRITICAL: Verify response is complete JSON structure
-        assert isinstance(
-            result, dict
-        ), "Production workflow failed: got text instead of JSON"
+        assert isinstance(result, dict), (
+            "Production workflow failed: got text instead of JSON"
+        )
 
         # Verify all workflow stages completed
         required_fields = [

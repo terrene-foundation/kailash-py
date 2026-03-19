@@ -155,7 +155,7 @@ async def simulate_autonomous_agent_execution():
     checkpoint = metrics["performance"]["checkpoint_io_ms"]
     print(f"  Checkpoint Save: mean={checkpoint['save_mean']:.0f}ms")
     print(f"  Checkpoint Load: mean={checkpoint['load_mean']:.0f}ms")
-    print(f"  Compression Ratio: {checkpoint['compression_ratio']*100:.0f}%")
+    print(f"  Compression Ratio: {checkpoint['compression_ratio'] * 100:.0f}%")
 
     print()
     print("Runtime Metrics:")

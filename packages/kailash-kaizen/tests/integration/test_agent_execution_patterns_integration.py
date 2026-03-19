@@ -50,9 +50,9 @@ class TestRealCoreSDKIntegration:
         workflow = agent.compile_workflow()
 
         # Validate real WorkflowBuilder
-        assert isinstance(
-            workflow, WorkflowBuilder
-        ), "Should return real WorkflowBuilder"
+        assert isinstance(workflow, WorkflowBuilder), (
+            "Should return real WorkflowBuilder"
+        )
 
         # Execute compiled workflow with real runtime
         runtime = LocalRuntime()
@@ -127,9 +127,9 @@ class TestChainOfThoughtIntegration:
         has_reasoning = (
             "reasoning" in result or "answer" in result or "response" in result
         )
-        assert (
-            has_reasoning
-        ), f"CoT should include reasoning/answer fields, got: {list(result.keys())}"
+        assert has_reasoning, (
+            f"CoT should include reasoning/answer fields, got: {list(result.keys())}"
+        )
 
         # Validate that we got some meaningful response
         response_content = str(result)
@@ -178,13 +178,13 @@ class TestChainOfThoughtIntegration:
         execution_time = time.time() - start_time
 
         # Performance validation
-        assert (
-            execution_time < 5.0
-        ), f"CoT execution took {execution_time:.2f}s, should be <5s"
+        assert execution_time < 5.0, (
+            f"CoT execution took {execution_time:.2f}s, should be <5s"
+        )
         assert isinstance(result, dict), "Should maintain structured output"
-        assert (
-            "reasoning" in result or "solution" in result
-        ), "Should provide reasoning output"
+        assert "reasoning" in result or "solution" in result, (
+            "Should provide reasoning output"
+        )
 
 
 class TestReActIntegration:
@@ -221,9 +221,9 @@ class TestReActIntegration:
             "response",
         ]
         has_react_field = any(field in result for field in expected_fields)
-        assert (
-            has_react_field
-        ), f"ReAct should include reasoning fields, got: {list(result.keys())}"
+        assert has_react_field, (
+            f"ReAct should include reasoning fields, got: {list(result.keys())}"
+        )
 
         # Validate content quality
         response_content = str(result)
@@ -245,9 +245,9 @@ class TestReActIntegration:
         )
 
         # Validate integration
-        assert isinstance(
-            result, dict
-        ), "Should create and execute workflow successfully"
+        assert isinstance(result, dict), (
+            "Should create and execute workflow successfully"
+        )
 
         # Check that structured ReAct output is maintained
         expected_structure = ["reasoning", "action", "result"]
@@ -270,12 +270,12 @@ class TestReActIntegration:
         execution_time = time.time() - start_time
 
         # Performance validation
-        assert (
-            execution_time < 5.0
-        ), f"ReAct execution took {execution_time:.2f}s, should be <5s"
-        assert isinstance(
-            result, dict
-        ), "Should maintain performance while providing structure"
+        assert execution_time < 5.0, (
+            f"ReAct execution took {execution_time:.2f}s, should be <5s"
+        )
+        assert isinstance(result, dict), (
+            "Should maintain performance while providing structure"
+        )
 
 
 class TestSignatureCompilerIntegration:
@@ -303,9 +303,9 @@ class TestSignatureCompilerIntegration:
         # Check expected output structure
         expected_outputs = ["summary", "key_points", "sentiment"]
         has_expected_structure = any(output in result for output in expected_outputs)
-        assert (
-            has_expected_structure
-        ), "Compiled signature should produce expected outputs"
+        assert has_expected_structure, (
+            "Compiled signature should produce expected outputs"
+        )
 
     def test_signature_parameter_enhancement_integration(self):
         """Test that signature compilation enhances parameters correctly."""
@@ -326,15 +326,15 @@ class TestSignatureCompilerIntegration:
         )
 
         # Validate that execution worked with parameter enhancement
-        assert isinstance(
-            result, dict
-        ), "Parameter enhancement should not break execution"
+        assert isinstance(result, dict), (
+            "Parameter enhancement should not break execution"
+        )
 
         # Should produce detailed output despite basic initial config
         output_content = str(result)
-        assert (
-            len(output_content) > 100
-        ), "Enhanced parameters should produce substantial output"
+        assert len(output_content) > 100, (
+            "Enhanced parameters should produce substantial output"
+        )
 
     def test_multiple_signature_executions_performance(self):
         """Test performance with multiple different signature executions."""
@@ -361,9 +361,9 @@ class TestSignatureCompilerIntegration:
         total_time = time.time() - start_time
 
         # Performance validation
-        assert (
-            total_time < 15.0
-        ), f"Multiple executions took {total_time:.2f}s, should be <15s"
+        assert total_time < 15.0, (
+            f"Multiple executions took {total_time:.2f}s, should be <15s"
+        )
 
         # All should complete successfully
         assert isinstance(result1, dict), "Normal execution should succeed"
@@ -412,9 +412,9 @@ class TestRealLLMResponseParsing:
 
         # Should extract multiple fields
         found_fields = [field for field in expected_fields if field in result]
-        assert (
-            len(found_fields) >= 1
-        ), f"Should extract at least one field, found: {found_fields}"
+        assert len(found_fields) >= 1, (
+            f"Should extract at least one field, found: {found_fields}"
+        )
 
     def test_error_handling_for_parsing_failures(self):
         """Test error handling when LLM response cannot be parsed."""
@@ -430,14 +430,14 @@ class TestRealLLMResponseParsing:
         try:
             result = agent.execute(invalid_input="")
             # If it succeeds, should be structured
-            assert isinstance(
-                result, dict
-            ), "Should return dict even with difficult input"
+            assert isinstance(result, dict), (
+                "Should return dict even with difficult input"
+            )
         except Exception as e:
             # If it fails, should be informative error
-            assert (
-                "signature" in str(e).lower() or "parse" in str(e).lower()
-            ), "Error should be related to signature parsing"
+            assert "signature" in str(e).lower() or "parse" in str(e).lower(), (
+                "Error should be related to signature parsing"
+            )
 
 
 class TestExecutionPatternValidation:
@@ -459,9 +459,9 @@ class TestExecutionPatternValidation:
         simple_time = time.time() - start_time
 
         # Note: With real LLM calls, 200ms is unrealistic, using 5s for integration test
-        assert (
-            simple_time < 5.0
-        ), f"Simple execution took {simple_time:.2f}s, should be <5s"
+        assert simple_time < 5.0, (
+            f"Simple execution took {simple_time:.2f}s, should be <5s"
+        )
 
         # Test pattern execution: <500ms for complex patterns (adjusted for real LLM)
         agent.signature = "problem -> reasoning, solution"
@@ -469,9 +469,9 @@ class TestExecutionPatternValidation:
         agent.execute_cot(problem="Basic problem")
         pattern_time = time.time() - start_time
 
-        assert (
-            pattern_time < 5.0
-        ), f"Pattern execution took {pattern_time:.2f}s, should be <5s"
+        assert pattern_time < 5.0, (
+            f"Pattern execution took {pattern_time:.2f}s, should be <5s"
+        )
 
     def test_structured_output_compliance(self):
         """Test that all execution patterns produce compliant structured output."""
@@ -494,12 +494,12 @@ class TestExecutionPatternValidation:
             # Execute and validate compliance
             result = agent.execute(**inputs)
 
-            assert isinstance(
-                result, dict
-            ), f"Signature '{signature_spec}' should return dict"
-            assert (
-                len(result) > 0
-            ), f"Signature '{signature_spec}' should return non-empty result"
+            assert isinstance(result, dict), (
+                f"Signature '{signature_spec}' should return dict"
+            )
+            assert len(result) > 0, (
+                f"Signature '{signature_spec}' should return non-empty result"
+            )
 
     def test_memory_and_resource_usage(self):
         """Test resource usage during execution patterns."""
@@ -533,6 +533,6 @@ class TestExecutionPatternValidation:
         memory_increase = final_memory - initial_memory
 
         # Memory increase should be reasonable (less than 100MB for 5 agents)
-        assert (
-            memory_increase < 100
-        ), f"Memory increased by {memory_increase:.2f}MB, should be <100MB"
+        assert memory_increase < 100, (
+            f"Memory increased by {memory_increase:.2f}MB, should be <100MB"
+        )

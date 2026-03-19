@@ -258,7 +258,9 @@ class PerformanceTracker:
             trend_direction = (
                 "improving"
                 if slope < -0.5
-                else "degrading" if slope > 0.5 else "stable"
+                else "degrading"
+                if slope > 0.5
+                else "stable"
             )
         else:
             slope = 0.0
@@ -740,9 +742,9 @@ def test_regression_severity_classification():
 
     for current_time, baseline_time, expected_severity in test_cases:
         result = detector.detect_regression(current_time, baseline_time)
-        assert (
-            result["severity"] == expected_severity
-        ), f"Expected {expected_severity}, got {result['severity']} for {current_time}ms vs {baseline_time}ms"
+        assert result["severity"] == expected_severity, (
+            f"Expected {expected_severity}, got {result['severity']} for {current_time}ms vs {baseline_time}ms"
+        )
 
 
 def test_performance_optimization_validation(regression_suite):
@@ -777,6 +779,6 @@ def test_performance_optimization_validation(regression_suite):
     std_dev = statistics.stdev(execution_times) if len(execution_times) > 1 else 0.0
     coefficient_of_variation = std_dev / avg_time if avg_time > 0 else 0.0
 
-    assert (
-        coefficient_of_variation < 0.3
-    ), f"Performance too variable: {coefficient_of_variation:.2f}"
+    assert coefficient_of_variation < 0.3, (
+        f"Performance too variable: {coefficient_of_variation:.2f}"
+    )

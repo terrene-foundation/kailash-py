@@ -164,8 +164,8 @@ class TDDDataSeeder:
         """Seed test users with realistic data."""
         users = [
             {
-                "name": f"Test User {i+1}",
-                "email": f"user{i+1}@example.com",
+                "name": f"Test User {i + 1}",
+                "email": f"user{i + 1}@example.com",
                 "active": True,
                 "created_at": "2024-01-01T00:00:00Z",
                 "metadata": {"test": True, "index": i + 1},
@@ -182,12 +182,12 @@ class TDDDataSeeder:
         for i in range(count):
             products.append(
                 {
-                    "name": f"Test Product {i+1}",
+                    "name": f"Test Product {i + 1}",
                     "price": round(10.0 + (i * 5.5), 2),
                     "category": categories[i % len(categories)],
                     "in_stock": i % 2 == 0,
-                    "sku": f"TEST{i+1:03d}",
-                    "tags": [f"tag{i+1}", "test"],
+                    "sku": f"TEST{i + 1:03d}",
+                    "tags": [f"tag{i + 1}", "test"],
                 }
             )
 
@@ -208,7 +208,7 @@ class TDDDataSeeder:
                     "total_price": round((10.0 + (i * 5.5)) * ((i % 3) + 1), 2),
                     "status": "completed" if i % 2 == 0 else "pending",
                     "order_date": "2024-01-01T00:00:00Z",
-                    "notes": f"Test order {i+1}",
+                    "notes": f"Test order {i + 1}",
                 }
             )
 

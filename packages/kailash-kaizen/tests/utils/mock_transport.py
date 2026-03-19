@@ -82,7 +82,7 @@ class MockTransport(Transport):
         """
         if not self._connected:
             raise RuntimeError(
-                "Cannot write to transport: not connected. " "Call connect() first."
+                "Cannot write to transport: not connected. Call connect() first."
             )
 
         if self._send_stream is None:
@@ -109,7 +109,7 @@ class MockTransport(Transport):
         """
         if not self._connected:
             raise RuntimeError(
-                "Cannot read from transport: not connected. " "Call connect() first."
+                "Cannot read from transport: not connected. Call connect() first."
             )
 
         return self._read_messages_impl()

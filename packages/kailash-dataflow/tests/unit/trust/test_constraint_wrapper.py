@@ -332,9 +332,9 @@ class TestDetectPIIColumns:
         assert "employee_dob" in result, "employee_dob should be detected as PII"
         assert "primary_tax_id" in result, "primary_tax_id should be detected as PII"
         assert "ssn_value" in result, "ssn_value should be detected as PII"
-        assert (
-            "my_passport_number" in result
-        ), "my_passport_number should be detected as PII"
+        assert "my_passport_number" in result, (
+            "my_passport_number should be detected as PII"
+        )
 
 
 class TestDetectSensitiveColumns:
@@ -648,6 +648,6 @@ class TestReadOnlyAllowlist:
                 model_columns,
                 operation=operation,
             )
-            assert (
-                result.allowed is True
-            ), f"Operation '{operation}' should be allowed (case-insensitive)"
+            assert result.allowed is True, (
+                f"Operation '{operation}' should be allowed (case-insensitive)"
+            )

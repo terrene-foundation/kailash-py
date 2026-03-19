@@ -588,16 +588,12 @@ class TestListHooks:
 class TestEmptyRegistry:
     """Verify behavior when no hooks are registered."""
 
-    async def test_execute_empty_registry_allows(
-        self, registry, pre_delegation_context
-    ):
+    async def test_execute_empty_registry_allows(self, registry, pre_delegation_context):
         """Execute with no hooks must return allow=True."""
         result = await registry.execute(HookType.PRE_DELEGATION, pre_delegation_context)
         assert result.allow is True
 
-    async def test_execute_no_matching_hooks_allows(
-        self, registry, pre_delegation_context
-    ):
+    async def test_execute_no_matching_hooks_allows(self, registry, pre_delegation_context):
         """Execute with hooks only for a different type must return allow=True."""
         hook = AllowAllHook(name="post_only", event_types=[HookType.POST_DELEGATION])
         registry.register(hook)
@@ -613,9 +609,7 @@ class TestEmptyRegistry:
 class TestPriorityOrdering:
     """Verify hooks execute in priority order (lower number first)."""
 
-    async def test_hooks_execute_in_priority_order(
-        self, registry, pre_delegation_context
-    ):
+    async def test_hooks_execute_in_priority_order(self, registry, pre_delegation_context):
         """Hooks must execute lowest priority first."""
         order_log: list[str] = []
         hook_a = OrderTrackingHook("a_last", order_log, priority=300)
@@ -763,9 +757,7 @@ class TestConcurrentRegistration:
             registry.register(hook)
         assert len(registry.list_hooks()) == 50
 
-    async def test_unregister_during_iteration_safety(
-        self, registry, pre_delegation_context
-    ):
+    async def test_unregister_during_iteration_safety(self, registry, pre_delegation_context):
         """Unregistering a hook between execute calls must not corrupt state."""
         hook_a = AllowAllHook(name="a", priority=10)
         hook_b = AllowAllHook(name="b", priority=20)
@@ -773,40 +765,30 @@ class TestConcurrentRegistration:
         registry.register(hook_b)
 
         # Execute once — both run
-        result1 = await registry.execute(
-            HookType.PRE_DELEGATION, pre_delegation_context
-        )
+        result1 = await registry.execute(HookType.PRE_DELEGATION, pre_delegation_context)
         assert result1.allow is True
         assert hook_a.call_count == 1
         assert hook_b.call_count == 1
 
         # Unregister hook_a, execute again — only hook_b runs
         registry.unregister("a")
-        result2 = await registry.execute(
-            HookType.PRE_DELEGATION, pre_delegation_context
-        )
+        result2 = await registry.execute(HookType.PRE_DELEGATION, pre_delegation_context)
         assert result2.allow is True
         assert hook_a.call_count == 1  # Not incremented
         assert hook_b.call_count == 2
 
-    async def test_register_unregister_register_same_name(
-        self, registry, pre_delegation_context
-    ):
+    async def test_register_unregister_register_same_name(self, registry, pre_delegation_context):
         """Register -> unregister -> register with same name must work."""
         hook_v1 = AllowAllHook(name="versioned")
         hook_v2 = DenyHook(name="versioned")
 
         registry.register(hook_v1)
-        result1 = await registry.execute(
-            HookType.PRE_DELEGATION, pre_delegation_context
-        )
+        result1 = await registry.execute(HookType.PRE_DELEGATION, pre_delegation_context)
         assert result1.allow is True
 
         registry.unregister("versioned")
         registry.register(hook_v2)
-        result2 = await registry.execute(
-            HookType.PRE_DELEGATION, pre_delegation_context
-        )
+        result2 = await registry.execute(HookType.PRE_DELEGATION, pre_delegation_context)
         assert result2.allow is False
 
 
@@ -826,12 +808,8 @@ class TestMultipleEventTypes:
         )
         registry.register(multi_hook)
 
-        ctx_pre = HookContext(
-            agent_id="a", action="x", hook_type=HookType.PRE_DELEGATION
-        )
-        ctx_post = HookContext(
-            agent_id="a", action="x", hook_type=HookType.POST_VERIFICATION
-        )
+        ctx_pre = HookContext(agent_id="a", action="x", hook_type=HookType.PRE_DELEGATION)
+        ctx_post = HookContext(agent_id="a", action="x", hook_type=HookType.POST_VERIFICATION)
 
         await registry.execute(HookType.PRE_DELEGATION, ctx_pre)
         assert multi_hook.call_count == 1
@@ -875,9 +853,7 @@ class TestMultipleEventTypes:
 class TestModifiedContextPropagation:
     """Verify that modified_context is merged into metadata for subsequent hooks."""
 
-    async def test_modified_context_visible_to_next_hook(
-        self, registry, pre_delegation_context
-    ):
+    async def test_modified_context_visible_to_next_hook(self, registry, pre_delegation_context):
         """A hook's modified_context must appear in the next hook's metadata."""
         modifier = ContextModifyingHook(
             name="enricher",
@@ -895,14 +871,10 @@ class TestModifiedContextPropagation:
         assert reader.observed_metadata["enriched_by"] == "enricher"
         assert reader.observed_metadata["level"] == 42
 
-    async def test_chained_modifications_accumulate(
-        self, registry, pre_delegation_context
-    ):
+    async def test_chained_modifications_accumulate(self, registry, pre_delegation_context):
         """Multiple modifier hooks must accumulate their context changes."""
         mod1 = ContextModifyingHook(name="mod1", priority=10, inject={"step": 1})
-        mod2 = ContextModifyingHook(
-            name="mod2", priority=20, inject={"step": 2, "extra": "data"}
-        )
+        mod2 = ContextModifyingHook(name="mod2", priority=20, inject={"step": 2, "extra": "data"})
         reader = ContextReaderHook(name="final_reader", priority=100)
 
         registry.register(mod1)
@@ -915,9 +887,7 @@ class TestModifiedContextPropagation:
         assert reader.observed_metadata["step"] == 2
         assert reader.observed_metadata["extra"] == "data"
 
-    async def test_deny_hook_does_not_merge_context(
-        self, registry, pre_delegation_context
-    ):
+    async def test_deny_hook_does_not_merge_context(self, registry, pre_delegation_context):
         """modified_context from a deny result must NOT be merged (chain aborts)."""
         # The deny hook's modified_context never gets applied because the chain stops
         deny = DenyHook(name="blocker", priority=10)
@@ -939,9 +909,7 @@ class TestModifiedContextPropagation:
             hook_type=HookType.PRE_DELEGATION,
             metadata={"original_key": "original_value"},
         )
-        modifier = ContextModifyingHook(
-            name="adder", priority=10, inject={"new_key": "new_value"}
-        )
+        modifier = ContextModifyingHook(name="adder", priority=10, inject={"new_key": "new_value"})
         reader = ContextReaderHook(name="checker", priority=100)
 
         registry.register(modifier)

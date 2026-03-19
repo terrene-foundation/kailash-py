@@ -33,9 +33,9 @@ class TestPROD005GitHubActionsWorkflow:
     def test_deployment_workflow_file_exists(self):
         """Verify deployment workflow file exists"""
         workflow_path = REPO_ROOT / ".github/workflows/deploy-production.yml"
-        assert (
-            workflow_path.exists()
-        ), f"Deployment workflow file not found at {workflow_path}"
+        assert workflow_path.exists(), (
+            f"Deployment workflow file not found at {workflow_path}"
+        )
 
     def test_deployment_workflow_has_required_structure(self):
         """Verify deployment workflow has correct structure"""
@@ -127,9 +127,9 @@ class TestPROD005GitHubActionsWorkflow:
             and "staging" in content.lower()
             and "prod" in content.lower()
         )
-        assert (
-            has_env_support
-        ), "Workflow must support multiple environments (dev/staging/prod)"
+        assert has_env_support, (
+            "Workflow must support multiple environments (dev/staging/prod)"
+        )
 
     def test_deployment_workflow_has_proper_triggers(self):
         """Verify workflow has appropriate triggers"""
@@ -140,9 +140,9 @@ class TestPROD005GitHubActionsWorkflow:
         # YAML parses "on" as boolean True
         triggers = workflow.get(True, workflow.get("on", {}))
         # Should support at least workflow_dispatch for manual deployments
-        assert (
-            "workflow_dispatch" in triggers or "push" in triggers
-        ), "Workflow must have appropriate triggers (workflow_dispatch or push)"
+        assert "workflow_dispatch" in triggers or "push" in triggers, (
+            "Workflow must have appropriate triggers (workflow_dispatch or push)"
+        )
 
     def test_deployment_workflow_has_permissions(self):
         """Verify workflow has proper permissions defined"""
@@ -151,9 +151,9 @@ class TestPROD005GitHubActionsWorkflow:
             workflow = yaml.safe_load(f)
 
         # Permissions should be explicitly defined for security
-        assert (
-            "permissions" in workflow
-        ), "Workflow should define permissions explicitly"
+        assert "permissions" in workflow, (
+            "Workflow should define permissions explicitly"
+        )
 
 
 class TestPROD006DeploymentValidation:
@@ -169,12 +169,16 @@ class TestPROD006DeploymentValidation:
 
     def test_validation_script_exists(self):
         """Verify deployment validation script exists"""
-        script_path = REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        script_path = (
+            REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        )
         assert script_path.exists(), f"Validation script not found at {script_path}"
 
     def test_validation_script_executable(self):
         """Verify validation script has executable permissions"""
-        script_path = REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        script_path = (
+            REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        )
         assert script_path.exists(), "Script must exist"
 
         # Check if file has executable permission
@@ -184,7 +188,9 @@ class TestPROD006DeploymentValidation:
 
     def test_validation_script_has_health_check(self):
         """Verify validation script includes health checks"""
-        script_path = REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        script_path = (
+            REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        )
         with open(script_path) as f:
             content = f.read()
 
@@ -194,13 +200,15 @@ class TestPROD006DeploymentValidation:
             or "/health" in content
             or "healthcheck" in content.lower()
         )
-        assert (
-            has_health_check
-        ), "Validation script must include health check validation"
+        assert has_health_check, (
+            "Validation script must include health check validation"
+        )
 
     def test_validation_script_has_smoke_tests(self):
         """Verify validation script includes smoke tests"""
-        script_path = REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        script_path = (
+            REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        )
         with open(script_path) as f:
             content = f.read()
 
@@ -214,7 +222,9 @@ class TestPROD006DeploymentValidation:
 
     def test_validation_script_validates_endpoints(self):
         """Verify validation script validates API endpoints"""
-        script_path = REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        script_path = (
+            REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        )
         with open(script_path) as f:
             content = f.read()
 
@@ -228,7 +238,9 @@ class TestPROD006DeploymentValidation:
 
     def test_validation_script_checks_response_codes(self):
         """Verify validation script checks HTTP response codes"""
-        script_path = REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        script_path = (
+            REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        )
         with open(script_path) as f:
             content = f.read()
 
@@ -242,7 +254,9 @@ class TestPROD006DeploymentValidation:
 
     def test_validation_script_has_timeout_protection(self):
         """Verify validation script has timeout protection"""
-        script_path = REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        script_path = (
+            REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        )
         with open(script_path) as f:
             content = f.read()
 
@@ -256,7 +270,9 @@ class TestPROD006DeploymentValidation:
 
     def test_validation_script_exits_on_failure(self):
         """Verify validation script exits with error on validation failure"""
-        script_path = REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        script_path = (
+            REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        )
         with open(script_path) as f:
             content = f.read()
 
@@ -437,9 +453,9 @@ class TestCICDIntegration:
             content = f.read()
 
         # Should reference validation script
-        assert (
-            "validate_deployment.sh" in content or "validate_env.py" in content
-        ), "Deployment workflow must use validation script"
+        assert "validate_deployment.sh" in content or "validate_env.py" in content, (
+            "Deployment workflow must use validation script"
+        )
 
     def test_deployment_workflow_uses_rollback_script(self):
         """Verify deployment workflow can trigger rollback script"""
@@ -448,9 +464,9 @@ class TestCICDIntegration:
             content = f.read()
 
         # Should reference rollback script or procedure
-        assert (
-            "rollback.sh" in content or "rollback" in content.lower()
-        ), "Deployment workflow must reference rollback procedures"
+        assert "rollback.sh" in content or "rollback" in content.lower(), (
+            "Deployment workflow must reference rollback procedures"
+        )
 
     def test_all_scripts_in_scripts_directory(self):
         """Verify all required scripts are in scripts/ directory"""
@@ -465,9 +481,9 @@ class TestCICDIntegration:
 
         for script_name in required_scripts:
             script_path = scripts_dir / script_name
-            assert (
-                script_path.exists()
-            ), f"Required script {script_name} not found in scripts/"
+            assert script_path.exists(), (
+                f"Required script {script_name} not found in scripts/"
+            )
 
     def test_all_docs_in_docs_directory(self):
         """Verify all required documentation is in docs/ directory"""
@@ -542,7 +558,9 @@ class TestSecurityAndCompliance:
 
     def test_validation_script_logs_results(self):
         """Verify validation script logs validation results"""
-        script_path = REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        script_path = (
+            REPO_ROOT / "packages/kailash-kaizen/scripts/validate_deployment.sh"
+        )
         with open(script_path) as f:
             content = f.read()
 

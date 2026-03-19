@@ -37,9 +37,9 @@ class TestSecureKeyStorageSalt:
         from kaizen.trust.security import SecureKeyStorage
 
         source = inspect.getsource(SecureKeyStorage)
-        assert (
-            "kaizen-trust-security-salt" not in source
-        ), "Static salt b'kaizen-trust-security-salt' still present in SecureKeyStorage"
+        assert "kaizen-trust-security-salt" not in source, (
+            "Static salt b'kaizen-trust-security-salt' still present in SecureKeyStorage"
+        )
 
     def test_different_instances_get_different_salts(self, master_key_env):
         """Two instances without explicit salt should get different salts."""

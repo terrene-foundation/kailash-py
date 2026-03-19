@@ -105,9 +105,9 @@ class TestPostgreSQLUpsertConflictOn:
         results1, _ = await runtime.execute_workflow_async(workflow1.build(), inputs={})
 
         # Assert: Should create new record (email doesn't exist)
-        assert (
-            results1["upsert1"]["created"] is True
-        ), "First upsert should INSERT when email doesn't exist"
+        assert results1["upsert1"]["created"] is True, (
+            "First upsert should INSERT when email doesn't exist"
+        )
         assert results1["upsert1"]["action"] == "created"
         assert results1["upsert1"]["record"]["email"] == user_email
         assert results1["upsert1"]["record"]["name"] == "Alice New"
@@ -136,14 +136,14 @@ class TestPostgreSQLUpsertConflictOn:
         results2, _ = await runtime.execute_workflow_async(workflow2.build(), inputs={})
 
         # Assert: Should update existing record (email already exists)
-        assert (
-            results2["upsert2"]["created"] is False
-        ), "Second upsert should UPDATE when email already exists (conflict_on=['email'])"
+        assert results2["upsert2"]["created"] is False, (
+            "Second upsert should UPDATE when email already exists (conflict_on=['email'])"
+        )
         assert results2["upsert2"]["action"] == "updated"
         assert results2["upsert2"]["record"]["email"] == user_email
-        assert (
-            results2["upsert2"]["record"]["name"] == "Alice Updated Again"
-        ), "Should use update data for existing email"
+        assert results2["upsert2"]["record"]["name"] == "Alice Updated Again", (
+            "Should use update data for existing email"
+        )
 
         # Assert: PostgreSQL query should use ON CONFLICT (email)
         # This is tested implicitly by successful execution
@@ -207,9 +207,9 @@ class TestPostgreSQLUpsertConflictOn:
         results1, _ = await runtime.execute_workflow_async(workflow1.build(), inputs={})
 
         # Assert: Should create new record (composite key doesn't exist)
-        assert (
-            results1["upsert1"]["created"] is True
-        ), "First upsert should INSERT when composite key (order_id, product_id) doesn't exist"
+        assert results1["upsert1"]["created"] is True, (
+            "First upsert should INSERT when composite key (order_id, product_id) doesn't exist"
+        )
         assert results1["upsert1"]["record"]["quantity"] == 5
         assert results1["upsert1"]["record"]["price"] == pytest.approx(49.99)
 
@@ -243,12 +243,12 @@ class TestPostgreSQLUpsertConflictOn:
         results2, _ = await runtime.execute_workflow_async(workflow2.build(), inputs={})
 
         # Assert: Should update existing record (composite key already exists)
-        assert (
-            results2["upsert2"]["created"] is False
-        ), "Second upsert should UPDATE when composite key (order_id, product_id) already exists"
-        assert (
-            results2["upsert2"]["record"]["quantity"] == 10
-        ), "Should use update data for existing composite key"
+        assert results2["upsert2"]["created"] is False, (
+            "Second upsert should UPDATE when composite key (order_id, product_id) already exists"
+        )
+        assert results2["upsert2"]["record"]["quantity"] == 10, (
+            "Should use update data for existing composite key"
+        )
         assert results2["upsert2"]["record"]["price"] == pytest.approx(99.99)
 
         # Assert: PostgreSQL query should use ON CONFLICT (order_id, product_id)
@@ -314,9 +314,9 @@ class TestPostgreSQLUpsertConflictOn:
         results1, _ = await runtime.execute_workflow_async(workflow1.build(), inputs={})
 
         # Assert: Should INSERT (NULL never matches in SQL)
-        assert (
-            results1["upsert1"]["created"] is True
-        ), "NULL values should always INSERT (SQL standard: NULL != NULL)"
+        assert results1["upsert1"]["created"] is True, (
+            "NULL values should always INSERT (SQL standard: NULL != NULL)"
+        )
         assert results1["upsert1"]["record"]["title"] == "Document 1"
 
         # Act: Second upsert - Another INSERT with NULL external_id
@@ -336,13 +336,13 @@ class TestPostgreSQLUpsertConflictOn:
         results2, _ = await runtime.execute_workflow_async(workflow2.build(), inputs={})
 
         # Assert: Should INSERT again (NULL values don't conflict)
-        assert (
-            results2["upsert2"]["created"] is True
-        ), "NULL values should always INSERT (NULL != NULL in SQL)"
+        assert results2["upsert2"]["created"] is True, (
+            "NULL values should always INSERT (NULL != NULL in SQL)"
+        )
         assert results2["upsert2"]["record"]["title"] == "Document 2"
-        assert (
-            results2["upsert2"]["record"]["id"] == doc_id2
-        ), "Should create new record, not update existing NULL record"
+        assert results2["upsert2"]["record"]["id"] == doc_id2, (
+            "Should create new record, not update existing NULL record"
+        )
 
 
 @pytest.mark.integration
@@ -411,9 +411,9 @@ class TestSQLiteUpsertConflictOn:
         results1, _ = await runtime.execute_workflow_async(workflow1.build(), inputs={})
 
         # Assert: Should create new record (SKU doesn't exist)
-        assert (
-            results1["upsert1"]["created"] is True
-        ), "First upsert should INSERT when SKU doesn't exist"
+        assert results1["upsert1"]["created"] is True, (
+            "First upsert should INSERT when SKU doesn't exist"
+        )
         assert results1["upsert1"]["record"]["sku"] == product_sku
         assert results1["upsert1"]["record"]["name"] == "Product New"
         assert results1["upsert1"]["record"]["price"] == pytest.approx(49.99)
@@ -441,9 +441,9 @@ class TestSQLiteUpsertConflictOn:
         results2, _ = await runtime.execute_workflow_async(workflow2.build(), inputs={})
 
         # Assert: Should update existing record (SKU already exists)
-        assert (
-            results2["upsert2"]["created"] is False
-        ), "Second upsert should UPDATE when SKU already exists (conflict_on=['sku'])"
+        assert results2["upsert2"]["created"] is False, (
+            "Second upsert should UPDATE when SKU already exists (conflict_on=['sku'])"
+        )
         assert results2["upsert2"]["record"]["sku"] == product_sku
         assert results2["upsert2"]["record"]["name"] == "Product Updated Again"
         assert results2["upsert2"]["record"]["price"] == pytest.approx(99.99)
@@ -524,9 +524,9 @@ class TestSQLiteUpsertConflictOn:
         results1, _ = await runtime.execute_workflow_async(workflow1.build(), inputs={})
 
         # Assert: Should create new record (composite key doesn't exist)
-        assert (
-            results1["upsert1"]["created"] is True
-        ), "First upsert should INSERT when composite key doesn't exist"
+        assert results1["upsert1"]["created"] is True, (
+            "First upsert should INSERT when composite key doesn't exist"
+        )
         assert results1["upsert1"]["record"]["quantity"] == 5
 
         # Act: Second upsert - UPDATE on same composite key
@@ -556,9 +556,9 @@ class TestSQLiteUpsertConflictOn:
         results2, _ = await runtime.execute_workflow_async(workflow2.build(), inputs={})
 
         # Assert: Should update existing record (composite key already exists)
-        assert (
-            results2["upsert2"]["created"] is False
-        ), "Second upsert should UPDATE when composite key already exists"
+        assert results2["upsert2"]["created"] is False, (
+            "Second upsert should UPDATE when composite key already exists"
+        )
         assert results2["upsert2"]["record"]["quantity"] == 10
 
         # Assert: SQLite query should use WHERE order_id = ? AND product_id = ?
@@ -604,9 +604,9 @@ class TestUpsertConflictOnBackwardCompatibility:
         results1, _ = await runtime.execute_workflow_async(workflow1.build(), inputs={})
 
         # Assert: Should create new record (Phase 1 behavior)
-        assert (
-            results1["upsert1"]["created"] is True
-        ), "First upsert should INSERT (Phase 1 backward compatibility)"
+        assert results1["upsert1"]["created"] is True, (
+            "First upsert should INSERT (Phase 1 backward compatibility)"
+        )
         assert results1["upsert1"]["record"]["name"] == "Charlie New"
 
         # Act: Second upsert - Same 'id', should UPDATE (Phase 1 behavior)
@@ -632,9 +632,9 @@ class TestUpsertConflictOnBackwardCompatibility:
         results2, _ = await runtime.execute_workflow_async(workflow2.build(), inputs={})
 
         # Assert: Should update existing record (Phase 1 behavior preserved)
-        assert (
-            results2["upsert2"]["created"] is False
-        ), "Second upsert should UPDATE when 'id' matches (backward compatibility with Phase 1)"
+        assert results2["upsert2"]["created"] is False, (
+            "Second upsert should UPDATE when 'id' matches (backward compatibility with Phase 1)"
+        )
         assert results2["upsert2"]["record"]["name"] == "Charlie Updated Again"
 
         # This test verifies Phase 1 code (no conflict_on) still works in Phase 2
@@ -783,9 +783,9 @@ class TestUpsertConflictOnValidation:
         results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
 
         # Assert: Should work correctly (Phase 2 flexibility)
-        assert (
-            results["upsert"]["created"] is True
-        ), "Phase 2: conflict_on=['email'] should work with where={'email': ...}"
+        assert results["upsert"]["created"] is True, (
+            "Phase 2: conflict_on=['email'] should work with where={'email': ...}"
+        )
         assert results["upsert"]["record"]["email"] == user_email
 
         # Note: This test verifies Phase 2 allows flexible conflict_on usage

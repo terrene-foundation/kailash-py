@@ -112,9 +112,9 @@ class TestCompleteIntelligentWorkflows:
             content = result[field]
             assert isinstance(content, str), f"Field {field} must be string"
             assert len(content.strip()) > 0, f"Field {field} cannot be empty"
-            assert not content.startswith(
-                "I understand"
-            ), f"Field {field} is template: {content}"
+            assert not content.startswith("I understand"), (
+                f"Field {field} is template: {content}"
+            )
 
         # Intelligence validation
         market_analysis = result["market_analysis"].lower()
@@ -132,41 +132,41 @@ class TestCompleteIntelligentWorkflows:
             "arr",
         ]
         market_matches = sum(1 for term in market_terms if term in market_analysis)
-        assert (
-            market_matches >= 4
-        ), f"Market analysis lacks intelligence: {result['market_analysis']}"
+        assert market_matches >= 4, (
+            f"Market analysis lacks intelligence: {result['market_analysis']}"
+        )
 
         # Competitive analysis intelligence
         competitors = ["asana", "monday", "trello"]
         competitor_matches = sum(
             1 for comp in competitors if comp in competitive_analysis
         )
-        assert (
-            competitor_matches >= 2
-        ), f"Competitive analysis must address competitors: {result['competitive_analysis']}"
+        assert competitor_matches >= 2, (
+            f"Competitive analysis must address competitors: {result['competitive_analysis']}"
+        )
 
         # Recommendations intelligence
         business_actions = ["sales", "marketing", "scale", "hire", "strategy", "growth"]
         rec_matches = sum(1 for action in business_actions if action in recommendations)
-        assert (
-            rec_matches >= 3
-        ), f"Recommendations lack actionable intelligence: {result['recommendations']}"
+        assert rec_matches >= 3, (
+            f"Recommendations lack actionable intelligence: {result['recommendations']}"
+        )
 
         # Action plan intelligence
         action_indicators = ["step", "phase", "timeline", "implement", "first", "next"]
         action_matches = sum(
             1 for indicator in action_indicators if indicator in action_plan
         )
-        assert (
-            action_matches >= 2
-        ), f"Action plan lacks structured approach: {result['action_plan']}"
+        assert action_matches >= 2, (
+            f"Action plan lacks structured approach: {result['action_plan']}"
+        )
 
         # Quality validation
         total_words = sum(len(content.split()) for content in result.values())
         assert total_words >= 200, f"Complete analysis too brief: {total_words} words"
-        assert (
-            total_words <= 1000
-        ), f"Analysis too verbose for business context: {total_words} words"
+        assert total_words <= 1000, (
+            f"Analysis too verbose for business context: {total_words} words"
+        )
 
     def test_intelligent_multi_agent_collaboration(
         self, kaizen_production, production_llm_config
@@ -216,12 +216,12 @@ class TestCompleteIntelligentWorkflows:
         findings = research_result["research_findings"]
         data_points = research_result["data_points"]
 
-        assert not findings.startswith(
-            "I understand"
-        ), f"Research findings are template: {findings}"
-        assert not data_points.startswith(
-            "I understand"
-        ), f"Data points are template: {data_points}"
+        assert not findings.startswith("I understand"), (
+            f"Research findings are template: {findings}"
+        )
+        assert not data_points.startswith("I understand"), (
+            f"Data points are template: {data_points}"
+        )
 
         # Research intelligence validation
         research_terms = [
@@ -233,9 +233,9 @@ class TestCompleteIntelligentWorkflows:
         ]
         findings_lower = findings.lower()
         research_matches = sum(1 for term in research_terms if term in findings_lower)
-        assert (
-            research_matches >= 3
-        ), f"Research lacks AI/business intelligence: {findings}"
+        assert research_matches >= 3, (
+            f"Research lacks AI/business intelligence: {findings}"
+        )
 
         # Step 2: Analysis (using research output)
         combined_research = f"{findings} {data_points}"
@@ -248,12 +248,12 @@ class TestCompleteIntelligentWorkflows:
         analysis = analysis_result["analysis"]
         insights = analysis_result["insights"]
 
-        assert not analysis.startswith(
-            "I understand"
-        ), f"Analysis is template: {analysis}"
-        assert not insights.startswith(
-            "I understand"
-        ), f"Insights are template: {insights}"
+        assert not analysis.startswith("I understand"), (
+            f"Analysis is template: {analysis}"
+        )
+        assert not insights.startswith("I understand"), (
+            f"Insights are template: {insights}"
+        )
 
         # Analysis should build upon research
         analysis_lower = analysis.lower()
@@ -278,12 +278,12 @@ class TestCompleteIntelligentWorkflows:
         strategy = strategy_result["strategy"]
         tactical_steps = strategy_result["tactical_steps"]
 
-        assert not strategy.startswith(
-            "I understand"
-        ), f"Strategy is template: {strategy}"
-        assert not tactical_steps.startswith(
-            "I understand"
-        ), f"Tactical steps are template: {tactical_steps}"
+        assert not strategy.startswith("I understand"), (
+            f"Strategy is template: {strategy}"
+        )
+        assert not tactical_steps.startswith("I understand"), (
+            f"Tactical steps are template: {tactical_steps}"
+        )
 
         # Strategy intelligence validation
         strategic_terms = ["strategy", "approach", "plan", "objective", "goal"]
@@ -295,9 +295,9 @@ class TestCompleteIntelligentWorkflows:
         tactical_lower = tactical_steps.lower()
         action_terms = ["step", "implement", "start", "begin", "action", "execute"]
         tactical_matches = sum(1 for term in action_terms if term in tactical_lower)
-        assert (
-            tactical_matches >= 2
-        ), f"Tactical steps lack actionable guidance: {tactical_steps}"
+        assert tactical_matches >= 2, (
+            f"Tactical steps lack actionable guidance: {tactical_steps}"
+        )
 
         # Validate information flow and coherence
         all_content = f"{findings} {analysis} {strategy}".lower()
@@ -309,9 +309,9 @@ class TestCompleteIntelligentWorkflows:
             "technology",
         ]
         coherence_matches = sum(1 for term in topic_coherence if term in all_content)
-        assert (
-            coherence_matches >= 4
-        ), "Multi-agent workflow lacks topic coherence across all outputs"
+        assert coherence_matches >= 4, (
+            "Multi-agent workflow lacks topic coherence across all outputs"
+        )
 
     def test_intelligent_chain_of_thought_reasoning_e2e(
         self, kaizen_production, production_llm_config
@@ -353,15 +353,15 @@ class TestCompleteIntelligentWorkflows:
         for field in reasoning_fields:
             if field in result:  # Some fields might be named differently
                 content = result[field]
-                assert isinstance(
-                    content, str
-                ), f"Reasoning field {field} must be string"
-                assert (
-                    len(content.strip()) > 0
-                ), f"Reasoning field {field} cannot be empty"
-                assert not content.startswith(
-                    "I understand"
-                ), f"Reasoning field {field} is template: {content}"
+                assert isinstance(content, str), (
+                    f"Reasoning field {field} must be string"
+                )
+                assert len(content.strip()) > 0, (
+                    f"Reasoning field {field} cannot be empty"
+                )
+                assert not content.startswith("I understand"), (
+                    f"Reasoning field {field} is template: {content}"
+                )
 
         # Find reasoning steps (flexible field naming)
         reasoning_steps = []
@@ -384,9 +384,9 @@ class TestCompleteIntelligentWorkflows:
                 confidence_content += str(value) + " "
 
         # Must have multiple reasoning steps
-        assert (
-            len(reasoning_steps) >= 2
-        ), f"CoT must show multiple reasoning steps: {result}"
+        assert len(reasoning_steps) >= 2, (
+            f"CoT must show multiple reasoning steps: {result}"
+        )
 
         # Reasoning intelligence validation
         all_reasoning = " ".join(reasoning_steps).lower()
@@ -404,9 +404,9 @@ class TestCompleteIntelligentWorkflows:
         element_matches = sum(
             1 for element in problem_elements if element in all_reasoning
         )
-        assert (
-            element_matches >= 5
-        ), f"CoT reasoning must address problem elements: {reasoning_steps}"
+        assert element_matches >= 5, (
+            f"CoT reasoning must address problem elements: {reasoning_steps}"
+        )
 
         # Must show structured thinking
         thinking_indicators = [
@@ -422,17 +422,17 @@ class TestCompleteIntelligentWorkflows:
         thinking_matches = sum(
             1 for indicator in thinking_indicators if indicator in all_reasoning
         )
-        assert (
-            thinking_matches >= 3
-        ), f"CoT must show structured thinking process: {reasoning_steps}"
+        assert thinking_matches >= 3, (
+            f"CoT must show structured thinking process: {reasoning_steps}"
+        )
 
         # Solution validation
-        assert (
-            len(solution_content.strip()) > 0
-        ), f"CoT must provide final solution: {result}"
-        assert not solution_content.startswith(
-            "I understand"
-        ), f"CoT solution is template: {solution_content}"
+        assert len(solution_content.strip()) > 0, (
+            f"CoT must provide final solution: {result}"
+        )
+        assert not solution_content.startswith("I understand"), (
+            f"CoT solution is template: {solution_content}"
+        )
 
         solution_lower = solution_content.lower()
         solution_elements = [
@@ -446,15 +446,15 @@ class TestCompleteIntelligentWorkflows:
         solution_matches = sum(
             1 for element in solution_elements if element in solution_lower
         )
-        assert (
-            solution_matches >= 3
-        ), f"Solution must be comprehensive: {solution_content}"
+        assert solution_matches >= 3, (
+            f"Solution must be comprehensive: {solution_content}"
+        )
 
         # Quality validation
         total_reasoning_words = sum(len(step.split()) for step in reasoning_steps)
-        assert (
-            total_reasoning_words >= 100
-        ), f"CoT reasoning too superficial: {total_reasoning_words} words"
+        assert total_reasoning_words >= 100, (
+            f"CoT reasoning too superficial: {total_reasoning_words} words"
+        )
 
     def test_intelligent_react_pattern_e2e(
         self, kaizen_production, production_llm_config
@@ -504,9 +504,9 @@ class TestCompleteIntelligentWorkflows:
 
         # Must have ReAct components
         assert len(thought_fields) >= 1, f"ReAct must have thought processes: {result}"
-        assert (
-            len(action_fields) >= 1 or len(observation_fields) >= 1
-        ), f"ReAct must have actions or observations: {result}"
+        assert len(action_fields) >= 1 or len(observation_fields) >= 1, (
+            f"ReAct must have actions or observations: {result}"
+        )
         assert len(final_answer.strip()) > 0, f"ReAct must have final answer: {result}"
 
         # Intelligence validation
@@ -515,15 +515,15 @@ class TestCompleteIntelligentWorkflows:
         all_observations = " ".join(observation_fields).lower()
 
         # Must NOT be templates
-        assert not all_thoughts.startswith(
-            "i understand"
-        ), f"ReAct thoughts are templates: {thought_fields}"
-        assert not all_actions.startswith(
-            "i understand"
-        ), f"ReAct actions are templates: {action_fields}"
-        assert not final_answer.startswith(
-            "I understand"
-        ), f"ReAct final answer is template: {final_answer}"
+        assert not all_thoughts.startswith("i understand"), (
+            f"ReAct thoughts are templates: {thought_fields}"
+        )
+        assert not all_actions.startswith("i understand"), (
+            f"ReAct actions are templates: {action_fields}"
+        )
+        assert not final_answer.startswith("I understand"), (
+            f"ReAct final answer is template: {final_answer}"
+        )
 
         # Must address programming languages for AI
         combined_content = (
@@ -572,21 +572,21 @@ class TestCompleteIntelligentWorkflows:
         criteria_matches = sum(
             1 for criterion in criteria if criterion in combined_content
         )
-        assert (
-            criteria_matches >= 3
-        ), f"ReAct must consider evaluation criteria: {result}"
+        assert criteria_matches >= 3, (
+            f"ReAct must consider evaluation criteria: {result}"
+        )
 
         # Final answer must be comprehensive
         final_lower = final_answer.lower()
-        assert (
-            "top" in final_lower or "3" in final_lower or "three" in final_lower
-        ), f"Final answer must identify top 3 languages: {final_answer}"
+        assert "top" in final_lower or "3" in final_lower or "three" in final_lower, (
+            f"Final answer must identify top 3 languages: {final_answer}"
+        )
 
         # Quality validation
         total_words = len(combined_content.split())
-        assert (
-            total_words >= 150
-        ), f"ReAct response too brief for research task: {total_words} words"
+        assert total_words >= 150, (
+            f"ReAct response too brief for research task: {total_words} words"
+        )
 
 
 class TestIntelligentEnterpriseWorkflows:
@@ -675,15 +675,15 @@ class TestIntelligentEnterpriseWorkflows:
             assert isinstance(result, dict), f"Enterprise result {i} must be structured"
 
             for field, content in result.items():
-                assert isinstance(
-                    content, str
-                ), f"Field {field} in result {i} must be string"
-                assert (
-                    len(content.strip()) > 0
-                ), f"Field {field} in result {i} cannot be empty"
-                assert not content.startswith(
-                    "I understand"
-                ), f"Field {field} in result {i} is template: {content}"
+                assert isinstance(content, str), (
+                    f"Field {field} in result {i} must be string"
+                )
+                assert len(content.strip()) > 0, (
+                    f"Field {field} in result {i} cannot be empty"
+                )
+                assert not content.startswith("I understand"), (
+                    f"Field {field} in result {i} is template: {content}"
+                )
 
         # Financial intelligence validation
         financial_content = " ".join(financial_result.values()).lower()
@@ -697,9 +697,9 @@ class TestIntelligentEnterpriseWorkflows:
             "million",
         ]
         fin_matches = sum(1 for term in financial_terms if term in financial_content)
-        assert (
-            fin_matches >= 4
-        ), f"Financial analysis lacks intelligence: {financial_result}"
+        assert fin_matches >= 4, (
+            f"Financial analysis lacks intelligence: {financial_result}"
+        )
 
         # Technical intelligence validation
         technical_content = " ".join(technical_result.values()).lower()
@@ -713,9 +713,9 @@ class TestIntelligentEnterpriseWorkflows:
             "architecture",
         ]
         tech_matches = sum(1 for term in technical_terms if term in technical_content)
-        assert (
-            tech_matches >= 4
-        ), f"Technical assessment lacks intelligence: {technical_result}"
+        assert tech_matches >= 4, (
+            f"Technical assessment lacks intelligence: {technical_result}"
+        )
 
         # Executive intelligence validation
         executive_content = " ".join(executive_result.values()).lower()
@@ -728,9 +728,9 @@ class TestIntelligentEnterpriseWorkflows:
             "framework",
         ]
         exec_matches = sum(1 for term in executive_terms if term in executive_content)
-        assert (
-            exec_matches >= 3
-        ), f"Executive summary lacks intelligence: {executive_result}"
+        assert exec_matches >= 3, (
+            f"Executive summary lacks intelligence: {executive_result}"
+        )
 
         # Integration validation - executive summary should reference both analyses
         exec_summary = executive_result.get("executive_summary", "").lower()
@@ -741,12 +741,12 @@ class TestIntelligentEnterpriseWorkflows:
             term in exec_summary for term in ["technical", "migration", "cloud"]
         )
 
-        assert (
-            references_financial
-        ), f"Executive summary must reference financial analysis: {executive_result}"
-        assert (
-            references_technical
-        ), f"Executive summary must reference technical assessment: {executive_result}"
+        assert references_financial, (
+            f"Executive summary must reference financial analysis: {executive_result}"
+        )
+        assert references_technical, (
+            f"Executive summary must reference technical assessment: {executive_result}"
+        )
 
     def test_intelligent_performance_monitoring(
         self, kaizen_production, production_llm_config
@@ -785,33 +785,33 @@ class TestIntelligentEnterpriseWorkflows:
             response_times.append(end - start)
 
             # Validate intelligent response structure
-            assert isinstance(
-                result, dict
-            ), f"Performance result {i} must be structured"
-            assert (
-                "performance_analysis" in result
-            ), f"Missing performance analysis in result {i}"
-            assert (
-                "bottleneck_identification" in result
-            ), f"Missing bottleneck identification in result {i}"
-            assert (
-                "optimization_recommendations" in result
-            ), f"Missing optimization recommendations in result {i}"
+            assert isinstance(result, dict), (
+                f"Performance result {i} must be structured"
+            )
+            assert "performance_analysis" in result, (
+                f"Missing performance analysis in result {i}"
+            )
+            assert "bottleneck_identification" in result, (
+                f"Missing bottleneck identification in result {i}"
+            )
+            assert "optimization_recommendations" in result, (
+                f"Missing optimization recommendations in result {i}"
+            )
 
             # Intelligence validation
             analysis = result["performance_analysis"]
             bottlenecks = result["bottleneck_identification"]
             recommendations = result["optimization_recommendations"]
 
-            assert not analysis.startswith(
-                "I understand"
-            ), f"Performance analysis {i} is template: {analysis}"
-            assert not bottlenecks.startswith(
-                "I understand"
-            ), f"Bottleneck identification {i} is template: {bottlenecks}"
-            assert not recommendations.startswith(
-                "I understand"
-            ), f"Optimization recommendations {i} is template: {recommendations}"
+            assert not analysis.startswith("I understand"), (
+                f"Performance analysis {i} is template: {analysis}"
+            )
+            assert not bottlenecks.startswith("I understand"), (
+                f"Bottleneck identification {i} is template: {bottlenecks}"
+            )
+            assert not recommendations.startswith("I understand"), (
+                f"Optimization recommendations {i} is template: {recommendations}"
+            )
 
             # Domain intelligence validation
             analysis_lower = analysis.lower()
@@ -828,9 +828,9 @@ class TestIntelligentEnterpriseWorkflows:
             analysis_matches = sum(
                 1 for metric in performance_metrics if metric in analysis_lower
             )
-            assert (
-                analysis_matches >= 3
-            ), f"Performance analysis {i} lacks domain intelligence: {analysis}"
+            assert analysis_matches >= 3, (
+                f"Performance analysis {i} lacks domain intelligence: {analysis}"
+            )
 
             # Bottleneck identification should be specific
             bottleneck_lower = bottlenecks.lower()
@@ -847,9 +847,9 @@ class TestIntelligentEnterpriseWorkflows:
                 for indicator in bottleneck_indicators
                 if indicator in bottleneck_lower
             )
-            assert (
-                bottleneck_matches >= 1
-            ), f"Bottleneck identification {i} lacks specificity: {bottlenecks}"
+            assert bottleneck_matches >= 1, (
+                f"Bottleneck identification {i} lacks specificity: {bottlenecks}"
+            )
 
             # Recommendations should be actionable
             rec_lower = recommendations.lower()
@@ -863,27 +863,27 @@ class TestIntelligentEnterpriseWorkflows:
                 "enhance",
             ]
             rec_matches = sum(1 for word in action_words if word in rec_lower)
-            assert (
-                rec_matches >= 2
-            ), f"Optimization recommendations {i} lack actionable advice: {recommendations}"
+            assert rec_matches >= 2, (
+                f"Optimization recommendations {i} lack actionable advice: {recommendations}"
+            )
 
         # Performance consistency validation
         avg_response_time = sum(response_times) / len(response_times)
         max_response_time = max(response_times)
         min_response_time = min(response_times)
 
-        assert (
-            avg_response_time < 60.0
-        ), f"Average response time too slow: {avg_response_time}s"
-        assert (
-            max_response_time < 90.0
-        ), f"Maximum response time too slow: {max_response_time}s"
+        assert avg_response_time < 60.0, (
+            f"Average response time too slow: {avg_response_time}s"
+        )
+        assert max_response_time < 90.0, (
+            f"Maximum response time too slow: {max_response_time}s"
+        )
 
         # Consistency check (responses shouldn't vary wildly in timing)
         time_variance = max_response_time - min_response_time
-        assert (
-            time_variance < 30.0
-        ), f"Response time too inconsistent: {time_variance}s variance"
+        assert time_variance < 30.0, (
+            f"Response time too inconsistent: {time_variance}s variance"
+        )
 
         print(
             f"Performance monitoring: Avg {avg_response_time:.2f}s, Range {min_response_time:.2f}s-{max_response_time:.2f}s"

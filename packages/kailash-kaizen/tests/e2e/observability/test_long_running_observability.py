@@ -149,9 +149,9 @@ class TestContinuousObservability:
 
         # Validate: No significant memory leaks
         # Allow up to 50% memory increase for caching/buffering
-        assert (
-            memory_increase_percent < 50
-        ), f"Memory leak detected: {memory_increase_percent:.1f}% increase"
+        assert memory_increase_percent < 50, (
+            f"Memory leak detected: {memory_increase_percent:.1f}% increase"
+        )
 
         # Validate: All calls completed
         assert call_count == total_calls
@@ -258,9 +258,9 @@ class TestHighVolumeMetrics:
         memory_increase_mb = final_memory_mb - initial_memory_mb
 
         # Validate: Memory increase is reasonable (<100 MB for 10k observations)
-        assert (
-            memory_increase_mb < 100
-        ), f"Excessive memory usage: {memory_increase_mb:.1f} MB"
+        assert memory_increase_mb < 100, (
+            f"Excessive memory usage: {memory_increase_mb:.1f} MB"
+        )
 
         # Validate: Prometheus export performance (<100ms)
         export_start = time.time()

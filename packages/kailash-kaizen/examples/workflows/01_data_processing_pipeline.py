@@ -133,17 +133,17 @@ class DataProcessor(BaseAgent):
     def _generate_report(self, filename: str, analysis: dict) -> str:
         """Generate formatted analysis report."""
         return f"""Data Analysis Report
-{'=' * 50}
+{"=" * 50}
 
 File: {filename}
-Processed: {analysis.get('line_count')} lines, {analysis.get('word_count')} words
+Processed: {analysis.get("line_count")} lines, {analysis.get("word_count")} words
 
 Metrics:
-- Total Characters: {analysis.get('char_count')}
-- Average Line Length: {analysis.get('avg_line_length', 0):.2f}
-- Non-Empty Lines: {analysis.get('non_empty_lines')}
+- Total Characters: {analysis.get("char_count")}
+- Average Line Length: {analysis.get("avg_line_length", 0):.2f}
+- Non-Empty Lines: {analysis.get("non_empty_lines")}
 
-{'=' * 50}
+{"=" * 50}
 """
 
 

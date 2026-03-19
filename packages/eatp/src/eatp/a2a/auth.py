@@ -98,9 +98,7 @@ class A2AAuthenticator:
             # Get trust chain for this agent
             chain = await self._trust_ops.get_chain(self._agent_id)
             if not chain:
-                raise AuthenticationError(
-                    f"No trust chain found for agent: {self._agent_id}"
-                )
+                raise AuthenticationError(f"No trust chain found for agent: {self._agent_id}")
 
             now = datetime.now(timezone.utc)
             token_data = A2AToken(
@@ -159,15 +157,10 @@ class A2AAuthenticator:
 
             # Check audience if provided
             if expected_audience and claims.aud != expected_audience:
-                raise InvalidTokenError(
-                    f"Token audience mismatch: expected {expected_audience}, "
-                    f"got {claims.aud}"
-                )
+                raise InvalidTokenError(f"Token audience mismatch: expected {expected_audience}, got {claims.aud}")
 
             # Verify signature
-            if not await self._verify_signature(
-                token, claims.iss, claims.trust_chain_hash
-            ):
+            if not await self._verify_signature(token, claims.iss, claims.trust_chain_hash):
                 raise InvalidTokenError("Invalid token signature")
 
             # Verify trust chain if requested

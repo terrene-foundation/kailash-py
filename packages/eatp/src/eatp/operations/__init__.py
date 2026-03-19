@@ -286,9 +286,7 @@ class TrustOperations:
 
         # 2. Check authority has permission to create agents
         if not authority.has_permission(AuthorityPermission.CREATE_AGENTS):
-            raise TrustError(
-                f"Authority {authority_id} does not have permission to create agents"
-            )
+            raise TrustError(f"Authority {authority_id} does not have permission to create agents")
 
         # 3. Check agent doesn't already have a trust chain
         try:
@@ -313,9 +311,7 @@ class TrustOperations:
 
         # 5. Sign genesis record
         genesis_payload = serialize_for_signing(genesis.to_signing_payload())
-        genesis.signature = await self.key_manager.sign(
-            genesis_payload, authority.signing_key_id
-        )
+        genesis.signature = await self.key_manager.sign(genesis_payload, authority.signing_key_id)
 
         # 6. Create Capability Attestations
         capability_attestations = []
@@ -410,9 +406,7 @@ class TrustOperations:
 
         # Sign attestation
         payload = serialize_for_signing(attestation.to_signing_payload())
-        attestation.signature = await self.key_manager.sign(
-            payload, authority.signing_key_id
-        )
+        attestation.signature = await self.key_manager.sign(payload, authority.signing_key_id)
 
         return attestation
 
@@ -570,8 +564,7 @@ class TrustOperations:
         # Reasoning trace verification (implemented in Phase 4)
         # Check if REASONING_REQUIRED constraint is active
         reasoning_required = any(
-            c.constraint_type == ConstraintType.REASONING_REQUIRED
-            for c in chain.constraint_envelope.active_constraints
+            c.constraint_type == ConstraintType.REASONING_REQUIRED for c in chain.constraint_envelope.active_constraints
         )
 
         reasoning_present: Optional[bool] = None
@@ -640,9 +633,7 @@ class TrustOperations:
             valid=True,
             level=level,
             capability_used=capability.id,
-            effective_constraints=chain.get_effective_constraints(
-                capability.capability
-            ),
+            effective_constraints=chain.get_effective_constraints(capability.capability),
             violations=reasoning_violations,
             reasoning_present=reasoning_present,
             reasoning_verified=reasoning_verified,
@@ -740,10 +731,7 @@ class TrustOperations:
                 if delegation.reasoning_trace_hash != expected_hash:
                     return VerificationResult(
                         valid=False,
-                        reason=(
-                            f"Reasoning trace hash mismatch on delegation "
-                            f"{delegation.id}"
-                        ),
+                        reason=(f"Reasoning trace hash mismatch on delegation {delegation.id}"),
                         level=VerificationLevel.FULL,
                         reasoning_verified=False,
                     )
@@ -752,10 +740,7 @@ class TrustOperations:
                 if delegation.reasoning_signature is None:
                     return VerificationResult(
                         valid=False,
-                        reason=(
-                            f"Reasoning signature missing on delegation "
-                            f"{delegation.id}"
-                        ),
+                        reason=(f"Reasoning signature missing on delegation {delegation.id}"),
                         level=VerificationLevel.FULL,
                         reasoning_verified=False,
                     )
@@ -780,10 +765,7 @@ class TrustOperations:
                 if not sig_valid:
                     return VerificationResult(
                         valid=False,
-                        reason=(
-                            f"Reasoning signature cryptographic verification "
-                            f"failed on delegation {delegation.id}"
-                        ),
+                        reason=(f"Reasoning signature cryptographic verification failed on delegation {delegation.id}"),
                         level=VerificationLevel.FULL,
                         reasoning_verified=False,
                     )
@@ -796,10 +778,7 @@ class TrustOperations:
                 if anchor.reasoning_trace_hash != expected_hash:
                     return VerificationResult(
                         valid=False,
-                        reason=(
-                            f"Reasoning trace hash mismatch on audit anchor "
-                            f"{anchor.id}"
-                        ),
+                        reason=(f"Reasoning trace hash mismatch on audit anchor {anchor.id}"),
                         level=VerificationLevel.FULL,
                         reasoning_verified=False,
                     )
@@ -808,10 +787,7 @@ class TrustOperations:
                 if anchor.reasoning_signature is None:
                     return VerificationResult(
                         valid=False,
-                        reason=(
-                            f"Reasoning signature missing on audit anchor "
-                            f"{anchor.id}"
-                        ),
+                        reason=(f"Reasoning signature missing on audit anchor {anchor.id}"),
                         level=VerificationLevel.FULL,
                         reasoning_verified=False,
                     )
@@ -836,10 +812,7 @@ class TrustOperations:
                 if not sig_valid:
                     return VerificationResult(
                         valid=False,
-                        reason=(
-                            f"Reasoning signature cryptographic verification "
-                            f"failed on audit anchor {anchor.id}"
-                        ),
+                        reason=(f"Reasoning signature cryptographic verification failed on audit anchor {anchor.id}"),
                         level=VerificationLevel.FULL,
                         reasoning_verified=False,
                     )
@@ -951,9 +924,7 @@ class TrustOperations:
         if not envelope.is_valid():
             return ConstraintEvaluationResult(
                 permitted=False,
-                violations=[
-                    {"constraint": "envelope", "reason": "Constraint envelope expired"}
-                ],
+                violations=[{"constraint": "envelope", "reason": "Constraint envelope expired"}],
             )
 
         # Evaluate each constraint
@@ -1092,13 +1063,9 @@ class TrustOperations:
         for delegation in chain.delegations:
             # For delegations, we need the delegator's chain to get the authority
             try:
-                delegator_chain = await self.trust_store.get_chain(
-                    delegation.delegator_id
-                )
+                delegator_chain = await self.trust_store.get_chain(delegation.delegator_id)
                 # Verify delegation signature using the authority's key
-                result = await self._verify_delegation_signature(
-                    delegation, delegator_chain
-                )
+                result = await self._verify_delegation_signature(delegation, delegator_chain)
                 if not result.valid:
                     return result
             except TrustChainNotFoundError:
@@ -1147,9 +1114,7 @@ class TrustOperations:
         del_payload = serialize_for_signing(delegation.to_signing_payload())
 
         # Verify signature using authority's key
-        if not verify_signature(
-            del_payload, delegation.signature, authority.public_key
-        ):
+        if not verify_signature(del_payload, delegation.signature, authority.public_key):
             return VerificationResult(
                 valid=False,
                 reason=f"Invalid delegation signature: {delegation.id}",
@@ -1197,12 +1162,8 @@ class TrustOperations:
         # Verify each delegation in the chain
         for delegation in chain.delegations:
             try:
-                delegator_chain = await self.trust_store.get_chain(
-                    delegation.delegator_id
-                )
-                result = await self._verify_delegation_signature(
-                    delegation, delegator_chain
-                )
+                delegator_chain = await self.trust_store.get_chain(delegation.delegator_id)
+                result = await self._verify_delegation_signature(delegation, delegator_chain)
                 if not result.valid:
                     return result
             except TrustChainNotFoundError:
@@ -1378,10 +1339,7 @@ class TrustOperations:
         delegator_caps = {cap.capability for cap in delegator_chain.capabilities}
         for requested_cap in capabilities:
             # Use pattern matching for wildcard capabilities
-            if not any(
-                self._capability_matches_pattern(dc, requested_cap)
-                for dc in delegator_caps
-            ):
+            if not any(self._capability_matches_pattern(dc, requested_cap) for dc in delegator_caps):
                 raise CapabilityNotFoundError(
                     requested_cap,
                     f"Delegator {delegator_id} does not have capability '{requested_cap}'",
@@ -1396,10 +1354,7 @@ class TrustOperations:
             )
 
         # 4. Verify delegator can delegate (not explicitly restricted)
-        delegator_constraints = [
-            str(c.value).lower()
-            for c in delegator_chain.constraint_envelope.active_constraints
-        ]
+        delegator_constraints = [str(c.value).lower() for c in delegator_chain.constraint_envelope.active_constraints]
         if "no_delegation" in delegator_constraints:
             raise DelegationError(
                 "Delegator is restricted from delegating trust",
@@ -1437,22 +1392,15 @@ class TrustOperations:
             )
 
             if not inheritance_result.valid:
-                violations_str = ", ".join(
-                    f"{v.value}" for v in inheritance_result.violations
-                )
-                details_str = "; ".join(
-                    f"{k}: {v}" for k, v in inheritance_result.details.items()
-                )
+                violations_str = ", ".join(f"{v.value}" for v in inheritance_result.violations)
+                details_str = "; ".join(f"{k}: {v}" for k, v in inheritance_result.details.items())
                 raise ConstraintViolationError(
-                    f"Delegation violates constraint inheritance: {violations_str}. "
-                    f"Details: {details_str}",
+                    f"Delegation violates constraint inheritance: {violations_str}. Details: {details_str}",
                     violations=[
                         {
                             "type": v.value,
                             "detail": inheritance_result.details.get(
-                                v.value.replace("_increased", "")
-                                .replace("_expanded", "")
-                                .replace("_removed", ""),
+                                v.value.replace("_increased", "").replace("_expanded", "").replace("_removed", ""),
                                 "",
                             ),
                         }
@@ -1565,9 +1513,7 @@ class TrustOperations:
             )
 
             # Sign derived genesis
-            genesis_payload = serialize_for_signing(
-                derived_genesis.to_signing_payload()
-            )
+            genesis_payload = serialize_for_signing(derived_genesis.to_signing_payload())
             derived_genesis.signature = await self.key_manager.sign(
                 genesis_payload,
                 authority.signing_key_id,
@@ -1597,9 +1543,7 @@ class TrustOperations:
                         signature="",
                         scope=source_cap.scope,
                     )
-                    cap_payload = serialize_for_signing(
-                        derived_cap.to_signing_payload()
-                    )
+                    cap_payload = serialize_for_signing(derived_cap.to_signing_payload())
                     derived_cap.signature = await self.key_manager.sign(
                         cap_payload,
                         authority.signing_key_id,
@@ -1937,9 +1881,7 @@ class TrustOperations:
             # Recursively revoke (in parallel for performance)
             if delegatee_ids:
                 cascade_tasks = [
-                    self.revoke_cascade(
-                        delegatee_id, f"Cascade from {agent_id}: {reason}"
-                    )
+                    self.revoke_cascade(delegatee_id, f"Cascade from {agent_id}: {reason}")
                     for delegatee_id in set(delegatee_ids)
                 ]
                 results = await asyncio.gather(*cascade_tasks, return_exceptions=True)
@@ -2001,24 +1943,18 @@ class TrustOperations:
                 if delegation.delegator_id == pseudo_agent_id:
                     direct_delegatees.add(delegation.delegatee_id)
                 # Also check if human_origin matches
-                if (
-                    delegation.human_origin
-                    and delegation.human_origin.human_id == human_id
-                ):
+                if delegation.human_origin and delegation.human_origin.human_id == human_id:
                     # This delegation chain traces back to this human
                     if chain.genesis.agent_id not in revoked_agents:
                         direct_delegatees.add(chain.genesis.agent_id)
 
         # Cascade revoke each direct delegatee
         for delegatee_id in direct_delegatees:
-            result = await self.revoke_cascade(
-                delegatee_id, f"Human access revoked ({human_id}): {reason}"
-            )
+            result = await self.revoke_cascade(delegatee_id, f"Human access revoked ({human_id}): {reason}")
             revoked_agents.extend(result)
 
         logger.warning(
-            f"Revoked all delegations from human {human_id}: "
-            f"{len(revoked_agents)} agents affected. Reason: {reason}"
+            f"Revoked all delegations from human {human_id}: {len(revoked_agents)} agents affected. Reason: {reason}"
         )
 
         return revoked_agents
@@ -2042,10 +1978,7 @@ class TrustOperations:
             all_chains = await self.trust_store.list_chains()
             for chain in all_chains:
                 for delegation in chain.delegations:
-                    if (
-                        delegation.human_origin
-                        and delegation.human_origin.human_id == human_id
-                    ):
+                    if delegation.human_origin and delegation.human_origin.human_id == human_id:
                         matching_delegations.append(delegation)
         except Exception as e:
             logger.error(f"Error finding delegations for human {human_id}: {e}")

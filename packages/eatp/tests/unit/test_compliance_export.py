@@ -144,17 +144,13 @@ class TestSOC2ControlMappings:
     def test_establish_maps_to_access_control(self):
         """ESTABLISH operation maps to CC6.1 (access control) and CC6.2 (user provisioning)."""
         mappings = SOC2_CONTROL_MAPPINGS["ESTABLISH"]
-        assert (
-            "CC6.1" in mappings
-        ), "ESTABLISH must map to CC6.1 (Logical and Physical Access Controls)"
+        assert "CC6.1" in mappings, "ESTABLISH must map to CC6.1 (Logical and Physical Access Controls)"
         assert "CC6.2" in mappings, "ESTABLISH must map to CC6.2 (User Provisioning)"
 
     def test_delegate_maps_to_role_based_access(self):
         """DELEGATE operation maps to CC6.1 and CC6.3 (role-based access)."""
         mappings = SOC2_CONTROL_MAPPINGS["DELEGATE"]
-        assert (
-            "CC6.1" in mappings
-        ), "DELEGATE must map to CC6.1 (Logical and Physical Access Controls)"
+        assert "CC6.1" in mappings, "DELEGATE must map to CC6.1 (Logical and Physical Access Controls)"
         assert "CC6.3" in mappings, "DELEGATE must map to CC6.3 (Role-Based Access)"
 
     def test_verify_maps_to_monitoring(self):
@@ -175,9 +171,7 @@ class TestSOC2ControlMappings:
             assert isinstance(controls, list), f"{operation} mapping must be a list"
             assert len(controls) > 0, f"{operation} must map to at least one control"
             for control in controls:
-                assert isinstance(
-                    control, str
-                ), f"Control IDs must be strings, got {type(control)}"
+                assert isinstance(control, str), f"Control IDs must be strings, got {type(control)}"
                 assert len(control) > 0, f"Control IDs must be non-empty"
 
     def test_control_ids_follow_soc2_naming_convention(self):
@@ -346,9 +340,7 @@ class TestGenerateSOC2Evidence:
     """Tests for the SOC 2 evidence generation function."""
 
     @pytest.mark.asyncio
-    async def test_generates_report_with_valid_structure(
-        self, mock_audit_service, period_start, period_end
-    ):
+    async def test_generates_report_with_valid_structure(self, mock_audit_service, period_start, period_end):
         """Generated report must have all required structural fields."""
         report = await generate_soc2_evidence(
             audit_service=mock_audit_service,
@@ -364,9 +356,7 @@ class TestGenerateSOC2Evidence:
         assert report.framework == "SOC2"
 
     @pytest.mark.asyncio
-    async def test_report_contains_evidence_records(
-        self, mock_audit_service, period_start, period_end
-    ):
+    async def test_report_contains_evidence_records(self, mock_audit_service, period_start, period_end):
         """Generated report must contain evidence records derived from audit data."""
         report = await generate_soc2_evidence(
             audit_service=mock_audit_service,
@@ -374,14 +364,10 @@ class TestGenerateSOC2Evidence:
             end_time=period_end,
         )
 
-        assert (
-            len(report.records) > 0
-        ), "Report must contain at least one evidence record"
+        assert len(report.records) > 0, "Report must contain at least one evidence record"
 
     @pytest.mark.asyncio
-    async def test_evidence_records_map_to_soc2_controls(
-        self, mock_audit_service, period_start, period_end
-    ):
+    async def test_evidence_records_map_to_soc2_controls(self, mock_audit_service, period_start, period_end):
         """Every evidence record must reference valid SOC 2 control objectives."""
         report = await generate_soc2_evidence(
             audit_service=mock_audit_service,
@@ -395,18 +381,14 @@ class TestGenerateSOC2Evidence:
             all_valid_controls.update(controls)
 
         for record in report.records:
-            assert (
-                len(record.control_objectives) > 0
-            ), f"Record {record.record_id} must have at least one control objective"
+            assert len(record.control_objectives) > 0, (
+                f"Record {record.record_id} must have at least one control objective"
+            )
             for control in record.control_objectives:
-                assert (
-                    control in all_valid_controls
-                ), f"Record {record.record_id} references unknown control {control}"
+                assert control in all_valid_controls, f"Record {record.record_id} references unknown control {control}"
 
     @pytest.mark.asyncio
-    async def test_control_coverage_counts_records_per_control(
-        self, mock_audit_service, period_start, period_end
-    ):
+    async def test_control_coverage_counts_records_per_control(self, mock_audit_service, period_start, period_end):
         """control_coverage must map each SOC 2 control ID to the count of evidence records."""
         report = await generate_soc2_evidence(
             audit_service=mock_audit_service,
@@ -416,15 +398,11 @@ class TestGenerateSOC2Evidence:
 
         assert len(report.control_coverage) > 0, "control_coverage must not be empty"
         for control_id, count in report.control_coverage.items():
-            assert isinstance(
-                count, int
-            ), f"Coverage count for {control_id} must be int"
+            assert isinstance(count, int), f"Coverage count for {control_id} must be int"
             assert count > 0, f"Coverage count for {control_id} must be positive"
 
     @pytest.mark.asyncio
-    async def test_summary_contains_aggregate_stats(
-        self, mock_audit_service, period_start, period_end
-    ):
+    async def test_summary_contains_aggregate_stats(self, mock_audit_service, period_start, period_end):
         """Report summary must include aggregate statistics."""
         report = await generate_soc2_evidence(
             audit_service=mock_audit_service,
@@ -435,14 +413,10 @@ class TestGenerateSOC2Evidence:
         assert "total_records" in report.summary, "Summary must include total_records"
         assert "total_agents" in report.summary, "Summary must include total_agents"
         assert "total_actions" in report.summary, "Summary must include total_actions"
-        assert (
-            "violations_found" in report.summary
-        ), "Summary must include violations_found"
+        assert "violations_found" in report.summary, "Summary must include violations_found"
 
     @pytest.mark.asyncio
-    async def test_passes_authority_id_filter_to_audit_service(
-        self, mock_audit_service, period_start, period_end
-    ):
+    async def test_passes_authority_id_filter_to_audit_service(self, mock_audit_service, period_start, period_end):
         """When authority_id is provided, it must be passed to the audit service."""
         await generate_soc2_evidence(
             audit_service=mock_audit_service,
@@ -458,9 +432,7 @@ class TestGenerateSOC2Evidence:
         )
 
     @pytest.mark.asyncio
-    async def test_generates_establish_evidence_records(
-        self, mock_audit_service, period_start, period_end
-    ):
+    async def test_generates_establish_evidence_records(self, mock_audit_service, period_start, period_end):
         """Report must include evidence records for ESTABLISH operations."""
         report = await generate_soc2_evidence(
             audit_service=mock_audit_service,
@@ -474,9 +446,7 @@ class TestGenerateSOC2Evidence:
             assert "CC6.1" in record.control_objectives
 
     @pytest.mark.asyncio
-    async def test_generates_delegate_evidence_records(
-        self, mock_audit_service, period_start, period_end
-    ):
+    async def test_generates_delegate_evidence_records(self, mock_audit_service, period_start, period_end):
         """Report must include evidence records for DELEGATE operations."""
         report = await generate_soc2_evidence(
             audit_service=mock_audit_service,
@@ -490,9 +460,7 @@ class TestGenerateSOC2Evidence:
             assert "CC6.3" in record.control_objectives
 
     @pytest.mark.asyncio
-    async def test_generates_verify_evidence_records(
-        self, mock_audit_service, period_start, period_end
-    ):
+    async def test_generates_verify_evidence_records(self, mock_audit_service, period_start, period_end):
         """Report must include evidence records for VERIFY operations."""
         report = await generate_soc2_evidence(
             audit_service=mock_audit_service,
@@ -506,9 +474,7 @@ class TestGenerateSOC2Evidence:
             assert "CC7.2" in record.control_objectives
 
     @pytest.mark.asyncio
-    async def test_generates_audit_evidence_records(
-        self, mock_audit_service, period_start, period_end
-    ):
+    async def test_generates_audit_evidence_records(self, mock_audit_service, period_start, period_end):
         """Report must include evidence records for AUDIT operations."""
         report = await generate_soc2_evidence(
             audit_service=mock_audit_service,
@@ -522,9 +488,7 @@ class TestGenerateSOC2Evidence:
             assert "CC8.1" in record.control_objectives
 
     @pytest.mark.asyncio
-    async def test_calls_audit_service_with_correct_time_range(
-        self, mock_audit_service, period_start, period_end
-    ):
+    async def test_calls_audit_service_with_correct_time_range(self, mock_audit_service, period_start, period_end):
         """Must pass exact start_time and end_time to audit service."""
         await generate_soc2_evidence(
             audit_service=mock_audit_service,
@@ -543,9 +507,7 @@ class TestGenerateSOC2Evidence:
             assert call_kwargs.args[1] == period_end
 
     @pytest.mark.asyncio
-    async def test_evidence_records_have_timestamps(
-        self, mock_audit_service, period_start, period_end
-    ):
+    async def test_evidence_records_have_timestamps(self, mock_audit_service, period_start, period_end):
         """Every evidence record must have a valid timestamp."""
         report = await generate_soc2_evidence(
             audit_service=mock_audit_service,
@@ -554,17 +516,11 @@ class TestGenerateSOC2Evidence:
         )
 
         for record in report.records:
-            assert (
-                record.timestamp is not None
-            ), f"Record {record.record_id} must have a timestamp"
-            assert isinstance(
-                record.timestamp, datetime
-            ), f"Record {record.record_id} timestamp must be a datetime"
+            assert record.timestamp is not None, f"Record {record.record_id} must have a timestamp"
+            assert isinstance(record.timestamp, datetime), f"Record {record.record_id} timestamp must be a datetime"
 
     @pytest.mark.asyncio
-    async def test_evidence_records_have_unique_ids(
-        self, mock_audit_service, period_start, period_end
-    ):
+    async def test_evidence_records_have_unique_ids(self, mock_audit_service, period_start, period_end):
         """Every evidence record must have a unique record_id."""
         report = await generate_soc2_evidence(
             audit_service=mock_audit_service,
@@ -576,9 +532,7 @@ class TestGenerateSOC2Evidence:
         assert len(record_ids) == len(set(record_ids)), "All record IDs must be unique"
 
     @pytest.mark.asyncio
-    async def test_violation_details_included_in_evidence(
-        self, mock_audit_service, period_start, period_end
-    ):
+    async def test_violation_details_included_in_evidence(self, mock_audit_service, period_start, period_end):
         """When the compliance report has violations, they must appear in the summary."""
         report = await generate_soc2_evidence(
             audit_service=mock_audit_service,
@@ -586,6 +540,4 @@ class TestGenerateSOC2Evidence:
             end_time=period_end,
         )
 
-        assert (
-            report.summary["violations_found"] is True
-        ), "Summary must reflect that violations were found"
+        assert report.summary["violations_found"] is True, "Summary must reflect that violations were found"

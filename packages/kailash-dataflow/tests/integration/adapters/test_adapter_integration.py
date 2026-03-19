@@ -237,7 +237,7 @@ class TestAdapterQueryIntegration:
                 assert len(result) > 0
                 assert isinstance(result[0], dict)
                 # Verify the test values
-                expected_key = f"test{i+1}"
+                expected_key = f"test{i + 1}"
                 assert expected_key in result[0]
                 assert result[0][expected_key] == i + 1
 
@@ -274,13 +274,13 @@ class TestAdapterFactoryIntegration:
 
             # Verify adapter type - handle both single types and tuples of acceptable types
             if isinstance(expected_type, tuple):
-                assert isinstance(
-                    adapter, expected_type
-                ), f"Expected one of {expected_type}, got {type(adapter)}"
+                assert isinstance(adapter, expected_type), (
+                    f"Expected one of {expected_type}, got {type(adapter)}"
+                )
             else:
-                assert isinstance(
-                    adapter, expected_type
-                ), f"Expected {expected_type}, got {type(adapter)}"
+                assert isinstance(adapter, expected_type), (
+                    f"Expected {expected_type}, got {type(adapter)}"
+                )
 
             # Verify configuration inheritance
             assert adapter.connection_string == connection_string

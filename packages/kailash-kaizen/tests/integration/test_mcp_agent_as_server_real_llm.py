@@ -275,7 +275,7 @@ class TestMCPServerAgentRealOpenAI:
             # Some might succeed, some might fail - both acceptable
 
         logger.info(f"Processed {len(questions)} requests in {total_time:.2f}s")
-        logger.info(f"Average latency: {total_time/len(questions):.2f}s")
+        logger.info(f"Average latency: {total_time / len(questions):.2f}s")
 
 
 # ===================================================================
@@ -486,7 +486,7 @@ class TestMCPServerAgentRealLLMPerformance:
             assert "jsonrpc" in result
 
         logger.info(f"Processed {len(questions)} questions in {total_time:.2f}s")
-        logger.info(f"Throughput: {len(questions)/total_time:.2f} questions/sec")
+        logger.info(f"Throughput: {len(questions) / total_time:.2f} questions/sec")
 
         agent.stop_server()
 
@@ -516,7 +516,8 @@ class TestMCPServerAgentRealLLMErrorHandling:
 
         # Missing required argument
         result = agent.handle_mcp_request(
-            tool_name="question_answering", arguments={}  # Missing 'question'
+            tool_name="question_answering",
+            arguments={},  # Missing 'question'
         )
 
         # Should return error or handle gracefully

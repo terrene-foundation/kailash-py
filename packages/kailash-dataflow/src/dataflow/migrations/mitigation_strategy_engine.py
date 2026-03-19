@@ -983,7 +983,7 @@ class MitigationStrategyEngine:
             expected_score = current_score - (score_reduction_per_phase * (i + 1))
             checkpoints.append(
                 {
-                    "checkpoint_name": f"Phase {i+1} Completion",
+                    "checkpoint_name": f"Phase {i + 1} Completion",
                     "expected_risk_score": expected_score,
                     "validation_criteria": [
                         f"Risk score reduced to {expected_score:.1f} or below",
@@ -1015,7 +1015,7 @@ class MitigationStrategyEngine:
 
         for i, phase in enumerate(phases):
             checkpoints.append(
-                f"Validate Phase {i+1} ({phase['phase_name']}) completion and effectiveness"
+                f"Validate Phase {i + 1} ({phase['phase_name']}) completion and effectiveness"
             )
 
         checkpoints.append("Final comprehensive risk assessment validation")

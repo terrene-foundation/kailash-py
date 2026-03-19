@@ -206,9 +206,9 @@ def performance_timer():
         def assert_under(self, max_seconds, operation_name="Operation"):
             if self.elapsed is None:
                 raise RuntimeError("Timer not stopped")
-            assert (
-                self.elapsed < max_seconds
-            ), f"{operation_name} took {self.elapsed:.3f}s (max: {max_seconds}s)"
+            assert self.elapsed < max_seconds, (
+                f"{operation_name} took {self.elapsed:.3f}s (max: {max_seconds}s)"
+            )
 
     return Timer
 
@@ -218,9 +218,9 @@ def assert_performance():
     """Helper to assert performance targets."""
 
     def _assert_performance(elapsed_ms: float, target_ms: float, operation: str):
-        assert (
-            elapsed_ms < target_ms
-        ), f"{operation} took {elapsed_ms:.1f}ms (target: <{target_ms}ms)"
+        assert elapsed_ms < target_ms, (
+            f"{operation} took {elapsed_ms:.1f}ms (target: <{target_ms}ms)"
+        )
 
     return _assert_performance
 

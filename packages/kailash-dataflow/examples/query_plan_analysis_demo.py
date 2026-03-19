@@ -206,7 +206,9 @@ def demonstrate_query_plan_analysis():
     """
 
     simple_analysis = pg_analyzer.analyze_query_plan(
-        query_sql, execution_plans["postgresql_simple"], 89.234  # execution time in ms
+        query_sql,
+        execution_plans["postgresql_simple"],
+        89.234,  # execution time in ms
     )
 
     print(f"Query analyzed: {len(query_sql)} characters")
@@ -317,7 +319,9 @@ def demonstrate_query_plan_analysis():
         status = (
             "✅"
             if analysis.optimization_score >= 80
-            else "⚠️" if analysis.optimization_score >= 60 else "❌"
+            else "⚠️"
+            if analysis.optimization_score >= 60
+            else "❌"
         )
         query_preview = analysis.query_sql.strip().split("\n")[0][:50] + "..."
         print(
@@ -337,7 +341,8 @@ def demonstrate_query_plan_analysis():
     print("-" * 32)
 
     monitoring_data = pg_analyzer.monitor_query_performance(
-        multi_analyses, threshold_ms=50.0  # Consider queries >50ms as slow
+        multi_analyses,
+        threshold_ms=50.0,  # Consider queries >50ms as slow
     )
 
     print("Performance Monitoring Results:")

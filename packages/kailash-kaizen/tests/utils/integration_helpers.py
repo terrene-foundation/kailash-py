@@ -413,12 +413,12 @@ class PerformanceBenchmark:
     def assert_performance(self, max_avg_ms: float, max_single_ms: float):
         """Assert performance requirements are met."""
         stats = self.get_stats()
-        assert (
-            stats["avg_ms"] <= max_avg_ms
-        ), f"Average time {stats['avg_ms']:.2f}ms exceeds {max_avg_ms}ms"
-        assert (
-            stats["max_ms"] <= max_single_ms
-        ), f"Max time {stats['max_ms']:.2f}ms exceeds {max_single_ms}ms"
+        assert stats["avg_ms"] <= max_avg_ms, (
+            f"Average time {stats['avg_ms']:.2f}ms exceeds {max_avg_ms}ms"
+        )
+        assert stats["max_ms"] <= max_single_ms, (
+            f"Max time {stats['max_ms']:.2f}ms exceeds {max_single_ms}ms"
+        )
 
 
 # Error simulation utilities for robust testing

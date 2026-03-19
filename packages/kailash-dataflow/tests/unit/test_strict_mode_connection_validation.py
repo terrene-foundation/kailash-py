@@ -352,7 +352,8 @@ class TestIntegrationScenarios:
 
         # Act: Validate with workflow-level override
         errors = validator.validate_workflow_connections(
-            workflow, strict_mode=False  # Override global
+            workflow,
+            strict_mode=False,  # Override global
         )
 
         # Assert: No errors (workflow override respected)

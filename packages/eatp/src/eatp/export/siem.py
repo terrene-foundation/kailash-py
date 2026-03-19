@@ -336,9 +336,7 @@ def serialize_cef(event: SIEMEvent) -> str:
         raise ValueError("Cannot serialize None event to CEF")
 
     sig_id = _escape_cef_header_value(event.operation)
-    name = _escape_cef_header_value(
-        _CEF_EVENT_NAMES.get(event.operation, f"EATP {event.operation}")
-    )
+    name = _escape_cef_header_value(_CEF_EVENT_NAMES.get(event.operation, f"EATP {event.operation}"))
     severity = str(event.severity)
     extensions = _build_cef_extensions(event)
 
@@ -490,9 +488,7 @@ def serialize_ocsf(event: SIEMEvent) -> Dict[str, Any]:
 # ============================================================================
 
 
-def from_audit_anchor(
-    anchor: AuditAnchor, authority_id: Optional[str] = None
-) -> AuditEvent:
+def from_audit_anchor(anchor: AuditAnchor, authority_id: Optional[str] = None) -> AuditEvent:
     """Create an AuditEvent from an existing AuditAnchor.
 
     Maps AuditAnchor fields to AuditEvent fields, translating
@@ -516,10 +512,7 @@ def from_audit_anchor(
         ValueError: If anchor is None.
     """
     if anchor is None:
-        raise ValueError(
-            "Cannot create AuditEvent from None anchor. "
-            "Provide a valid AuditAnchor instance."
-        )
+        raise ValueError("Cannot create AuditEvent from None anchor. Provide a valid AuditAnchor instance.")
 
     result_str = anchor.result.value.upper()
     severity = _RESULT_SEVERITY.get(anchor.result.value, 3)

@@ -73,27 +73,27 @@ result = {
     log_output = caplog.text
 
     # Should show full URLs with port
-    assert (
-        f"http://localhost:{api_port}/workflows/greeter/execute" in log_output
-    ), "Enhanced logging should show full execute endpoint URL"
+    assert f"http://localhost:{api_port}/workflows/greeter/execute" in log_output, (
+        "Enhanced logging should show full execute endpoint URL"
+    )
     assert (
         f"http://localhost:{api_port}/workflows/greeter/workflow/info" in log_output
     ), "Enhanced logging should show full workflow/info endpoint URL"
-    assert (
-        f"http://localhost:{api_port}/workflows/greeter/health" in log_output
-    ), "Enhanced logging should show full health endpoint URL"
+    assert f"http://localhost:{api_port}/workflows/greeter/health" in log_output, (
+        "Enhanced logging should show full health endpoint URL"
+    )
 
     # Should show HTTP methods
     assert "POST" in log_output, "Enhanced logging should show POST method"
     assert "GET" in log_output, "Enhanced logging should show GET method"
 
     # Should show multi-channel info
-    assert (
-        "MCP" in log_output or "mcp" in log_output.lower()
-    ), "Enhanced logging should mention MCP channel"
-    assert (
-        "CLI" in log_output or "cli" in log_output.lower()
-    ), "Enhanced logging should mention CLI channel"
+    assert "MCP" in log_output or "mcp" in log_output.lower(), (
+        "Enhanced logging should mention MCP channel"
+    )
+    assert "CLI" in log_output or "cli" in log_output.lower(), (
+        "Enhanced logging should mention CLI channel"
+    )
 
 
 def test_404_handler_in_nexus_mounted_context(caplog):
@@ -140,21 +140,21 @@ def test_404_handler_in_nexus_mounted_context(caplog):
         )
 
         # Should return 404
-        assert (
-            response.status_code == 404
-        ), f"Expected 404 for invalid endpoint, got {response.status_code}"
+        assert response.status_code == 404, (
+            f"Expected 404 for invalid endpoint, got {response.status_code}"
+        )
 
         # Should be JSON
-        assert (
-            response.headers.get("content-type") == "application/json"
-        ), "404 response should be JSON"
+        assert response.headers.get("content-type") == "application/json", (
+            "404 response should be JSON"
+        )
 
         data = response.json()
 
         # Should have error structure (either "error" or "detail")
-        assert (
-            "error" in data or "detail" in data
-        ), "404 response should have error field"
+        assert "error" in data or "detail" in data, (
+            "404 response should have error field"
+        )
 
         # Note: Custom 404 messages work at the WorkflowAPI level but may not
         # propagate through Nexus gateway in all cases due to FastAPI mount behavior.
@@ -164,9 +164,9 @@ def test_404_handler_in_nexus_mounted_context(caplog):
         health_response = requests.get(
             f"http://localhost:{api_port}/workflows/calculator/health", timeout=5
         )
-        assert (
-            health_response.status_code == 200
-        ), "Valid endpoints should work correctly"
+        assert health_response.status_code == 200, (
+            "Valid endpoints should work correctly"
+        )
 
     finally:
         # Cleanup: stop server
@@ -228,9 +228,9 @@ result = {
         assert response.status_code == 200, "Should be able to list workflows"
 
         workflows = response.json()
-        assert (
-            "data_processor" in workflows
-        ), "Registered workflow should appear in list"
+        assert "data_processor" in workflows, (
+            "Registered workflow should appear in list"
+        )
 
         # Step 2: Get workflow info
         response = requests.get(
@@ -280,23 +280,23 @@ def test_documentation_and_logging_consistency():
 
     # Documentation should describe standard endpoints
     assert "/execute" in doc_content, "Documentation should mention /execute endpoint"
-    assert (
-        "/workflow/info" in doc_content
-    ), "Documentation should mention /workflow/info endpoint"
+    assert "/workflow/info" in doc_content, (
+        "Documentation should mention /workflow/info endpoint"
+    )
     assert "/health" in doc_content, "Documentation should mention /health endpoint"
 
     # Documentation should mention discovery
-    assert (
-        "/workflows" in doc_content
-    ), "Documentation should mention /workflows discovery endpoint"
+    assert "/workflows" in doc_content, (
+        "Documentation should mention /workflows discovery endpoint"
+    )
 
     # Documentation should explain FastAPI mount behavior
-    assert (
-        "mount" in doc_content.lower()
-    ), "Documentation should explain FastAPI mount behavior"
-    assert (
-        "openapi" in doc_content.lower()
-    ), "Documentation should explain OpenAPI schema behavior"
+    assert "mount" in doc_content.lower(), (
+        "Documentation should explain FastAPI mount behavior"
+    )
+    assert "openapi" in doc_content.lower(), (
+        "Documentation should explain OpenAPI schema behavior"
+    )
 
 
 def test_regression_existing_functionality_preserved():
@@ -350,9 +350,9 @@ result = {
         )
         assert response.status_code == 200, "Health endpoint should work"
         health = response.json()
-        assert (
-            health["status"] == "healthy"
-        ), "Health check should return healthy status"
+        assert health["status"] == "healthy", (
+            "Health check should return healthy status"
+        )
 
         # Test workflow info endpoint
         response = requests.get(

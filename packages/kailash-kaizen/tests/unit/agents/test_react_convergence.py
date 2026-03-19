@@ -99,9 +99,9 @@ class TestReActAgentObjectiveConvergence:
         # Should converge (fallback to action == "finish")
         converged = agent._check_convergence(result)
 
-        assert (
-            converged is True
-        ), "Should converge via subjective fallback when tool_calls missing"
+        assert converged is True, (
+            "Should converge via subjective fallback when tool_calls missing"
+        )
 
     def test_backward_compatibility_old_signature_without_tool_calls(self):
         """
@@ -124,9 +124,9 @@ class TestReActAgentObjectiveConvergence:
         # Should NOT converge (confidence < threshold, action != "finish")
         converged = agent._check_convergence(result)
 
-        assert (
-            converged is False
-        ), "Should NOT converge with old signature (low confidence)"
+        assert converged is False, (
+            "Should NOT converge with old signature (low confidence)"
+        )
 
     def test_backward_compatibility_high_confidence_old_signature(self):
         """
@@ -148,9 +148,9 @@ class TestReActAgentObjectiveConvergence:
         # Should converge (high confidence triggers subjective convergence)
         converged = agent._check_convergence(result)
 
-        assert (
-            converged is True
-        ), "Should converge with high confidence in old signature"
+        assert converged is True, (
+            "Should converge with high confidence in old signature"
+        )
 
     def test_objective_convergence_tool_calls_none(self):
         """
@@ -194,9 +194,9 @@ class TestReActAgentObjectiveConvergence:
         # Should NOT converge (tool_calls is non-empty list)
         converged = agent._check_convergence(result)
 
-        assert (
-            converged is False
-        ), "Should NOT converge with non-empty tool_calls (even if dict empty)"
+        assert converged is False, (
+            "Should NOT converge with non-empty tool_calls (even if dict empty)"
+        )
 
     def test_objective_convergence_multiple_tool_calls(self):
         """
@@ -243,9 +243,9 @@ class TestReActAgentObjectiveConvergence:
 
         # Should NOT converge
         converged = agent._check_convergence(result_with_tools)
-        assert (
-            converged is False
-        ), "MultiCycleStrategy should NOT converge with tool_calls"
+        assert converged is False, (
+            "MultiCycleStrategy should NOT converge with tool_calls"
+        )
 
     def test_multicycle_strategy_objective_convergence_empty_tools(self):
         """
@@ -266,9 +266,9 @@ class TestReActAgentObjectiveConvergence:
 
         # Should converge
         converged = agent._check_convergence(result_no_tools)
-        assert (
-            converged is True
-        ), "MultiCycleStrategy should converge with empty tool_calls"
+        assert converged is True, (
+            "MultiCycleStrategy should converge with empty tool_calls"
+        )
 
     def test_convergence_priority_objective_over_subjective(self):
         """
@@ -290,9 +290,9 @@ class TestReActAgentObjectiveConvergence:
         # Objective should take priority (tool_calls present = not converged)
         converged = agent._check_convergence(result)
 
-        assert (
-            converged is False
-        ), "Objective detection should take priority over subjective"
+        assert converged is False, (
+            "Objective detection should take priority over subjective"
+        )
 
     def test_max_iterations_still_enforced(self):
         """
@@ -368,9 +368,9 @@ class TestReActAgentObjectiveConvergence:
         signature = ReActSignature()
 
         # Check that tool_calls is in output fields
-        assert (
-            "tool_calls" in signature.output_fields
-        ), "ReActSignature should have tool_calls field"
+        assert "tool_calls" in signature.output_fields, (
+            "ReActSignature should have tool_calls field"
+        )
 
         # Check field metadata
         tool_calls_field = signature.output_fields["tool_calls"]
@@ -427,9 +427,9 @@ class TestMultiCycleStrategyObjectiveConvergence:
         agent = ReActAgent(max_cycles=5)
 
         # Verify strategy has convergence_check_callback
-        assert (
-            agent.strategy.convergence_check_callback is not None
-        ), "Strategy should have convergence check callback"
+        assert agent.strategy.convergence_check_callback is not None, (
+            "Strategy should have convergence check callback"
+        )
 
     def test_multicycle_respects_objective_convergence(self):
         """

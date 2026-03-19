@@ -284,9 +284,7 @@ class PostgresAgentRegistryStore(AgentRegistryStore):
 
         except Exception as e:
             logger.error(f"Failed to initialize PostgresAgentRegistryStore: {e}")
-            raise RegistryStoreError(
-                "initialize", f"Database initialization failed: {e}", e
-            )
+            raise RegistryStoreError("initialize", f"Database initialization failed: {e}", e)
 
     async def close(self) -> None:
         """Close the database connection pool."""
@@ -326,14 +324,9 @@ class PostgresAgentRegistryStore(AgentRegistryStore):
             logger.info(f"Registered agent: {metadata.agent_id}")
 
         except Exception as e:
-            if (
-                "unique constraint" in str(e).lower()
-                or "duplicate key" in str(e).lower()
-            ):
+            if "unique constraint" in str(e).lower() or "duplicate key" in str(e).lower():
                 raise AgentAlreadyRegisteredError(metadata.agent_id)
-            raise RegistryStoreError(
-                "register_agent", f"Failed to register agent: {e}", e
-            )
+            raise RegistryStoreError("register_agent", f"Failed to register agent: {e}", e)
 
     async def update_agent(self, agent_id: str, metadata: AgentMetadata) -> None:
         """Update an existing agent's metadata."""
@@ -450,9 +443,7 @@ class PostgresAgentRegistryStore(AgentRegistryStore):
                 return [self._row_to_metadata(row) for row in rows]
 
         except Exception as e:
-            raise RegistryStoreError(
-                "find_by_capability", f"Failed to find by capability: {e}", e
-            )
+            raise RegistryStoreError("find_by_capability", f"Failed to find by capability: {e}", e)
 
     async def find_by_status(self, status: AgentStatus) -> List[AgentMetadata]:
         """Find all agents with a specific status."""
@@ -476,9 +467,7 @@ class PostgresAgentRegistryStore(AgentRegistryStore):
                 return [self._row_to_metadata(row) for row in rows]
 
         except Exception as e:
-            raise RegistryStoreError(
-                "find_by_status", f"Failed to find by status: {e}", e
-            )
+            raise RegistryStoreError("find_by_status", f"Failed to find by status: {e}", e)
 
     async def list_all(self) -> List[AgentMetadata]:
         """Retrieve all registered agents."""
@@ -525,9 +514,7 @@ class PostgresAgentRegistryStore(AgentRegistryStore):
         except AgentNotFoundError:
             raise
         except Exception as e:
-            raise RegistryStoreError(
-                "update_last_seen", f"Failed to update last_seen: {e}", e
-            )
+            raise RegistryStoreError("update_last_seen", f"Failed to update last_seen: {e}", e)
 
     async def update_status(self, agent_id: str, status: AgentStatus) -> None:
         """Update an agent's status."""
@@ -554,9 +541,7 @@ class PostgresAgentRegistryStore(AgentRegistryStore):
         except AgentNotFoundError:
             raise
         except Exception as e:
-            raise RegistryStoreError(
-                "update_status", f"Failed to update status: {e}", e
-            )
+            raise RegistryStoreError("update_status", f"Failed to update status: {e}", e)
 
     async def find_by_capabilities(
         self,
@@ -598,12 +583,7 @@ class PostgresAgentRegistryStore(AgentRegistryStore):
                 else:
                     # Agent must have ANY capability
                     # Build query with multiple containment checks
-                    conditions = " OR ".join(
-                        [
-                            "capabilities @> ${i + 1}::jsonb"
-                            for i in range(len(capabilities))
-                        ]
-                    )
+                    conditions = " OR ".join(["capabilities @> ${i + 1}::jsonb" for i in range(len(capabilities))])
                     query = f"""
                         SELECT agent_id, agent_type, capabilities, constraints,
                                status, trust_chain_hash, registered_at, last_seen,
@@ -618,9 +598,7 @@ class PostgresAgentRegistryStore(AgentRegistryStore):
                 return [self._row_to_metadata(row) for row in rows]
 
         except Exception as e:
-            raise RegistryStoreError(
-                "find_by_capabilities", f"Failed to find by capabilities: {e}", e
-            )
+            raise RegistryStoreError("find_by_capabilities", f"Failed to find by capabilities: {e}", e)
 
     async def find_stale_agents(self, timeout_seconds: int) -> List[AgentMetadata]:
         """
@@ -653,9 +631,7 @@ class PostgresAgentRegistryStore(AgentRegistryStore):
                 return [self._row_to_metadata(row) for row in rows]
 
         except Exception as e:
-            raise RegistryStoreError(
-                "find_stale_agents", f"Failed to find stale agents: {e}", e
-            )
+            raise RegistryStoreError("find_stale_agents", f"Failed to find stale agents: {e}", e)
 
     def _row_to_metadata(self, row) -> AgentMetadata:
         """Convert a database row to AgentMetadata."""
@@ -663,24 +639,14 @@ class PostgresAgentRegistryStore(AgentRegistryStore):
             agent_id=row["agent_id"],
             agent_type=row["agent_type"],
             capabilities=(
-                json.loads(row["capabilities"])
-                if isinstance(row["capabilities"], str)
-                else row["capabilities"]
+                json.loads(row["capabilities"]) if isinstance(row["capabilities"], str) else row["capabilities"]
             ),
-            constraints=(
-                json.loads(row["constraints"])
-                if isinstance(row["constraints"], str)
-                else row["constraints"]
-            ),
+            constraints=(json.loads(row["constraints"]) if isinstance(row["constraints"], str) else row["constraints"]),
             status=AgentStatus(row["status"]),
             trust_chain_hash=row["trust_chain_hash"],
             registered_at=row["registered_at"],
             last_seen=row["last_seen"],
-            metadata=(
-                json.loads(row["metadata"])
-                if isinstance(row["metadata"], str)
-                else (row["metadata"] or {})
-            ),
+            metadata=(json.loads(row["metadata"]) if isinstance(row["metadata"], str) else (row["metadata"] or {})),
             endpoint=row["endpoint"],
             public_key=row["public_key"],
         )
@@ -794,10 +760,6 @@ class InMemoryAgentRegistryStore(AgentRegistryStore):
 
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=timeout_seconds)
         return sorted(
-            [
-                a
-                for a in self._agents.values()
-                if a.status == AgentStatus.ACTIVE and a.last_seen < cutoff
-            ],
+            [a for a in self._agents.values() if a.status == AgentStatus.ACTIVE and a.last_seen < cutoff],
             key=lambda a: a.last_seen,
         )

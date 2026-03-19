@@ -221,7 +221,6 @@ class TestStagingEnvironmentManager:
                                 "_get_production_triggers",
                                 new_callable=AsyncMock,
                             ) as mock_triggers:
-
                                 # Setup mock data
                                 mock_tables.return_value = [
                                     {"table_name": "users", "table_type": "BASE TABLE"},

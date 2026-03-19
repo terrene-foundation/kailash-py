@@ -274,7 +274,7 @@ async def example_rate_limiting():
         result = await esa.get("/users", params={"limit": 1})
         elapsed = (datetime.utcnow() - start).total_seconds()
 
-        print(f"  Request {i+1}: {result.status_code} (waited {elapsed:.2f}s)")
+        print(f"  Request {i + 1}: {result.status_code} (waited {elapsed:.2f}s)")
 
     # Get final rate limit status
     rate_status = esa.get_rate_limit_status()

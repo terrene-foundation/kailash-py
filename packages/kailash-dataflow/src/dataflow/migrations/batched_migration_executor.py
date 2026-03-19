@@ -481,7 +481,7 @@ class BatchedMigrationExecutor:
         try:
             for i, batch in enumerate(batches):
                 logger.info(
-                    f"Executing batch {i+1}/{len(batches)} with {len(batch)} operations"
+                    f"Executing batch {i + 1}/{len(batches)} with {len(batch)} operations"
                 )
 
                 # Determine execution strategy for this batch
@@ -499,7 +499,7 @@ class BatchedMigrationExecutor:
                     sequential_batches += 1
 
                 if not success:
-                    logger.error(f"Batch {i+1} execution failed")
+                    logger.error(f"Batch {i + 1} execution failed")
                     return False
 
         except Exception as e:

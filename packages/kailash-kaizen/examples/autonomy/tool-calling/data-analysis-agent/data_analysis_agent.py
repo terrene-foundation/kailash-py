@@ -162,7 +162,7 @@ class DataAnalysisAgent(BaseAutonomousAgent):
         ]
         if outliers:
             insights.append(
-                f"⚠ Detected {len(outliers)} outliers ({len(outliers)/len(data)*100:.1f}%)"
+                f"⚠ Detected {len(outliers)} outliers ({len(outliers) / len(data) * 100:.1f}%)"
             )
         else:
             insights.append("✓ No significant outliers detected")

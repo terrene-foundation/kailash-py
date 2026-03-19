@@ -769,7 +769,6 @@ class TestNotNullColumnHandler:
                 self.handler, "_check_concurrent_operations", return_value=False
             ),
         ):
-
             result = await self.handler.validate_addition_safety(plan)
 
             assert result.is_safe is True
@@ -795,7 +794,6 @@ class TestNotNullColumnHandler:
             patch.object(self.handler, "_check_column_exists", return_value=True),
             patch.object(self.handler, "_get_table_constraints", return_value=[]),
         ):
-
             result = await self.handler.validate_addition_safety(plan)
 
             assert result.is_safe is False
@@ -866,7 +864,6 @@ class TestIntegrationScenarios:
                 self.validator, "_get_all_constraints_info"
             ) as mock_constraints,
         ):
-
             mock_constraints.return_value = {
                 "foreign_keys": [],
                 "check_constraints": [],
@@ -912,9 +909,9 @@ class TestIntegrationScenarios:
             strategy_type, reason = self.strategy_manager.recommend_strategy(
                 case["column"], case["table_info"]
             )
-            assert (
-                strategy_type == case["expected"]
-            ), f"Failed for {case['column'].name}: got {strategy_type}, expected {case['expected']}"
+            assert strategy_type == case["expected"], (
+                f"Failed for {case['column'].name}: got {strategy_type}, expected {case['expected']}"
+            )
 
     def test_validation_result_aggregation(self):
         """Test aggregation of validation results from multiple components."""

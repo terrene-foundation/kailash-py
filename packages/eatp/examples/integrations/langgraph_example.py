@@ -102,9 +102,7 @@ async def eatp_verify_node(
 
     verdict = enforcer.classify(result)
     state.trust_verified = result.valid
-    state.audit_trail.append(
-        f"VERIFY agent={agent_id} action={action} verdict={verdict.value}"
-    )
+    state.audit_trail.append(f"VERIFY agent={agent_id} action={action} verdict={verdict.value}")
 
     if verdict == Verdict.BLOCKED:
         print(f"  [verify_trust] BLOCKED: {result.reason}")
@@ -113,9 +111,7 @@ async def eatp_verify_node(
     return state
 
 
-async def analyze_node(
-    state: GraphState, ops: TrustOperations, agent_id: str
-) -> GraphState:
+async def analyze_node(state: GraphState, ops: TrustOperations, agent_id: str) -> GraphState:
     """Analysis node -- only runs if trust was verified.
 
     LANGGRAPH: Register and connect conditionally:
@@ -129,9 +125,7 @@ async def analyze_node(
     print(f"  [analyze] Processing query: {state.query}")
 
     # Simulate analysis work
-    analysis_result = (
-        f"Analysis of '{state.query}': 42 records found, 3 anomalies detected"
-    )
+    analysis_result = f"Analysis of '{state.query}': 42 records found, 3 anomalies detected"
     state.results.append(analysis_result)
 
     # Record audit trail
@@ -147,9 +141,7 @@ async def analyze_node(
     return state
 
 
-async def report_node(
-    state: GraphState, ops: TrustOperations, agent_id: str
-) -> GraphState:
+async def report_node(state: GraphState, ops: TrustOperations, agent_id: str) -> GraphState:
     """Report generation node.
 
     LANGGRAPH: graph.add_node("report", report_node)
@@ -341,9 +333,7 @@ async def main():
     print(f"\n  Blocked: results={len(state.results)} (should be 0)")
 
     print("\nLangGraph integration pattern completed.")
-    print(
-        "Replace the run_graph() simulation with LangGraph's StateGraph for production."
-    )
+    print("Replace the run_graph() simulation with LangGraph's StateGraph for production.")
 
 
 if __name__ == "__main__":

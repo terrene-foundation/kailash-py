@@ -270,15 +270,9 @@ async def main():
         agent_id="mcp-developer",
         authority_id="org-platform",
         capabilities=[
-            CapabilityRequest(
-                capability="read_file", capability_type=CapabilityType.ACCESS
-            ),
-            CapabilityRequest(
-                capability="write_file", capability_type=CapabilityType.ACTION
-            ),
-            CapabilityRequest(
-                capability="execute_query", capability_type=CapabilityType.ACTION
-            ),
+            CapabilityRequest(capability="read_file", capability_type=CapabilityType.ACCESS),
+            CapabilityRequest(capability="write_file", capability_type=CapabilityType.ACTION),
+            CapabilityRequest(capability="execute_query", capability_type=CapabilityType.ACTION),
         ],
         constraints=["audit_required"],
     )
@@ -290,9 +284,7 @@ async def main():
         agent_id="mcp-viewer",
         authority_id="org-platform",
         capabilities=[
-            CapabilityRequest(
-                capability="read_file", capability_type=CapabilityType.ACCESS
-            ),
+            CapabilityRequest(capability="read_file", capability_type=CapabilityType.ACCESS),
         ],
         constraints=["audit_required", "read_only"],
     )
@@ -304,21 +296,11 @@ async def main():
         agent_id="mcp-admin",
         authority_id="org-platform",
         capabilities=[
-            CapabilityRequest(
-                capability="read_file", capability_type=CapabilityType.ACCESS
-            ),
-            CapabilityRequest(
-                capability="write_file", capability_type=CapabilityType.ACTION
-            ),
-            CapabilityRequest(
-                capability="execute_query", capability_type=CapabilityType.ACTION
-            ),
-            CapabilityRequest(
-                capability="send_notification", capability_type=CapabilityType.ACTION
-            ),
-            CapabilityRequest(
-                capability="admin_reset", capability_type=CapabilityType.ACTION
-            ),
+            CapabilityRequest(capability="read_file", capability_type=CapabilityType.ACCESS),
+            CapabilityRequest(capability="write_file", capability_type=CapabilityType.ACTION),
+            CapabilityRequest(capability="execute_query", capability_type=CapabilityType.ACTION),
+            CapabilityRequest(capability="send_notification", capability_type=CapabilityType.ACTION),
+            CapabilityRequest(capability="admin_reset", capability_type=CapabilityType.ACTION),
         ],
         constraints=["audit_required"],
     )
@@ -378,9 +360,7 @@ async def main():
     ]:
         result = await guard.call_tool("mcp-developer", tool_name, args)
         trust = result["trust"]
-        print(
-            f"  {tool_name}: verdict={trust['verdict']}, audit={trust['audit_anchor']}..."
-        )
+        print(f"  {tool_name}: verdict={trust['verdict']}, audit={trust['audit_anchor']}...")
 
     # -- Scenario 2: Developer blocked from admin tool -----------------------
     print("\n=== Scenario 2: Developer -- Blocked from Admin Tool ===")
@@ -393,16 +373,12 @@ async def main():
     # -- Scenario 3: Viewer blocked from write tools -------------------------
     print("\n=== Scenario 3: Viewer -- Read Only ===")
     # Viewer can read
-    result = await guard.call_tool(
-        "mcp-viewer", "read_file", {"path": "/docs/readme.md"}
-    )
+    result = await guard.call_tool("mcp-viewer", "read_file", {"path": "/docs/readme.md"})
     print(f"  read_file: verdict={result['trust']['verdict']}")
 
     # Viewer cannot write
     try:
-        await guard.call_tool(
-            "mcp-viewer", "write_file", {"path": "/tmp/out.txt", "content": "data"}
-        )
+        await guard.call_tool("mcp-viewer", "write_file", {"path": "/tmp/out.txt", "content": "data"})
         print("  ERROR: Should have been blocked")
     except EATPBlockedError as e:
         print(f"  write_file blocked: {e.reason}")
@@ -428,9 +404,7 @@ async def main():
     ]:
         result = await guard.call_tool("mcp-admin", tool_name, args)
         trust = result["trust"]
-        print(
-            f"  {tool_name}: verdict={trust['verdict']}, audit={trust['audit_anchor']}..."
-        )
+        print(f"  {tool_name}: verdict={trust['verdict']}, audit={trust['audit_anchor']}...")
 
     # -- Scenario 5: Shadow mode for new tool rollout ------------------------
     print("\n=== Scenario 5: Shadow Mode for New Tool ===")
