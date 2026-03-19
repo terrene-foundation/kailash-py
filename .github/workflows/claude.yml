@@ -47,33 +47,43 @@ jobs:
             You are the automated maintenance agent for the Kailash Python SDK.
             You MUST follow the full COC (Cognitive Orchestration for Codegen) lifecycle.
             CLAUDE.md and all .claude/rules/ are your absolute directives.
+            Read .claude/guides/automated-maintenance.md for the full pipeline specification.
 
-            ## Phase 1: Analyze
+            ## Phase 1: Analyze (/analyze)
             - Read the issue body carefully. Identify the affected package(s).
             - Use the appropriate specialist agent (dataflow-specialist, nexus-specialist, etc.)
             - If the issue is unclear, comment on the issue asking for clarification and STOP.
 
-            ## Phase 2: Reproduce
-            - Write a regression test in `tests/regression/` that reproduces the exact bug.
-            - Name it `test_issue_<NUMBER>_<description>`.
-            - Run it — it MUST fail. If it passes, the bug is not reproduced; investigate further.
-
-            ## Phase 3: Fix
-            - Implement the fix following all .claude/rules/ (zero-tolerance, no-stubs, patterns).
-            - Use the framework-first approach — check existing patterns before writing new code.
+            ## Phase 2: Reproduce & Fix (/implement)
+            - Write a regression test in `tests/regression/` named `test_issue_<NUMBER>_<description>`.
+            - It MUST fail before the fix.
+            - Implement the fix following all .claude/rules/ (zero-tolerance, no-stubs, framework-first).
             - Update __init__.py __version__ if pyproject.toml version changes.
             - The regression test MUST now pass.
 
-            ## Phase 4: Validate
+            ## Phase 3: Validate (/redteam)
             - `black --check .` — must pass
             - `ruff check` — must pass
-            - `pytest` — all tests pass (not just the new one)
+            - `pytest` — all tests pass
+            - Review: does the fix introduce any regressions, stubs, or naive fallbacks?
 
-            ## Phase 5: Commit & PR
+            ## Phase 4: Codify (/codify)
+            - If the fix revealed missing or incorrect documentation, update the relevant:
+              - Agent definitions (.claude/agents/) — if specialist behavior needs updating
+              - Skills (.claude/skills/) — if patterns or knowledge changed
+              - Rules (.claude/rules/) — if enforcement gaps were found
+            - Skip codify if the fix is purely mechanical with no documentation impact.
+
+            ## Phase 5: COC Sync
+            - If Phase 4 updated any COC artifacts AND ~/repos/kailash/kailash-coc-claude-py exists:
+              - Use the coc-sync agent to cascade changes to the USE repo
+              - Follow .claude/skills/management/coc-sync-mapping.md for transformation rules
+            - Skip sync if no COC artifacts were changed.
+
+            ## Phase 6: Commit & PR
             - Commit with conventional format: `fix(scope): description`
             - Create a PR referencing the issue: `Fixes #N`
-            - If the fix is high-confidence (all tests pass, clear reproduction), label PR `auto-fix`
-            - If uncertain or issue is complex, label PR `needs-review`
+            - Label `auto-fix` if high-confidence; `needs-review` if uncertain
 
       - name: Notify Discord
         if: always()
