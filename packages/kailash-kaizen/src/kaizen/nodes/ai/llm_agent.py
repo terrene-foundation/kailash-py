@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 
 @dataclass
@@ -822,7 +823,6 @@ class LLMAgentNode(Node):
 
             # Generate response using selected provider
             if provider == "mock":
-                print(f"DEBUG: Using _mock_llm_response path for provider={provider}")
                 response = self._mock_llm_response(
                     enriched_messages, tools, generation_config, system_prompt
                 )
@@ -839,14 +839,25 @@ class LLMAgentNode(Node):
                 )
             else:
                 # Use the new provider architecture
-                print(
-                    f"DEBUG: Using _provider_llm_response path for provider={provider}"
-                )
-                # Thread per-request API key and base URL to provider
-                per_request_api_key = self.config.get("api_key", kwargs.get("api_key"))
-                per_request_base_url = self.config.get(
-                    "base_url", kwargs.get("base_url")
-                )
+                # Resolve credentials from CredentialStore (BYOK security)
+                per_request_api_key = None
+                per_request_base_url = None
+                _credential_ref = self.config.get("credential_ref")
+                if _credential_ref:
+                    from kailash.workflow.credentials import get_credential_store
+
+                    cred = get_credential_store().resolve(_credential_ref)
+                    if cred:
+                        per_request_api_key = cred.api_key
+                        per_request_base_url = cred.base_url
+                else:
+                    # Backward compat: fall back to direct config/kwargs
+                    per_request_api_key = self.config.get(
+                        "api_key", kwargs.get("api_key")
+                    )
+                    per_request_base_url = self.config.get(
+                        "base_url", kwargs.get("base_url")
+                    )
                 response = self._provider_llm_response(
                     provider,
                     model,
@@ -987,15 +998,7 @@ class LLMAgentNode(Node):
             # Parse structured outputs if using OpenAI Structured Outputs API
             response_format = generation_config.get("response_format", {})
             if response_format and "json_schema" in response_format:
-                # Debug: print response structure
-                print(
-                    "\n[DEBUG] response_format found, attempting structured output parsing"
-                )
-                print(f"[DEBUG] result keys: {list(result.keys())}")
-                print(f"[DEBUG] result['response'] type: {type(result['response'])}")
-                print(
-                    f"[DEBUG] result['response'] keys: {list(result['response'].keys()) if isinstance(result['response'], dict) else 'NOT A DICT'}"
-                )
+                self.logger.debug("Structured output parsing: response_format found")
 
                 # Extract the JSON content from the provider response
                 response_content = (
@@ -1003,26 +1006,23 @@ class LLMAgentNode(Node):
                     if isinstance(result["response"], dict)
                     else ""
                 )
-                print(
-                    f"[DEBUG] response_content type: {type(response_content)}, length: {len(response_content) if isinstance(response_content, str) else 'N/A'}"
-                )
 
                 if isinstance(response_content, str) and response_content.strip():
                     try:
                         import json
 
                         structured_data = json.loads(response_content)
-                        print(
-                            f"[DEBUG] Successfully parsed JSON, keys: {list(structured_data.keys())}"
+                        self.logger.debug(
+                            "Parsed structured JSON, keys: %s",
+                            list(structured_data.keys()),
                         )
                         # Add structured fields to top level for BaseAgent validation
                         result.update(structured_data)
-                        print(
-                            f"[DEBUG] Updated result, new keys: {list(result.keys())}"
-                        )
                     except json.JSONDecodeError as e:
                         # Log but don't fail - fall back to regular response
-                        print(f"Warning: Failed to parse structured output JSON: {e}")
+                        self.logger.warning(
+                            "Failed to parse structured output JSON: %s", e
+                        )
 
             # Call post-execution hook (Kaizen extension point)
             result = self._post_execute_hook(result)
@@ -1044,9 +1044,12 @@ class LLMAgentNode(Node):
             self._on_error_hook(e, error_context)
 
             # If hook didn't raise, return error response
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            self.logger.error("LLM agent error: %s", e, exc_info=True)
             return {
                 "success": False,
-                "error": str(e),
+                "error": sanitize_provider_error(e, provider),
                 "error_type": type(e).__name__,
                 "provider": provider,
                 "model": model,
@@ -1398,17 +1401,21 @@ class LLMAgentNode(Node):
                                 "relevance_score": 0.5,
                                 "metadata": {
                                     "error": "timeout",
-                                    "error_message": str(e),
+                                    "error_message": sanitize_provider_error(e, "MCP"),
                                 },
                             }
                         )
                     except Exception as e:
                         error_type = type(e).__name__
                         self.logger.error(
-                            f"MCP server '{server_config.get('name', 'unknown')}' connection failed ({error_type}): {e}"
+                            "MCP server '%s' connection failed (%s): %s",
+                            server_config.get("name", "unknown"),
+                            error_type,
+                            e,
                         )
 
                         # Provide helpful error messages based on exception type
+                        sanitized_msg = sanitize_provider_error(e, "MCP")
                         if "coroutine" in str(e).lower() and "await" in str(e).lower():
                             self.logger.error(
                                 "This appears to be an async/await issue. Please report this bug to the Kailash SDK team."
@@ -1418,13 +1425,13 @@ class LLMAgentNode(Node):
                         context_data.append(
                             {
                                 "uri": f"mcp://{server_config.get('name', 'unknown')}/fallback",
-                                "content": f"Connection failed ({error_type}) - using fallback content. Error: {str(e)}",
+                                "content": f"Connection failed ({error_type}) - using fallback content.",
                                 "source": server_config.get("name", "unknown"),
                                 "retrieved_at": datetime.now().isoformat(),
                                 "relevance_score": 0.5,
                                 "metadata": {
                                     "error": error_type,
-                                    "error_message": str(e),
+                                    "error_message": sanitized_msg,
                                 },
                             }
                         )
@@ -1842,10 +1849,11 @@ class LLMAgentNode(Node):
         system_prompt: str = None,
     ) -> dict[str, Any]:
         """Generate mock LLM response for testing."""
-        print(
-            f"DEBUG: _mock_llm_response called with system_prompt: {system_prompt[:100] if system_prompt else 'None'}..."
+        self.logger.debug(
+            "Mock LLM response: messages=%d, has_system_prompt=%s",
+            len(messages),
+            system_prompt is not None,
         )
-        print(f"DEBUG: messages length: {len(messages)}")
         last_user_message = ""
         system_content = ""
         has_images = False
@@ -1886,14 +1894,10 @@ class LLMAgentNode(Node):
         # Combine user message and system content for pattern matching
         combined_content = f"{last_user_message} {system_content}".lower()
 
-        # DEBUG: Print what we're working with
-        print(f"DEBUG MOCK: last_user_message='{last_user_message[:100]}...'")
-        print(f"DEBUG MOCK: system_content='{system_content[:100]}...'")
-        print(
-            f"DEBUG MOCK: combined_content contains 'train': {'train' in combined_content}"
-        )
-        print(
-            f"DEBUG MOCK: combined_content contains 'travels': {'travels' in combined_content}"
+        self.logger.debug(
+            "Mock response: message_length=%d, has_system=%s",
+            len(last_user_message),
+            bool(system_content),
         )
 
         # Generate contextual mock response
@@ -2195,8 +2199,11 @@ Final Answer: 6 hours"""
                 provider, model, messages, tools, generation_config
             )
         except Exception as e:
-            # Re-raise provider errors with context
-            raise RuntimeError(f"Provider {provider} error: {str(e)}") from e
+            # Re-raise provider errors with sanitized message
+            from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+            self.logger.error("Provider %s error: %s", provider, e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, provider)) from e
 
     def _fallback_llm_response(
         self,
@@ -2454,7 +2461,11 @@ Final Answer: 6 hours"""
 
         except Exception as e:
             self.logger.error(f"MCP tool execution failed: {e}")
-            return {"error": str(e), "success": False, "tool_name": tool_name}
+            return {
+                "error": sanitize_provider_error(e, "tool"),
+                "success": False,
+                "tool_name": tool_name,
+            }
 
     def _execute_tool_calls(
         self,
@@ -2525,7 +2536,7 @@ Final Answer: 6 hours"""
                         "tool_call_id": tool_id,
                         "content": json.dumps(
                             {
-                                "error": f"Invalid tool call format: {str(e)}",
+                                "error": sanitize_provider_error(e, "tool"),
                                 "tool": tool_name,
                                 "status": "failed",
                             }
@@ -2540,7 +2551,11 @@ Final Answer: 6 hours"""
                     {
                         "tool_call_id": tool_id,
                         "content": json.dumps(
-                            {"error": str(e), "tool": tool_name, "status": "failed"}
+                            {
+                                "error": sanitize_provider_error(e, "tool"),
+                                "tool": tool_name,
+                                "status": "failed",
+                            }
                         ),
                     }
                 )

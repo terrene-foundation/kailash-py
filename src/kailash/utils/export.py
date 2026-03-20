@@ -931,9 +931,14 @@ class WorkflowExporter:
                 continue
 
             try:
+                from kailash.workflow.credentials import SENSITIVE_KEYS
+
+                config_copy = deepcopy(node_instance.config)
+                for key in SENSITIVE_KEYS:
+                    config_copy.pop(key, None)
                 node_data = {
                     "type": node_instance.node_type,
-                    "config": deepcopy(node_instance.config),
+                    "config": config_copy,
                 }
 
                 # Try to add container info

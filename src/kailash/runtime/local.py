@@ -189,6 +189,9 @@ def _get_execution_planner():
 def _safe_serialize(data: Any, max_size: int = 10000) -> Any:
     """Serialize data for audit trail, truncating oversized values.
 
+    Strips sensitive keys (api_key, token, password, etc.) before serialization
+    to prevent credential leakage in audit trails and logs.
+
     Args:
         data: The data to serialize.
         max_size: Maximum JSON string length before truncation.
@@ -196,6 +199,20 @@ def _safe_serialize(data: Any, max_size: int = 10000) -> Any:
     Returns:
         The original data if within limits, or a truncation summary dict.
     """
+    from kailash.workflow.credentials import SENSITIVE_KEYS
+
+    def _strip_sensitive(obj):
+        if isinstance(obj, dict):
+            return {
+                k: _strip_sensitive(v)
+                for k, v in obj.items()
+                if k not in SENSITIVE_KEYS
+            }
+        if isinstance(obj, list):
+            return [_strip_sensitive(item) for item in obj]
+        return obj
+
+    data = _strip_sensitive(data)
     try:
         s = json.dumps(data)
         if len(s) > max_size:
@@ -813,13 +830,22 @@ class LocalRuntime(
         effective_trust_ctx = self._get_effective_trust_context()
 
         try:
-            # Check if we're already in an event loop
-            loop = asyncio.get_running_loop()
-            # If we're in an event loop, run synchronously instead
-            if effective_trust_ctx is not None:
-                from kailash.runtime.trust.context import runtime_trust_context
+            try:
+                # Check if we're already in an event loop
+                loop = asyncio.get_running_loop()
+                # If we're in an event loop, run synchronously instead
+                if effective_trust_ctx is not None:
+                    from kailash.runtime.trust.context import runtime_trust_context
 
-                with runtime_trust_context(effective_trust_ctx):
+                    with runtime_trust_context(effective_trust_ctx):
+                        return self._execute_sync(
+                            workflow=workflow,
+                            task_manager=task_manager,
+                            parameters=parameters,
+                            cancellation_token=cancellation_token,
+                            search_attributes=search_attributes,
+                        )
+                else:
                     return self._execute_sync(
                         workflow=workflow,
                         task_manager=task_manager,
@@ -827,40 +853,43 @@ class LocalRuntime(
                         cancellation_token=cancellation_token,
                         search_attributes=search_attributes,
                     )
-            else:
-                return self._execute_sync(
-                    workflow=workflow,
-                    task_manager=task_manager,
-                    parameters=parameters,
-                    cancellation_token=cancellation_token,
-                    search_attributes=search_attributes,
-                )
-        except RuntimeError:
-            # No event loop running, use persistent loop
-            loop = self._ensure_event_loop()
+            except RuntimeError:
+                # No event loop running, use persistent loop
+                loop = self._ensure_event_loop()
 
-            # CARE-017: Verify workflow trust before execution (async path)
-            if effective_trust_ctx is not None:
-                from kailash.runtime.trust.context import (
-                    TrustVerificationMode,
-                    runtime_trust_context,
-                )
-
-                # Run verification before execution if verifier is configured
-                if (
-                    self._trust_verification_mode != TrustVerificationMode.DISABLED
-                    and self._trust_verifier is not None
-                ):
-                    allowed = loop.run_until_complete(
-                        self._verify_workflow_trust(workflow, effective_trust_ctx)
+                # CARE-017: Verify workflow trust before execution (async path)
+                if effective_trust_ctx is not None:
+                    from kailash.runtime.trust.context import (
+                        TrustVerificationMode,
+                        runtime_trust_context,
                     )
-                    if not allowed:
-                        raise WorkflowExecutionError(
-                            "Trust verification denied workflow execution"
-                        )
 
-                # Run the async execution in the persistent loop with trust context
-                with runtime_trust_context(effective_trust_ctx):
+                    # Run verification before execution if verifier is configured
+                    if (
+                        self._trust_verification_mode != TrustVerificationMode.DISABLED
+                        and self._trust_verifier is not None
+                    ):
+                        allowed = loop.run_until_complete(
+                            self._verify_workflow_trust(workflow, effective_trust_ctx)
+                        )
+                        if not allowed:
+                            raise WorkflowExecutionError(
+                                "Trust verification denied workflow execution"
+                            )
+
+                    # Run the async execution in the persistent loop with trust context
+                    with runtime_trust_context(effective_trust_ctx):
+                        return loop.run_until_complete(
+                            self._execute_async(
+                                workflow=workflow,
+                                task_manager=task_manager,
+                                parameters=parameters,
+                                cancellation_token=cancellation_token,
+                                search_attributes=search_attributes,
+                            )
+                        )
+                else:
+                    # Run the async execution in the persistent loop
                     return loop.run_until_complete(
                         self._execute_async(
                             workflow=workflow,
@@ -870,17 +899,11 @@ class LocalRuntime(
                             search_attributes=search_attributes,
                         )
                     )
-            else:
-                # Run the async execution in the persistent loop
-                return loop.run_until_complete(
-                    self._execute_async(
-                        workflow=workflow,
-                        task_manager=task_manager,
-                        parameters=parameters,
-                        cancellation_token=cancellation_token,
-                        search_attributes=search_attributes,
-                    )
-                )
+        finally:
+            # BYOK hardening: clear credential store after execution completes
+            from kailash.workflow.credentials import get_credential_store
+
+            get_credential_store().clear()
 
     async def execute_async(
         self,

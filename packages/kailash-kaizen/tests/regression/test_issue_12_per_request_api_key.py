@@ -96,15 +96,15 @@ class TestProviderConfigApiKeyOverride:
             assert config.api_key == "sk-byok-key"
             assert config.model == "gpt-4o"
 
-    def test_provider_config_to_dict_includes_api_key(self):
-        """provider_config_to_dict should include api_key when present."""
+    def test_provider_config_to_dict_excludes_api_key(self):
+        """provider_config_to_dict must NOT include api_key (security hardening)."""
         config = ProviderConfig(
             provider="openai",
             model="gpt-4o",
             api_key="sk-tenant-key",
         )
         config_dict = provider_config_to_dict(config)
-        assert config_dict["api_key"] == "sk-tenant-key"
+        assert "api_key" not in config_dict
 
 
 class TestBaseAgentConfigApiKey:
@@ -163,10 +163,12 @@ class TestBaseAgentConfigApiKey:
 
 
 class TestWorkflowGeneratorApiKey:
-    """Test that WorkflowGenerator threads api_key to node_config."""
+    """Test that WorkflowGenerator threads api_key via CredentialStore."""
 
-    def test_workflow_generator_includes_api_key_in_node_config(self):
-        """WorkflowGenerator should pass api_key from config to LLMAgentNode config."""
+    def test_workflow_generator_storescredential_ref_not_api_key(self):
+        """WorkflowGenerator should store credential_ref, NOT api_key in node_config."""
+        from kailash.workflow.credentials import get_credential_store
+
         from kaizen.core.workflow_generator import WorkflowGenerator
         from kaizen.signatures import InputField, OutputField, Signature
 
@@ -190,8 +192,18 @@ class TestWorkflowGeneratorApiKey:
         built = workflow.build()
         node = built.nodes.get("agent_exec")
         assert node is not None
-        assert node.config.get("api_key") == "sk-workflow-key"
-        assert node.config.get("base_url") == "https://proxy.example.com/v1"
+        # api_key and base_url must NOT be in node_config (security)
+        assert "api_key" not in node.config
+        assert "base_url" not in node.config
+        # credential_ref must be present
+        cred_ref = node.config.get("credential_ref")
+        assert cred_ref is not None
+        assert cred_ref.startswith("cred_")
+        # Credential must resolve to the correct values
+        cred = get_credential_store().resolve(cred_ref)
+        assert cred is not None
+        assert cred.api_key == "sk-workflow-key"
+        assert cred.base_url == "https://proxy.example.com/v1"
 
 
 class TestRedTeamR1Fixes:
@@ -223,8 +235,10 @@ class TestRedTeamR1Fixes:
         with pytest.raises(ConfigurationError, match="blocked"):
             _validate_base_url("http://169.254.169.254/latest/meta-data/")
 
-    def test_fallback_workflow_threads_api_key(self):
-        """generate_fallback_workflow must include api_key in node_config."""
+    def test_fallback_workflow_storescredential_ref_not_api_key(self):
+        """generate_fallback_workflow must store credential_ref, NOT api_key."""
+        from kailash.workflow.credentials import get_credential_store
+
         from kaizen.core.workflow_generator import WorkflowGenerator
 
         config = BaseAgentConfig(
@@ -240,20 +254,28 @@ class TestRedTeamR1Fixes:
         built = workflow.build()
         node = built.nodes.get("agent_fallback")
         assert node is not None
-        assert node.config.get("api_key") == "sk-fallback-key"
-        assert node.config.get("base_url") == "https://proxy.example.com/v1"
+        # api_key and base_url must NOT be in node_config (security)
+        assert "api_key" not in node.config
+        assert "base_url" not in node.config
+        # credential_ref must be present and resolvable
+        cred_ref = node.config.get("credential_ref")
+        assert cred_ref is not None
+        cred = get_credential_store().resolve(cred_ref)
+        assert cred is not None
+        assert cred.api_key == "sk-fallback-key"
+        assert cred.base_url == "https://proxy.example.com/v1"
 
-    def test_provider_config_to_dict_uses_is_not_none(self):
-        """provider_config_to_dict should include api_key when it's not None."""
+    def test_provider_config_to_dict_never_includes_api_key(self):
+        """provider_config_to_dict must never include api_key (hardened)."""
         config = ProviderConfig(
             provider="openai",
             model="gpt-4o",
             api_key="sk-test",
         )
         result = provider_config_to_dict(config)
-        assert "api_key" in result
+        assert "api_key" not in result
 
-        # None api_key should NOT be in dict
+        # None api_key should also NOT be in dict
         config_no_key = ProviderConfig(provider="openai", model="gpt-4o")
         result_no_key = provider_config_to_dict(config_no_key)
         assert "api_key" not in result_no_key
@@ -270,3 +292,211 @@ class TestLLMAgentNodeApiKey:
         params = node.get_parameters()
         assert "api_key" in params
         assert "base_url" in params
+
+
+class TestCredentialStoreLifecycle:
+    """Tests for CredentialStore register/resolve/clear lifecycle."""
+
+    def test_register_and_resolve(self):
+        """CredentialStore should register and resolve credentials."""
+        from kailash.workflow.credentials import CredentialStore
+
+        store = CredentialStore()
+        ref = store.register(api_key="sk-test", base_url="https://example.com")
+        assert ref.startswith("cred_")
+        cred = store.resolve(ref)
+        assert cred is not None
+        assert cred.api_key == "sk-test"
+        assert cred.base_url == "https://example.com"
+
+    def test_clear_all(self):
+        """CredentialStore.clear() should remove all credentials."""
+        from kailash.workflow.credentials import CredentialStore
+
+        store = CredentialStore()
+        ref1 = store.register(api_key="sk-1")
+        ref2 = store.register(api_key="sk-2")
+        assert len(store) == 2
+        store.clear()
+        assert len(store) == 0
+        assert store.resolve(ref1) is None
+        assert store.resolve(ref2) is None
+
+    def test_clear_single(self):
+        """CredentialStore.clear(ref_id) should remove only that credential."""
+        from kailash.workflow.credentials import CredentialStore
+
+        store = CredentialStore()
+        ref1 = store.register(api_key="sk-1")
+        ref2 = store.register(api_key="sk-2")
+        store.clear(ref1)
+        assert store.resolve(ref1) is None
+        assert store.resolve(ref2) is not None
+
+    def test_resolve_unknown_returns_none(self):
+        """Resolving unknown ref should return None, not raise."""
+        from kailash.workflow.credentials import CredentialStore
+
+        store = CredentialStore()
+        assert store.resolve("cred_nonexistent") is None
+
+
+class TestSerializationLeak:
+    """Tests that serialized workflows never contain plaintext API keys."""
+
+    def test_workflow_to_dict_no_api_key(self):
+        """Workflow.to_dict() must not contain plaintext api_key anywhere."""
+        import json
+
+        from kailash.workflow.credentials import get_credential_store
+
+        from kaizen.core.config import BaseAgentConfig
+        from kaizen.core.workflow_generator import WorkflowGenerator
+        from kaizen.signatures import InputField, OutputField, Signature
+
+        class TestSig(Signature):
+            """Test."""
+
+            question: str = InputField(desc="Q")
+            answer: str = OutputField(desc="A")
+
+        config = BaseAgentConfig(
+            llm_provider="openai",
+            model="gpt-4o",
+            api_key="sk-SUPER-SECRET-KEY-12345",
+        )
+        generator = WorkflowGenerator(config=config, signature=TestSig())
+        workflow = generator.generate_signature_workflow()
+        built = workflow.build()
+
+        serialized = json.dumps(built.to_dict())
+        assert "sk-SUPER-SECRET-KEY-12345" not in serialized
+        assert "api_key" not in serialized
+
+
+class TestSafeSerializeRedaction:
+    """Tests that _safe_serialize strips sensitive keys."""
+
+    def test_safe_serialize_strips_api_key(self):
+        """_safe_serialize must strip api_key from dicts."""
+        from kailash.runtime.local import _safe_serialize
+
+        data = {"model": "gpt-4o", "api_key": "sk-secret", "temperature": 0.7}
+        result = _safe_serialize(data)
+        assert "api_key" not in result
+        assert result["model"] == "gpt-4o"
+
+    def test_safe_serialize_strips_nested(self):
+        """_safe_serialize must strip sensitive keys from nested dicts."""
+        from kailash.runtime.local import _safe_serialize
+
+        data = {"config": {"api_key": "sk-secret", "model": "gpt-4o"}, "name": "test"}
+        result = _safe_serialize(data)
+        assert "api_key" not in result.get("config", {})
+
+
+class TestAsyncLLMProviderUnlock:
+    """Test that use_async_llm is no longer restricted to OpenAI."""
+
+    def test_anthropic_async_allowed(self):
+        """BaseAgentConfig with anthropic + use_async_llm should not raise."""
+        config = BaseAgentConfig(
+            llm_provider="anthropic",
+            model="claude-3-haiku-20240307",
+            use_async_llm=True,
+        )
+        assert config.use_async_llm is True
+
+    def test_google_async_allowed(self):
+        """BaseAgentConfig with google + use_async_llm should not raise."""
+        config = BaseAgentConfig(
+            llm_provider="google",
+            model="gemini-2.0-flash",
+            use_async_llm=True,
+        )
+        assert config.use_async_llm is True
+
+
+class TestBYOKClientCache:
+    """Tests for the BYOK client cache."""
+
+    def test_cache_returns_same_client(self):
+        """get_or_create with same credentials should return cached client."""
+        from kaizen.nodes.ai.client_cache import BYOKClientCache
+
+        cache = BYOKClientCache(max_size=10, ttl_seconds=60)
+
+        call_count = 0
+
+        def factory():
+            nonlocal call_count
+            call_count += 1
+            return {"client": call_count}
+
+        c1 = cache.get_or_create("sk-test", "https://api.example.com", factory)
+        c2 = cache.get_or_create("sk-test", "https://api.example.com", factory)
+        assert c1 is c2
+        assert call_count == 1
+
+    def test_cache_different_keys_different_clients(self):
+        """Different credentials should create different clients."""
+        from kaizen.nodes.ai.client_cache import BYOKClientCache
+
+        cache = BYOKClientCache(max_size=10, ttl_seconds=60)
+
+        c1 = cache.get_or_create("sk-1", None, lambda: "client-1")
+        c2 = cache.get_or_create("sk-2", None, lambda: "client-2")
+        assert c1 != c2
+        assert len(cache) == 2
+
+    def test_cache_eviction_at_capacity(self):
+        """Cache should evict oldest entry when at max_size."""
+        from kaizen.nodes.ai.client_cache import BYOKClientCache
+
+        cache = BYOKClientCache(max_size=2, ttl_seconds=60)
+
+        cache.get_or_create("sk-1", None, lambda: "c1")
+        cache.get_or_create("sk-2", None, lambda: "c2")
+        cache.get_or_create("sk-3", None, lambda: "c3")
+        assert len(cache) == 2
+
+    def test_cache_clear(self):
+        """cache.clear() should remove all entries."""
+        from kaizen.nodes.ai.client_cache import BYOKClientCache
+
+        cache = BYOKClientCache(max_size=10)
+        cache.get_or_create("sk-1", None, lambda: "c1")
+        cache.get_or_create("sk-2", None, lambda: "c2")
+        cache.clear()
+        assert len(cache) == 0
+
+    def test_cache_ttl_expiry(self):
+        """Expired entries should be recreated."""
+        import time
+
+        from kaizen.nodes.ai.client_cache import BYOKClientCache
+
+        cache = BYOKClientCache(max_size=10, ttl_seconds=0.1)
+
+        c1 = cache.get_or_create("sk-1", None, lambda: "c1-v1")
+        time.sleep(0.15)
+        c2 = cache.get_or_create("sk-1", None, lambda: "c1-v2")
+        assert c2 == "c1-v2"
+
+
+class TestExportRedaction:
+    """Tests that export utility strips sensitive keys."""
+
+    def test_export_config_no_api_key(self):
+        """Export data node config must not contain api_key."""
+        from kailash.workflow.credentials import SENSITIVE_KEYS
+
+        # Simulate what export does
+        from copy import deepcopy
+
+        config = {"model": "gpt-4o", "api_key": "sk-secret", "temperature": 0.7}
+        config_copy = deepcopy(config)
+        for key in SENSITIVE_KEYS:
+            config_copy.pop(key, None)
+        assert "api_key" not in config_copy
+        assert config_copy["model"] == "gpt-4o"

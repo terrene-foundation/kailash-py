@@ -3,12 +3,22 @@ Cost Tracker - Multi-modal API cost tracking and budget management.
 
 Tracks usage across providers (Ollama, OpenAI) and estimates costs.
 Provides budget limits, alerts, and usage analytics.
+
+Costs are stored internally as integer microdollars (1 USD = 1_000_000 microdollars)
+to prevent floating-point precision loss on accumulated costs. Public API accepts
+and returns float USD values for backward compatibility.
+
+Cross-SDK alignment: kailash-rs#38 (same microdollar approach).
 """
 
-from collections import defaultdict
+import math
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
+
+# 1 USD = 1,000,000 microdollars
+_MICRODOLLARS_PER_USD = 1_000_000
 
 
 @dataclass
@@ -67,13 +77,30 @@ class CostTracker:
             warn_on_openai_usage: Warn before OpenAI API calls
             enable_cost_tracking: Enable cost tracking
         """
+        # Validate budget_limit (NaN/Inf bypass comparisons — trust-plane rule 3)
+        if budget_limit is not None:
+            if not math.isfinite(budget_limit):
+                raise ValueError(f"budget_limit must be finite, got {budget_limit}")
+            if budget_limit < 0:
+                raise ValueError(
+                    f"budget_limit must be non-negative, got {budget_limit}"
+                )
+
         self.budget_limit = budget_limit
         self.alert_threshold = alert_threshold
         self.warn_on_openai_usage = warn_on_openai_usage
         self.enable_cost_tracking = enable_cost_tracking
 
-        # Usage records
-        self._records: List[UsageRecord] = []
+        # Budget limit in microdollars for precision comparison
+        self._budget_limit_microdollars: Optional[int] = (
+            round(budget_limit * _MICRODOLLARS_PER_USD)
+            if budget_limit is not None
+            else None
+        )
+
+        # Usage records (bounded — trust-plane rule 4 / infrastructure-sql rule 7)
+        self._records: deque = deque(maxlen=10_000)
+        self._total_cost_microdollars: int = 0  # Accumulated cost in microdollars
 
         # Alert callbacks
         self.on_alert: Optional[Callable[[CostAlert], None]] = None
@@ -97,6 +124,12 @@ class CostTracker:
         if not self.enable_cost_tracking:
             return
 
+        # Validate cost value (NaN/Inf bypass comparisons — trust-plane-security rule 3)
+        if not math.isfinite(cost):
+            raise ValueError(f"cost must be finite, got {cost}")
+        if cost < 0:
+            raise ValueError(f"cost must be non-negative, got {cost}")
+
         record = UsageRecord(
             provider=provider,
             modality=modality,
@@ -109,6 +142,8 @@ class CostTracker:
         )
 
         self._records.append(record)
+        # Accumulate microdollars for precision (cross-SDK: kailash-rs#38)
+        self._total_cost_microdollars += round(cost * _MICRODOLLARS_PER_USD)
 
         # Check budget
         if self.budget_limit and not self._alert_triggered:
@@ -157,22 +192,26 @@ class CostTracker:
         return total
 
     def is_over_budget(self) -> bool:
-        """Check if over budget."""
-        if not self.budget_limit:
+        """Check if over budget using integer microdollar comparison."""
+        if self._budget_limit_microdollars is None:
             return False
-        return self.get_total_cost() > self.budget_limit
+        return self._total_cost_microdollars > self._budget_limit_microdollars
 
     def get_budget_remaining(self) -> float:
-        """Get remaining budget."""
-        if not self.budget_limit:
+        """Get remaining budget in USD."""
+        if self._budget_limit_microdollars is None:
             return float("inf")
-        return max(0, self.budget_limit - self.get_total_cost())
+        remaining = self._budget_limit_microdollars - self._total_cost_microdollars
+        return max(0.0, remaining / _MICRODOLLARS_PER_USD)
 
     def get_budget_percentage(self) -> float:
         """Get budget usage percentage."""
-        if not self.budget_limit:
+        if (
+            self._budget_limit_microdollars is None
+            or self._budget_limit_microdollars == 0
+        ):
             return 0.0
-        return (self.get_total_cost() / self.budget_limit) * 100
+        return (self._total_cost_microdollars / self._budget_limit_microdollars) * 100
 
     def get_usage_by_provider(self) -> Dict[str, Dict[str, Any]]:
         """Get usage breakdown by provider."""
@@ -220,6 +259,7 @@ class CostTracker:
     def reset(self):
         """Reset tracker (clear all records)."""
         self._records.clear()
+        self._total_cost_microdollars = 0
         self._alert_triggered = False
 
     def check_before_call(self, provider: str, estimated_cost: float):

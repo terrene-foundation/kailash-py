@@ -51,6 +51,14 @@ class ProviderConfig:
     timeout: int = 30
     max_retries: int = 3
 
+    def __repr__(self) -> str:
+        """Redact api_key in repr to prevent leakage in logs/tracebacks."""
+        return (
+            f"ProviderConfig(provider={self.provider!r}, model={self.model!r}, "
+            f"api_key={'***' if self.api_key else None}, "
+            f"base_url={self.base_url!r}, timeout={self.timeout})"
+        )
+
 
 class ConfigurationError(Exception):
     """Raised when provider configuration is invalid or unavailable."""
@@ -415,13 +423,22 @@ def get_cohere_config(
     )
 
 
-def get_huggingface_config(model: Optional[str] = None) -> ProviderConfig:
-    """Get HuggingFace provider configuration (embeddings only)."""
+def get_huggingface_config(
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> ProviderConfig:
+    """Get HuggingFace provider configuration (embeddings only).
+
+    Args:
+        model: Optional model override
+        api_key: Optional API key override (default: reads from HUGGINGFACE_API_KEY)
+    """
     default_model = "sentence-transformers/all-MiniLM-L6-v2"
+    resolved_api_key = _validate_api_key(api_key) or os.getenv("HUGGINGFACE_API_KEY")
     return ProviderConfig(
         provider="huggingface",
         model=model or os.getenv("KAIZEN_HUGGINGFACE_MODEL", default_model),
-        api_key=os.getenv("HUGGINGFACE_API_KEY"),  # Optional for local
+        api_key=resolved_api_key,  # Optional for local
         timeout=int(os.getenv("KAIZEN_TIMEOUT", "60")),
         max_retries=int(os.getenv("KAIZEN_MAX_RETRIES", "3")),
     )
@@ -515,7 +532,12 @@ def get_mock_config(model: Optional[str] = None) -> ProviderConfig:
     )
 
 
-def auto_detect_provider(preferred: Optional[ProviderType] = None) -> ProviderConfig:
+def auto_detect_provider(
+    preferred: Optional[ProviderType] = None,
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+) -> ProviderConfig:
     """
     Auto-detect available LLM provider.
 
@@ -529,6 +551,9 @@ def auto_detect_provider(preferred: Optional[ProviderType] = None) -> ProviderCo
 
     Args:
         preferred: Optional preferred provider to try first
+        model: Optional model override to thread through to the provider
+        api_key: Optional API key override for BYOK multi-tenant scenarios
+        base_url: Optional base URL override
 
     Returns:
         ProviderConfig for first available provider
@@ -536,6 +561,8 @@ def auto_detect_provider(preferred: Optional[ProviderType] = None) -> ProviderCo
     Raises:
         ConfigurationError: If no provider is available
     """
+    import inspect as _inspect
+
     # Check for explicit override
     explicit_provider = os.getenv("KAIZEN_DEFAULT_PROVIDER")
     if explicit_provider:
@@ -557,10 +584,25 @@ def auto_detect_provider(preferred: Optional[ProviderType] = None) -> ProviderCo
         "mock": get_mock_config,
     }
 
+    # Build kwargs to thread through
+    extra_kwargs: Dict[str, Any] = {}
+    if model is not None:
+        extra_kwargs["model"] = model
+    if api_key is not None:
+        extra_kwargs["api_key"] = api_key
+    if base_url is not None:
+        extra_kwargs["base_url"] = base_url
+
+    def _call_with_kwargs(fn):
+        """Call fn with only the kwargs it accepts."""
+        sig = _inspect.signature(fn)
+        valid = {k: v for k, v in extra_kwargs.items() if k in sig.parameters}
+        return fn(**valid)
+
     # Try preferred provider first
     if preferred and preferred in config_functions:
         try:
-            config = config_functions[preferred]()
+            config = _call_with_kwargs(config_functions[preferred])
             logger.info(
                 f"Using preferred provider: {preferred} (model: {config.model})"
             )
@@ -583,7 +625,7 @@ def auto_detect_provider(preferred: Optional[ProviderType] = None) -> ProviderCo
 
     for provider_name in detection_order:
         try:
-            config = config_functions[provider_name]()
+            config = _call_with_kwargs(config_functions[provider_name])
             logger.info(
                 f"Auto-detected provider: {provider_name} (model: {config.model})"
             )
@@ -664,13 +706,19 @@ def get_provider_config(
         valid_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
         return config_functions[provider](**valid_kwargs)
     else:
-        # Auto-detect
-        return auto_detect_provider(preferred=provider)
+        # Auto-detect — thread credentials through
+        return auto_detect_provider(
+            preferred=provider, model=model, api_key=api_key, base_url=base_url
+        )
 
 
 def provider_config_to_dict(config: ProviderConfig) -> Dict[str, Any]:
     """
     Convert ProviderConfig to dictionary suitable for Kaizen agent configuration.
+
+    SECURITY: api_key is intentionally EXCLUDED from the output to prevent
+    credential leakage through serialized configuration dicts. Credentials
+    should flow through the CredentialStore, not through config dicts.
 
     Args:
         config: ProviderConfig object
@@ -684,9 +732,7 @@ def provider_config_to_dict(config: ProviderConfig) -> Dict[str, Any]:
         "timeout": config.timeout,
     }
 
-    # Add provider-specific fields (use 'is not None' to avoid dropping empty strings)
-    if config.api_key is not None:
-        config_dict["api_key"] = config.api_key
+    # base_url is safe metadata (not a secret)
     if config.base_url:
         config_dict["base_url"] = config.base_url
 

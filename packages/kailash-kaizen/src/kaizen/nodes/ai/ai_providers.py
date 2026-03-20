@@ -7,8 +7,17 @@ separation between LLM and embedding capabilities.
 """
 
 import hashlib
+import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Union
+
+from kaizen.nodes.ai.client_cache import BYOKClientCache
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
+
+logger = logging.getLogger(__name__)
+
+# Module-level BYOK client cache (shared across all providers)
+_byok_cache = BYOKClientCache(max_size=128, ttl_seconds=300)
 
 # Type definitions for flexible message content
 MessageContent = Union[str, List[Dict[str, Any]]]
@@ -429,6 +438,11 @@ class OllamaProvider(UnifiedAIProvider):
             generation_config = kwargs.get("generation_config", {})
             backend_config = kwargs.get("backend_config", {})
 
+            # Normalize top-level base_url kwarg into backend_config
+            per_request_base_url = kwargs.get("base_url")
+            if per_request_base_url and not backend_config:
+                backend_config = {"base_url": per_request_base_url}
+
             # Configure Ollama client with custom host if provided
             if backend_config:
                 host = backend_config.get("host", "localhost")
@@ -559,7 +573,8 @@ class OllamaProvider(UnifiedAIProvider):
                 "Ollama library not installed. Install with: pip install ollama"
             )
         except Exception as e:
-            raise RuntimeError(f"Ollama error: {str(e)}")
+            logger.error("Ollama error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Ollama"))
 
     def embed(self, texts: list[str], **kwargs) -> list[list[float]]:
         """
@@ -616,7 +631,8 @@ class OllamaProvider(UnifiedAIProvider):
                 "Ollama library not installed. Install with: pip install ollama"
             )
         except Exception as e:
-            raise RuntimeError(f"Ollama embedding error: {str(e)}")
+            logger.error("Ollama embedding error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Ollama"))
 
     def get_model_info(self, model: str) -> dict[str, Any]:
         """Get information about an Ollama embedding model."""
@@ -863,7 +879,11 @@ class OpenAIProvider(UnifiedAIProvider):
                     client_kwargs["api_key"] = per_request_api_key
                 if per_request_base_url:
                     client_kwargs["base_url"] = per_request_base_url
-                client = openai.OpenAI(**client_kwargs)
+                client = _byok_cache.get_or_create(
+                    per_request_api_key,
+                    per_request_base_url,
+                    factory=lambda: openai.OpenAI(**client_kwargs),
+                )
             else:
                 # Initialize shared sync client if needed
                 if self._sync_client is None:
@@ -1086,13 +1106,11 @@ class OpenAIProvider(UnifiedAIProvider):
                 request_params["tool_choice"] = generation_config.get(
                     "tool_choice", default_choice
                 )
-                print("=" * 80)
-                print(f"Tools present: {len(tools)} tools")
-                print(f"tool_choice: {request_params.get('tool_choice')}")
-                print(
-                    f"First tool name: {tools[0].get('function', {}).get('name', 'N/A') if tools else 'N/A'}"
+                logger.debug(
+                    "OpenAI tools: %d tools, tool_choice=%s",
+                    len(tools),
+                    request_params.get("tool_choice"),
                 )
-                print("=" * 80 + "\n")
 
             # Call OpenAI (sync) — uses per-request client if overrides provided
             response = client.chat.completions.create(**request_params)
@@ -1125,15 +1143,17 @@ class OpenAIProvider(UnifiedAIProvider):
             )
         except openai.BadRequestError as e:
             # Provide helpful error message for unsupported models or parameters
+            logger.error("OpenAI BadRequestError: %s", e, exc_info=True)
             if "max_tokens" in str(e):
                 raise RuntimeError(
                     "This OpenAI provider requires models that support max_completion_tokens. "
                     "Please use o4-mini, o3 "
                     "Older models like gpt-4o or gpt-3.5-turbo are not supported."
                 )
-            raise RuntimeError(f"OpenAI API error: {str(e)}")
+            raise RuntimeError(sanitize_provider_error(e, "OpenAI"))
         except Exception as e:
-            raise RuntimeError(f"OpenAI error: {str(e)}")
+            logger.error("OpenAI error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "OpenAI"))
 
     async def chat_async(self, messages: List[Message], **kwargs) -> dict[str, Any]:
         """
@@ -1163,11 +1183,26 @@ class OpenAIProvider(UnifiedAIProvider):
             generation_config = kwargs.get("generation_config", {})
             tools = kwargs.get("tools", [])
 
-            # Initialize async client if needed
-            if self._async_client is None:
+            # Per-request API key and base URL override for BYOK multi-tenant
+            per_request_api_key = kwargs.get("api_key")
+            per_request_base_url = kwargs.get("base_url")
+
+            if per_request_api_key or per_request_base_url:
                 from openai import AsyncOpenAI
 
-                self._async_client = AsyncOpenAI()
+                client_kwargs = {}
+                if per_request_api_key:
+                    client_kwargs["api_key"] = per_request_api_key
+                if per_request_base_url:
+                    client_kwargs["base_url"] = per_request_base_url
+                async_client = AsyncOpenAI(**client_kwargs)
+            else:
+                # Initialize shared async client if needed
+                if self._async_client is None:
+                    from openai import AsyncOpenAI
+
+                    self._async_client = AsyncOpenAI()
+                async_client = self._async_client
 
             # Process messages for vision content (same logic as sync)
             processed_messages = []
@@ -1292,18 +1327,14 @@ class OpenAIProvider(UnifiedAIProvider):
                 request_params["tool_choice"] = generation_config.get(
                     "tool_choice", default_choice
                 )
-                print("=" * 80)
-                print(f"Tools present: {len(tools)} tools")
-                print(f"tool_choice: {request_params.get('tool_choice')}")
-                print(
-                    f"First tool name: {tools[0].get('function', {}).get('name', 'N/A') if tools else 'N/A'}"
+                logger.debug(
+                    "OpenAI async tools: %d tools, tool_choice=%s",
+                    len(tools),
+                    request_params.get("tool_choice"),
                 )
-                print("=" * 80 + "\n")
 
-            # Call OpenAI (async)
-            response = await self._async_client.chat.completions.create(
-                **request_params
-            )
+            # Call OpenAI (async) — uses per-request client if overrides provided
+            response = await async_client.chat.completions.create(**request_params)
 
             # Format response (same as sync)
             choice = response.choices[0]
@@ -1333,15 +1364,17 @@ class OpenAIProvider(UnifiedAIProvider):
             )
         except openai.BadRequestError as e:
             # Provide helpful error message for unsupported models or parameters
+            logger.error("OpenAI BadRequestError: %s", e, exc_info=True)
             if "max_tokens" in str(e):
                 raise RuntimeError(
                     "This OpenAI provider requires models that support max_completion_tokens. "
                     "Please use o4-mini, o3 "
                     "Older models like gpt-4o or gpt-3.5-turbo are not supported."
                 )
-            raise RuntimeError(f"OpenAI API error: {str(e)}")
+            raise RuntimeError(sanitize_provider_error(e, "OpenAI"))
         except Exception as e:
-            raise RuntimeError(f"OpenAI error: {str(e)}")
+            logger.error("OpenAI error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "OpenAI"))
 
     def embed(self, texts: list[str], **kwargs) -> list[list[float]]:
         """
@@ -1385,7 +1418,8 @@ class OpenAIProvider(UnifiedAIProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            raise RuntimeError(f"OpenAI embedding error: {str(e)}")
+            logger.error("OpenAI embedding error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "OpenAI"))
 
     async def embed_async(self, texts: list[str], **kwargs) -> list[list[float]]:
         """
@@ -1440,7 +1474,8 @@ class OpenAIProvider(UnifiedAIProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            raise RuntimeError(f"OpenAI embedding error: {str(e)}")
+            logger.error("OpenAI embedding error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "OpenAI"))
 
     def get_model_info(self, model: str) -> dict[str, Any]:
         """Get information about an OpenAI embedding model."""
@@ -1536,7 +1571,11 @@ class AnthropicProvider(LLMProvider):
                     client_kwargs["api_key"] = per_request_api_key
                 if per_request_base_url:
                     client_kwargs["base_url"] = per_request_base_url
-                client = anthropic.Anthropic(**client_kwargs)
+                client = _byok_cache.get_or_create(
+                    per_request_api_key,
+                    per_request_base_url,
+                    factory=lambda: anthropic.Anthropic(**client_kwargs),
+                )
             else:
                 # Initialize shared client if needed
                 if self._client is None:
@@ -1654,7 +1693,120 @@ class AnthropicProvider(LLMProvider):
                 "Anthropic library not installed. Install with: pip install anthropic"
             )
         except Exception as e:
-            raise RuntimeError(f"Anthropic error: {str(e)}")
+            logger.error("Anthropic error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Anthropic"))
+
+    async def chat_async(self, messages: List[Message], **kwargs) -> dict[str, Any]:
+        """Generate a chat completion using Anthropic (async version)."""
+        try:
+            import anthropic
+
+            model = kwargs.get("model", "claude-3-sonnet-20240229")
+            generation_config = kwargs.get("generation_config", {})
+
+            # Per-request API key and base URL override for BYOK multi-tenant
+            per_request_api_key = kwargs.get("api_key")
+            per_request_base_url = kwargs.get("base_url")
+
+            if per_request_api_key or per_request_base_url:
+                client_kwargs = {}
+                if per_request_api_key:
+                    client_kwargs["api_key"] = per_request_api_key
+                if per_request_base_url:
+                    client_kwargs["base_url"] = per_request_base_url
+                client = anthropic.AsyncAnthropic(**client_kwargs)
+            else:
+                client = anthropic.AsyncAnthropic()
+
+            # Convert messages to Anthropic format (same logic as sync)
+            system_message = None
+            user_messages = []
+
+            for msg in messages:
+                if msg["role"] == "system":
+                    system_message = (
+                        msg["content"]
+                        if isinstance(msg["content"], str)
+                        else str(msg["content"])
+                    )
+                else:
+                    if isinstance(msg.get("content"), list):
+                        content_parts = []
+                        for item in msg["content"]:
+                            if item["type"] == "text":
+                                content_parts.append(
+                                    {"type": "text", "text": item["text"]}
+                                )
+                            elif item["type"] == "image":
+                                from .vision_utils import encode_image, get_media_type
+
+                                if "path" in item:
+                                    base64_image = encode_image(item["path"])
+                                    media_type = get_media_type(item["path"])
+                                else:
+                                    base64_image = item.get("base64", "")
+                                    media_type = item.get("media_type", "image/jpeg")
+
+                                content_parts.append(
+                                    {
+                                        "type": "image",
+                                        "source": {
+                                            "type": "base64",
+                                            "media_type": media_type,
+                                            "data": base64_image,
+                                        },
+                                    }
+                                )
+                        user_messages.append(
+                            {"role": msg["role"], "content": content_parts}
+                        )
+                    else:
+                        user_messages.append(msg)
+
+            create_kwargs = {
+                "model": model,
+                "messages": user_messages,
+                "max_tokens": generation_config.get("max_tokens", 500),
+                "temperature": generation_config.get("temperature", 0.7),
+            }
+
+            if system_message is not None:
+                create_kwargs["system"] = system_message
+            if generation_config.get("top_p") is not None:
+                create_kwargs["top_p"] = generation_config.get("top_p")
+            if generation_config.get("top_k") is not None:
+                create_kwargs["top_k"] = generation_config.get("top_k")
+            if generation_config.get("stop_sequences") is not None:
+                create_kwargs["stop_sequences"] = generation_config.get(
+                    "stop_sequences"
+                )
+
+            response = await client.messages.create(**create_kwargs)
+
+            return {
+                "id": response.id,
+                "content": response.content[0].text,
+                "role": "assistant",
+                "model": response.model,
+                "created": None,
+                "tool_calls": [],
+                "finish_reason": response.stop_reason,
+                "usage": {
+                    "prompt_tokens": response.usage.input_tokens,
+                    "completion_tokens": response.usage.output_tokens,
+                    "total_tokens": response.usage.input_tokens
+                    + response.usage.output_tokens,
+                },
+                "metadata": {},
+            }
+
+        except ImportError:
+            raise RuntimeError(
+                "Anthropic library not installed. Install with: pip install anthropic"
+            )
+        except Exception as e:
+            logger.error("Anthropic async error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Anthropic"))
 
 
 class CohereProvider(EmbeddingProvider):
@@ -1718,7 +1870,8 @@ class CohereProvider(EmbeddingProvider):
                 "Cohere library not installed. Install with: pip install cohere"
             )
         except Exception as e:
-            raise RuntimeError(f"Cohere embedding error: {str(e)}")
+            logger.error("Cohere embedding error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Cohere"))
 
     def get_model_info(self, model: str) -> dict[str, Any]:
         """Get information about a Cohere embedding model."""
@@ -1908,7 +2061,9 @@ class HuggingFaceProvider(EmbeddingProvider):
                 )
 
                 if response.status_code != 200:
-                    raise RuntimeError(f"API error: {response.text}")
+                    raise RuntimeError(
+                        f"HuggingFace API error: HTTP {response.status_code}"
+                    )
 
                 embedding = response.json()
                 if isinstance(embedding, list) and isinstance(embedding[0], list):
@@ -1924,7 +2079,8 @@ class HuggingFaceProvider(EmbeddingProvider):
             return embeddings
 
         except Exception as e:
-            raise RuntimeError(f"HuggingFace API error: {str(e)}")
+            logger.error("HuggingFace API error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "HuggingFace"))
 
     def _embed_local(
         self, texts: list[str], model: str, device: str, normalize: bool
@@ -1984,7 +2140,8 @@ class HuggingFaceProvider(EmbeddingProvider):
                 "Transformers library not installed. Install with: pip install transformers torch"
             )
         except Exception as e:
-            raise RuntimeError(f"HuggingFace local error: {str(e)}")
+            logger.error("HuggingFace local error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "HuggingFace"))
 
     def get_model_info(self, model: str) -> dict[str, Any]:
         """Get information about a HuggingFace embedding model."""
@@ -2640,17 +2797,35 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
         """Generate chat completion using Azure AI Foundry."""
         try:
             from azure.ai.inference import ChatCompletionsClient
+            from azure.core.credentials import AzureKeyCredential
 
             generation_config = kwargs.get("generation_config", {})
             model = kwargs.get("model")
             tools = kwargs.get("tools", [])
 
-            # Initialize client if needed
-            if self._sync_chat_client is None:
-                self._sync_chat_client = ChatCompletionsClient(
-                    endpoint=self._get_endpoint(),
-                    credential=self._get_credential(),
+            # Per-request API key and base URL override for BYOK multi-tenant
+            per_request_api_key = kwargs.get("api_key")
+            per_request_base_url = kwargs.get("base_url")
+
+            if per_request_api_key or per_request_base_url:
+                endpoint = per_request_base_url or self._get_endpoint()
+                credential = (
+                    AzureKeyCredential(per_request_api_key)
+                    if per_request_api_key
+                    else self._get_credential()
                 )
+                chat_client = ChatCompletionsClient(
+                    endpoint=endpoint,
+                    credential=credential,
+                )
+            else:
+                # Initialize shared client if needed
+                if self._sync_chat_client is None:
+                    self._sync_chat_client = ChatCompletionsClient(
+                        endpoint=self._get_endpoint(),
+                        credential=self._get_credential(),
+                    )
+                chat_client = self._sync_chat_client
 
             # Convert messages to Azure format
             azure_messages = self._convert_messages(messages)
@@ -2710,7 +2885,7 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
             request_params = {k: v for k, v in request_params.items() if v is not None}
 
             # Call Azure
-            response = self._sync_chat_client.complete(**request_params)
+            response = chat_client.complete(**request_params)
 
             # Format response
             choice = response.choices[0]
@@ -2738,23 +2913,42 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
                 "Install with: pip install azure-ai-inference azure-identity"
             )
         except Exception as e:
-            raise RuntimeError(f"Azure AI Foundry error: {str(e)}")
+            logger.error("Azure AI Foundry error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Azure AI Foundry"))
 
     async def chat_async(self, messages: List[Message], **kwargs) -> dict[str, Any]:
         """Generate chat completion using Azure AI Foundry (async)."""
         try:
             from azure.ai.inference.aio import ChatCompletionsClient
+            from azure.core.credentials import AzureKeyCredential
 
             generation_config = kwargs.get("generation_config", {})
             model = kwargs.get("model")
             tools = kwargs.get("tools", [])
 
-            # Initialize async client if needed
-            if self._async_chat_client is None:
-                self._async_chat_client = ChatCompletionsClient(
-                    endpoint=self._get_endpoint(),
-                    credential=self._get_credential(),
+            # Per-request API key and base URL override for BYOK multi-tenant
+            per_request_api_key = kwargs.get("api_key")
+            per_request_base_url = kwargs.get("base_url")
+
+            if per_request_api_key or per_request_base_url:
+                endpoint = per_request_base_url or self._get_endpoint()
+                credential = (
+                    AzureKeyCredential(per_request_api_key)
+                    if per_request_api_key
+                    else self._get_credential()
                 )
+                async_chat_client = ChatCompletionsClient(
+                    endpoint=endpoint,
+                    credential=credential,
+                )
+            else:
+                # Initialize shared async client if needed
+                if self._async_chat_client is None:
+                    self._async_chat_client = ChatCompletionsClient(
+                        endpoint=self._get_endpoint(),
+                        credential=self._get_credential(),
+                    )
+                async_chat_client = self._async_chat_client
 
             # Convert messages (same as sync)
             azure_messages = self._convert_messages(messages)
@@ -2808,7 +3002,7 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
             request_params = {k: v for k, v in request_params.items() if v is not None}
 
             # Call Azure (async)
-            response = await self._async_chat_client.complete(**request_params)
+            response = await async_chat_client.complete(**request_params)
 
             choice = response.choices[0]
             return {
@@ -2835,7 +3029,8 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
                 "Install with: pip install azure-ai-inference azure-identity"
             )
         except Exception as e:
-            raise RuntimeError(f"Azure AI Foundry async error: {str(e)}")
+            logger.error("Azure AI Foundry async error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Azure AI Foundry"))
 
     def embed(self, texts: list[str], **kwargs) -> list[list[float]]:
         """Generate embeddings using Azure AI Foundry."""
@@ -2865,7 +3060,8 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
                 "Install with: pip install azure-ai-inference"
             )
         except Exception as e:
-            raise RuntimeError(f"Azure AI Foundry embedding error: {str(e)}")
+            logger.error("Azure AI Foundry embedding error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Azure AI Foundry"))
 
     async def embed_async(self, texts: list[str], **kwargs) -> list[list[float]]:
         """Generate embeddings using Azure AI Foundry (async)."""
@@ -2893,7 +3089,8 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
                 "Install with: pip install azure-ai-inference"
             )
         except Exception as e:
-            raise RuntimeError(f"Azure AI Foundry async embedding error: {str(e)}")
+            logger.error("Azure AI Foundry async embedding error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Azure AI Foundry"))
 
     def get_model_info(self, model: str) -> dict[str, Any]:
         """Get information about an Azure AI Foundry model."""
@@ -3081,12 +3278,22 @@ class DockerModelRunnerProvider(UnifiedAIProvider):
             if tools and stream:
                 stream = False
 
-            # Initialize client if needed
-            if self._sync_client is None:
-                self._sync_client = openai.OpenAI(
-                    api_key="docker-model-runner",  # Required but not validated
-                    base_url=self._get_base_url(),
+            # Per-request base URL override for BYOK multi-tenant
+            per_request_base_url = kwargs.get("base_url")
+
+            if per_request_base_url:
+                client = openai.OpenAI(
+                    api_key="docker-model-runner",
+                    base_url=per_request_base_url,
                 )
+            else:
+                # Initialize shared client if needed
+                if self._sync_client is None:
+                    self._sync_client = openai.OpenAI(
+                        api_key="docker-model-runner",  # Required but not validated
+                        base_url=self._get_base_url(),
+                    )
+                client = self._sync_client
 
             # Build request
             request_params = {
@@ -3109,7 +3316,7 @@ class DockerModelRunnerProvider(UnifiedAIProvider):
             # Remove None values
             request_params = {k: v for k, v in request_params.items() if v is not None}
 
-            response = self._sync_client.chat.completions.create(**request_params)
+            response = client.chat.completions.create(**request_params)
 
             # Format response
             choice = response.choices[0]
@@ -3144,7 +3351,8 @@ class DockerModelRunnerProvider(UnifiedAIProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            raise RuntimeError(f"Docker Model Runner error: {str(e)}")
+            logger.error("Docker Model Runner error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Docker Model Runner"))
 
     async def chat_async(self, messages: List[Message], **kwargs) -> dict[str, Any]:
         """Generate chat completion using Docker Model Runner (async)."""
@@ -3171,11 +3379,21 @@ class DockerModelRunnerProvider(UnifiedAIProvider):
             if tools and stream:
                 stream = False
 
-            if self._async_client is None:
-                self._async_client = AsyncOpenAI(
+            # Per-request base URL override for BYOK multi-tenant
+            per_request_base_url = kwargs.get("base_url")
+
+            if per_request_base_url:
+                async_client = AsyncOpenAI(
                     api_key="docker-model-runner",
-                    base_url=self._get_base_url(),
+                    base_url=per_request_base_url,
                 )
+            else:
+                if self._async_client is None:
+                    self._async_client = AsyncOpenAI(
+                        api_key="docker-model-runner",
+                        base_url=self._get_base_url(),
+                    )
+                async_client = self._async_client
 
             request_params = {
                 "model": model,
@@ -3195,9 +3413,7 @@ class DockerModelRunnerProvider(UnifiedAIProvider):
 
             request_params = {k: v for k, v in request_params.items() if v is not None}
 
-            response = await self._async_client.chat.completions.create(
-                **request_params
-            )
+            response = await async_client.chat.completions.create(**request_params)
 
             choice = response.choices[0]
             usage = response.usage
@@ -3231,7 +3447,8 @@ class DockerModelRunnerProvider(UnifiedAIProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            raise RuntimeError(f"Docker Model Runner async error: {str(e)}")
+            logger.error("Docker Model Runner async error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Docker Model Runner"))
 
     def embed(self, texts: list[str], **kwargs) -> list[list[float]]:
         """Generate embeddings using Docker Model Runner."""
@@ -3258,7 +3475,8 @@ class DockerModelRunnerProvider(UnifiedAIProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            raise RuntimeError(f"Docker Model Runner embedding error: {str(e)}")
+            logger.error("Docker Model Runner embedding error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Docker Model Runner"))
 
     async def embed_async(self, texts: list[str], **kwargs) -> list[list[float]]:
         """Generate embeddings using Docker Model Runner (async)."""
@@ -3285,7 +3503,10 @@ class DockerModelRunnerProvider(UnifiedAIProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            raise RuntimeError(f"Docker Model Runner async embedding error: {str(e)}")
+            logger.error(
+                "Docker Model Runner async embedding error: %s", e, exc_info=True
+            )
+            raise RuntimeError(sanitize_provider_error(e, "Docker Model Runner"))
 
     def get_model_info(self, model: str) -> dict[str, Any]:
         """Get information about a Docker Model Runner model."""
@@ -3674,7 +3895,15 @@ class GoogleGeminiProvider(UnifiedAIProvider):
             generation_config = kwargs.get("generation_config", {})
             tools = kwargs.get("tools", [])
 
-            client = self._get_client()
+            # Per-request API key override for BYOK multi-tenant
+            per_request_api_key = kwargs.get("api_key")
+
+            if per_request_api_key:
+                from google import genai
+
+                client = genai.Client(api_key=per_request_api_key)
+            else:
+                client = self._get_client()
 
             # Convert messages
             contents, system_instruction = self._convert_messages_to_contents(messages)
@@ -3784,7 +4013,8 @@ class GoogleGeminiProvider(UnifiedAIProvider):
                 "Google GenAI library not installed. Install with: pip install google-genai"
             )
         except Exception as e:
-            raise RuntimeError(f"Google Gemini error: {str(e)}")
+            logger.error("Google Gemini error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Google Gemini"))
 
     async def chat_async(self, messages: List[Message], **kwargs) -> dict[str, Any]:
         """
@@ -3807,8 +4037,16 @@ class GoogleGeminiProvider(UnifiedAIProvider):
             generation_config = kwargs.get("generation_config", {})
             tools = kwargs.get("tools", [])
 
-            # Get the sync client (we'll use its aio interface)
-            client = self._get_client()
+            # Per-request API key override for BYOK multi-tenant
+            per_request_api_key = kwargs.get("api_key")
+
+            if per_request_api_key:
+                from google import genai
+
+                client = genai.Client(api_key=per_request_api_key)
+            else:
+                # Get the sync client (we'll use its aio interface)
+                client = self._get_client()
 
             # Convert messages
             contents, system_instruction = self._convert_messages_to_contents(messages)
@@ -3913,7 +4151,8 @@ class GoogleGeminiProvider(UnifiedAIProvider):
                 "Google GenAI library not installed. Install with: pip install google-genai"
             )
         except Exception as e:
-            raise RuntimeError(f"Google Gemini async error: {str(e)}")
+            logger.error("Google Gemini async error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Google Gemini"))
 
     def embed(self, texts: list[str], **kwargs) -> list[list[float]]:
         """
@@ -3967,7 +4206,8 @@ class GoogleGeminiProvider(UnifiedAIProvider):
                 "Google GenAI library not installed. Install with: pip install google-genai"
             )
         except Exception as e:
-            raise RuntimeError(f"Google Gemini embedding error: {str(e)}")
+            logger.error("Google Gemini embedding error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Google Gemini"))
 
     async def embed_async(self, texts: list[str], **kwargs) -> list[list[float]]:
         """
@@ -4016,7 +4256,8 @@ class GoogleGeminiProvider(UnifiedAIProvider):
                 "Google GenAI library not installed. Install with: pip install google-genai"
             )
         except Exception as e:
-            raise RuntimeError(f"Google Gemini async embedding error: {str(e)}")
+            logger.error("Google Gemini async embedding error: %s", e, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(e, "Google Gemini"))
 
     def get_model_info(self, model: str) -> dict[str, Any]:
         """Get information about a Google Gemini embedding model."""
@@ -4479,12 +4720,23 @@ class PerplexityProvider(LLMProvider):
             model = kwargs.pop("model", self.DEFAULT_MODEL)
             generation_config = kwargs.pop("generation_config", {})
 
-            # Initialize sync client if needed
-            if self._sync_client is None:
-                self._sync_client = openai.OpenAI(
-                    api_key=self._get_api_key(),
-                    base_url=self.BASE_URL,
+            # Per-request API key and base URL override for BYOK multi-tenant
+            per_request_api_key = kwargs.pop("api_key", None)
+            per_request_base_url = kwargs.pop("base_url", None)
+
+            if per_request_api_key or per_request_base_url:
+                client = openai.OpenAI(
+                    api_key=per_request_api_key or self._get_api_key(),
+                    base_url=per_request_base_url or self.BASE_URL,
                 )
+            else:
+                # Initialize shared sync client if needed
+                if self._sync_client is None:
+                    self._sync_client = openai.OpenAI(
+                        api_key=self._get_api_key(),
+                        base_url=self.BASE_URL,
+                    )
+                client = self._sync_client
 
             # Process messages
             processed_messages = self._process_messages(messages)
@@ -4495,7 +4747,7 @@ class PerplexityProvider(LLMProvider):
             )
 
             # Make API call
-            response = self._sync_client.chat.completions.create(**request_params)
+            response = client.chat.completions.create(**request_params)
 
             # Format and return response
             return self._format_response(response)
@@ -4505,13 +4757,13 @@ class PerplexityProvider(LLMProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            error_msg = str(e)
-            if "api_key" in error_msg.lower():
+            logger.error("Perplexity error: %s", e, exc_info=True)
+            if "api_key" in str(e).lower():
                 raise RuntimeError(
                     "Perplexity API key invalid or not set. "
                     "Set PERPLEXITY_API_KEY environment variable."
                 )
-            raise RuntimeError(f"Perplexity error: {error_msg}")
+            raise RuntimeError(sanitize_provider_error(e, "Perplexity"))
 
     async def chat_async(self, messages: List[Message], **kwargs) -> dict[str, Any]:
         """
@@ -4533,12 +4785,23 @@ class PerplexityProvider(LLMProvider):
             model = kwargs.pop("model", self.DEFAULT_MODEL)
             generation_config = kwargs.pop("generation_config", {})
 
-            # Initialize async client if needed
-            if self._async_client is None:
-                self._async_client = AsyncOpenAI(
-                    api_key=self._get_api_key(),
-                    base_url=self.BASE_URL,
+            # Per-request API key and base URL override for BYOK multi-tenant
+            per_request_api_key = kwargs.pop("api_key", None)
+            per_request_base_url = kwargs.pop("base_url", None)
+
+            if per_request_api_key or per_request_base_url:
+                client = AsyncOpenAI(
+                    api_key=per_request_api_key or self._get_api_key(),
+                    base_url=per_request_base_url or self.BASE_URL,
                 )
+            else:
+                # Initialize shared async client if needed
+                if self._async_client is None:
+                    self._async_client = AsyncOpenAI(
+                        api_key=self._get_api_key(),
+                        base_url=self.BASE_URL,
+                    )
+                client = self._async_client
 
             # Process messages
             processed_messages = self._process_messages(messages)
@@ -4549,9 +4812,7 @@ class PerplexityProvider(LLMProvider):
             )
 
             # Make async API call
-            response = await self._async_client.chat.completions.create(
-                **request_params
-            )
+            response = await client.chat.completions.create(**request_params)
 
             # Format and return response
             return self._format_response(response)
@@ -4561,13 +4822,13 @@ class PerplexityProvider(LLMProvider):
                 "OpenAI library not installed. Install with: pip install openai"
             )
         except Exception as e:
-            error_msg = str(e)
-            if "api_key" in error_msg.lower():
+            logger.error("Perplexity error: %s", e, exc_info=True)
+            if "api_key" in str(e).lower():
                 raise RuntimeError(
                     "Perplexity API key invalid or not set. "
                     "Set PERPLEXITY_API_KEY environment variable."
                 )
-            raise RuntimeError(f"Perplexity error: {error_msg}")
+            raise RuntimeError(sanitize_provider_error(e, "Perplexity"))
 
     def get_supported_models(self) -> dict:
         """
@@ -4727,9 +4988,12 @@ def get_available_providers(
                 ),
             }
         except Exception as e:
+            logger.error(
+                "Provider %s availability check failed: %s", name, e, exc_info=True
+            )
             results[name] = {
                 "available": False,
-                "error": str(e),
+                "error": sanitize_provider_error(e, name),
                 "chat": False,
                 "embeddings": False,
             }
