@@ -73,6 +73,8 @@ class CredentialStore:
 
     _SENSITIVE_KEYS: ClassVar[frozenset] = SENSITIVE_KEYS
 
+    _MAX_SIZE: ClassVar[int] = 10_000  # Bounded per trust-plane rule 4
+
     def __init__(self) -> None:
         self._store: Dict[str, Credential] = {}
         self._lock = threading.Lock()
@@ -95,6 +97,17 @@ class CredentialStore:
         """
         ref_id = f"cred_{uuid.uuid4().hex[:12]}"
         with self._lock:
+            # Evict oldest 10% if at capacity (bounded collections — trust-plane rule 4)
+            if len(self._store) >= self._MAX_SIZE:
+                evict_count = max(1, self._MAX_SIZE // 10)
+                keys_to_evict = list(self._store.keys())[:evict_count]
+                for k in keys_to_evict:
+                    del self._store[k]
+                logger.warning(
+                    "CredentialStore at capacity (%d), evicted %d oldest entries",
+                    self._MAX_SIZE,
+                    evict_count,
+                )
             self._store[ref_id] = Credential(api_key=api_key, base_url=base_url)
         logger.debug("Registered credential ref %s", ref_id)
         return ref_id

@@ -12,7 +12,7 @@ Cross-SDK alignment: kailash-rs#38 (same microdollar approach).
 """
 
 import math
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
@@ -98,8 +98,8 @@ class CostTracker:
             else None
         )
 
-        # Usage records
-        self._records: List[UsageRecord] = []
+        # Usage records (bounded — trust-plane rule 4 / infrastructure-sql rule 7)
+        self._records: deque = deque(maxlen=10_000)
         self._total_cost_microdollars: int = 0  # Accumulated cost in microdollars
 
         # Alert callbacks

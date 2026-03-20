@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 
 @dataclass
@@ -1400,17 +1401,21 @@ class LLMAgentNode(Node):
                                 "relevance_score": 0.5,
                                 "metadata": {
                                     "error": "timeout",
-                                    "error_message": str(e),
+                                    "error_message": sanitize_provider_error(e, "MCP"),
                                 },
                             }
                         )
                     except Exception as e:
                         error_type = type(e).__name__
                         self.logger.error(
-                            f"MCP server '{server_config.get('name', 'unknown')}' connection failed ({error_type}): {e}"
+                            "MCP server '%s' connection failed (%s): %s",
+                            server_config.get("name", "unknown"),
+                            error_type,
+                            e,
                         )
 
                         # Provide helpful error messages based on exception type
+                        sanitized_msg = sanitize_provider_error(e, "MCP")
                         if "coroutine" in str(e).lower() and "await" in str(e).lower():
                             self.logger.error(
                                 "This appears to be an async/await issue. Please report this bug to the Kailash SDK team."
@@ -1420,13 +1425,13 @@ class LLMAgentNode(Node):
                         context_data.append(
                             {
                                 "uri": f"mcp://{server_config.get('name', 'unknown')}/fallback",
-                                "content": f"Connection failed ({error_type}) - using fallback content. Error: {str(e)}",
+                                "content": f"Connection failed ({error_type}) - using fallback content.",
                                 "source": server_config.get("name", "unknown"),
                                 "retrieved_at": datetime.now().isoformat(),
                                 "relevance_score": 0.5,
                                 "metadata": {
                                     "error": error_type,
-                                    "error_message": str(e),
+                                    "error_message": sanitized_msg,
                                 },
                             }
                         )
@@ -2456,7 +2461,11 @@ Final Answer: 6 hours"""
 
         except Exception as e:
             self.logger.error(f"MCP tool execution failed: {e}")
-            return {"error": str(e), "success": False, "tool_name": tool_name}
+            return {
+                "error": sanitize_provider_error(e, "tool"),
+                "success": False,
+                "tool_name": tool_name,
+            }
 
     def _execute_tool_calls(
         self,
@@ -2527,7 +2536,7 @@ Final Answer: 6 hours"""
                         "tool_call_id": tool_id,
                         "content": json.dumps(
                             {
-                                "error": f"Invalid tool call format: {str(e)}",
+                                "error": sanitize_provider_error(e, "tool"),
                                 "tool": tool_name,
                                 "status": "failed",
                             }
@@ -2542,7 +2551,11 @@ Final Answer: 6 hours"""
                     {
                         "tool_call_id": tool_id,
                         "content": json.dumps(
-                            {"error": str(e), "tool": tool_name, "status": "failed"}
+                            {
+                                "error": sanitize_provider_error(e, "tool"),
+                                "tool": tool_name,
+                                "status": "failed",
+                            }
                         ),
                     }
                 )

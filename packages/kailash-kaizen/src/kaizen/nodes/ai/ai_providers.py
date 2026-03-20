@@ -11,9 +11,13 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Union
 
+from kaizen.nodes.ai.client_cache import BYOKClientCache
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 logger = logging.getLogger(__name__)
+
+# Module-level BYOK client cache (shared across all providers)
+_byok_cache = BYOKClientCache(max_size=128, ttl_seconds=300)
 
 # Type definitions for flexible message content
 MessageContent = Union[str, List[Dict[str, Any]]]
@@ -875,7 +879,11 @@ class OpenAIProvider(UnifiedAIProvider):
                     client_kwargs["api_key"] = per_request_api_key
                 if per_request_base_url:
                     client_kwargs["base_url"] = per_request_base_url
-                client = openai.OpenAI(**client_kwargs)
+                client = _byok_cache.get_or_create(
+                    per_request_api_key,
+                    per_request_base_url,
+                    factory=lambda: openai.OpenAI(**client_kwargs),
+                )
             else:
                 # Initialize shared sync client if needed
                 if self._sync_client is None:
@@ -1563,7 +1571,11 @@ class AnthropicProvider(LLMProvider):
                     client_kwargs["api_key"] = per_request_api_key
                 if per_request_base_url:
                     client_kwargs["base_url"] = per_request_base_url
-                client = anthropic.Anthropic(**client_kwargs)
+                client = _byok_cache.get_or_create(
+                    per_request_api_key,
+                    per_request_base_url,
+                    factory=lambda: anthropic.Anthropic(**client_kwargs),
+                )
             else:
                 # Initialize shared client if needed
                 if self._client is None:
