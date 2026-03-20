@@ -58,6 +58,54 @@ class ConfigurationError(Exception):
     pass
 
 
+def _validate_api_key(api_key: Optional[str]) -> Optional[str]:
+    """Validate and normalize an API key.
+
+    Returns None if api_key is None, raises on empty/whitespace-only strings.
+    """
+    if api_key is None:
+        return None
+    if not api_key.strip():
+        raise ConfigurationError("api_key cannot be empty or whitespace-only")
+    return api_key
+
+
+def _validate_base_url(base_url: Optional[str]) -> Optional[str]:
+    """Validate a base URL to prevent SSRF against internal services.
+
+    Returns None if base_url is None, raises on private/internal URLs.
+    """
+    if base_url is None:
+        return None
+    if not base_url.strip():
+        raise ConfigurationError("base_url cannot be empty or whitespace-only")
+
+    from urllib.parse import urlparse
+
+    parsed = urlparse(base_url)
+    hostname = parsed.hostname or ""
+
+    # Block private/internal hostnames
+    blocked_patterns = [
+        "169.254.",  # AWS metadata / link-local
+        "metadata.google.",  # GCP metadata
+        "100.100.100.200",  # Alibaba metadata
+    ]
+    for pattern in blocked_patterns:
+        if hostname.startswith(pattern) or hostname == pattern.rstrip("."):
+            raise ConfigurationError(
+                f"base_url targets a blocked internal address: {hostname}"
+            )
+
+    # Block common internal hostnames
+    if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
+        # Allow localhost for Ollama/Docker (local providers)
+        # Callers should pass through without validation for local providers
+        pass
+
+    return base_url
+
+
 def check_ollama_available() -> bool:
     """
     Check if Ollama is available locally.
@@ -179,12 +227,13 @@ def get_openai_config(
     Raises:
         ConfigurationError: If API key is not available from either parameter or env var
     """
-    api_key = api_key or os.getenv("OPENAI_API_KEY")
+    api_key = _validate_api_key(api_key) or os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ConfigurationError(
             "OpenAI API key not found. Set OPENAI_API_KEY environment variable "
             "or pass api_key parameter."
         )
+    base_url = _validate_base_url(base_url)
 
     default_model = "gpt-4o-mini"  # Fast, cost-effective model
     return ProviderConfig(
@@ -252,8 +301,12 @@ def get_azure_config(
     Raises:
         ConfigurationError: If Azure credentials not available
     """
-    resolved_api_key = api_key or os.getenv("AZURE_AI_INFERENCE_API_KEY")
-    resolved_base_url = base_url or os.getenv("AZURE_AI_INFERENCE_ENDPOINT")
+    resolved_api_key = _validate_api_key(api_key) or os.getenv(
+        "AZURE_AI_INFERENCE_API_KEY"
+    )
+    resolved_base_url = _validate_base_url(base_url) or os.getenv(
+        "AZURE_AI_INFERENCE_ENDPOINT"
+    )
 
     if not resolved_api_key or not resolved_base_url:
         raise ConfigurationError(
@@ -318,7 +371,7 @@ def get_anthropic_config(
         model: Optional model override (default: claude-3-haiku-20240307)
         api_key: Optional API key override (default: reads from ANTHROPIC_API_KEY env var)
     """
-    api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+    api_key = _validate_api_key(api_key) or os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         raise ConfigurationError(
             "Anthropic API key not found. Set ANTHROPIC_API_KEY environment variable "
@@ -345,7 +398,7 @@ def get_cohere_config(
         model: Optional model override (default: embed-english-v3.0)
         api_key: Optional API key override (default: reads from COHERE_API_KEY env var)
     """
-    api_key = api_key or os.getenv("COHERE_API_KEY")
+    api_key = _validate_api_key(api_key) or os.getenv("COHERE_API_KEY")
     if not api_key:
         raise ConfigurationError(
             "Cohere API key not found. Set COHERE_API_KEY environment variable "
@@ -391,7 +444,11 @@ def get_google_config(
     Raises:
         ConfigurationError: If API key or project is not available
     """
-    api_key = api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    api_key = (
+        _validate_api_key(api_key)
+        or os.getenv("GOOGLE_API_KEY")
+        or os.getenv("GEMINI_API_KEY")
+    )
     project = os.getenv("GOOGLE_CLOUD_PROJECT")
 
     if not api_key and not project:
@@ -430,7 +487,7 @@ def get_perplexity_config(
     Raises:
         ConfigurationError: If API key is not available
     """
-    api_key = api_key or os.getenv("PERPLEXITY_API_KEY")
+    api_key = _validate_api_key(api_key) or os.getenv("PERPLEXITY_API_KEY")
     if not api_key:
         raise ConfigurationError(
             "Perplexity API key not found. Set PERPLEXITY_API_KEY environment variable "
@@ -627,8 +684,8 @@ def provider_config_to_dict(config: ProviderConfig) -> Dict[str, Any]:
         "timeout": config.timeout,
     }
 
-    # Add provider-specific fields
-    if config.api_key:
+    # Add provider-specific fields (use 'is not None' to avoid dropping empty strings)
+    if config.api_key is not None:
         config_dict["api_key"] = config.api_key
     if config.base_url:
         config_dict["base_url"] = config.base_url

@@ -335,6 +335,12 @@ class WorkflowGenerator:
             "generation_config": generation_config,
         }
 
+        # Add per-request API key and base URL for BYOK multi-tenant support
+        if hasattr(self.config, "api_key") and self.config.api_key:
+            node_config["api_key"] = self.config.api_key
+        if hasattr(self.config, "base_url") and self.config.base_url:
+            node_config["base_url"] = self.config.base_url
+
         # Add provider-specific config (preserve as nested dict for LLMAgentNode)
         if self.config.provider_config:
             node_config["provider_config"] = self.config.provider_config

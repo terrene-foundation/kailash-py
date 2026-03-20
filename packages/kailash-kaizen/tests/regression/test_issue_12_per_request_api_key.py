@@ -194,6 +194,71 @@ class TestWorkflowGeneratorApiKey:
         assert node.config.get("base_url") == "https://proxy.example.com/v1"
 
 
+class TestRedTeamR1Fixes:
+    """Regression tests for red team R1 findings."""
+
+    def test_empty_string_api_key_raises(self):
+        """Empty-string api_key must raise ConfigurationError, not silently pass."""
+        with patch.dict(os.environ, {}, clear=True):
+            with pytest.raises(ConfigurationError, match="empty"):
+                get_openai_config(api_key="")
+
+    def test_whitespace_api_key_raises(self):
+        """Whitespace-only api_key must raise ConfigurationError."""
+        with patch.dict(os.environ, {}, clear=True):
+            with pytest.raises(ConfigurationError, match="empty"):
+                get_openai_config(api_key="   ")
+
+    def test_empty_base_url_raises(self):
+        """Empty-string base_url must raise ConfigurationError."""
+        from kaizen.config.providers import _validate_base_url
+
+        with pytest.raises(ConfigurationError, match="empty"):
+            _validate_base_url("")
+
+    def test_ssrf_metadata_url_blocked(self):
+        """base_url targeting cloud metadata service must be blocked."""
+        from kaizen.config.providers import _validate_base_url
+
+        with pytest.raises(ConfigurationError, match="blocked"):
+            _validate_base_url("http://169.254.169.254/latest/meta-data/")
+
+    def test_fallback_workflow_threads_api_key(self):
+        """generate_fallback_workflow must include api_key in node_config."""
+        from kaizen.core.workflow_generator import WorkflowGenerator
+
+        config = BaseAgentConfig(
+            llm_provider="openai",
+            model="gpt-4o",
+            api_key="sk-fallback-key",
+            base_url="https://proxy.example.com/v1",
+        )
+
+        generator = WorkflowGenerator(config=config)
+        workflow = generator.generate_fallback_workflow()
+
+        built = workflow.build()
+        node = built.nodes.get("agent_fallback")
+        assert node is not None
+        assert node.config.get("api_key") == "sk-fallback-key"
+        assert node.config.get("base_url") == "https://proxy.example.com/v1"
+
+    def test_provider_config_to_dict_uses_is_not_none(self):
+        """provider_config_to_dict should include api_key when it's not None."""
+        config = ProviderConfig(
+            provider="openai",
+            model="gpt-4o",
+            api_key="sk-test",
+        )
+        result = provider_config_to_dict(config)
+        assert "api_key" in result
+
+        # None api_key should NOT be in dict
+        config_no_key = ProviderConfig(provider="openai", model="gpt-4o")
+        result_no_key = provider_config_to_dict(config_no_key)
+        assert "api_key" not in result_no_key
+
+
 class TestLLMAgentNodeApiKey:
     """Test that LLMAgentNode accepts and uses api_key parameter."""
 

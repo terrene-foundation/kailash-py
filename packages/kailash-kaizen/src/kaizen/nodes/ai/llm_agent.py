@@ -899,7 +899,13 @@ class LLMAgentNode(Node):
                         )
                     else:
                         response = self._provider_llm_response(
-                            provider, model, enriched_messages, tools, generation_config
+                            provider,
+                            model,
+                            enriched_messages,
+                            tools,
+                            generation_config,
+                            api_key=per_request_api_key,
+                            base_url=per_request_base_url,
                         )
 
                 # Update final response metadata
@@ -1025,11 +1031,15 @@ class LLMAgentNode(Node):
 
         except Exception as e:
             # Call error hook (Kaizen extension point)
+            # Strip sensitive fields from error context to prevent key leakage
+            safe_kwargs = {
+                k: v for k, v in kwargs.items() if k not in ("api_key", "base_url")
+            }
             error_context = {
                 "provider": provider,
                 "model": model,
                 "conversation_id": conversation_id,
-                "kwargs": kwargs,
+                "kwargs": safe_kwargs,
             }
             self._on_error_hook(e, error_context)
 

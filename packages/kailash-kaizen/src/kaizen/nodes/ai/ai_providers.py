@@ -1526,11 +1526,17 @@ class AnthropicProvider(LLMProvider):
             model = kwargs.get("model", "claude-3-sonnet-20240229")
             generation_config = kwargs.get("generation_config", {})
 
-            # Per-request API key override for BYOK multi-tenant
+            # Per-request API key and base URL override for BYOK multi-tenant
             per_request_api_key = kwargs.get("api_key")
+            per_request_base_url = kwargs.get("base_url")
 
-            if per_request_api_key:
-                client = anthropic.Anthropic(api_key=per_request_api_key)
+            if per_request_api_key or per_request_base_url:
+                client_kwargs = {}
+                if per_request_api_key:
+                    client_kwargs["api_key"] = per_request_api_key
+                if per_request_base_url:
+                    client_kwargs["base_url"] = per_request_base_url
+                client = anthropic.Anthropic(**client_kwargs)
             else:
                 # Initialize shared client if needed
                 if self._client is None:
