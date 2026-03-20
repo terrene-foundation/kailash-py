@@ -51,6 +51,14 @@ class ProviderConfig:
     timeout: int = 30
     max_retries: int = 3
 
+    def __repr__(self) -> str:
+        """Redact api_key in repr to prevent leakage in logs/tracebacks."""
+        return (
+            f"ProviderConfig(provider={self.provider!r}, model={self.model!r}, "
+            f"api_key={'***' if self.api_key else None}, "
+            f"base_url={self.base_url!r}, timeout={self.timeout})"
+        )
+
 
 class ConfigurationError(Exception):
     """Raised when provider configuration is invalid or unavailable."""

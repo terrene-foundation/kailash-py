@@ -1098,13 +1098,11 @@ class OpenAIProvider(UnifiedAIProvider):
                 request_params["tool_choice"] = generation_config.get(
                     "tool_choice", default_choice
                 )
-                print("=" * 80)
-                print(f"Tools present: {len(tools)} tools")
-                print(f"tool_choice: {request_params.get('tool_choice')}")
-                print(
-                    f"First tool name: {tools[0].get('function', {}).get('name', 'N/A') if tools else 'N/A'}"
+                logger.debug(
+                    "OpenAI tools: %d tools, tool_choice=%s",
+                    len(tools),
+                    request_params.get("tool_choice"),
                 )
-                print("=" * 80 + "\n")
 
             # Call OpenAI (sync) — uses per-request client if overrides provided
             response = client.chat.completions.create(**request_params)
@@ -1321,13 +1319,11 @@ class OpenAIProvider(UnifiedAIProvider):
                 request_params["tool_choice"] = generation_config.get(
                     "tool_choice", default_choice
                 )
-                print("=" * 80)
-                print(f"Tools present: {len(tools)} tools")
-                print(f"tool_choice: {request_params.get('tool_choice')}")
-                print(
-                    f"First tool name: {tools[0].get('function', {}).get('name', 'N/A') if tools else 'N/A'}"
+                logger.debug(
+                    "OpenAI async tools: %d tools, tool_choice=%s",
+                    len(tools),
+                    request_params.get("tool_choice"),
                 )
-                print("=" * 80 + "\n")
 
             # Call OpenAI (async) — uses per-request client if overrides provided
             response = await async_client.chat.completions.create(**request_params)

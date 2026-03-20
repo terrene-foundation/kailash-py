@@ -50,6 +50,10 @@ class Credential:
     api_key: Optional[str] = None
     base_url: Optional[str] = None
 
+    def __repr__(self) -> str:
+        """Redact credentials in repr to prevent leakage in logs/tracebacks."""
+        return "Credential(api_key=***, base_url=***)"
+
 
 class CredentialStore:
     """Thread-safe, non-serializable credential store for workflow execution.

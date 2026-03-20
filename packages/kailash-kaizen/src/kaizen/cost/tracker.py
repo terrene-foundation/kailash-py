@@ -77,6 +77,15 @@ class CostTracker:
             warn_on_openai_usage: Warn before OpenAI API calls
             enable_cost_tracking: Enable cost tracking
         """
+        # Validate budget_limit (NaN/Inf bypass comparisons — trust-plane rule 3)
+        if budget_limit is not None:
+            if not math.isfinite(budget_limit):
+                raise ValueError(f"budget_limit must be finite, got {budget_limit}")
+            if budget_limit < 0:
+                raise ValueError(
+                    f"budget_limit must be non-negative, got {budget_limit}"
+                )
+
         self.budget_limit = budget_limit
         self.alert_threshold = alert_threshold
         self.warn_on_openai_usage = warn_on_openai_usage
