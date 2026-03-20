@@ -129,11 +129,8 @@ class BaseAgentConfig:
         if not isinstance(self.use_async_llm, bool):
             raise TypeError("use_async_llm must be a boolean")
 
-        # Validate async configuration compatibility
-        if self.use_async_llm and self.llm_provider not in [None, "openai"]:
-            raise ValueError(
-                f"Async mode only supported for OpenAI provider, got: {self.llm_provider}"
-            )
+        # Async mode is supported for all providers with chat_async() methods
+        # (OpenAI, Anthropic, Google, Azure, Docker, Perplexity)
 
     @classmethod
     def from_domain_config(cls, config: Any) -> "BaseAgentConfig":

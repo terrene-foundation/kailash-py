@@ -6,7 +6,7 @@ import logging
 import uuid
 import warnings
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, ClassVar
 
 import networkx as nx
 import yaml
@@ -37,12 +37,35 @@ logger = logging.getLogger(__name__)
 class NodeInstance(BaseModel):
     """Instance of a node in a workflow."""
 
+    # Keys that MUST be redacted on serialization (defense-in-depth)
+    _SENSITIVE_KEYS: ClassVar[frozenset] = frozenset(
+        {
+            "api_key",
+            "api_secret",
+            "base_url",
+            "token",
+            "password",
+            "credential",
+            "auth",
+            "secret",
+        }
+    )
+
     node_id: str = Field(..., description="Unique identifier for this instance")
     node_type: str = Field(..., description="Type of node")
     config: dict[str, Any] = Field(
         default_factory=dict, description="Node configuration"
     )
     position: tuple[float, float] = Field(default=(0, 0), description="Visual position")
+
+    def model_dump(self, **kwargs) -> dict[str, Any]:
+        """Override to redact sensitive config keys on serialization."""
+        data = super().model_dump(**kwargs)
+        if "config" in data and isinstance(data["config"], dict):
+            for key in self._SENSITIVE_KEYS:
+                if key in data["config"]:
+                    data["config"][key] = "***REDACTED***"
+        return data
 
 
 class Connection(BaseModel):
@@ -201,7 +224,7 @@ class Workflow:
             else:
                 raise NodeConfigurationError(
                     f"Failed to create node '{node_id}' of type '{node_class.__name__}': {e}. "
-                    f"Constructor signature: {sig}. Config: {config}"
+                    f"Constructor signature: {sig}. Config keys: {list(config.keys())}"
                 ) from e
 
     def add_node(self, node_id: str, node_or_type: Any, **config) -> None:
@@ -1101,12 +1124,14 @@ class Workflow:
                     to_input = edge_data.get("to_input")
                     mapping = edge_data.get("mapping", {})
 
-                    print(f"CONNECTION DEBUG: {source_node_id} -> {node_id}")
-                    print(f"  Edge data: {edge_data}")
-                    print(f"  from_output: {from_output}, to_input: {to_input}")
-                    print(f"  mapping: {mapping}")
-                    print(
-                        f"  source_results keys: {list(results.get(source_node_id, {}).keys())}"
+                    logger.debug(
+                        "Connection: %s -> %s, from_output=%s, to_input=%s, mapping_keys=%s, source_result_keys=%s",
+                        source_node_id,
+                        node_id,
+                        from_output,
+                        to_input,
+                        list(mapping.keys()),
+                        list(results.get(source_node_id, {}).keys()),
                     )
 
                     source_results = results.get(source_node_id, {})
@@ -1134,12 +1159,17 @@ class Workflow:
                     for source_key, target_key in mapping.items():
                         if source_key in source_results:
                             node_inputs[target_key] = source_results[source_key]
-                            print(
-                                f"MAPPING DEBUG: {source_key} -> {target_key}, value type: {type(source_results[source_key])}"
+                            logger.debug(
+                                "Mapping: %s -> %s, value type: %s",
+                                source_key,
+                                target_key,
+                                type(source_results[source_key]).__name__,
                             )
                         else:
-                            print(
-                                f"MAPPING DEBUG: Source key '{source_key}' not found in source results: {list(source_results.keys())}"
+                            logger.debug(
+                                "Mapping: source key '%s' not found in source results: %s",
+                                source_key,
+                                list(source_results.keys()),
                             )
 
                 # Apply overrides

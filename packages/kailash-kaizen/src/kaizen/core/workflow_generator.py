@@ -24,6 +24,7 @@ import logging
 from typing import Any, Callable, Dict, List, Optional
 
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.workflow.credentials import get_credential_store
 
 from kaizen.core.config import BaseAgentConfig
 from kaizen.signatures import Signature
@@ -226,11 +227,12 @@ class WorkflowGenerator:
             "generation_config": generation_config,
         }
 
-        # Add per-request API key and base URL for BYOK multi-tenant support
-        if api_key:
-            node_config["api_key"] = api_key
-        if base_url:
-            node_config["base_url"] = base_url
+        # Register per-request credentials in CredentialStore (never in node_config)
+        if api_key or base_url:
+            credential_ref = get_credential_store().register(
+                api_key=api_key, base_url=base_url
+            )
+            node_config["credential_ref"] = credential_ref
 
         # Add provider-specific config (preserve as nested dict for LLMAgentNode)
         if provider_config:
@@ -335,11 +337,22 @@ class WorkflowGenerator:
             "generation_config": generation_config,
         }
 
-        # Add per-request API key and base URL for BYOK multi-tenant support
-        if hasattr(self.config, "api_key") and self.config.api_key:
-            node_config["api_key"] = self.config.api_key
-        if hasattr(self.config, "base_url") and self.config.base_url:
-            node_config["base_url"] = self.config.base_url
+        # Register per-request credentials in CredentialStore (never in node_config)
+        fallback_api_key = (
+            getattr(self.config, "api_key", None)
+            if hasattr(self.config, "api_key")
+            else None
+        )
+        fallback_base_url = (
+            getattr(self.config, "base_url", None)
+            if hasattr(self.config, "base_url")
+            else None
+        )
+        if fallback_api_key or fallback_base_url:
+            credential_ref = get_credential_store().register(
+                api_key=fallback_api_key, base_url=fallback_base_url
+            )
+            node_config["credential_ref"] = credential_ref
 
         # Add provider-specific config (preserve as nested dict for LLMAgentNode)
         if self.config.provider_config:

@@ -784,6 +784,11 @@ class AsyncLocalRuntime(LocalRuntime):
 
                 _runtime_trust_context.reset(trust_token)
 
+            # BYOK hardening: clear credential store after execution completes
+            from kailash.workflow.credentials import get_credential_store
+
+            get_credential_store().clear()
+
             # P0 Component 1: Cleanup guarantees
             # Always cleanup connections and resources
             try:
