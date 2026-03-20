@@ -1,6 +1,14 @@
 name: COC Sync to USE Repo
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".claude/agents/**"
+      - ".claude/skills/**"
+      - ".claude/rules/**"
+      - ".claude/commands/**"
+      - "scripts/hooks/**"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -8,47 +16,41 @@ on:
         required: false
         type: boolean
         default: false
-  # Paused — requires cross-repo PAT for ubuntu-latest runners
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - '.claude/agents/**'
-  #     - '.claude/skills/**'
-  #     - '.claude/rules/**'
-  #     - '.claude/commands/**'
-  #     - 'scripts/hooks/**'
 
 jobs:
   sync:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write
+      contents: read
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout BUILD repo
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
+          path: build-repo
 
-      - name: Sync COC artifacts to USE repo
+      - name: Checkout USE repo
+        uses: actions/checkout@v5
+        with:
+          repository: terrene-foundation/kailash-coc-claude-py
+          token: ${{ secrets.COC_SYNC_PAT }}
+          fetch-depth: 1
+          path: use-repo
+
+      - name: Sync COC artifacts
         run: |
-          USE_REPO="$HOME/repos/kailash/kailash-coc-claude-py"
-
-          if [ ! -d "$USE_REPO" ]; then
-            echo "USE repo not found at $USE_REPO — skipping sync"
-            exit 0
-          fi
-
+          BUILD="$GITHUB_WORKSPACE/build-repo"
+          USE="$GITHUB_WORKSPACE/use-repo"
           BRANCH="coc-sync/$(date +%Y%m%d-%H%M%S)"
-          cd "$USE_REPO"
 
-          git checkout main
-          git pull origin main
+          cd "$USE"
           git checkout -b "$BRANCH"
 
           # Sync rules
           for rule in zero-tolerance.md no-stubs.md agents.md e2e-god-mode.md terrene-naming.md git.md; do
-            src="$GITHUB_WORKSPACE/.claude/rules/$rule"
-            dst="$USE_REPO/.claude/rules/$rule"
+            src="$BUILD/.claude/rules/$rule"
+            dst="$USE/.claude/rules/$rule"
             if [ -f "$src" ]; then
               cp "$src" "$dst"
             fi
@@ -56,31 +58,41 @@ jobs:
 
           # Sync hooks
           for hook in validate-workflow.js validate-bash-command.js validate-deployment.js auto-format.js user-prompt-rules-reminder.js session-start.js session-end.js pre-compact.js stop.js; do
-            src="$GITHUB_WORKSPACE/scripts/hooks/$hook"
-            dst="$USE_REPO/scripts/hooks/$hook"
+            src="$BUILD/scripts/hooks/$hook"
+            dst="$USE/scripts/hooks/$hook"
             if [ -f "$src" ]; then
               cp "$src" "$dst"
             fi
           done
 
-          if [ -d "$GITHUB_WORKSPACE/scripts/hooks/lib" ]; then
-            cp -r "$GITHUB_WORKSPACE/scripts/hooks/lib/"* "$USE_REPO/scripts/hooks/lib/" 2>/dev/null || true
+          if [ -d "$BUILD/scripts/hooks/lib" ]; then
+            mkdir -p "$USE/scripts/hooks/lib"
+            cp -r "$BUILD/scripts/hooks/lib/"* "$USE/scripts/hooks/lib/" 2>/dev/null || true
           fi
 
-          cat > "$USE_REPO/.claude/.coc-sync-marker" <<MARKER
-          {"synced_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "template_commit": "$(git -C "$GITHUB_WORKSPACE" rev-parse --short HEAD)", "source": "kailash-py"}
+          # Write sync marker
+          mkdir -p "$USE/.claude"
+          cat > "$USE/.claude/.coc-sync-marker" <<MARKER
+          {"synced_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)", "template_commit": "$(git -C "$BUILD" rev-parse --short HEAD)", "source": "kailash-py"}
           MARKER
 
-          cd "$USE_REPO"
+          # Check for changes
           if git diff --quiet && git diff --cached --quiet; then
             echo "No COC changes to sync"
-            git checkout main
-            git branch -D "$BRANCH"
             exit 0
           fi
 
+          # Commit and push (skip if dry run)
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "Dry run — showing diff:"
+            git diff --stat
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "chore(coc): sync from kailash-py $(git -C "$GITHUB_WORKSPACE" rev-parse --short HEAD)
+          git commit -m "chore(coc): sync from kailash-py $(git -C "$BUILD" rev-parse --short HEAD)
 
           Automated COC sync from BUILD repo.
 
@@ -91,11 +103,11 @@ jobs:
           gh pr create \
             --repo terrene-foundation/kailash-coc-claude-py \
             --title "chore(coc): sync from kailash-py" \
-            --body "Automated COC sync. Source commit: $(git -C "$GITHUB_WORKSPACE" rev-parse --short HEAD)" \
+            --body "Automated COC sync. Source commit: $(git -C "$BUILD" rev-parse --short HEAD)" \
             --label "coc-sync" \
             --head "$BRANCH"
-
-          git checkout main
+        env:
+          GH_TOKEN: ${{ secrets.COC_SYNC_PAT }}
 
       - name: Notify Discord
         if: always()
