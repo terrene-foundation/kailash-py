@@ -254,7 +254,7 @@ jobs:
       redis-ready: ${{ steps.validate.outputs.redis }}
       ollama-ready: ${{ steps.validate.outputs.ollama }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Docker test infrastructure
         run: |
@@ -342,7 +342,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Python
         run: |
