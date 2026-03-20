@@ -92,6 +92,9 @@ class TestVaultKeyManagerImportError:
         assert VaultKeyManager.DEFAULT_MOUNT_POINT == "transit"
 
 
+botocore = pytest.importorskip("botocore", reason="botocore not installed")
+
+
 class TestAwsKmsExceptionWrapping:
     """Tests for AWS KMS exception wrapping (TODO-43)."""
 

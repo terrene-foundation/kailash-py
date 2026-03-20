@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import threading
 import time
 import urllib.request
@@ -1015,6 +1016,10 @@ class TestTokenManagement:
         token2 = load_or_create_token(str(trust_dir))
         assert token1 == token2
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="Unix file permission checks not applicable on Windows",
+    )
     def test_token_file_permissions(self, tmp_path):
         """Token file has 0o600 permissions (owner-only)."""
         import os

@@ -4,6 +4,7 @@
 """Tests for TrustProject — EATP-backed project lifecycle."""
 
 import json
+import sys
 
 import pytest
 
@@ -290,6 +291,10 @@ class TestKeyPersistence:
         assert (keys_dir / "private.key").exists()
         assert (keys_dir / "public.key").exists()
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="Unix file permission checks not applicable on Windows",
+    )
     async def test_private_key_permissions(self, trust_dir):
         import os
         import stat
@@ -499,9 +504,9 @@ class TestChainContinuity:
             actual_parent = data.get("parent_anchor_id") or data.get("context", {}).get(
                 "parent_anchor_id"
             )
-            assert actual_parent == expected_parent, (
-                f"Anchor {af.name}: expected parent {expected_parent}, got {actual_parent}"
-            )
+            assert (
+                actual_parent == expected_parent
+            ), f"Anchor {af.name}: expected parent {expected_parent}, got {actual_parent}"
             expected_parent = data["anchor_id"]
 
     async def test_verify_detects_deleted_anchor(self, trust_dir):

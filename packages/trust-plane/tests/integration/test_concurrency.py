@@ -10,6 +10,7 @@ since fcntl.flock is process-level.
 import json
 import multiprocessing
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -465,6 +466,10 @@ class TestLockTimeout:
 # --- 9. Symlink Protection ---
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="O_NOFOLLOW symlink protection not available on Windows",
+)
 class TestSymlinkProtection:
     """Verify symlink attack prevention."""
 
