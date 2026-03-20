@@ -49,8 +49,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install -e ".[dev]" --system
-          uv pip install -e "packages/kailash-kaizen[dev]" --system
+          uv pip install -e ".[dev]" --system --break-system-packages
+          uv pip install -e "packages/kailash-kaizen[dev]" --system --break-system-packages
 
       - name: Run Security Test Suite
         run: |
