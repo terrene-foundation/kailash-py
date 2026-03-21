@@ -2,14 +2,14 @@
 
 Critical patterns, security considerations, and gotchas discovered during the EATP SDK extraction and red team validation.
 
-**Source**: `packages/eatp/` | **Tests**: 1557 passed | **Red team**: 3 rounds, 5 agents, all critical/high resolved
+**Source**: `src/kailash/trust/` | **Tests**: 1557 passed | **Red team**: 3 rounds, 5 agents, all critical/high resolved
 
 ## Critical Gotchas
 
 ### 1. Key Pair Order: Private FIRST
 
 ```python
-from eatp.crypto import generate_keypair
+from kailash.trust.signing.crypto import generate_keypair
 
 private_key, public_key = generate_keypair()  # CORRECT: private first
 # Both are base64-encoded strings, NOT raw bytes
@@ -20,7 +20,7 @@ NEVER swap the order. `generate_keypair()` returns `(private_key_base64, public_
 ### 2. AuthorityRegistryProtocol — All 3 Methods Required
 
 ```python
-from eatp.authority import AuthorityRegistryProtocol
+from kailash.trust.authority import AuthorityRegistryProtocol
 
 # This protocol requires ALL THREE methods:
 class MyRegistry:
@@ -34,7 +34,7 @@ Missing `update_authority()` will fail at runtime when `CredentialRotationManage
 ### 3. StrictEnforcer — No Positional or trust_operations Arg
 
 ```python
-from eatp.enforce.strict import StrictEnforcer, Verdict
+from kailash.trust.enforce.strict import StrictEnforcer, Verdict
 
 # CORRECT — optional keyword args only: on_held, held_callback, flag_threshold
 enforcer = StrictEnforcer()
@@ -52,7 +52,7 @@ verdict = enforcer.classify(result)  # Returns Verdict enum
 ### 4. Signatures Are Base64, Not Hex
 
 ```python
-# Signatures from eatp.crypto.sign() are base64-encoded
+# Signatures from kailash.trust.signing.crypto.sign() are base64-encoded
 sig = sign(payload, private_key)  # Returns base64 string
 
 # verify_signature() expects base64 signature
@@ -88,7 +88,7 @@ payload = genesis.to_signing_payload()  # NOT genesis.signing_payload (it's a me
 ### 7. Reasoning Signature Signs Trace Content, Not Parent Record
 
 ```python
-from eatp.crypto import sign_reasoning_trace, verify_reasoning_signature
+from kailash.trust.signing.crypto import sign_reasoning_trace, verify_reasoning_signature
 
 # The reasoning_signature is computed from trace.to_signing_payload()
 # It is NOT part of the parent DelegationRecord/AuditAnchor signature
@@ -157,7 +157,7 @@ ok = verify_reasoning_signature(trace, delegation.reasoning_signature, pub_key) 
 Always set the confidentiality level before attaching evidence or alternatives:
 
 ```python
-from eatp.reasoning import ReasoningTrace, ConfidentialityLevel
+from kailash.trust.reasoning import ReasoningTrace, ConfidentialityLevel
 from datetime import datetime, timezone
 
 # CORRECT: classify first, then populate
@@ -178,8 +178,8 @@ trace = ReasoningTrace(
 ### Pattern: Using REASONING_REQUIRED for Compliance Workflows
 
 ```python
-from eatp import CapabilityRequest, TrustOperations
-from eatp.chain import CapabilityType, ConstraintType
+from kailash.trust import CapabilityRequest, TrustOperations
+from kailash.trust.chain import CapabilityType, ConstraintType
 
 # Establish agent with REASONING_REQUIRED constraint
 chain = await ops.establish(
@@ -217,7 +217,7 @@ trace = ReasoningTrace(
 logger.info(f"Reasoning: {trace.to_dict()}")  # Leaks TOP_SECRET to logs!
 
 # CORRECT: Use selective disclosure; only store hash
-from eatp.crypto import hash_reasoning_trace
+from kailash.trust.signing.crypto import hash_reasoning_trace
 trace_hash = hash_reasoning_trace(trace)
 logger.info(f"Reasoning hash: {trace_hash}")  # Safe: only hash in logs
 ```
@@ -251,7 +251,7 @@ _SAFE_ALGORITHMS = {"EdDSA", "ES256", "ES384", "ES512", "RS256", "RS384", "RS512
 `InMemoryReplayProtection` has a `max_nonces` parameter (default 1,000,000) to prevent memory exhaustion:
 
 ```python
-from eatp.messaging.replay_protection import InMemoryReplayProtection
+from kailash.trust.messaging.replay_protection import InMemoryReplayProtection
 
 replay = InMemoryReplayProtection(max_nonces=100_000)
 # Auto-cleanup when cap exceeded, oldest entries evicted first
@@ -290,7 +290,7 @@ Every action through `TrustedAgent` follows:
 3. **AUDIT** — Record in immutable trail
 
 ```python
-from eatp.trusted_agent import TrustedAgent, TrustedAgentConfig
+from kailash.trust.trusted_agent import TrustedAgent, TrustedAgentConfig
 
 trusted = TrustedAgent(
     agent=base_agent,
@@ -317,12 +317,12 @@ After extraction, Kaizen trust files are thin shims:
 
 ```python
 # packages/kailash-kaizen/src/kaizen/trust/chain.py
-from eatp.chain import *  # noqa: F401,F403
+from kailash.trust.chain import *  # noqa: F401,F403
 ```
 
 This means:
 
-- Canonical code lives in `packages/eatp/src/eatp/`
+- Canonical code lives in `src/kailash/trust/`
 - Kaizen tests exercise the same code through shim imports
 - 1557 EATP tests + Kaizen trust shim tests for total coverage
 
@@ -420,7 +420,7 @@ These are documented for future improvement:
 
 ```bash
 # Run EATP standalone tests
-cd packages/eatp
+cd src/kailash/trust
 python -m pytest tests/ -v
 
 # Run specific test categories

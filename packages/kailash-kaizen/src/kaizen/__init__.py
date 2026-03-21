@@ -6,8 +6,8 @@ auto-optimization, and enhanced AI agent capabilities built on top of the
 proven Kailash SDK infrastructure.
 """
 
-__version__ = "1.3.0"
-__author__ = "Kailash Team"
+__version__ = "2.0.0"
+__author__ = "Terrene Foundation"
 __license__ = "Apache-2.0"
 
 # UNIFIED AGENT API (ADR-020) - Primary user-facing agent

@@ -1,0 +1,23 @@
+# Minimal PACT Organization Definition for tests
+org_id: "test-minimal-001"
+name: "Minimal Test Org"
+
+departments:
+  - id: d-engineering
+    name: Engineering
+
+teams:
+  - id: t-backend
+    name: Backend Team
+
+roles:
+  - id: r-cto
+    name: CTO
+    heads: d-engineering
+  - id: r-lead
+    name: Tech Lead
+    reports_to: r-cto
+    heads: t-backend
+  - id: r-dev
+    name: Developer
+    reports_to: r-lead

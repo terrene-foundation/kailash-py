@@ -1,8 +1,8 @@
 """
-Organizational Authority — thin adapter importing shared types from EATP.
+Organizational Authority — thin adapter importing shared types from kailash.trust.
 
 Shared types (AuthorityPermission, OrganizationalAuthority) live in the
-``eatp.authority`` package.  This file re-exports them for backwards
+``kailash.trust.authority`` package.  This file re-exports them for backwards
 compatibility and keeps the Kaizen-specific DataFlow-backed
 ``OrganizationalAuthorityRegistry`` which depends on ``kailash.runtime``
 and ``dataflow``.
@@ -16,9 +16,9 @@ from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
-# ---------- shared types (from EATP) ----------
-from eatp.authority import AuthorityPermission, OrganizationalAuthority  # noqa: F401
-from eatp.chain import AuthorityType  # noqa: F401
+# ---------- shared types (from kailash.trust) ----------
+from kailash.trust.authority import AuthorityPermission, OrganizationalAuthority  # noqa: F401
+from kailash.trust.chain import AuthorityType  # noqa: F401
 
 from kaizen.trust.exceptions import (
     AuthorityInactiveError,

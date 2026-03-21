@@ -1,3 +1,3 @@
-"""Compatibility shim — re-exports from eatp.messaging.verifier."""
+"""Compatibility shim — re-exports from kailash.trust.messaging.verifier."""
 
-from eatp.messaging.verifier import *  # noqa: F401,F403
+from kailash.trust.messaging.verifier import *  # noqa: F401,F403

@@ -19,7 +19,7 @@ Reasoning traces are cryptographically signed independently from the parent reco
 ## Quick Start
 
 ```python
-from eatp import TrustOperations, ReasoningTrace, ConfidentialityLevel
+from kailash.trust import TrustOperations, ReasoningTrace, ConfidentialityLevel
 from datetime import datetime, timezone
 
 # Create a reasoning trace
@@ -87,7 +87,7 @@ Every reasoning trace carries a `ConfidentialityLevel` that controls how the tra
 Levels support ordering comparisons:
 
 ```python
-from eatp.reasoning import ConfidentialityLevel
+from kailash.trust.reasoning.traces import ConfidentialityLevel
 
 assert ConfidentialityLevel.PUBLIC < ConfidentialityLevel.SECRET
 assert ConfidentialityLevel.RESTRICTED <= ConfidentialityLevel.RESTRICTED
@@ -104,7 +104,7 @@ if agent_clearance < trace_level:
 Add the `REASONING_REQUIRED` constraint to a chain's constraint envelope to enforce that all delegations and audit anchors must include reasoning traces:
 
 ```python
-from eatp.chain import ConstraintType, Constraint
+from kailash.trust.chain import ConstraintType, Constraint
 
 # When establishing trust, include REASONING_REQUIRED
 chain = await ops.establish(
@@ -122,7 +122,7 @@ When `REASONING_REQUIRED` is active:
 - **QUICK verification** does not check reasoning (expiration only).
 
 ```python
-from eatp.chain import VerificationLevel
+from kailash.trust.chain import VerificationLevel
 
 # STANDARD: checks presence
 result = await ops.verify(
@@ -148,7 +148,7 @@ result = await ops.verify(
 Three dedicated functions handle reasoning trace cryptography:
 
 ```python
-from eatp.crypto import (
+from kailash.trust.signing.crypto import (
     hash_reasoning_trace,
     sign_reasoning_trace,
     verify_reasoning_signature,
@@ -173,7 +173,7 @@ These functions use `ReasoningTrace.to_signing_payload()` internally, which prod
 Propagates reasoning metadata into enforcement records:
 
 ```python
-from eatp.enforce.strict import StrictEnforcer
+from kailash.trust.enforce.strict import StrictEnforcer
 
 enforcer = StrictEnforcer()
 result = await ops.verify(agent_id="agent-001", action="do_thing")
@@ -191,7 +191,7 @@ Reasoning-specific violations are logged at WARNING level with details.
 Tracks reasoning metrics without blocking:
 
 ```python
-from eatp.enforce.shadow import ShadowEnforcer
+from kailash.trust.enforce.shadow import ShadowEnforcer
 
 shadow = ShadowEnforcer()
 # ... process verifications ...
@@ -222,7 +222,7 @@ Risk analysis flags incomplete reasoning coverage with actionable recommendation
 ### W3C Verifiable Credentials
 
 ```python
-from eatp.interop.w3c_vc import chain_to_w3c_vc
+from kailash.trust.interop.w3c_vc import chain_to_w3c_vc
 
 vc = chain_to_w3c_vc(chain, signing_key=priv_key)
 # PUBLIC/RESTRICTED: full reasoning in "reasoning" key
@@ -233,7 +233,7 @@ vc = chain_to_w3c_vc(chain, signing_key=priv_key)
 ### SD-JWT
 
 ```python
-from eatp.interop.sd_jwt import create_reasoning_sd_jwt
+from kailash.trust.interop.sd_jwt import create_reasoning_sd_jwt
 
 # Without disclosure (default): RESTRICTED+ traces hidden
 token = create_reasoning_sd_jwt(
@@ -259,7 +259,7 @@ Reasoning traces are serialized as `eatp_reasoning_trace`, `eatp_reasoning_trace
 Convert reasoning traces into searchable knowledge entries:
 
 ```python
-from eatp.knowledge.bridge import KnowledgeBridge
+from kailash.trust.knowledge.bridge import KnowledgeBridge
 
 bridge = KnowledgeBridge(
     knowledge_store=store,

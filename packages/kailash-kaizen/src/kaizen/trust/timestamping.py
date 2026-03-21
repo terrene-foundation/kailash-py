@@ -1,7 +1,7 @@
-"""Compatibility shim -- re-exports from eatp.
+"""Compatibility shim -- re-exports from kailash.trust.
 
-This module re-exports all public names from the EATP SDK.
-Import directly from ``eatp.timestamping`` for new code.
+This module re-exports all public names from kailash.trust.
+Import directly from ``kailash.trust.timestamping`` for new code.
 """
 
-from eatp.timestamping import *  # noqa: F401,F403
+from kailash.trust.signing.timestamping import *  # noqa: F401,F403

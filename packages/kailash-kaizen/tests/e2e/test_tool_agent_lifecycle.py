@@ -21,8 +21,8 @@ import tempfile
 
 import pytest
 
-from eatp.constraints.budget_tracker import BudgetTracker, usd_to_microdollars
-from eatp.postures import (
+from kailash.trust.constraints.budget_tracker import BudgetTracker, usd_to_microdollars
+from kailash.trust.posture.postures import (
     PostureStateMachine,
     PostureTransitionRequest,
     TrustPosture,

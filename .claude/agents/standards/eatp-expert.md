@@ -156,7 +156,7 @@ Invoke these skills when needed:
 
 ## TrustPlane Reference Implementation
 
-TrustPlane (`packages/trust-plane/`) is the EATP reference implementation — a production-grade Python library implementing the full trust chain.
+TrustPlane (`src/kailash/trust/plane/`) is the EATP reference implementation — a production-grade Python library implementing the full trust chain.
 
 ### Trust Chain Coverage
 
@@ -183,7 +183,7 @@ RBAC (4 roles), OIDC (JWKS auto-discovery), SIEM (CEF/OCSF/TLS syslog), Dashboar
 
 - **CLI**: `attest` command (Click-based)
 - **MCP Server**: `trustplane-mcp` via FastMCP
-- **Python API**: `from trustplane.project import TrustProject`
+- **Python API**: `from kailash.trust.plane.project import TrustProject`
 
 ### Quality
 

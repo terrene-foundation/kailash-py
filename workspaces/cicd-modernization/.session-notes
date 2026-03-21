@@ -1,22 +1,26 @@
-# Session Notes — 2026-03-18
+# Session Notes — CI/CD Modernization
+# Date: 2026-03-21
+# Status: COMPLETE
 
 ## Accomplished
-- Switched all workflows from self-hosted to ubuntu-latest
-- CI green: 1649 curated unit tests in 12s on GH runners
-- Moved 8 hanging test files to tests/integration/nodes/
-- Community files: CODEOWNERS, dependabot.yml, SECURITY.md, CONTRIBUTING.md (all 3 repos)
-- CodeQL scanning workflow added
-- OIDC publish workflow (pypa/gh-action-pypi-publish) ready
-- psutil lazy import fixed (7 modules), black formatted codebase
-- 27 CI commits squashed into 1
+- Prior: ubuntu-latest runners, community files, CodeQL, publish workflow, sub-package releases
+- This session: Python 3.11/3.12/3.13 matrix via actions/setup-python@v6
+- This session: Pyright type checking added (`--level basic` on src/kailash/)
+- This session: Removed ~200 lines of dead code (self-hosted runner logic, disabled Docker infra job)
+- This session: Switched uv install to astral-sh/setup-uv@v6
+- This session: Removed token auth from publish-pypi.yml — pure OIDC now
+- This session: Configured OIDC trusted publishers on PyPI AND TestPyPI for all 6 packages
+- This session: Removed all old Integrum-Global publishers from both registries
+- This session: Deleted PYPI_API_TOKEN secret from GitHub repo
+
+## In Progress
+- Nothing
 
 ## Blockers
-- Sub-packages not on PyPI at v1.0.0 (blocks `kailash[all]`)
-- OIDC trusted publishing needs PyPI website config per package
+- None
 
 ## Next Steps
-1. Publish sub-packages to PyPI
-2. Configure OIDC trusted publishing on PyPI
-3. Add Pyright to CI
-4. Python version matrix (3.10-3.13)
-5. Merge Dependabot PRs
+- Workspace COMPLETE — move to eatp-merge
+
+## Active Todo
+- None

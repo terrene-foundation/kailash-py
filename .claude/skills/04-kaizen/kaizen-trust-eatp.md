@@ -2,7 +2,7 @@
 
 **Cryptographically verifiable trust chains for AI agents**, enabling enterprise-grade accountability, authorization, and secure multi-agent communication.
 
-> **Architecture Note**: As of v0.1.0, EATP is a standalone SDK (`pip install eatp`). Kaizen's `kaizen.trust` module is a **shim layer** that re-exports from the standalone package. Canonical code lives in `packages/eatp/src/eatp/`. For standalone SDK documentation, see `skills/26-eatp-reference/`.
+> **Architecture Note**: As of v0.1.0, EATP is a standalone SDK (`pip install kailash[trust]`). Kaizen's `kaizen.trust` module is a **shim layer** that re-exports from the standalone package. Canonical code lives in `src/kailash/trust/`. For standalone SDK documentation, see `skills/26-eatp-reference/`.
 
 ## Overview
 
@@ -18,7 +18,7 @@ EATP provides complete trust infrastructure for AI agents:
 - **RFC 3161 Timestamping** (v1.1.0): Cryptographic timestamping for audit records with TSA integration
 
 **Location**: `kaizen.trust` module (shims to `eatp` package)
-**Canonical Source**: `packages/eatp/src/eatp/`
+**Canonical Source**: `src/kailash/trust/`
 
 ## Quick Start
 
@@ -663,15 +663,15 @@ After EATP SDK extraction, `kaizen.trust` files are thin shims:
 
 ```python
 # packages/kailash-kaizen/src/kaizen/trust/chain.py
-from eatp.chain import *  # noqa: F401,F403
+from kailash.trust.chain import *  # noqa: F401,F403
 ```
 
 **Import Mapping**:
 | Kaizen Shim Import | Canonical Import |
 |---|---|
-| `from kaizen.trust import TrustOperations` | `from eatp import TrustOperations` |
-| `from kaizen.trust.crypto import generate_keypair` | `from eatp.crypto import generate_keypair` |
-| `from kaizen.trust.authority import OrganizationalAuthority` | `from eatp.authority import OrganizationalAuthority` |
+| `from kaizen.trust import TrustOperations` | `from kailash.trust import TrustOperations` |
+| `from kaizen.trust.crypto import generate_keypair` | `from kailash.trust.signing.crypto import generate_keypair` |
+| `from kaizen.trust.authority import OrganizationalAuthority` | `from kailash.trust.authority import OrganizationalAuthority` |
 
 Kaizen adds `PostgresTrustStore` (DataFlow-backed) which is NOT in the standalone SDK. For lightweight storage, the standalone SDK provides `InMemoryTrustStore` and `FilesystemStore`.
 
@@ -679,9 +679,9 @@ Kaizen adds `PostgresTrustStore` (DataFlow-backed) which is NOT in the standalon
 
 ## Support
 
-- **Canonical Source**: `packages/eatp/src/eatp/` (standalone SDK)
+- **Canonical Source**: `src/kailash/trust/` (standalone SDK)
 - **Kaizen Shims**: `packages/kailash-kaizen/src/kaizen/trust/`
-- **EATP Tests**: `packages/eatp/tests/` (1324 tests)
+- **EATP Tests**: `src/kailash/trust/tests/` (1324 tests)
 - **Kaizen Trust Tests**: `packages/kailash-kaizen/tests/unit/trust/` (1623 tests, exercises same code via shims)
 - **Security Tests**: `packages/kailash-kaizen/tests/security/`
-- **Examples**: `packages/eatp/examples/` (standalone), `examples/trust/` (Kaizen integration)
+- **Examples**: `src/kailash/trust/examples/` (standalone), `examples/trust/` (Kaizen integration)

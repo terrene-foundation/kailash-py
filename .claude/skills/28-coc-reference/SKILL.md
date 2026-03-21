@@ -127,13 +127,47 @@ The developer's unique contribution is not writing code but defining and maintai
 
 Bainbridge's Irony (1983): The more automated a system becomes, the more critical it is that human operators maintain deep understanding. Every COC layer deepens the developer's expertise.
 
+## The Autonomous Execution Model
+
+COC executes through **autonomous AI agent systems**, not human teams. This is the direct application of CO Principle 4 (Human-on-the-Loop): the human defines the operating envelope; autonomous agents execute within it.
+
+### The 10x Throughput Multiplier
+
+**Default multiplier: 10x** — autonomous AI execution with mature COC institutional knowledge produces ~10x the sustained throughput of an equivalent human team.
+
+| Factor                                                       | Multiplier |
+| ------------------------------------------------------------ | ---------- |
+| Parallel agent execution                                     | 3-5x       |
+| Continuous operation (24/7, no fatigue, zero context-switch) | 2-3x       |
+| Knowledge compounding (CO Principle 7)                       | 1.5-2x     |
+| Validation overhead                                          | 0.7-0.8x   |
+| **Net sustained**                                            | **~10x**   |
+
+### Structural vs Execution Gates
+
+| Gate Type                              | Examples                                                         | Human Role                      |
+| -------------------------------------- | ---------------------------------------------------------------- | ------------------------------- |
+| **Structural** (human authority)       | Plan approval, release authorization, envelope changes           | Human decides                   |
+| **Execution** (autonomous convergence) | Test passing, red team convergence, code review, security review | Agents converge; human observes |
+
+### Impact on Deliberation
+
+When agents deliberate (during /analyze, /redteam, or planning), they MUST:
+
+- Estimate effort in **autonomous sessions**, not human-days
+- Recommend the **technically optimal approach** unconstrained by human resource limits
+- Default to **maximum parallelization** across agent specializations
+- Frame trade-offs in terms of **system complexity** and **validation rigor**, not team bandwidth
+
+See `rules/autonomous-execution.md` for the full principle, multiplier basis, and application rules.
+
 ## Honest Limitations
 
 - Novel architecture decisions (no established pattern to follow)
 - Distributed systems complexity (emergent problems beyond local guardrails)
-- Team dynamics and culture (organizational, not technical)
 - Model-specific limitations (reduced, not eliminated)
 - Legacy codebases (fewer frameworks to compose with)
+- Greenfield domains where no institutional knowledge exists yet (first session is ~2-3x, not 10x)
 
 ## Quick Reference
 

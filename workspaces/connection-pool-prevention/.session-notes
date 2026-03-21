@@ -1,21 +1,26 @@
 # Session Notes — Connection Pool Prevention
-# Date: 2026-03-21 (Session 2, post-convergence)
+# Date: 2026-03-21 (Session 2)
+# Status: COMPLETE — RELEASED
 
-## Accomplished (Session 1 + 2)
-- Full analysis (4 agents), cross-SDK alignment with kailash-rs, 63-todo plan
-- Milestones 0-10 ALL IMPLEMENTED + RED TEAM ROUND 2 CONVERGED
-- Red team round 2: 4 agents (security, code review, deep analyst, testing)
-  - 2 CRITICAL + 4 HIGH + 6 MEDIUM fixes applied
-  - 20 new convergence tests (total: 127 unit + 16 integration)
-  - Thread-safe pool stats, asyncio.Lock on LightweightPool, narrowed SHOW allowlist
+## Accomplished
+- Wired real pool stats provider into PoolMonitor (reads from asyncpg/SQLAlchemy/SQLite via _shared_pools)
+- Wired LightweightPool into DataFlow lifecycle (init, health_check, close, close_async)
+- Added execute_raw_lightweight() and pool stats in health_check()
+- M8 COC: Updated skill, hooks (validate-workflow.js, session-start.js), coc-sync to USE template
+- M9 Docs: CHANGELOG, README pool section, env var docs
+- Red team round 2 CONVERGED: 2 CRITICAL + 4 HIGH + 6 MEDIUM fixed, 20 new tests
+  - Thread-safe list() snapshot, asyncio.Lock on LightweightPool, narrowed SHOW allowlist
   - URL-scoped stats provider, interval floor, close timeout + terminate fallback
-  - Post-fork detection, credential logging fix, SQLite URL handling
-- 5 new source files + 2 new test files
-- 147 total tests pass, 0 regressions
+- /codify: Updated dataflow-specialist agent, dataflow-monitoring skill, SKILL.md, coc-sync (7 artifacts)
+- /release: Version 1.0.1 → 1.1.0, PR #26 merged, tag dataflow-v1.1.0, PyPI published
 
-## Ready for
-- Commit and create PR
-- /codify for coc-sync to USE template repo
+## In Progress
+- Nothing — workspace complete
 
 ## Blockers
-- kailash-enterprise keeps reinstalling via aerith deps — use `pip uninstall kailash-enterprise && pip install -e . --no-deps`
+- kailash-enterprise reinstalls via aerith deps — use `pip uninstall kailash-enterprise && pip install -e . --no-deps`
+
+## Next Steps
+- Cross-SDK: File kailash-rs issue for pool auto-scaling alignment (RS already has RS-6)
+- Monitor PyPI install reports for any issues
+- Consider byok-hardening workspace next

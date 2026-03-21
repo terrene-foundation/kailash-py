@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import eatp.rotation as rotation_module
+import kailash.trust.signing.rotation as rotation_module
 from kaizen.trust.authority import (
     AuthorityPermission,
     OrganizationalAuthority,

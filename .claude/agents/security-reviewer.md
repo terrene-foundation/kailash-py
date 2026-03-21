@@ -103,7 +103,7 @@ You MUST be invoked:
 
 ### 8. TrustPlane / EATP Security Patterns
 
-These checks are MANDATORY for any code touching `packages/trust-plane/` or `packages/eatp/`.
+These checks are MANDATORY for any code touching `src/kailash/trust/plane/` or `src/kailash/trust/`.
 
 - [ ] **P1 — validate_id() on external IDs**: Every record ID used in a filesystem path or SQL query MUST pass `validate_id()` first. **Violation**: bare `f"{record_id}.json"` without prior validation.
 - [ ] **P2 — O_NOFOLLOW via safe_read_json()/safe_read_text()**: All trust-sensitive file reads MUST use safe helpers. **Violation**: `open(path)` or `path.read_text()` on trust store files.
@@ -117,7 +117,7 @@ These checks are MANDATORY for any code touching `packages/trust-plane/` or `pac
 - [ ] **P10 — frozen=True on security-critical dataclasses**: **Violation**: mutable dataclass where mutation bypasses validation.
 - [ ] **P11 — from_dict() validates all fields**: **Violation**: `data.get("field", "")` — silent defaults on security fields.
 
-> These 11 patterns were hardened through 14 rounds of red teaming. See `packages/trust-plane/CLAUDE.md` for full details with code examples.
+> These 11 patterns were hardened through 14 rounds of red teaming. See `src/kailash/trust/plane/CLAUDE.md` for full details with code examples.
 
 ### 9. Production Readiness Security Patterns
 

@@ -1,10 +1,10 @@
-"""Compatibility shim -- re-exports from eatp.
+"""Compatibility shim -- re-exports from kailash.trust.
 
-This module re-exports all public names from the EATP SDK.
-Import directly from ``eatp.circuit_breaker`` for new code.
+This module re-exports all public names from kailash.trust.
+Import directly from ``kailash.trust.circuit_breaker`` for new code.
 """
 
-from eatp.circuit_breaker import *  # noqa: F401,F403
+from kailash.trust.circuit_breaker import *  # noqa: F401,F403
 
-# Preserve __all__ from eatp module for explicit re-export
-from eatp.circuit_breaker import __all__  # noqa: F401
+# Preserve __all__ from kailash.trust module for explicit re-export
+from kailash.trust.circuit_breaker import __all__  # noqa: F401

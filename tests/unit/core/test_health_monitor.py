@@ -348,9 +348,12 @@ class TestHTTPHealthCheck:
         mock_response.status = 200
         mock_response.read = AsyncMock(return_value=b"OK")
 
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+
         mock_session = AsyncMock()
-        mock_session.get.return_value.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_session.get.return_value.__aexit__ = AsyncMock(return_value=False)
+        mock_session.get = Mock(return_value=mock_ctx)
 
         with patch("aiohttp.ClientSession") as mock_client_session:
             mock_client_session.return_value.__aenter__ = AsyncMock(

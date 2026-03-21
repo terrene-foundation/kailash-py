@@ -1,60 +1,26 @@
 name: CI Pipeline
 
-# Runner Selection:
-# - All CI runs use self-hosted runners (NO GitHub runners to save costs)
-# - Default runner: self-hosted-primary (preferred), falls back to self-hosted-secondary or any self-hosted
-# - For push/PR events: Automatically prefers self-hosted-primary runner
-# - For manual runs: Can choose specific runner via workflow_dispatch
-# - Maintainers can use their own runner names
-# - Start your runner with the Actions Runner application configured for this repository
+# Runs on GitHub-hosted ubuntu-latest runners.
+# Push to feature branches runs Tier 1 unit tests (fast).
+# PRs to main run the same checks. Manual dispatch allows full test suite.
 
 on:
-  # Trigger on push to development branches (direct branch work only)
   push:
     branches: [feat/*, feature/*, fix/*, docs/*, session/*, session-*]
-    # Note: release/* excluded to prevent duplicates with release PRs
-    # Runs Tier 1 unit tests only (fast mode) - no external dependencies required
-  # Trigger on PRs to main (code review process)
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened]
-    # Can run full test suite based on PR requirements
   workflow_dispatch:
     inputs:
-      runner-type:
-        description: "Choose runner type"
-        required: false
-        default: "local"
-        type: choice
-        options:
-          - local # Use local runner (auto-detected) - RECOMMENDED
-          - self-hosted-secondary # Use self-hosted-secondary runner
-          - self-hosted-primary # Use self-hosted-primary runner
-          - local-mac # Use your Mac
-          - self-hosted # Use any self-hosted runner
-          - github # Use GitHub's runners (EXPENSIVE - avoid unless necessary)
       test-mode:
         description: "Test execution mode"
         required: false
         default: "fast"
         type: choice
         options:
-          - fast # Tier 1 unit tests only (fast, isolated, no external dependencies) - RECOMMENDED for CI
+          - fast # Tier 1 unit tests only (no external dependencies)
           - full # All tests including slow ones
           - infrastructure # Docker infrastructure tests only
-          - admin-nodes # Admin nodes tests only
-      force-runner:
-        description: "Force specific runner for PR (overrides auto-detection)"
-        required: false
-        default: "auto"
-        type: choice
-        options:
-          - auto # Auto-detect based on branch
-          - github # Force GitHub runners
-          - local # Force local runner (auto-detected)
-          - local-mac # Force local Mac runner
-          - self-hosted-secondary # Force self-hosted-secondary runner
-          - self-hosted-primary # Force self-hosted-primary runner
 
 permissions:
   contents: read
@@ -66,344 +32,72 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Docker test infrastructure configuration
   SKIP_SLOW_TESTS: true
-  DOCKER_TEST_MODE: true
-  POSTGRES_HOST: localhost
-  POSTGRES_PORT: 5434
-  POSTGRES_DB: kailash_test
-  POSTGRES_USER: admin
-  POSTGRES_PASSWORD: admin
-  REDIS_HOST: localhost
-  REDIS_PORT: 6380
-  OLLAMA_HOST: http://localhost:11435
 
 jobs:
-  # Check if this is a duplicate run (push to a branch with an open PR)
+  # Skip push CI when an open PR already covers the branch
   check-duplicate:
     name: Check for Duplicate Run
     runs-on: ubuntu-latest
     outputs:
       should-skip: ${{ steps.check.outputs.skip }}
-      skip-reason: ${{ steps.check.outputs.reason }}
     steps:
       - name: Check if push event should be skipped
         id: check
         uses: actions/github-script@v7
         with:
           script: |
-            // Only check for duplicates on push events
             if (context.eventName !== 'push') {
               core.setOutput('skip', 'false');
-              core.setOutput('reason', 'Not a push event');
               return;
             }
-
-            // Get the branch name from the push event
             const branch = context.ref.replace('refs/heads/', '');
-            console.log(`Checking for open PRs on branch: ${branch}`);
-
             try {
-              // List all open PRs for this branch
               const { data: prs } = await github.rest.pulls.list({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 state: 'open',
                 head: `${context.repo.owner}:${branch}`
               });
-
-              if (prs.length > 0) {
-                console.log(`Found ${prs.length} open PR(s) for branch ${branch}`);
-                console.log(`PR #${prs[0].number}: ${prs[0].title}`);
-                core.setOutput('skip', 'true');
-                core.setOutput('reason', `Skipping push CI - PR #${prs[0].number} will handle CI`);
-              } else {
-                console.log(`No open PRs found for branch ${branch}`);
-                core.setOutput('skip', 'false');
-                core.setOutput('reason', 'No open PR found');
-              }
+              core.setOutput('skip', prs.length > 0 ? 'true' : 'false');
             } catch (error) {
-              console.error('Error checking for PRs:', error);
-              // On error, don't skip to ensure CI runs
               core.setOutput('skip', 'false');
-              core.setOutput('reason', 'Error checking PRs');
             }
 
-  # Determine what level of testing to run based on context
-  determine-context:
-    name: Determine Test Context
+  test:
+    name: Test (Python ${{ matrix.python-version }})
     needs: check-duplicate
     if: needs.check-duplicate.outputs.should-skip != 'true'
     runs-on: ubuntu-latest
-    outputs:
-      test-level: ${{ steps.determine.outputs.level }}
-      test-mode: ${{ steps.determine.outputs.mode }}
-      skip-reason: ${{ steps.determine.outputs.skip-reason }}
-      runner-label: ${{ steps.runner.outputs.label }}
-    steps:
-      - name: Determine runner to use
-        id: runner
-        run: |
-          # Check if force-runner is specified (for PRs triggered via workflow_dispatch)
-          if [[ "${{ github.event.inputs.force-runner }}" != "" && "${{ github.event.inputs.force-runner }}" != "auto" ]]; then
-            case "${{ github.event.inputs.force-runner }}" in
-              local)
-                echo 'label=self-hosted' >> $GITHUB_OUTPUT
-                echo "Using local runner (forced)"
-                ;;
-              local-mac)
-                echo 'label=[self-hosted, macOS, ARM64]' >> $GITHUB_OUTPUT
-                echo "Using local Mac runner (forced)"
-                ;;
-              self-hosted-secondary)
-                echo 'label=[self-hosted, self-hosted-secondary]' >> $GITHUB_OUTPUT
-                echo "Using self-hosted-secondary runner (forced)"
-                ;;
-              self-hosted-primary)
-                echo 'label=self-hosted-primary' >> $GITHUB_OUTPUT
-                echo "Using self-hosted-primary runner (forced)"
-                ;;
-              github)
-                echo 'label=ubuntu-latest' >> $GITHUB_OUTPUT
-                echo "Using GitHub-hosted runner (forced)"
-                ;;
-            esac
-          # For manual runs, use the selected runner
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            case "${{ github.event.inputs.runner-type }}" in
-              local)
-                echo 'label=self-hosted' >> $GITHUB_OUTPUT
-                echo "Using local runner"
-                ;;
-              local-mac)
-                echo 'label=[self-hosted, macOS, ARM64]' >> $GITHUB_OUTPUT
-                echo "Using local Mac runner"
-                ;;
-              self-hosted-secondary)
-                echo 'label=[self-hosted, self-hosted-secondary]' >> $GITHUB_OUTPUT
-                echo "Using self-hosted-secondary runner"
-                ;;
-              self-hosted-primary)
-                echo 'label=[self-hosted, self-hosted-primary]' >> $GITHUB_OUTPUT
-                echo "Using self-hosted-primary runner"
-                ;;
-              self-hosted)
-                echo 'label=[self-hosted, linux, x64]' >> $GITHUB_OUTPUT
-                echo "Using self-hosted Linux runner"
-                ;;
-              *)
-                echo 'label=ubuntu-latest' >> $GITHUB_OUTPUT
-                echo "Using GitHub-hosted runner (default)"
-                ;;
-            esac
-          else
-            # For automatic runs (push/PR), use GitHub-hosted runner
-            echo 'label=ubuntu-latest' >> $GITHUB_OUTPUT
-            echo "Using GitHub-hosted runner"
-          fi
-
-      - name: Determine test level and mode
-        id: determine
-        run: |
-          # Set test mode based on event type and input
-          if [[ "${{ github.event_name }}" == "push" || "${{ github.event_name }}" == "pull_request" ]]; then
-            # For push and PR events, always use fast mode (Tier 1 only)
-            TEST_MODE="fast"
-            TEST_LEVEL="tier1"
-            echo "Push/PR event detected - using fast mode (Tier 1 only)"
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # For manual runs, use the selected test mode
-            TEST_MODE="${{ github.event.inputs.test-mode }}"
-            if [[ -z "$TEST_MODE" ]]; then
-              TEST_MODE="fast"
-            fi
-            # Only set full level for manual runs with non-fast mode
-            if [[ "$TEST_MODE" == "fast" ]]; then
-              TEST_LEVEL="tier1"
-            else
-              TEST_LEVEL="full"
-            fi
-          else
-            # Default to fast mode
-            TEST_MODE="fast"
-            TEST_LEVEL="tier1"
-          fi
-
-          echo "mode=$TEST_MODE" >> $GITHUB_OUTPUT
-          echo "level=$TEST_LEVEL" >> $GITHUB_OUTPUT
-          echo "skip-reason=" >> $GITHUB_OUTPUT
-          echo "Running $TEST_MODE test suite for ${{ github.event_name }} event"
-
-      - name: Display decision
-        run: |
-          echo "Test Level: ${{ steps.determine.outputs.level }}"
-          echo "Test Mode: ${{ steps.determine.outputs.mode }}"
-          echo "Runner: ${{ steps.runner.outputs.label }}"
-          echo "Skip Reason: ${{ steps.determine.outputs.skip-reason }}"
-
-  # Docker infrastructure setup - DISABLED for push/PR (only Tier 1 tests)
-  setup-docker-infrastructure:
-    name: Setup Docker Test Infrastructure
-    needs: [check-duplicate, determine-context]
-    if: |
-      false
-    runs-on: ubuntu-latest
-    outputs:
-      infrastructure-ready: ${{ steps.validate.outputs.ready }}
-      postgres-ready: ${{ steps.validate.outputs.postgres }}
-      redis-ready: ${{ steps.validate.outputs.redis }}
-      ollama-ready: ${{ steps.validate.outputs.ollama }}
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Setup Docker test infrastructure
-        run: |
-          echo "🐳 Setting up Docker test infrastructure..."
-
-          # Start Docker services for testing
-          cd tests/infrastructure
-
-          # Check if containers are already running
-          if docker ps | grep -q "kailash-postgres\|kailash_test"; then
-            echo "ℹ️  Existing PostgreSQL containers detected, using them"
-          else
-            echo "Starting new PostgreSQL test container..."
-            docker compose -f compose.yaml up -d postgres
-          fi
-
-          # Start Redis test container
-          if docker ps | grep -q "kailash.*redis\|kailash_test_redis"; then
-            echo "ℹ️  Existing Redis containers detected, using them"
-          else
-            echo "Starting new Redis test container..."
-            docker compose -f compose.yaml up -d redis
-          fi
-
-          # Start Ollama test container
-          if docker ps | grep -q "kailash.*ollama\|kailash_test_ollama"; then
-            echo "ℹ️  Existing Ollama containers detected, using them"
-          else
-            echo "Starting new Ollama test container..."
-            docker compose -f compose.yaml up -d ollama
-          fi
-
-          echo "Waiting for services to be ready..."
-          sleep 10
-
-      - name: Pull Ollama model if needed
-        run: |
-          echo "🦙 Ensuring Ollama model is available..."
-
-          # Check if model is already available
-          if curl -s http://localhost:11435/api/tags | grep -q "llama3.2:1b"; then
-            echo "✅ Test model already available"
-          else
-            echo "Pulling lightweight test model..."
-            docker exec $(docker ps -qf "name=ollama") ollama pull llama3.2:1b || {
-              echo "⚠️  Failed to pull model, will use existing or skip model-dependent tests"
-            }
-          fi
-
-      - name: Validate infrastructure readiness
-        id: validate
-        run: |
-          echo "🔍 Validating Docker infrastructure..."
-
-          # Run our infrastructure validation script
-          python tests/utils/validate_ci_environment.py
-
-          # Set outputs based on validation results
-          if [ $? -eq 0 ]; then
-            echo "ready=true" >> $GITHUB_OUTPUT
-            echo "postgres=true" >> $GITHUB_OUTPUT
-            echo "redis=true" >> $GITHUB_OUTPUT
-            echo "ollama=true" >> $GITHUB_OUTPUT
-            echo "✅ Infrastructure validation passed"
-          else
-            echo "ready=false" >> $GITHUB_OUTPUT
-            echo "postgres=false" >> $GITHUB_OUTPUT
-            echo "redis=false" >> $GITHUB_OUTPUT
-            echo "ollama=false" >> $GITHUB_OUTPUT
-            echo "❌ Infrastructure validation failed"
-            exit 1
-          fi
-
-  # Combined job for self-hosted runners to maximize parallelism
-  all-checks-parallel:
-    name: All Checks (Parallel)
-    needs: [check-duplicate, determine-context, setup-docker-infrastructure]
-    if: |
-      always() &&
-      needs.check-duplicate.result == 'success' &&
-      needs.check-duplicate.outputs.should-skip != 'true' &&
-      needs.determine-context.result == 'success' &&
-      (needs.setup-docker-infrastructure.result == 'success' || needs.setup-docker-infrastructure.result == 'skipped') &&
-      true
-    runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v5
 
-      - name: Setup Python
-        run: |
-          echo "Checking available Python versions"
-
-          # Initialize pyenv if available
-          if command -v pyenv &> /dev/null; then
-            echo "Found pyenv, initializing..."
-            export PYENV_ROOT="$HOME/.pyenv"
-            export PATH="$PYENV_ROOT/bin:$PATH"
-            eval "$(pyenv init -)"
-
-            echo "Available Python versions:"
-            pyenv versions
-
-            # Check for required versions
-            if pyenv versions | grep -q "3.11"; then
-              echo "✓ Python 3.11 available"
-            else
-              echo "⚠️  Python 3.11 not found - install with: pyenv install 3.11"
-            fi
-
-            if pyenv versions | grep -q "3.12"; then
-              echo "✓ Python 3.12 available"
-            else
-              echo "⚠️  Python 3.12 not found - install with: pyenv install 3.12"
-            fi
-          else
-            echo "pyenv not found, checking system Python"
-            which python3
-            python3 --version
-          fi
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
 
       - name: Install uv
-        run: |
-          # Install uv in a custom location to avoid permission issues
-          export CARGO_HOME="${GITHUB_WORKSPACE}/.cargo"
-          export RUSTUP_HOME="${GITHUB_WORKSPACE}/.rustup"
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "${GITHUB_WORKSPACE}/.cargo/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@v6
 
       - name: Install dependencies
         run: |
-          # Initialize pyenv if available
-          if command -v pyenv &> /dev/null; then
-            export PYENV_ROOT="$HOME/.pyenv"
-            export PATH="$PYENV_ROOT/bin:$PATH"
-            eval "$(pyenv init -)"
-          fi
-
-          # Create a single venv and install dependencies from local source.
-          # Install [dev] extras only — [all] pulls kailash-dataflow/nexus/kaizen
-          # from PyPI which are not yet published at this stage.
-          echo "Setting up Python environment"
           uv venv .venv
           uv pip install -e ".[dev,server,cli,database,postgres,mysql,files,distributed,monitoring,http,auth,mfa,mcp,scheduler,otel]" --python .venv/bin/python
-          # Install numpy for tests that transitively import it (removed from SDK runtime in v1.0.0)
           uv pip install numpy --python .venv/bin/python
 
       - name: Lint (ruff)
         run: .venv/bin/ruff check src/ tests/ --select=E9,F63,F7,F82
+
+      - name: Type check (pyright)
+        run: |
+          uv pip install pyright --python .venv/bin/python
+          .venv/bin/pyright src/kailash/ --pythonversion ${{ matrix.python-version }} --level basic
 
       - name: Test (Tier 1 — unit tests)
         timeout-minutes: 5

@@ -1,0 +1,20 @@
+# Session Notes — Production Readiness
+# Date: 2026-03-21
+# Status: COMPLETE
+
+## Accomplished
+- Prior: All 35 TODOs shipped (saga, 2PC, durable workflows, Prometheus, EventStore, signals, etc.)
+- This session: Fixed residual `# Simulate some processing` comment in saga_step.py:349
+- This session: Deleted stale branch feat/production-enhancements-phase2-3 (43 commits, 9 months old)
+
+## In Progress
+- Nothing
+
+## Blockers
+- None
+
+## Next Steps
+- Workspace COMPLETE — move to eatp-merge
+
+## Active Todo
+- None

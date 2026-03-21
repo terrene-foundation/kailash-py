@@ -22,7 +22,7 @@ def __getattr__(name):
         return WorkflowVisualizer
     if name == "WorkflowGraph":
         warnings.warn(
-            "WorkflowGraph is deprecated and will be removed in v2.0.0. "
+            "WorkflowGraph is deprecated and will be removed in v3.0.0. "
             "Use Workflow instead.",
             DeprecationWarning,
             stacklevel=2,
@@ -75,7 +75,7 @@ def __getattr__(name):
     raise AttributeError(f"module 'kailash' has no attribute {name!r}")
 
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 __all__ = [
     # Core workflow components

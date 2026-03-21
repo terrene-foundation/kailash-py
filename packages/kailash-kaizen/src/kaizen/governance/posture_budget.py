@@ -25,8 +25,8 @@ import logging
 import math
 from typing import Any, Dict, Optional, Set
 
-from eatp.constraints.budget_tracker import BudgetEvent, BudgetTracker
-from eatp.postures import (
+from kailash.trust.constraints.budget_tracker import BudgetEvent, BudgetTracker
+from kailash.trust.posture.postures import (
     PostureStateMachine,
     PostureTransitionRequest,
     TrustPosture,

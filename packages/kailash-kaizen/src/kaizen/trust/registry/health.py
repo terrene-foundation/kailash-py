@@ -1,3 +1,3 @@
-"""Compatibility shim — re-exports from eatp.registry.health."""
+"""Compatibility shim — re-exports from kailash.trust.registry.health."""
 
-from eatp.registry.health import *  # noqa: F401,F403
+from kailash.trust.registry.health import *  # noqa: F401,F403

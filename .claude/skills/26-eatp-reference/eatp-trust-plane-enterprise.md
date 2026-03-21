@@ -1,6 +1,6 @@
 # Skill: TrustPlane Enterprise Features
 
-Quick reference for TrustPlane enterprise capabilities. For full documentation, see `packages/trust-plane/CLAUDE.md`.
+Quick reference for TrustPlane enterprise capabilities. For full documentation, see `src/kailash/trust/plane/`.
 
 ## Budget Enforcement (`trustplane.project` + `trustplane.models`)
 
@@ -48,7 +48,7 @@ status = project.budget_status
 **Budget exhaustion** raises `BudgetExhaustedError` (subclass of `ConstraintViolationError`):
 
 ```python
-from trustplane.exceptions import BudgetExhaustedError
+from kailash.trust.plane.exceptions import BudgetExhaustedError
 try:
     await project.record_decision(expensive_decision)
 except BudgetExhaustedError as e:
@@ -145,5 +145,5 @@ All trace to `TrustPlaneError` with `.details: dict[str, Any]`. Key branches:
 
 ## See Also
 
-- `packages/trust-plane/CLAUDE.md` — Full reference with code examples
+- `src/kailash/trust/plane/` — Full reference with code examples
 - `.claude/skills/project/trust-plane-security-patterns.md` — 13 security patterns

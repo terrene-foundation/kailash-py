@@ -149,9 +149,9 @@ Operations: ESTABLISH → DELEGATE → VERIFY → AUDIT
 
 ## SDK Implementation Reference
 
-This repo contains the standalone EATP SDK (`packages/eatp/`). For SDK-specific knowledge, see these companion files:
+This repo contains the EATP SDK (`src/kailash/trust/`). For SDK-specific knowledge, see these companion files:
 
-- **[eatp-sdk-quickstart.md](eatp-sdk-quickstart.md)** — Getting started with `pip install eatp`, 4-operation lifecycle, store selection
+- **[eatp-sdk-quickstart.md](eatp-sdk-quickstart.md)** — Getting started with `pip install kailash[trust]`, 4-operation lifecycle, store selection
 - **[eatp-sdk-api-reference.md](eatp-sdk-api-reference.md)** — Complete API surface: all exports, module reference, type signatures
 - **[eatp-sdk-patterns.md](eatp-sdk-patterns.md)** — Implementation patterns, critical gotchas, security findings, architecture patterns
 - **[eatp-sdk-reasoning-traces.md](eatp-sdk-reasoning-traces.md)** — Reasoning trace extension: lifecycle, confidentiality, knowledge bridge integration

@@ -1,8 +1,8 @@
 """
-Trust Store — thin adapter importing shared types from EATP.
+Trust Store — thin adapter importing shared types from kailash.trust.
 
 Shared types (TrustStore ABC, TransactionContext, InMemoryTrustStore) live in
-``eatp.store`` / ``eatp.store.memory``.  This file re-exports them for
+``kailash.trust.chain_store`` / ``kailash.trust.chain_store.memory``.  This file re-exports them for
 backwards compatibility and keeps the Kaizen-specific DataFlow-backed
 ``PostgresTrustStore`` which depends on ``kailash.runtime`` and ``dataflow``.
 """
@@ -15,9 +15,9 @@ from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
-# ---------- shared types (from EATP) ----------
-from eatp.store import TransactionContext, TrustStore  # noqa: F401
-from eatp.store.memory import InMemoryTrustStore  # noqa: F401
+# ---------- shared types (from kailash.trust) ----------
+from kailash.trust.chain_store import TransactionContext, TrustStore  # noqa: F401
+from kailash.trust.chain_store.memory import InMemoryTrustStore  # noqa: F401
 
 from kaizen.trust.chain import TrustLineageChain
 from kaizen.trust.exceptions import (

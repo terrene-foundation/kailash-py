@@ -1,3 +1,3 @@
-"""Compatibility shim — re-exports from eatp.trusted_agent."""
+"""Compatibility shim — re-exports from kailash.trust.trusted_agent."""
 
-from eatp.trusted_agent import *  # noqa: F401,F403
+from kailash.trust.agents.trusted_agent import *  # noqa: F401,F403

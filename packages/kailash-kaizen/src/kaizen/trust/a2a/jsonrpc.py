@@ -1,3 +1,3 @@
-"""Compatibility shim — re-exports from eatp.a2a.jsonrpc."""
+"""Compatibility shim — re-exports from kailash.trust.a2a.jsonrpc."""
 
-from eatp.a2a.jsonrpc import *  # noqa: F401,F403
+from kailash.trust.a2a.jsonrpc import *  # noqa: F401,F403

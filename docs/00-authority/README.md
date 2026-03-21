@@ -16,6 +16,6 @@ Authoritative references for the trust-plane package. Developers and codegen age
 
 ## Cross-References
 
-- Package-level CLAUDE.md: `packages/trust-plane/CLAUDE.md` (security patterns, store contract, red team convergence)
+- Package-level CLAUDE.md: `src/kailash/trust/plane/CLAUDE.md` (security patterns, store contract, red team convergence)
 - EATP SDK rules: `.claude/rules/eatp.md`
 - Trust integration guides: `docs/trust/`

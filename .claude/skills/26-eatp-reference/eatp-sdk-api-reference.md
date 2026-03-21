@@ -2,84 +2,84 @@
 
 Complete API surface for the standalone EATP Python SDK.
 
-**Package**: `packages/eatp/src/eatp/`
-**Install**: `pip install eatp`
+**Package**: `src/kailash/trust/`
+**Install**: `pip install kailash[trust]`
 **License**: Apache 2.0 (Terrene Foundation)
 **Python**: >=3.11
 
-## Top-Level Exports (`from eatp import ...`)
+## Top-Level Exports (`from kailash.trust import ...`)
 
 ### Operations
 
-| Export                      | Type      | Module            |
-| --------------------------- | --------- | ----------------- |
-| `TrustOperations`           | Class     | `eatp.operations` |
-| `TrustKeyManager`           | Class     | `eatp.operations` |
-| `CapabilityRequest`         | Dataclass | `eatp.operations` |
-| `AuthorityRegistryProtocol` | Protocol  | `eatp.authority`  |
+| Export                      | Type      | Module                     |
+| --------------------------- | --------- | -------------------------- |
+| `TrustOperations`           | Class     | `kailash.trust.operations` |
+| `TrustKeyManager`           | Class     | `kailash.trust.operations` |
+| `CapabilityRequest`         | Dataclass | `kailash.trust.operations` |
+| `AuthorityRegistryProtocol` | Protocol  | `kailash.trust.authority`  |
 
 ### Chain Types (5 EATP Elements)
 
-| Export                  | Type      | Module       |
-| ----------------------- | --------- | ------------ |
-| `TrustLineageChain`     | Dataclass | `eatp.chain` |
-| `GenesisRecord`         | Dataclass | `eatp.chain` |
-| `DelegationRecord`      | Dataclass | `eatp.chain` |
-| `CapabilityAttestation` | Dataclass | `eatp.chain` |
-| `ConstraintEnvelope`    | Dataclass | `eatp.chain` |
-| `AuditAnchor`           | Dataclass | `eatp.chain` |
-| `VerificationResult`    | Dataclass | `eatp.chain` |
-| `VerificationLevel`     | Enum      | `eatp.chain` |
-| `AuthorityType`         | Enum      | `eatp.chain` |
-| `CapabilityType`        | Enum      | `eatp.chain` |
-| `ConstraintType`        | Enum      | `eatp.chain` |
+| Export                  | Type      | Module                |
+| ----------------------- | --------- | --------------------- |
+| `TrustLineageChain`     | Dataclass | `kailash.trust.chain` |
+| `GenesisRecord`         | Dataclass | `kailash.trust.chain` |
+| `DelegationRecord`      | Dataclass | `kailash.trust.chain` |
+| `CapabilityAttestation` | Dataclass | `kailash.trust.chain` |
+| `ConstraintEnvelope`    | Dataclass | `kailash.trust.chain` |
+| `AuditAnchor`           | Dataclass | `kailash.trust.chain` |
+| `VerificationResult`    | Dataclass | `kailash.trust.chain` |
+| `VerificationLevel`     | Enum      | `kailash.trust.chain` |
+| `AuthorityType`         | Enum      | `kailash.trust.chain` |
+| `CapabilityType`        | Enum      | `kailash.trust.chain` |
+| `ConstraintType`        | Enum      | `kailash.trust.chain` |
 
 ### Reasoning Traces
 
-| Export                 | Type      | Module           |
-| ---------------------- | --------- | ---------------- |
-| `ReasoningTrace`       | Dataclass | `eatp.reasoning` |
-| `ConfidentialityLevel` | Enum      | `eatp.reasoning` |
+| Export                 | Type      | Module                    |
+| ---------------------- | --------- | ------------------------- |
+| `ReasoningTrace`       | Dataclass | `kailash.trust.reasoning` |
+| `ConfidentialityLevel` | Enum      | `kailash.trust.reasoning` |
 
 ### Stores
 
-| Export               | Type  | Module              |
-| -------------------- | ----- | ------------------- |
-| `TrustStore`         | ABC   | `eatp.store`        |
-| `InMemoryTrustStore` | Class | `eatp.store.memory` |
+| Export               | Type  | Module                             |
+| -------------------- | ----- | ---------------------------------- |
+| `TrustStore`         | ABC   | `kailash.trust.chain_store`        |
+| `InMemoryTrustStore` | Class | `kailash.trust.chain_store.memory` |
 
 ### Crypto
 
-| Export             | Type     | Module        |
-| ------------------ | -------- | ------------- |
-| `generate_keypair` | Function | `eatp.crypto` |
-| `sign`             | Function | `eatp.crypto` |
-| `verify_signature` | Function | `eatp.crypto` |
+| Export             | Type     | Module                         |
+| ------------------ | -------- | ------------------------------ |
+| `generate_keypair` | Function | `kailash.trust.signing.crypto` |
+| `sign`             | Function | `kailash.trust.signing.crypto` |
+| `verify_signature` | Function | `kailash.trust.signing.crypto` |
 
 ### Authority
 
-| Export                    | Type      | Module           |
-| ------------------------- | --------- | ---------------- |
-| `OrganizationalAuthority` | Dataclass | `eatp.authority` |
-| `AuthorityPermission`     | Enum      | `eatp.authority` |
+| Export                    | Type      | Module                    |
+| ------------------------- | --------- | ------------------------- |
+| `OrganizationalAuthority` | Dataclass | `kailash.trust.authority` |
+| `AuthorityPermission`     | Enum      | `kailash.trust.authority` |
 
 ### Postures
 
-| Export                | Type  | Module          |
-| --------------------- | ----- | --------------- |
-| `TrustPosture`        | Enum  | `eatp.postures` |
-| `PostureStateMachine` | Class | `eatp.postures` |
+| Export                | Type  | Module                   |
+| --------------------- | ----- | ------------------------ |
+| `TrustPosture`        | Enum  | `kailash.trust.postures` |
+| `PostureStateMachine` | Class | `kailash.trust.postures` |
 
 ### Exceptions
 
-| Export                    | Type      | Module            |
-| ------------------------- | --------- | ----------------- |
-| `TrustError`              | Exception | `eatp.exceptions` |
-| `TrustChainNotFoundError` | Exception | `eatp.exceptions` |
+| Export                    | Type      | Module                     |
+| ------------------------- | --------- | -------------------------- |
+| `TrustError`              | Exception | `kailash.trust.exceptions` |
+| `TrustChainNotFoundError` | Exception | `kailash.trust.exceptions` |
 
 ## Module Reference
 
-### `eatp.operations` — Core Operations
+### `kailash.trust.operations` — Core Operations
 
 ```python
 class TrustOperations:
@@ -127,7 +127,7 @@ class TrustOperations:
     ) -> AuditAnchor: ...
 ```
 
-### `eatp.authority` — Authority Types
+### `kailash.trust.authority` — Authority Types
 
 ```python
 class AuthorityPermission(Enum):
@@ -165,7 +165,7 @@ class AuthorityRegistryProtocol(Protocol):
 OrganizationalAuthorityRegistry = AuthorityRegistryProtocol
 ```
 
-### `eatp.chain` — Data Structures
+### `kailash.trust.chain` — Data Structures
 
 ```python
 class AuthorityType(Enum):
@@ -210,7 +210,7 @@ class VerificationResult:
     reasoning_verified: Optional[bool] = None  # True/False/None (FULL only)
 ```
 
-### `eatp.crypto` — Cryptographic Primitives
+### `kailash.trust.signing.crypto` — Cryptographic Primitives
 
 ```python
 def generate_keypair() -> Tuple[str, str]:
@@ -239,7 +239,7 @@ def verify_reasoning_signature(trace: ReasoningTrace, signature: str, public_key
     """Verify reasoning trace Ed25519 signature."""
 ```
 
-### `eatp.store` — Storage
+### `kailash.trust.store` — Storage
 
 ```python
 class TrustStore(ABC):
@@ -252,11 +252,11 @@ class TrustStore(ABC):
     def transaction(self) -> TransactionContext: ...
 
 # Implementations
-class InMemoryTrustStore(TrustStore): ...      # eatp.store.memory
-class FilesystemStore(TrustStore): ...          # eatp.store.filesystem
+class InMemoryTrustStore(TrustStore): ...      # kailash.trust.chain_store.memory
+class FilesystemStore(TrustStore): ...          # kailash.trust.chain_store.filesystem
 ```
 
-### `eatp.enforce` — Enforcement
+### `kailash.trust.enforce` — Enforcement
 
 ```python
 class Verdict(Enum):
@@ -274,7 +274,7 @@ class EATPBlockedError(PermissionError): ...
 class EATPHeldError(PermissionError): ...
 ```
 
-### `eatp.postures` — Trust Postures
+### `kailash.trust.postures` — Trust Postures
 
 ```python
 class TrustPosture(str, Enum):
@@ -290,7 +290,7 @@ class TrustPosture(str, Enum):
     def can_downgrade_to(self, target: TrustPosture) -> bool: ...
 ```
 
-### `eatp.exceptions` — Error Hierarchy
+### `kailash.trust.exceptions` — Error Hierarchy
 
 ```python
 class TrustError(Exception): ...                    # Base
@@ -308,40 +308,40 @@ class VerificationFailedError(TrustError): ...       # VERIFY operation failed
 
 ### Additional Modules
 
-| Module                             | Purpose                         | Key Classes                                                    |
-| ---------------------------------- | ------------------------------- | -------------------------------------------------------------- |
-| `eatp.reasoning`                   | Reasoning trace extension       | `ReasoningTrace`, `ConfidentialityLevel`                       |
-| `eatp.scoring`                     | Trust score computation         | `compute_trust_score()`, `analyse_trust_chain()`               |
-| `eatp.trusted_agent`               | Trust-enhanced agent wrapper    | `TrustedAgent`, `TrustedAgentConfig`, `TrustedSupervisorAgent` |
-| `eatp.constraint_validator`        | Constraint tightening logic     | `ConstraintValidator`                                          |
-| `eatp.constraints.builtin`         | Built-in constraint types       | Financial, temporal, operational constraints                   |
-| `eatp.constraints.dimension`       | 5 constraint dimensions         | `ConstraintDimension`                                          |
-| `eatp.constraints.evaluator`       | Constraint evaluation           | `ConstraintEvaluator`                                          |
-| `eatp.messaging.channel`           | Secure agent communication      | `SecureChannel`                                                |
-| `eatp.messaging.signer`            | Message signing                 | `MessageSigner`                                                |
-| `eatp.messaging.verifier`          | Message verification            | `MessageVerifier`                                              |
-| `eatp.messaging.replay_protection` | Nonce-based replay defense      | `InMemoryReplayProtection`                                     |
-| `eatp.registry.agent_registry`     | Agent discovery                 | `AgentRegistry`                                                |
-| `eatp.registry.health`             | Health monitoring               | `AgentHealthMonitor`                                           |
-| `eatp.orchestration.runtime`       | Trust-aware workflow runtime    | `TrustAwareOrchestrationRuntime`                               |
-| `eatp.orchestration.policy`        | Policy engine                   | `TrustPolicyEngine`                                            |
-| `eatp.esa.base`                    | Enterprise System Agent         | `EnterpriseSystemAgent`                                        |
-| `eatp.a2a.service`                 | HTTP/JSON-RPC service           | `A2AService`                                                   |
-| `eatp.a2a.agent_card`              | Agent card generation           | `AgentCardGenerator`                                           |
-| `eatp.rotation`                    | Credential rotation             | `CredentialRotationManager`                                    |
-| `eatp.security`                    | Security events + rate limiting | `SecurityEventType`, `TrustRateLimiter`                        |
-| `eatp.merkle`                      | Merkle tree audit integrity     | `MerkleTree`                                                   |
-| `eatp.cache`                       | Trust chain caching             | `TrustChainCache`                                              |
-| `eatp.crl`                         | Certificate revocation list     | `CertificateRevocationList`                                    |
-| `eatp.multi_sig`                   | Multi-signature support         | `MultiSigPolicy`                                               |
-| `eatp.interop.jwt`                 | JWT interoperability            | `to_jwt()`, `from_jwt()`                                       |
-| `eatp.interop.sd_jwt`              | SD-JWT selective disclosure     | SD-JWT functions                                               |
-| `eatp.interop.did`                 | DID resolution                  | DID functions                                                  |
-| `eatp.interop.w3c_vc`              | W3C Verifiable Credentials      | VC conversion                                                  |
-| `eatp.interop.ucan`                | UCAN token conversion           | UCAN functions                                                 |
-| `eatp.interop.biscuit`             | Biscuit token conversion        | Biscuit functions                                              |
-| `eatp.knowledge.bridge`            | Knowledge provenance bridge     | `KnowledgeBridge`                                              |
-| `eatp.governance.policy_engine`    | Governance policy engine        | `GovernancePolicyEngine`                                       |
-| `eatp.governance.rate_limiter`     | Rate limiting                   | `GovernanceRateLimiter`                                        |
-| `eatp.mcp.server`                  | MCP server for trust ops        | `EATPMCPServer`                                                |
-| `eatp.cli.commands`                | CLI interface                   | `eatp` command                                                 |
+| Module                                      | Purpose                         | Key Classes                                                    |
+| ------------------------------------------- | ------------------------------- | -------------------------------------------------------------- |
+| `kailash.trust.reasoning`                   | Reasoning trace extension       | `ReasoningTrace`, `ConfidentialityLevel`                       |
+| `kailash.trust.scoring`                     | Trust score computation         | `compute_trust_score()`, `analyse_trust_chain()`               |
+| `kailash.trust.trusted_agent`               | Trust-enhanced agent wrapper    | `TrustedAgent`, `TrustedAgentConfig`, `TrustedSupervisorAgent` |
+| `kailash.trust.constraint_validator`        | Constraint tightening logic     | `ConstraintValidator`                                          |
+| `kailash.trust.constraints.builtin`         | Built-in constraint types       | Financial, temporal, operational constraints                   |
+| `kailash.trust.constraints.dimension`       | 5 constraint dimensions         | `ConstraintDimension`                                          |
+| `kailash.trust.constraints.evaluator`       | Constraint evaluation           | `ConstraintEvaluator`                                          |
+| `kailash.trust.messaging.channel`           | Secure agent communication      | `SecureChannel`                                                |
+| `kailash.trust.messaging.signer`            | Message signing                 | `MessageSigner`                                                |
+| `kailash.trust.messaging.verifier`          | Message verification            | `MessageVerifier`                                              |
+| `kailash.trust.messaging.replay_protection` | Nonce-based replay defense      | `InMemoryReplayProtection`                                     |
+| `kailash.trust.registry.agent_registry`     | Agent discovery                 | `AgentRegistry`                                                |
+| `kailash.trust.registry.health`             | Health monitoring               | `AgentHealthMonitor`                                           |
+| `kailash.trust.orchestration.runtime`       | Trust-aware workflow runtime    | `TrustAwareOrchestrationRuntime`                               |
+| `kailash.trust.orchestration.policy`        | Policy engine                   | `TrustPolicyEngine`                                            |
+| `kailash.trust.esa.base`                    | Enterprise System Agent         | `EnterpriseSystemAgent`                                        |
+| `kailash.trust.a2a.service`                 | HTTP/JSON-RPC service           | `A2AService`                                                   |
+| `kailash.trust.a2a.agent_card`              | Agent card generation           | `AgentCardGenerator`                                           |
+| `kailash.trust.rotation`                    | Credential rotation             | `CredentialRotationManager`                                    |
+| `kailash.trust.security`                    | Security events + rate limiting | `SecurityEventType`, `TrustRateLimiter`                        |
+| `kailash.trust.merkle`                      | Merkle tree audit integrity     | `MerkleTree`                                                   |
+| `kailash.trust.cache`                       | Trust chain caching             | `TrustChainCache`                                              |
+| `kailash.trust.crl`                         | Certificate revocation list     | `CertificateRevocationList`                                    |
+| `kailash.trust.multi_sig`                   | Multi-signature support         | `MultiSigPolicy`                                               |
+| `kailash.trust.interop.jwt`                 | JWT interoperability            | `to_jwt()`, `from_jwt()`                                       |
+| `kailash.trust.interop.sd_jwt`              | SD-JWT selective disclosure     | SD-JWT functions                                               |
+| `kailash.trust.interop.did`                 | DID resolution                  | DID functions                                                  |
+| `kailash.trust.interop.w3c_vc`              | W3C Verifiable Credentials      | VC conversion                                                  |
+| `kailash.trust.interop.ucan`                | UCAN token conversion           | UCAN functions                                                 |
+| `kailash.trust.interop.biscuit`             | Biscuit token conversion        | Biscuit functions                                              |
+| `kailash.trust.knowledge.bridge`            | Knowledge provenance bridge     | `KnowledgeBridge`                                              |
+| `kailash.trust.governance.policy_engine`    | Governance policy engine        | `GovernancePolicyEngine`                                       |
+| `kailash.trust.governance.rate_limiter`     | Rate limiting                   | `GovernanceRateLimiter`                                        |
+| `kailash.trust.mcp.server`                  | MCP server for trust ops        | `EATPMCPServer`                                                |
+| `kailash.trust.cli.commands`                | CLI interface                   | `eatp` command                                                 |

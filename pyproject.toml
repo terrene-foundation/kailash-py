@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash"
-version = "1.0.0"
+version = "2.0.0"
 description = "Python SDK for the Kailash container-node architecture"
 authors = [
     {name = "Terrene Foundation", email = "info@terrene.foundation"}
@@ -27,9 +27,23 @@ dependencies = [
     "networkx>=2.7",
     "pydantic>=1.9",
     "pyyaml>=6.0",
+    "filelock>=3.0",
 ]
 
 [project.optional-dependencies]
+# Trust subsystem (EATP protocol + trust-plane platform)
+trust = [
+    "pynacl>=1.5",
+]
+# Trust encryption at rest
+trust-encryption = [
+    "cryptography>=41.0",
+]
+# Trust SSO (OIDC JWT verification)
+trust-sso = [
+    "PyJWT>=2.8",
+    "cryptography>=41.0",
+]
 # Server stack (API gateway, Nexus endpoints, webhooks)
 server = [
     "aiohttp>=3.12.4",
@@ -110,7 +124,7 @@ nexus = [
     "kailash-nexus>=1.4.2",
 ]
 kaizen = [
-    "kailash-kaizen>=1.2.5",
+    "kailash-kaizen>=2.0.0,<3.0.0",
 ]
 # Secret backends
 vault = [
@@ -157,10 +171,10 @@ docs = [
 ]
 # Everything (restores pre-1.0 behavior)
 all = [
-    "kailash[server,cli,http,database,postgres,mysql,files,auth,mfa,microsoft,monitoring,distributed,mcp,scheduler,otel]",
+    "kailash[server,cli,http,database,postgres,mysql,files,auth,mfa,microsoft,monitoring,distributed,mcp,scheduler,otel,trust,trust-encryption,trust-sso]",
     "kailash-dataflow>=1.0.0,<2.0.0",
     "kailash-nexus>=1.4.2",
-    "kailash-kaizen>=1.2.5",
+    "kailash-kaizen>=2.0.0,<3.0.0",
 ]
 
 [project.urls]
@@ -175,6 +189,9 @@ package-dir = {"" = "src"}
 
 [project.scripts]
 kailash = "kailash.cli:main"
+eatp = "kailash.trust.cli:main"
+attest = "kailash.trust.plane.cli.commands:main"
+trustplane-mcp = "kailash.trust.plane.mcp_server:main"
 
 [tool.ruff]
 line-length = 88

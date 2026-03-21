@@ -23,12 +23,12 @@ from typing import Any, Dict, List
 
 import pytest
 
-from eatp.constraints.budget_tracker import (
+from kailash.trust.constraints.budget_tracker import (
     BudgetEvent,
     BudgetTracker,
     usd_to_microdollars,
 )
-from eatp.postures import (
+from kailash.trust.posture.postures import (
     PostureStateMachine,
     PostureTransition,
     TrustPosture,

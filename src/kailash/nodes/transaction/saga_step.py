@@ -346,7 +346,7 @@ class SagaStepNode(AsyncNode):
         action_type = inputs.get("action_type", "process")
         data = inputs.get("data", {})
 
-        # Simulate some processing
+        # Default echo-back — override in subclasses for real logic
         result = {
             "action": action_type,
             "processed_data": data,

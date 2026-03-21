@@ -62,21 +62,22 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 
 ## Rules Index
 
-| Concern                               | Rule File                     | Scope                                                                 |
-| ------------------------------------- | ----------------------------- | --------------------------------------------------------------------- |
-| **Foundation independence**           | `rules/independence.md`       | **Global — overrides all**                                            |
-| Agent orchestration & review mandates | `rules/agents.md`             | Global                                                                |
-| SDK release & PyPI publishing         | `rules/deployment.md`         | `deploy/**`, `.github/workflows/**`, `pyproject.toml`, `CHANGELOG.md` |
-| E2E god-mode testing                  | `rules/e2e-god-mode.md`       | `tests/e2e/**`, `**/*e2e*`, `**/*playwright*`                         |
-| API keys & model names                | `rules/env-models.md`         | `**/*.py`, `**/*.ts`, `**/*.js`, `.env*`                              |
-| Git commits, branches, PRs            | `rules/git.md`                | Global                                                                |
-| Branch protection & PR workflow       | `rules/branch-protection.md`  | Global                                                                |
-| No stubs, TODOs, or placeholders      | `rules/no-stubs.md`           | Global                                                                |
-| Kailash SDK execution patterns        | `rules/patterns.md`           | `**/*.py`, `**/*.ts`, `**/*.js`                                       |
-| Security (secrets, injection)         | `rules/security.md`           | Global                                                                |
-| 3-tier testing, no mocking Tiers 2-3  | `rules/testing.md`            | `tests/**`, `**/*test*`, `**/*spec*`, `conftest.py`                   |
-| Auto-generated workflow instincts     | `rules/learned-instincts.md`  | Global                                                                |
-| Infrastructure SQL safety             | `rules/infrastructure-sql.md` | `src/kailash/db/**`, `src/kailash/infrastructure/**`                  |
+| Concern                               | Rule File                       | Scope                                                                 |
+| ------------------------------------- | ------------------------------- | --------------------------------------------------------------------- |
+| **Foundation independence**           | `rules/independence.md`         | **Global — overrides all**                                            |
+| **Autonomous execution model**        | `rules/autonomous-execution.md` | **Global — 10x multiplier, structural vs execution gates**            |
+| Agent orchestration & review mandates | `rules/agents.md`               | Global                                                                |
+| SDK release & PyPI publishing         | `rules/deployment.md`           | `deploy/**`, `.github/workflows/**`, `pyproject.toml`, `CHANGELOG.md` |
+| E2E god-mode testing                  | `rules/e2e-god-mode.md`         | `tests/e2e/**`, `**/*e2e*`, `**/*playwright*`                         |
+| API keys & model names                | `rules/env-models.md`           | `**/*.py`, `**/*.ts`, `**/*.js`, `.env*`                              |
+| Git commits, branches, PRs            | `rules/git.md`                  | Global                                                                |
+| Branch protection & PR workflow       | `rules/branch-protection.md`    | Global                                                                |
+| No stubs, TODOs, or placeholders      | `rules/no-stubs.md`             | Global                                                                |
+| Kailash SDK execution patterns        | `rules/patterns.md`             | `**/*.py`, `**/*.ts`, `**/*.js`                                       |
+| Security (secrets, injection)         | `rules/security.md`             | Global                                                                |
+| 3-tier testing, no mocking Tiers 2-3  | `rules/testing.md`              | `tests/**`, `**/*test*`, `**/*spec*`, `conftest.py`                   |
+| Auto-generated workflow instincts     | `rules/learned-instincts.md`    | Global                                                                |
+| Infrastructure SQL safety             | `rules/infrastructure-sql.md`   | `src/kailash/db/**`, `src/kailash/infrastructure/**`                  |
 
 **Note**: Rules with path scoping are loaded only when editing matching files. Global rules load every session.
 
@@ -161,6 +162,7 @@ workflow.add_node("NodeType", "node_id", {"param": "value"})
 | Framework    | Purpose                                | Install                        |
 | ------------ | -------------------------------------- | ------------------------------ |
 | **Core SDK** | Workflow orchestration, 140+ nodes     | `pip install kailash`          |
+| **Trust**    | EATP protocol + trust-plane governance | `pip install kailash[trust]`   |
 | **DataFlow** | Zero-config database operations        | `pip install kailash-dataflow` |
 | **Nexus**    | Multi-channel deployment (API+CLI+MCP) | `pip install kailash-nexus`    |
 | **Kaizen**   | AI agent framework                     | `pip install kailash-kaizen`   |

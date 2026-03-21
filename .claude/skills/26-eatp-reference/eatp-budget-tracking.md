@@ -2,7 +2,7 @@
 
 Thread-safe, fail-closed budget accounting with integer microdollars, two-phase reserve/record semantics, threshold callbacks, and crash-safe SQLite persistence.
 
-**Source**: `packages/eatp/src/eatp/constraints/budget_tracker.py`, `packages/eatp/src/eatp/constraints/budget_store.py`
+**Source**: `src/kailash/trust/constraints/budget_tracker.py`, `src/kailash/trust/constraints/budget_store.py`
 
 ## Core Concepts
 
@@ -15,7 +15,7 @@ All budget arithmetic uses integer microdollars to avoid floating-point precisio
 - Threshold comparisons use `committed * 100 >= allocated * threshold_pct` (pure integer arithmetic)
 
 ```python
-from eatp.constraints.budget_tracker import usd_to_microdollars, microdollars_to_usd
+from kailash.trust.constraints.budget_tracker import usd_to_microdollars, microdollars_to_usd
 
 budget = usd_to_microdollars(100.0)   # 100_000_000
 display = microdollars_to_usd(budget)  # 100.0
@@ -28,7 +28,7 @@ display = microdollars_to_usd(budget)  # 100.0
 Every spend follows a reserve-then-record pattern:
 
 ```python
-from eatp.constraints.budget_tracker import BudgetTracker, usd_to_microdollars
+from kailash.trust.constraints.budget_tracker import BudgetTracker, usd_to_microdollars
 
 tracker = BudgetTracker(allocated_microdollars=usd_to_microdollars(100.0))
 
@@ -177,8 +177,8 @@ Crash-safe SQLite persistence for budget snapshots and transaction logs.
 ### Setup
 
 ```python
-from eatp.constraints.budget_store import SQLiteBudgetStore
-from eatp.constraints.budget_tracker import BudgetTracker, usd_to_microdollars
+from kailash.trust.constraints.budget_store import SQLiteBudgetStore
+from kailash.trust.constraints.budget_tracker import BudgetTracker, usd_to_microdollars
 
 store = SQLiteBudgetStore("/tmp/eatp/budget.db")
 store.initialize()  # Creates tables, indexes, sets 0o600 permissions
@@ -272,13 +272,13 @@ Both include `.details: Dict[str, Any]` for structured error context.
 ## Complete Example
 
 ```python
-from eatp.constraints.budget_tracker import (
+from kailash.trust.constraints.budget_tracker import (
     BudgetTracker,
     BudgetEvent,
     usd_to_microdollars,
     microdollars_to_usd,
 )
-from eatp.constraints.budget_store import SQLiteBudgetStore
+from kailash.trust.constraints.budget_store import SQLiteBudgetStore
 
 # Setup persistence
 store = SQLiteBudgetStore("/tmp/eatp/budget.db")
@@ -320,4 +320,4 @@ store.close()
 - **Agent**: `eatp-expert` — Full EATP framework knowledge
 - **Security patterns**: `eatp-security-patterns.md` — Lock ordering, integer arithmetic, symlink rejection
 - **Posture stores**: `eatp-posture-stores.md` — Related persistence pattern for postures
-- **Source**: `packages/eatp/src/eatp/constraints/budget_tracker.py`, `packages/eatp/src/eatp/constraints/budget_store.py`
+- **Source**: `src/kailash/trust/constraints/budget_tracker.py`, `src/kailash/trust/constraints/budget_store.py`
