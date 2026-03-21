@@ -120,3 +120,19 @@ packages/kailash-pact/
 - For AI agent execution patterns (signatures, tools) → use **kaizen-specialist**
 - For database operations → use **dataflow-specialist**
 - For API deployment → use **nexus-specialist**
+
+## Security Invariants (Cross-SDK)
+
+These invariants were discovered during the kailash-rs red team and apply equally to Python. Violations are BLOCK-level findings.
+
+### 1. GovernanceContext Must NOT Be Deserializable
+
+The Rust SDK removed `Deserialize` from `GovernanceContext` after the red team found that deserializable context objects allow agents to forge governance state from crafted payloads. In Python: `GovernanceContext(frozen=True)` objects must NOT be unpickleable, constructable from `dict`, or loadable from JSON. The only valid construction path is `GovernanceEngine.get_context()`. If code attempts `pickle.loads()`, `GovernanceContext(**some_dict)`, or `GovernanceContext.from_json()`, it is a security violation.
+
+### 2. NaN/Inf Bypass Prevention on ALL Numeric Context Values
+
+The Rust red team found that `float('nan')` in context dicts bypasses financial comparisons because `NaN < X` and `NaN > X` are both `False`. Python's `verify_action()` must validate with `math.isfinite()` on ALL numeric context values -- not just at the envelope boundary. This means checking `context.get("transaction_amount")`, `context.get("cost")`, and any other numeric field passed in the action context dict before ANY comparison occurs.
+
+### 3. daily_total Also Needs is_finite Check
+
+The Rust red team found that even when `transaction_amount` was validated, `float('nan')` could slip through `daily_total` and poison cumulative budget checks (`daily_total + amount <= limit` is `False` when `daily_total` is `NaN`, silently passing). Both `evaluate_financial()` and `verify_action()` must check `math.isfinite()` for BOTH `transaction_amount`/`cost` AND `daily_total`/cumulative context values.
