@@ -28,6 +28,7 @@ from typing import Any
 from pact.governance.config import TrustPostureLevel
 from pact.governance.context import GovernanceContext
 from pact.governance.engine import GovernanceEngine
+from pact.governance.exceptions import PactError
 from pact.governance.verdict import GovernanceVerdict
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ __all__ = [
 ]
 
 
-class GovernanceBlockedError(Exception):
+class GovernanceBlockedError(PactError):
     """Raised when governance blocks an agent action.
 
     Attributes:
@@ -48,10 +49,16 @@ class GovernanceBlockedError(Exception):
 
     def __init__(self, verdict: GovernanceVerdict) -> None:
         self.verdict = verdict
-        super().__init__(f"Governance BLOCKED: {verdict.reason}")
+        super().__init__(
+            f"Governance BLOCKED: {verdict.reason}",
+            details={
+                "level": verdict.level,
+                "reason": verdict.reason,
+            },
+        )
 
 
-class GovernanceHeldError(Exception):
+class GovernanceHeldError(PactError):
     """Raised when governance holds an action for human approval.
 
     Attributes:
@@ -60,7 +67,13 @@ class GovernanceHeldError(Exception):
 
     def __init__(self, verdict: GovernanceVerdict) -> None:
         self.verdict = verdict
-        super().__init__(f"Governance HELD: {verdict.reason}")
+        super().__init__(
+            f"Governance HELD: {verdict.reason}",
+            details={
+                "level": verdict.level,
+                "reason": verdict.reason,
+            },
+        )
 
 
 class PactGovernedAgent:

@@ -113,3 +113,33 @@ jobs:
             tests/unit/edge/ \
             -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' \
             --maxfail=5 -q -p no:xdist
+
+  test-pact:
+    name: Test PACT (Python 3.11)
+    needs: check-duplicate
+    if: needs.check-duplicate.outputs.should-skip != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install dependencies
+        run: |
+          uv venv .venv
+          uv pip install -e ".[trust]" --python .venv/bin/python
+          uv pip install -e "packages/kailash-pact[dev]" --python .venv/bin/python
+
+      - name: Test kailash-pact
+        timeout-minutes: 5
+        run: |
+          cd packages/kailash-pact
+          ../../.venv/bin/python -m pytest tests/ \
+            --maxfail=5 -q --timeout=120

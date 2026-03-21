@@ -20,6 +20,7 @@ import math
 from typing import TYPE_CHECKING, Any
 
 from pact.governance.config import ConstraintEnvelopeConfig
+from pact.governance.exceptions import PactError
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ if TYPE_CHECKING:
     from pact.governance.engine import GovernanceEngine
 
 
-class EnvelopeAdapterError(Exception):
+class EnvelopeAdapterError(PactError):
     """Raised when envelope conversion fails. Fail-closed -- no fallback."""
 
     pass

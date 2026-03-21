@@ -16,6 +16,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from pact.governance.addressing import AddressSegment, GrammarError, NodeType
+from pact.governance.exceptions import PactError
 
 if TYPE_CHECKING:
     from pact.governance.config import DepartmentConfig, OrgDefinition, TeamConfig
@@ -53,7 +54,7 @@ MAX_TOTAL_NODES: int = 100_000
 # ---------------------------------------------------------------------------
 
 
-class CompilationError(Exception):
+class CompilationError(PactError):
     """Raised when organization compilation fails due to structural errors."""
 
     pass

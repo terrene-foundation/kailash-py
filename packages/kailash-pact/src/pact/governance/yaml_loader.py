@@ -22,6 +22,7 @@ import yaml
 
 from pact.governance.config import DepartmentConfig, OrgDefinition, TeamConfig
 from pact.governance.compilation import RoleDefinition
+from pact.governance.exceptions import PactError
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ _VALID_CLEARANCE_LEVELS = frozenset(
 # ---------------------------------------------------------------------------
 
 
-class ConfigurationError(Exception):
+class ConfigurationError(PactError):
     """Raised when a YAML org definition is invalid or has broken references."""
 
     pass

@@ -18,6 +18,7 @@ Never write code from scratch before checking whether the Kailash frameworks alr
 - Instead of FastAPI/custom API gateway → check with **nexus-specialist**
 - Instead of custom MCP server/client → check with **mcp-specialist**
 - Instead of custom agentic platform → check with **kaizen-specialist**
+- Instead of custom governance/access control → check with **pact-specialist**
 
 ### 2. .env Is the Single Source of Truth
 
@@ -78,6 +79,7 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 | 3-tier testing, no mocking Tiers 2-3  | `rules/testing.md`              | `tests/**`, `**/*test*`, `**/*spec*`, `conftest.py`                   |
 | Auto-generated workflow instincts     | `rules/learned-instincts.md`    | Global                                                                |
 | Infrastructure SQL safety             | `rules/infrastructure-sql.md`   | `src/kailash/db/**`, `src/kailash/infrastructure/**`                  |
+| PACT governance security              | `rules/pact-governance.md`      | `packages/kailash-pact/**`                                            |
 
 **Note**: Rules with path scoping are loaded only when editing matching files. Global rules load every session.
 
@@ -166,5 +168,6 @@ workflow.add_node("NodeType", "node_id", {"param": "value"})
 | **DataFlow** | Zero-config database operations        | `pip install kailash-dataflow` |
 | **Nexus**    | Multi-channel deployment (API+CLI+MCP) | `pip install kailash-nexus`    |
 | **Kaizen**   | AI agent framework                     | `pip install kailash-kaizen`   |
+| **PACT**     | Organizational governance (D/T/R)      | `pip install kailash-pact`     |
 
 All frameworks are built ON Core SDK — they don't replace it.

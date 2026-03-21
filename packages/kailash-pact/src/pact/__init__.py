@@ -14,6 +14,8 @@ __version__ = "0.2.0"
 
 # --- Governance ---
 from pact.governance import (
+    # Error hierarchy
+    PactError,
     # Addressing
     Address,
     AddressError,
@@ -134,6 +136,8 @@ from pact.governance.audit import AuditChain
 from pact.governance.gradient import EvaluationResult, GradientEngine
 
 __all__ = [
+    # Error hierarchy
+    "PactError",
     # Addressing
     "Address",
     "AddressError",

@@ -33,6 +33,7 @@ from pact.governance.config import (
     TrustPostureLevel,
 )
 from pact.governance.addressing import Address
+from pact.governance.exceptions import PactError
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +55,12 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 
-class MonotonicTighteningError(ValueError):
-    """Raised when a child envelope violates monotonic tightening relative to its parent."""
+class MonotonicTighteningError(PactError, ValueError):
+    """Raised when a child envelope violates monotonic tightening relative to its parent.
+
+    Inherits from both ``PactError`` (PACT error hierarchy) and
+    ``ValueError`` (backward compatibility).
+    """
 
     pass
 

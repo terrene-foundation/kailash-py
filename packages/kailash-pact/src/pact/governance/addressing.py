@@ -14,6 +14,8 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 
+from pact.governance.exceptions import PactError
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -33,8 +35,12 @@ class NodeType(str, Enum):
     ROLE = "R"
 
 
-class AddressError(ValueError):
-    """Base error for address parsing/validation."""
+class AddressError(PactError, ValueError):
+    """Base error for address parsing/validation.
+
+    Inherits from both ``PactError`` (PACT error hierarchy) and
+    ``ValueError`` (backward compatibility).
+    """
 
     pass
 

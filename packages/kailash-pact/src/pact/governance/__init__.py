@@ -2,6 +2,7 @@
 # Licensed under the Apache License, Version 2.0
 """PACT governance layer -- D/T/R grammar, addressing, clearance, access enforcement, envelopes."""
 
+from pact.governance.exceptions import PactError
 from pact.governance.addressing import (
     Address,
     AddressError,
@@ -86,6 +87,8 @@ from pact.governance.yaml_loader import (
 )
 
 __all__ = [
+    # Error hierarchy (TODO-18, M5 convention compliance)
+    "PactError",
     # Addressing (TODO-1001)
     "Address",
     "AddressError",
