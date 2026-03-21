@@ -128,7 +128,7 @@ jobs:
       id-token: write # Required for OIDC trusted publishing
     steps:
       - name: Download distribution artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: dist-${{ needs.determine-package.outputs.package }}
           path: dist/
@@ -153,7 +153,7 @@ jobs:
       id-token: write # Required for OIDC trusted publishing
     steps:
       - name: Download distribution artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: dist-${{ needs.determine-package.outputs.package }}
           path: dist/
@@ -172,7 +172,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Download distribution artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: dist-${{ needs.determine-package.outputs.package }}
           path: dist/
