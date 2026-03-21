@@ -166,6 +166,21 @@ Provide findings as:
 - **testing-specialist**: Ensure security tests exist
 - **deployment-specialist**: Verify production security config
 
+## PACT Governance Security Checks
+
+When reviewing `packages/kailash-pact/**`, additionally check:
+
+1. **Anti-self-modification**: Agents receive `GovernanceContext(frozen=True)`, NEVER `GovernanceEngine`. Check that no code path exposes the engine to agent code.
+2. **Monotonic tightening**: Verify `intersect_envelopes()` and `set_task_envelope()` only tighten, never widen constraints.
+3. **Fail-closed decisions**: Verify every `try/except` in `GovernanceEngine` returns BLOCKED/DENY on error paths.
+4. **Posture ceiling enforcement**: Verify `effective_clearance()` always caps at `POSTURE_CEILING[posture]`.
+5. **Default-deny tools**: Verify `PactGovernedAgent.execute_tool()` blocks unregistered tools.
+6. **NaN/Inf on governance paths**: Financial constraint checks in `verify_action()` and envelope intersection.
+7. **Compilation limits**: Verify `MAX_COMPILATION_DEPTH`, `MAX_CHILDREN_PER_NODE`, `MAX_TOTAL_NODES` are enforced.
+8. **hmac.compare_digest()**: All hash comparisons in `AuditChain`, `SqliteAuditLog`, and stores.
+
+See `.claude/rules/pact-governance.md` for full MUST/MUST NOT rules.
+
 ## Full Documentation
 
 When this guidance is insufficient, consult:

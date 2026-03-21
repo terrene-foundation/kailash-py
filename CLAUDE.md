@@ -99,6 +99,7 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 - **kaizen-specialist** — AI agents, signatures, multi-agent coordination
 - **mcp-specialist** — MCP server implementation
 - **infrastructure-specialist** — Progressive infrastructure (Level 0/1/2), dialect-portable SQL, task queues, idempotency
+- **pact-specialist** — Organizational governance (D/T/R, envelopes, clearance, governed agents)
 
 ### Core Implementation
 
