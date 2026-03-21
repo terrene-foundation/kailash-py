@@ -35,13 +35,13 @@ from __future__ import annotations
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     DepartmentConfig,
+    OrgDefinition,
     TeamConfig,
     TrustPostureLevel,
 )
-from pact.build.org.builder import OrgDefinition
 from pact.governance.access import (
     KnowledgeSharePolicy,
     PactBridge,
@@ -120,7 +120,9 @@ def finserv_org() -> CompiledOrg:
 
     teams = [
         TeamConfig(id="t-aml", name="AML/CFT Team", workspace="ws-aml"),
-        TeamConfig(id="t-client-advisory", name="Client Advisory Team", workspace="ws-advisory"),
+        TeamConfig(
+            id="t-client-advisory", name="Client Advisory Team", workspace="ws-advisory"
+        ),
         TeamConfig(id="t-equities", name="Equities Desk", workspace="ws-trading"),
     ]
 
@@ -339,7 +341,8 @@ class TestScenario2CCOReadsAdvisory:
             bridges=cco_bridges,
         )
         assert decision.allowed is True, (
-            f"CCO should have bridge access to Advisory data. " f"Reason: {decision.reason}"
+            f"CCO should have bridge access to Advisory data. "
+            f"Reason: {decision.reason}"
         )
 
 
@@ -368,7 +371,8 @@ class TestScenario3CCOReadsTrading:
             bridges=cco_bridges,
         )
         assert decision.allowed is True, (
-            f"CCO should have bridge access to Trading data. " f"Reason: {decision.reason}"
+            f"CCO should have bridge access to Trading data. "
+            f"Reason: {decision.reason}"
         )
 
 
@@ -397,7 +401,8 @@ class TestScenario4AMLOfficerReadsInvestigation:
             bridges=cco_bridges,
         )
         assert decision.allowed is True, (
-            f"AML Officer should access AML investigation data. " f"Reason: {decision.reason}"
+            f"AML Officer should access AML investigation data. "
+            f"Reason: {decision.reason}"
         )
 
 

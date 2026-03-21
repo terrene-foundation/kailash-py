@@ -22,13 +22,13 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     DepartmentConfig,
+    OrgDefinition,
     TeamConfig,
     TrustPostureLevel,
 )
-from pact.build.org.builder import OrgDefinition
 from pact.governance.access import (
     KnowledgeSharePolicy,
     PactBridge,
@@ -125,7 +125,9 @@ def finserv_org() -> CompiledOrg:
 
     teams = [
         TeamConfig(id="t-aml", name="AML/CFT Team", workspace="ws-aml"),
-        TeamConfig(id="t-client-advisory", name="Client Advisory Team", workspace="ws-advisory"),
+        TeamConfig(
+            id="t-client-advisory", name="Client Advisory Team", workspace="ws-advisory"
+        ),
         TeamConfig(id="t-equities", name="Equities Desk", workspace="ws-trading"),
     ]
 
@@ -165,7 +167,8 @@ def _make_clearances(**overrides: ConfidentialityLevel) -> dict[str, RoleClearan
             role_address=addr,
             max_clearance=level,
             compartments=compartments,
-            nda_signed=level in (ConfidentialityLevel.SECRET, ConfidentialityLevel.TOP_SECRET),
+            nda_signed=level
+            in (ConfidentialityLevel.SECRET, ConfidentialityLevel.TOP_SECRET),
         )
     return result
 
@@ -189,11 +192,39 @@ _CONTAINMENT_CASES = [
     ("cross-div-no-mechanism", "D1-R1-D2-R1-T1-R1", "D1-R1-D3", None, None, False),
     ("cross-dept-no-mechanism", "D1-R1-D3-R1-T1-R1", "D1-R1-D2", None, None, False),
     # --- 4d: With KSP ---
-    ("ksp-grants-cross-div", "D1-R1-D2-R1-T1-R1", "D1-R1-D3", "ksp_adv_to_trd", None, True),
-    ("ksp-wrong-direction", "D1-R1-D3-R1-T1-R1", "D1-R1-D2", "ksp_adv_to_trd", None, False),
+    (
+        "ksp-grants-cross-div",
+        "D1-R1-D2-R1-T1-R1",
+        "D1-R1-D3",
+        "ksp_adv_to_trd",
+        None,
+        True,
+    ),
+    (
+        "ksp-wrong-direction",
+        "D1-R1-D3-R1-T1-R1",
+        "D1-R1-D2",
+        "ksp_adv_to_trd",
+        None,
+        False,
+    ),
     # --- 4e: With bridge ---
-    ("bridge-grants-cross-div", "D1-R1-D1-R1", "D1-R1-D3", None, "bridge_cco_trd", True),
-    ("bridge-wrong-role", "D1-R1-D2-R1-T1-R1", "D1-R1-D3", None, "bridge_cco_trd", False),
+    (
+        "bridge-grants-cross-div",
+        "D1-R1-D1-R1",
+        "D1-R1-D3",
+        None,
+        "bridge_cco_trd",
+        True,
+    ),
+    (
+        "bridge-wrong-role",
+        "D1-R1-D2-R1-T1-R1",
+        "D1-R1-D3",
+        None,
+        "bridge_cco_trd",
+        False,
+    ),
     # --- Both KSP and bridge ---
     (
         "both-ksp-and-bridge",
@@ -206,7 +237,14 @@ _CONTAINMENT_CASES = [
     # --- Root (BOD) has no clearance -> step 1 deny ---
     ("root-external-no-clearance", "R1", "D1-R1-D2", None, None, False),
     # --- Cross-team within same dept ---
-    ("cross-team-same-dept-no-mech", "D1-R1-D2-R1-T1-R1", "D1-R1-D3-R1-T1", None, None, False),
+    (
+        "cross-team-same-dept-no-mech",
+        "D1-R1-D2-R1-T1-R1",
+        "D1-R1-D3-R1-T1",
+        None,
+        None,
+        False,
+    ),
 ]
 
 
@@ -311,7 +349,9 @@ _CLEARANCE_ORDER = {
     ConfidentialityLevel.TOP_SECRET: 4,
 }
 
-_CLEARANCE_CASES = [(role_cl, item_cl) for role_cl in _ALL_LEVELS for item_cl in _ALL_LEVELS]
+_CLEARANCE_CASES = [
+    (role_cl, item_cl) for role_cl in _ALL_LEVELS for item_cl in _ALL_LEVELS
+]
 
 
 @pytest.mark.parametrize(
@@ -369,7 +409,9 @@ _POSTURE_CEILING = {
     TrustPostureLevel.DELEGATED: ConfidentialityLevel.TOP_SECRET,
 }
 
-_POSTURE_CASES = [(posture, item_cl) for posture in TrustPostureLevel for item_cl in _ALL_LEVELS]
+_POSTURE_CASES = [
+    (posture, item_cl) for posture in TrustPostureLevel for item_cl in _ALL_LEVELS
+]
 
 
 @pytest.mark.parametrize(
@@ -427,8 +469,20 @@ def test_posture_capping_matrix(
 _COMPARTMENT_CASES = [
     # (id, role_compartments, item_compartments, item_classification, expected)
     ("secret-matching", {"alpha"}, {"alpha"}, ConfidentialityLevel.SECRET, True),
-    ("secret-superset", {"alpha", "beta"}, {"alpha"}, ConfidentialityLevel.SECRET, True),
-    ("secret-missing-one", {"alpha"}, {"alpha", "beta"}, ConfidentialityLevel.SECRET, False),
+    (
+        "secret-superset",
+        {"alpha", "beta"},
+        {"alpha"},
+        ConfidentialityLevel.SECRET,
+        True,
+    ),
+    (
+        "secret-missing-one",
+        {"alpha"},
+        {"alpha", "beta"},
+        ConfidentialityLevel.SECRET,
+        False,
+    ),
     ("secret-disjoint", {"gamma"}, {"alpha"}, ConfidentialityLevel.SECRET, False),
     ("secret-empty-role", set(), {"alpha"}, ConfidentialityLevel.SECRET, False),
     ("top-secret-matching", {"ts-1"}, {"ts-1"}, ConfidentialityLevel.TOP_SECRET, True),

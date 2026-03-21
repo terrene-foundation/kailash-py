@@ -33,8 +33,7 @@ from __future__ import annotations
 
 import logging
 
-from pact.build.config.schema import DepartmentConfig, TeamConfig
-from pact.build.org.builder import OrgDefinition
+from pact.governance.config import DepartmentConfig, OrgDefinition, TeamConfig
 from pact.governance.compilation import CompiledOrg, RoleDefinition, compile_org
 
 logger = logging.getLogger(__name__)
@@ -83,7 +82,9 @@ def create_university_org() -> tuple[CompiledOrg, OrgDefinition]:
         TeamConfig(id="t-research-lab", name="Research Lab", workspace="ws-research"),
         TeamConfig(id="t-hr", name="HR", workspace="ws-hr"),
         TeamConfig(id="t-finance", name="Finance", workspace="ws-finance"),
-        TeamConfig(id="t-disciplinary", name="Disciplinary Board", workspace="ws-disciplinary"),
+        TeamConfig(
+            id="t-disciplinary", name="Disciplinary Board", workspace="ws-disciplinary"
+        ),
     ]
 
     # --- Roles (reports_to chains build the hierarchy) ---

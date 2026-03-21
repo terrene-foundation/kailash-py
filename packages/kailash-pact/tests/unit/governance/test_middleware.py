@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
@@ -165,7 +165,9 @@ class TestPreExecute:
         assert verdict.level == "blocked"
         assert verdict.allowed is False
 
-    def test_blocked_action_not_in_allowed_list(self, middleware: PactGovernanceMiddleware) -> None:
+    def test_blocked_action_not_in_allowed_list(
+        self, middleware: PactGovernanceMiddleware
+    ) -> None:
         """An action not in the allowed_actions list returns blocked verdict."""
         verdict = middleware.pre_execute("deploy")
         assert isinstance(verdict, GovernanceVerdict)
@@ -216,13 +218,17 @@ class TestPreExecute:
         assert verdict.level == "flagged"
         assert verdict.allowed is True
 
-    def test_no_context_defaults_to_empty(self, middleware: PactGovernanceMiddleware) -> None:
+    def test_no_context_defaults_to_empty(
+        self, middleware: PactGovernanceMiddleware
+    ) -> None:
         """Calling pre_execute without context should use empty dict."""
         verdict = middleware.pre_execute("read")
         assert isinstance(verdict, GovernanceVerdict)
         assert verdict.level == "auto_approved"
 
-    def test_verdict_has_role_address(self, middleware: PactGovernanceMiddleware) -> None:
+    def test_verdict_has_role_address(
+        self, middleware: PactGovernanceMiddleware
+    ) -> None:
         """Verdict should include the role_address."""
         verdict = middleware.pre_execute("read")
         assert verdict.role_address == CS_CHAIR_ADDR

@@ -20,8 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 
-from pact.build.config.schema import DepartmentConfig, TeamConfig
-from pact.build.org.builder import OrgDefinition
+from pact.governance.config import DepartmentConfig, OrgDefinition, TeamConfig
 from pact.governance.agent_mapping import AgentRoleMapping
 from pact.governance.compilation import CompiledOrg, RoleDefinition, compile_org
 

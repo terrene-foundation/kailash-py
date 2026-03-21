@@ -18,13 +18,17 @@ from datetime import UTC, datetime
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     OperationalConstraintConfig,
     TrustPostureLevel,
 )
-from pact.governance.clearance import POSTURE_CEILING, RoleClearance, effective_clearance
+from pact.governance.clearance import (
+    POSTURE_CEILING,
+    RoleClearance,
+    effective_clearance,
+)
 from pact.governance.context import GovernanceContext
 
 

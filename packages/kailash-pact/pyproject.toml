@@ -26,8 +26,7 @@ classifiers = [
 readme = "README.md"
 keywords = ["governance", "pact", "agent", "trust", "D/T/R", "envelopes", "clearance", "EATP", "AI"]
 dependencies = [
-    "kailash>=1.0.0,<2.0.0",
-    "eatp>=0.1.0,<1.0.0",
+    "kailash>=2.0.0,<3.0.0",
     "pydantic>=2.6",
 ]
 
@@ -47,7 +46,7 @@ dev = [
     "ruff>=0.3",
 ]
 kaizen = [
-    "kailash-kaizen>=1.0.0",
+    "kailash-kaizen>=2.0.0",
 ]
 postgres = [
     "psycopg[binary]>=3.0",
@@ -62,12 +61,6 @@ kailash-pact = "pact.governance.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pact"]
-
-# Monorepo development: resolve eatp from sibling package
-[tool.hatch.envs.default.overrides]
-dependencies = [
-    "eatp @ {root:uri}/../eatp",
-]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

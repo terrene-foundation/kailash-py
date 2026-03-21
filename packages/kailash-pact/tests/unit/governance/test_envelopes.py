@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     CommunicationConstraintConfig,
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
@@ -197,7 +197,9 @@ class TestIntersectEnvelopesOperational:
     def test_blocked_overrides_allowed(self) -> None:
         """When composed allowed and blocked sets overlap, blocked takes precedence."""
         a = _make_envelope(allowed_actions=["deploy", "read"], blocked_actions=[])
-        b = _make_envelope(allowed_actions=["deploy", "read"], blocked_actions=["deploy"])
+        b = _make_envelope(
+            allowed_actions=["deploy", "read"], blocked_actions=["deploy"]
+        )
         result = intersect_envelopes(a, b)
         assert "deploy" not in result.operational.allowed_actions
         assert "deploy" in result.operational.blocked_actions
@@ -284,7 +286,10 @@ class TestIntersectEnvelopesDataAccess:
         a = _make_envelope().model_copy(update={"data_access": a_da})
         b = _make_envelope().model_copy(update={"data_access": b_da})
         result = intersect_envelopes(a, b)
-        assert set(result.data_access.blocked_data_types) == {"pii", "financial_records"}
+        assert set(result.data_access.blocked_data_types) == {
+            "pii",
+            "financial_records",
+        }
 
 
 class TestIntersectEnvelopesCommunication:
@@ -365,7 +370,9 @@ class TestIntersectEnvelopesIdempotent:
         assert result.financial.api_cost_budget_usd == 100.0
 
     def test_self_intersection_operational(self) -> None:
-        a = _make_envelope(allowed_actions=["read", "write"], blocked_actions=["delete"])
+        a = _make_envelope(
+            allowed_actions=["read", "write"], blocked_actions=["delete"]
+        )
         result = intersect_envelopes(a, a)
         assert set(result.operational.allowed_actions) == {"read", "write"}
         assert set(result.operational.blocked_actions) == {"delete"}
@@ -402,12 +409,18 @@ class TestIntersectEnvelopesCommutative:
 
         assert r1.financial is not None and r2.financial is not None
         assert r1.financial.max_spend_usd == r2.financial.max_spend_usd
-        assert set(r1.operational.allowed_actions) == set(r2.operational.allowed_actions)
-        assert set(r1.operational.blocked_actions) == set(r2.operational.blocked_actions)
+        assert set(r1.operational.allowed_actions) == set(
+            r2.operational.allowed_actions
+        )
+        assert set(r1.operational.blocked_actions) == set(
+            r2.operational.blocked_actions
+        )
         assert r1.temporal.active_hours_start == r2.temporal.active_hours_start
         assert r1.temporal.active_hours_end == r2.temporal.active_hours_end
         assert set(r1.data_access.read_paths) == set(r2.data_access.read_paths)
-        assert set(r1.communication.allowed_channels) == set(r2.communication.allowed_channels)
+        assert set(r1.communication.allowed_channels) == set(
+            r2.communication.allowed_channels
+        )
         assert r1.confidentiality_clearance == r2.confidentiality_clearance
 
 
@@ -560,7 +573,9 @@ class TestComputeEffectiveEnvelope:
     def test_ancestor_chain_intersection(self) -> None:
         """Two envelopes in ancestor chain get intersected."""
         parent_env = _make_envelope(max_spend=1000.0, allowed_actions=["read", "write"])
-        child_env = _make_envelope(max_spend=500.0, allowed_actions=["read", "write", "deploy"])
+        child_env = _make_envelope(
+            max_spend=500.0, allowed_actions=["read", "write", "deploy"]
+        )
         role_envs = {
             "D1-R1": RoleEnvelope(
                 id="re-001",
@@ -681,7 +696,9 @@ class TestComputeEffectiveEnvelope:
                 envelope=l3_env,
             ),
         }
-        result = compute_effective_envelope("D1-R1-D1-R1-T1-R1", role_envs, org_envelope=org_env)
+        result = compute_effective_envelope(
+            "D1-R1-D1-R1-T1-R1", role_envs, org_envelope=org_env
+        )
         assert result is not None
         assert result.financial is not None
         # min(10000, 5000, 1000, 500) = 500
@@ -803,12 +820,16 @@ class TestCheckDegenerateEnvelope:
         # allowed actions should produce a warning.
         warnings = check_degenerate_envelope(env)
         # At minimum, should flag that operational dimension is degenerate
-        assert any("operational" in w.lower() or "action" in w.lower() for w in warnings)
+        assert any(
+            "operational" in w.lower() or "action" in w.lower() for w in warnings
+        )
 
     def test_no_channels_warns(self) -> None:
         env = _make_envelope(allowed_channels=[], internal_only=True)
         warnings = check_degenerate_envelope(env)
-        assert any("communication" in w.lower() or "channel" in w.lower() for w in warnings)
+        assert any(
+            "communication" in w.lower() or "channel" in w.lower() for w in warnings
+        )
 
     def test_custom_functional_minimum(self) -> None:
         """With a specific functional minimum, warn when below 20% of it."""
@@ -872,10 +893,14 @@ class TestMonotonicTightening:
         parent = _make_envelope(max_spend=500.0)
         child = _make_envelope(max_spend=1000.0)
         with pytest.raises(MonotonicTighteningError):
-            RoleEnvelope.validate_tightening(parent_envelope=parent, child_envelope=child)
+            RoleEnvelope.validate_tightening(
+                parent_envelope=parent, child_envelope=child
+            )
 
     def test_looser_confidentiality_raises(self) -> None:
         parent = _make_envelope(confidentiality=ConfidentialityLevel.RESTRICTED)
         child = _make_envelope(confidentiality=ConfidentialityLevel.SECRET)
         with pytest.raises(MonotonicTighteningError):
-            RoleEnvelope.validate_tightening(parent_envelope=parent, child_envelope=child)
+            RoleEnvelope.validate_tightening(
+                parent_envelope=parent, child_envelope=child
+            )

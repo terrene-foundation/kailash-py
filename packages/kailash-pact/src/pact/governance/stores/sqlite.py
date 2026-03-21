@@ -28,7 +28,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from pact.build.config.schema import ConfidentialityLevel, ConstraintEnvelopeConfig
+from pact.governance.config import ConfidentialityLevel, ConstraintEnvelopeConfig
 from pact.governance.access import KnowledgeSharePolicy, PactBridge
 from pact.governance.clearance import RoleClearance, VettingStatus
 from pact.governance.compilation import CompiledOrg, OrgNode
@@ -327,7 +327,7 @@ class SqliteEnvelopeStore(_SqliteBase):
         _validate_id(envelope.id)
         now = datetime.now(UTC).isoformat()
 
-        envelope_json = json.dumps(envelope.envelope.model_dump(), default=str)
+        envelope_json = json.dumps(envelope.envelope.model_dump(mode="json"))
 
         conn = self._get_connection()
         with self._write_lock:
@@ -381,7 +381,9 @@ class SqliteEnvelopeStore(_SqliteBase):
         if row is None:
             return None
 
-        envelope_config = ConstraintEnvelopeConfig.model_validate(json.loads(row["envelope_json"]))
+        envelope_config = ConstraintEnvelopeConfig.model_validate(
+            json.loads(row["envelope_json"])
+        )
         return RoleEnvelope(
             id=row["id"],
             defining_role_address=row["defining_role_address"],
@@ -397,7 +399,7 @@ class SqliteEnvelopeStore(_SqliteBase):
         _validate_id(envelope.id)
         _validate_id(envelope.task_id)
 
-        envelope_json = json.dumps(envelope.envelope.model_dump(), default=str)
+        envelope_json = json.dumps(envelope.envelope.model_dump(mode="json"))
 
         conn = self._get_connection()
         with self._write_lock, conn:
@@ -422,7 +424,9 @@ class SqliteEnvelopeStore(_SqliteBase):
             envelope.task_id,
         )
 
-    def get_active_task_envelope(self, role_address: str, task_id: str) -> TaskEnvelope | None:
+    def get_active_task_envelope(
+        self, role_address: str, task_id: str
+    ) -> TaskEnvelope | None:
         """Get an active (non-expired) task envelope by task_id."""
         _validate_id(task_id)
         conn = self._get_connection()
@@ -442,7 +446,9 @@ class SqliteEnvelopeStore(_SqliteBase):
             logger.debug("Task envelope '%s' is expired", row["id"])
             return None
 
-        envelope_config = ConstraintEnvelopeConfig.model_validate(json.loads(row["envelope_json"]))
+        envelope_config = ConstraintEnvelopeConfig.model_validate(
+            json.loads(row["envelope_json"])
+        )
         return TaskEnvelope(
             id=row["id"],
             task_id=row["task_id"],
@@ -557,7 +563,9 @@ class SqliteClearanceStore(_SqliteBase):
             return None
 
         compartments = frozenset(json.loads(row["compartments_json"]))
-        review_at = datetime.fromisoformat(row["review_at"]) if row["review_at"] else None
+        review_at = (
+            datetime.fromisoformat(row["review_at"]) if row["review_at"] else None
+        )
 
         return RoleClearance(
             role_address=row["role_address"],
@@ -666,7 +674,9 @@ class SqliteAccessPolicyStore(_SqliteBase):
             ksp.target_unit_address,
         )
 
-    def find_ksp(self, source_prefix: str, target_prefix: str) -> KnowledgeSharePolicy | None:
+    def find_ksp(
+        self, source_prefix: str, target_prefix: str
+    ) -> KnowledgeSharePolicy | None:
         """Find a KSP matching source and target prefixes (directional)."""
         conn = self._get_connection()
         with self._lock:
@@ -698,7 +708,9 @@ class SqliteAccessPolicyStore(_SqliteBase):
     @staticmethod
     def _row_to_ksp(row: sqlite3.Row) -> KnowledgeSharePolicy:
         compartments = frozenset(json.loads(row["compartments_json"]))
-        expires_at = datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None
+        expires_at = (
+            datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None
+        )
         return KnowledgeSharePolicy(
             id=row["id"],
             source_unit_address=row["source_unit_address"],
@@ -751,7 +763,9 @@ class SqliteAccessPolicyStore(_SqliteBase):
             bridge.bridge_type,
         )
 
-    def find_bridge(self, role_a_address: str, role_b_address: str) -> PactBridge | None:
+    def find_bridge(
+        self, role_a_address: str, role_b_address: str
+    ) -> PactBridge | None:
         """Find a bridge connecting two role addresses (symmetric lookup)."""
         conn = self._get_connection()
         with self._lock:
@@ -784,7 +798,9 @@ class SqliteAccessPolicyStore(_SqliteBase):
     @staticmethod
     def _row_to_bridge(row: sqlite3.Row) -> PactBridge:
         scope = tuple(json.loads(row["operational_scope_json"]))
-        expires_at = datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None
+        expires_at = (
+            datetime.fromisoformat(row["expires_at"]) if row["expires_at"] else None
+        )
         return PactBridge(
             id=row["id"],
             role_a_address=row["role_a_address"],
@@ -848,7 +864,9 @@ class SqliteAuditLog(_SqliteBase):
             ).fetchone()
             prev_chain = row["chain_hash"] if row is not None else ""
 
-            chain_hash = hashlib.sha256((prev_chain + content_hash).encode()).hexdigest()
+            chain_hash = hashlib.sha256(
+                (prev_chain + content_hash).encode()
+            ).hexdigest()
 
             with conn:
                 conn.execute(

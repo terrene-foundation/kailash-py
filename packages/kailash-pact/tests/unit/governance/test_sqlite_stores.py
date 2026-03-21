@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
@@ -666,7 +666,9 @@ class TestSqliteThreadSafety:
 # ===========================================================================
 
 
-@pytest.mark.skipif(platform.system() == "Windows", reason="POSIX-only permissions test")
+@pytest.mark.skipif(
+    platform.system() == "Windows", reason="POSIX-only permissions test"
+)
 class TestSqliteFilePermissions:
     """Database file must have 0o600 permissions on POSIX systems."""
 

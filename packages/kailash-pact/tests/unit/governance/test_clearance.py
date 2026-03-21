@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from pact.build.config.schema import ConfidentialityLevel, TrustPostureLevel
+from pact.governance.config import ConfidentialityLevel, TrustPostureLevel
 from pact.governance.clearance import (
     POSTURE_CEILING,
     RoleClearance,
@@ -60,21 +60,34 @@ class TestPostureCeiling:
     """POSTURE_CEILING maps every TrustPostureLevel to a ConfidentialityLevel."""
 
     def test_pseudo_agent_ceiling_is_public(self) -> None:
-        assert POSTURE_CEILING[TrustPostureLevel.PSEUDO_AGENT] == ConfidentialityLevel.PUBLIC
+        assert (
+            POSTURE_CEILING[TrustPostureLevel.PSEUDO_AGENT]
+            == ConfidentialityLevel.PUBLIC
+        )
 
     def test_supervised_ceiling_is_restricted(self) -> None:
-        assert POSTURE_CEILING[TrustPostureLevel.SUPERVISED] == ConfidentialityLevel.RESTRICTED
+        assert (
+            POSTURE_CEILING[TrustPostureLevel.SUPERVISED]
+            == ConfidentialityLevel.RESTRICTED
+        )
 
     def test_shared_planning_ceiling_is_confidential(self) -> None:
         assert (
-            POSTURE_CEILING[TrustPostureLevel.SHARED_PLANNING] == ConfidentialityLevel.CONFIDENTIAL
+            POSTURE_CEILING[TrustPostureLevel.SHARED_PLANNING]
+            == ConfidentialityLevel.CONFIDENTIAL
         )
 
     def test_continuous_insight_ceiling_is_secret(self) -> None:
-        assert POSTURE_CEILING[TrustPostureLevel.CONTINUOUS_INSIGHT] == ConfidentialityLevel.SECRET
+        assert (
+            POSTURE_CEILING[TrustPostureLevel.CONTINUOUS_INSIGHT]
+            == ConfidentialityLevel.SECRET
+        )
 
     def test_delegated_ceiling_is_top_secret(self) -> None:
-        assert POSTURE_CEILING[TrustPostureLevel.DELEGATED] == ConfidentialityLevel.TOP_SECRET
+        assert (
+            POSTURE_CEILING[TrustPostureLevel.DELEGATED]
+            == ConfidentialityLevel.TOP_SECRET
+        )
 
     def test_all_posture_levels_mapped(self) -> None:
         """Every TrustPostureLevel has a ceiling entry."""
@@ -254,7 +267,11 @@ class TestEffectiveClearance:
                 ConfidentialityLevel.TOP_SECRET,
                 ConfidentialityLevel.TOP_SECRET,
             ),
-            (TrustPostureLevel.DELEGATED, ConfidentialityLevel.PUBLIC, ConfidentialityLevel.PUBLIC),
+            (
+                TrustPostureLevel.DELEGATED,
+                ConfidentialityLevel.PUBLIC,
+                ConfidentialityLevel.PUBLIC,
+            ),
         ],
     )
     def test_posture_capping_matrix(

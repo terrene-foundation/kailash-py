@@ -34,7 +34,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
-from pact.build.config.schema import TrustPostureLevel
+from pact.governance.config import TrustPostureLevel
 from pact.governance.agent import PactGovernedAgent
 from pact.governance.engine import GovernanceEngine
 

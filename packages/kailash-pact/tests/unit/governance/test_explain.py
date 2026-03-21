@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
@@ -94,7 +94,9 @@ def envelope_store() -> MemoryEnvelopeStore:
             id="dean-cs-chair-envelope",
             description="Dean's envelope for CS Chair",
             financial=FinancialConstraintConfig(max_spend_usd=10000.0),
-            operational=OperationalConstraintConfig(allowed_actions=["read", "write", "approve"]),
+            operational=OperationalConstraintConfig(
+                allowed_actions=["read", "write", "approve"]
+            ),
         ),
     )
     store.save_role_envelope(dean_env)
@@ -130,13 +132,17 @@ class TestDescribeAddress:
         assert "D99-R99" in desc
         assert "not found" in desc.lower() or "unknown" in desc.lower()
 
-    def test_describe_address_includes_department(self, university_org: CompiledOrg) -> None:
+    def test_describe_address_includes_department(
+        self, university_org: CompiledOrg
+    ) -> None:
         """Description includes the department/team name when applicable."""
         # VP Administration
         desc = describe_address("D1-R1-D2-R1", university_org)
         assert "VP Administration" in desc
 
-    def test_describe_address_standalone_role(self, university_org: CompiledOrg) -> None:
+    def test_describe_address_standalone_role(
+        self, university_org: CompiledOrg
+    ) -> None:
         """CS Faculty Member (non-head role) gets a meaningful description."""
         desc = describe_address("D1-R1-D1-R1-D1-R1-T1-R1-R1", university_org)
         assert "CS Faculty Member" in desc
@@ -264,7 +270,11 @@ class TestExplainAccess:
         )
 
         # Should indicate denial
-        assert "DENY" in trace.upper() or "DENIED" in trace.upper() or "FAIL" in trace.upper()
+        assert (
+            "DENY" in trace.upper()
+            or "DENIED" in trace.upper()
+            or "FAIL" in trace.upper()
+        )
 
     def test_explain_access_allowed_via_bridge(
         self,
@@ -353,5 +363,9 @@ class TestExplainAccess:
         )
 
         # Should show step 2 failure (classification)
-        assert "Step 2" in trace or "step 2" in trace.lower() or "classification" in trace.lower()
+        assert (
+            "Step 2" in trace
+            or "step 2" in trace.lower()
+            or "classification" in trace.lower()
+        )
         assert "DENY" in trace.upper() or "FAIL" in trace.upper()

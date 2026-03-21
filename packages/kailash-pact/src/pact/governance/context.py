@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     TrustPostureLevel,
@@ -74,11 +74,15 @@ class GovernanceContext:
             "role_address": self.role_address,
             "posture": self.posture.value,
             "effective_envelope": (
-                self.effective_envelope.model_dump()
+                self.effective_envelope.model_dump(mode="json")
                 if self.effective_envelope is not None
                 else None
             ),
-            "clearance": _clearance_to_dict(self.clearance) if self.clearance is not None else None,
+            "clearance": (
+                _clearance_to_dict(self.clearance)
+                if self.clearance is not None
+                else None
+            ),
             "effective_clearance_level": (
                 self.effective_clearance_level.value
                 if self.effective_clearance_level is not None
@@ -164,7 +168,9 @@ def _clearance_to_dict(clearance: RoleClearance) -> dict[str, Any]:
         "compartments": sorted(clearance.compartments),
         "granted_by_role_address": clearance.granted_by_role_address,
         "vetting_status": clearance.vetting_status.value,
-        "review_at": clearance.review_at.isoformat() if clearance.review_at is not None else None,
+        "review_at": (
+            clearance.review_at.isoformat() if clearance.review_at is not None else None
+        ),
         "nda_signed": clearance.nda_signed,
     }
 

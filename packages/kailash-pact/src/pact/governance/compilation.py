@@ -18,8 +18,7 @@ from typing import TYPE_CHECKING, Any
 from pact.governance.addressing import AddressSegment, GrammarError, NodeType
 
 if TYPE_CHECKING:
-    from pact.build.config.schema import DepartmentConfig, TeamConfig
-    from pact.build.org.builder import OrgDefinition
+    from pact.governance.config import DepartmentConfig, OrgDefinition, TeamConfig
 
 logger = logging.getLogger(__name__)
 
@@ -200,7 +199,10 @@ class CompiledOrg:
             The OrgNode for that role, or None if not found.
         """
         for node in self.nodes.values():
-            if node.role_definition is not None and node.role_definition.role_id == role_id:
+            if (
+                node.role_definition is not None
+                and node.role_definition.role_id == role_id
+            ):
                 return node
         return None
 
@@ -318,7 +320,7 @@ def compile_org(org: OrgDefinition) -> CompiledOrg:
             dangling references, cycles, etc.).
     """
     # Import here to avoid circular imports at module level
-    from pact.build.config.schema import DepartmentConfig, TeamConfig
+    from pact.governance.config import DepartmentConfig, TeamConfig
 
     roles: list[RoleDefinition] = getattr(org, "roles", [])
 
@@ -334,7 +336,9 @@ def compile_org(org: OrgDefinition) -> CompiledOrg:
 
     # --- Phase 2: Build indexes ---
     role_index: dict[str, RoleDefinition] = {r.role_id: r for r in roles}
-    dept_index: dict[str, DepartmentConfig] = {d.department_id: d for d in org.departments}
+    dept_index: dict[str, DepartmentConfig] = {
+        d.department_id: d for d in org.departments
+    }
     team_index: dict[str, TeamConfig] = {t.id: t for t in org.teams}
 
     # Map from unit_id -> role that heads it
@@ -596,7 +600,9 @@ def _assign_children_of_external_root(
         else:
             role_counter += 1
             role_addr = f"R{role_counter}"
-            _create_role_node(compiled, child_role, role_addr, parent_address=parent_role_addr)
+            _create_role_node(
+                compiled, child_role, role_addr, parent_address=parent_role_addr
+            )
 
             if parent_role_addr in compiled.nodes:
                 _append_child(compiled.nodes[parent_role_addr], role_addr)
@@ -754,7 +760,9 @@ def _assign_children_addresses(
             # Additional role (not a unit head)
             role_counter += 1
             role_addr = f"{parent_role_addr}-R{role_counter}"
-            _create_role_node(compiled, child_role, role_addr, parent_address=parent_role_addr)
+            _create_role_node(
+                compiled, child_role, role_addr, parent_address=parent_role_addr
+            )
 
             # Add as child of parent role
             if parent_role_addr in compiled.nodes:
@@ -818,7 +826,7 @@ def _validate_roles(roles: list[RoleDefinition], org: Any) -> None:
     Raises:
         CompilationError: If validation fails.
     """
-    from pact.build.config.schema import DepartmentConfig, TeamConfig
+    from pact.governance.config import DepartmentConfig, TeamConfig
 
     if not roles:
         return
@@ -854,7 +862,10 @@ def _validate_roles(roles: list[RoleDefinition], org: Any) -> None:
                     f"The chain visits '{current}' more than once."
                 )
             visited.add(current)
-            if current in role_index and role_index[current].reports_to_role_id is not None:
+            if (
+                current in role_index
+                and role_index[current].reports_to_role_id is not None
+            ):
                 current = role_index[current].reports_to_role_id
             else:
                 break
@@ -865,7 +876,10 @@ def _validate_roles(roles: list[RoleDefinition], org: Any) -> None:
     all_unit_ids = dept_ids | team_ids
 
     for r in roles:
-        if r.is_primary_for_unit is not None and r.is_primary_for_unit not in all_unit_ids:
+        if (
+            r.is_primary_for_unit is not None
+            and r.is_primary_for_unit not in all_unit_ids
+        ):
             raise CompilationError(
                 f"Role '{r.role_id}' references unit '{r.is_primary_for_unit}' "
                 f"which was not found in departments or teams. "

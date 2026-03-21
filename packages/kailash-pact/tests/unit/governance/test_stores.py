@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
@@ -511,7 +511,9 @@ class TestMemoryAccessPolicyStoreBridge:
     def test_bounded_bridge_eviction(self) -> None:
         store = MemoryAccessPolicyStore()
         for i in range(MAX_STORE_SIZE + 5):
-            bridge = _make_bridge(f"bridge-{i}", role_a=f"D{i}-R1", role_b=f"D{i + 10000}-R1")
+            bridge = _make_bridge(
+                f"bridge-{i}", role_a=f"D{i}-R1", role_b=f"D{i + 10000}-R1"
+            )
             store.save_bridge(bridge)
         bridges = store.list_bridges()
         bridge_ids = {b.id for b in bridges}

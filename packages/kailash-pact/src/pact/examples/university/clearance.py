@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 
-from pact.build.config.schema import ConfidentialityLevel
+from pact.governance.config import ConfidentialityLevel
 from pact.governance.clearance import RoleClearance, VettingStatus
 from pact.governance.compilation import CompiledOrg
 

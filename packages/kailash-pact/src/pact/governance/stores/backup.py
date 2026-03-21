@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
 )
@@ -82,7 +82,7 @@ def backup_governance_store(engine: Any, path: str) -> None:
                     "id": role_env.id,
                     "defining_role_address": role_env.defining_role_address,
                     "target_role_address": role_env.target_role_address,
-                    "envelope": role_env.envelope.model_dump(),
+                    "envelope": role_env.envelope.model_dump(mode="json"),
                     "version": role_env.version,
                     "created_at": role_env.created_at.isoformat(),
                     "modified_at": role_env.modified_at.isoformat(),
@@ -134,7 +134,9 @@ def backup_governance_store(engine: Any, path: str) -> None:
                 "max_classification": bridge.max_classification.value,
                 "operational_scope": list(bridge.operational_scope),
                 "bilateral": bridge.bilateral,
-                "expires_at": bridge.expires_at.isoformat() if bridge.expires_at else None,
+                "expires_at": (
+                    bridge.expires_at.isoformat() if bridge.expires_at else None
+                ),
                 "active": bridge.active,
             }
         )
@@ -261,7 +263,8 @@ def restore_governance_store(engine: Any, path: str) -> None:
         engine._access_policy_store.save_bridge(bridge)
 
     logger.info(
-        "Restored governance state from '%s': " "%d envelopes, %d clearances, %d KSPs, %d bridges",
+        "Restored governance state from '%s': "
+        "%d envelopes, %d clearances, %d KSPs, %d bridges",
         path,
         len(data.get("envelopes", [])),
         len(data.get("clearances", [])),

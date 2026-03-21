@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from pact.build.config.schema import TrustPostureLevel
+from pact.governance.config import TrustPostureLevel
 from pact.governance.context import GovernanceContext
 from pact.governance.engine import GovernanceEngine
 from pact.governance.verdict import GovernanceVerdict

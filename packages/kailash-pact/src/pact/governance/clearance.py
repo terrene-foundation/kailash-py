@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
-from pact.build.config.schema import ConfidentialityLevel, TrustPostureLevel
+from pact.governance.config import ConfidentialityLevel, TrustPostureLevel
 
 logger = logging.getLogger(__name__)
 

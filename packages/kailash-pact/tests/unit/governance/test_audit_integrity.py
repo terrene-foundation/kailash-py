@@ -18,7 +18,7 @@ import json
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
@@ -91,7 +91,9 @@ class TestAuditIntegrity:
         assert len(entries) == 3
 
         # First entry: chain_hash = SHA-256("" + content_hash)
-        first_content = hashlib.sha256(json.dumps({"step": 1}, sort_keys=True).encode()).hexdigest()
+        first_content = hashlib.sha256(
+            json.dumps({"step": 1}, sort_keys=True).encode()
+        ).hexdigest()
         first_chain = hashlib.sha256(("" + first_content).encode()).hexdigest()
         assert entries[0]["chain_hash"] == first_chain
 
@@ -99,12 +101,18 @@ class TestAuditIntegrity:
         second_content = hashlib.sha256(
             json.dumps({"step": 2}, sort_keys=True).encode()
         ).hexdigest()
-        second_chain = hashlib.sha256((first_chain + second_content).encode()).hexdigest()
+        second_chain = hashlib.sha256(
+            (first_chain + second_content).encode()
+        ).hexdigest()
         assert entries[1]["chain_hash"] == second_chain
 
         # Third entry
-        third_content = hashlib.sha256(json.dumps({"step": 3}, sort_keys=True).encode()).hexdigest()
-        third_chain = hashlib.sha256((second_chain + third_content).encode()).hexdigest()
+        third_content = hashlib.sha256(
+            json.dumps({"step": 3}, sort_keys=True).encode()
+        ).hexdigest()
+        third_chain = hashlib.sha256(
+            (second_chain + third_content).encode()
+        ).hexdigest()
         assert entries[2]["chain_hash"] == third_chain
 
     def test_verify_audit_integrity_valid(self) -> None:

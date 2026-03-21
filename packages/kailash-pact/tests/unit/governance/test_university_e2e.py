@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from pact.build.config.schema import ConfidentialityLevel, TrustPostureLevel
+from pact.governance.config import ConfidentialityLevel, TrustPostureLevel
 from pact.governance.access import KnowledgeSharePolicy, PactBridge, can_access
 from pact.governance.clearance import RoleClearance
 from pact.governance.compilation import CompiledOrg, RoleDefinition
@@ -491,7 +491,8 @@ class TestScenario9CSChairReadsOwnData:
             bridges=bridges,
         )
         assert decision.allowed is True, (
-            f"CS Chair should access CS Department data (same unit). " f"Reason: {decision.reason}"
+            f"CS Chair should access CS Department data (same unit). "
+            f"Reason: {decision.reason}"
         )
 
 

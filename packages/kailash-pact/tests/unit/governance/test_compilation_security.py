@@ -13,8 +13,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from pact.build.config.schema import DepartmentConfig, TeamConfig
-from pact.build.org.builder import OrgDefinition
+from pact.governance.config import DepartmentConfig, OrgDefinition, TeamConfig
 from pact.governance.compilation import (
     MAX_CHILDREN_PER_NODE,
     MAX_COMPILATION_DEPTH,
@@ -277,7 +276,9 @@ class TestCompilationDepthLimit:
             role_id = f"r-{i}"
             reports_to = f"r-{i-1}" if i > 0 else None
 
-            departments.append(DepartmentConfig(department_id=dept_id, name=f"Dept {i}"))
+            departments.append(
+                DepartmentConfig(department_id=dept_id, name=f"Dept {i}")
+            )
             roles.append(
                 RoleDefinition(
                     role_id=role_id,
@@ -309,7 +310,9 @@ class TestCompilationDepthLimit:
             role_id = f"r-{i}"
             reports_to = f"r-{i-1}" if i > 0 else None
 
-            departments.append(DepartmentConfig(department_id=dept_id, name=f"Dept {i}"))
+            departments.append(
+                DepartmentConfig(department_id=dept_id, name=f"Dept {i}")
+            )
             roles.append(
                 RoleDefinition(
                     role_id=role_id,

@@ -20,7 +20,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
@@ -584,7 +584,9 @@ class TestEvictionUnderConcurrency:
                 errors.append(exc)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_concurrent) as pool:
-            futures = [pool.submit(write_over_capacity, i) for i in range(num_concurrent)]
+            futures = [
+                pool.submit(write_over_capacity, i) for i in range(num_concurrent)
+            ]
             concurrent.futures.wait(futures)
 
         assert errors == [], f"Eviction under concurrency raised exceptions: {errors}"
@@ -609,7 +611,9 @@ class TestEvictionUnderConcurrency:
                 errors.append(exc)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_concurrent) as pool:
-            futures = [pool.submit(write_over_capacity, i) for i in range(num_concurrent)]
+            futures = [
+                pool.submit(write_over_capacity, i) for i in range(num_concurrent)
+            ]
             concurrent.futures.wait(futures)
 
         assert errors == [], f"Eviction under concurrency raised exceptions: {errors}"
@@ -635,7 +639,9 @@ class TestEvictionUnderConcurrency:
                 errors.append(exc)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_concurrent) as pool:
-            futures = [pool.submit(write_over_capacity, i) for i in range(num_concurrent)]
+            futures = [
+                pool.submit(write_over_capacity, i) for i in range(num_concurrent)
+            ]
             concurrent.futures.wait(futures)
 
         assert errors == [], f"Eviction under concurrency raised exceptions: {errors}"
@@ -659,7 +665,9 @@ class TestEvictionUnderConcurrency:
                 errors.append(exc)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_concurrent) as pool:
-            futures = [pool.submit(write_over_capacity, i) for i in range(num_concurrent)]
+            futures = [
+                pool.submit(write_over_capacity, i) for i in range(num_concurrent)
+            ]
             concurrent.futures.wait(futures)
 
         assert errors == [], f"Eviction under concurrency raised exceptions: {errors}"

@@ -20,8 +20,7 @@ from typing import Any
 
 import yaml
 
-from pact.build.config.schema import DepartmentConfig, TeamConfig
-from pact.build.org.builder import OrgDefinition
+from pact.governance.config import DepartmentConfig, OrgDefinition, TeamConfig
 from pact.governance.compilation import RoleDefinition
 
 logger = logging.getLogger(__name__)
@@ -329,7 +328,9 @@ def _parse_teams(raw: list[Any], path: Path) -> list[TeamConfig]:
             )
         team_id = entry.get("id")
         if not team_id:
-            raise ConfigurationError(f"Team entry {i} is missing required 'id' field in '{path}'")
+            raise ConfigurationError(
+                f"Team entry {i} is missing required 'id' field in '{path}'"
+            )
         team_name = entry.get("name", team_id)
         # Use a placeholder workspace since YAML teams don't require one
         teams.append(TeamConfig(id=team_id, name=team_name, workspace=f"ws-{team_id}"))
@@ -353,7 +354,9 @@ def _parse_roles(
 
         role_id = entry.get("id")
         if not role_id:
-            raise ConfigurationError(f"Role entry {i} is missing required 'id' field in '{path}'")
+            raise ConfigurationError(
+                f"Role entry {i} is missing required 'id' field in '{path}'"
+            )
 
         # Check for duplicate role IDs
         if role_id in seen_ids:
@@ -397,7 +400,10 @@ def _validate_role_references(
 ) -> None:
     """Validate that all role cross-references are valid."""
     for role in roles:
-        if role.reports_to_role_id is not None and role.reports_to_role_id not in role_ids:
+        if (
+            role.reports_to_role_id is not None
+            and role.reports_to_role_id not in role_ids
+        ):
             raise ConfigurationError(
                 f"Role '{role.role_id}' has reports_to='{role.reports_to_role_id}', "
                 f"but '{role.reports_to_role_id}' was not found in the role definitions. "
@@ -525,7 +531,9 @@ def _parse_bridges(
 
         bridge_id = entry.get("id")
         if not bridge_id:
-            raise ConfigurationError(f"Bridge entry {i} is missing required 'id' field in '{path}'")
+            raise ConfigurationError(
+                f"Bridge entry {i} is missing required 'id' field in '{path}'"
+            )
 
         role_a = entry.get("role_a")
         role_b = entry.get("role_b")
@@ -581,7 +589,9 @@ def _parse_ksps(
 
         ksp_id = entry.get("id")
         if not ksp_id:
-            raise ConfigurationError(f"KSP entry {i} is missing required 'id' field in '{path}'")
+            raise ConfigurationError(
+                f"KSP entry {i} is missing required 'id' field in '{path}'"
+            )
 
         source = entry.get("source")
         target = entry.get("target")

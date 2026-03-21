@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from pact.build.config.schema import ConfidentialityLevel
+from pact.governance.config import ConfidentialityLevel
 from pact.governance.knowledge import KnowledgeItem
 
 
@@ -71,7 +71,9 @@ class TestKnowledgeItemModel:
             item_id="cross-ref",
             classification=ConfidentialityLevel.TOP_SECRET,
             owning_unit_address="D1-R1-D1",
-            compartments=frozenset({"sanctions", "aml-investigations", "insider-trading"}),
+            compartments=frozenset(
+                {"sanctions", "aml-investigations", "insider-trading"}
+            ),
         )
         assert len(ki.compartments) == 3
         assert "sanctions" in ki.compartments

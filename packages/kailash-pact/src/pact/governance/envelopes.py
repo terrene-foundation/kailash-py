@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     CONFIDENTIALITY_ORDER,
     CommunicationConstraintConfig,
     ConfidentialityLevel,
@@ -95,7 +95,9 @@ def _validate_finite_int(value: int | None, field_name: str) -> None:
                     f"NaN/Inf values bypass numeric comparisons and break governance checks."
                 )
         elif not isinstance(value, int):
-            raise TypeError(f"{field_name} must be int or None, got {type(value).__name__}")
+            raise TypeError(
+                f"{field_name} must be int or None, got {type(value).__name__}"
+            )
 
 
 def _min_optional(a: float | None, b: float | None) -> float | None:
@@ -130,7 +132,9 @@ def _min_optional_int(a: int | None, b: int | None) -> int | None:
     return min(a, b)
 
 
-def _min_confidentiality(a: ConfidentialityLevel, b: ConfidentialityLevel) -> ConfidentialityLevel:
+def _min_confidentiality(
+    a: ConfidentialityLevel, b: ConfidentialityLevel
+) -> ConfidentialityLevel:
     """Return the lower (more restrictive) of two confidentiality levels."""
     if CONFIDENTIALITY_ORDER[a] <= CONFIDENTIALITY_ORDER[b]:
         return a
@@ -160,19 +164,27 @@ def _intersect_financial(
     if b is None:
         _validate_finite(a.max_spend_usd, "financial.max_spend_usd")
         _validate_finite(a.api_cost_budget_usd, "financial.api_cost_budget_usd")
-        _validate_finite(a.requires_approval_above_usd, "financial.requires_approval_above_usd")
+        _validate_finite(
+            a.requires_approval_above_usd, "financial.requires_approval_above_usd"
+        )
         return a
 
     # Validate all numeric fields before any min() calls
     _validate_finite(a.max_spend_usd, "financial.max_spend_usd (envelope a)")
     _validate_finite(b.max_spend_usd, "financial.max_spend_usd (envelope b)")
-    _validate_finite(a.api_cost_budget_usd, "financial.api_cost_budget_usd (envelope a)")
-    _validate_finite(b.api_cost_budget_usd, "financial.api_cost_budget_usd (envelope b)")
     _validate_finite(
-        a.requires_approval_above_usd, "financial.requires_approval_above_usd (envelope a)"
+        a.api_cost_budget_usd, "financial.api_cost_budget_usd (envelope a)"
     )
     _validate_finite(
-        b.requires_approval_above_usd, "financial.requires_approval_above_usd (envelope b)"
+        b.api_cost_budget_usd, "financial.api_cost_budget_usd (envelope b)"
+    )
+    _validate_finite(
+        a.requires_approval_above_usd,
+        "financial.requires_approval_above_usd (envelope a)",
+    )
+    _validate_finite(
+        b.requires_approval_above_usd,
+        "financial.requires_approval_above_usd (envelope b)",
     )
 
     return FinancialConstraintConfig(
@@ -204,11 +216,16 @@ def _intersect_operational(
     return OperationalConstraintConfig(
         allowed_actions=sorted(allowed),
         blocked_actions=sorted(blocked),
-        max_actions_per_day=_min_optional_int(a.max_actions_per_day, b.max_actions_per_day),
-        max_actions_per_hour=_min_optional_int(a.max_actions_per_hour, b.max_actions_per_hour),
+        max_actions_per_day=_min_optional_int(
+            a.max_actions_per_day, b.max_actions_per_day
+        ),
+        max_actions_per_hour=_min_optional_int(
+            a.max_actions_per_hour, b.max_actions_per_hour
+        ),
         rate_limit_window_type=(
             "rolling"
-            if a.rate_limit_window_type == "rolling" or b.rate_limit_window_type == "rolling"
+            if a.rate_limit_window_type == "rolling"
+            or b.rate_limit_window_type == "rolling"
             else "fixed"
         ),
         reasoning_required=a.reasoning_required or b.reasoning_required,
@@ -263,7 +280,9 @@ def _intersect_data_access(
     return DataAccessConstraintConfig(
         read_paths=sorted(set(a.read_paths) & set(b.read_paths)),
         write_paths=sorted(set(a.write_paths) & set(b.write_paths)),
-        blocked_data_types=sorted(set(a.blocked_data_types) | set(b.blocked_data_types)),
+        blocked_data_types=sorted(
+            set(a.blocked_data_types) | set(b.blocked_data_types)
+        ),
         reasoning_required=a.reasoning_required or b.reasoning_required,
     )
 
@@ -281,7 +300,8 @@ def _intersect_communication(
     return CommunicationConstraintConfig(
         internal_only=a.internal_only or b.internal_only,
         allowed_channels=sorted(set(a.allowed_channels) & set(b.allowed_channels)),
-        external_requires_approval=a.external_requires_approval or b.external_requires_approval,
+        external_requires_approval=a.external_requires_approval
+        or b.external_requires_approval,
         reasoning_required=a.reasoning_required or b.reasoning_required,
     )
 
@@ -320,7 +340,9 @@ def intersect_envelopes(
         temporal=_intersect_temporal(a.temporal, b.temporal),
         data_access=_intersect_data_access(a.data_access, b.data_access),
         communication=_intersect_communication(a.communication, b.communication),
-        max_delegation_depth=_min_optional_int(a.max_delegation_depth, b.max_delegation_depth),
+        max_delegation_depth=_min_optional_int(
+            a.max_delegation_depth, b.max_delegation_depth
+        ),
     )
 
 
@@ -398,8 +420,14 @@ class RoleEnvelope:
             )
 
         # Financial: child max_spend must be <= parent max_spend
-        if parent_envelope.financial is not None and child_envelope.financial is not None:
-            if child_envelope.financial.max_spend_usd > parent_envelope.financial.max_spend_usd:
+        if (
+            parent_envelope.financial is not None
+            and child_envelope.financial is not None
+        ):
+            if (
+                child_envelope.financial.max_spend_usd
+                > parent_envelope.financial.max_spend_usd
+            ):
                 violations.append(
                     f"Financial: child max_spend_usd "
                     f"({child_envelope.financial.max_spend_usd}) exceeds parent "
@@ -429,8 +457,12 @@ class RoleEnvelope:
                 )
 
         # Confidentiality clearance: child must not exceed parent
-        child_conf_order = CONFIDENTIALITY_ORDER[child_envelope.confidentiality_clearance]
-        parent_conf_order = CONFIDENTIALITY_ORDER[parent_envelope.confidentiality_clearance]
+        child_conf_order = CONFIDENTIALITY_ORDER[
+            child_envelope.confidentiality_clearance
+        ]
+        parent_conf_order = CONFIDENTIALITY_ORDER[
+            parent_envelope.confidentiality_clearance
+        ]
         if child_conf_order > parent_conf_order:
             violations.append(
                 f"Confidentiality: child clearance "
@@ -441,7 +473,11 @@ class RoleEnvelope:
         # Operational: child allowed_actions must be subset of parent's
         parent_allowed = set(parent_envelope.operational.allowed_actions)
         child_allowed = set(child_envelope.operational.allowed_actions)
-        if parent_allowed and child_allowed and not child_allowed.issubset(parent_allowed):
+        if (
+            parent_allowed
+            and child_allowed
+            and not child_allowed.issubset(parent_allowed)
+        ):
             extra = child_allowed - parent_allowed
             violations.append(
                 f"Operational: child allowed_actions {extra} not in parent allowed set"
@@ -451,7 +487,8 @@ class RoleEnvelope:
         if (
             parent_envelope.max_delegation_depth is not None
             and child_envelope.max_delegation_depth is not None
-            and child_envelope.max_delegation_depth > parent_envelope.max_delegation_depth
+            and child_envelope.max_delegation_depth
+            > parent_envelope.max_delegation_depth
         ):
             violations.append(
                 f"Delegation: child max_delegation_depth "
@@ -650,7 +687,9 @@ def compute_effective_envelope_with_version(
 # ---------------------------------------------------------------------------
 
 
-def default_envelope_for_posture(posture: TrustPostureLevel) -> ConstraintEnvelopeConfig:
+def default_envelope_for_posture(
+    posture: TrustPostureLevel,
+) -> ConstraintEnvelopeConfig:
     """Return conservative default envelope calibrated to trust posture level.
 
     These defaults provide a reasonable starting point for each posture level.
@@ -696,10 +735,22 @@ def default_envelope_for_posture(posture: TrustPostureLevel) -> ConstraintEnvelo
         TrustPostureLevel.CONTINUOUS_INSIGHT: {
             "max_spend_usd": 10000.0,
             "confidentiality": ConfidentialityLevel.SECRET,
-            "allowed_actions": ["read", "write", "plan", "propose", "execute", "deploy"],
+            "allowed_actions": [
+                "read",
+                "write",
+                "plan",
+                "propose",
+                "execute",
+                "deploy",
+            ],
             "internal_only": False,
             "allowed_channels": ["internal", "email", "slack", "teams", "api"],
-            "read_paths": ["/data/public", "/data/team", "/data/department", "/data/org"],
+            "read_paths": [
+                "/data/public",
+                "/data/team",
+                "/data/department",
+                "/data/org",
+            ],
             "write_paths": ["/data/team", "/data/department", "/data/org"],
         },
         TrustPostureLevel.DELEGATED: {
@@ -716,7 +767,14 @@ def default_envelope_for_posture(posture: TrustPostureLevel) -> ConstraintEnvelo
                 "delegate",
             ],
             "internal_only": False,
-            "allowed_channels": ["internal", "email", "slack", "teams", "api", "external"],
+            "allowed_channels": [
+                "internal",
+                "email",
+                "slack",
+                "teams",
+                "api",
+                "external",
+            ],
             "read_paths": [
                 "/data/public",
                 "/data/team",
@@ -811,17 +869,21 @@ def check_degenerate_envelope(
                     )
         elif effective.financial.max_spend_usd == 0.0:
             warnings.append(
-                "Financial: effective spend limit is $0.00 -- " "no financial actions possible"
+                "Financial: effective spend limit is $0.00 -- "
+                "no financial actions possible"
             )
 
     # Operational dimension
     if not effective.operational.allowed_actions:
-        warnings.append("Operational: no allowed actions -- " "agent cannot perform any operations")
+        warnings.append(
+            "Operational: no allowed actions -- " "agent cannot perform any operations"
+        )
 
     # Communication dimension
     if not effective.communication.allowed_channels:
         warnings.append(
-            "Communication: no allowed channels -- " "agent cannot communicate through any channel"
+            "Communication: no allowed channels -- "
+            "agent cannot communicate through any channel"
         )
 
     # Data access dimension

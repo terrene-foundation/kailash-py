@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from pact.build.config.schema import ConfidentialityLevel
+from pact.governance.config import ConfidentialityLevel
 
 logger = logging.getLogger(__name__)
 

@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from pact.build.config.schema import ConfidentialityLevel, TrustPostureLevel
+from pact.governance.config import ConfidentialityLevel, TrustPostureLevel
 from pact.governance.access import (
     KnowledgeSharePolicy,
     PactBridge,
@@ -150,7 +150,9 @@ def explain_envelope(
 
         # Financial dimension
         if env.envelope.financial is not None:
-            lines.append(f"      Financial: max_spend_usd={env.envelope.financial.max_spend_usd}")
+            lines.append(
+                f"      Financial: max_spend_usd={env.envelope.financial.max_spend_usd}"
+            )
             if env.envelope.financial.api_cost_budget_usd is not None:
                 lines.append(
                     f"        api_cost_budget_usd={env.envelope.financial.api_cost_budget_usd}"
@@ -177,7 +179,9 @@ def explain_envelope(
 
         # Data access dimension
         if env.envelope.data_access.read_paths:
-            lines.append(f"      Data access: read_paths={env.envelope.data_access.read_paths}")
+            lines.append(
+                f"      Data access: read_paths={env.envelope.data_access.read_paths}"
+            )
         else:
             lines.append("      Data access: unrestricted")
 
@@ -206,11 +210,17 @@ def explain_envelope(
     if effective is not None:
         lines.append("  Effective envelope (intersection of all ancestors):")
         if effective.financial is not None:
-            lines.append(f"    Financial: max_spend_usd={effective.financial.max_spend_usd}")
+            lines.append(
+                f"    Financial: max_spend_usd={effective.financial.max_spend_usd}"
+            )
         else:
             lines.append("    Financial: none")
-        lines.append(f"    Operational: allowed_actions={effective.operational.allowed_actions}")
-        lines.append(f"    Confidentiality ceiling: {effective.confidentiality_clearance.value}")
+        lines.append(
+            f"    Operational: allowed_actions={effective.operational.allowed_actions}"
+        )
+        lines.append(
+            f"    Confidentiality ceiling: {effective.confidentiality_clearance.value}"
+        )
     else:
         lines.append("  Effective envelope: none (maximally permissive)")
 
@@ -266,7 +276,9 @@ def explain_access(
     if role_clearance is None:
         lines.append("Step 1: Clearance check -- FAIL (no clearance found for role)")
         lines.append("")
-        lines.append(f"Result: DENIED at Step 1 -- no clearance assigned to '{role_address}'")
+        lines.append(
+            f"Result: DENIED at Step 1 -- no clearance assigned to '{role_address}'"
+        )
         return "\n".join(lines)
 
     if role_clearance.vetting_status != VettingStatus.ACTIVE:
@@ -319,7 +331,9 @@ def explain_access(
                     f"(missing compartments: {sorted(missing)})"
                 )
                 lines.append("")
-                lines.append(f"Result: DENIED at Step 3 -- missing compartments {sorted(missing)}")
+                lines.append(
+                    f"Result: DENIED at Step 3 -- missing compartments {sorted(missing)}"
+                )
                 return "\n".join(lines)
             else:
                 lines.append(
@@ -328,7 +342,9 @@ def explain_access(
                     f"{sorted(item.compartments)})"
                 )
         else:
-            lines.append("Step 3: Compartment check -- SKIPPED (item has no compartments)")
+            lines.append(
+                "Step 3: Compartment check -- SKIPPED (item has no compartments)"
+            )
     else:
         lines.append(
             f"Step 3: Compartment check -- SKIPPED "

@@ -26,7 +26,7 @@ from typing import Any
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
@@ -52,7 +52,7 @@ from pact.governance.store import (
     MemoryOrgStore,
 )
 from pact.governance.verdict import GovernanceVerdict
-from pact.trust.audit.anchor import AuditChain
+from pact.governance.audit import AuditChain
 
 
 # ---------------------------------------------------------------------------
@@ -182,14 +182,18 @@ def engine_with_audit(
 class TestConstruction:
     """GovernanceEngine construction from OrgDefinition and CompiledOrg."""
 
-    def test_construct_from_org_definition(self, engine_from_org_def: GovernanceEngine) -> None:
+    def test_construct_from_org_definition(
+        self, engine_from_org_def: GovernanceEngine
+    ) -> None:
         """Engine should accept an OrgDefinition and auto-compile it."""
         org = engine_from_org_def.get_org()
         assert isinstance(org, CompiledOrg)
         assert org.org_id == "university-001"
         assert len(org.nodes) > 0
 
-    def test_construct_from_compiled_org(self, engine_from_compiled: GovernanceEngine) -> None:
+    def test_construct_from_compiled_org(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
         """Engine should accept a pre-compiled CompiledOrg directly."""
         org = engine_from_compiled.get_org()
         assert isinstance(org, CompiledOrg)
@@ -215,7 +219,9 @@ class TestConstruction:
 class TestCheckAccess:
     """Knowledge access enforcement through the engine facade."""
 
-    def test_check_access_allowed_same_unit(self, engine_from_compiled: GovernanceEngine) -> None:
+    def test_check_access_allowed_same_unit(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
         """CS Chair should access RESTRICTED data owned by CS Department (same unit)."""
         item = KnowledgeItem(
             item_id="cs-syllabus-2026",
@@ -353,7 +359,9 @@ class TestVerifyAction:
         assert verdict.level == "blocked"
         assert verdict.allowed is False
 
-    def test_verify_action_fail_closed_on_internal_error(self, compiled_org: CompiledOrg) -> None:
+    def test_verify_action_fail_closed_on_internal_error(
+        self, compiled_org: CompiledOrg
+    ) -> None:
         """Any internal error during verify_action should return BLOCKED, not raise."""
         engine = GovernanceEngine(compiled_org)
 
@@ -390,7 +398,9 @@ class TestVerifyAction:
 class TestComputeEnvelope:
     """Effective envelope computation through the engine."""
 
-    def test_compute_envelope_returns_config(self, engine_from_compiled: GovernanceEngine) -> None:
+    def test_compute_envelope_returns_config(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
         """When a role envelope is set, compute_envelope returns the effective envelope."""
         envelope_config = ConstraintEnvelopeConfig(
             id="env-provost",
@@ -461,7 +471,9 @@ class TestComputeEnvelope:
         # Task narrows allowed actions to intersection: {"read", "approve"}
         assert set(effective.operational.allowed_actions) == {"read", "approve"}
 
-    def test_compute_envelope_none_when_empty(self, engine_from_compiled: GovernanceEngine) -> None:
+    def test_compute_envelope_none_when_empty(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
         """When no envelopes exist, compute_envelope returns None."""
         result = engine_from_compiled.compute_envelope("D1-R1-D2-R1")
         assert result is None
@@ -475,7 +487,9 @@ class TestComputeEnvelope:
 class TestQueryAPI:
     """Query operations through the engine."""
 
-    def test_get_org_returns_compiled(self, engine_from_compiled: GovernanceEngine) -> None:
+    def test_get_org_returns_compiled(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
         """get_org() should return the CompiledOrg."""
         org = engine_from_compiled.get_org()
         assert isinstance(org, CompiledOrg)
@@ -575,7 +589,9 @@ class TestStateMutation:
         )
         assert decision.allowed is False
 
-    def test_create_bridge_enables_access(self, engine_from_compiled: GovernanceEngine) -> None:
+    def test_create_bridge_enables_access(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
         """Creating a bridge through the engine should enable cross-unit access."""
         # VP Student Affairs cannot normally access Academic Affairs data
         item = KnowledgeItem(
@@ -610,7 +626,9 @@ class TestStateMutation:
         )
         assert decision_after.allowed is True
 
-    def test_create_ksp_enables_access(self, engine_from_compiled: GovernanceEngine) -> None:
+    def test_create_ksp_enables_access(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
         """Creating a KSP through the engine should enable one-way knowledge sharing."""
         # Finance team cannot normally read Student Affairs data
         item = KnowledgeItem(
@@ -673,7 +691,9 @@ class TestStateMutation:
 class TestAuditChain:
     """Audit chain integration."""
 
-    def test_audit_chain_records_decisions(self, engine_with_audit: GovernanceEngine) -> None:
+    def test_audit_chain_records_decisions(
+        self, engine_with_audit: GovernanceEngine
+    ) -> None:
         """When audit_chain is provided, verify_action should record audit anchors."""
         assert engine_with_audit.audit_chain is not None
         initial_length = engine_with_audit.audit_chain.length
@@ -689,7 +709,9 @@ class TestAuditChain:
         assert latest is not None
         assert latest.action == "verify_action"
 
-    def test_audit_chain_records_mutations(self, engine_with_audit: GovernanceEngine) -> None:
+    def test_audit_chain_records_mutations(
+        self, engine_with_audit: GovernanceEngine
+    ) -> None:
         """Mutations (grant_clearance, create_bridge) should emit audit anchors."""
         assert engine_with_audit.audit_chain is not None
         initial_length = engine_with_audit.audit_chain.length

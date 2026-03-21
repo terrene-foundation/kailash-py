@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
@@ -143,7 +143,9 @@ class TestFrozenFieldMutations:
         with pytest.raises(AttributeError):
             agent_context.posture = TrustPostureLevel.DELEGATED  # type: ignore[misc]
 
-    def test_cannot_mutate_effective_envelope(self, agent_context: GovernanceContext) -> None:
+    def test_cannot_mutate_effective_envelope(
+        self, agent_context: GovernanceContext
+    ) -> None:
         with pytest.raises(AttributeError):
             agent_context.effective_envelope = None  # type: ignore[misc]
 
@@ -157,7 +159,9 @@ class TestFrozenFieldMutations:
         with pytest.raises(AttributeError):
             agent_context.effective_clearance_level = ConfidentialityLevel.TOP_SECRET  # type: ignore[misc]
 
-    def test_cannot_mutate_allowed_actions(self, agent_context: GovernanceContext) -> None:
+    def test_cannot_mutate_allowed_actions(
+        self, agent_context: GovernanceContext
+    ) -> None:
         with pytest.raises(AttributeError):
             agent_context.allowed_actions = frozenset({"everything"})  # type: ignore[misc]
 
@@ -188,7 +192,9 @@ class TestCannotAddNewAttributes:
         with pytest.raises(AttributeError):
             agent_context.hacked_field = "injected"  # type: ignore[misc]
 
-    def test_cannot_add_engine_reference(self, agent_context: GovernanceContext) -> None:
+    def test_cannot_add_engine_reference(
+        self, agent_context: GovernanceContext
+    ) -> None:
         with pytest.raises(AttributeError):
             agent_context.engine = "some_engine_ref"  # type: ignore[misc]
 
@@ -208,7 +214,9 @@ class TestContextFromEngine:
         with pytest.raises(AttributeError):
             ctx.posture = TrustPostureLevel.DELEGATED  # type: ignore[misc]
 
-    def test_engine_get_context_has_correct_role(self, engine: GovernanceEngine) -> None:
+    def test_engine_get_context_has_correct_role(
+        self, engine: GovernanceEngine
+    ) -> None:
         """get_context() should include the requested role_address."""
         ctx = engine.get_context(CS_CHAIR_ADDR)
         assert ctx.role_address == CS_CHAIR_ADDR
@@ -228,13 +236,17 @@ class TestContextFromEngine:
         assert ctx.clearance is not None
         assert ctx.clearance.max_clearance == ConfidentialityLevel.RESTRICTED
 
-    def test_engine_get_context_has_allowed_actions(self, engine: GovernanceEngine) -> None:
+    def test_engine_get_context_has_allowed_actions(
+        self, engine: GovernanceEngine
+    ) -> None:
         """get_context() should derive allowed_actions from the envelope."""
         ctx = engine.get_context(CS_CHAIR_ADDR)
         assert "read" in ctx.allowed_actions
         assert "write" in ctx.allowed_actions
 
-    def test_engine_get_context_default_posture_supervised(self, engine: GovernanceEngine) -> None:
+    def test_engine_get_context_default_posture_supervised(
+        self, engine: GovernanceEngine
+    ) -> None:
         """get_context() without posture override defaults to SUPERVISED."""
         ctx = engine.get_context(CS_CHAIR_ADDR)
         assert ctx.posture == TrustPostureLevel.SUPERVISED

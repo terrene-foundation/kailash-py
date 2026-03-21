@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,

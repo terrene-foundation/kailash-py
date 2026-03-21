@@ -16,7 +16,7 @@ import math
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     CommunicationConstraintConfig,
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
@@ -180,22 +180,30 @@ class TestFinancialConfigNanInf:
     def test_api_cost_budget_nan_rejected(self) -> None:
         """api_cost_budget_usd=NaN must raise ValidationError."""
         with pytest.raises((ValueError, Exception)):
-            FinancialConstraintConfig(max_spend_usd=100.0, api_cost_budget_usd=float("nan"))
+            FinancialConstraintConfig(
+                max_spend_usd=100.0, api_cost_budget_usd=float("nan")
+            )
 
     def test_api_cost_budget_inf_rejected(self) -> None:
         """api_cost_budget_usd=Inf must raise ValidationError."""
         with pytest.raises((ValueError, Exception)):
-            FinancialConstraintConfig(max_spend_usd=100.0, api_cost_budget_usd=float("inf"))
+            FinancialConstraintConfig(
+                max_spend_usd=100.0, api_cost_budget_usd=float("inf")
+            )
 
     def test_requires_approval_nan_rejected(self) -> None:
         """requires_approval_above_usd=NaN must raise ValidationError."""
         with pytest.raises((ValueError, Exception)):
-            FinancialConstraintConfig(max_spend_usd=100.0, requires_approval_above_usd=float("nan"))
+            FinancialConstraintConfig(
+                max_spend_usd=100.0, requires_approval_above_usd=float("nan")
+            )
 
     def test_requires_approval_inf_rejected(self) -> None:
         """requires_approval_above_usd=Inf must raise ValidationError."""
         with pytest.raises((ValueError, Exception)):
-            FinancialConstraintConfig(max_spend_usd=100.0, requires_approval_above_usd=float("inf"))
+            FinancialConstraintConfig(
+                max_spend_usd=100.0, requires_approval_above_usd=float("inf")
+            )
 
     def test_valid_financial_config_works(self) -> None:
         """Normal finite values must continue to work."""
@@ -393,7 +401,9 @@ class TestValidateTighteningNanInf:
 
     def test_child_inf_api_budget_raises(self) -> None:
         """Child with Inf api_cost_budget_usd must be rejected."""
-        parent = _make_envelope(envelope_id="parent", max_spend=1000.0, api_cost_budget_usd=500.0)
+        parent = _make_envelope(
+            envelope_id="parent", max_spend=1000.0, api_cost_budget_usd=500.0
+        )
         inf_financial = FinancialConstraintConfig.model_construct(
             max_spend_usd=500.0,
             api_cost_budget_usd=float("inf"),

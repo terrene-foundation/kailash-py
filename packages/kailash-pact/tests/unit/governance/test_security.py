@@ -16,13 +16,13 @@ import math
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     DepartmentConfig,
+    OrgDefinition,
     TeamConfig,
     TrustPostureLevel,
 )
-from pact.build.org.builder import OrgDefinition
 from pact.governance import access as access_module
 from pact.governance.access import (
     KnowledgeSharePolicy,
@@ -138,17 +138,25 @@ class TestKSPAbsenceDefaultDeny:
         # Need a two-dept org for this
         roles = [
             RoleDefinition(
-                role_id="r-a", name="A", reports_to_role_id=None, is_primary_for_unit="d-a"
+                role_id="r-a",
+                name="A",
+                reports_to_role_id=None,
+                is_primary_for_unit="d-a",
             ),
             RoleDefinition(
-                role_id="r-b", name="B", reports_to_role_id=None, is_primary_for_unit="d-b"
+                role_id="r-b",
+                name="B",
+                reports_to_role_id=None,
+                is_primary_for_unit="d-b",
             ),
         ]
         depts = [
             DepartmentConfig(department_id="d-a", name="A"),
             DepartmentConfig(department_id="d-b", name="B"),
         ]
-        org = OrgDefinition(org_id="deny-test", name="Deny", departments=depts, roles=roles)
+        org = OrgDefinition(
+            org_id="deny-test", name="Deny", departments=depts, roles=roles
+        )
         compiled = compile_org(org)
         clearances = {
             "D2-R1": RoleClearance(
@@ -176,17 +184,25 @@ class TestKSPAbsenceDefaultDeny:
         """With active KSP, cross-unit access is allowed."""
         roles = [
             RoleDefinition(
-                role_id="r-a", name="A", reports_to_role_id=None, is_primary_for_unit="d-a"
+                role_id="r-a",
+                name="A",
+                reports_to_role_id=None,
+                is_primary_for_unit="d-a",
             ),
             RoleDefinition(
-                role_id="r-b", name="B", reports_to_role_id=None, is_primary_for_unit="d-b"
+                role_id="r-b",
+                name="B",
+                reports_to_role_id=None,
+                is_primary_for_unit="d-b",
             ),
         ]
         depts = [
             DepartmentConfig(department_id="d-a", name="A"),
             DepartmentConfig(department_id="d-b", name="B"),
         ]
-        org = OrgDefinition(org_id="allow-test", name="Allow", departments=depts, roles=roles)
+        org = OrgDefinition(
+            org_id="allow-test", name="Allow", departments=depts, roles=roles
+        )
         compiled = compile_org(org)
         clearances = {
             "D2-R1": RoleClearance(
@@ -221,17 +237,25 @@ class TestKSPAbsenceDefaultDeny:
         """Deactivated KSP no longer grants access."""
         roles = [
             RoleDefinition(
-                role_id="r-a", name="A", reports_to_role_id=None, is_primary_for_unit="d-a"
+                role_id="r-a",
+                name="A",
+                reports_to_role_id=None,
+                is_primary_for_unit="d-a",
             ),
             RoleDefinition(
-                role_id="r-b", name="B", reports_to_role_id=None, is_primary_for_unit="d-b"
+                role_id="r-b",
+                name="B",
+                reports_to_role_id=None,
+                is_primary_for_unit="d-b",
             ),
         ]
         depts = [
             DepartmentConfig(department_id="d-a", name="A"),
             DepartmentConfig(department_id="d-b", name="B"),
         ]
-        org = OrgDefinition(org_id="reblock-test", name="Reblock", departments=depts, roles=roles)
+        org = OrgDefinition(
+            org_id="reblock-test", name="Reblock", departments=depts, roles=roles
+        )
         compiled = compile_org(org)
         clearances = {
             "D2-R1": RoleClearance(
@@ -333,7 +357,9 @@ class TestCompartmentEnforcement:
         assert decision.allowed is False
         assert decision.step_failed == 3
 
-    def test_confidential_compartment_not_enforced(self, simple_org: CompiledOrg) -> None:
+    def test_confidential_compartment_not_enforced(
+        self, simple_org: CompiledOrg
+    ) -> None:
         """CONFIDENTIAL items with compartments do NOT enforce compartment check.
 
         DOCUMENTED GAP: Compartment enforcement threshold is SECRET+ (order >= 3).

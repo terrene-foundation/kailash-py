@@ -18,7 +18,7 @@ import math
 
 from hypothesis import given, settings, strategies as st
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     CONFIDENTIALITY_ORDER,
     CommunicationConstraintConfig,
     ConfidentialityLevel,
@@ -46,7 +46,13 @@ _ALL_ACTIONS = ["read", "write", "approve", "delete", "execute", "create", "upda
 _ALL_CHANNELS = ["internal", "email", "external", "api", "slack"]
 
 # Canonical path vocabulary for data access constraints.
-_ALL_READ_PATHS = ["/data/public", "/data/team", "/data/dept", "/data/org", "/data/classified"]
+_ALL_READ_PATHS = [
+    "/data/public",
+    "/data/team",
+    "/data/dept",
+    "/data/org",
+    "/data/classified",
+]
 _ALL_WRITE_PATHS = ["/data/team", "/data/dept", "/data/org", "/data/classified"]
 
 # Canonical blocked data types.
@@ -58,18 +64,24 @@ def financial_constraints(draw: st.DrawFn) -> FinancialConstraintConfig:
     """Generate a valid FinancialConstraintConfig with finite values."""
     return FinancialConstraintConfig(
         max_spend_usd=draw(
-            st.floats(min_value=0.0, max_value=1e9, allow_nan=False, allow_infinity=False)
+            st.floats(
+                min_value=0.0, max_value=1e9, allow_nan=False, allow_infinity=False
+            )
         ),
         api_cost_budget_usd=draw(
             st.one_of(
                 st.none(),
-                st.floats(min_value=0.0, max_value=1e9, allow_nan=False, allow_infinity=False),
+                st.floats(
+                    min_value=0.0, max_value=1e9, allow_nan=False, allow_infinity=False
+                ),
             )
         ),
         requires_approval_above_usd=draw(
             st.one_of(
                 st.none(),
-                st.floats(min_value=0.0, max_value=1e9, allow_nan=False, allow_infinity=False),
+                st.floats(
+                    min_value=0.0, max_value=1e9, allow_nan=False, allow_infinity=False
+                ),
             )
         ),
         reasoning_required=draw(st.booleans()),
@@ -79,8 +91,12 @@ def financial_constraints(draw: st.DrawFn) -> FinancialConstraintConfig:
 @st.composite
 def operational_constraints(draw: st.DrawFn) -> OperationalConstraintConfig:
     """Generate a valid OperationalConstraintConfig."""
-    allowed = draw(st.lists(st.sampled_from(_ALL_ACTIONS), min_size=1, max_size=5, unique=True))
-    blocked = draw(st.lists(st.sampled_from(_ALL_ACTIONS), min_size=0, max_size=3, unique=True))
+    allowed = draw(
+        st.lists(st.sampled_from(_ALL_ACTIONS), min_size=1, max_size=5, unique=True)
+    )
+    blocked = draw(
+        st.lists(st.sampled_from(_ALL_ACTIONS), min_size=0, max_size=3, unique=True)
+    )
     max_per_day = draw(st.one_of(st.none(), st.integers(min_value=1, max_value=10000)))
     max_per_hour = draw(st.one_of(st.none(), st.integers(min_value=1, max_value=1000)))
     window_type = draw(st.sampled_from(["fixed", "rolling"]))
@@ -131,10 +147,24 @@ def data_access_constraints(draw: st.DrawFn) -> DataAccessConstraintConfig:
     """Generate a valid DataAccessConstraintConfig."""
     return DataAccessConstraintConfig(
         read_paths=sorted(
-            draw(st.lists(st.sampled_from(_ALL_READ_PATHS), min_size=0, max_size=4, unique=True))
+            draw(
+                st.lists(
+                    st.sampled_from(_ALL_READ_PATHS),
+                    min_size=0,
+                    max_size=4,
+                    unique=True,
+                )
+            )
         ),
         write_paths=sorted(
-            draw(st.lists(st.sampled_from(_ALL_WRITE_PATHS), min_size=0, max_size=3, unique=True))
+            draw(
+                st.lists(
+                    st.sampled_from(_ALL_WRITE_PATHS),
+                    min_size=0,
+                    max_size=3,
+                    unique=True,
+                )
+            )
         ),
         blocked_data_types=sorted(
             draw(
@@ -156,7 +186,11 @@ def communication_constraints(draw: st.DrawFn) -> CommunicationConstraintConfig:
     return CommunicationConstraintConfig(
         internal_only=draw(st.booleans()),
         allowed_channels=sorted(
-            draw(st.lists(st.sampled_from(_ALL_CHANNELS), min_size=1, max_size=4, unique=True))
+            draw(
+                st.lists(
+                    st.sampled_from(_ALL_CHANNELS), min_size=1, max_size=4, unique=True
+                )
+            )
         ),
         external_requires_approval=draw(st.booleans()),
         reasoning_required=draw(st.booleans()),
@@ -175,7 +209,9 @@ def envelope_config(draw: st.DrawFn) -> ConstraintEnvelopeConfig:
         temporal=draw(temporal_constraints()),
         data_access=draw(data_access_constraints()),
         communication=draw(communication_constraints()),
-        max_delegation_depth=draw(st.one_of(st.none(), st.integers(min_value=1, max_value=100))),
+        max_delegation_depth=draw(
+            st.one_of(st.none(), st.integers(min_value=1, max_value=100))
+        ),
     )
 
 
@@ -215,14 +251,22 @@ class TestIntersectionMonotonicity:
             and b.financial.api_cost_budget_usd is not None
         ):
             assert result.financial.api_cost_budget_usd is not None
-            assert result.financial.api_cost_budget_usd <= a.financial.api_cost_budget_usd
-            assert result.financial.api_cost_budget_usd <= b.financial.api_cost_budget_usd
+            assert (
+                result.financial.api_cost_budget_usd <= a.financial.api_cost_budget_usd
+            )
+            assert (
+                result.financial.api_cost_budget_usd <= b.financial.api_cost_budget_usd
+            )
         elif a.financial.api_cost_budget_usd is not None:
             # Only a has a limit -- result adopts it
-            assert result.financial.api_cost_budget_usd == a.financial.api_cost_budget_usd
+            assert (
+                result.financial.api_cost_budget_usd == a.financial.api_cost_budget_usd
+            )
         elif b.financial.api_cost_budget_usd is not None:
             # Only b has a limit -- result adopts it
-            assert result.financial.api_cost_budget_usd == b.financial.api_cost_budget_usd
+            assert (
+                result.financial.api_cost_budget_usd == b.financial.api_cost_budget_usd
+            )
 
     @given(a=envelope_config(), b=envelope_config())
     @settings(max_examples=500, deadline=None)
@@ -306,15 +350,27 @@ class TestIntersectionMonotonicity:
             and b.operational.max_actions_per_day is not None
         ):
             assert result.operational.max_actions_per_day is not None
-            assert result.operational.max_actions_per_day <= a.operational.max_actions_per_day
-            assert result.operational.max_actions_per_day <= b.operational.max_actions_per_day
+            assert (
+                result.operational.max_actions_per_day
+                <= a.operational.max_actions_per_day
+            )
+            assert (
+                result.operational.max_actions_per_day
+                <= b.operational.max_actions_per_day
+            )
         if (
             a.operational.max_actions_per_hour is not None
             and b.operational.max_actions_per_hour is not None
         ):
             assert result.operational.max_actions_per_hour is not None
-            assert result.operational.max_actions_per_hour <= a.operational.max_actions_per_hour
-            assert result.operational.max_actions_per_hour <= b.operational.max_actions_per_hour
+            assert (
+                result.operational.max_actions_per_hour
+                <= a.operational.max_actions_per_hour
+            )
+            assert (
+                result.operational.max_actions_per_hour
+                <= b.operational.max_actions_per_hour
+            )
 
     @given(a=envelope_config(), b=envelope_config())
     @settings(max_examples=500, deadline=None)
@@ -379,8 +435,12 @@ class TestIntersectionMonotonicity:
     ) -> None:
         """Data access: result.blocked_data_types is superset of both inputs."""
         result = intersect_envelopes(a, b)
-        assert set(a.data_access.blocked_data_types) <= set(result.data_access.blocked_data_types)
-        assert set(b.data_access.blocked_data_types) <= set(result.data_access.blocked_data_types)
+        assert set(a.data_access.blocked_data_types) <= set(
+            result.data_access.blocked_data_types
+        )
+        assert set(b.data_access.blocked_data_types) <= set(
+            result.data_access.blocked_data_types
+        )
 
     @given(a=envelope_config(), b=envelope_config())
     @settings(max_examples=500, deadline=None)
@@ -432,7 +492,10 @@ class TestIntersectionCommutativity:
         assert ba.financial is not None
         assert ab.financial.max_spend_usd == ba.financial.max_spend_usd
         assert ab.financial.api_cost_budget_usd == ba.financial.api_cost_budget_usd
-        assert ab.financial.requires_approval_above_usd == ba.financial.requires_approval_above_usd
+        assert (
+            ab.financial.requires_approval_above_usd
+            == ba.financial.requires_approval_above_usd
+        )
         assert ab.financial.reasoning_required == ba.financial.reasoning_required
 
     @given(a=envelope_config(), b=envelope_config())
@@ -442,10 +505,16 @@ class TestIntersectionCommutativity:
     ) -> None:
         ab = intersect_envelopes(a, b)
         ba = intersect_envelopes(b, a)
-        assert set(ab.operational.allowed_actions) == set(ba.operational.allowed_actions)
-        assert set(ab.operational.blocked_actions) == set(ba.operational.blocked_actions)
+        assert set(ab.operational.allowed_actions) == set(
+            ba.operational.allowed_actions
+        )
+        assert set(ab.operational.blocked_actions) == set(
+            ba.operational.blocked_actions
+        )
         assert ab.operational.max_actions_per_day == ba.operational.max_actions_per_day
-        assert ab.operational.max_actions_per_hour == ba.operational.max_actions_per_hour
+        assert (
+            ab.operational.max_actions_per_hour == ba.operational.max_actions_per_hour
+        )
         assert ab.operational.reasoning_required == ba.operational.reasoning_required
 
     @given(a=envelope_config(), b=envelope_config())
@@ -455,13 +524,17 @@ class TestIntersectionCommutativity:
     ) -> None:
         ab = intersect_envelopes(a, b)
         ba = intersect_envelopes(b, a)
-        assert set(ab.communication.allowed_channels) == set(ba.communication.allowed_channels)
+        assert set(ab.communication.allowed_channels) == set(
+            ba.communication.allowed_channels
+        )
         assert ab.communication.internal_only == ba.communication.internal_only
         assert (
             ab.communication.external_requires_approval
             == ba.communication.external_requires_approval
         )
-        assert ab.communication.reasoning_required == ba.communication.reasoning_required
+        assert (
+            ab.communication.reasoning_required == ba.communication.reasoning_required
+        )
 
     @given(a=envelope_config(), b=envelope_config())
     @settings(max_examples=500, deadline=None)
@@ -481,7 +554,9 @@ class TestIntersectionCommutativity:
         ba = intersect_envelopes(b, a)
         assert set(ab.data_access.read_paths) == set(ba.data_access.read_paths)
         assert set(ab.data_access.write_paths) == set(ba.data_access.write_paths)
-        assert set(ab.data_access.blocked_data_types) == set(ba.data_access.blocked_data_types)
+        assert set(ab.data_access.blocked_data_types) == set(
+            ba.data_access.blocked_data_types
+        )
 
     @given(a=envelope_config(), b=envelope_config())
     @settings(max_examples=500, deadline=None)
@@ -529,7 +604,8 @@ class TestIntersectionAssociativity:
         assert ab_c.financial.max_spend_usd == a_bc.financial.max_spend_usd
         assert ab_c.financial.api_cost_budget_usd == a_bc.financial.api_cost_budget_usd
         assert (
-            ab_c.financial.requires_approval_above_usd == a_bc.financial.requires_approval_above_usd
+            ab_c.financial.requires_approval_above_usd
+            == a_bc.financial.requires_approval_above_usd
         )
         assert ab_c.financial.reasoning_required == a_bc.financial.reasoning_required
 
@@ -543,10 +619,19 @@ class TestIntersectionAssociativity:
     ) -> None:
         ab_c = intersect_envelopes(intersect_envelopes(a, b), c)
         a_bc = intersect_envelopes(a, intersect_envelopes(b, c))
-        assert set(ab_c.operational.allowed_actions) == set(a_bc.operational.allowed_actions)
-        assert set(ab_c.operational.blocked_actions) == set(a_bc.operational.blocked_actions)
-        assert ab_c.operational.max_actions_per_day == a_bc.operational.max_actions_per_day
-        assert ab_c.operational.max_actions_per_hour == a_bc.operational.max_actions_per_hour
+        assert set(ab_c.operational.allowed_actions) == set(
+            a_bc.operational.allowed_actions
+        )
+        assert set(ab_c.operational.blocked_actions) == set(
+            a_bc.operational.blocked_actions
+        )
+        assert (
+            ab_c.operational.max_actions_per_day == a_bc.operational.max_actions_per_day
+        )
+        assert (
+            ab_c.operational.max_actions_per_hour
+            == a_bc.operational.max_actions_per_hour
+        )
 
     @given(a=envelope_config(), b=envelope_config(), c=envelope_config())
     @settings(max_examples=200, deadline=None)
@@ -558,7 +643,9 @@ class TestIntersectionAssociativity:
     ) -> None:
         ab_c = intersect_envelopes(intersect_envelopes(a, b), c)
         a_bc = intersect_envelopes(a, intersect_envelopes(b, c))
-        assert set(ab_c.communication.allowed_channels) == set(a_bc.communication.allowed_channels)
+        assert set(ab_c.communication.allowed_channels) == set(
+            a_bc.communication.allowed_channels
+        )
         assert ab_c.communication.internal_only == a_bc.communication.internal_only
         assert (
             ab_c.communication.external_requires_approval
@@ -589,7 +676,9 @@ class TestIntersectionAssociativity:
         a_bc = intersect_envelopes(a, intersect_envelopes(b, c))
         assert set(ab_c.data_access.read_paths) == set(a_bc.data_access.read_paths)
         assert set(ab_c.data_access.write_paths) == set(a_bc.data_access.write_paths)
-        assert set(ab_c.data_access.blocked_data_types) == set(a_bc.data_access.blocked_data_types)
+        assert set(ab_c.data_access.blocked_data_types) == set(
+            a_bc.data_access.blocked_data_types
+        )
 
     @given(a=envelope_config(), b=envelope_config(), c=envelope_config())
     @settings(max_examples=200, deadline=None)
@@ -601,7 +690,9 @@ class TestIntersectionAssociativity:
     ) -> None:
         ab_c = intersect_envelopes(intersect_envelopes(a, b), c)
         a_bc = intersect_envelopes(a, intersect_envelopes(b, c))
-        assert set(ab_c.temporal.blackout_periods) == set(a_bc.temporal.blackout_periods)
+        assert set(ab_c.temporal.blackout_periods) == set(
+            a_bc.temporal.blackout_periods
+        )
 
     @given(a=envelope_config(), b=envelope_config(), c=envelope_config())
     @settings(max_examples=200, deadline=None)
@@ -633,7 +724,8 @@ class TestIntersectionIdempotency:
         assert result.financial.max_spend_usd == a.financial.max_spend_usd
         assert result.financial.api_cost_budget_usd == a.financial.api_cost_budget_usd
         assert (
-            result.financial.requires_approval_above_usd == a.financial.requires_approval_above_usd
+            result.financial.requires_approval_above_usd
+            == a.financial.requires_approval_above_usd
         )
         assert result.financial.reasoning_required == a.financial.reasoning_required
 
@@ -642,17 +734,28 @@ class TestIntersectionIdempotency:
     def test_operational_idempotent(self, a: ConstraintEnvelopeConfig) -> None:
         result = intersect_envelopes(a, a)
         # After intersection with itself, allowed_actions = allowed - blocked
-        expected_allowed = set(a.operational.allowed_actions) - set(a.operational.blocked_actions)
+        expected_allowed = set(a.operational.allowed_actions) - set(
+            a.operational.blocked_actions
+        )
         assert set(result.operational.allowed_actions) == expected_allowed
-        assert set(result.operational.blocked_actions) == set(a.operational.blocked_actions)
-        assert result.operational.max_actions_per_day == a.operational.max_actions_per_day
-        assert result.operational.max_actions_per_hour == a.operational.max_actions_per_hour
+        assert set(result.operational.blocked_actions) == set(
+            a.operational.blocked_actions
+        )
+        assert (
+            result.operational.max_actions_per_day == a.operational.max_actions_per_day
+        )
+        assert (
+            result.operational.max_actions_per_hour
+            == a.operational.max_actions_per_hour
+        )
 
     @given(a=envelope_config())
     @settings(max_examples=500, deadline=None)
     def test_communication_idempotent(self, a: ConstraintEnvelopeConfig) -> None:
         result = intersect_envelopes(a, a)
-        assert set(result.communication.allowed_channels) == set(a.communication.allowed_channels)
+        assert set(result.communication.allowed_channels) == set(
+            a.communication.allowed_channels
+        )
         assert result.communication.internal_only == a.communication.internal_only
         assert (
             result.communication.external_requires_approval
@@ -671,7 +774,9 @@ class TestIntersectionIdempotency:
         result = intersect_envelopes(a, a)
         assert set(result.data_access.read_paths) == set(a.data_access.read_paths)
         assert set(result.data_access.write_paths) == set(a.data_access.write_paths)
-        assert set(result.data_access.blocked_data_types) == set(a.data_access.blocked_data_types)
+        assert set(result.data_access.blocked_data_types) == set(
+            a.data_access.blocked_data_types
+        )
 
     @given(a=envelope_config())
     @settings(max_examples=500, deadline=None)
@@ -748,7 +853,9 @@ class TestIntersectionPassesTightening:
 
     @given(a=envelope_config())
     @settings(max_examples=500, deadline=None)
-    def test_self_intersection_is_valid_child(self, a: ConstraintEnvelopeConfig) -> None:
+    def test_self_intersection_is_valid_child(
+        self, a: ConstraintEnvelopeConfig
+    ) -> None:
         """intersect(a, a) always passes validate_tightening(a, ...)."""
         child = intersect_envelopes(a, a)
         RoleEnvelope.validate_tightening(parent_envelope=a, child_envelope=child)

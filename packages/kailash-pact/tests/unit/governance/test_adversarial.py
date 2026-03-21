@@ -18,15 +18,15 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     DepartmentConfig,
     OperationalConstraintConfig,
+    OrgDefinition,
     TeamConfig,
     TrustPostureLevel,
 )
-from pact.build.org.builder import OrgDefinition
 from pact.governance.access import (
     AccessDecision,
     KnowledgeSharePolicy,
@@ -35,7 +35,12 @@ from pact.governance.access import (
 )
 from pact.governance.addressing import Address, AddressSegment
 from pact.governance.clearance import RoleClearance
-from pact.governance.compilation import CompiledOrg, OrgNode, RoleDefinition, compile_org
+from pact.governance.compilation import (
+    CompiledOrg,
+    OrgNode,
+    RoleDefinition,
+    compile_org,
+)
 from pact.governance.envelopes import (
     MonotonicTighteningError,
     RoleEnvelope,
@@ -274,7 +279,9 @@ class TestBridgeCollusion:
     the bridges list before calling can_access().
     """
 
-    def test_unauthorized_bridge_accepted_by_can_access(self, two_dept_org: CompiledOrg) -> None:
+    def test_unauthorized_bridge_accepted_by_can_access(
+        self, two_dept_org: CompiledOrg
+    ) -> None:
         """can_access() does not validate bridge approval status.
 
         DOCUMENTED GAP: An attacker who can inject a PactBridge into the bridges

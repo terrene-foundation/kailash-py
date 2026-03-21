@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import sys
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
@@ -445,8 +445,13 @@ def run_demo() -> int:
     _scenario("Frozen GovernanceContext (Anti-Self-Modification)")
 
     ctx = engine.get_context(cs_chair_addr, posture=TrustPostureLevel.SUPERVISED)
-    _check(f"Context role_address: {ctx.role_address}", ctx.role_address == cs_chair_addr)
-    _check(f"Context posture: {ctx.posture.value}", ctx.posture == TrustPostureLevel.SUPERVISED)
+    _check(
+        f"Context role_address: {ctx.role_address}", ctx.role_address == cs_chair_addr
+    )
+    _check(
+        f"Context posture: {ctx.posture.value}",
+        ctx.posture == TrustPostureLevel.SUPERVISED,
+    )
     _check(
         f"Context allowed_actions: {sorted(ctx.allowed_actions)}",
         "read" in ctx.allowed_actions and "write" in ctx.allowed_actions,

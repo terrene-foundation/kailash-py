@@ -20,7 +20,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from pact.build.config.schema import ConstraintEnvelopeConfig, FinancialConstraintConfig
+from pact.governance.config import ConstraintEnvelopeConfig, FinancialConstraintConfig
 
 __all__ = [
     "CheckAccessRequest",
@@ -39,7 +39,9 @@ __all__ = [
 # Valid enum value sets (lowercase, matching the str Enum .value fields)
 # ---------------------------------------------------------------------------
 
-_VALID_CLASSIFICATIONS = frozenset({"public", "restricted", "confidential", "secret", "top_secret"})
+_VALID_CLASSIFICATIONS = frozenset(
+    {"public", "restricted", "confidential", "secret", "top_secret"}
+)
 _VALID_POSTURES = frozenset(
     {"pseudo_agent", "supervised", "shared_planning", "continuous_insight", "delegated"}
 )
@@ -87,17 +89,23 @@ class CheckAccessRequest(BaseModel):
     KSPs, and bridges.
     """
 
-    role_address: str = Field(description="D/T/R positional address of the requesting role")
+    role_address: str = Field(
+        description="D/T/R positional address of the requesting role"
+    )
     item_id: str = Field(description="Unique identifier of the knowledge item")
     item_classification: str = Field(
         description="Confidentiality level of the item (public through top_secret)"
     )
-    item_owning_unit: str = Field(description="D or T prefix that owns the knowledge item")
+    item_owning_unit: str = Field(
+        description="D or T prefix that owns the knowledge item"
+    )
     item_compartments: list[str] = Field(
         default_factory=list,
         description="Named compartments the item belongs to",
     )
-    posture: str = Field(description="Current trust posture level of the requesting role")
+    posture: str = Field(
+        description="Current trust posture level of the requesting role"
+    )
 
     @field_validator("role_address")
     @classmethod
@@ -117,7 +125,9 @@ class CheckAccessRequest(BaseModel):
     @classmethod
     def validate_posture(cls, v: str) -> str:
         if v not in _VALID_POSTURES:
-            raise ValueError(f"posture must be one of {sorted(_VALID_POSTURES)}, got '{v}'")
+            raise ValueError(
+                f"posture must be one of {sorted(_VALID_POSTURES)}, got '{v}'"
+            )
         return v
 
 
@@ -163,11 +173,13 @@ class VerifyActionRequest(BaseModel):
         if v is not None:
             if not math.isfinite(v):
                 raise ValueError(
-                    f"cost must be finite, got {v!r}. " f"NaN/Inf values bypass governance checks."
+                    f"cost must be finite, got {v!r}. "
+                    f"NaN/Inf values bypass governance checks."
                 )
             if v < 0:
                 raise ValueError(
-                    f"cost must be non-negative, got {v}. " f"Negative costs are not meaningful."
+                    f"cost must be non-negative, got {v}. "
+                    f"Negative costs are not meaningful."
                 )
         return v
 
@@ -178,7 +190,9 @@ class GrantClearanceRequest(BaseModel):
     Grants knowledge clearance to a role at a given D/T/R address.
     """
 
-    role_address: str = Field(description="D/T/R address of the role to grant clearance to")
+    role_address: str = Field(
+        description="D/T/R address of the role to grant clearance to"
+    )
     max_clearance: str = Field(description="Maximum confidentiality level to grant")
     compartments: list[str] = Field(
         default_factory=list,
@@ -243,7 +257,9 @@ class CreateBridgeRequest(BaseModel):
     @classmethod
     def validate_bridge_type(cls, v: str) -> str:
         if v not in _VALID_BRIDGE_TYPES:
-            raise ValueError(f"bridge_type must be one of {sorted(_VALID_BRIDGE_TYPES)}, got '{v}'")
+            raise ValueError(
+                f"bridge_type must be one of {sorted(_VALID_BRIDGE_TYPES)}, got '{v}'"
+            )
         return v
 
     @field_validator("max_classification")
@@ -265,7 +281,9 @@ class CreateKSPRequest(BaseModel):
     source_unit_address: str = Field(description="D/T prefix sharing knowledge")
     target_unit_address: str = Field(description="D/T prefix receiving access")
     max_classification: str = Field(description="Maximum classification level shared")
-    created_by_role_address: str = Field(description="Role that created this policy (audit trail)")
+    created_by_role_address: str = Field(
+        description="Role that created this policy (audit trail)"
+    )
     compartments: list[str] = Field(
         default_factory=list,
         description="Restrict sharing to specific compartments (empty = all)",

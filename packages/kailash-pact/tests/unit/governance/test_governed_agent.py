@@ -21,7 +21,7 @@ from typing import Any
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
@@ -171,7 +171,9 @@ class TestConstruction:
         assert agent.context is not None
         assert agent.context.role_address == CS_CHAIR_ADDR
 
-    def test_context_is_governance_context(self, governed_agent: PactGovernedAgent) -> None:
+    def test_context_is_governance_context(
+        self, governed_agent: PactGovernedAgent
+    ) -> None:
         """The agent's context property should return a GovernanceContext."""
         assert isinstance(governed_agent.context, GovernanceContext)
 
@@ -181,7 +183,9 @@ class TestConstruction:
         with pytest.raises(AttributeError):
             ctx.posture = TrustPostureLevel.DELEGATED  # type: ignore[misc]
 
-    def test_context_has_correct_org_id(self, governed_agent: PactGovernedAgent) -> None:
+    def test_context_has_correct_org_id(
+        self, governed_agent: PactGovernedAgent
+    ) -> None:
         """Context should contain the correct org_id."""
         assert governed_agent.context.org_id == "university-001"
 
@@ -219,7 +223,9 @@ class TestToolRegistration:
         assert exc_info.value.verdict.level == "blocked"
         assert exc_info.value.verdict.action == "unregistered_dangerous_tool"
 
-    def test_unregistered_tool_never_executes_fn(self, governed_agent: PactGovernedAgent) -> None:
+    def test_unregistered_tool_never_executes_fn(
+        self, governed_agent: PactGovernedAgent
+    ) -> None:
         """The tool function must NEVER be called if the tool is not registered."""
         call_tracker = {"called": False}
 
@@ -243,7 +249,9 @@ class TestToolRegistration:
 class TestExecuteToolVerdicts:
     """execute_tool must respect verification gradient levels."""
 
-    def test_auto_approved_action_succeeds(self, governed_agent: PactGovernedAgent) -> None:
+    def test_auto_approved_action_succeeds(
+        self, governed_agent: PactGovernedAgent
+    ) -> None:
         """An action within the envelope (AUTO_APPROVED) should succeed."""
         result = governed_agent.execute_tool(
             "read",
@@ -251,7 +259,9 @@ class TestExecuteToolVerdicts:
         )
         assert result == "read result"
 
-    def test_blocked_action_raises_error(self, governed_agent: PactGovernedAgent) -> None:
+    def test_blocked_action_raises_error(
+        self, governed_agent: PactGovernedAgent
+    ) -> None:
         """An action explicitly blocked by the envelope raises GovernanceBlockedError."""
         # "delete" is in the blocked_actions list. Register it so we get past default-deny.
         governed_agent.register_tool("delete", cost=0.0)
@@ -263,7 +273,9 @@ class TestExecuteToolVerdicts:
         assert exc_info.value.verdict.level == "blocked"
         assert "blocked" in exc_info.value.verdict.reason.lower()
 
-    def test_blocked_action_never_executes_fn(self, governed_agent: PactGovernedAgent) -> None:
+    def test_blocked_action_never_executes_fn(
+        self, governed_agent: PactGovernedAgent
+    ) -> None:
         """The tool function must NEVER be called when governance blocks."""
         call_tracker = {"called": False}
 
@@ -303,7 +315,9 @@ class TestExecuteToolVerdicts:
             )
         assert exc_info.value.verdict.level == "held"
 
-    def test_held_action_never_executes_fn(self, governed_agent: PactGovernedAgent) -> None:
+    def test_held_action_never_executes_fn(
+        self, governed_agent: PactGovernedAgent
+    ) -> None:
         """The tool function must NEVER be called when governance holds."""
         call_tracker = {"called": False}
 
@@ -382,7 +396,9 @@ class TestExceptionProperties:
         assert err.verdict.level == "blocked"
         assert err.verdict.role_address == CS_CHAIR_ADDR
 
-    def test_blocked_error_message_includes_reason(self, governed_agent: PactGovernedAgent) -> None:
+    def test_blocked_error_message_includes_reason(
+        self, governed_agent: PactGovernedAgent
+    ) -> None:
         """GovernanceBlockedError message should include the reason."""
         with pytest.raises(GovernanceBlockedError, match="not governance-registered"):
             governed_agent.execute_tool(
@@ -411,13 +427,17 @@ class TestExceptionProperties:
 class TestEngineIsolation:
     """Agent must NOT have access to the GovernanceEngine or its mutation methods."""
 
-    def test_agent_has_no_engine_attribute(self, governed_agent: PactGovernedAgent) -> None:
+    def test_agent_has_no_engine_attribute(
+        self, governed_agent: PactGovernedAgent
+    ) -> None:
         """The governed agent should not expose the engine as a public attribute."""
         # _engine is private (underscore prefix), context is the public interface
         assert not hasattr(governed_agent, "engine")
         assert hasattr(governed_agent, "context")
 
-    def test_context_has_no_mutation_methods(self, governed_agent: PactGovernedAgent) -> None:
+    def test_context_has_no_mutation_methods(
+        self, governed_agent: PactGovernedAgent
+    ) -> None:
         """GovernanceContext (the agent's view) must not have mutation methods."""
         ctx = governed_agent.context
         assert not hasattr(ctx, "grant_clearance")

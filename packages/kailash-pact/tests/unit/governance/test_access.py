@@ -15,13 +15,13 @@ from datetime import datetime, timezone
 
 import pytest
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     DepartmentConfig,
+    OrgDefinition,
     TeamConfig,
     TrustPostureLevel,
 )
-from pact.build.org.builder import OrgDefinition
 from pact.governance.access import (
     AccessDecision,
     KnowledgeSharePolicy,
@@ -310,7 +310,10 @@ class TestAccessDecision:
             allowed=False,
             reason="Classification check failed",
             step_failed=2,
-            audit_details={"effective_clearance": "restricted", "item_classification": "secret"},
+            audit_details={
+                "effective_clearance": "restricted",
+                "item_classification": "secret",
+            },
         )
         assert dec.audit_details["effective_clearance"] == "restricted"
 
@@ -328,7 +331,9 @@ class TestAccessDecision:
 class TestCanAccessClassification:
     """Steps 1 and 2: effective clearance vs item classification."""
 
-    def test_clearance_meets_classification_allows(self, simple_org: CompiledOrg) -> None:
+    def test_clearance_meets_classification_allows(
+        self, simple_org: CompiledOrg
+    ) -> None:
         """Role with CONFIDENTIAL clearance can access RESTRICTED item."""
         clearances = {
             "D1-R1": RoleClearance(
@@ -352,7 +357,9 @@ class TestCanAccessClassification:
         )
         assert decision.allowed is True
 
-    def test_clearance_below_classification_denies(self, simple_org: CompiledOrg) -> None:
+    def test_clearance_below_classification_denies(
+        self, simple_org: CompiledOrg
+    ) -> None:
         """Role with RESTRICTED clearance cannot access SECRET item."""
         clearances = {
             "D1-R1-T1-R1": RoleClearance(
@@ -430,7 +437,9 @@ class TestCanAccessClassification:
 class TestCanAccessCompartments:
     """Step 3: SECRET/TOP_SECRET items require compartment match."""
 
-    def test_secret_item_with_matching_compartments_passes(self, simple_org: CompiledOrg) -> None:
+    def test_secret_item_with_matching_compartments_passes(
+        self, simple_org: CompiledOrg
+    ) -> None:
         clearances = {
             "D1-R1": RoleClearance(
                 role_address="D1-R1",
@@ -455,7 +464,9 @@ class TestCanAccessCompartments:
         )
         assert decision.allowed is True
 
-    def test_secret_item_missing_compartment_denies(self, simple_org: CompiledOrg) -> None:
+    def test_secret_item_missing_compartment_denies(
+        self, simple_org: CompiledOrg
+    ) -> None:
         clearances = {
             "D1-R1": RoleClearance(
                 role_address="D1-R1",
@@ -616,7 +627,9 @@ class TestCanAccessTInheritsD:
 class TestCanAccessKSP:
     """Step 4d: KnowledgeSharePolicy grants cross-unit access."""
 
-    def test_ksp_grants_cross_department_access(self, two_dept_org: CompiledOrg) -> None:
+    def test_ksp_grants_cross_department_access(
+        self, two_dept_org: CompiledOrg
+    ) -> None:
         """KSP from Dept A to Dept B allows Team B1 to read Dept A data."""
         clearances = {
             "D2-R1-T1-R1": RoleClearance(
@@ -716,7 +729,9 @@ class TestCanAccessKSP:
 class TestCanAccessBridge:
     """Step 4e: PactBridge grants role-to-role cross-unit access."""
 
-    def test_bridge_grants_cross_department_access(self, two_dept_org: CompiledOrg) -> None:
+    def test_bridge_grants_cross_department_access(
+        self, two_dept_org: CompiledOrg
+    ) -> None:
         """Bridge from Head of Dept A to Head of Dept B allows access."""
         clearances = {
             "D2-R1": RoleClearance(
@@ -747,7 +762,9 @@ class TestCanAccessBridge:
         )
         assert decision.allowed is True
 
-    def test_bridge_classification_limit_enforced(self, two_dept_org: CompiledOrg) -> None:
+    def test_bridge_classification_limit_enforced(
+        self, two_dept_org: CompiledOrg
+    ) -> None:
         """Bridge with max RESTRICTED blocks SECRET items."""
         clearances = {
             "D2-R1": RoleClearance(

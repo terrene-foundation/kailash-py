@@ -13,8 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from pact.build.config.schema import DepartmentConfig, TeamConfig
-from pact.build.org.builder import OrgDefinition
+from pact.governance.config import DepartmentConfig, OrgDefinition, TeamConfig
 from pact.governance.addressing import Address, GrammarError, NodeType
 from pact.governance.compilation import (
     CompilationError,
@@ -145,7 +144,9 @@ def financial_services_org() -> OrgDefinition:
 
     teams = [
         TeamConfig(id="t-aml", name="AML/CFT Team", workspace="ws-aml"),
-        TeamConfig(id="t-client-advisory", name="Client Advisory Team", workspace="ws-advisory"),
+        TeamConfig(
+            id="t-client-advisory", name="Client Advisory Team", workspace="ws-advisory"
+        ),
         TeamConfig(id="t-equities", name="Equities Desk", workspace="ws-trading"),
     ]
 
@@ -309,14 +310,18 @@ class TestCompileOrg:
         # Should have nodes for all departments, teams, and roles
         assert len(compiled.nodes) > 0
 
-    def test_financial_services_ceo_address(self, financial_services_org: OrgDefinition) -> None:
+    def test_financial_services_ceo_address(
+        self, financial_services_org: OrgDefinition
+    ) -> None:
         """CEO should get address D1-R1 (head of first department)."""
         compiled = compile_org(financial_services_org)
         ceo_node = compiled.get_node_by_role_id("r-ceo")
         assert ceo_node is not None
         assert ceo_node.address == "D1-R1"
 
-    def test_financial_services_cco_address(self, financial_services_org: OrgDefinition) -> None:
+    def test_financial_services_cco_address(
+        self, financial_services_org: OrgDefinition
+    ) -> None:
         """CCO should get address D1-R1-D1-R1 (head of first sub-department under CEO)."""
         compiled = compile_org(financial_services_org)
         cco_node = compiled.get_node_by_role_id("r-cco")
@@ -369,7 +374,9 @@ class TestCompileOrg:
         assert bod_node.address == "R1"
         assert bod_node.is_external is True
 
-    def test_all_addresses_are_grammar_valid(self, financial_services_org: OrgDefinition) -> None:
+    def test_all_addresses_are_grammar_valid(
+        self, financial_services_org: OrgDefinition
+    ) -> None:
         """Every assigned address must pass grammar validation."""
         compiled = compile_org(financial_services_org)
         for addr_str, node in compiled.nodes.items():
@@ -407,7 +414,9 @@ class TestGetNode:
         assert node is not None
         assert node.name == "CEO"
 
-    def test_get_nonexistent_node_raises(self, financial_services_org: OrgDefinition) -> None:
+    def test_get_nonexistent_node_raises(
+        self, financial_services_org: OrgDefinition
+    ) -> None:
         compiled = compile_org(financial_services_org)
         with pytest.raises(KeyError):
             compiled.get_node("D99-R99")
@@ -434,7 +443,9 @@ class TestQueryByPrefix:
         for node in results:
             assert node.address.startswith("D1")
 
-    def test_query_compliance_division(self, financial_services_org: OrgDefinition) -> None:
+    def test_query_compliance_division(
+        self, financial_services_org: OrgDefinition
+    ) -> None:
         compiled = compile_org(financial_services_org)
         results = compiled.query_by_prefix("D1-R1-D1")
         # Should include: D1-R1-D1-R1 (CCO), D1-R1-D1-R1-T1-R1 (AML Officer),
@@ -465,7 +476,9 @@ class TestGetSubtree:
         assert len(subtree) == 1
         assert subtree[0].address == "D1-R1-D3-R1-T1-R1"
 
-    def test_subtree_nonexistent_raises(self, financial_services_org: OrgDefinition) -> None:
+    def test_subtree_nonexistent_raises(
+        self, financial_services_org: OrgDefinition
+    ) -> None:
         compiled = compile_org(financial_services_org)
         with pytest.raises(KeyError):
             compiled.get_subtree("D99-R99")
@@ -474,7 +487,9 @@ class TestGetSubtree:
 class TestRootRoles:
     """CompiledOrg.root_roles property."""
 
-    def test_root_roles_includes_bod(self, financial_services_org: OrgDefinition) -> None:
+    def test_root_roles_includes_bod(
+        self, financial_services_org: OrgDefinition
+    ) -> None:
         compiled = compile_org(financial_services_org)
         root_names = [r.name for r in compiled.root_roles]
         assert "Board of Directors" in root_names
@@ -483,7 +498,9 @@ class TestRootRoles:
         compiled = compile_org(financial_services_org)
         # BOD is the only root role (CEO reports to BOD)
         # Plus we might have the top-level department node
-        root_role_nodes = [r for r in compiled.root_roles if r.node_type == NodeType.ROLE]
+        root_role_nodes = [
+            r for r in compiled.root_roles if r.node_type == NodeType.ROLE
+        ]
         assert len(root_role_nodes) >= 1
 
 
@@ -495,14 +512,18 @@ class TestRootRoles:
 class TestVacancyHandling:
     """VacancyStatus for role vacancy queries."""
 
-    def test_vacancy_status_for_occupied_role(self, financial_services_org: OrgDefinition) -> None:
+    def test_vacancy_status_for_occupied_role(
+        self, financial_services_org: OrgDefinition
+    ) -> None:
         compiled = compile_org(financial_services_org)
         ceo_node = compiled.get_node_by_role_id("r-ceo")
         assert ceo_node is not None
         status = compiled.get_vacancy_status(ceo_node.address)
         assert status.is_vacant is False
 
-    def test_vacancy_status_for_vacant_role(self, org_with_vacancy: OrgDefinition) -> None:
+    def test_vacancy_status_for_vacant_role(
+        self, org_with_vacancy: OrgDefinition
+    ) -> None:
         compiled = compile_org(org_with_vacancy)
         vacant_node = compiled.get_node_by_role_id("r-backend-lead")
         assert vacant_node is not None
@@ -523,7 +544,9 @@ class TestVacancyHandling:
         status = compiled.get_vacancy_status(vacant_node.address)
         assert status.role_id == "r-backend-lead"
 
-    def test_vacancy_status_external_role(self, financial_services_org: OrgDefinition) -> None:
+    def test_vacancy_status_external_role(
+        self, financial_services_org: OrgDefinition
+    ) -> None:
         compiled = compile_org(financial_services_org)
         bod_node = compiled.get_node_by_role_id("r-bod")
         assert bod_node is not None
@@ -638,7 +661,9 @@ class TestOrgNodeFields:
             if node.node_type == NodeType.DEPARTMENT:
                 assert node.department is not None
 
-    def test_children_addresses_populated(self, financial_services_org: OrgDefinition) -> None:
+    def test_children_addresses_populated(
+        self, financial_services_org: OrgDefinition
+    ) -> None:
         compiled = compile_org(financial_services_org)
         ceo_node = compiled.get_node("D1-R1")
         # CEO should have children (the sub-departments)

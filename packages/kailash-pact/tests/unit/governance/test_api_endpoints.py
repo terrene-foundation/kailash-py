@@ -13,16 +13,16 @@ from typing import Any
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     DepartmentConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
+    OrgDefinition,
     TeamConfig,
     TrustPostureLevel,
 )
-from pact.build.org.builder import OrgDefinition
 from pact.governance.access import PactBridge
 from pact.governance.api.auth import GovernanceAuth
 from pact.governance.api.router import create_governance_app
@@ -591,7 +591,9 @@ class TestCreateKSP:
         vp_addr = _find_address_by_name(test_engine, "VP Engineering")
         # Find team prefixes
         compiled = test_engine.get_org()
-        team_addrs = [addr for addr, node in compiled.nodes.items() if node.node_type.value == "T"]
+        team_addrs = [
+            addr for addr, node in compiled.nodes.items() if node.node_type.value == "T"
+        ]
         assert len(team_addrs) >= 2
 
         resp = await client.post(

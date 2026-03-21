@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from pact.build.config.schema import ConfidentialityLevel, TrustPostureLevel
+from pact.governance.config import ConfidentialityLevel, TrustPostureLevel
 from pact.governance.clearance import (
     RoleClearance,
     VettingStatus,
@@ -429,7 +429,8 @@ def can_access(
     # Step 4b: Downward (role address is prefix of item owner)
     if _is_downward(role_address, item.owning_unit_address):
         logger.debug(
-            "Access allowed (step 4b): downward visibility — role_address=%s, " "item_owner=%s",
+            "Access allowed (step 4b): downward visibility — role_address=%s, "
+            "item_owner=%s",
             role_address,
             item.owning_unit_address,
         )
@@ -450,7 +451,8 @@ def can_access(
     # Step 4c: T-inherits-D (role in T can access parent D's data)
     if _t_inherits_d(role_address, item.owning_unit_address, compiled_org):
         logger.debug(
-            "Access allowed (step 4c): T-inherits-D — role_address=%s, " "item_owner=%s",
+            "Access allowed (step 4c): T-inherits-D — role_address=%s, "
+            "item_owner=%s",
             role_address,
             item.owning_unit_address,
         )
@@ -550,8 +552,9 @@ def _check_ksps(
         # Target must contain the requesting role
         target_matches = False
         if role_unit is not None:
-            target_matches = role_unit == ksp.target_unit_address or role_unit.startswith(
-                ksp.target_unit_address + "-"
+            target_matches = (
+                role_unit == ksp.target_unit_address
+                or role_unit.startswith(ksp.target_unit_address + "-")
             )
         if not target_matches:
             # Also check if role_address itself starts with target unit
@@ -628,7 +631,9 @@ def _check_bridges(
 
         # Determine direction: which side matches the requesting role,
         # and which side connects to the item owner?
-        direction = _bridge_direction(role_address, item.owning_unit_address, bridge, compiled_org)
+        direction = _bridge_direction(
+            role_address, item.owning_unit_address, bridge, compiled_org
+        )
         if direction is None:
             continue
 

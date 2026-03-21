@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 
-from pact.build.config.schema import ConfidentialityLevel
+from pact.governance.config import ConfidentialityLevel
 from pact.governance.access import KnowledgeSharePolicy, PactBridge
 
 logger = logging.getLogger(__name__)

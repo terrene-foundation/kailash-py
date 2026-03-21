@@ -24,7 +24,7 @@ import threading
 from datetime import UTC, datetime
 from typing import Any
 
-from pact.build.config.schema import (
+from pact.governance.config import (
     ConstraintEnvelopeConfig,
     TrustPostureLevel,
     VerificationLevel,
@@ -102,13 +102,21 @@ class GovernanceEngine:
 
         # Initialize stores -- use factory if store_backend specified,
         # otherwise use explicit stores or default to memory
-        self._sqlite_audit_log: Any | None = None  # SqliteAuditLog when using sqlite backend
+        self._sqlite_audit_log: Any | None = (
+            None  # SqliteAuditLog when using sqlite backend
+        )
 
         if (
             store_backend == "sqlite"
             and store_url is not None
             and all(
-                s is None for s in (envelope_store, clearance_store, access_policy_store, org_store)
+                s is None
+                for s in (
+                    envelope_store,
+                    clearance_store,
+                    access_policy_store,
+                    org_store,
+                )
             )
         ):
             from pact.governance.stores.sqlite import (
@@ -121,7 +129,9 @@ class GovernanceEngine:
 
             self._envelope_store: EnvelopeStore = SqliteEnvelopeStore(store_url)
             self._clearance_store: ClearanceStore = SqliteClearanceStore(store_url)
-            self._access_policy_store: AccessPolicyStore = SqliteAccessPolicyStore(store_url)
+            self._access_policy_store: AccessPolicyStore = SqliteAccessPolicyStore(
+                store_url
+            )
             self._org_store: OrgStore = SqliteOrgStore(store_url)
             self._sqlite_audit_log = SqliteAuditLog(store_url)
             logger.info("GovernanceEngine using SQLite stores at %s", store_url)
@@ -136,7 +146,9 @@ class GovernanceEngine:
                 envelope_store if envelope_store is not None else MemoryEnvelopeStore()
             )
             self._clearance_store = (
-                clearance_store if clearance_store is not None else MemoryClearanceStore()
+                clearance_store
+                if clearance_store is not None
+                else MemoryClearanceStore()
             )
             self._access_policy_store = (
                 access_policy_store
@@ -308,7 +320,9 @@ class GovernanceEngine:
         """
         # Step 1: Compute effective envelope with version hash (TOCTOU defense)
         task_id = ctx.get("task_id")
-        snapshot = self._compute_envelope_with_version_locked(role_address, task_id=task_id)
+        snapshot = self._compute_envelope_with_version_locked(
+            role_address, task_id=task_id
+        )
         effective = snapshot.envelope
         envelope_version = snapshot.version_hash
 
@@ -318,7 +332,7 @@ class GovernanceEngine:
         envelope_snapshot: dict[str, Any] | None = None
 
         if effective is not None:
-            envelope_snapshot = effective.model_dump()
+            envelope_snapshot = effective.model_dump(mode="json")
             level, reason = self._evaluate_against_envelope(effective, action, ctx)
 
         # Multi-level VERIFY: walk accountability chain and check each ancestor's
@@ -326,10 +340,17 @@ class GovernanceEngine:
         # from executing an action that is allowed at the leaf but blocked by
         # an ancestor's envelope.
         if level in ("auto_approved", "flagged"):
-            ancestor_level, ancestor_reason = self._multi_level_verify(role_address, action, ctx)
+            ancestor_level, ancestor_reason = self._multi_level_verify(
+                role_address, action, ctx
+            )
             if ancestor_level is not None:
                 # Escalate to more restrictive level
-                level_order = {"auto_approved": 0, "flagged": 1, "held": 2, "blocked": 3}
+                level_order = {
+                    "auto_approved": 0,
+                    "flagged": 1,
+                    "held": 2,
+                    "blocked": 3,
+                }
                 if level_order.get(ancestor_level, 0) > level_order.get(level, 0):
                     level = ancestor_level
                     reason = ancestor_reason
@@ -468,7 +489,10 @@ class GovernanceEngine:
                 )
 
         # --- All checks passed ---
-        return ("auto_approved", f"Action '{action}' is within all constraint dimensions")
+        return (
+            "auto_approved",
+            f"Action '{action}' is within all constraint dimensions",
+        )
 
     def compute_envelope(
         self,
@@ -500,7 +524,9 @@ class GovernanceEngine:
         # Get task envelope if task_id is provided
         task_envelope: TaskEnvelope | None = None
         if task_id is not None:
-            task_envelope = self._envelope_store.get_active_task_envelope(role_address, task_id)
+            task_envelope = self._envelope_store.get_active_task_envelope(
+                role_address, task_id
+            )
 
         return compute_effective_envelope(
             role_address=role_address,
@@ -521,7 +547,9 @@ class GovernanceEngine:
 
         task_envelope: TaskEnvelope | None = None
         if task_id is not None:
-            task_envelope = self._envelope_store.get_active_task_envelope(role_address, task_id)
+            task_envelope = self._envelope_store.get_active_task_envelope(
+                role_address, task_id
+            )
 
         return compute_effective_envelope_with_version(
             role_address=role_address,
@@ -869,7 +897,9 @@ class GovernanceEngine:
                 continue
 
             # Evaluate the action against this ancestor's envelope
-            anc_level, anc_reason = self._evaluate_against_envelope(ancestor_envelope, action, ctx)
+            anc_level, anc_reason = self._evaluate_against_envelope(
+                ancestor_envelope, action, ctx
+            )
 
             anc_order = level_order.get(anc_level, 0)
             current_order = level_order.get(most_restrictive_level, -1)
