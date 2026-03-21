@@ -1,0 +1,22 @@
+commit: feat/trust-merge (HEAD)
+timestamp: 2026-03-21T16:30:00+08:00
+baseline_pass: 5425 (pre-redteam)
+baseline_fail: 0
+baseline_skip: 5
+final_pass_trust_unit: 2638
+final_fail_trust_unit: 0
+final_pass_coverage: 41
+final_fail_coverage: 0
+regressions: 0
+command_trust: pytest tests/trust/unit/ --tb=line -q --timeout=60
+command_coverage: pytest tests/trust/test_coverage_verification.py --tb=short -q --timeout=60
+redteam_fixes: 14 files
+notes: |
+  - Red team found and fixed 2 CRITICAL (circular import, missing __version__)
+  - Red team found and fixed 6 HIGH (API surface gaps, stale test refs)
+  - Circular import: _locking.py→plane.exceptions→plane.__init__→_locking.py
+  - Fix: LockTimeoutError moved to _locking.py, plane.exceptions re-exports
+  - API surface: TrustOperations, TrustKeyManager, CapabilityRequest, TrustStore, InMemoryTrustStore added to kailash.trust.__init__
+  - 9 test files fixed: stale eatp references (patch paths, logger names, version assertions, module paths, variable names)
+  - 2 kaizen test files fixed: stale eatp imports
+  - Main unit suite (5425 tests) re-verification pending

@@ -1,3 +1,3 @@
-"""Compatibility shim — re-exports from eatp.esa.discovery."""
+"""Compatibility shim — re-exports from kailash.trust.esa.discovery."""
 
-from eatp.esa.discovery import *  # noqa: F401,F403
+from kailash.trust.esa.discovery import *  # noqa: F401,F403

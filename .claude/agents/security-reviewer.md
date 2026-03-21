@@ -103,7 +103,7 @@ You MUST be invoked:
 
 ### 8. TrustPlane / EATP Security Patterns
 
-These checks are MANDATORY for any code touching `packages/trust-plane/` or `packages/eatp/`.
+These checks are MANDATORY for any code touching `src/kailash/trust/plane/` or `src/kailash/trust/`.
 
 - [ ] **P1 — validate_id() on external IDs**: Every record ID used in a filesystem path or SQL query MUST pass `validate_id()` first. **Violation**: bare `f"{record_id}.json"` without prior validation.
 - [ ] **P2 — O_NOFOLLOW via safe_read_json()/safe_read_text()**: All trust-sensitive file reads MUST use safe helpers. **Violation**: `open(path)` or `path.read_text()` on trust store files.
@@ -117,7 +117,7 @@ These checks are MANDATORY for any code touching `packages/trust-plane/` or `pac
 - [ ] **P10 — frozen=True on security-critical dataclasses**: **Violation**: mutable dataclass where mutation bypasses validation.
 - [ ] **P11 — from_dict() validates all fields**: **Violation**: `data.get("field", "")` — silent defaults on security fields.
 
-> These 11 patterns were hardened through 14 rounds of red teaming. See `packages/trust-plane/CLAUDE.md` for full details with code examples.
+> These 11 patterns were hardened through 14 rounds of red teaming. See `src/kailash/trust/plane/CLAUDE.md` for full details with code examples.
 
 ### 9. Production Readiness Security Patterns
 
@@ -165,6 +165,21 @@ Provide findings as:
 - **intermediate-reviewer**: Hand off for general code review
 - **testing-specialist**: Ensure security tests exist
 - **deployment-specialist**: Verify production security config
+
+## PACT Governance Security Checks
+
+When reviewing `packages/kailash-pact/**`, additionally check:
+
+1. **Anti-self-modification**: Agents receive `GovernanceContext(frozen=True)`, NEVER `GovernanceEngine`. Check that no code path exposes the engine to agent code.
+2. **Monotonic tightening**: Verify `intersect_envelopes()` and `set_task_envelope()` only tighten, never widen constraints.
+3. **Fail-closed decisions**: Verify every `try/except` in `GovernanceEngine` returns BLOCKED/DENY on error paths.
+4. **Posture ceiling enforcement**: Verify `effective_clearance()` always caps at `POSTURE_CEILING[posture]`.
+5. **Default-deny tools**: Verify `PactGovernedAgent.execute_tool()` blocks unregistered tools.
+6. **NaN/Inf on governance paths**: Financial constraint checks in `verify_action()` and envelope intersection.
+7. **Compilation limits**: Verify `MAX_COMPILATION_DEPTH`, `MAX_CHILDREN_PER_NODE`, `MAX_TOTAL_NODES` are enforced.
+8. **hmac.compare_digest()**: All hash comparisons in `AuditChain`, `SqliteAuditLog`, and stores.
+
+See `.claude/rules/pact-governance.md` for full MUST/MUST NOT rules.
 
 ## Full Documentation
 

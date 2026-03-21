@@ -504,8 +504,8 @@ After syncing agents/skills/rules, update ALL version references in the COC temp
    - `kailash-nexus>=X.Y.Z` — from `packages/kailash-nexus/pyproject.toml`
    - `kailash-dataflow>=X.Y.Z` — from `packages/kailash-dataflow/pyproject.toml`
    - `kailash-kaizen>=X.Y.Z` — from `packages/kailash-kaizen/pyproject.toml`
-   - `eatp>=X.Y.Z` — from `packages/eatp/pyproject.toml`
-   - `trust-plane>=X.Y.Z` — from `packages/trust-plane/pyproject.toml`
+   - `eatp>=X.Y.Z` — from `src/kailash/trust/` (EATP version)
+   - `trust-plane>=X.Y.Z` — from `src/kailash/trust/plane/` (TrustPlane version)
 3. Use `>=` pins (minimum version), not `==` (exact pin)
 
 ### 7b. Version references in agent/skill/doc content

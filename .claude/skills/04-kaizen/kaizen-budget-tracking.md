@@ -12,7 +12,7 @@ Two components work together for budget-aware governance:
 
 **Source modules**:
 
-- `packages/eatp/src/eatp/constraints/budget_tracker.py` -- `BudgetTracker`, `BudgetSnapshot`, `BudgetCheckResult`, `BudgetEvent`
+- `src/kailash/trust/constraints/budget_tracker.py` -- `BudgetTracker`, `BudgetSnapshot`, `BudgetCheckResult`, `BudgetEvent`
 - `packages/kailash-kaizen/src/kaizen/governance/posture_budget.py` -- `PostureBudgetIntegration`
 
 ---
@@ -22,7 +22,7 @@ Two components work together for budget-aware governance:
 ### Creating a Tracker
 
 ```python
-from eatp.constraints.budget_tracker import BudgetTracker, usd_to_microdollars
+from kailash.trust.constraints.budget_tracker import BudgetTracker, usd_to_microdollars
 
 # Create with $10 budget
 tracker = BudgetTracker(allocated_microdollars=usd_to_microdollars(10.0))
@@ -76,7 +76,7 @@ remaining = tracker.remaining_microdollars()
 The tracker fires callbacks at fixed utilization thresholds. Each threshold fires at most once per tracker lifetime.
 
 ```python
-from eatp.constraints.budget_tracker import BudgetEvent
+from kailash.trust.constraints.budget_tracker import BudgetEvent
 
 def on_threshold(event: BudgetEvent):
     print(f"Threshold crossed: {event.event_type}")
@@ -112,7 +112,7 @@ Callbacks fire outside the lock, after threshold callbacks. Exceptions are logge
 ### Snapshots and Persistence
 
 ```python
-from eatp.constraints.budget_tracker import BudgetSnapshot
+from kailash.trust.constraints.budget_tracker import BudgetSnapshot
 
 # Capture persistent state (allocated + committed only; reservations are transient)
 snapshot = tracker.snapshot()
@@ -141,7 +141,7 @@ tracker = BudgetTracker(
 ### Conversion Helpers
 
 ```python
-from eatp.constraints.budget_tracker import usd_to_microdollars, microdollars_to_usd
+from kailash.trust.constraints.budget_tracker import usd_to_microdollars, microdollars_to_usd
 
 microdollars = usd_to_microdollars(1.50)   # 1_500_000
 usd = microdollars_to_usd(1_500_000)       # 1.5
@@ -156,8 +156,8 @@ usd = microdollars_to_usd(1_500_000)       # 1.5
 ### Setup
 
 ```python
-from eatp.constraints.budget_tracker import BudgetTracker, usd_to_microdollars
-from eatp.postures import PostureStateMachine, TrustPosture
+from kailash.trust.constraints.budget_tracker import BudgetTracker, usd_to_microdollars
+from kailash.trust.postures import PostureStateMachine, TrustPosture
 from kaizen.governance.posture_budget import PostureBudgetIntegration
 
 # 1. Create budget tracker
@@ -263,8 +263,8 @@ For production budget management, use `BudgetTracker` + `PostureBudgetIntegratio
 ## Complete Example
 
 ```python
-from eatp.constraints.budget_tracker import BudgetTracker, usd_to_microdollars
-from eatp.postures import PostureStateMachine, TrustPosture
+from kailash.trust.constraints.budget_tracker import BudgetTracker, usd_to_microdollars
+from kailash.trust.postures import PostureStateMachine, TrustPosture
 from kaizen.governance.posture_budget import PostureBudgetIntegration
 
 # Setup
@@ -313,7 +313,7 @@ for i in range(10):
 
 ## References
 
-- **Source**: `packages/eatp/src/eatp/constraints/budget_tracker.py`
+- **Source**: `src/kailash/trust/constraints/budget_tracker.py`
 - **Source**: `packages/kailash-kaizen/src/kaizen/governance/posture_budget.py`
 - **Related**: [`kaizen-cost-tracking`](kaizen-cost-tracking.md) -- Basic per-invocation cost tracking via BaseAgent
 - **Related**: [`kaizen-trust-eatp`](kaizen-trust-eatp.md) -- Full EATP trust infrastructure

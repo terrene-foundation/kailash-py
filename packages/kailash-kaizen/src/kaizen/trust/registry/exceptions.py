@@ -1,7 +1,7 @@
-"""Compatibility shim -- re-exports from eatp.
+"""Compatibility shim -- re-exports from kailash.trust.
 
-This module re-exports all public names from the EATP SDK.
-Import directly from ``eatp.registry.exceptions`` for new code.
+This module re-exports all public names from kailash.trust.
+Import directly from ``kailash.trust.registry.exceptions`` for new code.
 """
 
-from eatp.registry.exceptions import *  # noqa: F401,F403
+from kailash.trust.registry.exceptions import *  # noqa: F401,F403

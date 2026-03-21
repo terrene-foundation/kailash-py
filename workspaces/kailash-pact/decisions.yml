@@ -1,0 +1,33 @@
+# kailash-pact Integration Decisions
+
+- decision: "Package name is kailash-pact"
+  rationale: "Avoids PyPI conflict with pact-python (2.2M+ downloads). Aligns with kailash ecosystem naming."
+  alternatives_rejected: ["pact (conflicts)", "terrene-pact (doesn't signal kailash ecosystem)", "pact-governance (too generic)"]
+  date: "2026-03-21"
+  initiative: "PACT framework"
+  confidence: "high"
+  source: "pact repo discussion"
+
+- decision: "kailash-pact depends on kailash + eatp (Option X)"
+  rationale: "PACT bridges kailash and EATP at the organizational level, same pattern as kaizen bridging them at the agent level. After EATP merge into kailash core, dependency becomes kailash only."
+  alternatives_rejected: ["Pure core with no deps (requires type duplication)", "kailash only with optional eatp (breaks audit model)"]
+  date: "2026-03-21"
+  initiative: "PACT framework"
+  confidence: "high"
+  source: "pact repo architecture discussion"
+
+- decision: "Import path stays as pact.governance (not kailash_pact.governance)"
+  rationale: "Avoids breaking all existing code. The standalone pact repo becomes a consumer of kailash-pact, importing from pact.governance. Namespace packages allow coexistence."
+  alternatives_rejected: ["Rename to kailash_pact.governance (breaks everything)", "Duplicate under both namespaces (confusing)"]
+  date: "2026-03-21"
+  initiative: "PACT framework"
+  confidence: "medium"
+  source: "migration planning"
+
+- decision: "kailash-pact is a peer to kailash-kaizen, not a layer above or below"
+  rationale: "Both bridge kailash + eatp. Kaizen for agent execution, PACT for organizational governance. They compose, not stack."
+  alternatives_rejected: ["PACT above kaizen (implies dependency)", "PACT below kaizen (wrong — governance uses agents, not the reverse)"]
+  date: "2026-03-21"
+  initiative: "PACT framework"
+  confidence: "high"
+  source: "ecosystem architecture discussion"

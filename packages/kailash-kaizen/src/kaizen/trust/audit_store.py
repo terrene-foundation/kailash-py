@@ -1,9 +1,9 @@
 """
-Audit Store — thin adapter importing shared types from EATP.
+Audit Store — thin adapter importing shared types from kailash.trust.
 
 Shared types (AuditStore ABC, AuditStoreError, AuditAnchorNotFoundError,
 AuditStoreImmutabilityError, AuditRecord, IntegrityVerificationResult,
-AppendOnlyAuditStore) live in ``eatp.audit_store``.  This file re-exports
+AppendOnlyAuditStore) live in ``kailash.trust.audit_store``.  This file re-exports
 them for backwards compatibility and keeps the Kaizen-specific DataFlow-backed
 ``PostgresAuditStore`` which depends on ``kailash.runtime`` and ``dataflow``.
 """
@@ -16,8 +16,8 @@ from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
-# ---------- shared types (from EATP) ----------
-from eatp.audit_store import (  # noqa: F401
+# ---------- shared types (from kailash.trust) ----------
+from kailash.trust.audit_store import (  # noqa: F401
     AppendOnlyAuditStore,
     AuditAnchorNotFoundError,
     AuditRecord,
@@ -473,7 +473,7 @@ class PostgresAuditStore(AuditStore):
         reasoning_trace = None
         reasoning_trace_dict = anchor_data.get("reasoning_trace")
         if reasoning_trace_dict:
-            from eatp.reasoning import ReasoningTrace
+            from kailash.trust.reasoning.traces import ReasoningTrace
 
             reasoning_trace = ReasoningTrace.from_dict(reasoning_trace_dict)
 

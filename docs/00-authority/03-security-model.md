@@ -21,7 +21,7 @@ TrustPlane protects against:
 AES-256-GCM via the `cryptography` library.
 
 ```python
-from trustplane.crypto_utils import derive_encryption_key, encrypt_record, decrypt_record
+from kailash.trust.plane.encryption.crypto_utils import derive_encryption_key, encrypt_record, decrypt_record
 
 key = derive_encryption_key(passphrase=b"secret", salt=b"project-salt")
 ciphertext = encrypt_record({"decision_id": "d1", ...}, key)
@@ -33,23 +33,23 @@ plaintext = decrypt_record(ciphertext, key)
 - Random 96-bit nonce per encryption
 - Decryption failures raise `TrustDecryptionError`
 
-Install: `pip install trust-plane[encryption]`
+Install: `pip install kailash[trust-encryption]`
 
 ## Role-Based Access Control (RBAC)
 
 Four roles with predefined permission sets:
 
-| Role | Permissions |
-|------|-------------|
-| **ADMIN** | All 12 operations |
-| **AUDITOR** | read_decisions, read_milestones, read_holds, read_delegates, verify, export_compliance |
-| **DELEGATE** | read_decisions, read_milestones, record_decision, record_milestone |
-| **OBSERVER** | read_decisions, read_milestones, read_holds |
+| Role         | Permissions                                                                            |
+| ------------ | -------------------------------------------------------------------------------------- |
+| **ADMIN**    | All 12 operations                                                                      |
+| **AUDITOR**  | read_decisions, read_milestones, read_holds, read_delegates, verify, export_compliance |
+| **DELEGATE** | read_decisions, read_milestones, record_decision, record_milestone                     |
+| **OBSERVER** | read_decisions, read_milestones, read_holds                                            |
 
 Operations: `record_decision`, `record_milestone`, `create_hold`, `resolve_hold`, `create_delegate`, `revoke_delegate`, `read_decisions`, `read_milestones`, `read_holds`, `read_delegates`, `verify`, `export_compliance`.
 
 ```python
-from trustplane.rbac import RBACManager, Role
+from kailash.trust.plane.rbac import RBACManager, Role
 
 rbac = RBACManager(trust_dir=Path(".trust-plane"))
 rbac.assign_role("alice", Role.ADMIN)
@@ -70,12 +70,12 @@ class TrustPlaneKeyManager(Protocol):
 
 ### Available Key Managers
 
-| Manager | Algorithm | Install Extra |
-|---------|-----------|---------------|
-| `LocalFileKeyManager` | Ed25519 | (none) |
-| `AwsKmsKeyManager` | ECDSA P-256 | `[aws]` |
-| `AzureKeyVaultKeyManager` | EC P-256 | `[azure]` |
-| `VaultKeyManager` | Ed25519 (Transit) | `[vault]` |
+| Manager                   | Algorithm         | Install Extra |
+| ------------------------- | ----------------- | ------------- |
+| `LocalFileKeyManager`     | Ed25519           | (none)        |
+| `AwsKmsKeyManager`        | ECDSA P-256       | `[aws]`       |
+| `AzureKeyVaultKeyManager` | EC P-256          | `[azure]`     |
+| `VaultKeyManager`         | Ed25519 (Transit) | `[vault]`     |
 
 **Algorithm mismatch note**: AWS KMS does not support Ed25519. When using `AwsKmsKeyManager`, signatures use ECDSA P-256 (SHA-256). This is a documented deviation from the default Ed25519 requirement per `.claude/rules/eatp.md`.
 
@@ -84,7 +84,7 @@ class TrustPlaneKeyManager(Protocol):
 JWT token verification for identity-bound attestations.
 
 ```python
-from trustplane.identity import OIDCVerifier, IdentityProvider
+from kailash.trust.plane.identity import OIDCVerifier, IdentityProvider
 
 provider = IdentityProvider(
     name="okta",
@@ -99,7 +99,7 @@ Supported providers: `okta`, `azure_ad`, `google`, `generic_oidc`.
 
 Default token expiry: 8 hours (configurable).
 
-Install: `pip install trust-plane[sso]`
+Install: `pip install kailash[trust-sso]`
 
 ## File Permissions
 
@@ -107,4 +107,4 @@ Install: `pip install trust-plane[sso]`
 - **Windows**: `pywin32` DACL restricts access to current user's SID
 - **Windows without pywin32**: Warning logged, file still written (degraded security)
 
-Install for Windows: `pip install trust-plane[windows]`
+Install for Windows: `pip install kailash[trust-windows]`

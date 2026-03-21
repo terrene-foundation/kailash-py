@@ -1,0 +1,28 @@
+# Workspace: eatp-merge
+# Purpose: Merge eatp + trust-plane packages into kailash core as kailash.trust.*
+
+decisions:
+  - id: D001
+    title: "Merge eatp and trust-plane into kailash core as kailash.trust.*"
+    status: approved
+    date: "2026-03-21"
+    brief: briefs/01-eatp-merge-brief.md
+    rationale: >
+      Every framework that needs trust (kaizen, pact) bridges kailash and eatp,
+      creating version coordination overhead, namespace fragmentation (eatp,
+      trustplane, kailash — 3 roots), and developer confusion. Merging into
+      kailash.trust.* flattens the dependency graph so all frameworks depend
+      on kailash only.
+    impact:
+      - "kailash core gains kailash.trust.* namespace with all EATP + trust-plane code"
+      - "packages/eatp/ becomes a backward-compatible shim with DeprecationWarning"
+      - "packages/trust-plane/ becomes a backward-compatible shim with DeprecationWarning"
+      - "kailash-kaizen drops eatp dependency (kailash core has it)"
+      - "kailash-pact (new) depends on kailash only"
+      - "pynacl>=1.5 moves into kailash core (or kailash[trust] extra)"
+    constraints:
+      - "EATP specification (CC BY 4.0) remains independent — only the Python implementation moves"
+      - "Rust SDK (kailash-rs) implements EATP independently — this merge is Python-only"
+      - "Existing PyPI packages (eatp, trust-plane) must continue to work via shims"
+      - "Zero test loss — all tests migrate with the code"
+    origin: "pact repo — PACT framework development revealed the bridge coupling pattern"

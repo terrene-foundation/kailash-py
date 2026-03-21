@@ -1,3 +1,3 @@
-"""Compatibility shim — re-exports from eatp.orchestration.execution_context."""
+"""Compatibility shim — re-exports from kailash.trust.orchestration.execution_context."""
 
-from eatp.orchestration.execution_context import *  # noqa: F401,F403
+from kailash.trust.orchestration.execution_context import *  # noqa: F401,F403

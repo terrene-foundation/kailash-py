@@ -1,6 +1,6 @@
 # Trust-Plane CLI Reference
 
-Entry point: `attest` (installed via `pip install trust-plane`).
+Entry point: `attest` (installed via `pip install kailash[trust]`).
 
 ## Global Options
 
@@ -21,6 +21,7 @@ attest init --name "Project" --author "Admin" --constraint "no-external-api"
 ```
 
 Options:
+
 - `--name` (required) — Project name
 - `--author` (required) — Human authority name
 - `--constraint` (repeatable) — Project constraints
@@ -35,6 +36,7 @@ attest quickstart --project-name "My App" --author "Alice" --domain web-app --mo
 ```
 
 Options:
+
 - `--project-name` — Project name (prompted if omitted)
 - `--author` — Author name (prompted if omitted)
 - `--domain` — `web-app`, `data-pipeline`, `research`, `custom`
@@ -51,6 +53,7 @@ attest decide --type methodology --decision "Use random forest" --rationale "Bes
 ```
 
 Options:
+
 - `--type` (required) — Decision category (scope, methodology, design, etc.)
 - `--decision` (required) — What was decided
 - `--rationale` (required) — Why this choice was made
@@ -113,6 +116,7 @@ attest export --format syslog --host siem.local --port 514
 ```
 
 Options:
+
 - `--format` — `json`, `html`, `soc2`, `iso27001`, `cef`, `ocsf`, `syslog`
 - `--output` / `-o` — Output file path
 - `--confidentiality` — Max level to include: `public`, `restricted`, `confidential`, `secret`

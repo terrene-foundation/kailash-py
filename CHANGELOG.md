@@ -15,6 +15,29 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [2.0.0] - 2026-03-21
+
+**Trust Integration — EATP + Trust-Plane merged into kailash.trust**
+
+#### Added
+
+- `kailash.trust` namespace — EATP protocol implementation (chains, attestations, signing, verification, constraints, postures, enforcement)
+- `kailash.trust.plane` namespace — Trust-plane platform (projects, sessions, decisions, milestones, holds, RBAC, SIEM, dashboard)
+- `kailash[trust]` optional extra for Ed25519 cryptography (pynacl)
+- CLI entry points: `eatp`, `attest`, `trustplane-mcp`
+- `filelock>=3.0` added to core dependencies
+
+#### Changed
+
+- kailash-kaizen 2.0.0 drops standalone `eatp` dependency (uses `kailash.trust`)
+- kailash-dataflow and kailash-nexus accept kailash 2.x (`<3.0.0`)
+
+#### Removed
+
+- `packages/eatp/` — merged into `src/kailash/trust/`. Import from `kailash.trust` instead.
+- `packages/trust-plane/` — merged into `src/kailash/trust/plane/`. Import from `kailash.trust.plane` instead.
+- `pydantic>=2.6` phantom dependency removed from EATP (was declared but never imported).
+
 ### [1.0.0] - 2026-03-17
 
 **First Stable Release**

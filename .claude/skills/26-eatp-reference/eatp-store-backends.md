@@ -6,12 +6,12 @@ When adding a new `TrustPlaneStore` backend (e.g., PostgreSQL, DynamoDB, or any 
 
 ## Prerequisites
 
-- `TrustPlaneStore` protocol: `packages/trust-plane/src/trustplane/store/__init__.py`
-- Conformance test suite: `packages/trust-plane/tests/store/test_store_conformance.py`
+- `TrustPlaneStore` protocol: `src/kailash/trust/plane/store/__init__.py`
+- Conformance test suite: `tests/trust/plane/store/test_store_conformance.py`
 - Existing reference implementations:
-  - SQLite: `packages/trust-plane/src/trustplane/store/sqlite.py` (698 LOC, default backend)
-  - Filesystem: `packages/trust-plane/src/trustplane/store/filesystem.py` (305 LOC)
-  - PostgreSQL: `packages/trust-plane/src/trustplane/store/postgres.py` (production backend)
+  - SQLite: `src/kailash/trust/plane/store/sqlite.py` (698 LOC, default backend)
+  - Filesystem: `src/kailash/trust/plane/store/filesystem.py` (305 LOC)
+  - PostgreSQL: `src/kailash/trust/plane/store/postgres.py` (production backend)
 - Python 3.11+
 
 ## Store Security Contract (Mandatory Checklist)
@@ -26,7 +26,7 @@ Every backend MUST satisfy ALL six requirements. A missing requirement is a secu
 - [ ] **2. INPUT_VALIDATION**: Every method accepting a record ID or query parameter MUST call `validate_id()` before using it in a path or query. Malformed IDs MUST raise `ValueError`.
 
   ```python
-  from trustplane._locking import validate_id
+  from kailash.trust.plane._locking import validate_id
   validate_id(record_id)  # Regex: ^[a-zA-Z0-9_-]+$
   ```
 
@@ -49,7 +49,7 @@ Every backend MUST satisfy ALL six requirements. A missing requirement is a secu
 ### Step 1: Create the backend module
 
 ```
-packages/trust-plane/src/trustplane/store/<backend_name>.py
+src/kailash/trust/plane/store/<backend_name>.py
 ```
 
 Required header:
@@ -64,10 +64,10 @@ from __future__ import annotations
 
 import json
 import logging
-from trustplane._locking import validate_id
-from trustplane.delegation import Delegate, DelegateStatus, ReviewResolution
-from trustplane.holds import HoldRecord
-from trustplane.models import DecisionRecord, MilestoneRecord, ProjectManifest
+from kailash.trust.plane._locking import validate_id
+from kailash.trust.plane.delegation import Delegate, DelegateStatus, ReviewResolution
+from kailash.trust.plane.holds import HoldRecord
+from kailash.trust.plane.models import DecisionRecord, MilestoneRecord, ProjectManifest
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +144,7 @@ except OSError:
 1. Add to `store/__init__.py`:
 
 ```python
-from trustplane.store.<backend> import <BackendName>TrustPlaneStore  # noqa: E402, F401
+from kailash.trust.plane.store.<backend> import <BackendName>TrustPlaneStore  # noqa: E402, F401
 ```
 
 2. Add to `__init__.py` `__all__`
@@ -167,7 +167,7 @@ def store(request, tmp_path):
         store.close()
 ```
 
-Run: `pytest packages/trust-plane/tests/store/test_store_conformance.py -v`
+Run: `pytest tests/trust/plane/store/test_store_conformance.py -v`
 
 All tests MUST pass. The conformance suite tests all six contract requirements.
 
@@ -298,7 +298,7 @@ raise StoreConnectionError(f"Cannot connect to {self._sanitize_conninfo(self._co
 All database backends MUST follow this exception wrapping pattern:
 
 ```python
-from trustplane.exceptions import StoreConnectionError, StoreQueryError
+from kailash.trust.plane.exceptions import StoreConnectionError, StoreQueryError
 
 @contextmanager
 def _safe_connection(self):
@@ -322,7 +322,7 @@ def _safe_connection(self):
 
 ## See Also
 
-- `packages/trust-plane/CLAUDE.md` — Store Architecture section, Store Security Contract
+- `src/kailash/trust/plane/CLAUDE.md` — Store Architecture section, Store Security Contract
 - `workspaces/trust-plane/04-validate/09-R13-store-red-team.md` — R13 findings that informed this skill
 - `workspaces/trust-plane/04-validate/R14-validation-report.md` — R14 findings (PostgreSQL PoolTimeout, exception wrapping)
 - TODO-24: PostgreSQL backend — first real application of this codified pattern

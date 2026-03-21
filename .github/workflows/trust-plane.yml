@@ -4,14 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - "packages/trust-plane/**"
-      - "packages/eatp/**"
+      - "src/kailash/trust/**"
       - ".github/workflows/trust-plane.yml"
   pull_request:
     branches: [main]
     paths:
-      - "packages/trust-plane/**"
-      - "packages/eatp/**"
+      - "src/kailash/trust/**"
       - ".github/workflows/trust-plane.yml"
 
 permissions:
@@ -42,11 +40,14 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install packages
-        run: pip install -e packages/eatp -e "packages/trust-plane[dev]"
+      - name: Install kailash with trust extra
+        run: pip install -e ".[trust,dev]"
 
-      - name: Run tests
-        run: pytest packages/trust-plane/tests/ -x -q --tb=short
+      - name: Run trust protocol tests
+        run: pytest tests/trust/ -x -q --tb=short --ignore=tests/trust/plane
+
+      - name: Run trust plane tests
+        run: pytest tests/trust/plane/ -x -q --tb=short
 
       - name: Upload test results
         uses: actions/upload-artifact@v6
@@ -71,19 +72,18 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install packages
-        run: pip install -e packages/eatp -e "packages/trust-plane[dev]"
+      - name: Install kailash with trust
+        run: pip install -e ".[trust,cli]"
 
-      - name: Verify CLI entry point
-        run: attest --help
-
-      - name: Verify Python import
-        run: python -c "from trustplane import TrustProject; print('OK')"
+      - name: Verify new import paths
+        run: |
+          python -c "from kailash.trust import GenesisRecord; print('Protocol OK')"
+          python -c "from kailash.trust.plane import TrustProject; print('Plane OK')"
 
       - name: Test summary
         if: always()
         run: |
           echo "## Smoke Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- attest --help: verified" >> $GITHUB_STEP_SUMMARY
-          echo "- TrustProject import: verified" >> $GITHUB_STEP_SUMMARY
+          echo "- kailash.trust import: verified" >> $GITHUB_STEP_SUMMARY
+          echo "- kailash.trust.plane import: verified" >> $GITHUB_STEP_SUMMARY

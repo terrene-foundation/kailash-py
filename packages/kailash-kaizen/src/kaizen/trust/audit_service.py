@@ -1,3 +1,3 @@
-"""Compatibility shim — re-exports from eatp.audit_service."""
+"""Compatibility shim — re-exports from kailash.trust.audit_service."""
 
-from eatp.audit_service import *  # noqa: F401,F403
+from kailash.trust.audit_service import *  # noqa: F401,F403

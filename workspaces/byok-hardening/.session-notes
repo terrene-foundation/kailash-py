@@ -1,0 +1,28 @@
+# Session Notes — BYOK Hardening
+# Date: 2026-03-20
+
+## Accomplished
+- Issue #12: BYOK per-request API key override — implemented (PR #14)
+- Issue #15: CostTracker microdollar precision fix — closed
+- Full BYOK security hardening — CredentialStore, error sanitizer, all providers, client cache (PR #16)
+- Red team R1+R2: all findings fixed, zero deferred
+- CI fixes: PEP 668, self-hosted→ubuntu-latest, Node.js 24 action upgrades, Trust Plane Windows skips (PRs #13,#17-#22)
+- COC sync: 214 files synced to kailash-coc-claude-py (PR #4), properly transformed
+- COC sync workflow replaced with notification-only (dumb file copy removed)
+- Cross-SDK: kailash-rs#52 (BYOK), #53 (security hardening) — both closed by rs team
+- New skill: kaizen-byok-patterns.md codified
+- COC_SYNC_PAT secret created for future automated notifications
+- Verified: no contamination in USE repo from dumb sync (it never ran)
+
+## In Progress
+- Nothing — workspace COMPLETE
+
+## Blockers
+- Claude Code automation (claude.yml) still paused — needs CC quota restored
+
+## Next Steps
+- Re-enable claude.yml auto-triggers when CC quota available
+- Pick next workspace
+
+## Active Todo
+- None — all 32 TODOs completed, workspace converged and merged

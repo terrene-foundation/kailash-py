@@ -8,15 +8,15 @@ Read `.claude/` freely but never write to it except `.claude/agents/project/` an
 
 Follow phases in order using slash commands. Each command is self-contained — it includes workspace detection, workflow steps, and agent teams.
 
-Each phase has a human gate — do not proceed without approval.
+Phases use two gate types (see `rules/autonomous-execution.md`): **structural gates** require human authority; **execution gates** are autonomous agent convergence (human observes, does not block).
 
-| Phase | Command      | Workspace Output                              | Project Root Output                                  | Gate              |
-| ----- | ------------ | --------------------------------------------- | ---------------------------------------------------- | ----------------- |
-| 01    | `/analyze`   | `01-analysis/`, `02-plans/`, `03-user-flows/` |                                                      | Human review      |
-| 02    | `/todos`     | `todos/active/`                               |                                                      | Human approval    |
-| 03    | `/implement` | `todos/active/` -> `todos/completed/`         | `src/`, `packages/`, `docs/`                         | All tests passing |
-| 04    | `/redteam`   | `04-validate/`                                |                                                      | Red team sign-off |
-| 05    | `/codify`    |                                               | `.claude/agents/project/`, `.claude/skills/project/` | Human review      |
+| Phase | Command      | Workspace Output                              | Project Root Output                                  | Gate Type              | Gate                                      |
+| ----- | ------------ | --------------------------------------------- | ---------------------------------------------------- | ---------------------- | ----------------------------------------- |
+| 01    | `/analyze`   | `01-analysis/`, `02-plans/`, `03-user-flows/` |                                                      | Execution (autonomous) | Red team agents converge                  |
+| 02    | `/todos`     | `todos/active/`                               |                                                      | **Structural (human)** | Human approves plan                       |
+| 03    | `/implement` | `todos/active/` -> `todos/completed/`         | `src/`, `packages/`, `docs/`                         | Execution (autonomous) | All tests passing, review agents converge |
+| 04    | `/redteam`   | `04-validate/`                                |                                                      | Execution (autonomous) | Red team agents find no gaps              |
+| 05    | `/codify`    |                                               | `.claude/agents/project/`, `.claude/skills/project/` | **Structural (human)** | Human approves institutional knowledge    |
 
 Additional: `/ws` (status dashboard), `/wrapup` (save session notes before ending).
 

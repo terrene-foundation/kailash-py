@@ -5,7 +5,7 @@
 `TrustPlaneStore` is a `typing.Protocol` (runtime-checkable) defining the persistence interface. All backends implement this protocol identically.
 
 ```python
-from trustplane.store import TrustPlaneStore
+from kailash.trust.plane.store import TrustPlaneStore
 
 # Any backend can be passed where TrustPlaneStore is expected
 def process(store: TrustPlaneStore) -> None:
@@ -15,22 +15,22 @@ def process(store: TrustPlaneStore) -> None:
 
 ## Backend Comparison
 
-| Feature | SQLite | Filesystem | PostgreSQL |
-|---------|--------|------------|------------|
-| Default | Yes | No | No |
-| Install extra | (none) | (none) | `[postgres]` |
-| Concurrency | WAL mode + `BEGIN IMMEDIATE` | `filelock` | MVCC |
-| Atomic writes | Transaction | temp + fsync + rename | Transaction |
-| Schema versioning | `meta` table | N/A | `meta` table |
-| Multi-tenancy | `WHERE project_id = ?` | Directory scoping | RLS |
-| Performance | High (single file) | Moderate (many files) | High (network) |
-| Git-friendly | No (binary) | Yes (JSON files) | No (external) |
-| Encryption at rest | Via `crypto_utils` | Via `crypto_utils` | Via `crypto_utils` + TDE |
+| Feature            | SQLite                       | Filesystem            | PostgreSQL               |
+| ------------------ | ---------------------------- | --------------------- | ------------------------ |
+| Default            | Yes                          | No                    | No                       |
+| Install extra      | (none)                       | (none)                | `[postgres]`             |
+| Concurrency        | WAL mode + `BEGIN IMMEDIATE` | `filelock`            | MVCC                     |
+| Atomic writes      | Transaction                  | temp + fsync + rename | Transaction              |
+| Schema versioning  | `meta` table                 | N/A                   | `meta` table             |
+| Multi-tenancy      | `WHERE project_id = ?`       | Directory scoping     | RLS                      |
+| Performance        | High (single file)           | Moderate (many files) | High (network)           |
+| Git-friendly       | No (binary)                  | Yes (JSON files)      | No (external)            |
+| Encryption at rest | Via `crypto_utils`           | Via `crypto_utils`    | Via `crypto_utils` + TDE |
 
 ## SQLite Backend (Default)
 
 ```python
-from trustplane.store.sqlite import SqliteTrustPlaneStore
+from kailash.trust.plane.store.sqlite import SqliteTrustPlaneStore
 
 store = SqliteTrustPlaneStore(".trust-plane/trust.db")
 store.initialize()
@@ -54,7 +54,7 @@ The SQLite backend auto-manages schema versions:
 ## Filesystem Backend
 
 ```python
-from trustplane.store.filesystem import FileSystemTrustPlaneStore
+from kailash.trust.plane.store.filesystem import FileSystemTrustPlaneStore
 
 store = FileSystemTrustPlaneStore(Path(".trust-plane"))
 store.initialize()
@@ -84,13 +84,13 @@ store.initialize()
 ## PostgreSQL Backend
 
 ```python
-from trustplane.store.postgres import PostgresTrustPlaneStore
+from kailash.trust.plane.store.postgres import PostgresTrustPlaneStore
 
 store = PostgresTrustPlaneStore("postgresql://user:pass@host/db")
 store.initialize()
 ```
 
-Requires `pip install trust-plane[postgres]` (psycopg3 + psycopg_pool).
+Requires `pip install kailash[trust-postgres]` (psycopg3 + psycopg_pool).
 
 - Connection pooling via `psycopg_pool`
 - MVCC for concurrent safety
@@ -113,7 +113,7 @@ All backends MUST satisfy these 6 requirements. Violations are security defects.
 New backends must pass the conformance test suite:
 
 ```python
-from trustplane.conformance import run_conformance_tests
+from kailash.trust.plane.conformance import run_conformance_tests
 
 results = run_conformance_tests(MyCustomStore(path))
 assert all(r.passed for r in results)
@@ -124,7 +124,7 @@ The suite tests all 6 security contract requirements plus all protocol methods.
 ## Migration Between Backends
 
 ```python
-from trustplane.migrate import migrate_to_sqlite
+from kailash.trust.plane.migrate import migrate_to_sqlite
 
 # Filesystem -> SQLite
 result = migrate_to_sqlite(".trust-plane")

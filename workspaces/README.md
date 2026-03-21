@@ -64,13 +64,13 @@ All phase commands read every file in `briefs/` for context.
 
 Each command is self-contained: it detects the workspace, reads your briefs, includes all workflow steps, and deploys the right agent teams.
 
-| Phase | Command      | Workspace Output                              | Project Root Output                                  | Gate              |
-| ----- | ------------ | --------------------------------------------- | ---------------------------------------------------- | ----------------- |
-| 01    | `/analyze`   | `01-analysis/`, `02-plans/`, `03-user-flows/` |                                                      | Human review      |
-| 02    | `/todos`     | `todos/active/`                               |                                                      | Human approval    |
-| 03    | `/implement` | `todos/active/` -> `todos/completed/`         | `src/`, `packages/`, `docs/`                         | All tests passing |
-| 04    | `/redteam`   | `04-validate/`                                |                                                      | Red team sign-off |
-| 05    | `/codify`    |                                               | `.claude/agents/project/`, `.claude/skills/project/` | Human review      |
+| Phase | Command      | Workspace Output                              | Project Root Output                                  | Gate Type              | Gate                                      |
+| ----- | ------------ | --------------------------------------------- | ---------------------------------------------------- | ---------------------- | ----------------------------------------- |
+| 01    | `/analyze`   | `01-analysis/`, `02-plans/`, `03-user-flows/` |                                                      | Execution (autonomous) | Red team agents converge                  |
+| 02    | `/todos`     | `todos/active/`                               |                                                      | **Structural (human)** | Human approves plan                       |
+| 03    | `/implement` | `todos/active/` -> `todos/completed/`         | `src/`, `packages/`, `docs/`                         | Execution (autonomous) | All tests passing, review agents converge |
+| 04    | `/redteam`   | `04-validate/`                                |                                                      | Execution (autonomous) | Red team agents find no gaps              |
+| 05    | `/codify`    |                                               | `.claude/agents/project/`, `.claude/skills/project/` | **Structural (human)** | Human approves institutional knowledge    |
 
 Additional commands: `/ws` (status dashboard), `/wrapup` (save session notes before ending).
 

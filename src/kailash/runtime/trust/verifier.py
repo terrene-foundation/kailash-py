@@ -18,7 +18,7 @@ Usage:
     verifier = TrustVerifier()
 
     # With Kaizen backend
-    from kaizen.trust.operations import TrustOperations
+    from kailash.trust.operations import TrustOperations
     verifier = TrustVerifier(
         kaizen_backend=TrustOperations(...),
         config=TrustVerifierConfig(mode="enforcing"),
@@ -379,7 +379,7 @@ class TrustVerifier:
             try:
                 # Try to import VerificationLevel from Kaizen
                 try:
-                    from kaizen.trust.chain import VerificationLevel
+                    from kailash.trust.chain import VerificationLevel
 
                     level = VerificationLevel.STANDARD
                 except ImportError:
@@ -477,7 +477,7 @@ class TrustVerifier:
             try:
                 # Try to import VerificationLevel from Kaizen
                 try:
-                    from kaizen.trust.chain import VerificationLevel
+                    from kailash.trust.chain import VerificationLevel
 
                     level = (
                         VerificationLevel.FULL

@@ -2,9 +2,9 @@
 
 Structured reasoning traces capture WHY a decision was made during trust delegation and audit operations. This extension is fully optional and backward compatible.
 
-**Source**: `packages/eatp/src/eatp/reasoning.py`
-**Crypto**: `packages/eatp/src/eatp/crypto.py` (hash/sign/verify reasoning functions)
-**Operations**: `packages/eatp/src/eatp/operations/__init__.py` (delegate/audit accept reasoning_trace)
+**Source**: `src/kailash/trust/reasoning.py`
+**Crypto**: `src/kailash/trust/crypto.py` (hash/sign/verify reasoning functions)
+**Operations**: `src/kailash/trust/operations/__init__.py` (delegate/audit accept reasoning_trace)
 
 ## Design Rationale
 
@@ -29,7 +29,7 @@ PUBLIC < RESTRICTED < CONFIDENTIAL < SECRET < TOP_SECRET
 This ordering supports access control comparisons:
 
 ```python
-from eatp.reasoning import ConfidentialityLevel
+from kailash.trust.reasoning import ConfidentialityLevel
 
 agent_clearance = ConfidentialityLevel.CONFIDENTIAL
 trace_level = ConfidentialityLevel.SECRET
@@ -46,7 +46,7 @@ if agent_clearance < trace_level:
 ### 1. Create
 
 ```python
-from eatp.reasoning import ReasoningTrace, ConfidentialityLevel
+from kailash.trust.reasoning import ReasoningTrace, ConfidentialityLevel
 from datetime import datetime, timezone
 
 trace = ReasoningTrace(
@@ -93,7 +93,7 @@ When `reasoning_trace` is provided, the SDK automatically computes and stores th
 ### 3. Sign (standalone)
 
 ```python
-from eatp.crypto import hash_reasoning_trace, sign_reasoning_trace
+from kailash.trust.signing.crypto import hash_reasoning_trace, sign_reasoning_trace
 
 # Hash: SHA-256 of trace.to_signing_payload()
 trace_hash = hash_reasoning_trace(trace)  # "a3f8..." (64 chars)
@@ -105,7 +105,7 @@ signature = sign_reasoning_trace(trace, private_key)  # base64 string
 ### 4. Verify
 
 ```python
-from eatp.crypto import verify_reasoning_signature
+from kailash.trust.signing.crypto import verify_reasoning_signature
 
 # Standalone verification (for signatures created without context_id)
 is_valid = verify_reasoning_signature(trace, signature, public_key)  # bool
@@ -126,16 +126,16 @@ result = await ops.verify(
 
 Verification gradient for reasoning:
 
-| Level        | Reasoning Check                                                                    |
-| ------------ | ---------------------------------------------------------------------------------- |
-| **QUICK**    | No reasoning check                                                                 |
-| **STANDARD** | If `REASONING_REQUIRED` constraint active: checks presence, records warning violation (valid=True) |
+| Level        | Reasoning Check                                                                                                                                                   |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **QUICK**    | No reasoning check                                                                                                                                                |
+| **STANDARD** | If `REASONING_REQUIRED` constraint active: checks presence, records warning violation (valid=True)                                                                |
 | **FULL**     | If `REASONING_REQUIRED` + no trace: **hard failure** (valid=False). If trace present: verifies `reasoning_trace_hash` and `reasoning_signature` cryptographically |
 
 ### 5. Query (via Knowledge Bridge)
 
 ```python
-from eatp.knowledge.bridge import KnowledgeBridge
+from kailash.trust.knowledge.bridge import KnowledgeBridge
 
 bridge = KnowledgeBridge(trust_store=store)
 
@@ -208,9 +208,9 @@ payload = trace.to_signing_payload()
 ### Compliance Workflow with Mandatory Reasoning
 
 ```python
-from eatp import CapabilityRequest, TrustOperations
-from eatp.chain import CapabilityType, VerificationLevel
-from eatp.reasoning import ReasoningTrace, ConfidentialityLevel
+from kailash.trust import CapabilityRequest, TrustOperations
+from kailash.trust.chain import CapabilityType, VerificationLevel
+from kailash.trust.reasoning import ReasoningTrace, ConfidentialityLevel
 from datetime import datetime, timezone
 
 # Establish with REASONING_REQUIRED constraint
@@ -257,7 +257,7 @@ result = await ops.verify(
 ### Converting Reasoning to Organizational Knowledge
 
 ```python
-from eatp.knowledge.bridge import KnowledgeBridge
+from kailash.trust.knowledge.bridge import KnowledgeBridge
 
 bridge = KnowledgeBridge(trust_store=store)
 
@@ -279,8 +279,8 @@ entry = await bridge.reasoning_trace_to_knowledge(
 ### Privacy-Aware Reasoning with Redaction
 
 ```python
-from eatp.reasoning import ReasoningTrace, ConfidentialityLevel
-from eatp.crypto import hash_reasoning_trace
+from kailash.trust.reasoning import ReasoningTrace, ConfidentialityLevel
+from kailash.trust.signing.crypto import hash_reasoning_trace
 
 # For sensitive operations, classify at SECRET or above
 trace = ReasoningTrace(

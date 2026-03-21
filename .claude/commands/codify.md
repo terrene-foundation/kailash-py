@@ -16,6 +16,10 @@ description: "Load phase 05 (codify) for the current workspace. Update existing 
 - Read `docs/` and `docs/00-authority/` for knowledge base
 - Output: update existing agents and skills in their canonical locations (e.g., `agents/frameworks/`, `skills/01-core-sdk/`, `skills/02-dataflow/`, etc.)
 
+## Execution Model
+
+This phase executes under the **autonomous execution model** (see `rules/autonomous-execution.md`). Knowledge extraction and codification are autonomous — agents extract, structure, and validate knowledge without human intervention. The human reviews the codified output at the end (structural gate on what becomes institutional knowledge), but the extraction and synthesis process is fully autonomous.
+
 ## Workflow
 
 ### 1. Deep knowledge extraction

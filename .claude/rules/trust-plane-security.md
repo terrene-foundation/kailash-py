@@ -4,8 +4,9 @@
 
 These rules apply when editing:
 
-- `packages/trust-plane/**`
-- `packages/eatp/src/eatp/store/**`
+- `src/kailash/trust/plane/**`
+- `src/kailash/trust/_locking.py`
+- `src/kailash/trust/chain_store/**`
 
 These rules supplement `.claude/rules/security.md`. Both apply to trust-plane files.
 Violations during code review by intermediate-reviewer are BLOCK-level findings.
@@ -16,7 +17,7 @@ Violations during code review by intermediate-reviewer are BLOCK-level findings.
 
 ```python
 # DO:
-from trustplane._locking import safe_read_json, safe_open
+from kailash.trust._locking import safe_read_json, safe_open
 data = safe_read_json(path)
 
 # DO NOT:
@@ -31,7 +32,7 @@ data = json.loads(path.read_text())  # No symlink protection, no fd safety
 
 ```python
 # DO:
-from trustplane._locking import validate_id
+from kailash.trust._locking import validate_id
 validate_id(record_id)  # Raises ValueError on "../", "/", null bytes, etc.
 path = store_dir / f"{record_id}.json"
 
@@ -100,7 +101,7 @@ db_path.touch()  # Default permissions may be world-readable
 
 ```python
 # DO:
-from trustplane._locking import atomic_write
+from kailash.trust._locking import atomic_write
 atomic_write(path, json.dumps(record.to_dict()))
 
 # DO NOT:
@@ -199,7 +200,7 @@ if action_cost > limit:  # NaN > limit is always False — budget bypassed!
 
 ```python
 # DO:
-from trustplane.exceptions import RecordNotFoundError
+from kailash.trust.plane.exceptions import RecordNotFoundError
 try:
     delegate = store.get_delegate(did)
 except RecordNotFoundError:
@@ -220,7 +221,7 @@ All constraint patterns and resource paths MUST be normalized via `normalize_res
 
 ```python
 # DO:
-from trustplane.pathutils import normalize_resource_path
+from kailash.trust.pathutils import normalize_resource_path
 norm = normalize_resource_path(user_path)
 
 # DO NOT:
@@ -232,7 +233,7 @@ norm = Path(user_path).as_posix()   # Doesn't collapse double slashes
 
 ## Cross-References
 
-- `packages/trust-plane/CLAUDE.md` — Full security pattern inventory (13 patterns) and Store Security Contract
-- `packages/trust-plane/src/trustplane/store/__init__.py` — Store Security Contract as protocol docstring (created in TODO-09)
+- `src/kailash/trust/plane/ (security patterns documented in .claude/rules/trust-plane-security.md)` — Full security pattern inventory (13 patterns) and Store Security Contract
+- `src/kailash/trust/plane/store/__init__.py` — Store Security Contract as protocol docstring (created in TODO-09)
 - `.claude/rules/security.md` — Global security rules (secrets, injection, input validation)
 - `.claude/rules/eatp.md` — EATP SDK conventions (dataclasses, error hierarchy, cryptography)

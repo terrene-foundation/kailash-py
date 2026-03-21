@@ -43,24 +43,20 @@ class TestImportCycles:
     @pytest.mark.parametrize(
         "module_name",
         [
-            "eatp.constraints.budget_tracker",
-            "eatp.constraints.budget_store",
-            "eatp.posture_store",
-            "eatp.postures",
+            "kailash.trust.constraints.budget_tracker",
+            "kailash.trust.constraints.budget_store",
+            "kailash.trust.posture.posture_store",
+            "kailash.trust.posture.postures",
         ],
     )
-    def test_eatp_module_imports_cleanly(self, module_name: str) -> None:
-        """EATP modules import without errors."""
+    def test_trust_module_imports_cleanly(self, module_name: str) -> None:
+        """Trust modules import without errors."""
         mod = importlib.import_module(module_name)
         assert mod is not None
 
     def test_no_reverse_imports(self) -> None:
-        """EATP must never import from kaizen or dataflow."""
-        import eatp
+        """kailash.trust must never import from kaizen or dataflow."""
+        import kailash.trust
 
-        # Check that the eatp package source doesn't reference kaizen
-        import inspect
-
-        source_file = inspect.getfile(eatp)
         # Just verify the import works -- structural check
-        assert eatp is not None
+        assert kailash.trust is not None

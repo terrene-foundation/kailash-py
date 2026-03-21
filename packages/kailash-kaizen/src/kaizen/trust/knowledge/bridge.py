@@ -1,3 +1,3 @@
-"""Compatibility shim — re-exports from eatp.knowledge.bridge."""
+"""Compatibility shim — re-exports from kailash.trust.knowledge.bridge."""
 
-from eatp.knowledge.bridge import *  # noqa: F401,F403
+from kailash.trust.knowledge.bridge import *  # noqa: F401,F403

@@ -1,3 +1,3 @@
-"""Compatibility shim — re-exports from eatp.esa.api."""
+"""Compatibility shim — re-exports from kailash.trust.esa.api."""
 
-from eatp.esa.api import *  # noqa: F401,F403
+from kailash.trust.esa.api import *  # noqa: F401,F403

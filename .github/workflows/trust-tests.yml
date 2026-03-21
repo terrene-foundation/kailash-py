@@ -5,6 +5,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - "src/kailash/trust/**"
       - "src/kailash/runtime/trust/**"
       - "src/kailash/runtime/base.py"
       - "src/kailash/runtime/local.py"
@@ -12,6 +13,7 @@ on:
       - "packages/kailash-kaizen/src/kaizen/trust/**"
       - "packages/kailash-dataflow/src/dataflow/trust/**"
       - "packages/kailash-nexus/src/nexus/trust/**"
+      - "tests/trust/**"
       - "tests/unit/runtime/trust/**"
       - "packages/kailash-kaizen/tests/unit/trust/**"
       - "packages/kailash-kaizen/tests/integration/trust/**"
@@ -55,7 +57,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install -e ".[dev]" --system --break-system-packages
+          uv pip install -e ".[trust,dev]" --system --break-system-packages
           uv pip install -e "packages/kailash-kaizen[dev]" --system --break-system-packages
           uv pip install -e "packages/kailash-dataflow[dev]" --system --break-system-packages
           uv pip install -e "packages/kailash-nexus[dev]" --system --break-system-packages

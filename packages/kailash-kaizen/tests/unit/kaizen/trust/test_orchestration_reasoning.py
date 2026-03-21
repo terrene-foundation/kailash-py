@@ -11,12 +11,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from eatp.orchestration.execution_context import TrustExecutionContext
-from eatp.orchestration.runtime import (
+from kailash.trust.orchestration.execution_context import TrustExecutionContext
+from kailash.trust.orchestration.runtime import (
     TrustAwareOrchestrationRuntime,
     TrustAwareRuntimeConfig,
 )
-from eatp.reasoning import ConfidentialityLevel, ReasoningTrace
+from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
 
 
 @pytest.fixture
@@ -207,7 +207,7 @@ class TestKaizenShimReExports:
             TrustAwareOrchestrationRuntime as KaizenRuntime,
         )
 
-        from eatp.orchestration.runtime import (
+        from kailash.trust.orchestration.runtime import (
             TrustAwareOrchestrationRuntime as EatpRuntime,
         )
 

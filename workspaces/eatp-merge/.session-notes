@@ -1,0 +1,29 @@
+# Session Notes — EATP Merge
+# Date: 2026-03-21
+# Status: ALL PHASES COMPLETE — ready for PR
+
+## Accomplished
+- Phase 04 /redteam: 3 rounds, all findings resolved
+  - R1: Circular import crash, missing __version__, API surface gaps (FIXED)
+  - R2 (agents): TrustPlaneError.details loss, CI config, version bounds (FIXED)
+  - R3: Security hardening (chain_store symlink+fsync+permissions), test guardrails, all /codify items
+- /codify complete:
+  - Skills: 7 files in 26-eatp-reference + kaizen-trust-eatp.md — crypto/store paths, pip install refs
+  - Rules: trust-plane-security.md — trustplane→kailash.trust.plane examples
+  - Docs: 5 files in docs/00-authority/ — pip install trust-plane→kailash[trust]
+  - Kaizen shims: 44 files — docstrings eatp.*→kailash.trust.*
+  - Code: chain_store security (safe_read_json, fsync, 0o600), test_dependency_direction.py created
+  - Config: kaizen __author__→"Terrene Foundation", ruff target py311, kaizen version bounds
+- Trust tests: 2683 passed, 0 failed
+- Total files changed across all red team rounds: ~70
+
+## Blockers
+- None
+
+## Next Steps
+- Create PR: `gh pr create` on feat/trust-merge → main
+- Main unit test suite re-verification (5425 tests — last confirmed pass was pre-red-team fixes)
+- After merge: publish kailash 2.0.0, kailash-kaizen 2.0.0
+
+## Active Todo
+- PR creation
