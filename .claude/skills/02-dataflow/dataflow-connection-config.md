@@ -27,11 +27,9 @@ Configure database connections with full support for special characters in passw
 ```python
 from dataflow import DataFlow
 
-# PostgreSQL with special characters
+# PostgreSQL with special characters (pool auto-scales from max_connections)
 db = DataFlow(
     database_url="postgresql://admin:MySecret#123$@localhost:5432/mydb",
-    pool_size=20,
-    pool_max_overflow=30
 )
 
 # SQLite (development)
@@ -87,11 +85,14 @@ db = DataFlow(
     # Connection
     database_url="postgresql://...",
 
-    # Connection pooling
-    pool_size=20,              # Base connections
-    pool_max_overflow=30,      # Extra connections
+    # Connection pooling — auto-scales by default (recommended)
+    # pool_size auto-detects from database max_connections
+    # pool_max_overflow auto-computed as max(2, pool_size // 2)
     pool_recycle=3600,         # Recycle after 1 hour
-    pool_pre_ping=True,        # Validate connections
+
+    # Override auto-scaling only when needed:
+    # pool_size=25,            # Explicit override (e.g., PgBouncer)
+    # pool_max_overflow=12,    # Explicit overflow limit
 
     # Timeouts
     connect_timeout=10,        # Connection timeout (seconds)
@@ -102,6 +103,53 @@ db = DataFlow(
     auto_migrate=True,         # Auto schema updates (default)
 )
 ```
+
+## Connection Pool Configuration
+
+DataFlow auto-scales pool sizes from `max_connections`. No configuration needed for most deployments.
+
+### How Auto-Scaling Works
+
+1. **Explicit `pool_size`** → used as-is (highest priority)
+2. **`DATAFLOW_POOL_SIZE` env var** → used if set
+3. **Auto-detect**: probes `SHOW max_connections` on PostgreSQL → `pool_size = (max_conn * 0.7) / workers`
+4. **Fallback**: `min(5, cpu_count)` if probe fails
+
+### When to Override
+
+| Scenario               | Action                                              |
+| ---------------------- | --------------------------------------------------- |
+| **PgBouncer**          | Set `pool_size=3` (pooler manages connections)      |
+| **Known worker count** | Set `DATAFLOW_WORKER_COUNT=N` for accurate division |
+| **Shared database**    | Lower `pool_size` to leave room for other apps      |
+| **Development**        | Leave default — SQLite doesn't need pooling         |
+
+### Diagnostic Flow
+
+```python
+# 1. Check startup logs for pool configuration
+#    [DataFlow] Pool auto-scaled: pool_size=17, max_overflow=8 (db_max=100, workers=4)
+
+# 2. Real-time utilization
+stats = db.pool_stats()
+# {"active": 5, "idle": 12, "max": 17, "overflow": 0, "max_overflow": 8, "utilization": 0.19}
+
+# 3. Health check includes pool status
+health = db.health_check()
+# health["pool"]["utilization"] — 0.0 to 1.0
+
+# 4. Lightweight health check (doesn't consume main pool)
+result = await db.execute_raw_lightweight("SELECT 1")
+```
+
+### Environment Variables
+
+| Variable                         | Purpose                        | Default     |
+| -------------------------------- | ------------------------------ | ----------- |
+| `DATAFLOW_POOL_SIZE`             | Override auto-scaled pool size | Auto-detect |
+| `DATAFLOW_WORKER_COUNT`          | Worker count for pool division | Auto-detect |
+| `DATAFLOW_STARTUP_VALIDATION`    | Validate pool at startup       | `true`      |
+| `DATAFLOW_POOL_MONITOR_INTERVAL` | Monitor check interval (secs)  | `10`        |
 
 ## Common Mistakes
 
@@ -120,24 +168,24 @@ db = DataFlow(f"postgresql://user:{password}@host/db")
 db = DataFlow("postgresql://user:MySecret#123$@host/db")
 ```
 
-### Mistake 2: Small Connection Pool
+### Mistake 2: Hardcoding Pool Size
 
 ```python
-# Wrong - pool exhaustion under load
+# Wrong — hardcoded pool_size ignores deployment topology
 db = DataFlow(
     database_url="postgresql://...",
-    pool_size=5  # Too small for production
+    pool_size=50,           # May exhaust max_connections in multi-worker deployments
+    pool_max_overflow=100   # pool_size * 2 triples connection footprint!
 )
 ```
 
-**Fix: Adequate Pool Size**
+**Fix: Let Auto-Scaling Handle It**
 
 ```python
-# Correct
+# Correct — auto-scales from database max_connections
 db = DataFlow(
     database_url="postgresql://...",
-    pool_size=20,
-    pool_max_overflow=30
+    # pool_size auto-detected, max_overflow = max(2, pool_size // 2)
 )
 ```
 
@@ -161,9 +209,7 @@ Use `dataflow-specialist` when:
 
 ### Primary Sources
 
-
 ### Related Documentation
-
 
 ## Examples
 
@@ -180,17 +226,16 @@ if os.getenv("ENV") == "development":
 elif os.getenv("ENV") == "staging":
     db = DataFlow(
         database_url=os.getenv("DATABASE_URL"),
-        pool_size=10,
         auto_migrate=True
+        # pool_size auto-scaled from max_connections
     )
 
 # Production
 else:
     db = DataFlow(
         database_url=os.getenv("DATABASE_URL"),
-        pool_size=20,
-        pool_max_overflow=30,
         auto_migrate=False,  # Don't modify existing schema
+        # pool_size auto-scaled; override with DATAFLOW_POOL_SIZE env var if needed
     )
 ```
 
@@ -208,19 +253,19 @@ db = DataFlow(
 
 ## Troubleshooting
 
-| Issue                          | Cause                     | Solution                 |
-| ------------------------------ | ------------------------- | ------------------------ |
-| Connection refused             | Wrong host/port           | Verify connection string |
-| Password authentication failed | Special chars in password | Use latest DataFlow      |
-| Pool exhausted                 | pool_size too small       | Increase pool_size       |
-| Connection timeout             | Network/firewall          | Check connect_timeout    |
+| Issue                          | Cause                                  | Solution                                                                            |
+| ------------------------------ | -------------------------------------- | ----------------------------------------------------------------------------------- |
+| Connection refused             | Wrong host/port                        | Verify connection string                                                            |
+| Password authentication failed | Special chars in password              | Use latest DataFlow                                                                 |
+| Pool exhausted                 | Too many workers or pool_size override | Remove explicit pool_size (let auto-scaling handle it) or set DATAFLOW_WORKER_COUNT |
+| Connection timeout             | Network/firewall                       | Check connect_timeout                                                               |
 
 ## Quick Tips
 
 - Use environment variables for credentials
 - Special characters work with no encoding required
 - SQLite for development, PostgreSQL for production
-- pool_size = 2x CPU cores (typical)
+- pool_size auto-scales from max_connections (leave default)
 - Enable pool_pre_ping for reliability
 - Test connection before deployment
 

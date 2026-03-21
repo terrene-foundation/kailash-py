@@ -260,8 +260,8 @@ class TestPostgreSQLAdapter:
             "database": "testdb",
             "user": "test",
             "password": "test",
-            "min_size": 10,  # pool_size
-            "max_size": 30,  # pool_size + max_overflow
+            "min_size": 5,  # pool_size (conservative default)
+            "max_size": 7,  # pool_size + max_overflow (5 + 2)
         }
 
         for key, value in expected_params.items():

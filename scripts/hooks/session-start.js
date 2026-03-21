@@ -89,6 +89,20 @@ function initializeSession(data) {
   // ── Detect framework ──────────────────────────────────────────────────
   const framework = detectFramework(cwd);
 
+  // ── Detect DataFlow pool config ─────────────────────────────────────
+  const poolInfo = detectPoolConfig(cwd);
+  if (poolInfo.isPostgresql) {
+    if (poolInfo.hasPoolOverride) {
+      console.error(
+        "[DataFlow] Pool size override detected (DATAFLOW_POOL_SIZE). Auto-scaling disabled.",
+      );
+    } else {
+      console.error(
+        "[DataFlow] Pool auto-scaling active. Override with DATAFLOW_POOL_SIZE=N if needed.",
+      );
+    }
+  }
+
   // ── Log observation ───────────────────────────────────────────────────
   try {
     const observationsFile = path.join(learningDir, "observations.jsonl");
@@ -182,7 +196,11 @@ function initializeSession(data) {
 function checkPythonPackageFreshness(cwd) {
   // Check all packages for version consistency
   const packageDirs = [
-    { name: "kailash", pyproject: "pyproject.toml", init: "src/kailash/__init__.py" },
+    {
+      name: "kailash",
+      pyproject: "pyproject.toml",
+      init: "src/kailash/__init__.py",
+    },
   ];
 
   // Also check packages/ subdirectories
@@ -263,7 +281,9 @@ function checkPythonPackageFreshness(cwd) {
     try {
       const marker = JSON.parse(fs.readFileSync(markerPath, "utf8").trim());
       if (marker.synced_at) {
-        const daysSince = (Date.now() - new Date(marker.synced_at).getTime()) / (1000 * 60 * 60 * 24);
+        const daysSince =
+          (Date.now() - new Date(marker.synced_at).getTime()) /
+          (1000 * 60 * 60 * 24);
         if (daysSince > 7) {
           console.error(
             `[COC-SYNC] WARNING: COC sync is ${Math.floor(daysSince)} days old. ` +
@@ -295,4 +315,34 @@ function detectFramework(cwd) {
   } catch {
     return "unknown";
   }
+}
+
+function detectPoolConfig(cwd) {
+  const result = { isPostgresql: false, hasPoolOverride: false };
+  try {
+    const envPath = path.join(cwd, ".env");
+    if (!fs.existsSync(envPath)) return result;
+    const content = fs.readFileSync(envPath, "utf8");
+    const lines = content.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("#") || !trimmed.includes("=")) continue;
+      const eqIndex = trimmed.indexOf("=");
+      const key = trimmed.slice(0, eqIndex).trim();
+      const value = trimmed
+        .slice(eqIndex + 1)
+        .trim()
+        .replace(/^["']|["']$/g, "");
+      if (
+        (key === "DATABASE_URL" || key === "DATAFLOW_DATABASE_URL") &&
+        (/postgresql/i.test(value) || /postgres/i.test(value))
+      ) {
+        result.isPostgresql = true;
+      }
+      if (key === "DATAFLOW_POOL_SIZE" && value.length > 0) {
+        result.hasPoolOverride = true;
+      }
+    }
+  } catch {}
+  return result;
 }

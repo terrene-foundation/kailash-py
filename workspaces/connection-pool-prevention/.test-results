@@ -1,0 +1,20 @@
+commit: 8d6666d2 (base) + uncommitted pool prevention changes (session 2, post-convergence)
+timestamp: 2026-03-21T18:00:00+08:00
+baseline_pass: 398
+baseline_fail: 1 (test_rapid_creation_destruction_cycle — pre-existing Redis timeout, unrelated)
+final_pass_unit: 127 (all pool unit tests including 20 convergence tests)
+final_fail_unit: 0
+final_pass_integration: 16 (real PostgreSQL on localhost:5434 — validated in session 1)
+final_fail_integration: 0
+new_tests: 131 (111 original + 20 red team round 2 convergence)
+regressions: 0
+command_unit: python -m pytest packages/kailash-dataflow/tests/unit/core/test_pool_*.py packages/kailash-dataflow/tests/unit/core/test_architecture_validation.py -x --tb=short -q --timeout=60
+command_integration: python -m pytest packages/kailash-dataflow/tests/integration/core_engine/test_pool_prevention_integration.py -x --tb=short -q --timeout=30
+infrastructure: PostgreSQL 16.13 on Docker (localhost:5434, max_connections=100) — not running in session 2
+redteam_round2: |
+  2 CRITICAL fixed (thread-safe snapshot, close/execute race)
+  4 HIGH fixed (SHOW allowlist, URL scoping, interval floor, close timeout)
+  6 MEDIUM fixed (credential logging, redundant init, private access, SQLite URL, docs, close logging)
+  2 MEDIUM deferred (pool_ready flag, full Gunicorn lifecycle)
+  5 LOW accepted
+  20 new tests covering all critical gaps

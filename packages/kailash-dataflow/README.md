@@ -92,6 +92,30 @@ class User:
 # ✅ Schema state management with rollback
 ```
 
+## Connection Pool Configuration
+
+DataFlow auto-detects safe pool sizes from your database's `max_connections`. No configuration needed for most deployments.
+
+```python
+# Auto-scaling (recommended) — pool size computed from max_connections
+db = DataFlow("postgresql://user:pass@localhost/mydb")
+
+# Explicit override (PgBouncer, shared databases)
+db = DataFlow("postgresql://...", pool_size=3)
+
+# Check pool health at runtime
+stats = db.pool_stats()
+# {"active": 5, "idle": 12, "max": 17, "utilization": 0.19}
+```
+
+### Environment Variables
+
+| Variable                      | Purpose                         | Default     |
+| ----------------------------- | ------------------------------- | ----------- |
+| `DATAFLOW_POOL_SIZE`          | Override auto-scaled pool size  | Auto-detect |
+| `DATAFLOW_WORKER_COUNT`       | Worker count for pool division  | Auto-detect |
+| `DATAFLOW_STARTUP_VALIDATION` | Validate pool config at startup | `true`      |
+
 ## 🎯 What Makes DataFlow Different?
 
 ### Multi-Database Support
@@ -114,9 +138,9 @@ db = DataFlow("mongodb://localhost:27017/dbname")
 db = DataFlow()  # Reads from DATABASE_URL
 
 # Advanced features (all SQL databases)
+# Pool auto-scales from max_connections — no pool_size needed
 db = DataFlow(
     "postgresql://...",  # or "mysql://..." or "sqlite:///..."
-    pool_size=50,
     auto_migrate=True,
     monitoring=True
 )
@@ -212,10 +236,9 @@ workflow.add_node("UserListNode", "find_users", {
 db = DataFlow(multi_tenant=True)
 
 # Real SQL generation with security
+# Pool auto-scales from max_connections; override only for PgBouncer/shared DBs
 db = DataFlow(
     database_url="postgresql://user:pass@localhost/db",
-    pool_size=20,
-    pool_max_overflow=30,
     monitoring=True,
     echo=False  # No SQL logging in production
 )

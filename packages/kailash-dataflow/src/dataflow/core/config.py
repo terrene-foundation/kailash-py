@@ -5,6 +5,7 @@ Provides zero-configuration defaults with progressive disclosure for advanced us
 Automatically detects environment and configures optimal settings.
 """
 
+import logging
 import multiprocessing
 import os
 from dataclasses import asdict, dataclass, field
@@ -13,6 +14,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .models import Environment
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # ErrorEnhancer Performance Configuration
@@ -329,50 +332,119 @@ class DatabaseConfig:
             # But for zero-config mode, default to SQLite
             return "sqlite:///dataflow.db"
 
-    def get_pool_size(self, environment: Environment) -> int:
-        """Calculate optimal pool size based on environment and resources"""
+    def get_pool_size(self, environment: Optional[Environment] = None) -> int:
+        """Calculate optimal pool size via auto-scaling.
+
+        Resolution order (first match wins):
+        1. Explicit ``self.pool_size`` (set via constructor or config)
+        2. ``DATAFLOW_POOL_SIZE`` environment variable
+        3. Auto-detect from database ``max_connections / workers * 0.7``
+        4. Conservative fallback: ``min(5, cpu_count)``
+
+        The old environment-based formula (up to ``cpu_count * 4 = 50``) is
+        eliminated — it caused guaranteed pool exhaustion in multi-worker
+        production deployments.
+
+        Args:
+            environment: Optional environment hint (kept for backward
+                compatibility with existing callers).
+        """
+        # 1. Explicit pool_size always wins
         if self.pool_size is not None:
             return self.pool_size
 
-        # Calculate based on CPU cores and environment
-        cpu_count = multiprocessing.cpu_count()
+        # 2. Env var override
+        env_val = os.environ.get("DATAFLOW_POOL_SIZE", "").strip()
+        if env_val:
+            try:
+                parsed = int(env_val)
+                if parsed >= 1:
+                    return parsed
+                logger.warning("DATAFLOW_POOL_SIZE=%d is less than 1, ignoring", parsed)
+            except ValueError:
+                logger.warning(
+                    "DATAFLOW_POOL_SIZE=%r is not a valid integer, ignoring",
+                    env_val,
+                )
 
-        if environment == Environment.DEVELOPMENT:
-            return min(5, cpu_count)
-        elif environment == Environment.TESTING:
-            return min(10, cpu_count * 2)
-        elif environment == Environment.STAGING:
-            return min(20, cpu_count * 3)
-        else:  # Production
-            return min(50, cpu_count * 4)
+        # 3. Auto-detect from database server
+        from dataflow.core.pool_utils import (
+            detect_worker_count,
+            probe_max_connections,
+        )
 
-    def get_max_overflow(self, environment: Environment) -> int:
-        """Calculate max overflow based on pool size"""
+        db_url = (
+            self.get_connection_url(environment)
+            if environment
+            else (self.url or self.database_url or os.environ.get("DATABASE_URL"))
+        )
+        db_max = probe_max_connections(db_url)
+        workers = detect_worker_count()
+
+        if db_max is not None:
+            # Reserve 30% for admin/migrations, then account for max_overflow
+            # (which adds ~50% on top of pool_size). Factor of 1.5 ensures
+            # total connections (pool_size + max_overflow) stay within budget.
+            available = int(db_max * 0.7)
+            pool_size = max(
+                2, available // (workers * 3 // 2)
+            )  # /1.5 to account for overflow
+            logger.info(
+                "Pool auto-scaled: pool_size=%d (db_max=%d, workers=%d, "
+                "reserved=30%%)",
+                pool_size,
+                db_max,
+                workers,
+            )
+            return pool_size
+
+        # 4. Conservative fallback
+        fallback = min(5, multiprocessing.cpu_count())
+        logger.info(
+            "Pool fallback: pool_size=%d (could not probe database "
+            "max_connections, using min(5, cpu_count))",
+            fallback,
+        )
+        return fallback
+
+    def get_max_overflow(self, environment: Optional[Environment] = None) -> int:
+        """Calculate max overflow based on pool size.
+
+        Uses max(2, pool_size // 2) to keep the overflow bounded.
+        The old formula (pool_size * 2) tripled the connection footprint
+        and was a major source of pool exhaustion in multi-worker deployments.
+        """
         if self.max_overflow is not None:
             return self.max_overflow
 
         pool_size = self.get_pool_size(environment)
-        return pool_size * 2  # Allow 2x overflow
+        return max(2, pool_size // 2)
 
 
 @dataclass
 class MonitoringConfig:
-    """Monitoring configuration with production defaults"""
+    """Monitoring configuration with production defaults.
+
+    Flags here MUST have backing implementations. Dead flags (config with no
+    consumer) violate no-stubs.md Rule 4.
+
+    Wired to PoolMonitor (pool_monitor.py):
+    - ``connection_metrics``: enables pool_stats() collection
+    - ``alert_on_connection_exhaustion``: enables ERROR logs at >= 95% utilization
+    """
 
     enabled: Optional[bool] = None
     slow_query_threshold: float = 1.0  # seconds
-    query_insights: bool = True
+
+    # Pool monitoring — wired to PoolMonitor (PY-2)
     connection_metrics: bool = True
-    transaction_tracking: bool = True
-
-    # Alerting
     alert_on_connection_exhaustion: bool = True
-    alert_on_slow_queries: bool = True
-    alert_on_failed_transactions: bool = True
 
-    # Export settings
-    metrics_export_interval: int = 60  # seconds
-    metrics_export_format: str = "prometheus"  # prometheus, json, statsd
+    # Pool monitor interval in seconds (used by PoolMonitor daemon thread)
+    pool_monitor_interval_secs: int = 10
+
+    # Leak detection threshold in seconds (used by PoolMonitor)
+    leak_detection_threshold_secs: int = 30
 
     def is_enabled(self, environment: Environment) -> bool:
         """Determine if monitoring should be enabled"""
@@ -459,7 +531,18 @@ class DataFlowConfig:
         self.debug = kwargs.get("debug", False)
         self.auto_commit = kwargs.get("auto_commit", True)
         self.batch_size = kwargs.get("batch_size", 1000)
-        self.connection_pool_size = kwargs.get("connection_pool_size", 10)
+
+        # Deprecation: connection_pool_size was a dead attribute (never consumed).
+        # Emit a deprecation warning if callers still pass it.
+        if "connection_pool_size" in kwargs:
+            import warnings
+
+            warnings.warn(
+                "connection_pool_size is deprecated and has no effect. "
+                "Use pool_size instead (passed to DataFlow or DatabaseConfig).",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
         # Schema state management settings
         self.schema_cache_ttl = kwargs.get("schema_cache_ttl", 300)  # 5 minutes default
@@ -749,7 +832,6 @@ class DataFlowConfig:
             "debug": self.debug,
             "auto_commit": self.auto_commit,
             "batch_size": self.batch_size,
-            "connection_pool_size": self.connection_pool_size,
             "schema_cache_ttl": self.schema_cache_ttl,
             "schema_cache_max_size": self.schema_cache_max_size,
         }

@@ -1,5 +1,39 @@
 # DataFlow Changelog
 
+## [1.1.0] - 2026-03-21
+
+### Added
+
+- **Pool auto-scaling**: Pool size automatically detected from database `max_connections`, divided by worker count. No configuration needed for most deployments.
+- **Startup validation**: Warns at startup if configured pool will exhaust `max_connections`. Set `DATAFLOW_STARTUP_VALIDATION=false` to disable.
+- **Pool utilization monitor**: Background daemon thread logs at 70% (INFO), 80% (WARNING), 95% (ERROR) utilization thresholds.
+- **Connection leak detection**: Tracks connection checkout time and logs warnings with tracebacks when connections are held beyond threshold (default: 30s).
+- **Lightweight health check pool**: Separate 2-connection mini-pool for health checks that doesn't compete with the main application pool (RS-6 alignment).
+- **`pool_stats()` API**: Real-time pool utilization stats (`active`, `idle`, `max`, `utilization`).
+- **`execute_raw_lightweight()` API**: Execute health check queries on the dedicated lightweight pool.
+- **`health_check()` pool integration**: Health check response now includes pool utilization stats and degrades status at 95%+ utilization.
+
+### Changed
+
+- **Pool size default**: Replaced five competing pool size defaults with single source of truth via `DatabaseConfig.get_pool_size()`.
+- **`max_overflow` formula**: Changed from `pool_size * 2` (triples connections) to `max(2, pool_size // 2)` (bounded).
+- **`pool_max_overflow` parameter**: Changed from `int = 30` to `Optional[int] = None` to allow auto-computation.
+
+### Deprecated
+
+- `DataFlowConfig.connection_pool_size`: Use `DatabaseConfig.pool_size` via `get_pool_size()` instead.
+
+### Removed
+
+- Dead `MonitoringConfig` flags (`alert_on_slow_queries`, `alert_on_failed_transactions`, `query_insights`, `transaction_tracking`, `metrics_export_interval`, `metrics_export_format`) that had no backing implementation.
+- Ghost `DATAFLOW_POOL_SIZE` env var read in engine.py pooling block that computed but never stored the value.
+- `connection_pool_size` suggestion mapping from engine.py parameter suggestions.
+
+### Fixed
+
+- Five competing pool size defaults (10, 20, 25, 30, `cpu_count * 4`) consolidated into single code path.
+- `MonitoringConfig.alert_on_connection_exhaustion` and `connection_metrics` flags now wired to pool monitor.
+
 ## [0.12.1] - 2026-02-22
 
 ### V4 Audit Hardening Patch

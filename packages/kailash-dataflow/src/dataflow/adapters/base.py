@@ -51,8 +51,11 @@ class DatabaseAdapter(BaseAdapter):
         self.query_params = components.get("query_params", {})
 
         # Common SQL configuration
-        self.pool_size = kwargs.get("pool_size", 10)
-        self.max_overflow = kwargs.get("max_overflow", 20)
+        # Callers (DataFlow/config) should resolve via get_pool_size() and pass
+        # the resolved value. Fallback to 5 if not provided — conservative default
+        # that is safe for any deployment (5 * 4 workers = 20, well within PG default 100).
+        self.pool_size = kwargs.get("pool_size") or 5
+        self.max_overflow = kwargs.get("max_overflow") or 2
         self.pool_timeout = kwargs.get("pool_timeout", 30)
         self.pool_recycle = kwargs.get("pool_recycle", 3600)
         self.enable_logging = kwargs.get("enable_logging", False)
