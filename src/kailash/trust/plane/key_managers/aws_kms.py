@@ -7,7 +7,7 @@ Uses AWS KMS for signing operations with ECDSA P-256 (the only
 asymmetric algorithm available in AWS KMS that supports Ed25519-like
 use cases). Ed25519 is not available in AWS KMS.
 
-Requires boto3: pip install trust-plane[aws]
+Requires boto3: pip install kailash[aws-secrets]
 
 Example:
     from kailash.trust.plane.key_managers.aws_kms import AwsKmsKeyManager
@@ -25,7 +25,11 @@ import hashlib
 import logging
 from typing import Any
 
-from kailash.trust.plane.exceptions import KeyManagerError, KeyNotFoundError, SigningError
+from kailash.trust.plane.exceptions import (
+    KeyManagerError,
+    KeyNotFoundError,
+    SigningError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +68,7 @@ class AwsKmsKeyManager:
         if not _BOTO3_AVAILABLE:
             raise ImportError(
                 "boto3 is required for AWS KMS key management. "
-                "Install with: pip install trust-plane[aws]"
+                "Install with: pip install kailash[aws-secrets]"
             )
 
         self._key_id = key_id

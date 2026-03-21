@@ -6,7 +6,7 @@
 Uses Azure Key Vault for signing operations with EC P-256.
 
 Requires azure-keyvault-keys and azure-identity:
-    pip install trust-plane[azure]
+    pip install kailash[azure-secrets]
 
 Example:
     from kailash.trust.plane.key_managers.azure_keyvault import AzureKeyVaultKeyManager
@@ -24,7 +24,11 @@ import hashlib
 import logging
 from typing import Any
 
-from kailash.trust.plane.exceptions import KeyManagerError, KeyNotFoundError, SigningError
+from kailash.trust.plane.exceptions import (
+    KeyManagerError,
+    KeyNotFoundError,
+    SigningError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +67,7 @@ class AzureKeyVaultKeyManager:
             raise ImportError(
                 "azure-keyvault-keys and azure-identity are required for "
                 "Azure Key Vault key management. "
-                "Install with: pip install trust-plane[azure]"
+                "Install with: pip install kailash[azure-secrets]"
             )
 
         self._vault_url = vault_url

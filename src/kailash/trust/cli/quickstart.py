@@ -312,7 +312,9 @@ async def run_quickstart(verbose: bool = False) -> None:
         else:
             # Show the delegation-level constraints
             chain2 = await store.get_chain(agent2_id)
-            env_constraints = [str(c.value) for c in chain2.constraint_envelope.active_constraints]
+            env_constraints = [
+                str(c.value) for c in chain2.constraint_envelope.active_constraints
+            ]
             if env_constraints:
                 print(_detail(f"Constraints: {', '.join(env_constraints)}"))
     else:
@@ -360,7 +362,11 @@ async def run_quickstart(verbose: bool = False) -> None:
 
     score = await compute_trust_score(agent1_id, store)
 
-    print(_ok(f"Trust Score for {agent1_id}: {_BOLD}{score.score}/100{_RESET} (Grade {score.grade})"))
+    print(
+        _ok(
+            f"Trust Score for {agent1_id}: {_BOLD}{score.score}/100{_RESET} (Grade {score.grade})"
+        )
+    )
     if verbose:
         for factor, value in score.breakdown.items():
             factor_label = factor.replace("_", " ").title()
@@ -386,12 +392,16 @@ async def run_quickstart(verbose: bool = False) -> None:
     print(_header("Your turn! Try:"))
     print()
     print(f"  {_WHITE}eatp init --name 'My Org'{_RESET}")
-    print(f"  {_WHITE}eatp establish my-agent --authority <id> --capabilities read,write{_RESET}")
+    print(
+        f"  {_WHITE}eatp establish my-agent --authority <id> --capabilities read,write{_RESET}"
+    )
     print(f"  {_WHITE}eatp verify my-agent --action read{_RESET}")
-    print(f"  {_WHITE}eatp delegate --from my-agent --to helper --capabilities read{_RESET}")
+    print(
+        f"  {_WHITE}eatp delegate --from my-agent --to helper --capabilities read{_RESET}"
+    )
     print(f"  {_WHITE}eatp status{_RESET}")
     print()
-    print(f"{_DIM}Docs: https://eatp.dev | pip install eatp{_RESET}")
+    print(f"{_DIM}Docs: https://eatp.dev | pip install kailash[trust]{_RESET}")
     print(_RESET)
 
 

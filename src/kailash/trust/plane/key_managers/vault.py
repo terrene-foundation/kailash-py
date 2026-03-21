@@ -6,7 +6,7 @@
 Uses HashiCorp Vault's Transit secrets engine for signing operations
 with ECDSA P-256.
 
-Requires hvac: pip install trust-plane[vault]
+Requires hvac: pip install kailash[vault]
 
 Example:
     from kailash.trust.plane.key_managers.vault import VaultKeyManager
@@ -26,7 +26,11 @@ import hashlib
 import logging
 from typing import Any
 
-from kailash.trust.plane.exceptions import KeyManagerError, KeyNotFoundError, SigningError
+from kailash.trust.plane.exceptions import (
+    KeyManagerError,
+    KeyNotFoundError,
+    SigningError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +75,7 @@ class VaultKeyManager:
         if not _HVAC_AVAILABLE:
             raise ImportError(
                 "hvac is required for HashiCorp Vault key management. "
-                "Install with: pip install trust-plane[vault]"
+                "Install with: pip install kailash[vault]"
             )
 
         self._vault_addr = vault_addr

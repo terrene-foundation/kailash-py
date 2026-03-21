@@ -24,9 +24,13 @@ class TestAwsKmsKeyManagerImportError:
 
         # Simulate boto3 not being available by patching the availability flag
         with patch.object(aws_kms_mod, "_BOTO3_AVAILABLE", False):
-            from kailash.trust.plane.key_managers.managers.aws_kms import AwsKmsKeyManager
+            from kailash.trust.plane.key_managers.managers.aws_kms import (
+                AwsKmsKeyManager,
+            )
 
-            with pytest.raises(ImportError, match="pip install trust-plane\\[aws\\]"):
+            with pytest.raises(
+                ImportError, match="pip install kailash\\[aws-secrets\\]"
+            ):
                 AwsKmsKeyManager(
                     key_id="arn:aws:kms:us-east-1:123456789012:key/test-key"
                 )
@@ -43,13 +47,19 @@ class TestAzureKeyVaultKeyManagerImportError:
 
     def test_init_raises_import_error_without_azure(self) -> None:
         """AzureKeyVaultKeyManager must raise ImportError if azure-keyvault-keys is not installed."""
-        from kailash.trust.plane.key_managers.managers import azure_keyvault as azure_mod
+        from kailash.trust.plane.key_managers.managers import (
+            azure_keyvault as azure_mod,
+        )
 
         # Simulate azure libs not being available by patching the availability flag
         with patch.object(azure_mod, "_AZURE_AVAILABLE", False):
-            from kailash.trust.plane.key_managers.managers.azure_keyvault import AzureKeyVaultKeyManager
+            from kailash.trust.plane.key_managers.managers.azure_keyvault import (
+                AzureKeyVaultKeyManager,
+            )
 
-            with pytest.raises(ImportError, match="pip install trust-plane\\[azure\\]"):
+            with pytest.raises(
+                ImportError, match="pip install kailash\\[azure-secrets\\]"
+            ):
                 AzureKeyVaultKeyManager(
                     vault_url="https://my-vault.vault.azure.net",
                     key_name="test-key",
@@ -57,7 +67,9 @@ class TestAzureKeyVaultKeyManagerImportError:
 
     def test_algorithm_returns_ecdsa_p256(self) -> None:
         """AzureKeyVaultKeyManager.algorithm() must return 'ecdsa-p256'."""
-        from kailash.trust.plane.key_managers.managers.azure_keyvault import AzureKeyVaultKeyManager
+        from kailash.trust.plane.key_managers.managers.azure_keyvault import (
+            AzureKeyVaultKeyManager,
+        )
 
         assert AzureKeyVaultKeyManager.ALGORITHM == "ecdsa-p256"
 
@@ -73,7 +85,7 @@ class TestVaultKeyManagerImportError:
         with patch.object(vault_mod, "_HVAC_AVAILABLE", False):
             from kailash.trust.plane.key_managers.managers.vault import VaultKeyManager
 
-            with pytest.raises(ImportError, match="pip install trust-plane\\[vault\\]"):
+            with pytest.raises(ImportError, match="pip install kailash\\[vault\\]"):
                 VaultKeyManager(
                     vault_addr="https://vault.example.com:8200",
                     key_name="test-key",
@@ -165,7 +177,9 @@ class TestAzureKeyVaultExceptionWrapping:
     def test_sign_wraps_azure_error(self) -> None:
         """sign() must wrap Azure errors in SigningError."""
         from kailash.trust.plane.exceptions import SigningError
-        from kailash.trust.plane.key_managers.managers.azure_keyvault import AzureKeyVaultKeyManager
+        from kailash.trust.plane.key_managers.managers.azure_keyvault import (
+            AzureKeyVaultKeyManager,
+        )
 
         manager = AzureKeyVaultKeyManager.__new__(AzureKeyVaultKeyManager)
         manager._key_name = "test-key"
@@ -181,7 +195,9 @@ class TestAzureKeyVaultExceptionWrapping:
     def test_get_public_key_wraps_azure_error(self) -> None:
         """get_public_key() must wrap Azure errors in KeyManagerError."""
         from kailash.trust.plane.exceptions import KeyManagerError
-        from kailash.trust.plane.key_managers.managers.azure_keyvault import AzureKeyVaultKeyManager
+        from kailash.trust.plane.key_managers.managers.azure_keyvault import (
+            AzureKeyVaultKeyManager,
+        )
 
         manager = AzureKeyVaultKeyManager.__new__(AzureKeyVaultKeyManager)
         manager._key_name = "test-key"

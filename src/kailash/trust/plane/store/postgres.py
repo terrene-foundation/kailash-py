@@ -36,7 +36,7 @@ try:
 except ImportError:
     raise ImportError(
         "PostgreSQL store requires 'psycopg' and 'psycopg_pool'. "
-        "Install with: pip install trust-plane[postgres]  "
+        "Install with: pip install kailash[postgres]"
         "or: pip install 'psycopg[binary]>=3.0' psycopg_pool"
     )
 
