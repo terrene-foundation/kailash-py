@@ -1,0 +1,21 @@
+# Session Notes — Connection Pool Prevention
+# Date: 2026-03-21 (Session 2, post-convergence)
+
+## Accomplished (Session 1 + 2)
+- Full analysis (4 agents), cross-SDK alignment with kailash-rs, 63-todo plan
+- Milestones 0-10 ALL IMPLEMENTED + RED TEAM ROUND 2 CONVERGED
+- Red team round 2: 4 agents (security, code review, deep analyst, testing)
+  - 2 CRITICAL + 4 HIGH + 6 MEDIUM fixes applied
+  - 20 new convergence tests (total: 127 unit + 16 integration)
+  - Thread-safe pool stats, asyncio.Lock on LightweightPool, narrowed SHOW allowlist
+  - URL-scoped stats provider, interval floor, close timeout + terminate fallback
+  - Post-fork detection, credential logging fix, SQLite URL handling
+- 5 new source files + 2 new test files
+- 147 total tests pass, 0 regressions
+
+## Ready for
+- Commit and create PR
+- /codify for coc-sync to USE template repo
+
+## Blockers
+- kailash-enterprise keeps reinstalling via aerith deps — use `pip uninstall kailash-enterprise && pip install -e . --no-deps`

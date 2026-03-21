@@ -134,7 +134,7 @@ class DataFlowProductionEngine:
             debug=self.config.get("debug", False),
             auto_commit=self.config.get("auto_commit", True),
             batch_size=self.config.get("batch_size", 1000),
-            connection_pool_size=self.config.get("pool_size", 10),
+            pool_size=self.config.get("pool_size", 10),
         )
 
         # Connection pool and management

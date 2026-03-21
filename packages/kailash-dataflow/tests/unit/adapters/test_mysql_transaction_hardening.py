@@ -49,24 +49,21 @@ class TestMySQLTransactionInit:
     def test_init_sets_committed_false(self):
         """__init__ must set _committed to False on the instance."""
         pool = Mock()
-        conn = Mock()
-        txn = MySQLTransaction(pool, conn)
+        txn = MySQLTransaction(pool)
         assert txn._committed is False
 
     def test_init_sets_rolled_back_false(self):
         """__init__ must set _rolled_back to False on the instance."""
         pool = Mock()
-        conn = Mock()
-        txn = MySQLTransaction(pool, conn)
+        txn = MySQLTransaction(pool)
         assert txn._rolled_back is False
 
-    def test_init_stores_pool_and_connection(self):
-        """__init__ must store the pool and connection references."""
+    def test_init_stores_pool_reference(self):
+        """__init__ must store the pool reference; connection is None until __aenter__."""
         pool = Mock()
-        conn = Mock()
-        txn = MySQLTransaction(pool, conn)
+        txn = MySQLTransaction(pool)
         assert txn.connection_pool is pool
-        assert txn.connection is conn
+        assert txn.connection is None
 
     def test_init_captures_source_traceback_in_debug_mode(self):
         """In debug mode (__debug__ is True), __init__ must capture source traceback."""
@@ -75,8 +72,7 @@ class TestMySQLTransactionInit:
             pytest.skip("Test requires __debug__ == True (no -O flag)")
 
         pool = Mock()
-        conn = Mock()
-        txn = MySQLTransaction(pool, conn)
+        txn = MySQLTransaction(pool)
         assert txn._source_traceback is not None
         assert len(txn._source_traceback) > 0
 
@@ -91,7 +87,8 @@ class TestMySQLTransactionAexit:
         mock_pool = Mock()
         mock_pool.release = Mock()
 
-        txn = MySQLTransaction(mock_pool, mock_connection)
+        txn = MySQLTransaction(mock_pool)
+        txn.connection = mock_connection
 
         await txn.__aexit__(None, None, None)
 
@@ -106,7 +103,8 @@ class TestMySQLTransactionAexit:
         mock_pool = Mock()
         mock_pool.release = Mock()
 
-        txn = MySQLTransaction(mock_pool, mock_connection)
+        txn = MySQLTransaction(mock_pool)
+        txn.connection = mock_connection
 
         await txn.__aexit__(ValueError, ValueError("test"), None)
 
@@ -121,7 +119,8 @@ class TestMySQLTransactionAexit:
         mock_pool = Mock()
         mock_pool.release = Mock()
 
-        txn = MySQLTransaction(mock_pool, mock_connection)
+        txn = MySQLTransaction(mock_pool)
+        txn.connection = mock_connection
 
         await txn.__aexit__(None, None, None)
 
@@ -134,7 +133,8 @@ class TestMySQLTransactionAexit:
         mock_pool = Mock()
         mock_pool.release = Mock()
 
-        txn = MySQLTransaction(mock_pool, mock_connection)
+        txn = MySQLTransaction(mock_pool)
+        txn.connection = mock_connection
 
         await txn.__aexit__(RuntimeError, RuntimeError("fail"), None)
 
@@ -148,7 +148,8 @@ class TestMySQLTransactionAexit:
         mock_pool = Mock()
         mock_pool.release = Mock()
 
-        txn = MySQLTransaction(mock_pool, mock_connection)
+        txn = MySQLTransaction(mock_pool)
+        txn.connection = mock_connection
 
         # Should NOT raise -- the error is logged but connection is still released
         await txn.__aexit__(None, None, None)
@@ -163,7 +164,8 @@ class TestMySQLTransactionAexit:
         mock_pool = Mock()
         mock_pool.release = Mock()
 
-        txn = MySQLTransaction(mock_pool, mock_connection)
+        txn = MySQLTransaction(mock_pool)
+        txn.connection = mock_connection
 
         # Should NOT raise -- the error is logged but connection is still released
         await txn.__aexit__(ValueError, ValueError("original"), None)
@@ -177,7 +179,8 @@ class TestMySQLTransactionAexit:
         mock_pool = Mock()
         mock_pool.release = Mock()
 
-        txn = MySQLTransaction(mock_pool, mock_connection)
+        txn = MySQLTransaction(mock_pool)
+        txn.connection = mock_connection
         txn._committed = True
 
         await txn.__aexit__(None, None, None)
@@ -192,7 +195,8 @@ class TestMySQLTransactionAexit:
         mock_pool = Mock()
         mock_pool.release = Mock()
 
-        txn = MySQLTransaction(mock_pool, mock_connection)
+        txn = MySQLTransaction(mock_pool)
+        txn.connection = mock_connection
         txn._rolled_back = True
 
         await txn.__aexit__(RuntimeError, RuntimeError("fail"), None)
@@ -207,7 +211,8 @@ class TestMySQLTransactionAexit:
         mock_pool = Mock()
         mock_pool.release = Mock()
 
-        txn = MySQLTransaction(mock_pool, mock_connection)
+        txn = MySQLTransaction(mock_pool)
+        txn.connection = mock_connection
         txn._committed = True
 
         await txn.__aexit__(RuntimeError, RuntimeError("fail"), None)
@@ -221,7 +226,8 @@ class TestMySQLTransactionAexit:
         mock_pool = Mock()
         mock_pool.release = Mock()
 
-        txn = MySQLTransaction(mock_pool, None)
+        txn = MySQLTransaction(mock_pool)
+        # connection stays None (never entered)
 
         await txn.__aexit__(None, None, None)
 
@@ -236,7 +242,8 @@ class TestMySQLTransactionDel:
         mock_pool = Mock()
         mock_connection = Mock()
 
-        txn = MySQLTransaction(mock_pool, mock_connection)
+        txn = MySQLTransaction(mock_pool)
+        txn.connection = mock_connection
         # Simulate: transaction was entered but never exited
 
         with warnings.catch_warnings(record=True) as w:
@@ -252,7 +259,8 @@ class TestMySQLTransactionDel:
         mock_pool = Mock()
         mock_connection = Mock()
 
-        txn = MySQLTransaction(mock_pool, mock_connection)
+        txn = MySQLTransaction(mock_pool)
+        txn.connection = mock_connection
         txn._committed = True
 
         with warnings.catch_warnings(record=True) as w:
@@ -269,7 +277,8 @@ class TestMySQLTransactionDel:
         mock_pool = Mock()
         mock_connection = Mock()
 
-        txn = MySQLTransaction(mock_pool, mock_connection)
+        txn = MySQLTransaction(mock_pool)
+        txn.connection = mock_connection
         txn._rolled_back = True
 
         with warnings.catch_warnings(record=True) as w:
@@ -285,7 +294,8 @@ class TestMySQLTransactionDel:
         """__del__ must not warn if connection is None (never entered)."""
         mock_pool = Mock()
 
-        txn = MySQLTransaction(mock_pool, None)
+        txn = MySQLTransaction(mock_pool)
+        # connection stays None (never entered)
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -304,7 +314,8 @@ class TestMySQLTransactionDel:
         mock_pool = Mock()
         mock_connection = Mock()
 
-        txn = MySQLTransaction(mock_pool, mock_connection)
+        txn = MySQLTransaction(mock_pool)
+        txn.connection = mock_connection
         # _source_traceback should be set by __init__ in debug mode
 
         with warnings.catch_warnings(record=True) as w:
@@ -319,15 +330,14 @@ class TestMySQLTransactionDel:
 
 
 class TestMySQLTransactionInitSignature:
-    """Test that the __init__ signature accepts pool and connection."""
+    """Test that the __init__ signature accepts pool; connection is set in __aenter__."""
 
-    def test_init_requires_pool_and_connection(self):
-        """__init__ must accept pool and connection as positional args."""
+    def test_init_requires_pool_only(self):
+        """__init__ must accept pool as the sole positional arg; connection starts as None."""
         pool = Mock()
-        conn = Mock()
-        txn = MySQLTransaction(pool, conn)
+        txn = MySQLTransaction(pool)
         assert txn.connection_pool is pool
-        assert txn.connection is conn
+        assert txn.connection is None
 
 
 class TestMySQLTransactionAenter:
@@ -335,12 +345,15 @@ class TestMySQLTransactionAenter:
 
     @pytest.mark.asyncio
     async def test_aenter_begins_transaction(self):
-        """__aenter__ must call begin() on the connection."""
+        """__aenter__ must acquire connection from pool and call begin()."""
         mock_connection = AsyncMock()
-        mock_pool = Mock()
+        mock_pool = AsyncMock()
+        mock_pool.acquire = AsyncMock(return_value=mock_connection)
 
-        txn = MySQLTransaction(mock_pool, mock_connection)
+        txn = MySQLTransaction(mock_pool)
         result = await txn.__aenter__()
 
+        mock_pool.acquire.assert_called_once()
         mock_connection.begin.assert_called_once()
         assert result is txn
+        assert txn.connection is mock_connection

@@ -123,21 +123,25 @@ class TestArchitecturalRefactoring:
 
     def test_database_config_intelligence(self):
         """Test intelligent database configuration features."""
-        # Test pool size calculation based on environment
-        dev_config = DatabaseConfig(url="sqlite:///:memory:")
-        dev_pool_size = dev_config.get_pool_size(Environment.DEVELOPMENT)
-        assert dev_pool_size == 5  # Should be smaller for development
+        import os
 
-        prod_config = DatabaseConfig(url="postgresql://user:pass@localhost/prod")
-        prod_pool_size = prod_config.get_pool_size(Environment.PRODUCTION)
-        assert prod_pool_size >= 10  # Should be larger for production
+        # Temporarily clear DATAFLOW_POOL_SIZE to test auto-scaling logic
+        saved = os.environ.pop("DATAFLOW_POOL_SIZE", None)
+        try:
+            # SQLite: auto-scaling probe returns None → fallback to min(5, cpu_count)
+            dev_config = DatabaseConfig(url="sqlite:///:memory:")
+            dev_pool_size = dev_config.get_pool_size(Environment.DEVELOPMENT)
+            assert dev_pool_size <= 5  # Conservative fallback
 
-        # Test explicit pool size override
-        explicit_config = DatabaseConfig(
-            url="postgresql://user:pass@localhost/test", pool_size=25
-        )
-        explicit_pool_size = explicit_config.get_pool_size(Environment.PRODUCTION)
-        assert explicit_pool_size == 25
+            # Explicit pool_size always wins regardless of environment
+            explicit_config = DatabaseConfig(
+                url="postgresql://user:pass@localhost/test", pool_size=25
+            )
+            explicit_pool_size = explicit_config.get_pool_size(Environment.PRODUCTION)
+            assert explicit_pool_size == 25
+        finally:
+            if saved is not None:
+                os.environ["DATAFLOW_POOL_SIZE"] = saved
 
     def test_progressive_disclosure(self):
         """Test that configuration supports progressive disclosure."""
@@ -160,8 +164,8 @@ class TestArchitecturalRefactoring:
             monitoring=MonitoringConfig(
                 enabled=True,
                 slow_query_threshold=1.0,
-                query_insights=True,
                 connection_metrics=True,
+                alert_on_connection_exhaustion=True,
             ),
             security=SecurityConfig(
                 access_control_enabled=True,
@@ -175,7 +179,7 @@ class TestArchitecturalRefactoring:
 
         # Verify all advanced options are accessible
         assert advanced_config.database.max_overflow == 30
-        assert advanced_config.monitoring.query_insights is True
+        assert advanced_config.monitoring.alert_on_connection_exhaustion is True
         assert advanced_config.security.access_control_strategy == "rbac"
 
 
@@ -212,7 +216,9 @@ class TestDocumentationAlignment:
                 multi_tenant=True, audit_enabled=True, encrypt_at_rest=True
             ),
             monitoring=MonitoringConfig(
-                enabled=True, connection_metrics=True, transaction_tracking=True
+                enabled=True,
+                connection_metrics=True,
+                alert_on_connection_exhaustion=True,
             ),
         )
         db_enterprise = DataFlow(config=enterprise_config)

@@ -34,6 +34,12 @@ Zero-config database framework specialist for Kailash DataFlow implementation (v
 - "Connection isolation?" -> [`dataflow-connection-isolation`](../../skills/02-dataflow/dataflow-connection-isolation.md)
 - "Fast CRUD? db.express?" -> [`dataflow-express`](../../skills/02-dataflow/dataflow-express.md) (~23x FASTER)
 
+### Connection Pool & Monitoring
+
+- "Pool configuration? Auto-scaling?" -> [`dataflow-connection-config`](../../skills/02-dataflow/dataflow-connection-config.md) (pool auto-scales from max_connections)
+- "Pool stats? Utilization?" -> [`dataflow-monitoring`](../../skills/02-dataflow/dataflow-monitoring.md) (pool_stats(), health_check())
+- "Pool rules?" -> [`rules/dataflow-pool.md`](../../rules/dataflow-pool.md) (single source of truth, no hardcoded defaults)
+
 ### Advanced Topics
 
 - "Async lifecycle (DF-501)?" -> [`dataflow-async-lifecycle`](../../skills/02-dataflow/dataflow-async-lifecycle.md)

@@ -12,7 +12,7 @@ import threading
 import time
 from copy import deepcopy
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 from kailash.runtime import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
@@ -73,7 +73,7 @@ class DataFlow:
         pool_size: Optional[
             int
         ] = None,  # Changed to Optional to detect when explicitly set
-        pool_max_overflow: int = 30,
+        pool_max_overflow: Optional[int] = None,
         pool_recycle: int = 3600,
         echo: bool = False,
         multi_tenant: bool = False,
@@ -220,10 +220,8 @@ class DataFlow:
                 # Create structured config from individual parameters
                 database_config = DatabaseConfig(
                     url=database_url,
-                    pool_size=(
-                        pool_size if pool_size is not None else 20
-                    ),  # Provide default
-                    max_overflow=pool_max_overflow,
+                    pool_size=pool_size,  # None flows through to get_pool_size()
+                    max_overflow=pool_max_overflow,  # None flows through to get_max_overflow()
                     pool_recycle=pool_recycle,
                     echo=echo,
                 )
@@ -437,26 +435,84 @@ class DataFlow:
         self._tenant_context_switch = TenantContextSwitch(self)
 
         # Connection pool configuration (pool managed by individual adapters via AsyncSQLitePool)
+        # Pool size and max_overflow are resolved via DatabaseConfig.get_pool_size()
+        # and DatabaseConfig.get_max_overflow() — the single source of truth.
         self._pool_manager = None
+        self._pool_monitor = None
+        self._lightweight_pool = None
         if enable_connection_pooling:
-            final_pool_size = (
-                pool_size
-                if pool_size is not None
-                else int(os.environ.get("DATAFLOW_POOL_SIZE", "10"))
+            resolved_pool_size = self.config.database.get_pool_size(
+                self.config.environment
             )
-            final_max_overflow = (
-                max_overflow
-                if max_overflow is not None
-                else (
-                    pool_max_overflow
-                    if pool_max_overflow != 30
-                    else int(os.environ.get("DATAFLOW_MAX_OVERFLOW", "20"))
-                )
+            resolved_max_overflow = self.config.database.get_max_overflow(
+                self.config.environment
             )
             logger.debug(
-                f"Connection pooling enabled: pool_size={final_pool_size}, "
-                f"max_overflow={final_max_overflow}"
+                "Connection pooling enabled: pool_size=%d, max_overflow=%d",
+                resolved_pool_size,
+                resolved_max_overflow,
             )
+
+            # PY-4: Startup validation — catch misconfigurations before first query
+            startup_validation = kwargs.get("startup_validation", True)
+            env_validation = os.environ.get(
+                "DATAFLOW_STARTUP_VALIDATION", "true"
+            ).lower()
+            if startup_validation and env_validation != "false":
+                try:
+                    from dataflow.core.pool_validator import validate_pool_config
+
+                    validate_pool_config(
+                        database_url=self.config.database.url
+                        or self.config.database.database_url,
+                        pool_size=resolved_pool_size,
+                        max_overflow=resolved_max_overflow,
+                    )
+                except Exception:
+                    logger.debug(
+                        "Pool startup validation failed (non-fatal)",
+                        exc_info=True,
+                    )
+
+            # PY-2/PY-5: Pool utilization monitor + leak detection
+            if self.config.monitoring.connection_metrics:
+                try:
+                    from dataflow.core.pool_monitor import PoolMonitor
+
+                    self._pool_monitor = PoolMonitor(
+                        stats_provider=self._make_pool_stats_provider(
+                            resolved_pool_size, resolved_max_overflow
+                        ),
+                        interval_secs=float(
+                            self.config.monitoring.pool_monitor_interval_secs
+                        ),
+                        alert_on_exhaustion=(
+                            self.config.monitoring.alert_on_connection_exhaustion
+                        ),
+                        leak_detection_enabled=True,
+                        leak_threshold_secs=float(
+                            self.config.monitoring.leak_detection_threshold_secs
+                        ),
+                    )
+                    self._pool_monitor.start()
+                except Exception:
+                    logger.debug(
+                        "Pool monitor initialization failed (non-fatal)",
+                        exc_info=True,
+                    )
+
+            # RS-6: Lightweight pool for health checks (separate from main pool)
+            db_url = self.config.database.url or self.config.database.database_url
+            if db_url:
+                try:
+                    from dataflow.core.pool_lightweight import LightweightPool
+
+                    self._lightweight_pool = LightweightPool(db_url)
+                except Exception:
+                    logger.debug(
+                        "Lightweight pool creation failed (non-fatal)",
+                        exc_info=True,
+                    )
 
         if self.config.security.multi_tenant:
             self._multi_tenant_manager = MultiTenantManager(self)
@@ -5732,21 +5788,25 @@ class DataFlow:
 
             # Bulk update using UPDATE ... FROM
             set_clauses = ", ".join([f"{name} = data.{name}" for name in field_names])
-            bulk_sql["bulk_update"] = f"""
+            bulk_sql["bulk_update"] = (
+                f"""
                 UPDATE {table_name} SET {set_clauses}
                 FROM (SELECT UNNEST($1::integer[]) as id, {", ".join([f"UNNEST(${i + 2}::text[]) as {name}" for i, name in enumerate(field_names)])}) as data
                 WHERE {table_name}.id = data.id
             """.strip()
+            )
 
         elif database_type.lower() == "mysql":
             # MySQL supports VALUES() for bulk operations
             bulk_sql["bulk_insert"] = (
                 f"INSERT INTO {table_name} ({columns}) VALUES {{values_list}}"
             )
-            bulk_sql["bulk_update"] = f"""
+            bulk_sql["bulk_update"] = (
+                f"""
                 INSERT INTO {table_name} (id, {columns}) VALUES {{values_list}}
                 ON DUPLICATE KEY UPDATE {", ".join([f"{name} = VALUES({name})" for name in field_names])}
             """.strip()
+            )
 
         else:  # sqlite
             # SQLite supports INSERT OR REPLACE
@@ -7370,7 +7430,8 @@ class DataFlow:
             health_status["status"] = "unhealthy"
             health_status["database"] = "error"
             health_status["components"]["database"] = f"error: {type(e).__name__}"
-            logger.warning("Health check database error: %s", e, exc_info=True)
+            logger.warning("Health check database error: %s", type(e).__name__)
+            logger.debug("Health check database error details", exc_info=True)
 
         # Test other components
         try:
@@ -7386,6 +7447,22 @@ class DataFlow:
         except Exception as e:
             health_status["components"]["general"] = f"error: {type(e).__name__}"
             logger.warning("Health check general error: %s", e, exc_info=True)
+
+        # Pool utilization stats (from real pool when available)
+        if self._pool_monitor is not None:
+            try:
+                stats = self._pool_monitor.get_stats()
+                health_status["pool"] = stats
+                utilization = stats.get("utilization", 0)
+                if utilization >= 0.95:
+                    health_status["status"] = "degraded"
+                    health_status["components"]["pool"] = "exhaustion_imminent"
+                elif utilization >= 0.80:
+                    health_status["components"]["pool"] = "high_utilization"
+                else:
+                    health_status["components"]["pool"] = "ok"
+            except Exception:
+                health_status["components"]["pool"] = "error"
 
         return health_status
 
@@ -7459,17 +7536,148 @@ class DataFlow:
             logger.debug("Database connection test failed: %s", type(e).__name__)
             return False
 
+    def _make_pool_stats_provider(
+        self, pool_size: int, max_overflow: int
+    ) -> "Callable[[], Dict[str, Any]]":
+        """Create a stats provider that reads from the real connection pool.
+
+        The provider lazily discovers the actual asyncpg/SQLAlchemy pool
+        from AsyncSQLDatabaseNode._shared_pools and reads live stats.
+        Falls back to configured sizes with active=0 when no pool exists yet.
+
+        Thread safety: The daemon monitor thread calls this provider. We snapshot
+        _shared_pools with list() to prevent RuntimeError on concurrent mutation.
+        The provider is scoped to this DataFlow instance's database URL to avoid
+        reading stats from unrelated pools in multi-database setups.
+        """
+        from dataflow.core.pool_monitor import pool_stats_dict
+
+        # Scope to this instance's database URL
+        db_url = self.config.database.url or self.config.database.database_url or ""
+
+        def _provider() -> Dict[str, Any]:
+            try:
+                from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+
+                # Snapshot to prevent RuntimeError on concurrent dict mutation
+                pools_snapshot = list(AsyncSQLDatabaseNode._shared_pools.items())
+                for _key, (adapter, _ref) in pools_snapshot:
+                    # Scope: only read pools matching this DataFlow's database
+                    if db_url and db_url not in _key:
+                        continue
+
+                    pool = getattr(adapter, "connection_pool", None) or getattr(
+                        adapter, "_pool", None
+                    )
+                    if pool is None:
+                        continue
+
+                    # asyncpg pool (PostgreSQL)
+                    if hasattr(pool, "get_size") and hasattr(pool, "get_idle_size"):
+                        total = pool.get_size()
+                        idle = pool.get_idle_size()
+                        return pool_stats_dict(
+                            active=total - idle,
+                            idle=idle,
+                            max_size=pool_size,
+                            overflow=max(0, total - pool_size),
+                            max_overflow=max_overflow,
+                        )
+
+                    # SQLAlchemy QueuePool
+                    if hasattr(pool, "checkedout") and hasattr(pool, "checkedin"):
+                        return pool_stats_dict(
+                            active=pool.checkedout(),
+                            idle=pool.checkedin(),
+                            max_size=pool.size(),
+                            overflow=pool.overflow(),
+                            max_overflow=getattr(pool, "_max_overflow", max_overflow),
+                        )
+
+                    # SQLite adapter with _pool_stats attribute
+                    pool_stats_attr = getattr(adapter, "_pool_stats", None)
+                    if pool_stats_attr is not None:
+                        return pool_stats_dict(
+                            active=getattr(pool_stats_attr, "active_connections", 0),
+                            idle=getattr(pool_stats_attr, "idle_connections", 0),
+                            max_size=pool_size,
+                            max_overflow=max_overflow,
+                        )
+            except Exception:
+                pass
+
+            # No pool found yet or error — return configured sizes with zero activity
+            return pool_stats_dict(max_size=pool_size, max_overflow=max_overflow)
+
+        return _provider
+
+    def pool_stats(self) -> Dict[str, Any]:
+        """Return real-time pool utilization stats.
+
+        Returns:
+            Dict with keys: active, idle, max, overflow, max_overflow, utilization.
+            Returns zeros when pool monitor is not running.
+        """
+        if self._pool_monitor is not None:
+            return self._pool_monitor.get_stats()
+        from dataflow.core.pool_monitor import pool_stats_dict
+
+        return pool_stats_dict()
+
+    async def execute_raw_lightweight(self, sql: str) -> Any:
+        """Execute a health check / diagnostic query on the lightweight pool.
+
+        The lightweight pool is a separate 2-connection mini-pool that does not
+        compete with the main application pool. Use this for health checks,
+        readiness probes, and diagnostic queries only.
+
+        Args:
+            sql: SQL query (must match the lightweight pool's allowlist).
+
+        Returns:
+            Query result.
+
+        Raises:
+            RuntimeError: If lightweight pool is not configured.
+            ValueError: If the SQL query is not in the allowlist.
+        """
+        if self._lightweight_pool is None:
+            raise RuntimeError(
+                "Lightweight pool not configured. "
+                "Ensure enable_connection_pooling=True and a valid database_url is set."
+            )
+        if not self._lightweight_pool.is_initialized:
+            await self._lightweight_pool.initialize()
+        return await self._lightweight_pool.execute_raw(sql)
+
     def close(self):
         """Close database connections and clean up resources (sync version).
 
         For async contexts (FastAPI, pytest async fixtures), use close_async() instead.
 
         This method safely closes:
+        - Pool monitor thread
         - Connection pool manager pools
         - Connection manager connections
         - Persistent :memory: connections
         """
         import asyncio
+
+        # Stop pool monitor
+        if self._pool_monitor is not None:
+            try:
+                self._pool_monitor.stop()
+            except Exception:
+                pass
+            self._pool_monitor = None
+
+        # Close lightweight pool
+        if hasattr(self, "_lightweight_pool") and self._lightweight_pool is not None:
+            try:
+                async_safe_run(self._lightweight_pool.close())
+            except Exception:
+                pass
+            self._lightweight_pool = None
 
         # Clean up connection manager
         if hasattr(self, "_connection_manager") and self._connection_manager:
@@ -7507,6 +7715,22 @@ class DataFlow:
         - Connection manager connections
         - Persistent :memory: connections (awaited)
         """
+        # Stop pool monitor (same cleanup as sync close())
+        if self._pool_monitor is not None:
+            try:
+                self._pool_monitor.stop()
+            except Exception:
+                pass
+            self._pool_monitor = None
+
+        # Close lightweight pool
+        if hasattr(self, "_lightweight_pool") and self._lightweight_pool is not None:
+            try:
+                await self._lightweight_pool.close()
+            except Exception:
+                pass
+            self._lightweight_pool = None
+
         # Clean up cached AsyncSQLDatabaseNode instances (Express API uses these)
         if hasattr(self, "_async_sql_node_cache") and self._async_sql_node_cache:
             for db_type, (node, _) in list(self._async_sql_node_cache.items()):

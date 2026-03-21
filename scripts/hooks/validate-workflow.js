@@ -107,6 +107,7 @@ function validateFile(data) {
   if (isPy) {
     const pyBlocked = checkPythonPatterns(content, filePath, messages);
     if (pyBlocked) shouldBlock = true;
+    checkPoolPatterns(content, filePath, messages);
   }
 
   // -- Hardcoded model detection (code files only -- configs may list models intentionally)
@@ -286,7 +287,9 @@ function checkPythonPatterns(content, filePath, messages) {
     }
 
     // BLOCKING: pass as placeholder (pass with stub/placeholder comment)
-    if (/^\s*pass\s*#\s*(placeholder|stub|todo|fixme|not\s*implement)/i.test(line)) {
+    if (
+      /^\s*pass\s*#\s*(placeholder|stub|todo|fixme|not\s*implement)/i.test(line)
+    ) {
       messages.push(
         `BLOCKED: stub pass at ${path.basename(filePath)}:${i + 1}. ` +
           `Implement the logic or remove the function.`,
@@ -312,6 +315,55 @@ function checkPythonPatterns(content, filePath, messages) {
   }
 
   return hasBlocking;
+}
+
+// =====================================================================
+// Pool configuration pattern detection (DataFlow)
+// =====================================================================
+
+/**
+ * Detect pool configuration anti-patterns in Python files.
+ * WARNING only — never blocks. See rules/dataflow-pool.md.
+ */
+function checkPoolPatterns(content, filePath, messages) {
+  if (isTestFile(filePath)) return false;
+
+  const lines = content.split("\n");
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Skip comments
+    if (trimmed.startsWith("#")) continue;
+
+    // Detect pool_size set to a value > 20
+    const poolSizeMatch = line.match(/pool_size\s*[=:]\s*(\d+)/);
+    if (poolSizeMatch) {
+      const size = parseInt(poolSizeMatch[1], 10);
+      if (size > 20) {
+        messages.push(
+          `WARNING: pool_size=${size} at ${path.basename(filePath)}:${i + 1}. ` +
+            `DataFlow auto-scales pool sizes from max_connections. Consider removing ` +
+            `the explicit override unless you have a specific reason (e.g., PgBouncer).`,
+        );
+      }
+    }
+
+    // Detect max_overflow = pool_size * 2 (triples connection footprint)
+    if (
+      /max_overflow\s*=\s*pool_size\s*\*\s*2/.test(line) ||
+      /max_overflow\s*=\s*\w+\s*\*\s*2/.test(line)
+    ) {
+      messages.push(
+        `WARNING: max_overflow = pool_size * 2 at ${path.basename(filePath)}:${i + 1}. ` +
+          `This triples the connection footprint. Use max(2, pool_size // 2) instead. ` +
+          `See rules/dataflow-pool.md.`,
+      );
+    }
+  }
+
+  return false;
 }
 
 // =====================================================================
@@ -483,12 +535,21 @@ function checkStubsAndSimulations(content, filePath, messages) {
     ? [
         [/\btodo!\s*\(/, "todo!() macro — IMPLEMENT fully"],
         [/\bunimplemented!\s*\(/, "unimplemented!() — IMPLEMENT fully"],
-        [/\bpanic!\s*\(\s*"not\s+(yet\s+)?implement/i, "panic!(not implemented) — IMPLEMENT fully"],
+        [
+          /\bpanic!\s*\(\s*"not\s+(yet\s+)?implement/i,
+          "panic!(not implemented) — IMPLEMENT fully",
+        ],
       ]
     : isPy
       ? [
-          [/\braise\s+NotImplementedError\b/, "raise NotImplementedError — IMPLEMENT fully"],
-          [/^\s*pass\s*#\s*(placeholder|stub|todo|fixme|not\s*implement)/i, "stub pass — IMPLEMENT fully"],
+          [
+            /\braise\s+NotImplementedError\b/,
+            "raise NotImplementedError — IMPLEMENT fully",
+          ],
+          [
+            /^\s*pass\s*#\s*(placeholder|stub|todo|fixme|not\s*implement)/i,
+            "stub pass — IMPLEMENT fully",
+          ],
         ]
       : [];
 
@@ -498,7 +559,10 @@ function checkStubsAndSimulations(content, filePath, messages) {
     [/\bHACK\b/, "HACK marker — implement properly"],
     [/\bSTUB\b/, "STUB marker — implement real logic"],
     [/\bXXX\b/, "XXX marker — resolve immediately"],
-    [/\b(simulated?|fake|dummy|placeholder)\s*(data|response|result|value)/i, "simulated/fake data"],
+    [
+      /\b(simulated?|fake|dummy|placeholder)\s*(data|response|result|value)/i,
+      "simulated/fake data",
+    ],
     [/catch\s*\([^)]*\)\s*\{\s*\}/, "empty catch block — handle the error"],
   ];
 
@@ -511,9 +575,13 @@ function checkStubsAndSimulations(content, filePath, messages) {
 
     if (cfgTestLine > 0 && i + 1 >= cfgTestLine) break;
 
-    const isComment = trimmed.startsWith("//") || trimmed.startsWith("///") ||
-      trimmed.startsWith("//!") || trimmed.startsWith("/*") ||
-      trimmed.startsWith("*") || trimmed.startsWith("#");
+    const isComment =
+      trimmed.startsWith("//") ||
+      trimmed.startsWith("///") ||
+      trimmed.startsWith("//!") ||
+      trimmed.startsWith("/*") ||
+      trimmed.startsWith("*") ||
+      trimmed.startsWith("#");
 
     if (!isComment) {
       for (const [pattern, label] of blockingPatterns) {
@@ -530,9 +598,15 @@ function checkStubsAndSimulations(content, filePath, messages) {
 
     for (const [pattern, label] of warningPatterns) {
       if (pattern.test(line) && !found.has(label)) {
-        if (trimmed.includes("rules/") || trimmed.includes("Detection Patterns")) continue;
+        if (
+          trimmed.includes("rules/") ||
+          trimmed.includes("Detection Patterns")
+        )
+          continue;
         found.add(label);
-        messages.push(`WARNING: ${label} at ${path.basename(filePath)}:${i + 1}.`);
+        messages.push(
+          `WARNING: ${label} at ${path.basename(filePath)}:${i + 1}.`,
+        );
       }
     }
   }
