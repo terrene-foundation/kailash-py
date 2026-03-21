@@ -246,9 +246,12 @@ class AuditChain:
         chain_id: Unique identifier for this audit chain.
     """
 
-    def __init__(self, chain_id: str) -> None:
+    _MAX_ANCHORS = 10_000
+
+    def __init__(self, chain_id: str, *, max_anchors: int = _MAX_ANCHORS) -> None:
         self.chain_id = chain_id
         self.anchors: list[AuditAnchor] = []
+        self._max_anchors = max_anchors
         self._chain_lock = threading.Lock()
 
     @property
@@ -302,6 +305,10 @@ class AuditChain:
             )
             anchor.seal()
             self.anchors.append(anchor)
+            # Evict oldest 10% when at capacity (bounded collection)
+            if len(self.anchors) > self._max_anchors:
+                evict_count = max(1, self._max_anchors // 10)
+                self.anchors = self.anchors[evict_count:]
             return anchor
 
     def verify_chain_integrity(self) -> tuple[bool, list[str]]:
@@ -328,7 +335,7 @@ class AuditChain:
                     )
             else:
                 expected_prev = self.anchors[i - 1].content_hash
-                if anchor.previous_hash != expected_prev:
+                if not hmac_mod.compare_digest(anchor.previous_hash, expected_prev):
                     errors.append(
                         f"Anchor {i}: previous_hash doesn't match anchor {i - 1}"
                     )

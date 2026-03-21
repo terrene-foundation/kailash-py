@@ -564,7 +564,7 @@ PlatformConfig = PactConfig
 # ---------------------------------------------------------------------------
 
 
-class ValidationSeverity(enum.Enum):
+class ValidationSeverity(str, enum.Enum):
     """Severity level for org validation results."""
 
     ERROR = "error"

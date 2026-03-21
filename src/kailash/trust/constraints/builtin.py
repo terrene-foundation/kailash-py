@@ -135,6 +135,19 @@ class CostLimitDimension(ConstraintDimension):
         except (TypeError, ValueError):
             used = 0.0
 
+        # Reject NaN/Inf in context-supplied cost values — NaN bypasses
+        # all numeric comparisons (NaN <= X is always False), and Inf
+        # would poison the remaining calculation. Fail-closed: treat
+        # invalid cost as over-budget.
+        if not math.isfinite(used) or used < 0:
+            return ConstraintCheckResult(
+                satisfied=False,
+                reason=f"invalid cost_used value: {used!r}",
+                remaining=0.0,
+                used=0.0,
+                limit=limit,
+            )
+
         remaining = max(0, limit - used)
         satisfied = used <= limit
 
@@ -188,7 +201,9 @@ class TimeDimension(ConstraintDimension):
         match = re.match(pattern, value.strip())
 
         if not match:
-            raise ValueError(f"Invalid time window format: {value}. Expected HH:MM-HH:MM")
+            raise ValueError(
+                f"Invalid time window format: {value}. Expected HH:MM-HH:MM"
+            )
 
         start_hour, start_min = int(match.group(1)), int(match.group(2))
         end_hour, end_min = int(match.group(3)), int(match.group(4))
@@ -302,7 +317,9 @@ class TimeDimension(ConstraintDimension):
         # If parent is overnight and child is not, valid if child fits in one part
         if parent_overnight and not child_overnight:
             # Child must fit entirely in either the evening part or morning part
-            fits_evening = child_start >= parent_start  # Child starts in evening portion
+            fits_evening = (
+                child_start >= parent_start
+            )  # Child starts in evening portion
             fits_morning = child_end <= parent_end  # Child ends in morning portion
             return fits_evening or fits_morning
 
@@ -461,7 +478,9 @@ class ResourceDimension(ConstraintDimension):
         # Security: Validate the resource path before matching
         validation_error = self._validate_resource_path(resource)
         if validation_error:
-            logger.warning(f"Resource path security violation: {validation_error} (resource: {resource!r})")
+            logger.warning(
+                f"Resource path security violation: {validation_error} (resource: {resource!r})"
+            )
             return ConstraintCheckResult(
                 satisfied=False,
                 reason=f"security violation: {validation_error}",
@@ -605,7 +624,9 @@ class RateLimitDimension(ConstraintDimension):
 
                 period = parts[1].strip().lower()
                 if period not in self.VALID_PERIODS:
-                    raise ValueError(f"Invalid period: {period}. Valid periods: {self.VALID_PERIODS}")
+                    raise ValueError(
+                        f"Invalid period: {period}. Valid periods: {self.VALID_PERIODS}"
+                    )
 
                 return ConstraintValue(
                     dimension=self.name,
@@ -712,7 +733,9 @@ class DataAccessDimension(ConstraintDimension):
         if isinstance(value, str):
             mode = value.lower().strip()
             if mode not in self.VALID_MODES:
-                raise ValueError(f"Invalid data access mode: {mode}. Valid modes: {self.VALID_MODES}")
+                raise ValueError(
+                    f"Invalid data access mode: {mode}. Valid modes: {self.VALID_MODES}"
+                )
             return ConstraintValue(
                 dimension=self.name,
                 raw_value=value,
@@ -848,7 +871,9 @@ class CommunicationDimension(ConstraintDimension):
         if isinstance(value, str):
             mode = value.lower().strip()
             if mode not in self.VALID_MODES:
-                raise ValueError(f"Invalid communication mode: {mode}. Valid modes: {self.VALID_MODES}")
+                raise ValueError(
+                    f"Invalid communication mode: {mode}. Valid modes: {self.VALID_MODES}"
+                )
             return ConstraintValue(
                 dimension=self.name,
                 raw_value=value,

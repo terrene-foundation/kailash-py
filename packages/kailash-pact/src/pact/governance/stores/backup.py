@@ -16,8 +16,10 @@ for reproducible snapshots.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -154,10 +156,24 @@ def backup_governance_store(engine: Any, path: str) -> None:
     }
 
     output_path = Path(path)
-    output_path.write_text(
-        json.dumps(backup_data, indent=2, sort_keys=False, default=str),
-        encoding="utf-8",
+    # Atomic write: temp file + rename to prevent partial writes on crash.
+    # Uses os.replace() which is atomic on POSIX.
+    import tempfile
+
+    content = json.dumps(backup_data, indent=2, sort_keys=False, default=str)
+    fd, tmp_path = tempfile.mkstemp(
+        dir=str(output_path.parent), suffix=".tmp", prefix=".backup-"
     )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, str(output_path))
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_path)
+        raise
 
     logger.info(
         "Backed up governance state for org '%s' to '%s' "
@@ -192,7 +208,16 @@ def restore_governance_store(engine: Any, path: str) -> None:
     if not input_path.exists():
         raise FileNotFoundError(f"Backup file not found: {path}")
 
-    data = json.loads(input_path.read_text(encoding="utf-8"))
+    # Read with O_NOFOLLOW to prevent symlink attacks
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    fd = os.open(str(input_path), flags)
+    try:
+        with os.fdopen(fd, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except OSError:
+        raise
 
     # Restore clearances
     for clr_data in data.get("clearances", []):

@@ -17,6 +17,7 @@ Schema version tracking via pact_schema_version table.
 from __future__ import annotations
 
 import hashlib
+import hmac as hmac_mod
 import json
 import logging
 import os
@@ -928,7 +929,7 @@ class SqliteAuditLog(_SqliteBase):
 
             # Verify content_hash
             expected_content_hash = hashlib.sha256(details_json.encode()).hexdigest()
-            if stored_content_hash != expected_content_hash:
+            if not hmac_mod.compare_digest(stored_content_hash, expected_content_hash):
                 return (
                     False,
                     f"Tamper detected at entry {entry_id}: content_hash mismatch. "
@@ -939,7 +940,7 @@ class SqliteAuditLog(_SqliteBase):
             expected_chain_hash = hashlib.sha256(
                 (prev_chain + expected_content_hash).encode()
             ).hexdigest()
-            if stored_chain_hash != expected_chain_hash:
+            if not hmac_mod.compare_digest(stored_chain_hash, expected_chain_hash):
                 return (
                     False,
                     f"Tamper detected at entry {entry_id}: chain_hash mismatch. "
