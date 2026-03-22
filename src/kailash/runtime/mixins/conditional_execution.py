@@ -216,9 +216,7 @@ class ConditionalExecutionMixin:
 
             # Method 3: NetworkX graph cycle detection
             if hasattr(workflow, "graph") and workflow.graph is not None:
-                import networkx as nx
-
-                is_dag = nx.is_directed_acyclic_graph(workflow.graph)
+                is_dag = workflow.graph.is_dag()
                 if not is_dag:
                     self.logger.debug("Detected cycles via NetworkX graph analysis")
                     return True
@@ -859,15 +857,13 @@ class ConditionalExecutionMixin:
             self.logger.info("Using standard switch execution")
 
             # Get topological order for all nodes
-            import networkx as nx
-
-            all_nodes_order = list(nx.topological_sort(workflow.graph))
+            all_nodes_order = workflow.graph.topological_sort()
 
             # Find all nodes that switches depend on (need to execute these too)
             nodes_to_execute = set(switch_node_ids)
             for switch_id in switch_node_ids:
                 # Get all predecessors (direct and indirect) of this switch
-                predecessors = nx.ancestors(workflow.graph, switch_id)
+                predecessors = workflow.graph.ancestors(switch_id)
                 nodes_to_execute.update(predecessors)
 
             # Execute nodes in topological order, but only those needed for switches

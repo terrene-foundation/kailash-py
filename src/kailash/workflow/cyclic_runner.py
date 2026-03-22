@@ -102,9 +102,8 @@ import logging
 from datetime import UTC, datetime
 from typing import Any, Optional
 
-import networkx as nx
-
 from kailash.sdk_exceptions import WorkflowExecutionError, WorkflowValidationError
+from kailash.workflow.dag import CycleDetectedError, WorkflowDAG
 from kailash.tracking import TaskManager, TaskStatus
 from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.tracking.models import TaskMetrics
@@ -340,15 +339,15 @@ class CyclicWorkflowExecutor:
         plan = ExecutionPlan()
 
         # Create DAG-only graph for topological analysis
-        dag_graph = nx.DiGraph()
+        dag_graph = WorkflowDAG()
         dag_graph.add_nodes_from(workflow.graph.nodes(data=True))
         for source, target, data in dag_edges:
             dag_graph.add_edge(source, target, **data)
 
         # Get topological order for DAG portion
         try:
-            topo_order = list(nx.topological_sort(dag_graph))
-        except nx.NetworkXUnfeasible:
+            topo_order = dag_graph.topological_sort()
+        except CycleDetectedError:
             raise WorkflowValidationError("DAG portion contains unmarked cycles")
 
         # Identify cycle entry and exit points
@@ -471,8 +470,8 @@ class CyclicWorkflowExecutor:
 
             # Order them topologically
             subgraph = workflow.graph.subgraph(nodes_to_execute)
-            if nx.is_directed_acyclic_graph(subgraph):
-                ordered_nodes = list(nx.topological_sort(subgraph))
+            if subgraph.is_dag():
+                ordered_nodes = subgraph.topological_sort()
             else:
                 ordered_nodes = list(nodes_to_execute)
 
@@ -1382,7 +1381,7 @@ class ExecutionPlan:
         )
 
     def build_stages(
-        self, topo_order: list[str], dag_graph: nx.DiGraph, workflow: Workflow
+        self, topo_order: list[str], dag_graph: WorkflowDAG, workflow: Workflow
     ) -> None:
         """Build execution stages.
 
@@ -1603,7 +1602,7 @@ class CycleGroup:
                     downstream.add(successor)
         return downstream
 
-    def get_execution_order(self, full_graph: nx.DiGraph) -> list[str]:
+    def get_execution_order(self, full_graph: WorkflowDAG) -> list[str]:
         """Get execution order for nodes in cycle.
 
         Args:
@@ -1629,8 +1628,8 @@ class CycleGroup:
 
         # Try topological sort on the subgraph
         try:
-            return list(nx.topological_sort(cycle_subgraph))
-        except (nx.NetworkXError, nx.NetworkXUnfeasible):
+            return cycle_subgraph.topological_sort()
+        except (CycleDetectedError, Exception):
             # Fall back to entry nodes first, then others
             order = list(self.entry_nodes)
             for node in self.nodes:

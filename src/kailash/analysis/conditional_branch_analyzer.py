@@ -8,9 +8,8 @@ which nodes are reachable based on SwitchNode outputs.
 import logging
 from typing import Any, Dict, List, Optional, Set
 
-import networkx as nx
-
 from kailash.nodes.logic.operations import MergeNode, SwitchNode
+from kailash.workflow.dag import WorkflowDAG
 from kailash.workflow.graph import Workflow
 
 logger = logging.getLogger(__name__)
@@ -282,9 +281,7 @@ class ConditionalBranchAnalyzer:
             # Prioritize NetworkX cycle detection (detects structural cycles)
             if hasattr(self.workflow.graph, "nodes"):
                 # Use NetworkX to detect cycles in graph structure
-                has_structural_cycles = not nx.is_directed_acyclic_graph(
-                    self.workflow.graph
-                )
+                has_structural_cycles = not self.workflow.graph.is_dag()
                 if has_structural_cycles:
                     return True
 
@@ -345,7 +342,7 @@ class ConditionalBranchAnalyzer:
             return False
 
         # Build dependency graph between switches
-        switch_deps = nx.DiGraph()
+        switch_deps = WorkflowDAG()
         switch_deps.add_nodes_from(switch_nodes)
 
         for switch_id in switch_nodes:
@@ -357,7 +354,7 @@ class ConditionalBranchAnalyzer:
 
         # Check for cycles in switch dependency graph
         try:
-            return not nx.is_directed_acyclic_graph(switch_deps)
+            return not switch_deps.is_dag()
         except Exception:
             return False
 

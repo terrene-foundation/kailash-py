@@ -10,6 +10,7 @@ import logging
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from kailash.analysis import ConditionalBranchAnalyzer
+from kailash.workflow.dag import WorkflowDAG
 from kailash.tracking import TaskManager
 from kailash.workflow.graph import Workflow
 
@@ -489,10 +490,8 @@ class HierarchicalSwitchExecutor:
         """
         # Try to detect and break cycles
         try:
-            import networkx as nx
-
             # Create directed graph of dependencies
-            G = nx.DiGraph()
+            G = WorkflowDAG()
             for switch_id in switch_nodes:
                 G.add_node(switch_id)
                 predecessors = list(self.workflow.graph.predecessors(switch_id))
@@ -501,7 +500,7 @@ class HierarchicalSwitchExecutor:
                         G.add_edge(pred, switch_id)
 
             # Find cycles
-            cycles = list(nx.simple_cycles(G))
+            cycles = G.simple_cycles()
 
             if cycles:
                 logger.warning(

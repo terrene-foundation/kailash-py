@@ -8,8 +8,9 @@ import warnings
 from datetime import UTC, datetime
 from typing import Any, ClassVar
 
-import networkx as nx
 import yaml
+
+from kailash.workflow.dag import CycleDetectedError, WorkflowDAG
 from pydantic import BaseModel, Field, ValidationError
 
 from kailash.nodes.base import Node
@@ -143,7 +144,7 @@ class Workflow:
             self.metadata["created_at"] = datetime.now(UTC).isoformat()
 
         # Create directed graph for the workflow
-        self.graph = nx.DiGraph()
+        self.graph = WorkflowDAG()
 
         # Storage for node instances and node metadata
         self._node_instances = {}  # Maps node_id to Node instances
@@ -153,7 +154,7 @@ class Workflow:
         # P0B-004/005: Cached graph computations (invalidated on mutation)
         # P0D-003: Use tuple for immutability — prevents callers from corrupting cache
         self._topo_cache: tuple[str, ...] | None = None
-        self._dag_cycle_cache: tuple[list[tuple], list[tuple]] | None = None
+        self._dag_cycle_cache: tuple[tuple, ...] | None = None  # H3: immutable tuples
 
         logger.info(f"Created workflow '{name}' (ID: {workflow_id})")
 
@@ -746,7 +747,10 @@ class Workflow:
             else:
                 dag_edges.append((source, target, data))
 
-        self._dag_cycle_cache = (dag_edges, cycle_edges)
+        self._dag_cycle_cache = (
+            tuple(dag_edges),
+            tuple(cycle_edges),
+        )  # H3 fix: immutable cache
         return self._dag_cycle_cache
 
     def get_cycle_groups(self) -> dict[str, list[tuple]]:
@@ -787,7 +791,7 @@ class Workflow:
             # Find strongly connected components in the full graph
             try:
                 # Get all strongly connected components
-                sccs = list(nx.strongly_connected_components(self.graph))
+                sccs = self.graph.strongly_connected_components()
 
                 # Find which SCC contains our cycle nodes
                 target_scc = None
@@ -871,7 +875,7 @@ class Workflow:
         dag_edges, cycle_edges = self.separate_dag_and_cycle_edges()
 
         # Create DAG-only graph
-        dag_graph = nx.DiGraph()
+        dag_graph = WorkflowDAG()
         dag_graph.add_nodes_from(self.graph.nodes(data=True))
         for source, target, data in dag_edges:
             dag_graph.add_edge(source, target, **data)
@@ -880,12 +884,12 @@ class Workflow:
             # Get topological order for DAG portion
             # P0D-003: Store as tuple for immutability — prevents callers from
             # corrupting the cache by mutating the returned sequence
-            result = tuple(nx.topological_sort(dag_graph))
+            result = tuple(dag_graph.topological_sort())
             self._topo_cache = result
             return result
-        except nx.NetworkXUnfeasible:
+        except CycleDetectedError:
             # Check if there are unmarked cycles
-            cycles = list(nx.simple_cycles(dag_graph))
+            cycles = dag_graph.simple_cycles()
             if cycles:
                 raise WorkflowValidationError(
                     f"Workflow contains unmarked cycles: {cycles}. "

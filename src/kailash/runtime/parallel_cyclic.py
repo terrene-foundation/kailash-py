@@ -5,9 +5,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from typing import Any
 
-import networkx as nx
-
 from kailash.nodes.base import Node
+from kailash.workflow.dag import CycleDetectedError
 from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import RuntimeExecutionError, WorkflowExecutionError
 from kailash.tracking import TaskManager, TaskStatus
@@ -265,8 +264,8 @@ class ParallelCyclicRuntime:
         """
         # Get topological ordering to respect dependencies
         try:
-            topo_order = list(nx.topological_sort(workflow.graph))
-        except nx.NetworkXError as e:
+            topo_order = workflow.graph.topological_sort()
+        except CycleDetectedError as e:
             raise WorkflowExecutionError(
                 f"Failed to determine execution order: {e}"
             ) from e
@@ -487,7 +486,7 @@ class ParallelCyclicRuntime:
         """
         # Simple heuristic: if there are nodes at the same dependency level
         try:
-            topo_order = list(nx.topological_sort(workflow.graph))
+            topo_order = workflow.graph.topological_sort()
 
             # Calculate dependency levels
             levels = {}
@@ -505,7 +504,7 @@ class ParallelCyclicRuntime:
             # If any level has more than one node, parallel execution is beneficial
             return any(count > 1 for count in level_counts.values())
 
-        except nx.NetworkXError:
+        except (CycleDetectedError, Exception):
             return False
 
     def _should_stop_on_group_error(
