@@ -212,6 +212,22 @@ class AgentConfig:
     """Warn when budget usage reaches this threshold (default: 80%)"""
 
     # =========================================================================
+    # LAYER 2: Governance Envelope (L3)
+    # =========================================================================
+
+    envelope: Optional[Any] = None
+    """
+    PACT constraint envelope governing this agent's authority.
+
+    When set, downstream systems (TAOD runner, tool executor, delegation)
+    enforce constraints from this envelope. When absent, no envelope
+    enforcement is applied (L0-L2 backward-compatible behavior).
+
+    Type: Optional[ConstraintEnvelopeConfig] from pact.governance.config.
+    Typed as Any to avoid hard dependency on kailash-pact for minimal installs.
+    """
+
+    # =========================================================================
     # LAYER 3: Expert Overrides (Custom Implementations)
     # =========================================================================
 
@@ -406,6 +422,11 @@ class AgentConfig:
             "memory_turns": self.memory_turns,
             "memory_backend": self.memory_backend,
             "tools": self.tools,
+            "envelope": (
+                self.envelope.to_dict()  # type: ignore[union-attr]
+                if self.envelope is not None and hasattr(self.envelope, "to_dict")
+                else self.envelope
+            ),
             "enabled_features": self.get_enabled_features(),
         }
 

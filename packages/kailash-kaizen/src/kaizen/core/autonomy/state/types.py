@@ -21,7 +21,9 @@ class AgentState:
     # Identification
     checkpoint_id: str = field(default_factory=lambda: f"ckpt_{uuid.uuid4().hex[:12]}")
     agent_id: str = ""
+    model: str = ""  # B2 parity: LLM model name at checkpoint time
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime | None = None  # B2 parity: last update timestamp
     step_number: int = 0
 
     # Conversation state

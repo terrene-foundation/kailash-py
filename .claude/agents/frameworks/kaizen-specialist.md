@@ -76,6 +76,21 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - "Budget tracking?" -> [`kaizen-budget-tracking`](../../skills/04-kaizen/kaizen-budget-tracking.md)
 - "Posture-budget integration?" -> [`kaizen-budget-tracking`](../../skills/04-kaizen/kaizen-budget-tracking.md)
 
+**L3 Autonomy Primitives**:
+
+- "L3 overview?" -> [`kaizen-l3-overview`](../../skills/04-kaizen/kaizen-l3-overview.md)
+- "Envelope tracking?" -> [`kaizen-l3-envelope`](../../skills/04-kaizen/kaizen-l3-envelope.md)
+- "Budget enforcement?" -> [`kaizen-l3-envelope`](../../skills/04-kaizen/kaizen-l3-envelope.md)
+- "Scoped context?" -> [`kaizen-l3-context`](../../skills/04-kaizen/kaizen-l3-context.md)
+- "Context projections?" -> [`kaizen-l3-context`](../../skills/04-kaizen/kaizen-l3-context.md)
+- "L3 messaging?" -> [`kaizen-l3-messaging`](../../skills/04-kaizen/kaizen-l3-messaging.md)
+- "Message routing?" -> [`kaizen-l3-messaging`](../../skills/04-kaizen/kaizen-l3-messaging.md)
+- "Agent factory?" -> [`kaizen-l3-factory`](../../skills/04-kaizen/kaizen-l3-factory.md)
+- "Agent spawning?" -> [`kaizen-l3-factory`](../../skills/04-kaizen/kaizen-l3-factory.md)
+- "Plan DAG?" -> [`kaizen-l3-plan-dag`](../../skills/04-kaizen/kaizen-l3-plan-dag.md)
+- "Plan execution?" -> [`kaizen-l3-plan-dag`](../../skills/04-kaizen/kaizen-l3-plan-dag.md)
+- "Gradient rules?" -> [`kaizen-l3-plan-dag`](../../skills/04-kaizen/kaizen-l3-plan-dag.md)
+
 ## Primary Responsibilities
 
 ### Use This Subagent When:
@@ -88,6 +103,7 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **Composition Validation**: DAG cycle detection, schema compatibility, cost estimation
 - **MCP Catalog Server**: Standalone MCP server for agent catalog operations
 - **Budget-Posture Integration**: Linking budget thresholds to trust posture transitions
+- **L3 Autonomy**: Agent spawning, envelope enforcement, scoped context, typed messaging, plan DAG execution
 
 ### Use Skills Instead When:
 
