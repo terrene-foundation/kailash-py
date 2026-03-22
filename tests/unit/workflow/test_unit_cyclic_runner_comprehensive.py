@@ -17,8 +17,9 @@ from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
-import networkx as nx
 import pytest
+
+from kailash.workflow.dag import CycleDetectedError, WorkflowDAG
 
 from kailash.nodes.base import Node, NodeParameter
 from kailash.sdk_exceptions import WorkflowExecutionError, WorkflowValidationError
@@ -203,7 +204,7 @@ class TestCyclicWorkflowExecutorInternalMethods:
         self.workflow.name = "Test Workflow"
 
         # Create a mock graph
-        self.graph = Mock(spec=nx.DiGraph)
+        self.graph = Mock(spec=WorkflowDAG)
         self.workflow.graph = self.graph
 
     def test_filter_none_values_dict(self):
@@ -335,7 +336,7 @@ class TestExecutionPlan:
         """Test build_stages with DAG nodes only."""
         # Create mock workflow and dag_graph
         workflow = Mock(spec=Workflow)
-        dag_graph = Mock(spec=nx.DiGraph)
+        dag_graph = Mock(spec=WorkflowDAG)
 
         topo_order = ["node1", "node2", "node3"]
 
@@ -361,11 +362,11 @@ class TestExecutionPlan:
 
         # Mock workflow graph
         workflow = Mock(spec=Workflow)
-        workflow.graph = Mock(spec=nx.DiGraph)
+        workflow.graph = Mock(spec=WorkflowDAG)
         workflow.graph.predecessors.return_value = []
         workflow.graph.successors.return_value = []
 
-        dag_graph = Mock(spec=nx.DiGraph)
+        dag_graph = Mock(spec=WorkflowDAG)
 
         topo_order = ["dag_node1", "cycle_node1", "dag_node2"]
 
@@ -433,46 +434,29 @@ class TestCycleGroup:
 
     def test_get_execution_order_topological_sort(self):
         """Test get_execution_order with successful topological sort."""
-        # Create a mock graph
-        full_graph = Mock(spec=nx.DiGraph)
-        subgraph = Mock(spec=nx.DiGraph)
-        subgraph.copy.return_value = subgraph
-        subgraph.has_edge.return_value = True
-        # Mock edges method to return empty list (no cycle edges to remove)
-        subgraph.edges.return_value = []
-        subgraph.remove_edge = Mock()
-        full_graph.subgraph.return_value = subgraph
+        # Create a real WorkflowDAG with the cycle nodes in a DAG structure
+        full_graph = WorkflowDAG()
+        full_graph.add_edge("node1", "node2")
+        full_graph.add_edge("node2", "node3")
 
-        # Mock nx.topological_sort to succeed
-        with patch("kailash.workflow.cyclic_runner.nx.topological_sort") as mock_topo:
-            mock_topo.return_value = ["node1", "node2", "node3"]
+        order = self.cycle_group.get_execution_order(full_graph)
 
-            order = self.cycle_group.get_execution_order(full_graph)
-
-            assert order == ["node1", "node2", "node3"]
+        assert order == ["node1", "node2", "node3"]
 
     def test_get_execution_order_fallback(self):
         """Test get_execution_order with fallback when topological sort fails."""
-        # Create a mock graph
-        full_graph = Mock(spec=nx.DiGraph)
-        subgraph = Mock(spec=nx.DiGraph)
-        subgraph.copy.return_value = subgraph
-        subgraph.has_edge.return_value = True
-        # Mock edges method to return empty list
-        subgraph.edges.return_value = []
-        subgraph.remove_edge = Mock()
-        full_graph.subgraph.return_value = subgraph
+        # Create a real WorkflowDAG with a cycle (topological sort will fail)
+        full_graph = WorkflowDAG()
+        full_graph.add_edge("node1", "node2")
+        full_graph.add_edge("node2", "node3")
+        full_graph.add_edge("node3", "node1")  # Creates cycle
 
-        # Mock nx.topological_sort to fail
-        with patch("kailash.workflow.cyclic_runner.nx.topological_sort") as mock_topo:
-            mock_topo.side_effect = nx.NetworkXUnfeasible("No topological sort")
+        order = self.cycle_group.get_execution_order(full_graph)
 
-            order = self.cycle_group.get_execution_order(full_graph)
-
-            # Should fall back to entry nodes first, then others
-            assert order[0] == "node1"  # Entry node should be first
-            assert len(order) == 3
-            assert all(node in order for node in ["node1", "node2", "node3"])
+        # Should fall back to entry nodes first, then others
+        assert order[0] == "node1"  # Entry node should be first
+        assert len(order) == 3
+        assert all(node in order for node in ["node1", "node2", "node3"])
 
 
 class TestWorkflowState:
@@ -495,81 +479,60 @@ class TestCyclicWorkflowExecutorAdvanced:
         """Set up test fixtures."""
         self.executor = CyclicWorkflowExecutor()
 
-        # Create a mock workflow
+        # Create a mock workflow with a real WorkflowDAG graph
         self.workflow = Mock(spec=Workflow)
         self.workflow.workflow_id = "test_workflow"
         self.workflow.name = "Test Workflow"
-        self.workflow.graph = Mock(spec=nx.DiGraph)
+        self.workflow.graph = WorkflowDAG()
 
     def test_create_execution_plan_with_dag_only(self):
         """Test _create_execution_plan with DAG edges only."""
         dag_edges = [("node1", "node2", {}), ("node2", "node3", {})]
         cycle_groups = {}
 
-        # Mock networkx functions
-        with patch("kailash.workflow.cyclic_runner.nx.DiGraph") as mock_digraph:
-            mock_graph = Mock()
-            mock_digraph.return_value = mock_graph
+        # Add nodes to workflow graph so add_nodes_from works
+        self.workflow.graph.add_node("node1")
+        self.workflow.graph.add_node("node2")
+        self.workflow.graph.add_node("node3")
 
-            with patch(
-                "kailash.workflow.cyclic_runner.nx.topological_sort"
-            ) as mock_topo:
-                mock_topo.return_value = ["node1", "node2", "node3"]
+        plan = self.executor._create_execution_plan(
+            self.workflow, dag_edges, cycle_groups
+        )
 
-                plan = self.executor._create_execution_plan(
-                    self.workflow, dag_edges, cycle_groups
-                )
-
-                assert isinstance(plan, ExecutionPlan)
-                mock_graph.add_nodes_from.assert_called_once()
-                mock_graph.add_edge.assert_called()
+        assert isinstance(plan, ExecutionPlan)
 
     def test_create_execution_plan_with_cycles(self):
         """Test _create_execution_plan with cycle groups."""
         dag_edges = [("node1", "node2", {})]
         cycle_groups = {"cycle1": [("node2", "node3", {}), ("node3", "node2", {})]}
 
-        # Mock workflow graph methods
-        self.workflow.graph.predecessors.return_value = []
-        self.workflow.graph.successors.return_value = []
+        # Set up workflow graph with nodes
+        self.workflow.graph.add_node("node1")
+        self.workflow.graph.add_node("node2")
+        self.workflow.graph.add_node("node3")
+        self.workflow.graph.add_edge("node1", "node2")
 
-        with patch("kailash.workflow.cyclic_runner.nx.DiGraph") as mock_digraph:
-            mock_graph = Mock()
-            mock_digraph.return_value = mock_graph
+        plan = self.executor._create_execution_plan(
+            self.workflow, dag_edges, cycle_groups
+        )
 
-            with patch(
-                "kailash.workflow.cyclic_runner.nx.topological_sort"
-            ) as mock_topo:
-                mock_topo.return_value = ["node1", "node2", "node3"]
+        assert isinstance(plan, ExecutionPlan)
+        assert "cycle1" in plan.cycle_groups
 
-                plan = self.executor._create_execution_plan(
-                    self.workflow, dag_edges, cycle_groups
-                )
-
-                assert isinstance(plan, ExecutionPlan)
-                assert "cycle1" in plan.cycle_groups
-
-    def test_create_execution_plan_networkx_unfeasible(self):
-        """Test _create_execution_plan when NetworkX detects cycles."""
+    def test_create_execution_plan_cycle_detected_error(self):
+        """Test _create_execution_plan when DAG portion contains unmarked cycles."""
         dag_edges = [("node1", "node2", {}), ("node2", "node1", {})]  # Cycle in DAG
         cycle_groups = {}
 
-        with patch("kailash.workflow.cyclic_runner.nx.DiGraph") as mock_digraph:
-            mock_graph = Mock()
-            mock_digraph.return_value = mock_graph
+        # Add nodes to workflow graph
+        self.workflow.graph.add_node("node1")
+        self.workflow.graph.add_node("node2")
 
-            with patch(
-                "kailash.workflow.cyclic_runner.nx.topological_sort"
-            ) as mock_topo:
-                mock_topo.side_effect = nx.NetworkXUnfeasible("Cycle detected")
-
-                with pytest.raises(
-                    WorkflowValidationError,
-                    match="DAG portion contains unmarked cycles",
-                ):
-                    self.executor._create_execution_plan(
-                        self.workflow, dag_edges, cycle_groups
-                    )
+        with pytest.raises(
+            WorkflowValidationError,
+            match="DAG portion contains unmarked cycles",
+        ):
+            self.executor._create_execution_plan(self.workflow, dag_edges, cycle_groups)
 
     def test_execute_plan_with_dag_stages(self):
         """Test _execute_plan with DAG stages."""
@@ -695,7 +658,7 @@ class TestCyclicWorkflowExecutorNodeExecution:
         self.workflow = Mock(spec=Workflow)
         self.workflow.workflow_id = "test_workflow"
         self.workflow.name = "Test Workflow"
-        self.workflow.graph = Mock(spec=nx.DiGraph)
+        self.workflow.graph = Mock(spec=WorkflowDAG)
 
         # Create a mock node
         self.mock_node = Mock(spec=MockNode)

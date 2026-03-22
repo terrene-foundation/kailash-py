@@ -11,8 +11,6 @@ from collections import deque
 from datetime import UTC, datetime
 from typing import Any
 
-import networkx as nx
-
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import (
     RuntimeExecutionError,
@@ -534,7 +532,7 @@ class ParallelRuntime:
             ready_nodes: Queue of nodes ready to execute
         """
         # Get all descendants of the failed node
-        descendants = set(nx.descendants(workflow.graph, failed_node))
+        descendants = workflow.graph.descendants(failed_node)
 
         # Mark all descendants as failed
         for node in descendants:

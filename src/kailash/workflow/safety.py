@@ -163,7 +163,7 @@ class CycleMonitor:
         self.last_progress_time = None
         self.initial_memory = None
         self.peak_memory = 0
-        self.violations = []
+        self.violations: list[str] = []  # M1 fix: bounded in check_safety via len check
         self.is_active = False
 
         self._monitor_thread = None
@@ -175,9 +175,12 @@ class CycleMonitor:
         self.last_progress_time = self.start_time
         self.is_active = True
 
-        # Get initial memory usage
-        process = psutil.Process()
-        self.initial_memory = process.memory_info().rss / 1024 / 1024  # MB
+        # Get initial memory usage (C2 fix: psutil is optional)
+        if psutil is not None:
+            process = psutil.Process()
+            self.initial_memory = process.memory_info().rss / 1024 / 1024  # MB
+        else:
+            self.initial_memory = 0.0
 
         # Start monitoring thread if we have limits
         if self.timeout or self.memory_limit:
@@ -227,8 +230,8 @@ class CycleMonitor:
             self.violations.append(violation)
             return True
 
-        # Check memory limit
-        if self.memory_limit:
+        # Check memory limit (C2 fix: psutil is optional)
+        if self.memory_limit and psutil is not None:
             process = psutil.Process()
             current_memory = process.memory_info().rss / 1024 / 1024  # MB
             memory_increase = current_memory - self.initial_memory
@@ -276,10 +279,10 @@ class CycleMonitor:
             status["timeout"] = self.timeout
             status["time_remaining"] = max(0, self.timeout - status["elapsed_time"])
 
-        if self.memory_limit:
+        if self.memory_limit and psutil is not None:
             process = psutil.Process()
             current_memory = process.memory_info().rss / 1024 / 1024  # MB
-            memory_increase = current_memory - self.initial_memory
+            memory_increase = current_memory - (self.initial_memory or 0.0)
 
             status["memory_limit"] = self.memory_limit
             status["memory_used"] = memory_increase

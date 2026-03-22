@@ -241,9 +241,7 @@ class CompatibilityReporter:
     def _analyze_cycles(self, workflow: Workflow, report: CompatibilityReport) -> None:
         """Analyze cycle patterns."""
         try:
-            import networkx as nx
-
-            cycles = list(nx.simple_cycles(workflow.graph))
+            cycles = workflow.graph.simple_cycles()
 
             if cycles:
                 # Check if cycles contain switches

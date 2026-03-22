@@ -9,9 +9,8 @@ import logging
 from collections import defaultdict, deque
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-import networkx as nx
-
 from kailash.analysis.conditional_branch_analyzer import ConditionalBranchAnalyzer
+from kailash.workflow.dag import WorkflowDAG
 from kailash.workflow.graph import Workflow
 
 logger = logging.getLogger(__name__)
@@ -201,7 +200,7 @@ class DynamicExecutionPlanner:
             return []
 
         try:
-            return list(nx.topological_sort(self.workflow.graph))
+            return self.workflow.graph.topological_sort()
         except Exception as e:
             logger.error(f"Error getting topological order: {e}")
             # Fallback to node list
@@ -321,7 +320,7 @@ class DynamicExecutionPlanner:
         dependencies = self._analyze_dependencies()
 
         # Build switch dependency graph
-        switch_deps = nx.DiGraph()
+        switch_deps = WorkflowDAG()
         switch_deps.add_nodes_from(switch_nodes)
 
         for switch_id in switch_nodes:
