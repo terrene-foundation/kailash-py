@@ -15,6 +15,10 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash-kaizen [2.1.0] - 2026-03-22
+
+**L3 Autonomy Primitives** — Five deterministic SDK primitives for governed agent autonomy (`kaizen.l3`). EnvelopeTracker/Splitter/Enforcer, ScopedContext, MessageRouter/Channel, AgentFactory/Registry, Plan DAG/Validator/Executor. 868 new tests.
+
 ### [2.0.0] - 2026-03-21
 
 **Trust Integration — EATP + Trust-Plane merged into kailash.trust**
