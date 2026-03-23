@@ -5,6 +5,30 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-03-24
+
+### LLM-First Autonomous Agents
+
+All autonomous agents now default to MCP tool discovery enabled, and the framework enforces LLM-first reasoning as an absolute directive.
+
+### Changed
+
+- **ReActAgent**: `mcp_discovery_enabled` default changed from `False` to `True`
+- **CodeGenerationAgent**: Added `mcp_enabled: bool = True` to config
+- **RAGResearchAgent**: Added `mcp_enabled: bool = True` to config
+- **SelfReflectionAgent**: Added `mcp_enabled: bool = True` to config (now classified as autonomous)
+- Agent Classification updated: 4 autonomous agents (was 3), SelfReflectionAgent promoted
+
+### Removed
+
+- **ReActAgent.\_discover_mcp_tools()**: Removed no-op stub method. MCP discovery flows through `BaseAgent.discover_mcp_tools()` (the real async implementation)
+
+### Fixed
+
+- `test_memory_agent`: Fixed mock provider detection in execution test
+- `test_http_transport`: Fixed `base_url` fixture scope conflict with pytest-base-url plugin
+- `test_agent_execution_patterns_e2e`: Relaxed content assertions for mock provider compatibility
+
 ## [2.1.0] - 2026-03-22
 
 ### L3 Autonomy Primitives
