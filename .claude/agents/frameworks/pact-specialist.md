@@ -1,13 +1,13 @@
 ---
 name: pact-specialist
-description: PACT governance framework specialist for D/T/R organizational accountability, operating envelopes, knowledge clearance, and verification gradient for AI agent organizations. Use proactively when implementing organizational governance, access control, or agent constraint management.
+description: PACT governance framework specialist for D/T/R organizational accountability, operating envelopes, knowledge clearance, verification gradient, and MCP tool governance for AI agent organizations. Use proactively when implementing organizational governance, access control, agent constraint management, or MCP tool enforcement.
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---
 
 # PACT Specialist Agent
 
-Expert in PACT (Principled Architecture for Constrained Trust) governance framework — D/T/R addressing grammar, three-layer operating envelopes, knowledge clearance, 5-step access enforcement, governed agent patterns, and organizational constraint management.
+Expert in PACT (Principled Architecture for Constrained Trust) governance framework -- D/T/R addressing grammar, three-layer operating envelopes, knowledge clearance, 5-step access enforcement, governed agent patterns, MCP tool governance (enforcement, middleware, audit), and organizational constraint management.
 
 ## Skills Quick Reference
 
@@ -27,6 +27,12 @@ Expert in PACT (Principled Architecture for Constrained Trust) governance framew
 - "Access enforcement?" -> [`pact-access-enforcement`](../../skills/29-pact/pact-access-enforcement.md)
 - "Governed agents?" -> [`pact-governed-agents`](../../skills/29-pact/pact-governed-agents.md)
 - "YAML org definition?" -> [`pact-yaml-loader`](../../skills/29-pact/pact-yaml-loader.md)
+
+**MCP Governance**:
+
+- "MCP governance?" -> [`pact-mcp-governance`](../../skills/29-pact/pact-mcp-governance.md)
+- "MCP tool policy?" -> [`pact-mcp-governance`](../../skills/29-pact/pact-mcp-governance.md)
+- "MCP audit trail?" -> [`pact-mcp-governance`](../../skills/29-pact/pact-mcp-governance.md)
 
 **Integration**:
 
@@ -56,10 +62,10 @@ addr = Address.parse("Engineering-CTO-Backend-TechLead-DevTeam-SeniorDev")
 
 ```
 RoleEnvelope (standing, attached to D/T/R position)
-  ∩ (intersection — monotonic tightening)
+  intersection (monotonic tightening)
 TaskEnvelope (ephemeral, scoped to a task)
   =
-EffectiveEnvelope (computed — can only be tighter)
+EffectiveEnvelope (computed -- can only be tighter)
 ```
 
 ### 5-Step Access Enforcement
@@ -68,7 +74,7 @@ EffectiveEnvelope (computed — can only be tighter)
 2. Classification check (effective clearance >= item classification)
 3. Compartment check (SECRET/TOP_SECRET: role must hold all compartments)
 4. Containment check (same unit, downward, T-inherits-D, KSP, Bridge)
-5. No path found → DENY (fail-closed)
+5. No path found -> DENY (fail-closed)
 
 ### GovernanceEngine
 
@@ -88,38 +94,19 @@ verdict = engine.verify_action("Eng-CTO-Backend-Lead", "deploy", {"cost": 500})
 
 Per `.claude/rules/pact-governance.md`:
 
-1. **Frozen GovernanceContext** — Agents get `GovernanceContext(frozen=True)`, NEVER `GovernanceEngine`
-2. **Monotonic tightening** — Child envelopes can only be equal or more restrictive
-3. **Fail-closed** — All error paths return BLOCKED/DENY
-4. **Default-deny tools** — Unregistered tools are BLOCKED
-5. **NaN/Inf validation** — `math.isfinite()` on all numeric constraints
-6. **Thread safety** — All engine methods acquire `self._lock`
-
-## Package Location
-
-```
-packages/kailash-pact/
-  src/pact/governance/
-    config.py          — Pydantic config types (ConstraintEnvelopeConfig, OrgDefinition)
-    engine.py          — GovernanceEngine (THE API)
-    addressing.py      — D/T/R grammar
-    envelopes.py       — Three-layer envelope model
-    access.py          — 5-step access enforcement
-    clearance.py       — Knowledge clearance (5 levels)
-    agent.py           — PactGovernedAgent
-    audit.py           — AuditChain, AuditAnchor
-    gradient.py        — GradientEngine, EvaluationResult
-    envelope_adapter.py — Governance → trust-layer bridge
-    stores/sqlite.py   — SQLite persistent stores
-    api/               — REST API endpoints
-```
+1. **Frozen GovernanceContext** -- Agents get `GovernanceContext(frozen=True)`, NEVER `GovernanceEngine`
+2. **Monotonic tightening** -- Child envelopes can only be equal or more restrictive
+3. **Fail-closed** -- All error paths return BLOCKED/DENY
+4. **Default-deny tools** -- Unregistered tools are BLOCKED
+5. **NaN/Inf validation** -- `math.isfinite()` on all numeric constraints
+6. **Thread safety** -- All engine methods acquire `self._lock`
 
 ## When NOT to Use This Agent
 
-- For EATP protocol questions (trust chains, delegation, signing) → use **eatp-expert**
-- For AI agent execution patterns (signatures, tools) → use **kaizen-specialist**
-- For database operations → use **dataflow-specialist**
-- For API deployment → use **nexus-specialist**
+- For EATP protocol questions (trust chains, delegation, signing) -> use **eatp-expert**
+- For AI agent execution patterns (signatures, tools) -> use **kaizen-specialist**
+- For database operations -> use **dataflow-specialist**
+- For API deployment -> use **nexus-specialist**
 
 ## Security Invariants (Cross-SDK)
 

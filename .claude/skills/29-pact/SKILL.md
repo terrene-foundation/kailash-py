@@ -1,6 +1,6 @@
 ---
 name: 29-pact
-description: "PACT governance framework — D/T/R accountability grammar, operating envelopes, knowledge clearance, and verification gradient for AI agent organizations. Use when asking about 'governance', 'D/T/R', 'operating envelope', 'knowledge clearance', 'verification gradient', 'GovernanceEngine', 'PactGovernedAgent', 'access enforcement', 'organizational governance', 'PACT', 'governed agent', 'clearance', 'bridges', 'KSP', or 'monotonic tightening'."
+description: "PACT governance framework -- D/T/R accountability grammar, operating envelopes, knowledge clearance, and verification gradient for AI agent organizations. Use when asking about 'governance', 'D/T/R', 'operating envelope', 'knowledge clearance', 'verification gradient', 'GovernanceEngine', 'PactGovernedAgent', 'access enforcement', 'organizational governance', 'PACT', 'governed agent', 'clearance', 'bridges', 'KSP', 'monotonic tightening', 'MCP governance', 'McpGovernanceEnforcer', 'McpGovernanceMiddleware', 'McpAuditTrail', 'McpToolPolicy', 'MCP tool policy', 'default-deny MCP', or 'governed MCP tools'."
 ---
 
 # PACT Governance Skills
@@ -26,6 +26,7 @@ pip install kailash-kaizen>=2.0.0 # For governed Kaizen agents
 | [pact-access-enforcement](pact-access-enforcement.md) | 5-step algorithm, clearance, bridges, KSPs  |
 | [pact-governed-agents](pact-governed-agents.md)       | PactGovernedAgent, @governed_tool           |
 | [pact-kaizen-integration](pact-kaizen-integration.md) | Wrapping Kaizen agents with governance      |
+| [pact-mcp-governance](pact-mcp-governance.md)         | MCP tool governance: enforce, audit, middleware |
 
 ## Key Types
 
@@ -38,11 +39,13 @@ from pact.governance.config import (
 )
 from pact.governance.agent import PactGovernedAgent
 from pact.governance.audit import AuditChain
+
+# MCP governance
+from pact.mcp import (
+    McpGovernanceEnforcer, McpGovernanceMiddleware, McpAuditTrail,
+    McpToolPolicy, McpGovernanceConfig, McpActionContext,
+)
 ```
-
-## Package Location
-
-`packages/kailash-pact/src/pact/governance/`
 
 ## Rules
 
