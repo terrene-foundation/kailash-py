@@ -319,3 +319,60 @@ class TestStrictUnknownParams:
         error_msg = str(exc_info.value)
         assert "alpha" in error_msg
         assert "beta" in error_msg
+
+
+# ---------------------------------------------------------------------------
+# Tests: cache + alias path regression
+# ---------------------------------------------------------------------------
+
+
+class TestCacheAliasPath:
+    """Regression tests for cache hit path with workflow_alias parameters.
+
+    Verifies that on a cache hit the alias key is still recognised as valid
+    (no spurious unknown-param warning) and that a genuinely unknown key still
+    produces exactly one warning.
+    """
+
+    def test_alias_key_no_warning_on_cache_miss(self, caplog):
+        """First call (cache miss) with alias key must not warn."""
+        node = NodeWithAlias(id="test")
+        node._cache_enabled = True
+
+        with caplog.at_level(logging.WARNING, logger="kailash.nodes.base"):
+            result = node.validate_inputs(input="hello")
+
+        assert result["input_data"] == "hello"
+        assert "unknown" not in caplog.text.lower()
+
+    def test_alias_key_no_warning_on_cache_hit(self, caplog):
+        """Second call (cache hit) with alias key must not warn."""
+        node = NodeWithAlias(id="test")
+        node._cache_enabled = True
+
+        # Populate cache
+        node.validate_inputs(input="first")
+        caplog.clear()
+
+        # Cache hit — alias key must still be recognised
+        with caplog.at_level(logging.WARNING, logger="kailash.nodes.base"):
+            result = node.validate_inputs(input="second")
+
+        assert result["input_data"] == "second"
+        assert "unknown" not in caplog.text.lower()
+
+    def test_unknown_key_warns_on_cache_hit(self, caplog):
+        """On a cache hit, an unknown key (not alias) must still trigger a warning."""
+        node = NodeWithAlias(id="test")
+        node._cache_enabled = True
+
+        # Populate cache with alias key only
+        node.validate_inputs(input="first")
+        caplog.clear()
+
+        # Cache hit + extra unknown key
+        with caplog.at_level(logging.WARNING, logger="kailash.nodes.base"):
+            node.validate_inputs(input="second", bogus_key="oops")
+
+        assert "bogus_key" in caplog.text
+        assert "unknown" in caplog.text.lower()
