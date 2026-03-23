@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from kaizen_agents.monitor import PlanMonitor
+from kaizen_agents.orchestration.monitor import PlanMonitor
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,

@@ -14,17 +14,17 @@ from unittest.mock import MagicMock
 import pytest
 
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.protocols.clarification import (
+from kaizen_agents.orchestration.protocols.clarification import (
     CLARIFICATION_INTERPRETATION_SCHEMA,
     CLARIFICATION_QUESTION_SCHEMA,
     ClarificationProtocol,
 )
-from kaizen_agents.protocols.delegation import (
+from kaizen_agents.orchestration.protocols.delegation import (
     COMPLETION_PROCESSING_SCHEMA,
     DELEGATION_COMPOSITION_SCHEMA,
     DelegationProtocol,
 )
-from kaizen_agents.protocols.escalation import (
+from kaizen_agents.orchestration.protocols.escalation import (
     ESCALATION_COMPOSITION_SCHEMA,
     ESCALATION_DECISION_SCHEMA,
     EscalationAction,

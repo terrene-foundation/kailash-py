@@ -12,15 +12,15 @@ from unittest.mock import MagicMock
 import pytest
 
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.planner.composer import (
+from kaizen_agents.orchestration.planner.composer import (
     COMPOSITION_SCHEMA,
     PlanComposer,
     PlanValidator,
     ValidationError,
     _parse_edge_type,
 )
-from kaizen_agents.planner.decomposer import Subtask
-from kaizen_agents.planner.designer import SpawnDecision
+from kaizen_agents.orchestration.planner.decomposer import Subtask
+from kaizen_agents.orchestration.planner.designer import SpawnDecision
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,

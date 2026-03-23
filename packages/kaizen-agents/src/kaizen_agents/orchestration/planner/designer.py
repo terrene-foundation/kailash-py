@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.planner.decomposer import Subtask
+from kaizen_agents.orchestration.planner.decomposer import Subtask
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,
@@ -151,9 +151,7 @@ class CapabilityMatcher:
             if not spec.capabilities:
                 continue
 
-            matched, unmatched = self._semantic_compare(
-                required_capabilities, spec.capabilities
-            )
+            matched, unmatched = self._semantic_compare(required_capabilities, spec.capabilities)
             score = len(matched) / len(required_capabilities) if required_capabilities else 0.0
 
             if score >= min_score:
@@ -400,9 +398,7 @@ AGENT_DESIGN_SCHEMA: dict[str, Any] = {
         },
         "financial_ratio": {
             "type": "number",
-            "description": (
-                "Fraction of the parent's financial budget to allocate (0.0-1.0)."
-            ),
+            "description": ("Fraction of the parent's financial budget to allocate (0.0-1.0)."),
         },
         "needs_shared_memory": {
             "type": "boolean",

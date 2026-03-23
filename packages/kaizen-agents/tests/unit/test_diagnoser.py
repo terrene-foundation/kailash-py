@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.recovery.diagnoser import (
+from kaizen_agents.orchestration.recovery.diagnoser import (
     DIAGNOSIS_SCHEMA,
     FailureCategory,
     FailureDiagnosis,

@@ -28,7 +28,7 @@ from kaizen_agents._sdk_compat import (
     plan_to_sdk,
 )
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.monitor import PlanMonitor, PlanResult
+from kaizen_agents.orchestration.monitor import PlanMonitor, PlanResult
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,

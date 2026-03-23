@@ -1,11 +1,11 @@
 """Failure recovery: diagnose errors and recompose plans."""
 
-from kaizen_agents.recovery.diagnoser import (
+from kaizen_agents.orchestration.recovery.diagnoser import (
     FailureCategory,
     FailureDiagnosis,
     FailureDiagnoser,
 )
-from kaizen_agents.recovery.recomposer import (
+from kaizen_agents.orchestration.recovery.recomposer import (
     RecoveryPlan,
     RecoveryStrategy,
     Recomposer,

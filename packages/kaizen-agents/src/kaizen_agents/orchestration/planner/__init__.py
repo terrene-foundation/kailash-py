@@ -6,9 +6,13 @@ Modules:
     composer: PlanComposer — assembles Plan DAGs from subtasks + specs.
 """
 
-from kaizen_agents.planner.composer import PlanComposer, PlanValidator, ValidationError
-from kaizen_agents.planner.decomposer import Subtask, TaskDecomposer
-from kaizen_agents.planner.designer import (
+from kaizen_agents.orchestration.planner.composer import (
+    PlanComposer,
+    PlanValidator,
+    ValidationError,
+)
+from kaizen_agents.orchestration.planner.decomposer import Subtask, TaskDecomposer
+from kaizen_agents.orchestration.planner.designer import (
     AgentDesigner,
     CapabilityMatch,
     CapabilityMatcher,

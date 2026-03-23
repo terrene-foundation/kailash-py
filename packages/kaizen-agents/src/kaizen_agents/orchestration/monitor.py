@@ -28,11 +28,11 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.planner.composer import PlanComposer, PlanValidator
-from kaizen_agents.planner.decomposer import TaskDecomposer
-from kaizen_agents.planner.designer import AgentDesigner, SpawnDecision
-from kaizen_agents.recovery.diagnoser import FailureCategory, FailureDiagnoser
-from kaizen_agents.recovery.recomposer import Recomposer, RecoveryStrategy
+from kaizen_agents.orchestration.planner.composer import PlanComposer, PlanValidator
+from kaizen_agents.orchestration.planner.decomposer import TaskDecomposer
+from kaizen_agents.orchestration.planner.designer import AgentDesigner, SpawnDecision
+from kaizen_agents.orchestration.recovery.diagnoser import FailureCategory, FailureDiagnoser
+from kaizen_agents.orchestration.recovery.recomposer import Recomposer, RecoveryStrategy
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,

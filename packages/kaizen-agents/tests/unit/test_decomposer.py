@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.planner.decomposer import (
+from kaizen_agents.orchestration.planner.decomposer import (
     DECOMPOSITION_SCHEMA,
     Subtask,
     TaskDecomposer,
@@ -172,7 +172,9 @@ class TestTaskDecomposer:
         # Verify the LLM was called with structured output
         mock_llm.complete_structured.assert_called_once()
         call_args = mock_llm.complete_structured.call_args
-        messages = call_args.kwargs.get("messages") or call_args[1].get("messages") or call_args[0][0]
+        messages = (
+            call_args.kwargs.get("messages") or call_args[1].get("messages") or call_args[0][0]
+        )
         system_msg = messages[0]["content"]
         assert "$50.0" in system_msg
 
@@ -229,112 +231,124 @@ class TestDecomposerValidation:
             decomposer.decompose(objective="Do something")
 
     def test_empty_description_raises(self) -> None:
-        mock_llm = _make_mock_llm({
-            "subtasks": [
-                {
-                    "description": "",
-                    "estimated_complexity": 1,
-                    "required_capabilities": [],
-                    "suggested_tools": [],
-                    "depends_on": [],
-                    "output_keys": [],
-                }
-            ]
-        })
+        mock_llm = _make_mock_llm(
+            {
+                "subtasks": [
+                    {
+                        "description": "",
+                        "estimated_complexity": 1,
+                        "required_capabilities": [],
+                        "suggested_tools": [],
+                        "depends_on": [],
+                        "output_keys": [],
+                    }
+                ]
+            }
+        )
         decomposer = TaskDecomposer(llm_client=mock_llm)
 
         with pytest.raises(ValueError, match="invalid or empty description"):
             decomposer.decompose(objective="Do something")
 
     def test_complexity_clamped_to_valid_range(self) -> None:
-        mock_llm = _make_mock_llm({
-            "subtasks": [
-                {
-                    "description": "Valid task",
-                    "estimated_complexity": 10,  # Out of range, should be clamped to 5
-                    "required_capabilities": [],
-                    "suggested_tools": [],
-                    "depends_on": [],
-                    "output_keys": [],
-                }
-            ]
-        })
+        mock_llm = _make_mock_llm(
+            {
+                "subtasks": [
+                    {
+                        "description": "Valid task",
+                        "estimated_complexity": 10,  # Out of range, should be clamped to 5
+                        "required_capabilities": [],
+                        "suggested_tools": [],
+                        "depends_on": [],
+                        "output_keys": [],
+                    }
+                ]
+            }
+        )
         decomposer = TaskDecomposer(llm_client=mock_llm)
         subtasks = decomposer.decompose(objective="Do something")
         assert subtasks[0].estimated_complexity == 5
 
     def test_complexity_clamped_minimum(self) -> None:
-        mock_llm = _make_mock_llm({
-            "subtasks": [
-                {
-                    "description": "Valid task",
-                    "estimated_complexity": -1,
-                    "required_capabilities": [],
-                    "suggested_tools": [],
-                    "depends_on": [],
-                    "output_keys": [],
-                }
-            ]
-        })
+        mock_llm = _make_mock_llm(
+            {
+                "subtasks": [
+                    {
+                        "description": "Valid task",
+                        "estimated_complexity": -1,
+                        "required_capabilities": [],
+                        "suggested_tools": [],
+                        "depends_on": [],
+                        "output_keys": [],
+                    }
+                ]
+            }
+        )
         decomposer = TaskDecomposer(llm_client=mock_llm)
         subtasks = decomposer.decompose(objective="Do something")
         assert subtasks[0].estimated_complexity == 1
 
     def test_self_referencing_dependency_removed(self) -> None:
-        mock_llm = _make_mock_llm({
-            "subtasks": [
-                {
-                    "description": "Self-referencing task",
-                    "estimated_complexity": 2,
-                    "required_capabilities": [],
-                    "suggested_tools": [],
-                    "depends_on": [0],  # Self-reference
-                    "output_keys": [],
-                }
-            ]
-        })
+        mock_llm = _make_mock_llm(
+            {
+                "subtasks": [
+                    {
+                        "description": "Self-referencing task",
+                        "estimated_complexity": 2,
+                        "required_capabilities": [],
+                        "suggested_tools": [],
+                        "depends_on": [0],  # Self-reference
+                        "output_keys": [],
+                    }
+                ]
+            }
+        )
         decomposer = TaskDecomposer(llm_client=mock_llm)
         subtasks = decomposer.decompose(objective="Do something")
         assert subtasks[0].depends_on == []  # Self-reference removed
 
     def test_out_of_range_dependency_removed(self) -> None:
-        mock_llm = _make_mock_llm({
-            "subtasks": [
-                {
-                    "description": "Task with bad dep",
-                    "estimated_complexity": 2,
-                    "required_capabilities": [],
-                    "suggested_tools": [],
-                    "depends_on": [99],  # Out of range
-                    "output_keys": [],
-                }
-            ]
-        })
+        mock_llm = _make_mock_llm(
+            {
+                "subtasks": [
+                    {
+                        "description": "Task with bad dep",
+                        "estimated_complexity": 2,
+                        "required_capabilities": [],
+                        "suggested_tools": [],
+                        "depends_on": [99],  # Out of range
+                        "output_keys": [],
+                    }
+                ]
+            }
+        )
         decomposer = TaskDecomposer(llm_client=mock_llm)
         subtasks = decomposer.decompose(objective="Do something")
         assert subtasks[0].depends_on == []
 
     def test_circular_dependency_raises(self) -> None:
-        mock_llm = _make_mock_llm({
-            "subtasks": [
-                {
-                    "description": "Task A",
-                    "estimated_complexity": 2,
-                    "required_capabilities": [],
-                    "suggested_tools": [],
-                    "depends_on": [1],
-                    "output_keys": [],
-                },
-                {
-                    "description": "Task B",
-                    "estimated_complexity": 2,
-                    "required_capabilities": [],
-                    "suggested_tools": [],
-                    "depends_on": [0],
-                    "output_keys": [],
-                },
-            ]
-        })
+        mock_llm = _make_mock_llm(
+            {
+                "subtasks": [
+                    {
+                        "description": "Task A",
+                        "estimated_complexity": 2,
+                        "required_capabilities": [],
+                        "suggested_tools": [],
+                        "depends_on": [1],
+                        "output_keys": [],
+                    },
+                    {
+                        "description": "Task B",
+                        "estimated_complexity": 2,
+                        "required_capabilities": [],
+                        "suggested_tools": [],
+                        "depends_on": [0],
+                        "output_keys": [],
+                    },
+                ]
+            }
+        )
         decomposer = TaskDecomposer(llm_client=mock_llm)
 
         with pytest.raises(ValueError, match="Circular dependency"):
@@ -344,69 +358,75 @@ class TestDecomposerValidation:
         # Three tasks forming a chain where every task has a dependency
         # but with a cycle removed by validation, there should be a root.
         # This test creates a valid DAG where everything depends on something.
-        mock_llm = _make_mock_llm({
-            "subtasks": [
-                {
-                    "description": "Task A depends on B",
-                    "estimated_complexity": 2,
-                    "required_capabilities": [],
-                    "suggested_tools": [],
-                    "depends_on": [1],
-                    "output_keys": [],
-                },
-                {
-                    "description": "Task B depends on A — but after cycle detection this is valid DAG",
-                    "estimated_complexity": 2,
-                    "required_capabilities": [],
-                    "suggested_tools": [],
-                    "depends_on": [2],
-                    "output_keys": [],
-                },
-                {
-                    "description": "Task C depends on A",
-                    "estimated_complexity": 2,
-                    "required_capabilities": [],
-                    "suggested_tools": [],
-                    "depends_on": [0],
-                    "output_keys": [],
-                },
-            ]
-        })
+        mock_llm = _make_mock_llm(
+            {
+                "subtasks": [
+                    {
+                        "description": "Task A depends on B",
+                        "estimated_complexity": 2,
+                        "required_capabilities": [],
+                        "suggested_tools": [],
+                        "depends_on": [1],
+                        "output_keys": [],
+                    },
+                    {
+                        "description": "Task B depends on A — but after cycle detection this is valid DAG",
+                        "estimated_complexity": 2,
+                        "required_capabilities": [],
+                        "suggested_tools": [],
+                        "depends_on": [2],
+                        "output_keys": [],
+                    },
+                    {
+                        "description": "Task C depends on A",
+                        "estimated_complexity": 2,
+                        "required_capabilities": [],
+                        "suggested_tools": [],
+                        "depends_on": [0],
+                        "output_keys": [],
+                    },
+                ]
+            }
+        )
         decomposer = TaskDecomposer(llm_client=mock_llm)
         # This forms a cycle: 0->1->2->0, which should raise
         with pytest.raises(ValueError, match="Circular dependency"):
             decomposer.decompose(objective="Do something")
 
     def test_non_list_capabilities_treated_as_empty(self) -> None:
-        mock_llm = _make_mock_llm({
-            "subtasks": [
-                {
-                    "description": "Valid task",
-                    "estimated_complexity": 1,
-                    "required_capabilities": "not_a_list",
-                    "suggested_tools": [],
-                    "depends_on": [],
-                    "output_keys": [],
-                }
-            ]
-        })
+        mock_llm = _make_mock_llm(
+            {
+                "subtasks": [
+                    {
+                        "description": "Valid task",
+                        "estimated_complexity": 1,
+                        "required_capabilities": "not_a_list",
+                        "suggested_tools": [],
+                        "depends_on": [],
+                        "output_keys": [],
+                    }
+                ]
+            }
+        )
         decomposer = TaskDecomposer(llm_client=mock_llm)
         subtasks = decomposer.decompose(objective="Do something")
         assert subtasks[0].required_capabilities == []
 
     def test_non_list_depends_on_treated_as_empty(self) -> None:
-        mock_llm = _make_mock_llm({
-            "subtasks": [
-                {
-                    "description": "Valid task",
-                    "estimated_complexity": 1,
-                    "required_capabilities": [],
-                    "suggested_tools": [],
-                    "depends_on": "not_a_list",
-                    "output_keys": [],
-                }
-            ]
-        })
+        mock_llm = _make_mock_llm(
+            {
+                "subtasks": [
+                    {
+                        "description": "Valid task",
+                        "estimated_complexity": 1,
+                        "required_capabilities": [],
+                        "suggested_tools": [],
+                        "depends_on": "not_a_list",
+                        "output_keys": [],
+                    }
+                ]
+            }
+        )
         decomposer = TaskDecomposer(llm_client=mock_llm)
         subtasks = decomposer.decompose(objective="Do something")
         assert subtasks[0].depends_on == []

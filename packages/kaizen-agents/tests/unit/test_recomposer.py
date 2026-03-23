@@ -14,8 +14,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.recovery.diagnoser import FailureCategory, FailureDiagnosis
-from kaizen_agents.recovery.recomposer import (
+from kaizen_agents.orchestration.recovery.diagnoser import FailureCategory, FailureDiagnosis
+from kaizen_agents.orchestration.recovery.recomposer import (
     RECOVERY_SCHEMA,
     RecoveryPlan,
     RecoveryStrategy,
