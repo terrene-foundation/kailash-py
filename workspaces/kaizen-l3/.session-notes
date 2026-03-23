@@ -1,0 +1,30 @@
+# Session Notes — 2026-03-22
+
+## Accomplished
+- L3 Autonomy Primitives: ALL 7 milestones (M0-M6) implemented, tested, released
+  - 23 source files, 28 test files, 868 tests across 5 subpackages (envelope, context, messaging, factory, plan)
+  - Security red team: 240 tests (NaN/Inf injection, state machine fuzzing, cascade termination)
+  - Integration/E2E: 47 tests (cross-primitive, delegation chain, plan execution)
+- Released kailash-kaizen v2.1.0 to PyPI (PR #28 merged, tag kaizen-v2.1.0, CI green)
+- Codified: 6 new L3 skills, kaizen-specialist agent updated, SKILL.md triggers added
+- COC synced to kailash-coc-claude-py (8 files, 0 contamination)
+- Spec compliance audit: structural skeleton complete, integration gaps documented
+- Cleaned stale active todos across 5 workspaces (eatp-merge, enterprise-infra, tool-agent, connection-pool, trust-plane)
+
+## Also Accomplished (kailash workspace)
+- Runtime optimization P0: 20 todos completed (P0A quick wins, P0B dedup, P0C networkx replacement)
+- WorkflowDAG: 890-line custom graph engine replacing networkx, 70 tests, 10 equivalence tests
+- Security fixes: 2 CRITICAL + 2 HIGH + 3 MEDIUM findings fixed (cache corruption, psutil null, ghost nodes)
+- PR #29 merged (perf: runtime optimization P0)
+
+## In Progress
+- Nothing — all workspaces clear
+
+## Blockers
+- None
+
+## Next Steps
+- Core SDK version bump (2.0.0 → 2.0.1) when ready to release runtime optimization to PyPI
+- L3 integration layer: wire Factory↔Router↔Enforcer↔Context (cross-primitive gaps from spec audit)
+- EATP event system: hook translators for L3 governance events → audit records
+- kaizen-cli: run /todos to create implementation milestones from architecture spec

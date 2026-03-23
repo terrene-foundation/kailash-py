@@ -1,0 +1,30 @@
+## Session: 2026-03-21 — Trust Merge + PACT Integration + Release
+
+### Accomplished
+- EATP + trust-plane merged into kailash.trust (kailash 2.0.0)
+- kailash-pact integrated: 977 tests passing (959 unit + 18 integration)
+- Red team: 6 CRITICALs fixed (timing, NaN, file I/O, bounded collections)
+- Codified: pact-specialist agent, 8 skill files (29-pact/), governance rules
+- Security-reviewer updated with governance attack vectors
+- COC synced to kailash-coc-claude-py (PR #5)
+- PR #27 merged to main, GitHub Release v2.0.0 created
+- All 5 packages published to PyPI: kailash 2.0.0, kaizen 2.0.0, pact 0.2.0, dataflow 1.1.0, nexus 1.4.3
+- Trusted publisher configured for kailash-pact on PyPI (environment: pypi)
+- Stale `pip install trust-plane/eatp` references fixed across 9 source files
+- Cross-SDK security invariants from kailash-rs added to pact-specialist
+
+### In Progress
+- Nothing — all milestones complete, release published
+
+### Blockers
+- None
+
+### Next Steps
+- Merge COC sync PR #5 on kailash-coc-claude-py
+- Update kailash-coc-claude-py pyproject.toml dependency pins to 2.0.0
+- Address tracked HIGH findings (pre-existing in trust-plane) in a dedicated hardening workspace
+- Consider publishing eatp/trust-plane shim packages for backward compat
+
+### Active Todo
+- All todos completed (M1-M7 kailash-pact, M0-M5+M7 eatp-merge)
+- M6 (publishing) done — all packages on PyPI
