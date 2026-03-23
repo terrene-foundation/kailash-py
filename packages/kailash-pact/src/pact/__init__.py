@@ -8,6 +8,7 @@ Architecture:
     pact.governance.config — Platform configuration and agent definitions
     pact.governance.audit  — Tamper-evident audit chain
     pact.governance.gradient — Verification gradient engine
+    pact.mcp               — Governance enforcement on MCP tool invocations
 """
 
 __version__ = "0.2.0"
@@ -135,6 +136,20 @@ from pact.governance.audit import AuditChain
 # --- Gradient engine ---
 from pact.governance.gradient import EvaluationResult, GradientEngine
 
+# --- MCP governance ---
+from pact.mcp import (
+    DefaultPolicy,
+    GovernanceDecision,
+    McpActionContext,
+    McpAuditEntry,
+    McpAuditTrail,
+    McpGovernanceConfig,
+    McpGovernanceEnforcer,
+    McpGovernanceMiddleware,
+    McpInvocationResult,
+    McpToolPolicy,
+)
+
 __all__ = [
     # Error hierarchy
     "PactError",
@@ -248,4 +263,15 @@ __all__ = [
     # Gradient engine
     "EvaluationResult",
     "GradientEngine",
+    # MCP governance
+    "DefaultPolicy",
+    "GovernanceDecision",
+    "McpActionContext",
+    "McpAuditEntry",
+    "McpAuditTrail",
+    "McpGovernanceConfig",
+    "McpGovernanceEnforcer",
+    "McpGovernanceMiddleware",
+    "McpInvocationResult",
+    "McpToolPolicy",
 ]
