@@ -57,7 +57,12 @@ class EnvelopeEnforcer:
                      Returns a dimension name if BLOCKED, None if allowed.
     """
 
-    __slots__ = ("_tracker", "_strict_check", "_approved_actions")
+    __slots__ = (
+        "_tracker",
+        "_strict_check",
+        "_approved_actions",
+        "_agent_envelopes",
+    )
 
     def __init__(
         self,
@@ -70,11 +75,73 @@ class EnvelopeEnforcer:
         self._strict_check = strict_check
         # Track which actions have been approved (keyed by action+agent_instance_id)
         self._approved_actions: set[str] = set()
+        # L3 integration: per-agent envelope registry (agent_id -> envelope dict)
+        self._agent_envelopes: dict[str, dict[str, Any]] = {}
 
     @property
     def tracker(self) -> EnvelopeTracker:
         """Read-only access to the underlying tracker."""
         return self._tracker
+
+    # -------------------------------------------------------------------
+    # L3 integration: per-agent envelope registration
+    # -------------------------------------------------------------------
+
+    def register(self, agent_id: str, envelope: dict[str, Any]) -> None:
+        """Register an agent's envelope for enforcement tracking.
+
+        Called by AgentFactory at spawn time to associate an agent instance
+        with its constraint envelope. This enables per-agent enforcement
+        queries via :meth:`is_registered` and future per-agent budget checks.
+
+        Args:
+            agent_id: The agent instance ID.
+            envelope: The constraint envelope dict for this agent.
+
+        Raises:
+            ValueError: If agent_id is empty or already registered.
+        """
+        if not agent_id:
+            raise ValueError("agent_id must be a non-empty string")
+        if agent_id in self._agent_envelopes:
+            raise ValueError(
+                f"Agent '{agent_id}' is already registered with the enforcer"
+            )
+        self._agent_envelopes[agent_id] = envelope
+        logger.debug("Registered agent envelope: agent_id=%s", agent_id)
+
+    def deregister(self, agent_id: str) -> None:
+        """Remove an agent's envelope registration.
+
+        Called when an agent is terminated to clean up the registry.
+
+        Args:
+            agent_id: The agent instance ID to deregister.
+        """
+        self._agent_envelopes.pop(agent_id, None)
+        logger.debug("Deregistered agent envelope: agent_id=%s", agent_id)
+
+    def is_registered(self, agent_id: str) -> bool:
+        """Check if an agent has a registered envelope.
+
+        Args:
+            agent_id: The agent instance ID.
+
+        Returns:
+            True if the agent has a registered envelope.
+        """
+        return agent_id in self._agent_envelopes
+
+    def get_agent_envelope(self, agent_id: str) -> dict[str, Any] | None:
+        """Retrieve the registered envelope for an agent.
+
+        Args:
+            agent_id: The agent instance ID.
+
+        Returns:
+            The envelope dict, or None if the agent is not registered.
+        """
+        return self._agent_envelopes.get(agent_id)
 
     async def check_action(self, context: EnforcementContext) -> Verdict:
         """Pre-execution check — returns a Verdict without recording cost.

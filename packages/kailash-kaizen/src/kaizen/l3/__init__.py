@@ -68,6 +68,9 @@ from kaizen.l3.plan import (
     apply_modifications,
 )
 
+## Integration (cross-primitive wiring)
+from kaizen.l3.integration import L3Runtime
+
 __all__ = [
     # Envelope (Spec 01)
     "EnvelopeEnforcer",
@@ -98,4 +101,6 @@ __all__ = [
     "PlanValidator",
     "apply_modification",
     "apply_modifications",
+    # Integration (cross-primitive)
+    "L3Runtime",
 ]
