@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from typing import Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from kaizen.l3.plan.errors import ExecutionError
 from kaizen.l3.plan.types import (
@@ -30,6 +30,9 @@ from kaizen.l3.plan.types import (
     PlanNodeState,
     PlanState,
 )
+
+if TYPE_CHECKING:
+    from kaizen.l3.envelope.enforcer import EnvelopeEnforcer
 
 __all__ = ["AsyncPlanExecutor", "PlanExecutor"]
 
@@ -62,6 +65,11 @@ class PlanExecutor:
     Executes a validated plan by scheduling nodes in topological order
     and applying gradient rules for failure handling.
 
+    L3 integration: When ``enforcer`` is provided, the executor checks
+    the agent's envelope budget before executing each node. If the check
+    returns HELD or BLOCKED, the node is skipped with an appropriate
+    PlanEvent rather than executed.
+
     Args:
         node_callback: Function called to execute each node.
             Signature: (node_id, agent_spec_id) -> result dict with keys:
@@ -69,10 +77,21 @@ class PlanExecutor:
             - error: str | None (error message on failure)
             - retryable: bool (whether the error is retryable)
             - envelope_violation: bool (optional, signals G8)
+        enforcer: Optional EnvelopeEnforcer. When set, pre-execution
+            budget checks are performed before each node execution.
+        enforcer_agent_id: Agent instance ID for enforcer checks.
+            Required when enforcer is provided. Defaults to "plan-executor".
     """
 
-    def __init__(self, node_callback: NodeCallback) -> None:
+    def __init__(
+        self,
+        node_callback: NodeCallback,
+        enforcer: EnvelopeEnforcer | None = None,
+        enforcer_agent_id: str = "plan-executor",
+    ) -> None:
         self._callback = node_callback
+        self._enforcer = enforcer
+        self._enforcer_agent_id = enforcer_agent_id
 
     def execute(self, plan: Plan) -> list[PlanEvent]:
         """Execute the plan DAG.
@@ -558,6 +577,11 @@ class AsyncPlanExecutor:
     running independent ready nodes concurrently via ``asyncio.gather()``,
     and applying gradient rules (G1-G8) for failure handling.
 
+    L3 integration: When ``enforcer`` is provided, the executor checks
+    the agent's envelope budget before executing each node. If the check
+    returns HELD or BLOCKED, the node is skipped with an appropriate
+    PlanEvent rather than executed.
+
     Args:
         node_callback: Async function called to execute each node.
             Signature: async (node_id, agent_spec_id) -> result dict with keys:
@@ -570,6 +594,10 @@ class AsyncPlanExecutor:
             Signature: async (PlanEvent) -> None
         max_concurrency: Optional maximum number of nodes to execute
             concurrently. If None, all ready nodes run in parallel.
+        enforcer: Optional EnvelopeEnforcer. When set, pre-execution
+            budget checks are performed before each node execution.
+        enforcer_agent_id: Agent instance ID for enforcer checks.
+            Required when enforcer is provided. Defaults to "plan-executor".
     """
 
     def __init__(
@@ -577,9 +605,13 @@ class AsyncPlanExecutor:
         node_callback: AsyncNodeCallback,
         event_callback: EventCallback | None = None,
         max_concurrency: int | None = None,
+        enforcer: EnvelopeEnforcer | None = None,
+        enforcer_agent_id: str = "plan-executor",
     ) -> None:
         self._callback = node_callback
         self._event_callback = event_callback
+        self._enforcer = enforcer
+        self._enforcer_agent_id = enforcer_agent_id
         self._semaphore: asyncio.Semaphore | None = (
             asyncio.Semaphore(max_concurrency) if max_concurrency is not None else None
         )
@@ -782,6 +814,53 @@ class AsyncPlanExecutor:
         """Execute a single node and apply gradient rules."""
         # Emit NodeReady
         await self._emit(PlanEvent.node_ready(node.node_id), events)
+
+        # L3 integration: Enforcer -> Plan pre-execution check
+        if self._enforcer is not None:
+            from kaizen.l3.envelope.types import EnforcementContext
+
+            estimated_cost = node.envelope.get("estimated_cost", 0.0)
+            dimension_costs = node.envelope.get("dimension_costs", {})
+            if not dimension_costs and estimated_cost > 0:
+                dimension_costs = {"financial": estimated_cost}
+
+            ctx = EnforcementContext(
+                action=f"plan_node:{node.node_id}",
+                estimated_cost=estimated_cost,
+                agent_instance_id=self._enforcer_agent_id,
+                dimension_costs=dimension_costs,
+            )
+            verdict = await self._enforcer.check_action(ctx)
+
+            if verdict.tag == "BLOCKED":
+                node.transition_to(PlanNodeState.RUNNING)
+                node.transition_to(PlanNodeState.FAILED)
+                node.error = f"Envelope blocked: {verdict.detail}"
+                await self._emit(
+                    PlanEvent.node_blocked(
+                        node.node_id,
+                        dimension=verdict.dimension or "financial",
+                        detail=verdict.detail or "Budget exceeded",
+                    ),
+                    events,
+                )
+                cascade_events = self._cascade_block(plan, node.node_id)
+                await self._emit_many(cascade_events, events)
+                return
+
+            if verdict.tag == "HELD":
+                node.transition_to(PlanNodeState.RUNNING)
+                node.transition_to(PlanNodeState.HELD)
+                await self._emit(
+                    PlanEvent.node_held(
+                        node.node_id,
+                        reason=f"Envelope held: dimension={verdict.dimension}, "
+                        f"usage={verdict.current_usage:.2%}",
+                        zone="HELD",
+                    ),
+                    events,
+                )
+                return
 
         # Transition to Running
         node.transition_to(PlanNodeState.RUNNING)

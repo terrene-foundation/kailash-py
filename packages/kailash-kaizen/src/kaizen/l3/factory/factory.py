@@ -10,6 +10,11 @@ Validates PACT governance invariants at spawn time:
 - Required context keys
 - Spawn blocked during cascade termination (AD-L3-10)
 
+L3 integration wiring (cross-primitive):
+- Factory -> Enforcer: registers agent envelope at spawn time
+- Factory -> Router: creates message channels at spawn time
+- Factory -> Context: creates child ContextScope at spawn time
+
 Implements cascade termination (I-02): deepest-first, all descendants.
 """
 
@@ -18,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import deque
+from typing import TYPE_CHECKING
 
 from kaizen.l3.factory.errors import (
     InstanceNotFound,
@@ -34,6 +40,11 @@ from kaizen.l3.factory.instance import (
 from kaizen.l3.factory.registry import AgentInstanceRegistry
 from kaizen.l3.factory.spec import AgentSpec
 
+if TYPE_CHECKING:
+    from kaizen.l3.context.scope import ContextScope
+    from kaizen.l3.envelope.enforcer import EnvelopeEnforcer
+    from kaizen.l3.messaging.router import MessageRouter
+
 __all__ = ["AgentFactory"]
 
 logger = logging.getLogger(__name__)
@@ -46,12 +57,32 @@ class AgentFactory:
     Cascade termination ensures all descendants are terminated
     deepest-first when a parent is terminated.
 
+    L3 integration: When ``enforcer``, ``router``, or ``parent_scope``
+    are provided, spawn() automatically wires the new agent into those
+    subsystems. All integration parameters are optional and default to
+    None for backward compatibility.
+
     Args:
         registry: The AgentInstanceRegistry to use for tracking instances.
+        enforcer: Optional EnvelopeEnforcer. When set, spawn() registers
+            the agent's envelope with the enforcer for enforcement tracking.
+        router: Optional MessageRouter. When set, spawn() creates
+            bidirectional message channels between parent and child.
+        default_channel_capacity: Default channel capacity when creating
+            channels via the router integration. Defaults to 100.
     """
 
-    def __init__(self, registry: AgentInstanceRegistry) -> None:
+    def __init__(
+        self,
+        registry: AgentInstanceRegistry,
+        enforcer: EnvelopeEnforcer | None = None,
+        router: MessageRouter | None = None,
+        default_channel_capacity: int = 100,
+    ) -> None:
         self._registry = registry
+        self._enforcer = enforcer
+        self._router = router
+        self._default_channel_capacity = default_channel_capacity
         # Spec registry: maps spec_id -> AgentSpec for tool/depth checks
         self._specs: dict[str, AgentSpec] = {}
         # AD-L3-10: Track ancestors currently being cascade-terminated
@@ -62,15 +93,25 @@ class AgentFactory:
         self,
         child_spec: AgentSpec,
         parent_id: str | None = None,
+        parent_scope: ContextScope | None = None,
     ) -> AgentInstance:
         """Spawn a new agent instance.
 
         If parent_id is None, creates a root agent.
         If parent_id is provided, validates all spawn preconditions.
 
+        L3 integration (all optional, backward-compatible):
+        - If ``self._enforcer`` is set, registers the agent's envelope.
+        - If ``self._router`` is set and parent_id is provided, creates
+          bidirectional message channels between parent and child.
+        - If ``parent_scope`` is provided, creates a child ContextScope
+          and attaches it to the instance metadata (key: ``"context_scope"``).
+
         Args:
             child_spec: The AgentSpec blueprint for the new instance.
             parent_id: The parent instance ID, or None for root agents.
+            parent_scope: Optional parent ContextScope. When provided,
+                a child scope is created and attached to the instance.
 
         Returns:
             The newly created AgentInstance in Pending state.
@@ -99,6 +140,39 @@ class AgentFactory:
             self._specs[f"_inst_{instance.instance_id}"] = child_spec
 
         await self._registry.register(instance)
+
+        # L3 integration: Factory -> Enforcer
+        if self._enforcer is not None and child_spec.envelope:
+            self._enforcer.register(instance.instance_id, child_spec.envelope)
+
+        # L3 integration: Factory -> Router
+        if self._router is not None and parent_id is not None:
+            cap = self._default_channel_capacity
+            # Create bidirectional channels: parent->child and child->parent
+            self._router.create_channel(parent_id, instance.instance_id, cap)
+            self._router.create_channel(instance.instance_id, parent_id, cap)
+
+        # L3 integration: Factory -> Context
+        if parent_scope is not None:
+            from kaizen.l3.context.projection import ScopeProjection
+
+            # Create a child scope with inherited projections (monotonic tightening)
+            child_scope = parent_scope.create_child(
+                owner_id=instance.instance_id,
+                read_projection=ScopeProjection(
+                    allow_patterns=parent_scope.read_projection.allow_patterns,
+                    deny_patterns=parent_scope.read_projection.deny_patterns,
+                ),
+                write_projection=ScopeProjection(
+                    allow_patterns=parent_scope.write_projection.allow_patterns,
+                    deny_patterns=parent_scope.write_projection.deny_patterns,
+                ),
+            )
+            # Attach scope to instance metadata for retrieval by the agent
+            instance.envelope = instance.envelope or {}
+            if not isinstance(instance.envelope, dict):
+                instance.envelope = {}
+            instance.envelope["_context_scope_id"] = child_scope.scope_id
 
         logger.debug(
             "Spawned instance %s (spec=%s, parent=%s)",
