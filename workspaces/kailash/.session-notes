@@ -1,0 +1,19 @@
+# Session Notes — 2026-03-22
+
+## Accomplished
+- All 20 runtime optimization todos completed (P0A: 5, P0B: 6, P0C: 6, P0X: 2, C5: deferred)
+- WorkflowDAG class (~890 lines) replacing networkx — dual adjacency lists, Kahn's/Tarjan's/Johnson's
+- Full migration: graph.py + 8 runtime files migrated from networkx to WorkflowDAG
+- Security red team: 7 findings fixed (cache corruption, psutil null guards, ghost nodes, dead code)
+- PR #29 merged to main
+- Codified: core-workflow-dag.md skill, COC synced
+
+## In Progress
+- Nothing
+
+## Blockers
+- None
+
+## Next Steps
+- Core SDK version bump 2.0.0 → 2.0.1 when ready for PyPI release
+- Consider removing networkx from core dependencies (currently optional, retained for viz)

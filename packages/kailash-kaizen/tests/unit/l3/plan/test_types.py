@@ -120,7 +120,7 @@ class TestPlanNodeOutput:
 
 
 class TestPlanNodeState:
-    """PlanNodeState enum: 6 members."""
+    """PlanNodeState enum: 7 members (including HELD)."""
 
     def test_members_exist(self):
         from kaizen.l3.plan.types import PlanNodeState
@@ -131,6 +131,13 @@ class TestPlanNodeState:
         assert hasattr(PlanNodeState, "COMPLETED")
         assert hasattr(PlanNodeState, "FAILED")
         assert hasattr(PlanNodeState, "SKIPPED")
+        assert hasattr(PlanNodeState, "HELD")
+
+    def test_held_state_value(self):
+        from kaizen.l3.plan.types import PlanNodeState
+
+        assert PlanNodeState.HELD == "HELD"
+        assert PlanNodeState.HELD.value == "HELD"
 
     def test_is_str_enum(self):
         from kaizen.l3.plan.types import PlanNodeState
@@ -255,6 +262,88 @@ class TestPlanNode:
         node = self._make_node(state=PlanNodeState.FAILED)
         node.transition_to(PlanNodeState.SKIPPED)
         assert node.state == PlanNodeState.SKIPPED
+
+    # -- HELD state transition tests --
+
+    def test_transition_running_to_held(self):
+        from kaizen.l3.plan.types import PlanNodeState
+
+        node = self._make_node(state=PlanNodeState.RUNNING)
+        node.transition_to(PlanNodeState.HELD)
+        assert node.state == PlanNodeState.HELD
+
+    def test_transition_held_to_running(self):
+        """HELD -> RUNNING: resolved, retry."""
+        from kaizen.l3.plan.types import PlanNodeState
+
+        node = self._make_node(state=PlanNodeState.HELD)
+        node.transition_to(PlanNodeState.RUNNING)
+        assert node.state == PlanNodeState.RUNNING
+
+    def test_transition_held_to_failed(self):
+        """HELD -> FAILED: resolution timeout."""
+        from kaizen.l3.plan.types import PlanNodeState
+
+        node = self._make_node(state=PlanNodeState.HELD)
+        node.transition_to(PlanNodeState.FAILED)
+        assert node.state == PlanNodeState.FAILED
+
+    def test_transition_held_to_skipped(self):
+        """HELD -> SKIPPED: skip the held node."""
+        from kaizen.l3.plan.types import PlanNodeState
+
+        node = self._make_node(state=PlanNodeState.HELD)
+        node.transition_to(PlanNodeState.SKIPPED)
+        assert node.state == PlanNodeState.SKIPPED
+
+    def test_invalid_transition_pending_to_held(self):
+        from kaizen.l3.plan.types import PlanNodeState
+
+        node = self._make_node(state=PlanNodeState.PENDING)
+        with pytest.raises(ValueError, match="Invalid.*transition"):
+            node.transition_to(PlanNodeState.HELD)
+
+    def test_invalid_transition_completed_to_held(self):
+        from kaizen.l3.plan.types import PlanNodeState
+
+        node = self._make_node(state=PlanNodeState.COMPLETED)
+        with pytest.raises(ValueError, match="Invalid.*transition"):
+            node.transition_to(PlanNodeState.HELD)
+
+    def test_invalid_transition_held_to_completed(self):
+        """HELD -> COMPLETED is not a valid transition (must go through RUNNING)."""
+        from kaizen.l3.plan.types import PlanNodeState
+
+        node = self._make_node(state=PlanNodeState.HELD)
+        with pytest.raises(ValueError, match="Invalid.*transition"):
+            node.transition_to(PlanNodeState.COMPLETED)
+
+    def test_held_is_not_terminal(self):
+        from kaizen.l3.plan.types import PlanNodeState
+
+        node = self._make_node(state=PlanNodeState.HELD)
+        assert node.is_terminal is False
+
+    def test_completed_is_terminal(self):
+        """Verify COMPLETED is still terminal after HELD addition."""
+        from kaizen.l3.plan.types import PlanNodeState
+
+        node = self._make_node(state=PlanNodeState.COMPLETED)
+        assert node.is_terminal is True
+
+    def test_failed_is_terminal(self):
+        """Verify FAILED is still terminal after HELD addition."""
+        from kaizen.l3.plan.types import PlanNodeState
+
+        node = self._make_node(state=PlanNodeState.FAILED)
+        assert node.is_terminal is True
+
+    def test_skipped_is_terminal(self):
+        """Verify SKIPPED is still terminal after HELD addition."""
+        from kaizen.l3.plan.types import PlanNodeState
+
+        node = self._make_node(state=PlanNodeState.SKIPPED)
+        assert node.is_terminal is True
 
     def test_invalid_transition_completed_to_running(self):
         from kaizen.l3.plan.types import PlanNodeState

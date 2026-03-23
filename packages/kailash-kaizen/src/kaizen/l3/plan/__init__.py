@@ -10,7 +10,7 @@ from kaizen.l3.plan.errors import (
     PlanError,
     ValidationError,
 )
-from kaizen.l3.plan.executor import PlanExecutor
+from kaizen.l3.plan.executor import AsyncPlanExecutor, PlanExecutor
 from kaizen.l3.plan.modification import apply_modification, apply_modifications
 from kaizen.l3.plan.types import (
     EdgeType,
@@ -46,6 +46,7 @@ __all__ = [
     # Validator
     "PlanValidator",
     # Executor
+    "AsyncPlanExecutor",
     "PlanExecutor",
     # Modification
     "apply_modification",
