@@ -127,7 +127,16 @@ kaizen = [
     "kailash-kaizen>=2.0.0,<3.0.0",
 ]
 pact = [
-    "kailash-pact>=0.2.0",
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+]
+# Vector/embedding nodes (numpy for array operations)
+vector = [
+    "numpy>=1.24",
+]
+# DataFrame operations (pandas for tabular data)
+dataframe = [
+    "pandas>=2.0",
 ]
 # Secret backends
 vault = [
@@ -174,11 +183,11 @@ docs = [
 ]
 # Everything (restores pre-1.0 behavior)
 all = [
-    "kailash[server,cli,http,database,postgres,mysql,files,auth,mfa,microsoft,monitoring,distributed,mcp,scheduler,otel,trust,trust-encryption,trust-sso]",
+    "kailash[server,cli,http,database,postgres,mysql,files,auth,mfa,microsoft,monitoring,distributed,mcp,scheduler,otel,trust,trust-encryption,trust-sso,pact]",
     "kailash-dataflow>=1.0.0,<3.0.0",
     "kailash-nexus>=1.4.3",
     "kailash-kaizen>=2.0.0,<3.0.0",
-    "kailash-pact>=0.2.0",
+    "kailash-pact>=0.4.0",
 ]
 
 [project.urls]

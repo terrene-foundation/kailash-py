@@ -18,7 +18,7 @@ Conversion strategy:
     - Plan.envelope: local `ConstraintEnvelope` -> SDK `dict[str, Any]`.
     - Plan.gradient: local `PlanGradient` -> SDK `dict[str, Any]`.
     - PlanGradient.resolution_timeout: local `timedelta` -> SDK `float` (seconds).
-    - PlanNodeState.HELD: SDK has it, local does not.  Maps to local FAILED.
+    - PlanNodeState.HELD: Both SDK and local now have HELD with 1:1 mapping.
 """
 
 from __future__ import annotations
@@ -336,24 +336,63 @@ def plan_gradient_from_dict(data: dict[str, Any]) -> LocalPlanGradient:
 
 
 def envelope_to_dict(local: ConstraintEnvelope) -> dict[str, Any]:
-    """Serialize a local ConstraintEnvelope to a plain dict for the SDK Plan.envelope field."""
+    """Serialize a ConstraintEnvelopeConfig to a plain dict for the SDK Plan.envelope field."""
     return {
-        "financial": local.financial,
-        "operational": local.operational,
-        "temporal": local.temporal,
-        "data_access": local.data_access,
-        "communication": local.communication,
+        "financial": local.financial.model_dump() if local.financial else {},
+        "operational": local.operational.model_dump(),
+        "temporal": local.temporal.model_dump(),
+        "data_access": local.data_access.model_dump(),
+        "communication": local.communication.model_dump(),
     }
 
 
 def envelope_from_dict(data: dict[str, Any]) -> ConstraintEnvelope:
-    """Deserialize a plain dict (from SDK Plan.envelope) to a local ConstraintEnvelope."""
-    return ConstraintEnvelope(
-        financial=data.get("financial", ConstraintEnvelope().financial),
-        operational=data.get("operational", ConstraintEnvelope().operational),
-        temporal=data.get("temporal", ConstraintEnvelope().temporal),
-        data_access=data.get("data_access", ConstraintEnvelope().data_access),
-        communication=data.get("communication", ConstraintEnvelope().communication),
+    """Deserialize a plain dict (from SDK Plan.envelope) to a ConstraintEnvelopeConfig."""
+    import uuid
+
+    from kailash.trust.pact.config import (
+        CommunicationConstraintConfig,
+        ConstraintEnvelopeConfig,
+        DataAccessConstraintConfig,
+        FinancialConstraintConfig,
+        OperationalConstraintConfig,
+        TemporalConstraintConfig,
+    )
+
+    financial_data = data.get("financial")
+    financial = None
+    if financial_data and isinstance(financial_data, dict):
+        financial = FinancialConstraintConfig(**financial_data)
+    elif financial_data is None:
+        financial = FinancialConstraintConfig(max_spend_usd=1.0)
+
+    operational_data = data.get("operational")
+    operational = OperationalConstraintConfig()
+    if operational_data and isinstance(operational_data, dict):
+        operational = OperationalConstraintConfig(**operational_data)
+
+    temporal_data = data.get("temporal")
+    temporal = TemporalConstraintConfig()
+    if temporal_data and isinstance(temporal_data, dict):
+        temporal = TemporalConstraintConfig(**temporal_data)
+
+    data_access_data = data.get("data_access")
+    data_access = DataAccessConstraintConfig()
+    if data_access_data and isinstance(data_access_data, dict):
+        data_access = DataAccessConstraintConfig(**data_access_data)
+
+    communication_data = data.get("communication")
+    communication = CommunicationConstraintConfig()
+    if communication_data and isinstance(communication_data, dict):
+        communication = CommunicationConstraintConfig(**communication_data)
+
+    return ConstraintEnvelopeConfig(
+        id=data.get("id", f"deserialized-{uuid.uuid4().hex[:8]}"),
+        financial=financial,
+        operational=operational,
+        temporal=temporal,
+        data_access=data_access,
+        communication=communication,
     )
 
 

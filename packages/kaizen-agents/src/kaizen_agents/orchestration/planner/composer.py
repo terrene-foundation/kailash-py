@@ -269,12 +269,18 @@ class PlanValidator:
         if not plan.nodes:
             return errors
 
-        parent_limit = plan.envelope.financial.get("limit", float("inf"))
+        parent_limit = (
+            plan.envelope.financial.max_spend_usd if plan.envelope.financial else float("inf")
+        )
 
         # INV-PLAN-06: Budget summation
         total_child_budget = 0.0
         for node_id, node in plan.nodes.items():
-            child_limit = node.agent_spec.envelope.financial.get("limit", 0.0)
+            child_limit = (
+                node.agent_spec.envelope.financial.max_spend_usd
+                if node.agent_spec.envelope.financial
+                else 0.0
+            )
             total_child_budget += child_limit
 
         if total_child_budget > parent_limit:
@@ -290,15 +296,14 @@ class PlanValidator:
             )
 
         # INV-PLAN-07: Monotonic tightening per node
-        parent_blocked = set(plan.envelope.operational.get("blocked", []))
-        parent_allowed = plan.envelope.operational.get("allowed", [])
-        parent_ceiling = plan.envelope.data_access.get("ceiling", "internal")
+        parent_blocked = set(plan.envelope.operational.blocked_actions)
+        parent_allowed = plan.envelope.operational.allowed_actions
 
         for node_id, node in plan.nodes.items():
             child_env = node.agent_spec.envelope
 
             # Financial: child limit must not exceed parent limit
-            child_limit = child_env.financial.get("limit", 0.0)
+            child_limit = child_env.financial.max_spend_usd if child_env.financial else 0.0
             if child_limit > parent_limit:
                 errors.append(
                     ValidationError(
@@ -312,7 +317,7 @@ class PlanValidator:
                 )
 
             # Operational: child blocked must be superset of parent blocked
-            child_blocked = set(child_env.operational.get("blocked", []))
+            child_blocked = set(child_env.operational.blocked_actions)
             missing_blocked = parent_blocked - child_blocked
             if missing_blocked:
                 errors.append(
@@ -328,7 +333,7 @@ class PlanValidator:
 
             # Operational: child allowed must be subset of parent allowed (if parent restricts)
             if parent_allowed:
-                child_allowed = set(child_env.operational.get("allowed", []))
+                child_allowed = set(child_env.operational.allowed_actions)
                 excess_allowed = child_allowed - set(parent_allowed)
                 if excess_allowed:
                     errors.append(

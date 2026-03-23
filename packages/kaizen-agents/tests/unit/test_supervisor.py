@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from kaizen_agents.governance.cost_model import CostModel
 from kaizen_agents.supervisor import GovernedSupervisor, SupervisorResult
 from kaizen_agents.types import (
     AgentSpec,
@@ -117,7 +118,7 @@ class TestGovernedSupervisorLayer2:
         from kaizen_agents.governance.clearance import DataClassification
 
         supervisor = GovernedSupervisor(data_clearance="confidential")
-        assert supervisor.clearance_level == DataClassification.C2_CONFIDENTIAL
+        assert supervisor.clearance_level == DataClassification.CONFIDENTIAL
 
     def test_invalid_clearance_rejected(self) -> None:
         with pytest.raises(ValueError, match="data_clearance"):
@@ -129,9 +130,9 @@ class TestGovernedSupervisorLayer2:
             tools=["read", "write"],
             timeout_seconds=600.0,
         )
-        assert supervisor.envelope.financial["limit"] == 50.0
-        assert supervisor.envelope.operational["allowed"] == ["read", "write"]
-        assert supervisor.envelope.temporal["limit_seconds"] == 600.0
+        assert supervisor.envelope.financial is not None
+        assert supervisor.envelope.financial.max_spend_usd == 50.0
+        assert supervisor.envelope.operational.allowed_actions == ["read", "write"]
 
     @pytest.mark.asyncio
     async def test_budget_warning_event(self) -> None:
@@ -316,3 +317,71 @@ class TestGovernedSupervisorMultiNode:
 
         result = await supervisor.run_plan(plan, execute_node=mixed_executor)
         assert result.success is True  # only required nodes matter
+
+
+# ---------------------------------------------------------------------------
+# CostModel integration with GovernedSupervisor
+# ---------------------------------------------------------------------------
+
+
+async def token_executor(spec: AgentSpec, inputs: dict[str, Any]) -> dict[str, Any]:
+    """Executor that returns token counts but no explicit cost."""
+    return {
+        "result": f"output:{spec.name}",
+        "prompt_tokens": 1000,
+        "completion_tokens": 500,
+        "model": "claude-sonnet-4-6",
+    }
+
+
+async def token_executor_with_cost(spec: AgentSpec, inputs: dict[str, Any]) -> dict[str, Any]:
+    """Executor that returns both explicit cost and token counts."""
+    return {
+        "result": f"output:{spec.name}",
+        "cost": 0.99,
+        "prompt_tokens": 1000,
+        "completion_tokens": 500,
+    }
+
+
+class TestGovernedSupervisorCostModel:
+    """Test CostModel integration with GovernedSupervisor."""
+
+    @pytest.mark.asyncio
+    async def test_cost_model_computes_from_tokens(self) -> None:
+        """When executor returns tokens but no cost, cost_model computes it."""
+        cost_model = CostModel()
+        supervisor = GovernedSupervisor(budget_usd=10.0, cost_model=cost_model)
+        result = await supervisor.run("Task", execute_node=token_executor)
+        assert result.success is True
+        # claude-sonnet-4-6: (1000 * 3.0 + 500 * 15.0) / 1_000_000
+        expected = (1000 * 3.0 + 500 * 15.0) / 1_000_000
+        assert result.budget_consumed == pytest.approx(expected)
+
+    @pytest.mark.asyncio
+    async def test_explicit_cost_takes_precedence(self) -> None:
+        """When executor returns both cost and tokens, explicit cost wins."""
+        cost_model = CostModel()
+        supervisor = GovernedSupervisor(budget_usd=10.0, cost_model=cost_model)
+        result = await supervisor.run("Task", execute_node=token_executor_with_cost)
+        assert result.success is True
+        assert result.budget_consumed == pytest.approx(0.99)
+
+    @pytest.mark.asyncio
+    async def test_no_cost_model_ignores_tokens(self) -> None:
+        """Without cost_model, token counts are ignored and cost is 0."""
+        supervisor = GovernedSupervisor(budget_usd=10.0)
+        result = await supervisor.run("Task", execute_node=token_executor)
+        assert result.success is True
+        assert result.budget_consumed == 0.0
+
+    def test_cost_model_property_accessible(self) -> None:
+        """cost_model property returns the configured model."""
+        cm = CostModel()
+        supervisor = GovernedSupervisor(cost_model=cm)
+        assert supervisor.cost_model is cm
+
+    def test_cost_model_property_none_by_default(self) -> None:
+        """cost_model property returns None when not configured."""
+        supervisor = GovernedSupervisor()
+        assert supervisor.cost_model is None

@@ -223,7 +223,7 @@ class AgentConfig:
     enforce constraints from this envelope. When absent, no envelope
     enforcement is applied (L0-L2 backward-compatible behavior).
 
-    Type: Optional[ConstraintEnvelopeConfig] from pact.governance.config.
+    Type: Optional[ConstraintEnvelopeConfig] from kailash.trust.pact.config.
     Typed as Any to avoid hard dependency on kailash-pact for minimal installs.
     """
 

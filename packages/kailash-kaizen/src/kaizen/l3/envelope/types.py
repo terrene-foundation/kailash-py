@@ -33,12 +33,12 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# GradientZone (aliased from pact.governance.config.VerificationLevel
+# GradientZone (aliased from kailash.trust.pact.config.VerificationLevel
 #               per AD-L3-02-AMENDED, with standalone fallback)
 # ---------------------------------------------------------------------------
 
 try:
-    from pact.governance.config import VerificationLevel as _VerificationLevel
+    from kailash.trust.pact.config import VerificationLevel as _VerificationLevel
 
     class GradientZone(str, Enum):
         """Budget gradient zones — maps to PACT VerificationLevel.

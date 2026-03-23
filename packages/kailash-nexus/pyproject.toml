@@ -23,6 +23,7 @@ classifiers = [
 ]
 dependencies = [
     "kailash>=1.0.0,<3.0.0",
+    "starlette>=0.36.0",
 ]
 requires-python = ">=3.11"
 

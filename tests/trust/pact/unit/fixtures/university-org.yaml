@@ -1,0 +1,137 @@
+# University PACT Organization Definition -- full example for roundtrip testing
+org_id: "university-001"
+name: "State University"
+
+departments:
+  - id: d-president-office
+    name: Office of the President
+  - id: d-academic-affairs
+    name: Academic Affairs
+  - id: d-engineering
+    name: School of Engineering
+  - id: d-medicine
+    name: School of Medicine
+  - id: d-administration
+    name: Administration
+  - id: d-student-affairs
+    name: Student Affairs
+
+teams:
+  - id: t-cs-dept
+    name: CS Department
+  - id: t-research-lab
+    name: Research Lab
+  - id: t-hr
+    name: HR
+  - id: t-finance
+    name: Finance
+  - id: t-disciplinary
+    name: Disciplinary Board
+
+roles:
+  - id: r-president
+    name: President
+    heads: d-president-office
+  - id: r-provost
+    name: Provost
+    reports_to: r-president
+    heads: d-academic-affairs
+  - id: r-dean-eng
+    name: Dean of Engineering
+    reports_to: r-provost
+    heads: d-engineering
+  - id: r-cs-chair
+    name: CS Chair
+    reports_to: r-dean-eng
+    heads: t-cs-dept
+  - id: r-cs-faculty
+    name: CS Faculty Member
+    reports_to: r-cs-chair
+  - id: r-dean-med
+    name: Dean of Medicine
+    reports_to: r-provost
+    heads: d-medicine
+  - id: r-irb-director
+    name: IRB Director
+    reports_to: r-dean-med
+    heads: t-research-lab
+    agent: agent-irb
+  - id: r-vp-admin
+    name: VP Administration
+    reports_to: r-president
+    heads: d-administration
+  - id: r-hr-director
+    name: HR Director
+    reports_to: r-vp-admin
+    heads: t-hr
+  - id: r-finance-director
+    name: Finance Director
+    reports_to: r-vp-admin
+    heads: t-finance
+  - id: r-vp-student-affairs
+    name: VP Student Affairs
+    reports_to: r-president
+    heads: d-student-affairs
+  - id: r-disciplinary-officer
+    name: Disciplinary Officer
+    reports_to: r-vp-student-affairs
+    heads: t-disciplinary
+
+clearances:
+  - role: r-president
+    level: secret
+    nda_signed: true
+  - role: r-provost
+    level: confidential
+  - role: r-dean-eng
+    level: confidential
+  - role: r-cs-chair
+    level: restricted
+  - role: r-cs-faculty
+    level: restricted
+  - role: r-dean-med
+    level: confidential
+  - role: r-irb-director
+    level: secret
+    compartments: [human-subjects]
+    nda_signed: true
+  - role: r-vp-admin
+    level: restricted
+  - role: r-hr-director
+    level: confidential
+    compartments: [personnel]
+  - role: r-finance-director
+    level: restricted
+  - role: r-vp-student-affairs
+    level: confidential
+  - role: r-disciplinary-officer
+    level: confidential
+    compartments: [student-records]
+
+envelopes:
+  - target: r-cs-chair
+    defined_by: r-dean-eng
+    financial:
+      max_spend_usd: 10000
+    operational:
+      allowed_actions: [read, write, approve]
+
+bridges:
+  - id: bridge-provost-vpadmin
+    role_a: r-provost
+    role_b: r-vp-admin
+    type: standing
+    max_classification: restricted
+    bilateral: false
+  - id: bridge-eng-med-research
+    role_a: r-dean-eng
+    role_b: r-dean-med
+    type: scoped
+    max_classification: confidential
+    bilateral: true
+
+ksps:
+  - id: ksp-acad-to-hr
+    source: d-academic-affairs
+    target: t-hr
+    max_classification: restricted

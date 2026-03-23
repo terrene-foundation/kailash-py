@@ -1,20 +1,23 @@
 # Copyright 2026 Terrene Foundation
 # Licensed under the Apache License, Version 2.0
 """
-PACT — Governance framework for AI agent organizations.
+PACT -- Governance framework for AI agent organizations.
 
 Architecture:
-    pact.governance        — D/T/R grammar, addressing, clearance, access, envelopes
-    pact.governance.config — Platform configuration and agent definitions
-    pact.governance.audit  — Tamper-evident audit chain
-    pact.governance.gradient — Verification gradient engine
-    pact.mcp               — Governance enforcement on MCP tool invocations
+    kailash.trust.pact     -- D/T/R grammar, addressing, clearance, access, envelopes (core)
+    kailash.trust.pact.config -- Platform configuration and agent definitions (core)
+    kailash.trust.pact.audit  -- Tamper-evident audit chain (core)
+    kailash.trust.pact.gradient -- Verification gradient engine (core)
+    pact.governance.api    -- REST API endpoints (kailash-pact)
+    pact.governance.cli    -- CLI interface (kailash-pact)
+    pact.governance.testing -- Testing utilities (kailash-pact)
+    pact.mcp               -- Governance enforcement on MCP tool invocations (kailash-pact)
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
-# --- Governance ---
-from pact.governance import (
+# --- Governance (re-exported from kailash.trust.pact) ---
+from kailash.trust.pact import (
     # Error hierarchy
     PactError,
     # Addressing
@@ -81,8 +84,6 @@ from pact.governance import (
     PactGovernanceMiddleware,
     # Governance decorators
     governed_tool,
-    # Testing utilities
-    MockGovernedAgent,
     # Audit
     PactAuditAction,
     create_pact_audit_details,
@@ -98,8 +99,8 @@ from pact.governance import (
     OrgStore,
 )
 
-# --- Config types ---
-from pact.governance.config import (
+# --- Config types (re-exported from kailash.trust.pact.config) ---
+from kailash.trust.pact.config import (
     AgentConfig,
     CONFIDENTIALITY_ORDER,
     CommunicationConstraintConfig,
@@ -130,11 +131,20 @@ from kailash.trust import (
     TrustPosture,
 )
 
-# --- Audit chain ---
-from pact.governance.audit import AuditChain
+# --- Audit chain (re-exported from kailash.trust.pact.audit) ---
+from kailash.trust.pact.audit import AuditChain
 
-# --- Gradient engine ---
-from pact.governance.gradient import EvaluationResult, GradientEngine
+# --- Gradient engine (re-exported from kailash.trust.pact.gradient) ---
+from kailash.trust.pact.gradient import EvaluationResult, GradientEngine
+
+# --- Testing utilities (stays in kailash-pact) ---
+from pact.governance.testing import MockGovernedAgent
+
+# --- PactEngine (Dual Plane bridge) ---
+from pact.engine import PactEngine
+from pact.work import WorkResult, WorkSubmission
+from pact.costs import CostTracker
+from pact.events import EventBus
 
 # --- MCP governance ---
 from pact.mcp import (
@@ -263,6 +273,12 @@ __all__ = [
     # Gradient engine
     "EvaluationResult",
     "GradientEngine",
+    # PactEngine (Dual Plane bridge)
+    "PactEngine",
+    "WorkResult",
+    "WorkSubmission",
+    "CostTracker",
+    "EventBus",
     # MCP governance
     "DefaultPolicy",
     "GovernanceDecision",

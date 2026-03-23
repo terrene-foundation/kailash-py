@@ -394,12 +394,16 @@ class EnvelopeAllocator:
         # Convert parent envelope to SDK format (flat dict)
         sdk_parent = _envelope_to_sdk_parent(parent)
 
+        # When temporal is unbounded, zero out temporal_ratio to avoid
+        # SDK splitter rejecting unbounded dimension splits
+        has_temporal = sdk_parent.get("temporal_limit_seconds") is not None
+
         # Create SDK AllocationRequest objects from our local ratios
         sdk_allocations = [
             SdkAllocationRequest(
                 child_id=alloc.child_id,
                 financial_ratio=alloc.financial_ratio,
-                temporal_ratio=alloc.temporal_ratio,
+                temporal_ratio=alloc.temporal_ratio if has_temporal else 0.0,
             )
             for alloc in split_result.allocations
         ]
@@ -513,35 +517,30 @@ def _validate_allocation_sums(result: SplitResult) -> None:
 
 
 def _envelope_to_sdk_parent(envelope: ConstraintEnvelope) -> dict[str, Any]:
-    """Convert a local ConstraintEnvelope to the flat dict expected by SDK EnvelopeSplitter.
+    """Convert a ConstraintEnvelopeConfig to the flat dict expected by SDK EnvelopeSplitter.
 
     The SDK EnvelopeSplitter expects a flat dict with keys:
         - financial_limit: float | None
         - temporal_limit_seconds: float | None
         - action_limit: int | None
 
-    The local ConstraintEnvelope stores these in nested dimension dicts:
-        - financial["limit"] -> financial_limit
-        - temporal["limit_seconds"] -> temporal_limit_seconds
-        - operational["action_limit"] -> action_limit
-
     Args:
-        envelope: The local ConstraintEnvelope to convert.
+        envelope: The ConstraintEnvelopeConfig to convert.
 
     Returns:
         A flat dict suitable for EnvelopeSplitter.split(parent=...).
     """
-    financial_limit = envelope.financial.get("limit")
-    if financial_limit is not None:
-        financial_limit = float(financial_limit)
+    financial_limit: float | None = None
+    if envelope.financial is not None:
+        financial_limit = float(envelope.financial.max_spend_usd)
 
-    temporal_limit = envelope.temporal.get("limit_seconds")
-    if temporal_limit is not None:
-        temporal_limit = float(temporal_limit)
+    # Temporal: no direct limit_seconds on TemporalConstraintConfig
+    temporal_limit: float | None = None
 
-    action_limit = envelope.operational.get("action_limit")
-    if action_limit is not None:
-        action_limit = int(action_limit)
+    # Operational: max_actions_per_day as action_limit proxy
+    action_limit: int | None = None
+    if envelope.operational.max_actions_per_day is not None:
+        action_limit = int(envelope.operational.max_actions_per_day)
 
     return {
         "financial_limit": financial_limit,
@@ -554,54 +553,57 @@ def _sdk_result_to_envelope(
     child_dict: dict[str, Any],
     parent: ConstraintEnvelope,
 ) -> ConstraintEnvelope:
-    """Convert an SDK split result dict back to a local ConstraintEnvelope.
+    """Convert an SDK split result dict back to a ConstraintEnvelopeConfig.
 
     The SDK returns flat dicts with financial_limit, temporal_limit_seconds,
-    and action_limit. We reconstruct a ConstraintEnvelope inheriting the
+    and action_limit. We reconstruct a ConstraintEnvelopeConfig inheriting the
     non-depletable dimensions (data_access, communication) from the parent
     and populating the depletable dimensions from the SDK result.
-
-    The operational dimension's allowed/blocked lists are inherited from the
-    parent (they are non-depletable), while action_limit is set from the
-    SDK result.
 
     Args:
         child_dict: SDK result dict with financial_limit, temporal_limit_seconds,
             action_limit keys.
-        parent: The parent ConstraintEnvelope from which non-depletable
+        parent: The parent ConstraintEnvelopeConfig from which non-depletable
             dimensions are inherited.
 
     Returns:
-        A new ConstraintEnvelope for the child agent.
+        A new ConstraintEnvelopeConfig for the child agent.
     """
+    import uuid
+
+    from kailash.trust.pact.config import (
+        ConstraintEnvelopeConfig,
+        FinancialConstraintConfig,
+        OperationalConstraintConfig,
+    )
+
     # Financial dimension
-    child_financial: dict[str, Any] = dict(parent.financial)
     fin_limit = child_dict.get("financial_limit")
+    child_financial: FinancialConstraintConfig | None = None
     if fin_limit is not None:
-        child_financial["limit"] = fin_limit
-    else:
-        child_financial.pop("limit", None)
+        child_financial = FinancialConstraintConfig(max_spend_usd=float(fin_limit))
+    elif parent.financial is not None:
+        child_financial = parent.financial
 
-    # Temporal dimension
-    child_temporal: dict[str, Any] = dict(parent.temporal)
-    temp_limit = child_dict.get("temporal_limit_seconds")
-    if temp_limit is not None:
-        child_temporal["limit_seconds"] = temp_limit
-    else:
-        child_temporal.pop("limit_seconds", None)
-
-    # Operational dimension — inherit allowed/blocked, set action_limit from SDK
-    child_operational: dict[str, Any] = dict(parent.operational)
+    # Operational dimension — inherit allowed/blocked from parent,
+    # set action_limit from SDK result
     action_limit = child_dict.get("action_limit")
-    if action_limit is not None:
-        child_operational["action_limit"] = action_limit
-    else:
-        child_operational.pop("action_limit", None)
+    child_operational = OperationalConstraintConfig(
+        allowed_actions=list(parent.operational.allowed_actions),
+        blocked_actions=list(parent.operational.blocked_actions),
+        max_actions_per_day=(
+            int(action_limit)
+            if action_limit is not None
+            else parent.operational.max_actions_per_day
+        ),
+    )
 
-    return ConstraintEnvelope(
+    return ConstraintEnvelopeConfig(
+        id=f"child-{uuid.uuid4().hex[:8]}",
         financial=child_financial,
         operational=child_operational,
-        temporal=child_temporal,
-        data_access=dict(parent.data_access),
-        communication=dict(parent.communication),
+        temporal=parent.temporal,
+        data_access=parent.data_access,
+        communication=parent.communication,
+        confidentiality_clearance=parent.confidentiality_clearance,
     )

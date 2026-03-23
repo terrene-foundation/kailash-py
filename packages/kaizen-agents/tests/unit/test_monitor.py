@@ -21,6 +21,7 @@ from kaizen_agents.orchestration.recovery.recomposer import RecoveryStrategy
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,
+    make_envelope,
     EdgeType,
     GradientZone,
     Plan,
@@ -88,7 +89,7 @@ def _make_single_node_plan(
         nodes={"node-0": node},
         edges=[],
         state=PlanState.VALIDATED,
-        envelope=ConstraintEnvelope(financial={"limit": budget_limit}),
+        envelope=make_envelope(financial={"limit": budget_limit}),
         gradient=PlanGradient(retry_budget=2),
     )
 
@@ -124,7 +125,7 @@ def _make_three_node_linear_plan(
         nodes=nodes,
         edges=edges,
         state=PlanState.VALIDATED,
-        envelope=ConstraintEnvelope(financial={"limit": budget_limit}),
+        envelope=make_envelope(financial={"limit": budget_limit}),
         gradient=PlanGradient(retry_budget=2),
     )
 
@@ -162,7 +163,7 @@ def _make_diamond_plan(
         nodes=nodes,
         edges=edges,
         state=PlanState.VALIDATED,
-        envelope=ConstraintEnvelope(financial={"limit": budget_limit}),
+        envelope=make_envelope(financial={"limit": budget_limit}),
         gradient=PlanGradient(retry_budget=2),
     )
 
@@ -207,7 +208,7 @@ class TestSingleNodePlanSuccess:
     async def test_single_node_success(self) -> None:
         """A single-node plan where execution succeeds produces a successful PlanResult."""
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(retry_budget=2)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -233,7 +234,7 @@ class TestSingleNodePlanSuccess:
     async def test_single_node_with_no_cost(self) -> None:
         """A node that does not report cost still succeeds; cost stays at zero."""
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(retry_budget=2)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -258,7 +259,7 @@ class TestMultiNodePlanDependencyOrder:
     async def test_linear_plan_executes_in_order(self) -> None:
         """A three-node linear plan executes nodes in dependency order."""
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(retry_budget=2)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -280,7 +281,7 @@ class TestMultiNodePlanDependencyOrder:
     async def test_diamond_plan_respects_merge_point(self) -> None:
         """A diamond plan runs parallel branches before the merge node."""
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(retry_budget=2)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -307,7 +308,7 @@ class TestMultiNodePlanDependencyOrder:
     async def test_cumulative_cost_tracking(self) -> None:
         """Costs from all nodes accumulate in total_cost."""
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(retry_budget=2)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -332,7 +333,7 @@ class TestNodeFailureRecovery:
     async def test_retry_on_transient_failure(self) -> None:
         """A transient failure within retry budget gets auto-retried."""
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(retry_budget=2)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -381,7 +382,7 @@ class TestNodeFailureRecovery:
             "skip_reason": "Optional analysis not critical",
         }
         mock_llm = _make_mock_llm([diagnosis_response, recovery_response])
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(
             retry_budget=0,
             optional_node_failure=GradientZone.HELD,  # Force held so recovery runs
@@ -429,7 +430,7 @@ class TestNodeFailureRecovery:
         # Diagnoser + Recomposer = 2 LLM calls for first failure.
         # After replace, the new node runs and we need no more LLM calls.
         mock_llm = _make_mock_llm([diagnosis_response, recovery_response])
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(retry_budget=0)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -466,7 +467,7 @@ class TestNodeFailureRecovery:
             "skip_reason": None,
         }
         mock_llm = _make_mock_llm([diagnosis_response, recovery_response])
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(retry_budget=0)  # 0 retries so it goes to HELD
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -497,7 +498,7 @@ class TestBudgetExhaustion:
         """When cost exceeds the flag threshold, an ENVELOPE_WARNING is emitted
         but execution continues."""
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope(financial={"limit": 1.0})
+        envelope = make_envelope(financial={"limit": 1.0})
         gradient = PlanGradient(
             retry_budget=0,
             budget_flag_threshold=0.50,
@@ -539,7 +540,7 @@ class TestBudgetExhaustion:
             "skip_reason": None,
         }
         mock_llm = _make_mock_llm([diagnosis_response, recovery_response])
-        envelope = ConstraintEnvelope(financial={"limit": 1.0})
+        envelope = make_envelope(financial={"limit": 1.0})
         gradient = PlanGradient(
             retry_budget=0,
             budget_flag_threshold=0.50,
@@ -586,7 +587,7 @@ class TestAllNodesFail:
             "skip_reason": None,
         }
         mock_llm = _make_mock_llm([diagnosis_response, recovery_response])
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(retry_budget=0)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -622,7 +623,7 @@ class TestAllNodesFail:
             "skip_reason": None,
         }
         mock_llm = _make_mock_llm([diagnosis_response, recovery_response])
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(retry_budget=0)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -664,7 +665,7 @@ class TestAllNodesFail:
             "skip_reason": None,
         }
         mock_llm = _make_mock_llm([diagnosis_response, recovery_response])
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(retry_budget=2)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -698,7 +699,7 @@ class TestOptionalNodeFailures:
         """An optional node that fails with retries exhausted gets flagged
         and the plan continues."""
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(
             retry_budget=0,
             optional_node_failure=GradientZone.FLAGGED,
@@ -726,7 +727,7 @@ class TestOptionalNodeFailures:
 class TestInternalHelpers:
     def test_evaluate_plan_success_all_completed(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient()
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -737,7 +738,7 @@ class TestInternalHelpers:
 
     def test_evaluate_plan_success_required_node_failed(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient()
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -748,7 +749,7 @@ class TestInternalHelpers:
 
     def test_evaluate_plan_success_optional_node_failed_ok(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient()
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -761,7 +762,7 @@ class TestInternalHelpers:
 
     def test_evaluate_plan_success_optional_node_skipped_ok(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient()
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -772,7 +773,7 @@ class TestInternalHelpers:
 
     def test_classify_failure_with_retries_remaining(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient(retry_budget=2)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -784,7 +785,7 @@ class TestInternalHelpers:
 
     def test_classify_failure_retries_exhausted_required(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient(retry_budget=2, after_retry_exhaustion=GradientZone.HELD)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -797,7 +798,7 @@ class TestInternalHelpers:
 
     def test_classify_failure_retries_exhausted_optional(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient(
             retry_budget=1,
             optional_node_failure=GradientZone.FLAGGED,
@@ -814,7 +815,7 @@ class TestInternalHelpers:
 
     def test_check_budget_auto_approved(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(budget_flag_threshold=0.80, budget_hold_threshold=0.95)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -822,7 +823,7 @@ class TestInternalHelpers:
 
     def test_check_budget_flagged(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(budget_flag_threshold=0.80, budget_hold_threshold=0.95)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -830,7 +831,7 @@ class TestInternalHelpers:
 
     def test_check_budget_held(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(budget_flag_threshold=0.80, budget_hold_threshold=0.95)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -838,7 +839,7 @@ class TestInternalHelpers:
 
     def test_check_budget_blocked(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(budget_flag_threshold=0.80, budget_hold_threshold=0.95)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -848,7 +849,7 @@ class TestInternalHelpers:
         from kaizen_agents.types import PlanNodeOutput
 
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient()
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -869,7 +870,7 @@ class TestInternalHelpers:
         from kaizen_agents.types import PlanNodeOutput
 
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient()
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -890,7 +891,7 @@ class TestInternalHelpers:
         from kaizen_agents.types import PlanNodeOutput
 
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient()
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -916,7 +917,7 @@ class TestInternalHelpers:
 class TestApplyModification:
     def test_add_node(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient()
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -933,7 +934,7 @@ class TestApplyModification:
 
     def test_remove_node(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient()
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -950,7 +951,7 @@ class TestApplyModification:
 
     def test_replace_node(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient()
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -969,7 +970,7 @@ class TestApplyModification:
 
     def test_skip_node(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient()
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -982,7 +983,7 @@ class TestApplyModification:
 
     def test_update_spec(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient()
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -1003,7 +1004,7 @@ class TestApplyModification:
 class TestTerminateDownstream:
     def test_cascade_marks_pending_as_failed(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient()
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -1018,7 +1019,7 @@ class TestTerminateDownstream:
 
     def test_cascade_does_not_affect_completed_nodes(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient()
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -1035,7 +1036,7 @@ class TestTerminateDownstream:
 
     def test_cascade_in_diamond_plan(self) -> None:
         mock_llm = _make_mock_llm()
-        envelope = ConstraintEnvelope()
+        envelope = make_envelope()
         gradient = PlanGradient()
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 
@@ -1077,7 +1078,7 @@ class TestExecuteNodeExceptions:
             "skip_reason": None,
         }
         mock_llm = _make_mock_llm([diagnosis_response, recovery_response])
-        envelope = ConstraintEnvelope(financial={"limit": 10.0})
+        envelope = make_envelope(financial={"limit": 10.0})
         gradient = PlanGradient(retry_budget=0)
         monitor = PlanMonitor(llm=mock_llm, envelope=envelope, gradient=gradient)
 

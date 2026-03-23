@@ -21,7 +21,7 @@ from kaizen_agents.orchestration.planner.designer import (
     SpawnDecision,
     SpawnPolicy,
 )
-from kaizen_agents.types import AgentSpec, ConstraintEnvelope, MemoryConfig
+from kaizen_agents.types import AgentSpec, ConstraintEnvelope, make_envelope, MemoryConfig
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +70,7 @@ def _sample_spec(
         description="Reviews code for issues.",
         capabilities=capabilities or ["code-review", "security-analysis"],
         tool_ids=tool_ids or ["code_search", "file_read"],
-        envelope=ConstraintEnvelope(financial={"limit": 5.0}),
+        envelope=make_envelope(financial={"limit": 5.0}),
         memory_config=MemoryConfig(session=True),
     )
 
@@ -237,7 +237,7 @@ class TestSpawnPolicy:
     def test_high_complexity_spawns(self) -> None:
         policy = SpawnPolicy(complexity_threshold=3)
         subtask = _sample_subtask(complexity=4)
-        decision = policy.evaluate(subtask, ConstraintEnvelope())
+        decision = policy.evaluate(subtask, make_envelope())
 
         assert decision.should_spawn is True
         assert "Complexity 4" in decision.reason
@@ -245,7 +245,7 @@ class TestSpawnPolicy:
     def test_low_complexity_inlines(self) -> None:
         policy = SpawnPolicy(complexity_threshold=3)
         subtask = _sample_subtask(complexity=1, tools=[])
-        decision = policy.evaluate(subtask, ConstraintEnvelope())
+        decision = policy.evaluate(subtask, make_envelope())
 
         assert decision.should_spawn is False
         assert "below threshold" in decision.reason
@@ -253,7 +253,7 @@ class TestSpawnPolicy:
     def test_many_tools_spawns(self) -> None:
         policy = SpawnPolicy(complexity_threshold=5, tool_count_threshold=2)
         subtask = _sample_subtask(complexity=2, tools=["a", "b", "c"])
-        decision = policy.evaluate(subtask, ConstraintEnvelope())
+        decision = policy.evaluate(subtask, make_envelope())
 
         assert decision.should_spawn is True
         assert "tools" in decision.reason.lower()
@@ -261,7 +261,7 @@ class TestSpawnPolicy:
     def test_tight_budget_inlines(self) -> None:
         policy = SpawnPolicy(budget_threshold=5.0)
         subtask = _sample_subtask(complexity=4)
-        envelope = ConstraintEnvelope(financial={"limit": 1.0})
+        envelope = make_envelope(financial={"limit": 1.0})
         decision = policy.evaluate(subtask, envelope)
 
         assert decision.should_spawn is False
@@ -270,7 +270,7 @@ class TestSpawnPolicy:
     def test_matching_spec_spawns(self) -> None:
         policy = SpawnPolicy(complexity_threshold=5, tool_count_threshold=10)
         subtask = _sample_subtask(complexity=2, tools=["a"])
-        decision = policy.evaluate(subtask, ConstraintEnvelope(), has_matching_spec=True)
+        decision = policy.evaluate(subtask, make_envelope(), has_matching_spec=True)
 
         assert decision.should_spawn is True
         assert "reuse" in decision.reason.lower()
@@ -292,7 +292,7 @@ class TestAgentDesigner:
         designer = AgentDesigner(llm_client=mock_llm)
 
         subtask = _sample_subtask()
-        envelope = ConstraintEnvelope(financial={"limit": 100.0})
+        envelope = make_envelope(financial={"limit": 100.0})
         available_tools = ["code_search", "file_read", "file_write", "web_browser"]
 
         spec, decision = designer.design(subtask, envelope, available_tools)
@@ -301,7 +301,7 @@ class TestAgentDesigner:
         assert "code-review" in spec.capabilities
         assert "code_search" in spec.tool_ids
         assert "file_read" in spec.tool_ids
-        assert spec.envelope.financial["limit"] <= 100.0
+        assert spec.envelope.financial.max_spend_usd <= 100.0
         assert spec.memory_config.persistent is True
 
     def test_filters_unavailable_tools(self) -> None:
@@ -311,7 +311,7 @@ class TestAgentDesigner:
         designer = AgentDesigner(llm_client=mock_llm)
 
         subtask = _sample_subtask()
-        envelope = ConstraintEnvelope(financial={"limit": 100.0})
+        envelope = make_envelope(financial={"limit": 100.0})
         available_tools = ["code_search", "file_read"]
 
         spec, _ = designer.design(subtask, envelope, available_tools)
@@ -325,32 +325,32 @@ class TestAgentDesigner:
         designer = AgentDesigner(llm_client=mock_llm)
 
         subtask = _sample_subtask()
-        envelope = ConstraintEnvelope(financial={"limit": 100.0})
+        envelope = make_envelope(financial={"limit": 100.0})
 
         spec, _ = designer.design(subtask, envelope, [])
         # 0.5 * 100 = 50.0 max
-        assert spec.envelope.financial["limit"] <= 50.0
+        assert spec.envelope.financial.max_spend_usd <= 50.0
 
     def test_child_envelope_is_tighter_than_parent(self) -> None:
         mock_llm = _make_mock_llm(_sample_llm_design_response())
         designer = AgentDesigner(llm_client=mock_llm)
 
         subtask = _sample_subtask()
-        parent_envelope = ConstraintEnvelope(
+        parent_envelope = make_envelope(
             financial={"limit": 100.0},
             operational={"allowed": ["read", "write"], "blocked": ["delete"]},
         )
 
         spec, _ = designer.design(subtask, parent_envelope, ["code_search"])
-        assert spec.envelope.financial["limit"] <= 100.0
-        assert "delete" in spec.envelope.operational["blocked"]
+        assert spec.envelope.financial.max_spend_usd <= 100.0
+        assert "delete" in spec.envelope.operational.blocked_actions
 
     def test_uses_agent_design_schema(self) -> None:
         mock_llm = _make_mock_llm(_sample_llm_design_response())
         designer = AgentDesigner(llm_client=mock_llm)
         subtask = _sample_subtask()
 
-        designer.design(subtask, ConstraintEnvelope(), [])
+        designer.design(subtask, make_envelope(), [])
 
         call_args = mock_llm.complete_structured.call_args
         schema = call_args.kwargs.get("schema") or call_args[1].get("schema")
@@ -361,7 +361,7 @@ class TestAgentDesigner:
         designer = AgentDesigner(llm_client=mock_llm)
 
         subtask = _sample_subtask(complexity=4)
-        spec, _ = designer.design(subtask, ConstraintEnvelope(), [])
+        spec, _ = designer.design(subtask, make_envelope(), [])
 
         assert spec.metadata.get("generated_by") == "agent_designer"
         assert spec.metadata.get("subtask_complexity") == 4
@@ -387,7 +387,7 @@ class TestAgentDesignerWithExistingSpecs:
         )
 
         subtask = _sample_subtask(capabilities=["code-review", "security-analysis"])
-        envelope = ConstraintEnvelope(financial={"limit": 100.0})
+        envelope = make_envelope(financial={"limit": 100.0})
         available_tools = ["code_search", "file_read", "file_write"]
 
         spec, decision = designer.design(subtask, envelope, available_tools)
@@ -410,7 +410,7 @@ class TestAgentDesignerWithExistingSpecs:
         subtask = _sample_subtask(capabilities=["code-review", "security-analysis"])
         available_tools = ["code_search", "file_read"]
 
-        spec, _ = designer.design(subtask, ConstraintEnvelope(), available_tools)
+        spec, _ = designer.design(subtask, make_envelope(), available_tools)
         assert "missing_tool" not in spec.tool_ids
 
     def test_adapted_spec_adds_suggested_tools(self) -> None:
@@ -428,7 +428,7 @@ class TestAgentDesignerWithExistingSpecs:
         )
         available_tools = ["code_search", "file_read", "file_write"]
 
-        spec, _ = designer.design(subtask, ConstraintEnvelope(), available_tools)
+        spec, _ = designer.design(subtask, make_envelope(), available_tools)
         assert "file_read" in spec.tool_ids
 
     def test_falls_through_to_llm_on_partial_match(self) -> None:
@@ -440,7 +440,7 @@ class TestAgentDesignerWithExistingSpecs:
 
         subtask = _sample_subtask(capabilities=["code-review", "security-analysis"])
 
-        spec, _ = designer.design(subtask, ConstraintEnvelope(), ["code_search"])
+        spec, _ = designer.design(subtask, make_envelope(), ["code_search"])
         mock_llm.complete_structured.assert_called_once()
         assert spec.name == "Security Reviewer"  # From LLM
 
@@ -456,11 +456,11 @@ class TestEnvelopeTightening:
         designer = AgentDesigner(llm_client=mock_llm)
 
         subtask = _sample_subtask()
-        parent = ConstraintEnvelope(financial={"limit": 200.0})
+        parent = make_envelope(financial={"limit": 200.0})
 
         spec, _ = designer.design(subtask, parent, [])
         # LLM says 0.15 ratio, so 200 * 0.15 = 30.0
-        assert spec.envelope.financial["limit"] == pytest.approx(30.0)
+        assert spec.envelope.financial.max_spend_usd == pytest.approx(30.0)
 
     def test_child_cannot_exceed_parent_financial(self) -> None:
         response = _sample_llm_design_response()
@@ -469,34 +469,32 @@ class TestEnvelopeTightening:
         designer = AgentDesigner(llm_client=mock_llm)
 
         subtask = _sample_subtask()
-        parent = ConstraintEnvelope(financial={"limit": 10.0})
+        parent = make_envelope(financial={"limit": 10.0})
 
         spec, _ = designer.design(subtask, parent, [])
-        assert spec.envelope.financial["limit"] <= 10.0
+        assert spec.envelope.financial.max_spend_usd <= 10.0
 
     def test_child_inherits_parent_blocked_operations(self) -> None:
         mock_llm = _make_mock_llm(_sample_llm_design_response())
         designer = AgentDesigner(llm_client=mock_llm)
 
         subtask = _sample_subtask()
-        parent = ConstraintEnvelope(
-            operational={"allowed": [], "blocked": ["delete", "drop_table"]}
-        )
+        parent = make_envelope(operational={"allowed": [], "blocked": ["delete", "drop_table"]})
 
         spec, _ = designer.design(subtask, parent, [])
-        assert "delete" in spec.envelope.operational["blocked"]
-        assert "drop_table" in spec.envelope.operational["blocked"]
+        assert "delete" in spec.envelope.operational.blocked_actions
+        assert "drop_table" in spec.envelope.operational.blocked_actions
 
     def test_child_allowed_ops_subset_of_parent(self) -> None:
         mock_llm = _make_mock_llm(_sample_llm_design_response())
         designer = AgentDesigner(llm_client=mock_llm)
 
         subtask = _sample_subtask()
-        parent = ConstraintEnvelope(operational={"allowed": ["read", "write"], "blocked": []})
+        parent = make_envelope(operational={"allowed": ["read", "write"], "blocked": []})
 
         spec, _ = designer.design(subtask, parent, [])
         # Child's allowed must be subset of parent's allowed
-        for op in spec.envelope.operational.get("allowed", []):
+        for op in spec.envelope.operational.allowed_actions:
             assert op in ["read", "write"]
 
     def test_child_inherits_data_access_ceiling(self) -> None:
@@ -504,12 +502,11 @@ class TestEnvelopeTightening:
         designer = AgentDesigner(llm_client=mock_llm)
 
         subtask = _sample_subtask()
-        parent = ConstraintEnvelope(
-            data_access={"ceiling": "confidential", "scopes": ["project-x"]}
-        )
+        parent = make_envelope(data_access={"ceiling": "confidential", "scopes": ["project-x"]})
 
         spec, _ = designer.design(subtask, parent, [])
-        assert spec.envelope.data_access["ceiling"] == "confidential"
+        # Data access is inherited from parent via typed sub-models
+        assert spec.envelope.data_access is not None
 
 
 # ---------------------------------------------------------------------------

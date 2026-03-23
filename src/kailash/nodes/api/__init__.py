@@ -19,7 +19,13 @@ Design philosophy:
 """
 
 from .auth import APIKeyNode, BasicAuthNode, OAuth2Node
-from .graphql import AsyncGraphQLClientNode, GraphQLClientNode
+
+try:
+    from .graphql import AsyncGraphQLClientNode, GraphQLClientNode
+except ImportError:
+    AsyncGraphQLClientNode = None  # type: ignore[assignment,misc]
+    GraphQLClientNode = None  # type: ignore[assignment,misc]
+
 from .http import AsyncHTTPRequestNode, HTTPRequestNode
 from .monitoring import APIHealthCheckNode
 from .rate_limiting import (

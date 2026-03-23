@@ -46,7 +46,13 @@ Example:
 
 from typing import Any
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError as exc:
+    raise ImportError(
+        "numpy is required for vector database nodes. "
+        "Install it with: pip install kailash[vector]"
+    ) from exc
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
 from kailash.sdk_exceptions import NodeConfigurationError, NodeExecutionError

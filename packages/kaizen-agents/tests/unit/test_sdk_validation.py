@@ -28,6 +28,7 @@ from kaizen_agents.orchestration.planner.composer import PlanComposer
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,
+    make_envelope,
     EdgeType,
     GradientZone,
     Plan,
@@ -69,7 +70,7 @@ def _make_agent_spec(
         description=f"Agent: {name}",
         capabilities=["test"],
         tool_ids=[],
-        envelope=ConstraintEnvelope(
+        envelope=make_envelope(
             financial={"limit": financial_limit},
             operational={"allowed": [], "blocked": []},
         ),
@@ -120,7 +121,7 @@ def _make_valid_three_node_plan() -> Plan:
         nodes=nodes,
         edges=edges,
         state=PlanState.DRAFT,
-        envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+        envelope=make_envelope(financial={"limit": 10.0}),
         gradient=PlanGradient(retry_budget=2),
     )
 
@@ -138,7 +139,7 @@ class TestValidatePlanWithSdk:
         llm = _make_mock_llm()
         monitor = PlanMonitor(
             llm=llm,
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
             gradient=PlanGradient(retry_budget=2),
         )
         plan = _make_valid_three_node_plan()
@@ -153,7 +154,7 @@ class TestValidatePlanWithSdk:
         llm = _make_mock_llm()
         monitor = PlanMonitor(
             llm=llm,
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
             gradient=PlanGradient(retry_budget=2),
         )
         plan = Plan(
@@ -162,7 +163,7 @@ class TestValidatePlanWithSdk:
             nodes={},
             edges=[],
             state=PlanState.DRAFT,
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
             gradient=PlanGradient(retry_budget=2),
         )
 
@@ -179,7 +180,7 @@ class TestValidatePlanWithSdk:
         llm = _make_mock_llm()
         monitor = PlanMonitor(
             llm=llm,
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
             gradient=PlanGradient(retry_budget=2),
         )
         spec = _make_agent_spec(spec_id="spec-a", name="agent-a")
@@ -196,7 +197,7 @@ class TestValidatePlanWithSdk:
                 PlanEdge(from_node="node-b", to_node="node-a", edge_type=EdgeType.DATA_DEPENDENCY),
             ],
             state=PlanState.DRAFT,
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
             gradient=PlanGradient(retry_budget=2),
         )
 
@@ -213,7 +214,7 @@ class TestValidatePlanWithSdk:
         llm = _make_mock_llm()
         monitor = PlanMonitor(
             llm=llm,
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
             gradient=PlanGradient(retry_budget=2),
         )
         plan = Plan(
@@ -222,7 +223,7 @@ class TestValidatePlanWithSdk:
             nodes={},
             edges=[],
             state=PlanState.DRAFT,
-            envelope=ConstraintEnvelope(),
+            envelope=make_envelope(),
             gradient=PlanGradient(retry_budget=2),
         )
 
@@ -236,7 +237,7 @@ class TestValidatePlanWithSdk:
         llm = _make_mock_llm()
         monitor = PlanMonitor(
             llm=llm,
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
             gradient=PlanGradient(retry_budget=2),
         )
         spec = _make_agent_spec(spec_id="spec-self", name="self-agent")
@@ -250,7 +251,7 @@ class TestValidatePlanWithSdk:
                 PlanEdge(from_node="node-x", to_node="node-x", edge_type=EdgeType.DATA_DEPENDENCY),
             ],
             state=PlanState.DRAFT,
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
             gradient=PlanGradient(retry_budget=2),
         )
 
@@ -302,7 +303,7 @@ class TestHeldMappingRoundTrip:
             },
             edges=[],
             state=PlanState.EXECUTING,
-            envelope=ConstraintEnvelope(),
+            envelope=make_envelope(),
             gradient=PlanGradient(retry_budget=2),
         )
 
@@ -325,7 +326,7 @@ class TestHeldMappingRoundTrip:
         llm = _make_mock_llm()
         monitor = PlanMonitor(
             llm=llm,
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
             gradient=PlanGradient(
                 retry_budget=0,  # No retries -> immediate escalation
                 after_retry_exhaustion=GradientZone.HELD,
@@ -345,7 +346,7 @@ class TestHeldMappingRoundTrip:
             },
             edges=[],
             state=PlanState.VALIDATED,
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
             gradient=PlanGradient(
                 retry_budget=0,
                 after_retry_exhaustion=GradientZone.HELD,
@@ -433,7 +434,7 @@ class TestComposerSdkValidation:
         plan = composer.compose(
             subtasks=subtasks,
             specs=specs,
-            parent_envelope=ConstraintEnvelope(financial={"limit": 20.0}),
+            parent_envelope=make_envelope(financial={"limit": 20.0}),
             plan_name="research-report",
         )
 
@@ -510,7 +511,7 @@ class TestComposerSdkValidation:
         plan = composer.compose(
             subtasks=subtasks,
             specs=specs,
-            parent_envelope=ConstraintEnvelope(financial={"limit": 30.0}),
+            parent_envelope=make_envelope(financial={"limit": 30.0}),
             plan_name="three-stage-plan",
         )
 

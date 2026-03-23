@@ -399,6 +399,17 @@ class McpClient:
                         msg.get("method"),
                     )
 
+            # EOF — server process exited. Fail all pending futures so callers
+            # don't hang waiting for responses that will never arrive.
+            for future in self._pending.values():
+                if not future.done():
+                    future.set_exception(
+                        RuntimeError(
+                            f"MCP server {self._config.name!r} exited unexpectedly"
+                        )
+                    )
+            self._pending.clear()
+
         except asyncio.CancelledError:
             pass
         except Exception as exc:

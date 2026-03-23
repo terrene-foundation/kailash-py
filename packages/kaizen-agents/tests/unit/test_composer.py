@@ -24,6 +24,7 @@ from kaizen_agents.orchestration.planner.designer import SpawnDecision
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,
+    make_envelope,
     EdgeType,
     MemoryConfig,
     Plan,
@@ -77,7 +78,7 @@ def _sample_spec(
         description="A test agent.",
         capabilities=["test-cap"],
         tool_ids=["test_tool"],
-        envelope=ConstraintEnvelope(
+        envelope=make_envelope(
             financial={"limit": financial_limit},
             operational={"allowed": [], "blocked": ["delete"]},
         ),
@@ -451,7 +452,7 @@ class TestPlanValidatorEnvelopes:
         plan = Plan(
             nodes=nodes,
             edges=[],
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
         )
         validator = PlanValidator()
 
@@ -466,7 +467,7 @@ class TestPlanValidatorEnvelopes:
         plan = Plan(
             nodes=nodes,
             edges=[],
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
         )
         validator = PlanValidator()
 
@@ -482,7 +483,7 @@ class TestPlanValidatorEnvelopes:
         plan = Plan(
             nodes=nodes,
             edges=[],
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
         )
         validator = PlanValidator()
 
@@ -496,7 +497,7 @@ class TestPlanValidatorEnvelopes:
         plan = Plan(
             nodes=nodes,
             edges=[],
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
         )
         validator = PlanValidator()
 
@@ -509,8 +510,8 @@ class TestPlanValidatorEnvelopes:
             spec_id="child",
             name="Child",
             description="test",
-            envelope=ConstraintEnvelope(
-                financial={"limit": 3.0},
+            envelope=make_envelope(
+            financial={"limit": 3.0},
                 operational={"allowed": [], "blocked": []},  # Missing parent's "delete"
             ),
         )
@@ -518,8 +519,8 @@ class TestPlanValidatorEnvelopes:
         plan = Plan(
             nodes=nodes,
             edges=[],
-            envelope=ConstraintEnvelope(
-                financial={"limit": 10.0},
+            envelope=make_envelope(
+            financial={"limit": 10.0},
                 operational={"allowed": [], "blocked": ["delete"]},
             ),
         )
@@ -534,8 +535,8 @@ class TestPlanValidatorEnvelopes:
             spec_id="child",
             name="Child",
             description="test",
-            envelope=ConstraintEnvelope(
-                financial={"limit": 3.0},
+            envelope=make_envelope(
+            financial={"limit": 3.0},
                 operational={"allowed": ["read", "write", "admin"], "blocked": []},
             ),
         )
@@ -543,8 +544,8 @@ class TestPlanValidatorEnvelopes:
         plan = Plan(
             nodes=nodes,
             edges=[],
-            envelope=ConstraintEnvelope(
-                financial={"limit": 10.0},
+            envelope=make_envelope(
+            financial={"limit": 10.0},
                 operational={"allowed": ["read", "write"], "blocked": []},
             ),
         )
@@ -573,7 +574,7 @@ class TestPlanValidatorCombined:
         plan = Plan(
             nodes={"a": node},
             edges=[],
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
             state=PlanState.DRAFT,
         )
         validator = PlanValidator()
@@ -605,7 +606,7 @@ class TestPlanValidatorCombined:
             spec_id="child",
             name="Child",
             description="test",
-            envelope=ConstraintEnvelope(financial={"limit": 15.0}),
+            envelope=make_envelope(financial={"limit": 15.0}),
         )
         node_a = PlanNode(node_id="a", agent_spec=child_spec)
         plan = Plan(
@@ -613,7 +614,7 @@ class TestPlanValidatorCombined:
             edges=[
                 PlanEdge(from_node="a", to_node="a", edge_type=EdgeType.DATA_DEPENDENCY),
             ],
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
         )
         validator = PlanValidator()
 
@@ -635,7 +636,7 @@ class TestPlanComposer:
         subtasks, specs = _three_subtask_scenario()
         mock_llm = _make_mock_llm(_llm_response_sequential())
         composer = PlanComposer(llm_client=mock_llm)
-        parent_envelope = ConstraintEnvelope(financial={"limit": 100.0})
+        parent_envelope = make_envelope(financial={"limit": 100.0})
 
         plan = composer.compose(
             subtasks=subtasks,
@@ -663,7 +664,7 @@ class TestPlanComposer:
         subtasks, specs = _parallel_subtask_scenario()
         mock_llm = _make_mock_llm(_llm_response_parallel())
         composer = PlanComposer(llm_client=mock_llm)
-        parent_envelope = ConstraintEnvelope(financial={"limit": 100.0})
+        parent_envelope = make_envelope(financial={"limit": 100.0})
 
         plan = composer.compose(
             subtasks=subtasks,
@@ -687,7 +688,7 @@ class TestPlanComposer:
         subtasks, specs = _three_subtask_scenario()
         mock_llm = _make_mock_llm(_llm_response_sequential())
         composer = PlanComposer(llm_client=mock_llm)
-        parent_envelope = ConstraintEnvelope(financial={"limit": 100.0})
+        parent_envelope = make_envelope(financial={"limit": 100.0})
 
         plan = composer.compose(subtasks=subtasks, specs=specs, parent_envelope=parent_envelope)
 
@@ -711,7 +712,7 @@ class TestPlanComposer:
         composer.compose(
             subtasks=subtasks,
             specs=specs,
-            parent_envelope=ConstraintEnvelope(),
+            parent_envelope=make_envelope(),
         )
 
         call_args = mock_llm.complete_structured.call_args
@@ -722,12 +723,12 @@ class TestPlanComposer:
         subtasks, specs = _three_subtask_scenario()
         mock_llm = _make_mock_llm(_llm_response_sequential())
         composer = PlanComposer(llm_client=mock_llm)
-        parent_envelope = ConstraintEnvelope(financial={"limit": 42.0})
+        parent_envelope = make_envelope(financial={"limit": 42.0})
 
         plan = composer.compose(subtasks=subtasks, specs=specs, parent_envelope=parent_envelope)
 
         assert plan.envelope is parent_envelope
-        assert plan.envelope.financial["limit"] == 42.0
+        assert plan.envelope.financial.max_spend_usd == 42.0
 
 
 # ---------------------------------------------------------------------------
@@ -743,14 +744,14 @@ class TestPlanComposerEdgeCases:
         composer = PlanComposer(llm_client=mock_llm)
 
         with pytest.raises(ValueError, match="Mismatch"):
-            composer.compose(subtasks=subtasks, specs=specs, parent_envelope=ConstraintEnvelope())
+            composer.compose(subtasks=subtasks, specs=specs, parent_envelope=make_envelope())
 
     def test_empty_subtasks_raises(self) -> None:
         mock_llm = _make_mock_llm({"edges": [], "input_mappings": []})
         composer = PlanComposer(llm_client=mock_llm)
 
         with pytest.raises(ValueError, match="zero subtasks"):
-            composer.compose(subtasks=[], specs=[], parent_envelope=ConstraintEnvelope())
+            composer.compose(subtasks=[], specs=[], parent_envelope=make_envelope())
 
     def test_single_subtask_no_edges(self) -> None:
         subtasks = [_sample_subtask(output_keys=["result"])]
@@ -759,7 +760,7 @@ class TestPlanComposerEdgeCases:
         composer = PlanComposer(llm_client=mock_llm)
 
         plan = composer.compose(
-            subtasks=subtasks, specs=specs, parent_envelope=ConstraintEnvelope()
+            subtasks=subtasks, specs=specs, parent_envelope=make_envelope()
         )
 
         assert len(plan.nodes) == 1
@@ -780,7 +781,7 @@ class TestPlanComposerEdgeCases:
         composer = PlanComposer(llm_client=mock_llm)
 
         plan = composer.compose(
-            subtasks=subtasks, specs=specs, parent_envelope=ConstraintEnvelope()
+            subtasks=subtasks, specs=specs, parent_envelope=make_envelope()
         )
 
         edge_pairs = [(e.from_node, e.to_node) for e in plan.edges]
@@ -807,7 +808,7 @@ class TestPlanComposerEdgeCases:
         composer = PlanComposer(llm_client=mock_llm)
 
         plan = composer.compose(
-            subtasks=subtasks, specs=specs, parent_envelope=ConstraintEnvelope()
+            subtasks=subtasks, specs=specs, parent_envelope=make_envelope()
         )
 
         assert len(plan.edges) == 1
@@ -826,7 +827,7 @@ class TestPlanComposerEdgeCases:
         composer = PlanComposer(llm_client=mock_llm)
 
         plan = composer.compose(
-            subtasks=subtasks, specs=specs, parent_envelope=ConstraintEnvelope()
+            subtasks=subtasks, specs=specs, parent_envelope=make_envelope()
         )
 
         assert len(plan.edges) == 0
@@ -842,7 +843,7 @@ class TestPlanComposerEdgeCases:
         composer = PlanComposer(llm_client=mock_llm)
 
         plan = composer.compose(
-            subtasks=subtasks, specs=specs, parent_envelope=ConstraintEnvelope()
+            subtasks=subtasks, specs=specs, parent_envelope=make_envelope()
         )
 
         assert len(plan.edges) == 0
@@ -871,7 +872,7 @@ class TestPlanComposerEdgeCases:
         composer = PlanComposer(llm_client=mock_llm)
 
         plan = composer.compose(
-            subtasks=subtasks, specs=specs, parent_envelope=ConstraintEnvelope()
+            subtasks=subtasks, specs=specs, parent_envelope=make_envelope()
         )
 
         # Both mappings should be ignored
@@ -901,7 +902,7 @@ class TestPlanComposerEdgeCases:
         composer = PlanComposer(llm_client=mock_llm)
 
         plan = composer.compose(
-            subtasks=subtasks, specs=specs, parent_envelope=ConstraintEnvelope()
+            subtasks=subtasks, specs=specs, parent_envelope=make_envelope()
         )
 
         assert plan.nodes["node-1"].input_mapping == {}
@@ -917,7 +918,7 @@ class TestPlanComposerComposeAndValidate:
         subtasks, specs = _three_subtask_scenario()
         mock_llm = _make_mock_llm(_llm_response_sequential())
         composer = PlanComposer(llm_client=mock_llm)
-        parent_envelope = ConstraintEnvelope(financial={"limit": 100.0})
+        parent_envelope = make_envelope(financial={"limit": 100.0})
 
         plan, errors = composer.compose_and_validate(
             subtasks=subtasks,
@@ -942,7 +943,7 @@ class TestPlanComposerComposeAndValidate:
         ]
         mock_llm = _make_mock_llm(_llm_response_with_cycle())
         composer = PlanComposer(llm_client=mock_llm)
-        parent_envelope = ConstraintEnvelope(financial={"limit": 100.0})
+        parent_envelope = make_envelope(financial={"limit": 100.0})
 
         plan, errors = composer.compose_and_validate(
             subtasks=subtasks,
@@ -959,7 +960,7 @@ class TestPlanComposerComposeAndValidate:
         mock_llm = _make_mock_llm(_llm_response_sequential())
         composer = PlanComposer(llm_client=mock_llm)
         # Parent budget is only $5, but children sum to $10
-        parent_envelope = ConstraintEnvelope(financial={"limit": 5.0})
+        parent_envelope = make_envelope(financial={"limit": 5.0})
 
         plan, errors = composer.compose_and_validate(
             subtasks=subtasks,
@@ -997,7 +998,7 @@ class TestPlanComposerEdgeTypes:
         composer = PlanComposer(llm_client=mock_llm)
 
         plan = composer.compose(
-            subtasks=subtasks, specs=specs, parent_envelope=ConstraintEnvelope()
+            subtasks=subtasks, specs=specs, parent_envelope=make_envelope()
         )
 
         assert len(plan.edges) == 1
@@ -1022,7 +1023,7 @@ class TestPlanComposerEdgeTypes:
         composer = PlanComposer(llm_client=mock_llm)
 
         plan = composer.compose(
-            subtasks=subtasks, specs=specs, parent_envelope=ConstraintEnvelope()
+            subtasks=subtasks, specs=specs, parent_envelope=make_envelope()
         )
 
         assert len(plan.edges) == 1
@@ -1047,7 +1048,7 @@ class TestPlanComposerEdgeTypes:
         composer = PlanComposer(llm_client=mock_llm)
 
         plan = composer.compose(
-            subtasks=subtasks, specs=specs, parent_envelope=ConstraintEnvelope()
+            subtasks=subtasks, specs=specs, parent_envelope=make_envelope()
         )
 
         assert plan.edges[0].edge_type == EdgeType.DATA_DEPENDENCY

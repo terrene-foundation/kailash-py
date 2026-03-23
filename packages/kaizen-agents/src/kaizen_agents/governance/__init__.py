@@ -1,8 +1,11 @@
-"""PACT governance: accountability, clearance, revocation, vacancy, bypass, budget."""
+# Copyright 2026 Terrene Foundation
+# SPDX-License-Identifier: Apache-2.0
+"""PACT governance: accountability, clearance, revocation, vacancy, bypass, budget, cost model."""
 
 from kaizen_agents.governance.accountability import AccountabilityRecord, AccountabilityTracker
 from kaizen_agents.governance.budget import BudgetEvent, BudgetSnapshot, BudgetTracker
 from kaizen_agents.governance.bypass import BypassManager, BypassRecord
+from kaizen_agents.governance.cost_model import CostModel
 from kaizen_agents.governance.cascade import CascadeEvent, CascadeEventType, CascadeManager
 from kaizen_agents.governance.clearance import (
     ClassificationAssigner,
@@ -45,4 +48,6 @@ __all__ = [
     "BudgetTracker",
     "BudgetEvent",
     "BudgetSnapshot",
+    # LLM token cost model
+    "CostModel",
 ]

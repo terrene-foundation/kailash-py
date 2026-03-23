@@ -320,7 +320,7 @@ ksps:
 ## Loading in Python
 
 ```python
-from pact.governance.yaml_loader import load_org_yaml, ConfigurationError
+from kailash.trust.pact.yaml_loader import load_org_yaml, ConfigurationError
 
 try:
     loaded = load_org_yaml("my-org.yaml")

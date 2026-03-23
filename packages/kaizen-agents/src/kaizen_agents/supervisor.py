@@ -29,24 +29,46 @@ Defaults follow PACT default-deny: empty tools, $1 budget, PUBLIC clearance.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
+import threading
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
+
+try:
+    from kailash.trust.pact.agent import GovernanceHeldError
+except ImportError:
+
+    class GovernanceHeldError(Exception):  # type: ignore[no-redef]
+        """Fallback when kailash-pact is not installed."""
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args)
+
 
 from kaizen_agents.audit.trail import AuditTrail
 from kaizen_agents.governance.accountability import AccountabilityTracker
 from kaizen_agents.governance.budget import BudgetTracker
 from kaizen_agents.governance.bypass import BypassManager
 from kaizen_agents.governance.cascade import CascadeManager
+from kaizen_agents.governance.cost_model import CostModel
+from kailash.trust import ConfidentialityLevel
+
 from kaizen_agents.governance.clearance import (
     ClassificationAssigner,
     ClearanceEnforcer,
-    DataClassification,
 )
 from kaizen_agents.governance.dereliction import DerelictionDetector
 from kaizen_agents.governance.vacancy import VacancyManager
+from kailash.trust.pact.config import (
+    ConstraintEnvelopeConfig,
+    FinancialConstraintConfig,
+    OperationalConstraintConfig,
+    TemporalConstraintConfig,
+)
+
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,
@@ -63,7 +85,30 @@ from kaizen_agents.types import (
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["GovernedSupervisor", "SupervisorResult"]
+__all__ = ["GovernanceHeldError", "GovernedSupervisor", "HoldRecord", "SupervisorResult"]
+
+
+@dataclass
+class HoldRecord:
+    """Record of a held node awaiting human resolution.
+
+    Attributes:
+        node_id: The plan node ID that was held.
+        reason: Human-readable reason the node was held.
+        details: Structured details from the governance verdict.
+        held_at: UTC timestamp when the hold was created.
+        event: Async event for signaling hold resolution.
+        approved: True if approved, False if rejected, None if unresolved.
+        modified_context: Optional modified context for resumed execution.
+    """
+
+    node_id: str
+    reason: str
+    details: dict[str, Any]
+    held_at: datetime
+    event: asyncio.Event = field(default_factory=asyncio.Event)
+    approved: bool | None = None
+    modified_context: dict[str, Any] | None = None
 
 
 class _ReadOnlyView:
@@ -106,14 +151,14 @@ _BYPASS_QUERY_METHODS = frozenset(
 )
 _VACANCY_QUERY_METHODS = frozenset({"get_orphans", "is_orphaned"})
 
-# Map user-friendly clearance strings to DataClassification
-_CLEARANCE_MAP: dict[str, DataClassification] = {
-    "public": DataClassification.C0_PUBLIC,
-    "internal": DataClassification.C1_INTERNAL,
-    "restricted": DataClassification.C1_INTERNAL,
-    "confidential": DataClassification.C2_CONFIDENTIAL,
-    "secret": DataClassification.C3_SECRET,
-    "top_secret": DataClassification.C4_TOP_SECRET,
+# Map user-friendly clearance strings to ConfidentialityLevel
+_CLEARANCE_MAP: dict[str, ConfidentialityLevel] = {
+    "public": ConfidentialityLevel.PUBLIC,
+    "internal": ConfidentialityLevel.RESTRICTED,
+    "restricted": ConfidentialityLevel.RESTRICTED,
+    "confidential": ConfidentialityLevel.CONFIDENTIAL,
+    "secret": ConfidentialityLevel.SECRET,
+    "top_secret": ConfidentialityLevel.TOP_SECRET,
 }
 
 
@@ -166,6 +211,9 @@ class GovernedSupervisor:
         max_children: Max child agents per parent. Default 10.
         max_depth: Max delegation depth. Default 5.
         policy_source: Human identity that defined this supervisor's constraints.
+        cost_model: Optional CostModel for computing LLM token costs. When provided,
+            executor results that include ``prompt_tokens`` and ``completion_tokens``
+            but no explicit ``cost`` will have their cost computed automatically.
     """
 
     def __init__(
@@ -179,6 +227,7 @@ class GovernedSupervisor:
         max_children: int = 10,
         max_depth: int = 5,
         policy_source: str = "",
+        cost_model: CostModel | None = None,
     ) -> None:
         # Validate inputs
         if not math.isfinite(budget_usd) or budget_usd < 0:
@@ -201,12 +250,15 @@ class GovernedSupervisor:
         self._max_depth = max_depth
 
         # Build the root envelope (Layer 1 defaults)
-        self._envelope = ConstraintEnvelope(
-            financial={"limit": budget_usd},
-            operational={"allowed": list(self._tools), "blocked": []},
-            temporal={"limit_seconds": timeout_seconds},
-            data_access={"ceiling": data_clearance, "scopes": []},
-            communication={"recipients": [], "channels": []},
+        self._envelope = ConstraintEnvelopeConfig(
+            id="supervisor-root",
+            financial=FinancialConstraintConfig(max_spend_usd=budget_usd),
+            operational=OperationalConstraintConfig(
+                allowed_actions=list(self._tools),
+                blocked_actions=[],
+            ),
+            temporal=TemporalConstraintConfig(),
+            confidentiality_clearance=self._clearance_level,
         )
 
         self._gradient = PlanGradient(
@@ -230,6 +282,14 @@ class GovernedSupervisor:
         self._dereliction = DerelictionDetector()
         self._bypass = BypassManager()
         self._vacancy = VacancyManager()
+
+        # LLM token cost model (optional — auto-computes cost from token counts)
+        self._cost_model = cost_model
+
+        # External hold records: node_id -> HoldRecord (thread-safe, bounded)
+        self._held_nodes: dict[str, HoldRecord] = {}
+        self._held_lock = threading.Lock()
+        self._max_held_nodes = 10_000
 
         # Budget tracking
         self._budget.allocate("root", budget_usd)
@@ -284,7 +344,9 @@ class GovernedSupervisor:
             )
             self._cascade.register("root", None, _envelope_to_dict(self._envelope))
 
-        budget_allocated = self._envelope.financial.get("limit", 0.0)
+        budget_allocated = (
+            self._envelope.financial.max_spend_usd if self._envelope.financial else 0.0
+        )
 
         # Build a single-node plan if no decomposer is wired
         # (GovernedSupervisor is the entry point — decomposition happens
@@ -337,9 +399,9 @@ class GovernedSupervisor:
                     node.state = PlanNodeState.COMPLETED
                     node_results[node_id] = node.output
 
-                    # Track cost
-                    cost = output.get("cost", 0.0)
-                    if isinstance(cost, (int, float)) and math.isfinite(cost) and cost >= 0:
+                    # Track cost (explicit or computed from tokens via cost_model)
+                    cost = self._resolve_cost(output)
+                    if cost > 0:
                         total_cost += cost
                         budget_events = self._budget.record_consumption("root", cost)
                         for be in budget_events:
@@ -366,6 +428,40 @@ class GovernedSupervisor:
                         action=f"node_completed:{node_id}",
                         details={"cost": cost, "node_id": node_id},
                     )
+
+                except GovernanceHeldError as held:
+                    # External governance verdict: pause this node for human approval
+                    node.state = PlanNodeState.HELD
+                    hold_reason = (
+                        str(getattr(held.verdict, "reason", held))
+                        if hasattr(held, "verdict")
+                        else str(held)
+                    )
+                    hold_record = HoldRecord(
+                        node_id=node_id,
+                        reason=hold_reason,
+                        details=getattr(held, "details", {}) if hasattr(held, "details") else {},
+                        held_at=datetime.now(timezone.utc),
+                    )
+                    with self._held_lock:
+                        # Evict resolved holds if at capacity
+                        if len(self._held_nodes) >= self._max_held_nodes:
+                            resolved = [k for k, v in self._held_nodes.items() if v.event.is_set()]
+                            for k in resolved:
+                                del self._held_nodes[k]
+                        self._held_nodes[node_id] = hold_record
+                    events.append(
+                        PlanEvent(
+                            event_type=PlanEventType.NODE_HELD,
+                            node_id=node_id,
+                            reason=f"governance: {hold_reason}",
+                        )
+                    )
+                    self._audit.record_held("root", node_id, f"governance: {hold_reason}")
+                    continue
+
+                except (KeyboardInterrupt, SystemExit):
+                    raise
 
                 except Exception as exc:
                     node.state = PlanNodeState.FAILED
@@ -449,7 +545,9 @@ class GovernedSupervisor:
 
         ctx = context or {}
         executor = execute_node or _default_executor
-        budget_allocated = self._envelope.financial.get("limit", 0.0)
+        budget_allocated = (
+            self._envelope.financial.max_spend_usd if self._envelope.financial else 0.0
+        )
 
         # R1-10 (L2): Validate plan limits
         if len(plan.nodes) > self._max_children * self._max_depth:
@@ -478,8 +576,8 @@ class GovernedSupervisor:
                     node.state = PlanNodeState.COMPLETED
                     node_results[node_id] = node.output
 
-                    cost = output.get("cost", 0.0)
-                    if isinstance(cost, (int, float)) and math.isfinite(cost) and cost >= 0:
+                    cost = self._resolve_cost(output)
+                    if cost > 0:
                         total_cost += cost
                         self._budget.record_consumption("root", cost)
 
@@ -490,6 +588,40 @@ class GovernedSupervisor:
                             output=node.output,
                         )
                     )
+
+                except GovernanceHeldError as held:
+                    # External governance verdict: pause this node for human approval
+                    node.state = PlanNodeState.HELD
+                    hold_reason = (
+                        str(getattr(held.verdict, "reason", held))
+                        if hasattr(held, "verdict")
+                        else str(held)
+                    )
+                    hold_record = HoldRecord(
+                        node_id=node_id,
+                        reason=hold_reason,
+                        details=getattr(held, "details", {}) if hasattr(held, "details") else {},
+                        held_at=datetime.now(timezone.utc),
+                    )
+                    with self._held_lock:
+                        # Evict resolved holds if at capacity
+                        if len(self._held_nodes) >= self._max_held_nodes:
+                            resolved = [k for k, v in self._held_nodes.items() if v.event.is_set()]
+                            for k in resolved:
+                                del self._held_nodes[k]
+                        self._held_nodes[node_id] = hold_record
+                    events.append(
+                        PlanEvent(
+                            event_type=PlanEventType.NODE_HELD,
+                            node_id=node_id,
+                            reason=f"governance: {hold_reason}",
+                        )
+                    )
+                    self._audit.record_held("root", node_id, f"governance: {hold_reason}")
+                    continue
+
+                except (KeyboardInterrupt, SystemExit):
+                    raise
 
                 except Exception as exc:
                     node.state = PlanNodeState.FAILED
@@ -550,9 +682,101 @@ class GovernedSupervisor:
         return list(self._tools)
 
     @property
-    def clearance_level(self) -> DataClassification:
+    def cost_model(self) -> CostModel | None:
+        """The LLM token cost model, or None if not configured."""
+        return self._cost_model
+
+    @property
+    def clearance_level(self) -> ConfidentialityLevel:
         """The data clearance level."""
         return self._clearance_level
+
+    # -------------------------------------------------------------------
+    # Hold management (external governance HELD mechanism)
+    # -------------------------------------------------------------------
+
+    @property
+    def held_nodes(self) -> dict[str, HoldRecord]:
+        """Currently held nodes awaiting resolution. Returns a thread-safe copy."""
+        with self._held_lock:
+            return dict(self._held_nodes)
+
+    def resolve_hold(
+        self,
+        node_id: str,
+        approved: bool,
+        modified_context: dict[str, Any] | None = None,
+    ) -> None:
+        """Resume or reject a held node. Thread-safe.
+
+        Args:
+            node_id: The held node ID.
+            approved: True to resume execution, False to fail the node.
+            modified_context: Optional modified context for the resumed node.
+
+        Raises:
+            ValueError: If the node is not currently held.
+        """
+        with self._held_lock:
+            record = self._held_nodes.get(node_id)
+            if record is None:
+                raise ValueError(f"Node '{node_id}' is not currently held")
+            record.approved = approved
+            record.modified_context = modified_context
+        # Event.set() outside lock to avoid deadlock with event loop waiters
+        record.event.set()
+
+    # -------------------------------------------------------------------
+    # Layer 3: Tool-level audit recording (for CLI/entrypoint use)
+    # -------------------------------------------------------------------
+
+    def record_tool_use(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any] | None = None,
+        *,
+        blocked: bool = False,
+        reason: str = "",
+    ) -> None:
+        """Record a tool invocation in the audit trail.
+
+        Called by CLI/entrypoint tool executors to record governance-relevant
+        tool usage. This is the only write path exposed outside the supervisor's
+        own workflow execution.
+
+        Args:
+            tool_name: Name of the tool invoked.
+            arguments: Tool call arguments (keys only for security).
+            blocked: Whether the tool was blocked by governance.
+            reason: Reason for blocking (if blocked).
+        """
+        details: dict[str, Any] = {
+            "tool": tool_name,
+            "argument_keys": list((arguments or {}).keys()),
+            "blocked": blocked,
+        }
+        if blocked and reason:
+            details["reason"] = reason
+        action = f"tool_blocked:{tool_name}" if blocked else f"tool_use:{tool_name}"
+        self._audit.record_action("root", action, details)
+
+    def record_cost(self, amount: float, *, source: str = "tool") -> None:
+        """Record a cost against the session budget.
+
+        This is the write path for budget consumption from CLI/entrypoint code.
+        The ``budget`` property only exposes read-only queries.
+
+        Args:
+            amount: Cost in USD (must be finite and non-negative).
+            source: What incurred the cost (e.g. "tool", "llm_tokens").
+        """
+        if not math.isfinite(amount) or amount < 0:
+            logger.warning("Ignoring invalid cost: %s (source=%s)", amount, source)
+            return
+        try:
+            self._budget.record_consumption("root", amount)
+        except ValueError:
+            pass  # Agent not allocated yet (should not happen)
 
     # -------------------------------------------------------------------
     # Layer 3: Direct access to governance subsystems
@@ -606,6 +830,48 @@ class GovernedSupervisor:
     # -------------------------------------------------------------------
     # Internal helpers
     # -------------------------------------------------------------------
+
+    def _resolve_cost(self, output: dict[str, Any]) -> float:
+        """Resolve cost from executor output.
+
+        Resolution order:
+        1. If ``cost`` is present and valid, use it directly.
+        2. If ``cost`` is absent (or 0.0) but ``prompt_tokens`` and
+           ``completion_tokens`` are present and a cost_model is configured,
+           compute cost from token counts using the cost model.
+        3. Otherwise return 0.0.
+
+        Args:
+            output: The executor result dict.
+
+        Returns:
+            Cost in USD (finite, non-negative).
+        """
+        explicit_cost = output.get("cost")
+        if (
+            explicit_cost is not None
+            and isinstance(explicit_cost, (int, float))
+            and math.isfinite(explicit_cost)
+            and explicit_cost > 0
+        ):
+            return float(explicit_cost)
+
+        # Auto-compute from tokens if cost_model is available
+        if self._cost_model is not None:
+            prompt_tokens = output.get("prompt_tokens")
+            completion_tokens = output.get("completion_tokens")
+            if (
+                isinstance(prompt_tokens, int)
+                and isinstance(completion_tokens, int)
+                and prompt_tokens >= 0
+                and completion_tokens >= 0
+            ):
+                model_name = output.get("model", self._model)
+                computed = self._cost_model.compute(model_name, prompt_tokens, completion_tokens)
+                if math.isfinite(computed) and computed >= 0:
+                    return computed
+
+        return 0.0
 
     def _build_trivial_plan(self, objective: str, _context: dict[str, Any]) -> Plan:
         """Build a single-node plan for an objective (no LLM decomposition)."""
@@ -669,13 +935,13 @@ class GovernedSupervisor:
 
 
 def _envelope_to_dict(env: ConstraintEnvelope) -> dict[str, Any]:
-    """Convert a ConstraintEnvelope to a plain dict."""
+    """Convert a ConstraintEnvelopeConfig to a plain dict for audit/cascade systems."""
     return {
-        "financial": env.financial,
-        "operational": env.operational,
-        "temporal": env.temporal,
-        "data_access": env.data_access,
-        "communication": env.communication,
+        "financial": env.financial.model_dump() if env.financial else {},
+        "operational": env.operational.model_dump(),
+        "temporal": env.temporal.model_dump(),
+        "data_access": env.data_access.model_dump(),
+        "communication": env.communication.model_dump(),
     }
 
 

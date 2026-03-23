@@ -131,45 +131,45 @@ class TestClearanceEnforcer:
 
     def test_register_and_filter(self) -> None:
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("public", "hello", DataClassification.C0_PUBLIC))
-        enforcer.register_value(ClassifiedValue("secret", "sk-123", DataClassification.C3_SECRET))
+        enforcer.register_value(ClassifiedValue("public", "hello", DataClassification.PUBLIC))
+        enforcer.register_value(ClassifiedValue("secret", "sk-123", DataClassification.SECRET))
 
-        visible = enforcer.filter_for_clearance(DataClassification.C1_INTERNAL)
+        visible = enforcer.filter_for_clearance(DataClassification.RESTRICTED)
         assert "public" in visible
         assert "secret" not in visible
 
     def test_higher_clearance_sees_more(self) -> None:
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("internal", "data", DataClassification.C1_INTERNAL))
-        enforcer.register_value(ClassifiedValue("secret", "key", DataClassification.C3_SECRET))
+        enforcer.register_value(ClassifiedValue("internal", "data", DataClassification.RESTRICTED))
+        enforcer.register_value(ClassifiedValue("secret", "key", DataClassification.SECRET))
 
-        c1 = enforcer.filter_for_clearance(DataClassification.C1_INTERNAL)
-        c3 = enforcer.filter_for_clearance(DataClassification.C3_SECRET)
+        c1 = enforcer.filter_for_clearance(DataClassification.RESTRICTED)
+        c3 = enforcer.filter_for_clearance(DataClassification.SECRET)
         assert len(c1) == 1
         assert len(c3) == 2
 
     def test_monotonic_floor_prevents_downgrade(self) -> None:
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("key", "val", DataClassification.C3_SECRET))
+        enforcer.register_value(ClassifiedValue("key", "val", DataClassification.SECRET))
         with pytest.raises(ValueError, match="Monotonic floor"):
-            enforcer.register_value(ClassifiedValue("key", "val", DataClassification.C1_INTERNAL))
+            enforcer.register_value(ClassifiedValue("key", "val", DataClassification.RESTRICTED))
 
     def test_monotonic_floor_allows_upgrade(self) -> None:
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("key", "val", DataClassification.C1_INTERNAL))
-        enforcer.register_value(ClassifiedValue("key", "val", DataClassification.C3_SECRET))
-        assert enforcer.get_classification("key") == DataClassification.C3_SECRET
+        enforcer.register_value(ClassifiedValue("key", "val", DataClassification.RESTRICTED))
+        enforcer.register_value(ClassifiedValue("key", "val", DataClassification.SECRET))
+        assert enforcer.get_classification("key") == DataClassification.SECRET
 
     def test_is_visible(self) -> None:
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("data", "x", DataClassification.C2_CONFIDENTIAL))
-        assert enforcer.is_visible("data", DataClassification.C2_CONFIDENTIAL) is True
-        assert enforcer.is_visible("data", DataClassification.C1_INTERNAL) is False
-        assert enforcer.is_visible("data", DataClassification.C3_SECRET) is True
+        enforcer.register_value(ClassifiedValue("data", "x", DataClassification.CONFIDENTIAL))
+        assert enforcer.is_visible("data", DataClassification.CONFIDENTIAL) is True
+        assert enforcer.is_visible("data", DataClassification.RESTRICTED) is False
+        assert enforcer.is_visible("data", DataClassification.SECRET) is True
 
     def test_is_visible_unknown_key(self) -> None:
         enforcer = ClearanceEnforcer()
-        assert enforcer.is_visible("nonexistent", DataClassification.C4_TOP_SECRET) is False
+        assert enforcer.is_visible("nonexistent", DataClassification.TOP_SECRET) is False
 
 
 class TestClassificationAssigner:
@@ -178,38 +178,38 @@ class TestClassificationAssigner:
     def test_api_key_detected(self) -> None:
         assigner = ClassificationAssigner()
         level = assigner.classify("value", "sk-abc123def456ghi789jklmnop")
-        assert level >= DataClassification.C3_SECRET
+        assert level >= DataClassification.SECRET
 
     def test_email_detected(self) -> None:
         assigner = ClassificationAssigner()
         level = assigner.classify("contact", "user@example.com")
-        assert level >= DataClassification.C2_CONFIDENTIAL
+        assert level >= DataClassification.CONFIDENTIAL
 
     def test_ssn_detected(self) -> None:
         assigner = ClassificationAssigner()
         level = assigner.classify("data", "123-45-6789")
-        assert level >= DataClassification.C4_TOP_SECRET
+        assert level >= DataClassification.TOP_SECRET
 
     def test_private_key_detected(self) -> None:
         assigner = ClassificationAssigner()
         level = assigner.classify("cert", "-----BEGIN RSA PRIVATE KEY-----")
-        assert level >= DataClassification.C4_TOP_SECRET
+        assert level >= DataClassification.TOP_SECRET
 
     def test_key_name_heuristic(self) -> None:
         assigner = ClassificationAssigner()
         level = assigner.classify("api_key", "some_value")
-        assert level >= DataClassification.C3_SECRET
+        assert level >= DataClassification.SECRET
 
     def test_normal_value_gets_default(self) -> None:
         assigner = ClassificationAssigner()
         level = assigner.classify("greeting", "hello world")
-        assert level == DataClassification.C1_INTERNAL
+        assert level == DataClassification.RESTRICTED
 
     def test_classify_and_wrap(self) -> None:
         assigner = ClassificationAssigner()
         cv = assigner.classify_and_wrap("secret_key", "sk-abcdefghijklmnopqrstuvwx")
         assert isinstance(cv, ClassifiedValue)
-        assert cv.classification >= DataClassification.C3_SECRET
+        assert cv.classification >= DataClassification.SECRET
 
 
 # =========================================================================

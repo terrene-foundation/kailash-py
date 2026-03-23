@@ -629,8 +629,9 @@ class PlanMonitor:
         Returns:
             The budget limit, or float('inf') if not set.
         """
-        limit = float(self._envelope.financial.get("limit", float("inf")))
-        return limit
+        if self._envelope.financial is None:
+            return float("inf")
+        return float(self._envelope.financial.max_spend_usd)
 
     # ------------------------------------------------------------------
     # Internal: recovery via FailureDiagnoser + Recomposer

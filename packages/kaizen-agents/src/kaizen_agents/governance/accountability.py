@@ -18,7 +18,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
-from pact.governance.addressing import Address
+from kailash.trust.pact.addressing import Address
 
 logger = logging.getLogger(__name__)
 

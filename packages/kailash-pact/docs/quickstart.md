@@ -79,8 +79,8 @@ envelopes:
 ## 3. Load and Create the Engine
 
 ```python
-from pact.governance.yaml_loader import load_org_yaml
-from pact.governance.engine import GovernanceEngine
+from kailash.trust.pact.yaml_loader import load_org_yaml
+from kailash.trust.pact.engine import GovernanceEngine
 
 # Load the YAML definition
 loaded = load_org_yaml("my-org.yaml")
@@ -118,9 +118,9 @@ Nodes: 10
 The YAML loader returns clearance and envelope specs that need to be applied after compilation resolves positional addresses:
 
 ```python
-from pact.governance.clearance import RoleClearance, VettingStatus
-from pact.governance.envelopes import RoleEnvelope
-from pact.governance.envelope_adapter import GovernanceEnvelopeAdapter
+from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+from kailash.trust.pact.envelopes import RoleEnvelope
+from kailash.trust.pact.envelope_adapter import GovernanceEnvelopeAdapter
 from pact.build.config.schema import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
@@ -215,7 +215,7 @@ Dean hires at $60k: blocked -- Action cost ($60000.00) exceeds financial limit (
 Test whether roles can access classified information:
 
 ```python
-from pact.governance.knowledge import KnowledgeItem
+from kailash.trust.pact.knowledge import KnowledgeItem
 from pact.build.config.schema import TrustPostureLevel
 
 # A confidential research document owned by the CS department

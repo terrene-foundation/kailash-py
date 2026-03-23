@@ -10,6 +10,10 @@ These types mirror the spec definitions from:
 When the SDK teams deliver real implementations, these local types will be
 replaced by imports from kailash-enterprise. All orchestration code programs
 against these interfaces, so the swap is a single import change per file.
+
+ConstraintEnvelope is now an alias for ConstraintEnvelopeConfig from
+kailash.trust.pact.config (#59). The old frozen-dataclass-with-dicts
+version has been replaced by the Pydantic BaseModel with typed sub-models.
 """
 
 from __future__ import annotations
@@ -19,6 +23,124 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
+
+from kailash.trust.pact.config import (
+    CommunicationConstraintConfig,
+    ConstraintEnvelopeConfig,
+    DataAccessConstraintConfig,
+    FinancialConstraintConfig,
+    OperationalConstraintConfig,
+    TemporalConstraintConfig,
+)
+
+# Backward-compatible alias: ConstraintEnvelope -> ConstraintEnvelopeConfig (#59)
+ConstraintEnvelope = ConstraintEnvelopeConfig
+
+
+def _default_envelope() -> ConstraintEnvelopeConfig:
+    """Create a default ConstraintEnvelopeConfig for use as a field default.
+
+    Provides sensible defaults matching the old ConstraintEnvelope:
+    - Financial: $1.00 (default PACT budget)
+    - Operational: no allowed/blocked actions
+    - Other dimensions: defaults from ConstraintEnvelopeConfig
+    """
+    return ConstraintEnvelopeConfig(
+        id=f"default-{uuid.uuid4().hex[:8]}",
+        financial=FinancialConstraintConfig(max_spend_usd=1.0),
+    )
+
+
+def make_envelope(
+    *,
+    financial: dict[str, Any] | FinancialConstraintConfig | None = None,
+    operational: dict[str, Any] | OperationalConstraintConfig | None = None,
+    temporal: dict[str, Any] | TemporalConstraintConfig | None = None,
+    data_access: dict[str, Any] | DataAccessConstraintConfig | None = None,
+    communication: dict[str, Any] | CommunicationConstraintConfig | None = None,
+    envelope_id: str | None = None,
+) -> ConstraintEnvelopeConfig:
+    """Bridge factory: create a ConstraintEnvelopeConfig from old-style or new-style args.
+
+    Accepts the old dict-style arguments (e.g., financial={"limit": 5.0}) and
+    converts them to typed sub-models. Also accepts typed sub-models directly.
+
+    This function provides backward compatibility for code that was constructing
+    ConstraintEnvelope with dict arguments before the migration to
+    ConstraintEnvelopeConfig (#59).
+
+    Args:
+        financial: Financial constraints. Dict with "limit" key or
+            FinancialConstraintConfig. None means no financial capability.
+        operational: Operational constraints. Dict with "allowed"/"blocked" keys
+            or OperationalConstraintConfig.
+        temporal: Temporal constraints. Dict or TemporalConstraintConfig.
+        data_access: Data access constraints. Dict or DataAccessConstraintConfig.
+        communication: Communication constraints. Dict or CommunicationConstraintConfig.
+        envelope_id: Optional envelope ID. Auto-generated if not provided.
+
+    Returns:
+        A fully constructed ConstraintEnvelopeConfig.
+    """
+    eid = envelope_id or f"env-{uuid.uuid4().hex[:8]}"
+
+    # Financial
+    if financial is None:
+        fin = FinancialConstraintConfig(max_spend_usd=1.0)
+    elif isinstance(financial, dict):
+        fin = FinancialConstraintConfig(
+            max_spend_usd=float(financial.get("limit", 1.0)),
+        )
+    else:
+        fin = financial
+
+    # Operational
+    if operational is None:
+        ops = OperationalConstraintConfig()
+    elif isinstance(operational, dict):
+        ops = OperationalConstraintConfig(
+            allowed_actions=list(operational.get("allowed", [])),
+            blocked_actions=list(operational.get("blocked", [])),
+        )
+    else:
+        ops = operational
+
+    # Temporal
+    if temporal is None:
+        tmp = TemporalConstraintConfig()
+    elif isinstance(temporal, dict):
+        tmp = TemporalConstraintConfig()
+    else:
+        tmp = temporal
+
+    # Data access
+    if data_access is None:
+        da = DataAccessConstraintConfig()
+    elif isinstance(data_access, dict):
+        da = DataAccessConstraintConfig(
+            read_paths=list(data_access.get("scopes", [])),
+        )
+    else:
+        da = data_access
+
+    # Communication
+    if communication is None:
+        comm = CommunicationConstraintConfig()
+    elif isinstance(communication, dict):
+        comm = CommunicationConstraintConfig(
+            allowed_channels=list(communication.get("channels", [])),
+        )
+    else:
+        comm = communication
+
+    return ConstraintEnvelopeConfig(
+        id=eid,
+        financial=fin,
+        operational=ops,
+        temporal=tmp,
+        data_access=da,
+        communication=comm,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -101,59 +223,6 @@ class PlanGradient:
             )
 
 
-@dataclass(frozen=True)
-class ConstraintEnvelope:
-    """Simplified five-dimension constraint envelope per PACT spec.
-
-    Frozen to prevent field reassignment after creation. The dimension dicts
-    remain mutable for incremental construction (e.g., designer.py adjusts
-    financial["limit"] after creation). This is a deliberate trade-off:
-    frozen=True prevents wholesale field replacement while allowing dict
-    mutation for the builder pattern.
-
-    NaN/Inf validation: __post_init__ rejects non-finite values in known
-    numeric fields (financial.limit, temporal.limit_seconds) to prevent
-    governance bypass via NaN injection.
-
-    Dimensions:
-        financial: {"limit": float} -- monetary budget cap (default $1.00)
-        operational: {"allowed": list[str], "blocked": list[str]} -- action allowlists/blocklists
-        temporal: {"window_start": str, "window_end": str, "blackouts": list[str]}
-        data_access: {"ceiling": str, "scopes": list[str]} -- data classification ceiling + scopes
-        communication: {"recipients": list[str], "channels": list[str]} -- who/how to communicate
-    """
-
-    financial: dict[str, Any] = field(default_factory=lambda: {"limit": 1.0})
-    operational: dict[str, Any] = field(default_factory=lambda: {"allowed": [], "blocked": []})
-    temporal: dict[str, Any] = field(default_factory=dict)
-    data_access: dict[str, Any] = field(
-        default_factory=lambda: {"ceiling": "internal", "scopes": []}
-    )
-    communication: dict[str, Any] = field(
-        default_factory=lambda: {"recipients": [], "channels": []}
-    )
-
-    def __post_init__(self) -> None:
-        """Validate numeric fields in dimension dicts are finite."""
-        import math
-
-        limit = self.financial.get("limit")
-        if (
-            limit is not None
-            and isinstance(limit, (int, float))
-            and not math.isfinite(float(limit))
-        ):
-            raise ValueError(f"financial.limit must be finite, got {limit}")
-
-        temporal_limit = self.temporal.get("limit_seconds")
-        if (
-            temporal_limit is not None
-            and isinstance(temporal_limit, (int, float))
-            and not math.isfinite(float(temporal_limit))
-        ):
-            raise ValueError(f"temporal.limit_seconds must be finite, got {temporal_limit}")
-
-
 # ---------------------------------------------------------------------------
 # Agent types (from spec 04 — AgentFactory)
 # ---------------------------------------------------------------------------
@@ -230,7 +299,7 @@ class AgentSpec:
     description: str
     capabilities: list[str] = field(default_factory=list)
     tool_ids: list[str] = field(default_factory=list)
-    envelope: ConstraintEnvelope = field(default_factory=ConstraintEnvelope)
+    envelope: ConstraintEnvelope = field(default_factory=_default_envelope)
     memory_config: MemoryConfig = field(default_factory=MemoryConfig)
     max_lifetime: timedelta | None = None
     max_children: int | None = None
@@ -254,7 +323,7 @@ class AgentInstance:
     state: AgentState = AgentState.PENDING
     state_data: AgentStateData = field(default_factory=AgentStateData)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    active_envelope: ConstraintEnvelope = field(default_factory=ConstraintEnvelope)
+    active_envelope: ConstraintEnvelope = field(default_factory=_default_envelope)
 
 
 # ---------------------------------------------------------------------------
@@ -342,7 +411,7 @@ class Plan:
 
     plan_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
-    envelope: ConstraintEnvelope = field(default_factory=ConstraintEnvelope)
+    envelope: ConstraintEnvelope = field(default_factory=_default_envelope)
     gradient: PlanGradient = field(default_factory=PlanGradient)
     nodes: dict[str, PlanNode] = field(default_factory=dict)
     edges: list[PlanEdge] = field(default_factory=list)
@@ -553,7 +622,7 @@ class DelegationPayload:
 
     task_description: str
     context_snapshot: dict[str, Any] = field(default_factory=dict)
-    envelope: ConstraintEnvelope = field(default_factory=ConstraintEnvelope)
+    envelope: ConstraintEnvelope = field(default_factory=_default_envelope)
     deadline: datetime | None = None
     priority: Priority = Priority.NORMAL
 

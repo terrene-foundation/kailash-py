@@ -13,8 +13,15 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
-from scipy.optimize import minimize
-from scipy.stats import norm
+
+try:
+    from scipy.optimize import minimize
+    from scipy.stats import norm
+except ImportError as exc:
+    raise ImportError(
+        "scipy is required for optimization strategies. "
+        "Install it with: pip install scipy"
+    ) from exc
 
 from .core import (
     OptimizationEngineInterface,

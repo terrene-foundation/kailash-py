@@ -20,7 +20,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from pact.governance.config import ConstraintEnvelopeConfig, FinancialConstraintConfig
+from kailash.trust.pact.config import ConstraintEnvelopeConfig, FinancialConstraintConfig
 
 __all__ = [
     "CheckAccessRequest",

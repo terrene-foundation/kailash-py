@@ -23,6 +23,7 @@ from kaizen_agents.orchestration.monitor import PlanMonitor
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,
+    make_envelope,
     GradientZone,
     Plan,
     PlanGradient,
@@ -37,7 +38,7 @@ def _make_plan(budget_limit: float = 10.0) -> Plan:
     return Plan(
         plan_id="test-plan",
         name="NaN Test Plan",
-        envelope=ConstraintEnvelope(financial={"limit": budget_limit}),
+        envelope=make_envelope(financial={"limit": budget_limit}),
         gradient=PlanGradient(),
         nodes={
             "node-1": PlanNode(
@@ -62,7 +63,7 @@ def _make_monitor(
     llm = AsyncMock()
     return PlanMonitor(
         llm=llm,
-        envelope=envelope or ConstraintEnvelope(financial={"limit": 10.0}),
+        envelope=envelope or make_envelope(financial={"limit": 10.0}),
         gradient=PlanGradient(),
     )
 
@@ -113,19 +114,18 @@ class TestCheckBudgetNaN:
 
     def test_nan_budget_limit_rejected_at_construction(self) -> None:
         """NaN budget limit MUST be rejected at ConstraintEnvelope construction."""
-        with pytest.raises(ValueError, match="financial.limit must be finite"):
-            ConstraintEnvelope(financial={"limit": float("nan")})
+        with pytest.raises((ValueError,)):
+            make_envelope(financial={"limit": float("nan")})
 
-    def test_negative_budget_limit_returns_blocked(self) -> None:
-        """Negative budget limit MUST be BLOCKED."""
-        monitor = _make_monitor(envelope=ConstraintEnvelope(financial={"limit": -10.0}))
-        result = monitor._check_budget(5.0)
-        assert result == GradientZone.BLOCKED
+    def test_negative_budget_limit_rejected_at_construction(self) -> None:
+        """Negative budget limit MUST be rejected at construction (Pydantic ge=0)."""
+        with pytest.raises((ValueError,)):
+            make_envelope(financial={"limit": -10.0})
 
     def test_inf_budget_limit_rejected_at_construction(self) -> None:
         """Inf budget limit MUST be rejected at ConstraintEnvelope construction."""
-        with pytest.raises(ValueError, match="financial.limit must be finite"):
-            ConstraintEnvelope(financial={"limit": float("inf")})
+        with pytest.raises((ValueError,)):
+            make_envelope(financial={"limit": float("inf")})
 
 
 # ---------------------------------------------------------------------------
@@ -189,7 +189,7 @@ class TestCostAccumulationPoisoning:
     async def test_valid_cost_accumulates_correctly(self) -> None:
         """Valid costs should still accumulate normally."""
         plan = _make_plan(budget_limit=100.0)
-        monitor = _make_monitor(envelope=ConstraintEnvelope(financial={"limit": 100.0}))
+        monitor = _make_monitor(envelope=make_envelope(financial={"limit": 100.0}))
 
         async def execute_node(spec: AgentSpec, ctx: dict) -> dict:
             return {"result": "ok", "cost": 0.50}

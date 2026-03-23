@@ -3,8 +3,13 @@
 """Knowledge Clearance Enforcement -- classification-aware context filtering.
 
 Bridges PACT's knowledge clearance system with the kaizen-agents orchestration
-layer. Each context value carries a DataClassification (C0-C4); agents can only
-see values at or below their effective clearance level.
+layer. Each context value carries a ConfidentialityLevel (PUBLIC through
+TOP_SECRET); agents can only see values at or below their effective clearance
+level.
+
+Uses the canonical ``ConfidentialityLevel`` from ``kailash.trust`` (str Enum
+with custom ordering). The legacy ``DataClassification`` name is retained as a
+backward-compatible alias.
 
 Key properties:
 - Monotonic floor: classifications can only be raised, never lowered
@@ -19,8 +24,9 @@ import logging
 import re
 import threading
 from dataclasses import dataclass
-from enum import IntEnum
 from typing import Any
+
+from kailash.trust import ConfidentialityLevel
 
 logger = logging.getLogger(__name__)
 
@@ -32,32 +38,24 @@ __all__ = [
 ]
 
 
-class DataClassification(IntEnum):
-    """Data classification levels C0 through C4.
-
-    Numeric ordering enables direct comparison: C0 < C1 < C2 < C3 < C4.
-    """
-
-    C0_PUBLIC = 0
-    C1_INTERNAL = 1
-    C2_CONFIDENTIAL = 2
-    C3_SECRET = 3
-    C4_TOP_SECRET = 4
+# Backward-compatible alias: code that imports DataClassification from this
+# module will get the canonical ConfidentialityLevel from kailash.trust.
+DataClassification = ConfidentialityLevel
 
 
 @dataclass(frozen=True)
 class ClassifiedValue:
-    """A context value with its data classification.
+    """A context value with its confidentiality classification.
 
     Attributes:
         key: The context key name.
         value: The actual value.
-        classification: The data classification level.
+        classification: The confidentiality level (PUBLIC through TOP_SECRET).
     """
 
     key: str
     value: Any
-    classification: DataClassification
+    classification: ConfidentialityLevel
 
 
 class ClearanceEnforcer:
@@ -67,9 +65,9 @@ class ClearanceEnforcer:
 
     Usage:
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("api_key", "sk-...", DataClassification.C3_SECRET))
-        visible = enforcer.filter_for_clearance(DataClassification.C1_INTERNAL)
-        # visible == {} (C1 < C3, so api_key is invisible)
+        enforcer.register_value(ClassifiedValue("api_key", "sk-...", ConfidentialityLevel.SECRET))
+        visible = enforcer.filter_for_clearance(ConfidentialityLevel.RESTRICTED)
+        # visible == {} (RESTRICTED < SECRET, so api_key is invisible)
     """
 
     def __init__(self, max_values: int = 100_000) -> None:
@@ -104,7 +102,7 @@ class ClearanceEnforcer:
                 )
             self._values[cv.key] = cv
 
-    def filter_for_clearance(self, clearance: DataClassification) -> dict[str, Any]:
+    def filter_for_clearance(self, clearance: ConfidentialityLevel) -> dict[str, Any]:
         """Return only values at or below the given clearance level.
 
         Args:
@@ -118,20 +116,20 @@ class ClearanceEnforcer:
                 cv.key: cv.value for cv in self._values.values() if cv.classification <= clearance
             }
 
-    def get_classification(self, key: str) -> DataClassification | None:
+    def get_classification(self, key: str) -> ConfidentialityLevel | None:
         """Get the classification of a specific key.
 
         Args:
             key: The context key to look up.
 
         Returns:
-            The DataClassification, or None if key not registered.
+            The ConfidentialityLevel, or None if key not registered.
         """
         with self._lock:
             cv = self._values.get(key)
             return cv.classification if cv is not None else None
 
-    def is_visible(self, key: str, clearance: DataClassification) -> bool:
+    def is_visible(self, key: str, clearance: ConfidentialityLevel) -> bool:
         """Check if a specific key is visible at the given clearance.
 
         Args:
@@ -159,49 +157,49 @@ class ClearanceEnforcer:
 # ---------------------------------------------------------------------------
 
 # Patterns that indicate sensitive data without needing LLM classification
-_PREFILTER_PATTERNS: list[tuple[str, re.Pattern[str], DataClassification]] = [
+_PREFILTER_PATTERNS: list[tuple[str, re.Pattern[str], ConfidentialityLevel]] = [
     # API keys
-    ("api_key_openai", re.compile(r"sk-[a-zA-Z0-9]{20,}"), DataClassification.C3_SECRET),
+    ("api_key_openai", re.compile(r"sk-[a-zA-Z0-9]{20,}"), ConfidentialityLevel.SECRET),
     (
         "api_key_anthropic",
         re.compile(r"sk-ant-[a-zA-Z0-9-]{20,}", re.IGNORECASE),
-        DataClassification.C3_SECRET,
+        ConfidentialityLevel.SECRET,
     ),
     (
         "api_key_generic",
         re.compile(
             r"(?:api[_-]?key|token|secret)\s*[:=]\s*['\"]?[a-zA-Z0-9_-]{20,}", re.IGNORECASE
         ),
-        DataClassification.C3_SECRET,
+        ConfidentialityLevel.SECRET,
     ),
     # AWS keys
-    ("aws_key", re.compile(r"AKIA[0-9A-Z]{16}"), DataClassification.C3_SECRET),
+    ("aws_key", re.compile(r"AKIA[0-9A-Z]{16}"), ConfidentialityLevel.SECRET),
     (
         "aws_secret",
         re.compile(r"(?:aws_secret|AWS_SECRET)[_A-Z]*\s*[:=]\s*['\"]?[a-zA-Z0-9/+=]{30,}"),
-        DataClassification.C4_TOP_SECRET,
+        ConfidentialityLevel.TOP_SECRET,
     ),
     # Email addresses (PII)
     (
         "email",
         re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"),
-        DataClassification.C2_CONFIDENTIAL,
+        ConfidentialityLevel.CONFIDENTIAL,
     ),
     # SSN patterns
-    ("ssn", re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), DataClassification.C4_TOP_SECRET),
+    ("ssn", re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), ConfidentialityLevel.TOP_SECRET),
     # Credit card patterns (basic Luhn-candidate)
-    ("credit_card", re.compile(r"\b(?:\d{4}[- ]?){3}\d{4}\b"), DataClassification.C3_SECRET),
+    ("credit_card", re.compile(r"\b(?:\d{4}[- ]?){3}\d{4}\b"), ConfidentialityLevel.SECRET),
     # Phone numbers (US format)
     (
         "phone",
         re.compile(r"\b(?:\+1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b"),
-        DataClassification.C2_CONFIDENTIAL,
+        ConfidentialityLevel.CONFIDENTIAL,
     ),
     # Private key material
     (
         "private_key",
         re.compile(r"-----BEGIN (?:RSA |EC )?PRIVATE KEY-----"),
-        DataClassification.C4_TOP_SECRET,
+        ConfidentialityLevel.TOP_SECRET,
     ),
 ]
 
@@ -238,7 +236,7 @@ def _extract_string_leaves(value: Any, max_depth: int = 10, _depth: int = 0) -> 
 
 
 class ClassificationAssigner:
-    """Assigns data classification levels using deterministic pre-filter.
+    """Assigns confidentiality levels using deterministic pre-filter.
 
     The pre-filter catches known sensitive patterns (API keys, PII, etc.)
     without needing an LLM call. For values that don't match any pre-filter
@@ -247,16 +245,16 @@ class ClassificationAssigner:
     Usage:
         assigner = ClassificationAssigner()
         level = assigner.classify("my_key", "sk-abc123def456ghi789jkl")
-        # level == DataClassification.C3_SECRET (matched api_key_openai)
+        # level == ConfidentialityLevel.SECRET (matched api_key_openai)
     """
 
     def __init__(
         self,
-        default_classification: DataClassification = DataClassification.C1_INTERNAL,
+        default_classification: ConfidentialityLevel = ConfidentialityLevel.RESTRICTED,
     ) -> None:
         self._default = default_classification
 
-    def classify(self, key: str, value: Any) -> DataClassification:
+    def classify(self, key: str, value: Any) -> ConfidentialityLevel:
         """Classify a value using deterministic pre-filter.
 
         R1-04: Recursively extracts all string leaves from nested dicts/lists
@@ -268,7 +266,7 @@ class ClassificationAssigner:
             value: The value to classify.
 
         Returns:
-            The assigned DataClassification.
+            The assigned ConfidentialityLevel.
         """
         str_key = str(key).lower()
 
@@ -280,7 +278,7 @@ class ClassificationAssigner:
             for s in ("password", "secret", "token", "api_key", "private_key", "credential")
         )
         if key_sensitive:
-            highest = max(highest, DataClassification.C3_SECRET)
+            highest = max(highest, ConfidentialityLevel.SECRET)
 
         # R1-04: Collect all string leaves from value (recursive, bounded)
         leaves = _extract_string_leaves(value, max_depth=10)

@@ -513,9 +513,9 @@ Events are published to the platform EventBus and are available on the WebSocket
 
 ```python
 from fastapi import FastAPI
-from pact.governance.engine import GovernanceEngine
-from pact.governance.api.auth import GovernanceAuth
-from pact.governance.api.router import mount_governance_api
+from kailash.trust.pact.engine import GovernanceEngine
+from kailash.trust.pact.api.auth import GovernanceAuth
+from kailash.trust.pact.api.router import mount_governance_api
 
 app = FastAPI()
 engine = GovernanceEngine(org_definition)
@@ -527,7 +527,7 @@ mount_governance_api(app, engine, auth, rate_limit="60/minute")
 ### Standalone app (for testing)
 
 ```python
-from pact.governance.api.router import create_governance_app
+from kailash.trust.pact.api.router import create_governance_app
 
 app = create_governance_app(engine, auth, rate_limit="60/minute")
 
