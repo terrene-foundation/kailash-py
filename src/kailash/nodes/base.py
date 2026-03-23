@@ -168,6 +168,7 @@ class Node(ABC):
     # Class-level configuration
     _DEFAULT_CACHE_SIZE = 128
     _SPECIAL_PARAMS = {"context"}  # Parameters excluded from cache key
+    _strict_unknown_params = False  # Subclasses can set True to error on unknown params
 
     def __init__(self, **kwargs):
         """Initialize the node with configuration parameters.
@@ -797,7 +798,7 @@ class Node(ABC):
 
         # Check if caching is enabled
         if not self._cache_enabled:
-            resolved = self._resolve_parameters(kwargs, params)
+            resolved, used_inputs = self._resolve_parameters(kwargs, params)
         else:
             # Check if we have a cached resolution for this input pattern
             cache_key = self._get_cache_key(kwargs)
@@ -811,11 +812,13 @@ class Node(ABC):
                     # Use cached resolution and apply values
                     cached_mapping = self._param_cache[cache_key]
                     resolved = self._apply_cached_mapping(kwargs, cached_mapping)
+                    # Reconstruct used_inputs from cached mapping
+                    used_inputs = set(cached_mapping.keys()) & set(kwargs.keys())
                 else:
                     self._cache_misses += 1
 
                     # Phase 1: Resolve parameters using enhanced mapping
-                    resolved = self._resolve_parameters(kwargs, params)
+                    resolved, used_inputs = self._resolve_parameters(kwargs, params)
 
                     # Cache the mapping pattern for future use
                     mapping = self._extract_mapping_pattern(kwargs, resolved)
@@ -826,7 +829,36 @@ class Node(ABC):
                         self._param_cache.popitem(last=False)  # Remove oldest
                         self._cache_evictions += 1
 
-        # Phase 2: Validate resolved parameters
+        # Phase 2: Detect unknown parameters
+        unknown = {
+            k
+            for k in kwargs
+            if k not in used_inputs
+            and k not in self._SPECIAL_PARAMS
+            and not k.startswith("_")
+        }
+        if unknown:
+            declared = list(params.keys())
+            suggestions = {
+                k: self._suggest_parameter_mapping(k, declared) for k in unknown
+            }
+            msg = (
+                f"Unknown parameter(s) for {self.__class__.__name__}: {sorted(unknown)}. "
+                f"Valid parameters: {sorted(declared)}."
+            )
+            if suggestions:
+                hints = [
+                    f"  '{k}' -> did you mean {s}?" for k, s in suggestions.items() if s
+                ]
+                if hints:
+                    msg += " Suggestions:\n" + "\n".join(hints)
+
+            if self._strict_unknown_params:
+                raise NodeValidationError(msg)
+            else:
+                _logger.warning("[NODE] %s", msg)
+
+        # Phase 3: Validate resolved parameters
         validated = self._validate_resolved_parameters(resolved, params)
 
         # Preserve special runtime parameters that are not in schema
@@ -980,7 +1012,7 @@ class Node(ABC):
             params: Node parameter definitions from get_parameters()
 
         Returns:
-            Dict mapping parameter names to resolved values
+            Tuple of (resolved parameters dict, set of consumed input keys)
         """
         resolved = {}
         used_inputs = set()
@@ -1034,7 +1066,7 @@ class Node(ABC):
                 resolved[param_name] = main_input[1]
                 used_inputs.add(main_input[0])
 
-        return resolved
+        return resolved, used_inputs
 
     def _validate_resolved_parameters(self, resolved: dict, params: dict) -> dict:
         """Validate resolved parameters against their definitions.
