@@ -1,6 +1,6 @@
 ---
 name: kaizen
-description: "Kailash Kaizen - production-ready AI agent framework with signature-based programming, multi-agent coordination, and enterprise features. Use when asking about 'AI agents', 'agent framework', 'BaseAgent', 'multi-agent systems', 'agent coordination', 'signatures', 'agent signatures', 'RAG agents', 'vision agents', 'audio agents', 'multimodal agents', 'agent prompts', 'prompt optimization', 'chain of thought', 'ReAct pattern', 'Planning agent', 'PEV agent', 'Tree-of-Thoughts', 'pipeline patterns', 'supervisor-worker', 'router pattern', 'ensemble pattern', 'blackboard pattern', 'parallel execution', 'agent-to-agent communication', 'A2A protocol', 'streaming agents', 'agent testing', 'agent memory', 'agentic workflows', 'AgentRegistry', 'OrchestrationRuntime', 'distributed agents', 'agent registry', '100+ agents', 'capability discovery', 'fault tolerance', 'health monitoring', 'trust protocol', 'EATP', 'TrustedAgent', 'trust chains', 'secure messaging', 'enterprise trust', 'credential rotation', 'trust verification', 'cross-organization agents', 'agent manifest', 'TOML manifest', 'GovernanceManifest', 'deploy agent', 'FileRegistry', 'introspect agent', 'DAG validation', 'validate_dag', 'schema compatibility', 'cost estimation', 'composition validation', 'catalog server', 'CatalogMCPServer', 'MCP catalog', 'budget tracking', 'BudgetTracker', 'PostureBudgetIntegration', 'posture budget', 'budget threshold', 'L3 autonomy', 'L3 primitives', 'EnvelopeTracker', 'EnvelopeSplitter', 'EnvelopeEnforcer', 'ScopedContext', 'ContextScope', 'ScopeProjection', 'DataClassification', 'MessageRouter', 'MessageChannel', 'DeadLetterStore', 'AgentFactory', 'AgentInstance', 'AgentInstanceRegistry', 'AgentSpec', 'PlanExecutor', 'PlanValidator', 'PlanModification', 'Plan DAG', 'gradient zone', 'agent spawning', 'cascade termination', 'scoped context', 'envelope enforcement', 'plan execution', or 'agent lifecycle'."
+description: "Kailash Kaizen - production-ready AI agent framework with signature-based programming, multi-agent coordination, and enterprise features. Use when asking about 'AI agents', 'agent framework', 'BaseAgent', 'multi-agent systems', 'agent coordination', 'signatures', 'agent signatures', 'RAG agents', 'vision agents', 'audio agents', 'multimodal agents', 'agent prompts', 'prompt optimization', 'chain of thought', 'ReAct pattern', 'Planning agent', 'PEV agent', 'Tree-of-Thoughts', 'pipeline patterns', 'supervisor-worker', 'router pattern', 'ensemble pattern', 'blackboard pattern', 'parallel execution', 'agent-to-agent communication', 'A2A protocol', 'streaming agents', 'agent testing', 'agent memory', 'agentic workflows', 'AgentRegistry', 'OrchestrationRuntime', 'distributed agents', 'agent registry', '100+ agents', 'capability discovery', 'fault tolerance', 'health monitoring', 'trust protocol', 'EATP', 'TrustedAgent', 'trust chains', 'secure messaging', 'enterprise trust', 'credential rotation', 'trust verification', 'cross-organization agents', 'agent manifest', 'TOML manifest', 'GovernanceManifest', 'deploy agent', 'FileRegistry', 'introspect agent', 'DAG validation', 'validate_dag', 'schema compatibility', 'cost estimation', 'composition validation', 'catalog server', 'CatalogMCPServer', 'MCP catalog', 'budget tracking', 'BudgetTracker', 'PostureBudgetIntegration', 'posture budget', 'budget threshold', 'L3 autonomy', 'L3 primitives', 'EnvelopeTracker', 'EnvelopeSplitter', 'EnvelopeEnforcer', 'ScopedContext', 'ContextScope', 'ScopeProjection', 'DataClassification', 'MessageRouter', 'MessageChannel', 'DeadLetterStore', 'AgentFactory', 'AgentInstance', 'AgentInstanceRegistry', 'AgentSpec', 'PlanExecutor', 'PlanValidator', 'PlanModification', 'Plan DAG', 'gradient zone', 'agent spawning', 'cascade termination', 'scoped context', 'envelope enforcement', 'plan execution', or 'agent lifecycle'. Also covers kaizen-agents governance layer: 'GovernedSupervisor', 'governed agent', 'progressive disclosure', 'governance modules', 'AccountabilityTracker', 'CascadeManager', 'ClearanceEnforcer', 'DerelictionDetector', 'BypassManager', 'VacancyManager', 'kaizen-agents', 'governed multi-agent', 'PACT governance', 'anti-self-modification', 'ReadOnlyView', 'governance security', 'NaN defense', or 'bounded collections'."
 ---
 
 # Kailash Kaizen - AI Agent Framework
@@ -411,6 +411,26 @@ workflow.add_node("KaizenAgent", "agent1", {
 - ❌ NEVER skip signature definitions
 - ❌ NEVER ignore cost tracking in production
 - ❌ NEVER mock LLM calls in integration tests
+
+### Kaizen-Agents Governance (v0.1.0)
+
+- **[kaizen-agents-governance](kaizen-agents-governance.md)** — GovernedSupervisor, progressive disclosure (Layer 1/2/3), 7 governance modules
+  - `GovernedSupervisor` with 3-layer progressive API (2-param simple → 8-param configured → 9 governance subsystems)
+  - `AccountabilityTracker` — D/T/R addressing, policy source chain
+  - `BudgetTracker` — reclamation, predictive warnings, reallocation
+  - `CascadeManager` — monotonic envelope tightening, BFS termination
+  - `ClearanceEnforcer` + `ClassificationAssigner` — data classification (C0-C4), regex pre-filter
+  - `DerelictionDetector` — insufficient tightening detection
+  - `BypassManager` — time-limited emergency overrides with anti-stacking
+  - `VacancyManager` — orphan detection, grandparent auto-designation
+  - `AuditTrail` — EATP hash chain with `hmac.compare_digest()`
+  - SDK integration: `EnvelopeAllocator` → `EnvelopeSplitter`, `ScopeBridge` → `ScopedContext`
+
+- **[kaizen-agents-security](kaizen-agents-security.md)** — Security patterns for governance
+  - Anti-self-modification via `_ReadOnlyView` proxies
+  - Pervasive NaN/Inf defense (`math.isfinite()` on all numeric paths)
+  - Bounded collections, monotonic invariants, thread safety
+  - Delegate tool security (mandatory BashTool gate, ExecPolicy, session sanitization)
 
 ## Related Skills
 

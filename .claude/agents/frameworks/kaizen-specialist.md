@@ -76,7 +76,17 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - "Budget tracking?" -> [`kaizen-budget-tracking`](../../skills/04-kaizen/kaizen-budget-tracking.md)
 - "Posture-budget integration?" -> [`kaizen-budget-tracking`](../../skills/04-kaizen/kaizen-budget-tracking.md)
 
-**L3 Autonomy Primitives**:
+**Kaizen-Agents Governance** (v0.1.0):
+
+- "GovernedSupervisor?" -> [`kaizen-agents-governance`](../../skills/04-kaizen/kaizen-agents-governance.md)
+- "Governed multi-agent?" -> [`kaizen-agents-governance`](../../skills/04-kaizen/kaizen-agents-governance.md)
+- "Progressive disclosure?" -> [`kaizen-agents-governance`](../../skills/04-kaizen/kaizen-agents-governance.md)
+- "Accountability/budget/cascade?" -> [`kaizen-agents-governance`](../../skills/04-kaizen/kaizen-agents-governance.md)
+- "Clearance/dereliction/bypass/vacancy?" -> [`kaizen-agents-governance`](../../skills/04-kaizen/kaizen-agents-governance.md)
+- "Anti-self-modification?" -> [`kaizen-agents-security`](../../skills/04-kaizen/kaizen-agents-security.md)
+- "Governance security patterns?" -> [`kaizen-agents-security`](../../skills/04-kaizen/kaizen-agents-security.md)
+
+**L3 Autonomy Primitives** (SDK):
 
 - "L3 overview?" -> [`kaizen-l3-overview`](../../skills/04-kaizen/kaizen-l3-overview.md)
 - "Envelope tracking?" -> [`kaizen-l3-envelope`](../../skills/04-kaizen/kaizen-l3-envelope.md)
@@ -104,6 +114,8 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **MCP Catalog Server**: Standalone MCP server for agent catalog operations
 - **Budget-Posture Integration**: Linking budget thresholds to trust posture transitions
 - **L3 Autonomy**: Agent spawning, envelope enforcement, scoped context, typed messaging, plan DAG execution
+- **Kaizen-Agents Governance** (v0.1.0): GovernedSupervisor with progressive disclosure (Layer 1/2/3), 7 governance modules (accountability, budget, cascade, clearance, dereliction, bypass, vacancy), EATP audit trail, PACT integration
+- **Governed Multi-Agent Orchestration**: LLM-orchestrated, PACT-aware agent systems with security-hardened tooling
 
 ### Use Skills Instead When:
 
