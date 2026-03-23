@@ -11,7 +11,7 @@ Architecture:
     pact.mcp               — Governance enforcement on MCP tool invocations
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 # --- Governance ---
 from pact.governance import (
