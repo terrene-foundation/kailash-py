@@ -15,6 +15,16 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [2.0.1] - 2026-03-23
+
+#### Fixed
+
+- Node validation now detects and warns on unknown/misspelled parameters (#45)
+
+#### Changed
+
+- kailash-dataflow dependency constraint relaxed to `>=1.0.0,<3.0.0` (was `<2.0.0`)
+
 ### kailash-kaizen [2.1.0] - 2026-03-22
 
 **L3 Autonomy Primitives** — Five deterministic SDK primitives for governed agent autonomy (`kaizen.l3`). EnvelopeTracker/Splitter/Enforcer, ScopedContext, MessageRouter/Channel, AgentFactory/Registry, Plan DAG/Validator/Executor. 868 new tests.

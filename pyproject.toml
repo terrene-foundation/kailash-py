@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash"
-version = "2.0.0"
+version = "2.0.1"
 description = "Python SDK for the Kailash container-node architecture"
 authors = [
     {name = "Terrene Foundation", email = "info@terrene.foundation"}
@@ -118,7 +118,7 @@ otel = [
 ]
 # Sub-packages
 dataflow = [
-    "kailash-dataflow>=1.0.0,<2.0.0",
+    "kailash-dataflow>=1.0.0,<3.0.0",
 ]
 nexus = [
     "kailash-nexus>=1.4.3",
@@ -175,7 +175,7 @@ docs = [
 # Everything (restores pre-1.0 behavior)
 all = [
     "kailash[server,cli,http,database,postgres,mysql,files,auth,mfa,microsoft,monitoring,distributed,mcp,scheduler,otel,trust,trust-encryption,trust-sso]",
-    "kailash-dataflow>=1.0.0,<2.0.0",
+    "kailash-dataflow>=1.0.0,<3.0.0",
     "kailash-nexus>=1.4.3",
     "kailash-kaizen>=2.0.0,<3.0.0",
     "kailash-pact>=0.2.0",
