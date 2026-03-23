@@ -210,8 +210,8 @@ class TestRetryBehavior:
         tags = [e.tag for e in events]
         assert "NodeRetrying" in tags
 
-    def test_retry_budget_exhausted_holds(self):
-        """G3: retries exhausted -> held (default gradient)."""
+    def test_retry_budget_exhausted_transitions_to_held(self):
+        """G3: retries exhausted -> node transitions to HELD state."""
         from kaizen.l3.plan.executor import PlanExecutor
         from kaizen.l3.plan.types import PlanNodeState, PlanState
 
@@ -228,10 +228,32 @@ class TestRetryBehavior:
         )
         events = executor.execute(plan)
 
-        # Plan should be suspended/not completed since node is held
-        assert plan.nodes["n1"].state == PlanNodeState.FAILED
+        # Node should be in HELD state (not FAILED)
+        assert plan.nodes["n1"].state == PlanNodeState.HELD
         tags = [e.tag for e in events]
         assert "NodeHeld" in tags
+
+    def test_retry_budget_exhausted_plan_suspends(self):
+        """G3: plan with held node should be SUSPENDED, not FAILED."""
+        from kaizen.l3.plan.executor import PlanExecutor
+        from kaizen.l3.plan.types import PlanNodeState, PlanState
+
+        n1 = _make_node("n1")
+        plan = _make_plan(
+            [n1],
+            [],
+            gradient={"retry_budget": 1, "after_retry_exhaustion": "held"},
+        )
+
+        executor = PlanExecutor(
+            node_callback=FailCallback(error="always fails", retryable=True)
+        )
+        events = executor.execute(plan)
+
+        assert plan.nodes["n1"].state == PlanNodeState.HELD
+        assert plan.state == PlanState.SUSPENDED
+        tags = [e.tag for e in events]
+        assert "PlanSuspended" in tags
 
 
 # ---------------------------------------------------------------------------
@@ -262,6 +284,27 @@ class TestOptionalNodeFailure:
         tags = [e.tag for e in events]
         assert "NodeFlagged" in tags or "NodeSkipped" in tags
 
+    def test_optional_node_failure_held_transitions_to_held(self):
+        """G4: optional node with held zone transitions to HELD."""
+        from kaizen.l3.plan.executor import PlanExecutor
+        from kaizen.l3.plan.types import PlanNodeState, PlanState
+
+        n1 = _make_node("n1", optional=True)
+        plan = _make_plan(
+            [n1],
+            [],
+            gradient={"optional_node_failure": "held"},
+        )
+
+        executor = PlanExecutor(
+            node_callback=FailCallback(error="not retryable", retryable=False)
+        )
+        events = executor.execute(plan)
+
+        assert plan.nodes["n1"].state == PlanNodeState.HELD
+        tags = [e.tag for e in events]
+        assert "NodeHeld" in tags
+
 
 # ---------------------------------------------------------------------------
 # Required node failure tests (G5)
@@ -271,7 +314,28 @@ class TestOptionalNodeFailure:
 class TestRequiredNodeFailure:
     """Gradient rule G5: required node non-retryable failure -> held."""
 
-    def test_required_node_failure_held(self):
+    def test_required_node_failure_transitions_to_held(self):
+        """G5: required node non-retryable failure transitions to HELD state."""
+        from kaizen.l3.plan.executor import PlanExecutor
+        from kaizen.l3.plan.types import PlanNodeState, PlanState
+
+        n1 = _make_node("n1", optional=False)
+        plan = _make_plan([n1], [])
+
+        executor = PlanExecutor(
+            node_callback=FailCallback(error="fatal", retryable=False)
+        )
+        events = executor.execute(plan)
+
+        # Node should be in HELD state (not FAILED)
+        assert plan.nodes["n1"].state == PlanNodeState.HELD
+        tags = [e.tag for e in events]
+        assert "NodeHeld" in tags
+        # Plan should be SUSPENDED since the node is held
+        assert plan.state == PlanState.SUSPENDED
+
+    def test_required_node_failure_held_emits_correct_events(self):
+        """G5: NodeFailed then NodeHeld events are emitted in order."""
         from kaizen.l3.plan.executor import PlanExecutor
         from kaizen.l3.plan.types import PlanNodeState
 
@@ -283,9 +347,11 @@ class TestRequiredNodeFailure:
         )
         events = executor.execute(plan)
 
-        assert plan.nodes["n1"].state == PlanNodeState.FAILED
         tags = [e.tag for e in events]
+        assert "NodeFailed" in tags
         assert "NodeHeld" in tags
+        # NodeFailed should come before NodeHeld
+        assert tags.index("NodeFailed") < tags.index("NodeHeld")
 
 
 # ---------------------------------------------------------------------------
@@ -405,6 +471,63 @@ class TestSuspendResumeCancel:
         with pytest.raises(ExecutionError, match="terminal"):
             executor.cancel(plan)
 
+    def test_cancel_skips_held_nodes(self):
+        """Cancel transitions HELD nodes to SKIPPED."""
+        from kaizen.l3.plan.executor import PlanExecutor
+        from kaizen.l3.plan.types import PlanNodeState, PlanState
+
+        n1 = _make_node("n1")
+        # Manually put n1 in HELD state
+        n1.state = PlanNodeState.HELD
+        plan = _make_plan([n1], [])
+        plan.state = PlanState.SUSPENDED
+
+        executor = PlanExecutor(node_callback=SuccessCallback())
+        events = executor.cancel(plan)
+
+        assert plan.state == PlanState.CANCELLED
+        assert plan.nodes["n1"].state == PlanNodeState.SKIPPED
+        tags = [e.tag for e in events]
+        assert "NodeSkipped" in tags
+        assert "PlanCancelled" in tags
+
+
+# ---------------------------------------------------------------------------
+# HELD state resolution tests
+# ---------------------------------------------------------------------------
+
+
+class TestHeldStateResolution:
+    """Test HELD -> RUNNING resolution and re-execution."""
+
+    def test_held_node_can_be_resolved_to_running(self):
+        """After hold, node can be transitioned back to RUNNING for re-execution."""
+        from kaizen.l3.plan.types import PlanNodeState
+
+        n1 = _make_node("n1")
+        n1.state = PlanNodeState.HELD
+        n1.transition_to(PlanNodeState.RUNNING)
+        assert n1.state == PlanNodeState.RUNNING
+
+    def test_held_node_blocks_downstream_data_dependency(self):
+        """A HELD node should block downstream DATA_DEPENDENCY nodes from becoming ready."""
+        from kaizen.l3.plan.executor import PlanExecutor
+        from kaizen.l3.plan.types import PlanNodeState, PlanState
+
+        n1 = _make_node("n1")
+        n2 = _make_node("n2")
+        plan = _make_plan([n1, n2], [_make_edge("n1", "n2")])
+
+        # n1 fails non-retryably (required) -> HELD
+        executor = PlanExecutor(
+            node_callback=FailCallback(error="fatal", retryable=False)
+        )
+        events = executor.execute(plan)
+
+        # n1 should be HELD, n2 should still be PENDING (not ready)
+        assert plan.nodes["n1"].state == PlanNodeState.HELD
+        assert plan.nodes["n2"].state == PlanNodeState.PENDING
+
 
 # ---------------------------------------------------------------------------
 # Node readiness edge type tests
@@ -414,8 +537,48 @@ class TestSuspendResumeCancel:
 class TestNodeReadiness:
     """Node readiness semantics for different edge types."""
 
-    def test_completion_dependency_ready_on_failure(self):
-        """COMPLETION_DEPENDENCY: to is ready when from reaches terminal (even failed)."""
+    def test_completion_dependency_ready_on_terminal_failure(self):
+        """COMPLETION_DEPENDENCY: to is ready when from reaches terminal state.
+
+        Uses envelope violation (G8) which puts node in FAILED (terminal),
+        not HELD (non-terminal). This verifies COMPLETION_DEPENDENCY triggers
+        on terminal failure states.
+        """
+        from kaizen.l3.plan.executor import PlanExecutor
+        from kaizen.l3.plan.types import EdgeType, PlanNodeState, PlanState
+
+        n1 = _make_node("n1")
+        n2 = _make_node("n2")  # cleanup node
+        edge = _make_edge("n1", "n2", EdgeType.COMPLETION_DEPENDENCY)
+        plan = _make_plan([n1, n2], [edge])
+
+        call_count = {"n1": 0, "n2": 0}
+
+        def callback(node_id, spec_id):
+            call_count[node_id] = call_count.get(node_id, 0) + 1
+            if node_id == "n1":
+                return {
+                    "output": None,
+                    "error": "envelope_violation",
+                    "retryable": False,
+                    "envelope_violation": True,
+                }
+            return {"output": {"cleaned": True}, "error": None, "retryable": False}
+
+        executor = PlanExecutor(node_callback=callback)
+        events = executor.execute(plan)
+
+        # n1 is FAILED (terminal) due to envelope violation
+        assert plan.nodes["n1"].state == PlanNodeState.FAILED
+        # n2 should have been executed despite n1 failing (COMPLETION_DEPENDENCY)
+        assert call_count["n2"] >= 1
+
+    def test_completion_dependency_not_ready_on_held(self):
+        """COMPLETION_DEPENDENCY: to is NOT ready when from is HELD (non-terminal).
+
+        HELD means the node needs external resolution. Downstream
+        COMPLETION_DEPENDENCY nodes must wait until it resolves.
+        """
         from kaizen.l3.plan.executor import PlanExecutor
         from kaizen.l3.plan.types import EdgeType, PlanNodeState, PlanState
 
@@ -435,8 +598,11 @@ class TestNodeReadiness:
         executor = PlanExecutor(node_callback=callback)
         events = executor.execute(plan)
 
-        # n2 should have been executed despite n1 failing
-        assert call_count["n2"] >= 1
+        # n1 is HELD (non-terminal) — required node non-retryable failure
+        assert plan.nodes["n1"].state == PlanNodeState.HELD
+        # n2 should NOT have been executed since HELD is not terminal
+        assert call_count["n2"] == 0
+        assert plan.nodes["n2"].state == PlanNodeState.PENDING
 
     def test_co_start_does_not_block(self):
         """CO_START: advisory -- does not block to if from hasn't started."""

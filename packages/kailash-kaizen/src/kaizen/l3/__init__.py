@@ -60,6 +60,7 @@ from kaizen.l3.factory import (
 
 # Plan (Spec 05)
 from kaizen.l3.plan import (
+    AsyncPlanExecutor,
     Plan,
     PlanExecutor,
     PlanValidator,
@@ -91,6 +92,7 @@ __all__ = [
     "AgentInstanceRegistry",
     "AgentSpec",
     # Plan (Spec 05)
+    "AsyncPlanExecutor",
     "Plan",
     "PlanExecutor",
     "PlanValidator",

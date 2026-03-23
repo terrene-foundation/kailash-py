@@ -131,6 +131,9 @@ class PlanNodeState(str, Enum):
     PENDING -> READY -> RUNNING -> COMPLETED
                                 -> FAILED -> RUNNING (retry)
                                           -> SKIPPED
+                                -> HELD   -> RUNNING (resolved, retry)
+                                          -> FAILED  (resolution timeout)
+                                          -> SKIPPED (skip held node)
     PENDING -> SKIPPED
     """
 
@@ -140,19 +143,30 @@ class PlanNodeState(str, Enum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     SKIPPED = "SKIPPED"
+    HELD = "HELD"
 
 
 # Valid state transitions for PlanNodeState
 _NODE_TRANSITIONS: dict[PlanNodeState, set[PlanNodeState]] = {
     PlanNodeState.PENDING: {PlanNodeState.READY, PlanNodeState.SKIPPED},
     PlanNodeState.READY: {PlanNodeState.RUNNING, PlanNodeState.SKIPPED},
-    PlanNodeState.RUNNING: {PlanNodeState.COMPLETED, PlanNodeState.FAILED},
+    PlanNodeState.RUNNING: {
+        PlanNodeState.COMPLETED,
+        PlanNodeState.FAILED,
+        PlanNodeState.HELD,
+    },
     PlanNodeState.COMPLETED: set(),  # terminal
     PlanNodeState.FAILED: {
         PlanNodeState.RUNNING,
         PlanNodeState.SKIPPED,
-    },  # retry or skip
+        PlanNodeState.HELD,
+    },  # retry, skip, or hold for resolution
     PlanNodeState.SKIPPED: set(),  # terminal
+    PlanNodeState.HELD: {
+        PlanNodeState.RUNNING,  # resolved, retry
+        PlanNodeState.FAILED,  # resolution timeout
+        PlanNodeState.SKIPPED,  # skip held node
+    },
 }
 
 
@@ -236,7 +250,11 @@ class PlanNode:
 
     @property
     def is_terminal(self) -> bool:
-        """True if this node is in a terminal state."""
+        """True if this node is in a terminal state.
+
+        HELD is NOT terminal — it indicates the node needs external
+        resolution before it can proceed or be skipped.
+        """
         return self.state in {
             PlanNodeState.COMPLETED,
             PlanNodeState.FAILED,

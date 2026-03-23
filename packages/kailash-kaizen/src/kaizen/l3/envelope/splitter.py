@@ -144,12 +144,15 @@ class EnvelopeSplitter:
         if temp_limit is None and has_temporal_ratio:
             errors.append(SplitError.parent_dimension_unbounded(dimension="temporal"))
 
-        # Validate ratio sums (only if reserve is valid)
+        # Validate ratio sums (only if reserve is valid).
+        # A small epsilon tolerance (1e-9) absorbs floating-point rounding
+        # errors from ratio arithmetic (e.g., 0.54 + 0.36 = 0.9000000000000001).
+        _EPSILON = 1e-9
         if math.isfinite(reserve_pct) and reserve_pct >= 0.0:
             # Financial ratio sum
             if allocations and fin_limit is not None:
                 fin_sum = sum(a.financial_ratio for a in allocations)
-                if reserve_pct + fin_sum > 1.0:
+                if reserve_pct + fin_sum > 1.0 + _EPSILON:
                     errors.append(
                         SplitError.ratio_sum_exceeds_one(
                             dimension="financial",
@@ -160,7 +163,7 @@ class EnvelopeSplitter:
             # Temporal ratio sum
             if allocations and temp_limit is not None:
                 temp_sum = sum(a.temporal_ratio for a in allocations)
-                if reserve_pct + temp_sum > 1.0:
+                if reserve_pct + temp_sum > 1.0 + _EPSILON:
                     errors.append(
                         SplitError.ratio_sum_exceeds_one(
                             dimension="temporal",
