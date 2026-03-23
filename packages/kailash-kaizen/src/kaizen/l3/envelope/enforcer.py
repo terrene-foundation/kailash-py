@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import logging
 import math
+import threading
 import uuid
-from collections import deque
+from collections import OrderedDict, deque
 from datetime import UTC, datetime
 from typing import Any, Callable
 
@@ -57,11 +58,15 @@ class EnvelopeEnforcer:
                      Returns a dimension name if BLOCKED, None if allowed.
     """
 
+    _MAX_APPROVED = 10_000
+    _MAX_AGENT_ENVELOPES = 100_000
+
     __slots__ = (
         "_tracker",
         "_strict_check",
         "_approved_actions",
         "_agent_envelopes",
+        "_lock",
     )
 
     def __init__(
@@ -73,10 +78,13 @@ class EnvelopeEnforcer:
             raise ValueError("EnvelopeEnforcer requires a non-None tracker")
         self._tracker = tracker
         self._strict_check = strict_check
-        # Track which actions have been approved (keyed by action+agent_instance_id)
-        self._approved_actions: set[str] = set()
+        # Track which actions have been approved — bounded OrderedDict
+        # for FIFO eviction when capacity is reached (C1 fix).
+        self._approved_actions: OrderedDict[str, bool] = OrderedDict()
         # L3 integration: per-agent envelope registry (agent_id -> envelope dict)
         self._agent_envelopes: dict[str, dict[str, Any]] = {}
+        # Thread safety for all mutable state (C2 fix).
+        self._lock = threading.Lock()
 
     @property
     def tracker(self) -> EnvelopeTracker:
@@ -99,15 +107,23 @@ class EnvelopeEnforcer:
             envelope: The constraint envelope dict for this agent.
 
         Raises:
-            ValueError: If agent_id is empty or already registered.
+            ValueError: If agent_id is empty, already registered, or
+                capacity exceeded.
         """
         if not agent_id:
             raise ValueError("agent_id must be a non-empty string")
-        if agent_id in self._agent_envelopes:
-            raise ValueError(
-                f"Agent '{agent_id}' is already registered with the enforcer"
-            )
-        self._agent_envelopes[agent_id] = envelope
+        with self._lock:
+            if agent_id in self._agent_envelopes:
+                raise ValueError(
+                    f"Agent '{agent_id}' is already registered with the enforcer"
+                )
+            if len(self._agent_envelopes) >= self._MAX_AGENT_ENVELOPES:
+                raise ValueError(
+                    f"Agent envelope registry at capacity "
+                    f"({self._MAX_AGENT_ENVELOPES}). "
+                    f"Deregister terminated agents before registering new ones."
+                )
+            self._agent_envelopes[agent_id] = envelope
         logger.debug("Registered agent envelope: agent_id=%s", agent_id)
 
     def deregister(self, agent_id: str) -> None:
@@ -118,7 +134,8 @@ class EnvelopeEnforcer:
         Args:
             agent_id: The agent instance ID to deregister.
         """
-        self._agent_envelopes.pop(agent_id, None)
+        with self._lock:
+            self._agent_envelopes.pop(agent_id, None)
         logger.debug("Deregistered agent envelope: agent_id=%s", agent_id)
 
     def is_registered(self, agent_id: str) -> bool:
@@ -130,7 +147,8 @@ class EnvelopeEnforcer:
         Returns:
             True if the agent has a registered envelope.
         """
-        return agent_id in self._agent_envelopes
+        with self._lock:
+            return agent_id in self._agent_envelopes
 
     def get_agent_envelope(self, agent_id: str) -> dict[str, Any] | None:
         """Retrieve the registered envelope for an agent.
@@ -141,7 +159,8 @@ class EnvelopeEnforcer:
         Returns:
             The envelope dict, or None if the agent is not registered.
         """
-        return self._agent_envelopes.get(agent_id)
+        with self._lock:
+            return self._agent_envelopes.get(agent_id)
 
     async def check_action(self, context: EnforcementContext) -> Verdict:
         """Pre-execution check — returns a Verdict without recording cost.
@@ -198,7 +217,9 @@ class EnvelopeEnforcer:
                     hold_id = str(uuid.uuid4())
                     # Mark as approved (held actions are still approved for recording)
                     action_key = self._action_key(context)
-                    self._approved_actions.add(action_key)
+                    with self._lock:
+                        self._evict_approved_if_needed()
+                        self._approved_actions[action_key] = True
                     return Verdict.held(
                         dimension=dim,
                         current_usage=post_usage,
@@ -229,7 +250,9 @@ class EnvelopeEnforcer:
                     result_zone = zone_max(result_zone, GradientZone.FLAGGED)
 
         action_key = self._action_key(context)
-        self._approved_actions.add(action_key)
+        with self._lock:
+            self._evict_approved_if_needed()
+            self._approved_actions[action_key] = True
 
         return Verdict.approved(
             zone=result_zone,
@@ -267,9 +290,10 @@ class EnvelopeEnforcer:
 
         # Check that check_action was called
         action_key = self._action_key(context)
-        if action_key not in self._approved_actions:
-            raise EnforcerError.action_not_approved(action=context.action)
-        self._approved_actions.discard(action_key)
+        with self._lock:
+            if action_key not in self._approved_actions:
+                raise EnforcerError.action_not_approved(action=context.action)
+            del self._approved_actions[action_key]
 
         # Record via tracker
         entry = CostEntry(
@@ -281,6 +305,19 @@ class EnvelopeEnforcer:
             metadata=context.metadata,
         )
         return await self._tracker.record_consumption(entry)
+
+    def _evict_approved_if_needed(self) -> None:
+        """Evict oldest approved actions when at capacity.
+
+        Must be called while holding ``self._lock``.
+        """
+        while len(self._approved_actions) >= self._MAX_APPROVED:
+            evicted_key, _ = self._approved_actions.popitem(last=False)
+            logger.warning(
+                "Evicted stale approved action to stay within bound " "(%d): %s",
+                self._MAX_APPROVED,
+                evicted_key,
+            )
 
     @staticmethod
     def _action_key(context: EnforcementContext) -> str:

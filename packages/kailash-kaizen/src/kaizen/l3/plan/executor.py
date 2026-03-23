@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import uuid
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
@@ -820,6 +821,17 @@ class AsyncPlanExecutor:
             from kaizen.l3.envelope.types import EnforcementContext
 
             estimated_cost = node.envelope.get("estimated_cost", 0.0)
+            # C4 fix: NaN/Inf bypass — treat non-finite as 0.0 (fail-safe,
+            # let EnforcementContext catch real violations).
+            if not isinstance(estimated_cost, (int, float)):
+                estimated_cost = 0.0
+            elif not math.isfinite(estimated_cost):
+                logger.warning(
+                    "Non-finite estimated_cost=%r for node %s — " "treating as 0.0",
+                    estimated_cost,
+                    node.node_id,
+                )
+                estimated_cost = 0.0
             dimension_costs = node.envelope.get("dimension_costs", {})
             if not dimension_costs and estimated_cost > 0:
                 dimension_costs = {"financial": estimated_cost}

@@ -75,32 +75,60 @@ class L3EventType(str, Enum):
     CONTEXT_ACCESS_DENIED = "context_access_denied"
 
 
-def _sanitize_details(details: dict[str, Any]) -> dict[str, Any]:
+_MAX_SANITIZE_DEPTH = 10
+
+
+def _sanitize_value(value: Any, depth: int) -> Any:
+    """Sanitize a single value recursively.
+
+    Args:
+        value: The value to sanitize.
+        depth: Current recursion depth.
+
+    Returns:
+        Sanitized value.
+    """
+    if depth > _MAX_SANITIZE_DEPTH:
+        return value
+    if isinstance(value, float) and not math.isfinite(value):
+        logger.warning(
+            "Non-finite value in event details: value=%r — replaced with sentinel",
+            value,
+        )
+        return f"<non-finite:{value!r}>"
+    if isinstance(value, dict):
+        return _sanitize_details(value, depth=depth + 1)
+    if isinstance(value, list):
+        return [_sanitize_value(item, depth + 1) for item in value]
+    return value
+
+
+def _sanitize_details(
+    details: dict[str, Any],
+    *,
+    depth: int = 0,
+) -> dict[str, Any]:
     """Sanitize event detail values to prevent NaN/Inf corruption.
 
     Replaces non-finite float values with a string sentinel and logs a
     warning. This ensures audit records never contain values that would
     poison downstream numeric comparisons.
 
+    Handles nested dicts and lists. Recursion is bounded by
+    ``_MAX_SANITIZE_DEPTH`` to prevent stack overflow on adversarial input.
+
     Args:
         details: Raw event details dict.
+        depth: Current recursion depth (internal use).
 
     Returns:
         Sanitized copy with non-finite floats replaced.
     """
+    if depth > _MAX_SANITIZE_DEPTH:
+        return details
     sanitized: dict[str, Any] = {}
     for key, value in details.items():
-        if isinstance(value, float) and not math.isfinite(value):
-            logger.warning(
-                "Non-finite value in event details: key=%r value=%r — replaced with sentinel",
-                key,
-                value,
-            )
-            sanitized[key] = f"<non-finite:{value!r}>"
-        elif isinstance(value, dict):
-            sanitized[key] = _sanitize_details(value)
-        else:
-            sanitized[key] = value
+        sanitized[key] = _sanitize_value(value, depth)
     return sanitized
 
 

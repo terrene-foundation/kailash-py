@@ -316,10 +316,16 @@ class AgentFactory:
                             TerminationReason.PARENT_TERMINATED
                         )
                     )
+                    # H2 fix: deregister descendant from enforcer on termination
+                    if self._enforcer is not None:
+                        self._enforcer.deregister(desc_id)
                     logger.debug("Cascade terminated %s (parent_terminated)", desc_id)
 
             # Terminate the instance itself
             instance.transition_to(AgentLifecycleState.terminated(reason))
+            # H2 fix: deregister terminated instance from enforcer
+            if self._enforcer is not None:
+                self._enforcer.deregister(instance_id)
             logger.debug("Terminated %s (reason=%s)", instance_id, reason.value)
 
         finally:
