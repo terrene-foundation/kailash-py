@@ -320,14 +320,14 @@ class TestReActAgentConfidenceThreshold:
 class TestReActAgentMCPDiscovery:
     """Test MCP tool discovery (optional feature)."""
 
-    def test_mcp_discovery_disabled_by_default(self):
-        """Test MCP discovery is disabled by default (opt-in)."""
+    def test_mcp_discovery_enabled_by_default(self):
+        """Test MCP discovery is enabled by default for autonomous agents."""
         from kaizen.agents.specialized.react import ReActAgent
 
         agent = ReActAgent()
 
-        # Should be disabled by default
-        assert agent.react_config.mcp_discovery_enabled is False
+        # Autonomous agents enable MCP discovery by default
+        assert agent.react_config.mcp_discovery_enabled is True
 
     def test_mcp_discovery_can_be_enabled(self):
         """Test MCP discovery can be enabled."""
@@ -337,14 +337,15 @@ class TestReActAgentMCPDiscovery:
 
         assert agent.react_config.mcp_discovery_enabled is True
 
-    def test_mcp_tool_discovery_method_exists(self):
-        """Test that _discover_mcp_tools method exists."""
+    def test_mcp_tool_discovery_via_base_agent(self):
+        """Test that MCP tool discovery is available via BaseAgent.discover_mcp_tools()."""
         from kaizen.agents.specialized.react import ReActAgent
 
         agent = ReActAgent()
 
-        assert hasattr(agent, "_discover_mcp_tools")
-        assert callable(agent._discover_mcp_tools)
+        # MCP discovery flows through BaseAgent's async discover_mcp_tools method
+        assert hasattr(agent, "discover_mcp_tools")
+        assert callable(agent.discover_mcp_tools)
 
 
 class TestReActAgentConfiguration:

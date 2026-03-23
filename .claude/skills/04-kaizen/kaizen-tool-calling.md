@@ -2,9 +2,14 @@
 
 Autonomous tool execution with approval workflows for AI agents.
 
+## LLM-First Rule (ABSOLUTE — see rules/agent-reasoning.md)
+
+**Tools are dumb data endpoints. The LLM does ALL reasoning.** Tools fetch data, write data, call APIs. They MUST NOT contain decision logic, routing, or classification. The LLM decides which tool to call, when, and what to do with the result. If you're writing if-else logic in a tool to determine next steps — that logic belongs in the agent's Signature, not the tool.
+
 ## Overview
 
 Tool Calling enables agents to execute external tools automatically:
+
 - **12 Builtin Tools** - File, HTTP, bash, web operations
 - **Custom Tools** - Register your own tools
 - **MCP Integration** - Connect to MCP servers
@@ -175,13 +180,13 @@ results = await agent.execute_tool_chain([
 
 Tools have safety levels that determine approval requirements:
 
-| Level | Description | Approval Required | Examples |
-|-------|-------------|-------------------|----------|
-| `SAFE` | Read-only, no side effects | No | read_file, http_get, fetch_url |
-| `LOW` | Minor modifications | No | write_file (non-critical) |
-| `MEDIUM` | Significant changes | Yes (auto-approve in dev) | http_post, http_put |
-| `HIGH` | Risky operations | Yes | delete_file, bash_command |
-| `CRITICAL` | Destructive operations | Yes (manual only) | System commands |
+| Level      | Description                | Approval Required         | Examples                       |
+| ---------- | -------------------------- | ------------------------- | ------------------------------ |
+| `SAFE`     | Read-only, no side effects | No                        | read_file, http_get, fetch_url |
+| `LOW`      | Minor modifications        | No                        | write_file (non-critical)      |
+| `MEDIUM`   | Significant changes        | Yes (auto-approve in dev) | http_post, http_put            |
+| `HIGH`     | Risky operations           | Yes                       | delete_file, bash_command      |
+| `CRITICAL` | Destructive operations     | Yes (manual only)         | System commands                |
 
 ### Approval Workflow
 
@@ -489,12 +494,12 @@ async def test_tool_execution():
 
 ## Performance
 
-| Operation | Latency | Notes |
-|-----------|---------|-------|
-| Tool discovery | <1ms | Cached registry |
-| Single tool execution | 10-100ms | Depends on tool |
-| Tool chain (3 tools) | 30-300ms | Sequential execution |
-| MCP tool call | 50-200ms | IPC overhead |
+| Operation             | Latency  | Notes                |
+| --------------------- | -------- | -------------------- |
+| Tool discovery        | <1ms     | Cached registry      |
+| Single tool execution | 10-100ms | Depends on tool      |
+| Tool chain (3 tools)  | 30-300ms | Sequential execution |
+| MCP tool call         | 50-200ms | IPC overhead         |
 
 ---
 
@@ -503,6 +508,7 @@ async def test_tool_execution():
 **Issue:** `ToolNotFoundError: Tool 'xyz' not found`
 
 **Fix:** Ensure tool is registered:
+
 ```python
 
 # 12 builtin tools enabled via MCP
@@ -511,6 +517,7 @@ async def test_tool_execution():
 **Issue:** Tool execution hangs
 
 **Fix:** Add timeout:
+
 ```python
 result = await agent.execute_tool(
     "bash_command",
@@ -521,6 +528,7 @@ result = await agent.execute_tool(
 **Issue:** Approval prompt not showing
 
 **Fix:** Enable control protocol:
+
 ```python
 agent = MyAgent(config, tools="all"  # Enable 12 builtin tools via MCP
 ```
@@ -530,6 +538,7 @@ agent = MyAgent(config, tools="all"  # Enable 12 builtin tools via MCP
 ## Migration
 
 **Before** (Manual tool integration):
+
 ```python
 # Custom tool integration
 import requests
@@ -541,6 +550,7 @@ class MyAgent:
 ```
 
 **After** (Tool Calling):
+
 ```python
 # Unified tool calling
 agent = MyAgent(config, tools="all"  # Enable 12 builtin tools via MCP

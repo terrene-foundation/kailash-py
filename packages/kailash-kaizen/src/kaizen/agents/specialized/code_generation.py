@@ -66,6 +66,9 @@ class CodeGenConfig:
         default_factory=lambda: int(os.getenv("KAIZEN_MAX_TOKENS", "8000"))
     )
 
+    # MCP tool discovery (autonomous agents discover tools by default)
+    mcp_enabled: bool = True
+
     # Code-specific configuration
     programming_language: str = field(
         default_factory=lambda: os.getenv("KAIZEN_PROGRAMMING_LANGUAGE", "python")

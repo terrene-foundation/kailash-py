@@ -96,6 +96,9 @@ class RAGConfig:
         default_factory=lambda: int(os.getenv("KAIZEN_MAX_TOKENS", "1000"))
     )
 
+    # MCP tool discovery (autonomous agents discover tools by default)
+    mcp_enabled: bool = True
+
     # RAG-specific configuration
     top_k_documents: int = field(
         default_factory=lambda: int(os.getenv("KAIZEN_TOP_K", "3"))

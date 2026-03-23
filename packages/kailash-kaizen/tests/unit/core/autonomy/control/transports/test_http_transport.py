@@ -64,15 +64,15 @@ except ImportError:
 
 
 @pytest.fixture
-def base_url() -> str:
+def http_transport_url() -> str:
     """Base URL for HTTP transport."""
     return "http://localhost:8000"
 
 
 @pytest.fixture
-def transport_kwargs(base_url: str) -> dict:
+def transport_kwargs(http_transport_url: str) -> dict:
     """Common kwargs for HTTPTransport instantiation in tests."""
-    return {"base_url": base_url, "allow_insecure": True}
+    return {"base_url": http_transport_url, "allow_insecure": True}
 
 
 @pytest.fixture

@@ -42,6 +42,10 @@ Pre-existing failures MUST be fixed, not reported. Stubs are BLOCKED. Naive fall
 - **Security review** (security-reviewer) before EVERY commit — NO exceptions — see `rules/agents.md` Rule 2
 - **NO MOCKING** in Tier 2/3 tests — use real infrastructure — see `rules/testing.md`
 
+### 6. LLM-First Agent Reasoning
+
+When building AI agents: **the LLM does ALL reasoning. Tools are dumb data endpoints.** No if-else routing, no keyword matching, no regex classification in agent decision paths. The LLM IS the router, classifier, extractor, and evaluator. Deterministic logic is BLOCKED unless the user explicitly opts in. See `rules/agent-reasoning.md` for the full rule and detection patterns.
+
 ## Workspace Commands
 
 Phase commands replace the manual copy-paste workflow. Each loads the corresponding instruction template and checks workspace state.
@@ -67,6 +71,7 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 | ------------------------------------- | ------------------------------- | --------------------------------------------------------------------- |
 | **Foundation independence**           | `rules/independence.md`         | **Global — overrides all**                                            |
 | **Autonomous execution model**        | `rules/autonomous-execution.md` | **Global — 10x multiplier, structural vs execution gates**            |
+| **LLM-first agent reasoning**         | `rules/agent-reasoning.md`      | **Global — all agent code, Kaizen, AI patterns**                      |
 | Agent orchestration & review mandates | `rules/agents.md`               | Global                                                                |
 | SDK release & PyPI publishing         | `rules/deployment.md`           | `deploy/**`, `.github/workflows/**`, `pyproject.toml`, `CHANGELOG.md` |
 | E2E god-mode testing                  | `rules/e2e-god-mode.md`         | `tests/e2e/**`, `**/*e2e*`, `**/*playwright*`                         |
