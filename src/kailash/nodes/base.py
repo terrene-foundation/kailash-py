@@ -167,7 +167,7 @@ class Node(ABC):
 
     # Class-level configuration
     _DEFAULT_CACHE_SIZE = 128
-    _SPECIAL_PARAMS = {"context"}  # Parameters excluded from cache key
+    _SPECIAL_PARAMS = {"context", "config"}  # Parameters excluded from cache key
     _strict_unknown_params = False  # Subclasses can set True to error on unknown params
 
     def __init__(self, **kwargs):
@@ -813,7 +813,8 @@ class Node(ABC):
                     cached_mapping = self._param_cache[cache_key]
                     resolved = self._apply_cached_mapping(kwargs, cached_mapping)
                     # Reconstruct used_inputs from cached mapping
-                    used_inputs = set(cached_mapping.keys()) & set(kwargs.keys())
+                    # cached_mapping is {param_name: input_key}, so values() are the kwargs keys consumed
+                    used_inputs = set(cached_mapping.values()) & set(kwargs.keys())
                 else:
                     self._cache_misses += 1
 
