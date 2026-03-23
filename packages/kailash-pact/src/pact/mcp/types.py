@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import math
+import types as _builtin_types
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
@@ -72,18 +73,14 @@ class McpToolPolicy:
         if self.max_cost is not None:
             cost = float(self.max_cost)
             if not math.isfinite(cost):
-                raise ValueError(
-                    f"max_cost must be finite, got {self.max_cost!r}"
-                )
+                raise ValueError(f"max_cost must be finite, got {self.max_cost!r}")
             if cost < 0:
                 raise ValueError(
                     f"max_cost must be non-negative, got {self.max_cost!r}"
                 )
         if self.rate_limit is not None:
             if self.rate_limit < 1:
-                raise ValueError(
-                    f"rate_limit must be >= 1, got {self.rate_limit!r}"
-                )
+                raise ValueError(f"rate_limit must be >= 1, got {self.rate_limit!r}")
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-compatible dictionary."""
@@ -147,14 +144,20 @@ class McpGovernanceConfig:
                     f"tool_policies key '{key}' does not match "
                     f"policy.tool_name '{policy.tool_name}'"
                 )
+        # C3: Replace mutable dict with immutable MappingProxyType.
+        # Use object.__setattr__ because the dataclass is frozen.
+        object.__setattr__(
+            self,
+            "tool_policies",
+            _builtin_types.MappingProxyType(dict(self.tool_policies)),
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-compatible dictionary."""
         return {
             "default_policy": self.default_policy.value,
             "tool_policies": {
-                name: policy.to_dict()
-                for name, policy in self.tool_policies.items()
+                name: policy.to_dict() for name, policy in self.tool_policies.items()
             },
             "audit_enabled": self.audit_enabled,
             "max_audit_entries": self.max_audit_entries,
@@ -214,6 +217,17 @@ class McpActionContext:
                 raise ValueError(
                     f"cost_estimate must be non-negative, got {self.cost_estimate!r}"
                 )
+        # H3: Replace mutable dicts with immutable MappingProxyType.
+        object.__setattr__(
+            self,
+            "args",
+            _builtin_types.MappingProxyType(dict(self.args)),
+        )
+        object.__setattr__(
+            self,
+            "metadata",
+            _builtin_types.MappingProxyType(dict(self.metadata)),
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-compatible dictionary."""

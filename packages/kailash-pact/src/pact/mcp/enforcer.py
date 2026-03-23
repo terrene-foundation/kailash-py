@@ -182,16 +182,103 @@ class McpGovernanceEnforcer:
 
         return decision
 
+    _MAX_RATE_TRACKER_ENTRIES = 10_000
+
     def register_tool(self, policy: McpToolPolicy) -> None:
         """Register or update a tool policy at runtime.
+
+        Enforces monotonic tightening: if a policy already exists for this tool
+        (either from config or a prior registration), the new policy must be
+        equal to or more restrictive than the existing one.
 
         Thread-safe: acquires self._lock.
 
         Args:
             policy: The tool policy to register.
+
+        Raises:
+            ValueError: If the new policy would widen constraints relative to
+                the existing policy (monotonic tightening violation).
         """
         with self._lock:
+            existing = self._policy_overlay.get(policy.tool_name)
+            if existing is None:
+                existing = self._config.tool_policies.get(policy.tool_name)
+            if existing is not None:
+                self._validate_monotonic_tightening(existing, policy)
             self._policy_overlay[policy.tool_name] = policy
+
+    @staticmethod
+    def _validate_monotonic_tightening(
+        existing: McpToolPolicy, new: McpToolPolicy
+    ) -> None:
+        """Verify that ``new`` is equal to or more restrictive than ``existing``.
+
+        Checks:
+        - max_cost: new must be <= existing (None means "no limit" = wider)
+        - rate_limit: new must be <= existing (None means "no limit" = wider)
+        - allowed_args: new must be subset of existing (empty means "any" = wider)
+        - denied_args: new must be superset of existing (wider deny = tighter)
+
+        Raises:
+            ValueError: On any widening.
+        """
+        # max_cost: None means unlimited (widest). A number is tighter.
+        # new=None when existing has a number -> widening
+        # new > existing -> widening
+        if existing.max_cost is not None:
+            if new.max_cost is None:
+                raise ValueError(
+                    f"Monotonic tightening violation: max_cost widened from "
+                    f"{existing.max_cost} to None (unlimited) for tool "
+                    f"'{new.tool_name}'"
+                )
+            if new.max_cost > existing.max_cost:
+                raise ValueError(
+                    f"Monotonic tightening violation: max_cost widened from "
+                    f"{existing.max_cost} to {new.max_cost} for tool "
+                    f"'{new.tool_name}'"
+                )
+
+        # rate_limit: None means unlimited (widest). A number is tighter.
+        if existing.rate_limit is not None:
+            if new.rate_limit is None:
+                raise ValueError(
+                    f"Monotonic tightening violation: rate_limit widened from "
+                    f"{existing.rate_limit} to None (unlimited) for tool "
+                    f"'{new.tool_name}'"
+                )
+            if new.rate_limit > existing.rate_limit:
+                raise ValueError(
+                    f"Monotonic tightening violation: rate_limit widened from "
+                    f"{existing.rate_limit} to {new.rate_limit} for tool "
+                    f"'{new.tool_name}'"
+                )
+
+        # allowed_args: empty means "any arg allowed" (widest).
+        # Non-empty must be subset of existing (or equal).
+        if existing.allowed_args:
+            if not new.allowed_args:
+                raise ValueError(
+                    f"Monotonic tightening violation: allowed_args widened from "
+                    f"{sorted(existing.allowed_args)} to empty (any) for tool "
+                    f"'{new.tool_name}'"
+                )
+            if not new.allowed_args <= existing.allowed_args:
+                extra = sorted(new.allowed_args - existing.allowed_args)
+                raise ValueError(
+                    f"Monotonic tightening violation: allowed_args widened with "
+                    f"extra args {extra} for tool '{new.tool_name}'"
+                )
+
+        # denied_args: new must be superset of existing (wider deny = tighter).
+        if existing.denied_args:
+            if not existing.denied_args <= new.denied_args:
+                missing = sorted(existing.denied_args - new.denied_args)
+                raise ValueError(
+                    f"Monotonic tightening violation: denied_args narrowed, "
+                    f"missing {missing} for tool '{new.tool_name}'"
+                )
 
     def _get_policy(self, tool_name: str) -> McpToolPolicy | None:
         """Resolve the effective policy for a tool.
@@ -373,6 +460,9 @@ class McpGovernanceEnforcer:
         key = f"{agent_id}:{tool_name}"
         with self._lock:
             if key not in self._rate_tracker:
+                # Evict oldest entries if dict exceeds max size
+                if len(self._rate_tracker) >= self._MAX_RATE_TRACKER_ENTRIES:
+                    self._evict_oldest_rate_entries()
                 # Bounded deque for rate tracking
                 self._rate_tracker[key] = deque(maxlen=rate_limit + 1)
 
@@ -399,3 +489,24 @@ class McpGovernanceEnforcer:
             tracker.append(now)
 
         return None
+
+    def _evict_oldest_rate_entries(self) -> None:
+        """Evict the oldest 10% of rate tracker entries by last-access timestamp.
+
+        Must be called while holding self._lock.
+        """
+        if not self._rate_tracker:
+            return
+
+        # Sort keys by the most recent (last) timestamp in their deque.
+        # Empty deques sort to epoch so they are evicted first.
+        epoch = datetime.min.replace(tzinfo=UTC)
+
+        def _last_ts(k: str) -> datetime:
+            dq = self._rate_tracker[k]
+            return dq[-1] if dq else epoch
+
+        sorted_keys = sorted(self._rate_tracker.keys(), key=_last_ts)
+        evict_count = max(1, len(sorted_keys) // 10)
+        for k in sorted_keys[:evict_count]:
+            del self._rate_tracker[k]

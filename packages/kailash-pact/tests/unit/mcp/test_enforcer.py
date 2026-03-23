@@ -449,20 +449,20 @@ class TestRuntimeRegistration:
         ctx = _context(tool_name="new_tool", cost_estimate=5.0)
         assert enforcer.check_tool_call(ctx).level == "auto_approved"
 
-    def test_register_overrides_config(self) -> None:
-        """Runtime registration overrides config policy."""
+    def test_register_tightens_config(self) -> None:
+        """Runtime registration tightens (not widens) config policy."""
         policy = _policy("t", max_cost=10.0)
         config = _config(policies={"t": policy})
         enforcer = McpGovernanceEnforcer(config)
 
-        # Original limit: 10.0
-        ctx = _context(tool_name="t", cost_estimate=15.0)
-        assert enforcer.check_tool_call(ctx).level == "blocked"
-
-        # Override with higher limit
-        enforcer.register_tool(_policy("t", max_cost=20.0))
-        ctx = _context(tool_name="t", cost_estimate=15.0)
+        # Original limit: 10.0 -- cost 8.0 is auto_approved
+        ctx = _context(tool_name="t", cost_estimate=8.0)
         assert enforcer.check_tool_call(ctx).level == "auto_approved"
+
+        # Tighten to 5.0 -- cost 8.0 should now be blocked
+        enforcer.register_tool(_policy("t", max_cost=5.0))
+        ctx = _context(tool_name="t", cost_estimate=8.0)
+        assert enforcer.check_tool_call(ctx).level == "blocked"
 
 
 # ---------------------------------------------------------------------------

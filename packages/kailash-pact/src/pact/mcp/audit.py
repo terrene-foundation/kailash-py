@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import types as _builtin_types
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -50,6 +51,14 @@ class McpAuditEntry:
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     cost_estimate: float | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        # H4: Replace mutable metadata dict with immutable MappingProxyType.
+        object.__setattr__(
+            self,
+            "metadata",
+            _builtin_types.MappingProxyType(dict(self.metadata)),
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-compatible dictionary."""
