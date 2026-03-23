@@ -23,8 +23,8 @@ from kaizen_agents._sdk_compat import (
     plan_to_sdk,
 )
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.monitor import PlanMonitor
-from kaizen_agents.planner.composer import PlanComposer
+from kaizen_agents.orchestration.monitor import PlanMonitor
+from kaizen_agents.orchestration.planner.composer import PlanComposer
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,
@@ -382,8 +382,8 @@ class TestComposerSdkValidation:
         Uses a mocked LLM that returns a valid composition response
         (two-subtask linear dependency), converts to SDK, validates.
         """
-        from kaizen_agents.planner.decomposer import Subtask
-        from kaizen_agents.planner.designer import SpawnDecision
+        from kaizen_agents.orchestration.planner.decomposer import Subtask
+        from kaizen_agents.orchestration.planner.designer import SpawnDecision
 
         llm_response = {
             "edges": [
@@ -447,8 +447,8 @@ class TestComposerSdkValidation:
 
     def test_three_subtask_composed_plan_passes_sdk_validation(self) -> None:
         """A three-subtask composed plan (research -> implement -> test) validates."""
-        from kaizen_agents.planner.decomposer import Subtask
-        from kaizen_agents.planner.designer import SpawnDecision
+        from kaizen_agents.orchestration.planner.decomposer import Subtask
+        from kaizen_agents.orchestration.planner.designer import SpawnDecision
 
         llm_response = {
             "edges": [

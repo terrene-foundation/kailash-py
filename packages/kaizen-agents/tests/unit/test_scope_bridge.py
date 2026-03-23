@@ -12,7 +12,7 @@ import pytest
 
 from kaizen.l3.context.scope import ContextScope
 from kaizen.l3.context.types import DataClassification, ContextValue
-from kaizen_agents.context._scope_bridge import ScopeBridge
+from kaizen_agents.orchestration.context._scope_bridge import ScopeBridge
 
 
 # ---------------------------------------------------------------------------

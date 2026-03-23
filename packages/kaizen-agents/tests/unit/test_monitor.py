@@ -14,10 +14,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.monitor import PlanMonitor, PlanResult
-from kaizen_agents.planner.designer import SpawnDecision
-from kaizen_agents.recovery.diagnoser import FailureCategory
-from kaizen_agents.recovery.recomposer import RecoveryStrategy
+from kaizen_agents.orchestration.monitor import PlanMonitor, PlanResult
+from kaizen_agents.orchestration.planner.designer import SpawnDecision
+from kaizen_agents.orchestration.recovery.diagnoser import FailureCategory
+from kaizen_agents.orchestration.recovery.recomposer import RecoveryStrategy
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,

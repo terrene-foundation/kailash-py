@@ -11,11 +11,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from kaizen_agents.context.injector import (
+from kaizen_agents.orchestration.context.injector import (
     CONTEXT_SELECTION_SCHEMA,
     ContextInjector,
 )
-from kaizen_agents.context.summarizer import (
+from kaizen_agents.orchestration.context.summarizer import (
     SUMMARIZATION_SCHEMA,
     ContextSummarizer,
     _estimate_token_count,

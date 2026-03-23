@@ -12,8 +12,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.planner.decomposer import Subtask
-from kaizen_agents.planner.designer import (
+from kaizen_agents.orchestration.planner.decomposer import Subtask
+from kaizen_agents.orchestration.planner.designer import (
     AGENT_DESIGN_SCHEMA,
     AgentDesigner,
     CapabilityMatch,
@@ -48,7 +48,9 @@ def _sample_subtask(
     return Subtask(
         description=description,
         estimated_complexity=complexity,
-        required_capabilities=capabilities if capabilities is not None else ["code-review", "security-analysis"],
+        required_capabilities=(
+            capabilities if capabilities is not None else ["code-review", "security-analysis"]
+        ),
         suggested_tools=tools if tools is not None else ["code_search", "file_read"],
         depends_on=depends_on if depends_on is not None else [],
         output_keys=output_keys if output_keys is not None else ["review_result"],
@@ -268,9 +270,7 @@ class TestSpawnPolicy:
     def test_matching_spec_spawns(self) -> None:
         policy = SpawnPolicy(complexity_threshold=5, tool_count_threshold=10)
         subtask = _sample_subtask(complexity=2, tools=["a"])
-        decision = policy.evaluate(
-            subtask, ConstraintEnvelope(), has_matching_spec=True
-        )
+        decision = policy.evaluate(subtask, ConstraintEnvelope(), has_matching_spec=True)
 
         assert decision.should_spawn is True
         assert "reuse" in decision.reason.lower()
@@ -492,9 +492,7 @@ class TestEnvelopeTightening:
         designer = AgentDesigner(llm_client=mock_llm)
 
         subtask = _sample_subtask()
-        parent = ConstraintEnvelope(
-            operational={"allowed": ["read", "write"], "blocked": []}
-        )
+        parent = ConstraintEnvelope(operational={"allowed": ["read", "write"], "blocked": []})
 
         spec, _ = designer.design(subtask, parent, [])
         # Child's allowed must be subset of parent's allowed
