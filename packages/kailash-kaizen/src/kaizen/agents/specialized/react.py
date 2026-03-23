@@ -71,7 +71,7 @@ class ReActConfig:
     # ReAct-specific configuration
     max_cycles: int = 10
     confidence_threshold: float = 0.7
-    mcp_discovery_enabled: bool = False  # Disabled by default (opt-in)
+    mcp_discovery_enabled: bool = True  # Enabled: autonomous agents discover tools
     enable_parallel_tools: bool = False
     timeout: int = 30
     max_retries: int = 3
@@ -151,7 +151,7 @@ class ReActAgent(BaseAgent):
         max_tokens: Maximum tokens (default: 1000, env: KAIZEN_MAX_TOKENS)
         max_cycles: Maximum reasoning cycles (default: 10)
         confidence_threshold: Minimum confidence to finish (default: 0.7)
-        mcp_discovery_enabled: Enable MCP tool discovery (default: False, opt-in)
+        mcp_discovery_enabled: Enable MCP tool discovery (default: True for autonomous agents)
         enable_parallel_tools: Enable parallel tool execution (default: False)
         timeout: Request timeout seconds (default: 30)
         max_retries: Retry count on failure (default: 3)
@@ -204,7 +204,7 @@ class ReActAgent(BaseAgent):
             max_tokens: Override default max tokens
             max_cycles: Override default max cycles
             confidence_threshold: Override default confidence threshold
-            mcp_discovery_enabled: Enable MCP tool discovery (opt-in)
+            mcp_discovery_enabled: Enable MCP tool discovery (default: True)
             enable_parallel_tools: Enable parallel tool execution
             timeout: Override default timeout
             max_retries: Override default retry attempts
@@ -268,20 +268,9 @@ class ReActAgent(BaseAgent):
         self.available_tools = []
         self.action_history = []
 
-        # Discover MCP tools if enabled (opt-in feature)
-        if config.mcp_discovery_enabled:
-            self._discover_mcp_tools()
-
-    def _discover_mcp_tools(self):
-        """
-        Discover available MCP tools (placeholder for actual MCP integration).
-
-        In production, this would use actual MCP discovery protocol.
-        For now, this initializes an empty list that can be populated.
-        """
-        # Placeholder for MCP tool discovery
-        # In production, this would use MCP protocol to discover available tools
-        self.available_tools = []
+        # MCP tool discovery happens lazily via BaseAgent.discover_mcp_tools()
+        # during workflow generation (WorkflowGenerator calls it automatically).
+        # No sync stub needed — the async BaseAgent method is the real implementation.
 
     def _check_convergence(self, result: Dict[str, Any]) -> bool:
         """

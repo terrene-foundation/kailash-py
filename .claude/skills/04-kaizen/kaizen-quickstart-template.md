@@ -2,6 +2,10 @@
 
 Complete agent template from kaizen-specialist for rapid development.
 
+## LLM-First Rule (ABSOLUTE — see rules/agent-reasoning.md)
+
+**The LLM does ALL reasoning. Tools are dumb data endpoints.** Do NOT use if-else chains, keyword matching, or regex for agent decisions. Use `self.run()` with a rich Signature — the LLM routes, classifies, extracts, and evaluates. Deterministic logic in agent decision paths is BLOCKED unless the user explicitly opts in.
+
 ## Complete Template (Copy-Paste Ready)
 
 ```python
@@ -48,4 +52,5 @@ if __name__ == "__main__":
 ```
 
 ## References
+
 - **Specialist**: `.claude/agents/frameworks/kaizen-specialist.md` lines 489-520

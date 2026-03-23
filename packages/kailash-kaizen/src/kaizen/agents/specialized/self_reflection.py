@@ -70,6 +70,9 @@ class SelfReflectionConfig:
         default_factory=lambda: float(os.getenv("KAIZEN_TEMPERATURE", "0.7"))
     )
 
+    # MCP tool discovery (autonomous agents discover tools by default)
+    mcp_enabled: bool = True
+
     # Reflection configuration
     max_cycles: int = field(
         default_factory=lambda: int(os.getenv("KAIZEN_MAX_CYCLES", "3"))

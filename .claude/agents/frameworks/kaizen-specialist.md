@@ -209,12 +209,14 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 
 ### Agent Classification
 
-**Autonomous Agents (3)**: ReActAgent, CodeGenerationAgent, RAGResearchAgent
+**Autonomous Agents (4)**: ReActAgent, CodeGenerationAgent, RAGResearchAgent, SelfReflectionAgent
 
 - Multi-cycle execution with tool calling REQUIRED
 - Use MultiCycleStrategy by default
+- MCP tool discovery ENABLED by default (`mcp_enabled=True` / `mcp_discovery_enabled=True`)
+- ALL reasoning happens in the LLM — tools are dumb data endpoints (see rules/agent-reasoning.md)
 
-**Interactive Agents (22)**: All other agents
+**Interactive Agents (21)**: All other agents
 
 - Single-shot execution (AsyncSingleShotStrategy)
 - Tool calling OPTIONAL
@@ -230,6 +232,24 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 | GPT-4V    | API   | 1-2s  | 95%+     | ~$0.01/img | Production (cloud)   |
 
 ## Critical Rules
+
+### LLM-FIRST REASONING (ABSOLUTE — see rules/agent-reasoning.md)
+
+**WARNING: The LLM does ALL reasoning. Tools are dumb data endpoints.**
+
+When generating agent code, you MUST NOT produce:
+
+- `if-else` chains for intent routing or classification
+- Keyword matching (`if "cancel" in user_input`) for agent decisions
+- Regex matching (`re.match(...)`) for agent decisions
+- Dispatch tables (`handlers = {"a": func_a}`) for routing
+- Any deterministic logic that decides what the agent should _think_ or _do_
+
+The LLM IS the router, classifier, extractor, and evaluator. Use `self.run()` with a rich Signature that describes the reasoning needed. Tools fetch/write data — they contain ZERO decision logic.
+
+**UNLESS the user EXPLICITLY says** "use deterministic logic", "use keyword matching", or equivalent opt-in.
+
+Permitted deterministic logic: input validation, error handling, output formatting, safety guards, configuration branching.
 
 ### ALWAYS
 
@@ -252,6 +272,9 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 
 ### NEVER
 
+- **NEVER use if-else/regex/keyword matching for agent decisions** (see rules/agent-reasoning.md)
+- **NEVER put decision logic in tools** — tools are dumb data endpoints
+- **NEVER pre-filter/pre-classify input before the LLM sees it**
 - Manually create BaseAgentConfig (use auto-extraction)
 - Write verbose `write_insight()` (use `write_to_memory()`)
 - Manual JSON parsing (use `extract_*()`)
@@ -369,7 +392,7 @@ See the [Kaizen Skills](../../skills/04-kaizen/) (47 skills) for:
 - Composition validation and cost estimation
 - Budget-posture governance integration
 
-**Core Principle**: Kaizen is signature-based programming for AI workflows. Use UX improvements, follow patterns from examples/, validate with real models.
+**Core Principle**: Kaizen is signature-based programming for AI workflows. The LLM does ALL reasoning — tools are dumb data endpoints. No if-else routing, no keyword matching, no regex classification. Use rich Signatures, follow patterns from examples/, validate with real models.
 
 ## Related Agents
 

@@ -2,6 +2,10 @@
 
 Quick reference for implementing custom agents with Kaizen's BaseAgent architecture.
 
+## LLM-First Rule (ABSOLUTE — see rules/agent-reasoning.md)
+
+**The LLM does ALL reasoning. Tools are dumb data endpoints.** Do NOT use if-else chains, keyword matching, or regex for agent decisions. Use `self.run()` with a rich Signature — the LLM routes, classifies, extracts, and evaluates. Deterministic logic in agent decision paths is BLOCKED unless the user explicitly opts in.
+
 ## Pattern: Extend BaseAgent (3 Steps)
 
 ```python
@@ -63,6 +67,7 @@ class MyAgent(BaseAgent):
 ## What BaseAgent Provides Automatically
 
 **Core Features:**
+
 - ✅ Config auto-conversion (domain config → BaseAgentConfig)
 - ✅ Async execution (2-3x faster than sync)
 - ✅ Error handling with automatic retries
@@ -75,6 +80,7 @@ class MyAgent(BaseAgent):
 - ✅ **Bidirectional communication (v0.2.0)** - opt-in via `control_protocol`
 
 **Code Reduction:**
+
 - Traditional agent: ~496 lines
 - BaseAgent-based: ~65 lines
 - **87% reduction** with more features
@@ -179,20 +185,22 @@ results = await asyncio.gather(*tasks)  # All run in parallel
 
 ### Performance Comparison
 
-| Scenario | run() (sync) | run_async() (async) |
-|----------|--------------|---------------------|
-| Single request | 500ms | 500ms (same) |
-| 10 concurrent | 5000ms (queued) | 500ms (parallel) |
-| 100 concurrent | 50000ms + timeouts | 500ms (parallel) |
+| Scenario       | run() (sync)       | run_async() (async) |
+| -------------- | ------------------ | ------------------- |
+| Single request | 500ms              | 500ms (same)        |
+| 10 concurrent  | 5000ms (queued)    | 500ms (parallel)    |
+| 100 concurrent | 50000ms + timeouts | 500ms (parallel)    |
 
 ### When to Use
 
 **Use run_async():**
+
 - FastAPI/async web apps
 - High-throughput (10+ concurrent requests)
 - Docker deployments with AsyncLocalRuntime
 
 **Use run():**
+
 - CLI scripts and tools
 - Jupyter notebooks
 - Simple sequential workflows
@@ -277,12 +285,18 @@ class InteractiveAgent(BaseAgent):
 ## CRITICAL RULES
 
 **ALWAYS:**
+
+- ✅ Let the LLM reason — use `self.run()` with rich Signatures for ALL decisions
 - ✅ Use domain configs (e.g., `MyConfig`), let BaseAgent auto-convert
 - ✅ Call `self.run()`, not `strategy.execute()`
 - ✅ Load `.env` with `load_dotenv()` before creating agents
 - ✅ Let AsyncSingleShotStrategy be default (don't specify)
 
 **NEVER:**
+
+- ❌ **NEVER use if-else/regex/keyword for agent decisions** (rules/agent-reasoning.md)
+- ❌ **NEVER put decision logic in tools** — tools are dumb data endpoints
+- ❌ **NEVER pre-classify input before the LLM sees it**
 - ❌ Create BaseAgentConfig manually (use auto-conversion)
 - ❌ Call `strategy.execute()` directly (use `self.run()`)
 - ❌ Skip loading `.env` file
@@ -290,6 +304,7 @@ class InteractiveAgent(BaseAgent):
 ## Code Reduction Benefits
 
 **Traditional Agent (496 lines):**
+
 ```python
 class TraditionalAgent:
     def __init__(self, model, temperature, ...):
@@ -309,6 +324,7 @@ class TraditionalAgent:
 ```
 
 **BaseAgent-Based (65 lines):**
+
 ```python
 class MyAgent(BaseAgent):
     def __init__(self, config: MyConfig):
@@ -324,7 +340,7 @@ All features (logging, error handling, retries, performance tracking, memory) ar
 
 - **kaizen-signatures** - Deep dive into InputField/OutputField
 - **kaizen-config-patterns** - Advanced configuration patterns
-- **kaizen-ux-helpers** - extract_*(), write_to_memory()
+- **kaizen-ux-helpers** - extract\_\*(), write_to_memory()
 - **kaizen-agent-execution** - Advanced execution patterns
 
 ## References
