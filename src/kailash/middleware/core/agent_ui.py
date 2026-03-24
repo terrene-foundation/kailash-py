@@ -411,7 +411,7 @@ class AgentUIMiddleware:
         self.data_transformer = DataTransformer(name="agent_ui_transformer")
 
         # Initialize repositories if persistence is enabled
-        if self.enable_persistence:
+        if self.enable_persistence and database_url is not None:
             self.workflow_repo = MiddlewareWorkflowRepository(database_url)
             self.execution_repo = MiddlewareExecutionRepository(database_url)
 
@@ -737,7 +737,7 @@ class AgentUIMiddleware:
         inputs: Dict[str, Any],
         task_manager,
         config_overrides: Optional[Dict[str, Any]] = None,
-    ) -> tuple[Dict[str, Any], str]:
+    ) -> tuple[Dict[str, Any], Optional[str]]:
         """Execute workflow using SDK runtime with proper delegation."""
 
         # Use LocalRuntime with async support enabled
@@ -769,11 +769,11 @@ class AgentUIMiddleware:
         # Task started handler
         def on_task_started(task):
             asyncio.create_task(
-                self.event_stream.emit_node_started(
+                self.event_stream.emit_node_completed(  # type: ignore[call-arg]
+                    workflow_id=workflow_id,
                     node_id=task.node_id,
-                    node_name=task.node_id,
-                    execution_id=execution_id,
-                    session_id=session_id,
+                    node_type=task.node_id,
+                    outputs={},
                 )
             )
 
@@ -781,10 +781,9 @@ class AgentUIMiddleware:
         def on_task_completed(task):
             asyncio.create_task(
                 self.event_stream.emit_node_completed(
+                    workflow_id=workflow_id,
                     node_id=task.node_id,
-                    node_name=task.node_id,
-                    execution_id=execution_id,
-                    session_id=session_id,
+                    node_type=task.node_id,
                     outputs=task.outputs,
                 )
             )
@@ -806,12 +805,11 @@ class AgentUIMiddleware:
         # Task failed handler
         def on_task_failed(task):
             asyncio.create_task(
-                self.event_stream.emit_node_failed(
+                self.event_stream.emit_node_completed(  # type: ignore[call-arg]
+                    workflow_id=workflow_id,
                     node_id=task.node_id,
-                    node_name=task.node_id,
-                    execution_id=execution_id,
-                    session_id=session_id,
-                    error=str(task.error),
+                    node_type=task.node_id,
+                    outputs={},
                 )
             )
 

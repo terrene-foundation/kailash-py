@@ -347,7 +347,8 @@ class WorkflowBasedMiddleware:
         inputs = {"user_id": user_id, "metadata": metadata}
 
         # Execute session creation workflow
-        results, run_id = await self.runtime.execute(
+        assert self.runtime is not None, "Runtime has been closed"
+        results, run_id = await self.runtime.execute_async(
             self.workflows["session_creation"], parameters=inputs
         )
 
@@ -366,7 +367,8 @@ class WorkflowBasedMiddleware:
         inputs = {"execution_id": execution_id, "execution_data": execution_data}
 
         # Execute monitoring workflow
-        await self.runtime.execute(
+        assert self.runtime is not None, "Runtime has been closed"
+        await self.runtime.execute_async(
             self.workflows["execution_monitoring"], parameters=inputs
         )
 
@@ -383,7 +385,8 @@ class WorkflowBasedMiddleware:
         }
 
         # Execute cleanup workflow
-        await self.runtime.execute(self.workflows["cleanup"], parameters=inputs)
+        assert self.runtime is not None, "Runtime has been closed"
+        await self.runtime.execute_async(self.workflows["cleanup"], parameters=inputs)
 
     async def handle_error(self, error_data: Dict[str, Any]):
         """
@@ -393,7 +396,8 @@ class WorkflowBasedMiddleware:
             error_data: Error information including type and context
         """
         # Execute error handling workflow
-        results, _ = await self.runtime.execute(
+        assert self.runtime is not None, "Runtime has been closed"
+        results, _ = await self.runtime.execute_async(
             self.workflows["error_handling"], parameters={"error_data": error_data}
         )
 

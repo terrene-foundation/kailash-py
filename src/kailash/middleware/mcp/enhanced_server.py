@@ -190,7 +190,7 @@ class MiddlewareMCPServer:
         self.base_server = None
         if _KAILASH_MCP_AVAILABLE:
             try:
-                self.base_server = MCPServer(self.config.name)
+                self.base_server = MCPServer(self.config.name)  # type: ignore[possibly-undefined]
             except Exception as e:
                 logger.warning(f"Could not initialize base MCP server: {e}")
 
@@ -291,8 +291,8 @@ result = {'execution_result': execution_result}
         self,
         name: str,
         description: str,
-        handler: Callable = None,
-        parameters_schema: Dict[str, Any] = None,
+        handler: Optional[Callable] = None,
+        parameters_schema: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Register MCP tool using Kailash workflow."""
 
@@ -304,6 +304,7 @@ result = {'execution_result': execution_result}
         }
 
         workflow = self.tool_register_workflow.build()
+        assert self.runtime is not None, "Runtime has been stopped"
         results, _ = self.runtime.execute(workflow, parameters={"tool_data": tool_data})
 
         registration_result = results.get("register_tool", {})
@@ -348,7 +349,7 @@ result = {'execution_result': execution_result}
         uri: str,
         resource_type: str = "text",
         description: str = "",
-        handler: Callable = None,
+        handler: Optional[Callable] = None,
     ) -> Dict[str, Any]:
         """Register MCP resource using Kailash patterns."""
 
@@ -384,7 +385,10 @@ result = {'execution_result': execution_result}
         return {"success": True, "resource_uri": uri}
 
     async def execute_tool(
-        self, tool_name: str, arguments: Dict[str, Any], session_id: str = None
+        self,
+        tool_name: str,
+        arguments: Dict[str, Any],
+        session_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Execute MCP tool using Kailash workflow."""
 
@@ -430,7 +434,9 @@ result = {'execution_result': execution_result}
 
             return {"success": False, "error": str(e), "tool_name": tool_name}
 
-    async def get_resource(self, uri: str, session_id: str = None) -> Dict[str, Any]:
+    async def get_resource(
+        self, uri: str, session_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Get MCP resource using Kailash patterns."""
 
         if uri not in self.resources:
@@ -443,7 +449,7 @@ result = {'execution_result': execution_result}
         resource_node = self.resources[uri]
 
         try:
-            result = resource_node.execute({"resource_uri": uri})
+            result = resource_node.execute(resource_uri=uri)
 
             # Emit middleware event
             if self.event_stream:
@@ -545,7 +551,7 @@ result = {'execution_result': execution_result}
     async def _emit_mcp_event(self, event_type: str, data: Dict[str, Any]):
         """Emit MCP event to middleware event stream."""
 
-        from ..events import WorkflowEvent
+        from ..communication.events import WorkflowEvent
 
         event = WorkflowEvent(
             type=EventType.SYSTEM_STATUS,

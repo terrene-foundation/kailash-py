@@ -209,7 +209,7 @@ class MiddlewareAuthManager:
             raise HTTPException(status_code=401, detail="Invalid authentication token")
 
     async def create_api_key(
-        self, user_id: str, key_name: str, permissions: List[str] = None
+        self, user_id: str, key_name: str, permissions: Optional[List[str]] = None
     ) -> str:
         """
         Create API key using RotatingCredentialNode.
