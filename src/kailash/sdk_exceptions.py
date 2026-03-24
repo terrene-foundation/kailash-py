@@ -242,7 +242,7 @@ class RetryExhaustedException(RuntimeException):
         operation: str,
         attempts: int,
         last_error: Exception,
-        total_wait_time: float = None,
+        total_wait_time: float | None = None,
     ):
         self.operation = operation
         self.attempts = attempts

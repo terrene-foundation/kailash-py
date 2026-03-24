@@ -24,6 +24,8 @@ _spec = importlib.util.spec_from_file_location(
     "original_access_control",
     os.path.join(os.path.dirname(os.path.dirname(__file__)), "access_control.py"),
 )
+if _spec is None or _spec.loader is None:
+    raise ImportError("Could not load access_control module spec")
 _original_module = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_original_module)
 

@@ -505,7 +505,7 @@ def _load_python_workflow(workflow_file: str) -> Workflow:
                 workflow = obj
                 workflow_count += 1
 
-        if workflow_count == 0:
+        if workflow_count == 0 or workflow is None:
             raise CLIException(
                 "No Workflow instance found in file. "
                 "Make sure your file creates a Workflow object."

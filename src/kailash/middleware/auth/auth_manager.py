@@ -78,7 +78,7 @@ class MiddlewareAuthManager:
         self.enable_audit = enable_audit
 
         # Initialize SDK security nodes
-        self._initialize_security_nodes(secret_key, database_url)
+        self._initialize_security_nodes(secret_key or "", database_url or "")
 
         # FastAPI security scheme
         self.bearer_scheme = HTTPBearer(auto_error=False)

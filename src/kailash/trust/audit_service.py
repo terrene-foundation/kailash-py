@@ -478,7 +478,7 @@ class AuditQueryService:
         # the common interface: list_records if available, otherwise
         # fall back to iterating via the internal _records list.
         if hasattr(self.audit_store, "list_records"):
-            records = await self.audit_store.list_records(limit=100000)
+            records = await getattr(self.audit_store, "list_records")(limit=100000)
             for record in records:
                 if record.anchor.reasoning_trace is None:
                     missing.append(record.anchor)

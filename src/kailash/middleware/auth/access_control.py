@@ -45,7 +45,7 @@ class MiddlewareAccessControlManager:
 
     def __init__(
         self,
-        event_stream: EventStream = None,
+        event_stream: Optional[EventStream] = None,
         enable_abac: bool = True,
         enable_audit: bool = True,
     ):
@@ -73,12 +73,10 @@ class MiddlewareAccessControlManager:
 
         # Use Kailash permission check node
         result = self.permission_check_node.execute(
-            {
-                "user_context": user_context,
-                "resource_type": "session",
-                "resource_id": session_id,
-                "action": action,
-            }
+            user_context=user_context,
+            resource_type="session",
+            resource_id=session_id,
+            action=action,
         )
 
         decision = AccessDecision(
@@ -104,9 +102,17 @@ class MiddlewareAccessControlManager:
         """Check workflow access using existing Kailash RBAC/ABAC."""
 
         # Use existing Kailash access control
-        decision = self.access_manager.check_workflow_access(
-            user_context, workflow_id, permission
-        )
+        check_fn = getattr(self.access_manager, "check_workflow_access", None)
+        if check_fn:
+            decision = check_fn(user_context, workflow_id, permission)
+        else:
+            decision = AccessDecision(
+                allowed=False,
+                reason="Workflow access check not supported",
+                user_id=user_context.user_id,
+                resource_id=workflow_id,
+                permission=permission.value,
+            )
 
         # Emit middleware event
         if self.event_stream:
@@ -115,14 +121,12 @@ class MiddlewareAccessControlManager:
         # Audit logging using Kailash audit node
         if self.enable_audit and self.audit_node:
             self.audit_node.execute(
-                {
-                    "event_type": "workflow_access_check",
-                    "user_id": user_context.user_id,
-                    "resource_id": workflow_id,
-                    "permission": permission.value,
-                    "allowed": decision.allowed,
-                    "reason": decision.reason,
-                }
+                event_type="workflow_access_check",
+                user_id=user_context.user_id,
+                resource_id=workflow_id,
+                permission=permission.value,
+                allowed=decision.allowed,
+                reason=decision.reason,
             )
 
         return decision
@@ -133,9 +137,17 @@ class MiddlewareAccessControlManager:
         """Check node access using existing Kailash RBAC/ABAC."""
 
         # Use existing Kailash access control
-        decision = self.access_manager.check_node_access(
-            user_context, node_id, permission
-        )
+        check_fn = getattr(self.access_manager, "check_node_access", None)
+        if check_fn:
+            decision = check_fn(user_context, node_id, permission)
+        else:
+            decision = AccessDecision(
+                allowed=False,
+                reason="Node access check not supported",
+                user_id=user_context.user_id,
+                resource_id=node_id,
+                permission=permission.value,
+            )
 
         # Emit middleware event
         if self.event_stream:
@@ -152,7 +164,8 @@ class MiddlewareAccessControlManager:
         api_permission = f"api.{method.lower()}.{endpoint.replace('/', '.')}"
 
         # Use existing Kailash permission rules
-        rules = self.access_manager.get_user_permissions(user_context)
+        get_perms_fn = getattr(self.access_manager, "get_user_permissions", None)
+        rules = get_perms_fn(user_context) if get_perms_fn else []
 
         allowed = any(
             rule.permission == api_permission and rule.effect == PermissionEffect.ALLOW
@@ -179,7 +192,7 @@ class MiddlewareAccessControlManager:
         """Create UserContext from JWT token payload."""
 
         return UserContext(
-            user_id=token_payload.get("sub"),
+            user_id=token_payload.get("sub", ""),
             tenant_id=token_payload.get("tenant_id"),
             email=token_payload.get("email"),
             roles=token_payload.get("roles", []),
@@ -188,23 +201,21 @@ class MiddlewareAccessControlManager:
         )
 
     async def assign_role_to_user(
-        self, user_id: str, role: str, assigned_by: str, tenant_id: str = None
+        self, user_id: str, role: str, assigned_by: str, tenant_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Assign role to user using Kailash role management node."""
 
         result = self.role_mgmt_node.execute(
-            {
-                "action": "assign_role",
-                "user_id": user_id,
-                "role": role,
-                "assigned_by": assigned_by,
-                "tenant_id": tenant_id,
-            }
+            action="assign_role",
+            user_id=user_id,
+            role=role,
+            assigned_by=assigned_by,
+            tenant_id=tenant_id,
         )
 
         # Emit security event
         if self.event_stream:
-            from ..events import WorkflowEvent
+            from ..communication.events import WorkflowEvent
 
             event = WorkflowEvent(
                 type=EventType.SYSTEM_STATUS,
@@ -235,16 +246,16 @@ class MiddlewareAccessControlManager:
             conditions=rule_data.get("conditions", {}),
         )
 
-        self.access_manager.add_permission_rule(rule)
+        add_rule_fn = getattr(self.access_manager, "add_permission_rule", None)
+        if add_rule_fn:
+            add_rule_fn(rule)
 
         # Audit the rule creation
         if self.enable_audit and self.audit_node:
             self.audit_node.execute(
-                {
-                    "event_type": "permission_rule_created",
-                    "rule_data": rule_data,
-                    "created_by": created_by,
-                }
+                event_type="permission_rule_created",
+                rule_data=rule_data,
+                created_by=created_by,
             )
 
         return {"success": True, "rule_id": str(hash(str(rule)))}
@@ -255,7 +266,8 @@ class MiddlewareAccessControlManager:
         """Get effective permissions for user using Kailash access control."""
 
         # Use existing Kailash implementation
-        rules = self.access_manager.get_user_permissions(user_context)
+        get_perms_fn = getattr(self.access_manager, "get_user_permissions", None)
+        rules = get_perms_fn(user_context) if get_perms_fn else []
 
         return [
             {
@@ -272,7 +284,7 @@ class MiddlewareAccessControlManager:
     ):
         """Emit access control event to middleware event stream."""
 
-        from ..events import WorkflowEvent
+        from ..communication.events import WorkflowEvent
 
         event = WorkflowEvent(
             type=(
@@ -299,12 +311,13 @@ class MiddlewareAccessControlManager:
             },
         )
 
-        await self.event_stream.emit(event)
+        if self.event_stream:
+            await self.event_stream.emit(event)
 
     def get_stats(self) -> Dict[str, Any]:
         """Get access control statistics."""
         base_stats = (
-            self.access_manager.get_stats()
+            getattr(self.access_manager, "get_stats", lambda: {})()
             if hasattr(self.access_manager, "get_stats")
             else {}
         )
@@ -336,7 +349,7 @@ class MiddlewareAuthenticationMiddleware:
     def __init__(
         self,
         access_control_manager: MiddlewareAccessControlManager,
-        credential_manager: CredentialManagerNode = None,
+        credential_manager: Optional[CredentialManagerNode] = None,
     ):
         self.access_manager = access_control_manager
         self.credential_manager = credential_manager or CredentialManagerNode(
@@ -346,8 +359,8 @@ class MiddlewareAuthenticationMiddleware:
         )
 
     async def authenticate_request(
-        self, headers: Dict[str, str], session_id: str = None
-    ) -> tuple[bool, UserContext]:
+        self, headers: Dict[str, str], session_id: Optional[str] = None
+    ) -> tuple[bool, Optional[UserContext]]:
         """
         Authenticate incoming request using Kailash security patterns.
 
@@ -367,7 +380,7 @@ class MiddlewareAuthenticationMiddleware:
             # This would typically validate JWT token
             # For now, simulating with credential manager
             cred_result = self.credential_manager.execute(
-                {"action": "validate_token", "token": token}
+                action="validate_token", token=token
             )
 
             if not cred_result.get("valid", False):
@@ -389,11 +402,9 @@ class MiddlewareAuthenticationMiddleware:
         except Exception as e:
             # Log security event using Kailash security event node
             self.access_manager.security_event_node.execute(
-                {
-                    "event_type": "authentication_failure",
-                    "error": str(e),
-                    "token_preview": token[:10] + "..." if len(token) > 10 else token,
-                }
+                event_type="authentication_failure",
+                error=str(e),
+                token_preview=token[:10] + "..." if len(token) > 10 else token,
             )
 
             return False, None

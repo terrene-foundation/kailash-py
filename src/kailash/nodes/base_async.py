@@ -127,7 +127,7 @@ class AsyncNode(
 
         # Check if we're in a thread without an event loop
         current_thread = threading.current_thread()
-        is_main_thread = isinstance(current_thread, threading._MainThread)
+        is_main_thread = current_thread is threading.main_thread()
 
         # Run the async method - handle existing event loop
         try:

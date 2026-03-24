@@ -449,18 +449,18 @@ def load_workflow_from_file(file_path: str) -> Workflow:
     Raises:
         ValueError: If workflow cannot be loaded
     """
-    file_path = Path(file_path).resolve()
+    resolved_path = Path(file_path).resolve()
 
-    if file_path.suffix != ".py":
-        raise ValueError(f"Workflow file must be a Python file (.py): {file_path}")
+    if resolved_path.suffix != ".py":
+        raise ValueError(f"Workflow file must be a Python file (.py): {resolved_path}")
 
-    if not file_path.exists():
-        raise ValueError(f"Workflow file not found: {file_path}")
+    if not resolved_path.exists():
+        raise ValueError(f"Workflow file not found: {resolved_path}")
 
     # Load the module
-    spec = importlib.util.spec_from_file_location("workflow_module", file_path)
+    spec = importlib.util.spec_from_file_location("workflow_module", resolved_path)
     if spec is None or spec.loader is None:
-        raise ValueError(f"Could not load workflow from: {file_path}")
+        raise ValueError(f"Could not load workflow from: {resolved_path}")
 
     module = importlib.util.module_from_spec(spec)
     sys.modules["workflow_module"] = module
@@ -488,12 +488,12 @@ def load_workflow_from_file(file_path: str) -> Workflow:
 
     if workflow is None:
         raise ValueError(
-            f"No workflow found in {file_path}. "
+            f"No workflow found in {resolved_path}. "
             "Expected 'workflow' variable or 'build_workflow()' function."
         )
 
     # Store source file for reporting
-    workflow._source_file = str(file_path)
+    setattr(workflow, "_source_file", str(resolved_path))
 
     return workflow
 

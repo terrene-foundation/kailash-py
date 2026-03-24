@@ -273,7 +273,7 @@ class HttpClientFactory(ResourceFactory):
         logger.info(f"Creating httpx client: {self.base_url}")
 
         return httpx.AsyncClient(
-            base_url=self.base_url,
+            base_url=self.base_url or "",
             timeout=self.timeout,
             headers=self.headers,
             **self.extra_config,
@@ -365,7 +365,9 @@ class CacheFactory(ResourceFactory):
     async def _create_memcached_client(self):
         """Create Memcached client."""
         try:
-            import aiomemcache
+            import importlib
+
+            aiomemcache = importlib.import_module("aiomemcache")
         except ImportError:
             raise ImportError(
                 "aiomemcache is required. Install with: pip install aiomemcache"
@@ -398,7 +400,9 @@ class CacheFactory(ResourceFactory):
                     return None
                 return self._cache.get(key)
 
-            async def set(self, key: str, value: Any, ttl: int = None) -> None:
+            async def set(
+                self, key: str, value: Any, ttl: Optional[int] = None
+            ) -> None:
                 self._cache[key] = value
                 if ttl is not None and ttl > 0:
                     self._expiry[key] = time.monotonic() + ttl
@@ -511,7 +515,9 @@ class MessageQueueFactory(ResourceFactory):
     async def _create_rabbitmq_client(self):
         """Create RabbitMQ client."""
         try:
-            import aio_pika
+            import importlib
+
+            aio_pika = importlib.import_module("aio_pika")
         except ImportError:
             raise ImportError(
                 "aio-pika is required for RabbitMQ. Install with: pip install aio-pika"
@@ -528,7 +534,11 @@ class MessageQueueFactory(ResourceFactory):
     async def _create_kafka_client(self):
         """Create Kafka producer/consumer."""
         try:
-            from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+            import importlib
+
+            aiokafka = importlib.import_module("aiokafka")
+            AIOKafkaProducer = aiokafka.AIOKafkaProducer
+            AIOKafkaConsumer = aiokafka.AIOKafkaConsumer
         except ImportError:
             raise ImportError(
                 "aiokafka is required for Kafka. Install with: pip install aiokafka"
@@ -617,7 +627,9 @@ class S3ClientFactory(ResourceFactory):
     async def create(self) -> Any:
         """Create S3 client via aioboto3."""
         try:
-            import aioboto3
+            import importlib
+
+            aioboto3 = importlib.import_module("aioboto3")
         except ImportError:
             raise ImportError(
                 "aioboto3 is required for S3 support. "

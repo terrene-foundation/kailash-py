@@ -8,68 +8,15 @@ import logging
 import threading
 from typing import Any, Dict, List, Optional, Union
 
-# Import base access control components
-try:
-    from kailash.access_control import (
-        AccessDecision,
-        NodePermission,
-        PermissionRule,
-        UserContext,
-        WorkflowPermission,
-    )
-except ImportError:
-    # Local definitions to handle circular import during initial setup
-    from dataclasses import dataclass
-    from datetime import datetime
-    from enum import Enum
-
-    class NodePermission(Enum):
-        EXECUTE = "execute"
-        READ_OUTPUT = "read_output"
-        WRITE_INPUT = "write_input"
-
-    class WorkflowPermission(Enum):
-        VIEW = "view"
-        EXECUTE = "execute"
-        MODIFY = "modify"
-
-    class PermissionEffect(Enum):
-        ALLOW = "allow"
-        DENY = "deny"
-        CONDITIONAL = "conditional"
-
-    @dataclass
-    class UserContext:
-        user_id: str
-        tenant_id: str
-        email: str
-        roles: List[str]
-        attributes: Dict[str, Any]
-
-    @dataclass
-    class AccessDecision:
-        allowed: bool
-        reason: str
-        applied_rules: List[str]
-        conditions_met: Optional[Dict[str, bool]] = None
-        masked_fields: Optional[List[str]] = None
-
-    @dataclass
-    class PermissionRule:
-        id: str
-        resource_type: str
-        resource_id: str
-        permission: Union[NodePermission, WorkflowPermission]
-        effect: PermissionEffect
-        user_id: Optional[str] = None
-        role: Optional[str] = None
-        tenant_id: Optional[str] = None
-        conditions: Optional[Dict[str, Any]] = None
-        priority: int = 0
-        expires_at: Optional[datetime] = None
-
-
-from kailash.access_control.rule_evaluators import RuleEvaluator, create_rule_evaluator
+from kailash.access_control.rule_evaluators import (
+    AccessDecision,
+    NodePermission,
+    PermissionRule,
+    RuleEvaluator,
+    UserContext,
+    WorkflowPermission,
+    create_rule_evaluator,
+)
 
 logger = logging.getLogger(__name__)
 

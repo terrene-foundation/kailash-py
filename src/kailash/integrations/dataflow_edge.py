@@ -121,7 +121,7 @@ class DataFlowEdgeIntegration:
         Returns:
             Workflow edge configuration
         """
-        workflow_edge_config = {
+        workflow_edge_config: Dict[str, Any] = {
             "discovery": {
                 "locations": edge_config.get("edge_locations", []),
                 "selection_strategy": edge_config.get("selection_strategy", "balanced"),
@@ -184,7 +184,7 @@ def enhance_dataflow_node_generator():
                     # Enhance node class with edge capabilities
                     original_init = node_class.__init__
 
-                    def edge_enhanced_init(node_self, **config):
+                    def edge_enhanced_init(self: Any, **config: Any) -> None:
                         # Enhance config with edge settings
                         enhanced_config = DataFlowEdgeIntegration.enhance_node_config(
                             config, edge_config
@@ -195,9 +195,9 @@ def enhance_dataflow_node_generator():
                             # These operations benefit from EdgeDataNode
                             enhanced_config["_preferred_node_type"] = "EdgeDataNode"
 
-                        original_init(node_self, **enhanced_config)
+                        original_init(self, **enhanced_config)
 
-                    node_class.__init__ = edge_enhanced_init
+                    setattr(node_class, "__init__", edge_enhanced_init)
 
                     return node_class
 

@@ -171,7 +171,33 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Lazy-loaded crypto names (require pynacl)
+# These are resolved at runtime via __getattr__ below. The type-level
+# declarations keep static analysis (pyright) happy with __all__.
 # ---------------------------------------------------------------------------
+from typing import TYPE_CHECKING as _TYPE_CHECKING
+
+if _TYPE_CHECKING:
+    from kailash.trust.signing.crypto import (
+        generate_keypair as generate_keypair,
+        sign as sign,
+        verify_signature as verify_signature,
+        DualSignature as DualSignature,
+        dual_sign as dual_sign,
+        dual_verify as dual_verify,
+        hmac_sign as hmac_sign,
+        hmac_verify as hmac_verify,
+        hash_chain as hash_chain,
+        hash_trust_chain_state as hash_trust_chain_state,
+        hash_trust_chain_state_salted as hash_trust_chain_state_salted,
+        hash_reasoning_trace as hash_reasoning_trace,
+        sign_reasoning_trace as sign_reasoning_trace,
+        verify_reasoning_signature as verify_reasoning_signature,
+        serialize_for_signing as serialize_for_signing,
+        generate_salt as generate_salt,
+        derive_key_with_salt as derive_key_with_salt,
+        NACL_AVAILABLE as NACL_AVAILABLE,
+        SALT_LENGTH as SALT_LENGTH,
+    )
 
 _CRYPTO_NAMES = frozenset(
     {
