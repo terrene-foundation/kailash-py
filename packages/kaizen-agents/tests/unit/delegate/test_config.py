@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -24,29 +25,64 @@ from kaizen_agents.delegate.config.loader import (
 class TestEffortLevel:
     """EffortLevel enum and preset resolution."""
 
-    def test_low_preset_returns_fast_model(self) -> None:
+    @pytest.fixture(autouse=True)
+    def _reset_presets(self) -> Any:
+        """Reset the global preset cache before and after each test."""
+        import kaizen_agents.delegate.config.effort as effort_mod
+        original = effort_mod._PRESETS
+        effort_mod._PRESETS = None
+        yield
+        effort_mod._PRESETS = original
+
+    def test_low_preset_returns_fast_model(self, monkeypatch: Any) -> None:
+        # Reset cached presets so env changes take effect
+        import kaizen_agents.delegate.config.effort as effort_mod
+        monkeypatch.setattr(effort_mod, "_PRESETS", None)
+        monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
+        monkeypatch.delenv("OPENAI_DEV_MODEL", raising=False)
+        monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
         preset = get_effort_preset(EffortLevel.LOW)
         assert preset.level is EffortLevel.LOW
-        assert preset.model == "gpt-4o-mini"
+        assert preset.model == "gpt-4o-mini"  # fallback when env not set
         assert preset.temperature == 0.2
         assert preset.max_tokens == 4096
         assert preset.reasoning_effort == "low"
 
-    def test_medium_preset_is_default(self) -> None:
+    def test_medium_preset_is_default(self, monkeypatch: Any) -> None:
+        import kaizen_agents.delegate.config.effort as effort_mod
+        monkeypatch.setattr(effort_mod, "_PRESETS", None)
+        monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
+        monkeypatch.delenv("OPENAI_DEV_MODEL", raising=False)
+        monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
         preset = get_effort_preset(EffortLevel.MEDIUM)
         assert preset.level is EffortLevel.MEDIUM
-        assert preset.model == "gpt-4o"
+        assert preset.model == "gpt-4o"  # fallback when env not set
         assert preset.temperature == 0.4
         assert preset.max_tokens == 16384
         assert preset.reasoning_effort == "medium"
 
-    def test_high_preset_returns_best_model(self) -> None:
+    def test_high_preset_returns_best_model(self, monkeypatch: Any) -> None:
+        import kaizen_agents.delegate.config.effort as effort_mod
+        monkeypatch.setattr(effort_mod, "_PRESETS", None)
+        monkeypatch.delenv("DEFAULT_LLM_MODEL", raising=False)
+        monkeypatch.delenv("OPENAI_DEV_MODEL", raising=False)
+        monkeypatch.delenv("OPENAI_PROD_MODEL", raising=False)
         preset = get_effort_preset(EffortLevel.HIGH)
         assert preset.level is EffortLevel.HIGH
-        assert preset.model == "o3"
+        assert preset.model == "gpt-4o"  # fallback: prod = default = gpt-4o
         assert preset.temperature == 1.0
         assert preset.max_tokens == 65536
         assert preset.reasoning_effort == "high"
+
+    def test_presets_read_from_env(self, monkeypatch: Any) -> None:
+        import kaizen_agents.delegate.config.effort as effort_mod
+        monkeypatch.setattr(effort_mod, "_PRESETS", None)
+        monkeypatch.setenv("DEFAULT_LLM_MODEL", "gpt-5-chat-latest")
+        monkeypatch.setenv("OPENAI_DEV_MODEL", "gpt-5-mini")
+        monkeypatch.setenv("OPENAI_PROD_MODEL", "gpt-5")
+        assert get_effort_preset(EffortLevel.LOW).model == "gpt-5-mini"
+        assert get_effort_preset(EffortLevel.MEDIUM).model == "gpt-5-chat-latest"
+        assert get_effort_preset(EffortLevel.HIGH).model == "gpt-5"
 
     def test_string_level_accepted(self) -> None:
         preset = get_effort_preset("low")
@@ -120,7 +156,7 @@ class TestLoadConfig:
     def test_defaults_when_no_files(self, tmp_path: Path) -> None:
         """No config files or env vars -> returns defaults."""
         config = load_config(project_root=tmp_path, user_home=tmp_path / "fakehome")
-        assert config.model == "gpt-4o"
+        assert config.model == ""  # empty until effort preset or CLI flag sets it
         assert config.provider == "openai"
         assert config.effort_level is EffortLevel.MEDIUM
         assert config.max_turns == 50

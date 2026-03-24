@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import sys
 
-from pact.governance.config import (
+from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
@@ -27,15 +27,15 @@ from pact.examples.university.barriers import (
 )
 from pact.examples.university.clearance import create_university_clearances
 from pact.examples.university.org import create_university_org
-from pact.governance.access import KnowledgeSharePolicy, PactBridge
-from pact.governance.agent import GovernanceBlockedError, PactGovernedAgent
-from pact.governance.clearance import RoleClearance
-from pact.governance.decorators import governed_tool
-from pact.governance.engine import GovernanceEngine
-from pact.governance.envelopes import RoleEnvelope
-from pact.governance.knowledge import KnowledgeItem
-from pact.governance.testing import MockGovernedAgent
-from pact.governance.explain import describe_address, explain_access
+from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
+from kailash.trust.pact.agent import GovernanceBlockedError, PactGovernedAgent
+from kailash.trust.pact.clearance import RoleClearance
+from kailash.trust.pact.decorators import governed_tool
+from kailash.trust.pact.engine import GovernanceEngine
+from kailash.trust.pact.envelopes import RoleEnvelope
+from kailash.trust.pact.knowledge import KnowledgeItem
+from kailash.trust.pact.testing import MockGovernedAgent
+from kailash.trust.pact.explain import describe_address, explain_access
 
 logger = logging.getLogger(__name__)
 
@@ -467,7 +467,7 @@ def run_demo() -> int:
 
     # Roundtrip serialization
     data = ctx.to_dict()
-    from pact.governance.context import GovernanceContext
+    from kailash.trust.pact.context import GovernanceContext
 
     restored = GovernanceContext.from_dict(data)
     _check(

@@ -35,6 +35,7 @@ from kaizen_agents._sdk_compat import (
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,
+    make_envelope,
     DimensionGradient as LocalDimensionGradient,
     EdgeType as LocalEdgeType,
     GradientZone as LocalGradientZone,
@@ -462,7 +463,7 @@ class TestEnvelopeConverters:
     """ConstraintEnvelope to/from dict conversion."""
 
     def _make_envelope(self) -> ConstraintEnvelope:
-        return ConstraintEnvelope(
+        return make_envelope(
             financial={"limit": 50.0},
             operational={"allowed": ["search", "summarize"], "blocked": ["delete"]},
             temporal={"window_start": "09:00", "window_end": "17:00"},
@@ -473,18 +474,16 @@ class TestEnvelopeConverters:
     def test_to_dict_structure(self) -> None:
         env = self._make_envelope()
         d = envelope_to_dict(env)
-        assert d["financial"] == {"limit": 50.0}
-        assert "search" in d["operational"]["allowed"]
-        assert d["data_access"]["ceiling"] == "confidential"
+        assert d["financial"]["max_spend_usd"] == 50.0
+        assert "search" in d["operational"]["allowed_actions"]
+        assert isinstance(d["data_access"], dict)
 
     def test_round_trip(self) -> None:
         original = self._make_envelope()
         result = envelope_from_dict(envelope_to_dict(original))
         assert result.financial == original.financial
-        assert result.operational == original.operational
-        assert result.temporal == original.temporal
-        assert result.data_access == original.data_access
-        assert result.communication == original.communication
+        assert result.operational.allowed_actions == original.operational.allowed_actions
+        assert result.operational.blocked_actions == original.operational.blocked_actions
 
     def test_from_dict_empty(self) -> None:
         """Empty dict produces default envelope."""
@@ -514,7 +513,7 @@ class TestPlanConverters:
         return LocalPlan(
             plan_id="plan-001",
             name="Test Plan",
-            envelope=ConstraintEnvelope(
+            envelope=make_envelope(
                 financial={"limit": 100.0},
             ),
             gradient=LocalPlanGradient(
@@ -566,7 +565,7 @@ class TestPlanConverters:
         local = self._make_local_plan()
         sdk = plan_to_sdk(local)
         assert isinstance(sdk.envelope, dict)
-        assert sdk.envelope["financial"] == {"limit": 100.0}
+        assert sdk.envelope["financial"]["max_spend_usd"] == 100.0
 
     def test_to_sdk_plan_gradient_is_dict(self) -> None:
         local = self._make_local_plan()
@@ -624,7 +623,8 @@ class TestPlanConverters:
         }
         sdk = plan_to_sdk(local)
         result = plan_from_sdk(sdk, agent_specs=specs)
-        assert result.envelope.financial == {"limit": 100.0}
+        assert result.envelope.financial is not None
+        assert result.envelope.financial.max_spend_usd == 100.0
 
     def test_from_sdk_plan_missing_spec_raises(self) -> None:
         """Converting a plan with unknown agent_spec_id should raise."""

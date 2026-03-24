@@ -143,17 +143,16 @@ def _build_composition_user_prompt(
     context_section = "\n".join(context_lines) if context_lines else "(no context available)"
 
     budget_info = ""
-    financial_limit = envelope.financial.get("limit")
-    if financial_limit is not None:
-        budget_info += f"\n- Financial budget: ${financial_limit}"
+    if envelope.financial is not None:
+        budget_info += f"\n- Financial budget: ${envelope.financial.max_spend_usd}"
 
-    blocked_ops = envelope.operational.get("blocked", [])
+    blocked_ops = envelope.operational.blocked_actions
     if blocked_ops:
         budget_info += f"\n- Blocked operations: {', '.join(blocked_ops)}"
 
-    data_ceiling = envelope.data_access.get("ceiling")
-    if data_ceiling:
-        budget_info += f"\n- Data access ceiling: {data_ceiling}"
+    confidentiality = envelope.confidentiality_clearance
+    if confidentiality is not None:
+        budget_info += f"\n- Data access clearance: {confidentiality.value}"
 
     deadline_info = ""
     if deadline:

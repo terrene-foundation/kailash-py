@@ -24,9 +24,12 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Callable, Awaitable
+from typing import Any, AsyncIterator, Callable, Awaitable, TYPE_CHECKING
 
 from openai import AsyncOpenAI
+
+if TYPE_CHECKING:
+    from kaizen_agents.delegate.compact import CompactionResult
 
 from kaizen_agents.delegate.adapters.openai_stream import StreamResult, process_stream
 from kaizen_agents.delegate.config.loader import KzConfig
@@ -210,6 +213,27 @@ class Conversation:
             }
         )
 
+    def compact(self, preserve_recent: int = 4) -> "CompactionResult":
+        """Compact the conversation by pruning older messages.
+
+        Preserves the system message (always first), the last
+        ``preserve_recent`` turn pairs, and replaces everything in between
+        with a single summary message.
+
+        Parameters
+        ----------
+        preserve_recent:
+            Number of recent user/assistant turn pairs to keep verbatim.
+
+        Returns
+        -------
+        :class:`~kaizen_agents.delegate.compact.CompactionResult` with
+        before/after statistics.
+        """
+        from kaizen_agents.delegate.compact import compact_conversation
+
+        return compact_conversation(self.messages, preserve_recent=preserve_recent)
+
 
 # ---------------------------------------------------------------------------
 # AgentLoop — the core loop
@@ -251,6 +275,7 @@ class AgentLoop:
         *,
         client: AsyncOpenAI | None = None,
         system_prompt: str | None = None,
+        budget_check: Callable[[], bool] | None = None,
     ) -> None:
         """Initialise the agent loop.
 
@@ -265,6 +290,10 @@ class AgentLoop:
         system_prompt:
             Override the default system prompt. If None, uses the built-in
             default. In production, this will be assembled from KZ.md context.
+        budget_check:
+            Optional callback that returns True if budget is available, False
+            if exhausted. When provided, the loop checks budget before each
+            LLM call and stops early if exhausted.
         """
         self._config = config
         self._tools = tools
@@ -272,6 +301,7 @@ class AgentLoop:
         self._conversation = Conversation()
         self._usage = UsageTracker()
         self._interrupted = False
+        self._budget_check = budget_check
 
         # Set system prompt
         prompt = system_prompt if system_prompt is not None else _DEFAULT_SYSTEM_PROMPT
@@ -286,8 +316,13 @@ class AgentLoop:
         if not api_key:
             raise ValueError("No OpenAI API key found. Set OPENAI_API_KEY in your .env file.")
 
+        import httpx
+
         base_url = os.environ.get("OPENAI_BASE_URL")
-        kwargs: dict[str, Any] = {"api_key": api_key}
+        kwargs: dict[str, Any] = {
+            "api_key": api_key,
+            "timeout": httpx.Timeout(connect=10, read=120, write=30, pool=10),
+        }
         if base_url:
             kwargs["base_url"] = base_url
         return AsyncOpenAI(**kwargs)
@@ -334,15 +369,17 @@ class AgentLoop:
             inner_turns += 1
             self._usage.increment_turn()
 
+            # Check budget before making an LLM call
+            if self._budget_check and not self._budget_check():
+                logger.warning("Budget exhausted — stopping before LLM call")
+                yield "[Budget exhausted — stopping.]"
+                return
+
             # Stream the LLM response
             stream_result = await self._stream_completion()
 
             if self._interrupted:
                 return
-
-            # Yield any text content
-            if stream_result.content:
-                yield stream_result.content
 
             # Track usage
             if stream_result.usage:
@@ -350,6 +387,10 @@ class AgentLoop:
 
             # If no tool calls, this turn is done -- the model chose to respond with text
             if not stream_result.tool_calls:
+                # Only yield text from text-only responses (not from tool-call turns,
+                # where models like GPT-5 emit "thinking" text alongside tool calls)
+                if stream_result.content:
+                    yield stream_result.content
                 # Record the assistant message
                 self._conversation.add_assistant(stream_result.content)
                 return
@@ -372,14 +413,27 @@ class AgentLoop:
         """
         tools = self._tools.get_openai_tools()
 
+        model = self._config.model or "gpt-5-chat-latest"
+
+        # GPT-5 variants and reasoning models use max_completion_tokens
+        # instead of max_tokens, and do not support custom temperature.
+        _GPT5_AND_REASONING = ("o1", "o3", "gpt-5")
+        is_new_api = any(model.startswith(p) for p in _GPT5_AND_REASONING)
+
         kwargs: dict[str, Any] = {
-            "model": self._config.model or "gpt-4o",
+            "model": model,
             "messages": self._conversation.messages,
-            "temperature": self._config.temperature,
-            "max_tokens": self._config.max_tokens,
             "stream": True,
             "stream_options": {"include_usage": True},
         }
+
+        if not is_new_api:
+            kwargs["temperature"] = self._config.temperature
+
+        if is_new_api:
+            kwargs["max_completion_tokens"] = self._config.max_tokens
+        else:
+            kwargs["max_tokens"] = self._config.max_tokens
 
         if tools:
             kwargs["tools"] = tools
@@ -437,11 +491,20 @@ class AgentLoop:
         tasks = [_run_single(tc) for tc in tool_calls]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for result in results:
+        for idx, result in enumerate(results):
             if isinstance(result, BaseException):
-                # This should not happen since _run_single catches exceptions,
-                # but handle it defensively.
+                # Inject a synthetic error result so the conversation stays valid.
+                # The model sent tool_calls but needs matching tool results for
+                # every call — missing results cause API errors on the next turn.
                 logger.error("Unexpected error in parallel tool execution: %s", result)
+                tc = tool_calls[idx]
+                tc_id = tc["id"]
+                tc_name = tc["function"]["name"]
+                self._conversation.add_tool_result(
+                    tc_id,
+                    tc_name,
+                    json.dumps({"error": "Tool execution was interrupted"}),
+                )
                 continue
 
             tc_id, name, content = result
@@ -468,7 +531,7 @@ class AgentLoop:
         if display is None:
             display = Display()
 
-        display.show_welcome(self._config.model or "gpt-4o")
+        display.show_welcome(self._config.model or "gpt-5-chat-latest")
 
         while True:
             try:

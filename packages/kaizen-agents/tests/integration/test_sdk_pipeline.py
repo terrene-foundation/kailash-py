@@ -32,6 +32,7 @@ from kaizen_agents.orchestration.monitor import PlanMonitor, PlanResult
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,
+    make_envelope,
     EdgeType,
     GradientZone,
     Plan,
@@ -70,7 +71,7 @@ def _make_spec(spec_id: str, name: str, financial_limit: float = 3.0) -> AgentSp
         description=f"Agent for {name}",
         capabilities=["general"],
         tool_ids=[],
-        envelope=ConstraintEnvelope(
+        envelope=make_envelope(
             financial={"limit": financial_limit},
             operational={"allowed": [], "blocked": []},
         ),
@@ -134,7 +135,7 @@ def _make_three_node_linear_plan() -> tuple[Plan, dict[str, AgentSpec]]:
         nodes=nodes,
         edges=edges,
         state=PlanState.DRAFT,
-        envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+        envelope=make_envelope(financial={"limit": 10.0}),
         gradient=PlanGradient(retry_budget=2),
     )
 
@@ -203,7 +204,7 @@ class TestFullSdkPipeline:
         llm = _make_mock_llm()
         monitor = PlanMonitor(
             llm=llm,
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
             gradient=PlanGradient(retry_budget=2),
         )
 
@@ -251,7 +252,7 @@ class TestFullSdkPipeline:
         llm = _make_mock_llm()
         monitor = PlanMonitor(
             llm=llm,
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
             gradient=PlanGradient(
                 retry_budget=0,
                 after_retry_exhaustion=GradientZone.BLOCKED,
@@ -298,7 +299,7 @@ class TestFullSdkPipeline:
         llm = _make_mock_llm()
         monitor = PlanMonitor(
             llm=llm,
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
             gradient=PlanGradient(retry_budget=2),
         )
 
@@ -328,7 +329,7 @@ class TestFullSdkPipeline:
         llm = _make_mock_llm()
         monitor = PlanMonitor(
             llm=llm,
-            envelope=ConstraintEnvelope(financial={"limit": 10.0}),
+            envelope=make_envelope(financial={"limit": 10.0}),
             gradient=PlanGradient(
                 retry_budget=0,
                 after_retry_exhaustion=GradientZone.BLOCKED,

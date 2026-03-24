@@ -20,7 +20,7 @@ from kaizen_agents.orchestration.planner.decomposer import (
     _build_system_prompt,
     _build_user_prompt,
 )
-from kaizen_agents.types import ConstraintEnvelope
+from kaizen_agents.types import ConstraintEnvelope, make_envelope
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +102,7 @@ class TestSubtask:
 
 class TestPromptBuilding:
     def test_system_prompt_includes_constraint_info(self) -> None:
-        envelope = ConstraintEnvelope(
+        envelope = make_envelope(
             financial={"limit": 5.0},
             operational={"allowed": ["read"], "blocked": ["delete"]},
         )
@@ -112,7 +112,7 @@ class TestPromptBuilding:
         assert "read" in prompt
 
     def test_system_prompt_default_envelope(self) -> None:
-        prompt = _build_system_prompt(ConstraintEnvelope())
+        prompt = _build_system_prompt(make_envelope())
         assert "task decomposition engine" in prompt.lower()
 
     def test_user_prompt_includes_objective(self) -> None:
@@ -132,7 +132,13 @@ class TestPromptBuilding:
         assert "Context" not in prompt
 
     def test_system_prompt_with_data_ceiling(self) -> None:
-        envelope = ConstraintEnvelope(data_access={"ceiling": "confidential", "scopes": []})
+        from kailash.trust import ConfidentialityLevel
+        from kailash.trust.pact.config import ConstraintEnvelopeConfig
+
+        envelope = ConstraintEnvelopeConfig(
+            id="test-ceiling",
+            confidentiality_clearance=ConfidentialityLevel.CONFIDENTIAL,
+        )
         prompt = _build_system_prompt(envelope)
         assert "confidential" in prompt
 
@@ -162,7 +168,7 @@ class TestTaskDecomposer:
     def test_passes_envelope_to_system_prompt(self) -> None:
         mock_llm = _make_mock_llm(_valid_decomposition())
         decomposer = TaskDecomposer(llm_client=mock_llm)
-        envelope = ConstraintEnvelope(financial={"limit": 50.0})
+        envelope = make_envelope(financial={"limit": 50.0})
 
         decomposer.decompose(
             objective="Build something",

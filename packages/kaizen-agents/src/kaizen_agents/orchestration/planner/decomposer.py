@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from kaizen_agents.llm import LLMClient
-from kaizen_agents.types import ConstraintEnvelope
+from kaizen_agents.types import ConstraintEnvelope, _default_envelope
 
 
 @dataclass
@@ -76,9 +76,7 @@ DECOMPOSITION_SCHEMA: dict[str, Any] = {
                     "depends_on": {
                         "type": "array",
                         "items": {"type": "integer"},
-                        "description": (
-                            "Zero-based indices of subtasks that must complete first."
-                        ),
+                        "description": ("Zero-based indices of subtasks that must complete first."),
                     },
                     "output_keys": {
                         "type": "array",
@@ -106,21 +104,20 @@ DECOMPOSITION_SCHEMA: dict[str, Any] = {
 def _build_system_prompt(envelope: ConstraintEnvelope) -> str:
     """Build the system prompt for the decomposer, incorporating envelope constraints."""
     budget_info = ""
-    financial_limit = envelope.financial.get("limit")
-    if financial_limit is not None:
-        budget_info += f"\n- Financial budget limit: ${financial_limit}"
+    if envelope.financial is not None:
+        budget_info += f"\n- Financial budget limit: ${envelope.financial.max_spend_usd}"
 
-    blocked_ops = envelope.operational.get("blocked", [])
+    blocked_ops = envelope.operational.blocked_actions
     if blocked_ops:
         budget_info += f"\n- Blocked operations: {', '.join(blocked_ops)}"
 
-    allowed_ops = envelope.operational.get("allowed", [])
+    allowed_ops = envelope.operational.allowed_actions
     if allowed_ops:
         budget_info += f"\n- Allowed operations: {', '.join(allowed_ops)}"
 
-    data_ceiling = envelope.data_access.get("ceiling")
-    if data_ceiling:
-        budget_info += f"\n- Data access ceiling: {data_ceiling}"
+    confidentiality = envelope.confidentiality_clearance
+    if confidentiality is not None:
+        budget_info += f"\n- Data access clearance: {confidentiality.value}"
 
     constraint_section = ""
     if budget_info:
@@ -231,7 +228,7 @@ class TaskDecomposer:
         Raises:
             ValueError: If the LLM returns an invalid decomposition structure.
         """
-        effective_envelope = envelope or ConstraintEnvelope()
+        effective_envelope = envelope or _default_envelope()
         effective_context = context or {}
 
         system_prompt = _build_system_prompt(effective_envelope)
@@ -264,9 +261,7 @@ class TaskDecomposer:
         """
         raw_subtasks = raw.get("subtasks")
         if not isinstance(raw_subtasks, list):
-            raise ValueError(
-                f"Expected 'subtasks' to be a list, got {type(raw_subtasks).__name__}"
-            )
+            raise ValueError(f"Expected 'subtasks' to be a list, got {type(raw_subtasks).__name__}")
 
         if len(raw_subtasks) == 0:
             raise ValueError("Decomposition produced zero subtasks")

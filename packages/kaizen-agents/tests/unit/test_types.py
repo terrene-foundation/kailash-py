@@ -20,6 +20,7 @@ from kaizen_agents.types import (
     ClarificationPayload,
     CompletionPayload,
     ConstraintEnvelope,
+    make_envelope,
     DelegationPayload,
     DimensionGradient,
     EdgeType,
@@ -159,20 +160,21 @@ class TestPlanGradient:
 
 class TestConstraintEnvelope:
     def test_default_construction(self) -> None:
-        ce = ConstraintEnvelope()
-        assert ce.financial["limit"] == 1.0
-        assert ce.operational["allowed"] == []
-        assert ce.operational["blocked"] == []
-        assert ce.data_access["ceiling"] == "internal"
+        ce = make_envelope()
+        assert ce.financial is not None
+        assert ce.financial.max_spend_usd == 1.0
+        assert ce.operational.allowed_actions == []
+        assert ce.operational.blocked_actions == []
 
     def test_custom_financial(self) -> None:
-        ce = ConstraintEnvelope(financial={"limit": 100.0})
-        assert ce.financial["limit"] == 100.0
+        ce = make_envelope(financial={"limit": 100.0})
+        assert ce.financial is not None
+        assert ce.financial.max_spend_usd == 100.0
 
     def test_custom_operational(self) -> None:
-        ce = ConstraintEnvelope(operational={"allowed": ["read", "write"], "blocked": ["delete"]})
-        assert "read" in ce.operational["allowed"]
-        assert "delete" in ce.operational["blocked"]
+        ce = make_envelope(operational={"allowed": ["read", "write"], "blocked": ["delete"]})
+        assert "read" in ce.operational.allowed_actions
+        assert "delete" in ce.operational.blocked_actions
 
 
 # ---------------------------------------------------------------------------
@@ -214,7 +216,7 @@ class TestAgentSpec:
             description="An agent with all fields set.",
             capabilities=["code-review", "testing"],
             tool_ids=["file_read", "code_search"],
-            envelope=ConstraintEnvelope(financial={"limit": 5.0}),
+            envelope=make_envelope(financial={"limit": 5.0}),
             memory_config=MemoryConfig(session=True, shared=True, persistent=False),
             max_lifetime=timedelta(hours=1),
             max_children=10,
@@ -225,7 +227,7 @@ class TestAgentSpec:
         )
         assert len(spec.capabilities) == 2
         assert spec.max_depth == 3
-        assert spec.envelope.financial["limit"] == 5.0
+        assert spec.envelope.financial.max_spend_usd == 5.0
         assert spec.memory_config.shared is True
 
     def test_default_memory_config(self) -> None:

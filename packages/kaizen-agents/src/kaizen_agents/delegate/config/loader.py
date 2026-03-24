@@ -130,7 +130,7 @@ class KzConfig:
     """Resolved kz configuration."""
 
     # LLM settings
-    model: str = "gpt-4o"
+    model: str = ""
     provider: str = "openai"
     effort_level: EffortLevel = EffortLevel.MEDIUM
 

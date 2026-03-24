@@ -62,25 +62,36 @@ def _cost_handler(args: str, **context: Any) -> str:
     if usage is None:
         return "No usage data available."
 
-    # Rough cost estimates (USD per 1M tokens) — these are approximate
-    # and vary by model.  The user can check their provider dashboard
-    # for exact billing.
-    prompt_cost_per_m = 2.50
-    completion_cost_per_m = 10.00
+    # Use CostModel for accurate per-model pricing instead of hardcoded rates.
+    # Resolve model from config context; fall back to CostModel defaults.
+    from kaizen_agents.governance.cost_model import CostModel
 
-    prompt_cost = (usage.prompt_tokens / 1_000_000) * prompt_cost_per_m
-    completion_cost = (usage.completion_tokens / 1_000_000) * completion_cost_per_m
+    config = context.get("config")
+    model_name = getattr(config, "model", "") if config else ""
+
+    cost_model: CostModel | None = context.get("cost_model")
+    if cost_model is None:
+        cost_model = CostModel()
+
+    rates = cost_model.get_rate(model_name) if model_name else cost_model.get_rate("")
+
+    prompt_cost = (usage.prompt_tokens / 1_000_000) * rates["prompt"]
+    completion_cost = (usage.completion_tokens / 1_000_000) * rates["completion"]
     total_cost = prompt_cost + completion_cost
 
+    model_display = model_name if model_name else "(unknown model)"
     lines = [
         "Session usage:",
+        f"  Model:             {model_display}",
         f"  Prompt tokens:     {usage.prompt_tokens:>10,}",
         f"  Completion tokens: {usage.completion_tokens:>10,}",
         f"  Total tokens:      {usage.total_tokens:>10,}",
         f"  Turns:             {usage.turns:>10}",
         "",
+        f"  Prompt rate:       ${rates['prompt']:>9.2f}/1M tokens",
+        f"  Completion rate:   ${rates['completion']:>9.2f}/1M tokens",
         f"  Estimated cost:    ${total_cost:>9.4f}",
-        "  (approximate — check provider dashboard for exact billing)",
+        "  (check provider dashboard for exact billing)",
     ]
     return "\n".join(lines)
 
@@ -117,8 +128,18 @@ def _effort_handler(args: str, **context: Any) -> str:
         valid = ", ".join(e.value for e in EffortLevel)
         return f"Invalid effort level: {level_str!r}. Valid levels: {valid}"
 
+    # Apply the full effort preset (model, temperature, max_tokens)
+    from kaizen_agents.delegate.config.effort import get_effort_preset
+
+    preset = get_effort_preset(new_level)
     config.effort_level = new_level
-    return f"Effort level switched to: {new_level.value}"
+    config.model = preset.model
+    config.temperature = preset.temperature
+    config.max_tokens = preset.max_tokens
+    return (
+        f"Effort level switched to: {new_level.value}\n"
+        f"Model: {preset.model}, max_tokens: {preset.max_tokens}"
+    )
 
 
 def _context_handler(args: str, **context: Any) -> str:
@@ -149,8 +170,8 @@ def _context_handler(args: str, **context: Any) -> str:
         f"    user:         {user_count}",
         f"    assistant:    {assistant_count}",
         f"    tool:         {tool_count}",
-        f"  Est. tokens:    ~{estimated_tokens:,}",
-        f"  Max tokens:     {max_tokens:,}",
+        f"  Est. input tokens: ~{estimated_tokens:,}",
+        f"  Max output tokens: {max_tokens:,}",
     ]
     return "\n".join(lines)
 
@@ -170,28 +191,119 @@ def _clear_handler(args: str, **context: Any) -> str:
 
 
 def _plan_handler(args: str, **context: Any) -> str:
-    """Trigger multi-agent planning via PlanMonitor."""
+    """Trigger multi-agent planning via GovernedSupervisor.
+
+    Behaviour depends on what is available in context:
+
+    1. No args -> usage message.
+    2. A ``supervisor`` with a ``last_result`` that contains a plan -> format it.
+    3. A ``supervisor`` without a result -> show info about the configured supervisor.
+    4. No supervisor -> show a plan preview with a configuration hint.
+    """
     if not args:
         return "Usage: /plan <objective>"
 
-    return f"Plan mode not yet connected. Objective received: {args}"
+    supervisor = context.get("supervisor")
+    if supervisor is None:
+        return _plan_preview(args, context)
+
+    # If the caller provided a last_result with a plan, display it.
+    last_result = context.get("last_result")
+    if last_result is not None and hasattr(last_result, "plan") and last_result.plan:
+        return _format_plan(last_result)
+
+    return (
+        f"Plan created for: {args}\n"
+        f"Run the objective to see the execution plan.\n"
+        f"Supervisor configured with model={getattr(supervisor, 'model', 'unknown')}"
+    )
+
+
+def _plan_preview(objective: str, context: dict[str, Any]) -> str:
+    """Preview what a plan would look like without a supervisor.
+
+    Called when ``/plan`` is invoked but no ``GovernedSupervisor`` is
+    available in the context.  Shows the objective and a hint for how
+    to wire up a real supervisor.
+    """
+    model = context.get("model", "unknown")
+    return (
+        f"Plan preview for: {objective}\n"
+        f"Model: {model}\n"
+        f"To execute this plan, configure a GovernedSupervisor first.\n"
+        f"Example: supervisor = GovernedSupervisor(model='{model}', budget_usd=10.0)"
+    )
+
+
+def _format_plan(result: Any) -> str:
+    """Format a SupervisorResult plan as ASCII for terminal display.
+
+    Renders each node with a status icon, its description, and (for
+    completed/failed/held nodes) a one-line detail.  Finishes with a
+    summary line showing completion counts.
+    """
+    from kaizen_agents.types import PlanNodeState
+
+    plan = result.plan
+    lines = [f"Plan ({len(plan.nodes)} nodes):"]
+
+    status_icons = {
+        PlanNodeState.COMPLETED: "[done]",
+        PlanNodeState.FAILED: "[FAIL]",
+        PlanNodeState.HELD: "[HELD]",
+        PlanNodeState.RUNNING: "[....]",
+        PlanNodeState.PENDING: "[    ]",
+        PlanNodeState.READY: "[    ]",
+        PlanNodeState.SKIPPED: "[skip]",
+    }
+
+    for node_id, node in plan.nodes.items():
+        icon = status_icons.get(node.state, "[????]")
+        desc = node.agent_spec.description if node.agent_spec else node_id
+        lines.append(f"  {icon} {node_id}: {desc}")
+
+        if node.state == PlanNodeState.COMPLETED and node.output:
+            preview = str(node.output)[:80]
+            lines.append(f"           -> {preview}")
+        elif node.state == PlanNodeState.FAILED and node.error:
+            lines.append(f"           !! {node.error}")
+        elif node.state == PlanNodeState.HELD:
+            lines.append(f"           ** Awaiting approval")
+
+    # Summary
+    total = len(plan.nodes)
+    done = sum(1 for n in plan.nodes.values() if n.state == PlanNodeState.COMPLETED)
+    failed = sum(1 for n in plan.nodes.values() if n.state == PlanNodeState.FAILED)
+    held = sum(1 for n in plan.nodes.values() if n.state == PlanNodeState.HELD)
+
+    lines.append(f"\n{done}/{total} completed, {failed} failed, {held} held")
+    lines.append(f"{'SUCCESS' if result.success else 'INCOMPLETE'}")
+
+    return "\n".join(lines)
 
 
 def _compact_handler(args: str, **context: Any) -> str:
-    """Manually trigger context compaction."""
+    """Manually trigger context compaction.
+
+    Prunes older messages and replaces them with a compact summary while
+    preserving the system prompt and the most recent turn pairs.
+    """
     conversation = context.get("conversation")
     if conversation is None:
         return "No conversation to compact."
 
-    import json
+    result = conversation.compact()
 
-    raw = json.dumps(conversation.messages, default=str)
-    estimated_tokens = len(raw) // 4
-    message_count = len(conversation.messages)
+    if result.before_count == result.after_count:
+        return (
+            f"Conversation has {result.before_count} messages "
+            f"(~{result.before_tokens:,} tokens) -- nothing to compact."
+        )
 
     return (
-        f"Conversation length: {message_count} messages, ~{estimated_tokens:,} tokens.\n"
-        "Context compaction not yet connected."
+        f"Compacted: {result.before_count} -> {result.after_count} messages, "
+        f"~{result.before_tokens:,} -> ~{result.after_tokens:,} tokens "
+        f"({result.reduction_pct:.0f}% reduction)"
     )
 
 
@@ -318,8 +430,8 @@ def register_builtins(registry: CommandRegistry) -> None:
     registry.register("effort", "Show or switch effort level (low/medium/high)", _effort_handler)
     registry.register("context", "Show context window usage", _context_handler)
     registry.register("clear", "Clear conversation history (keep system prompt)", _clear_handler)
-    registry.register("plan", "Trigger multi-agent planning", _plan_handler)
-    registry.register("compact", "Summarize conversation length", _compact_handler)
+    registry.register("plan", "Execute governed multi-agent planning", _plan_handler)
+    registry.register("compact", "Compact conversation by pruning older messages", _compact_handler)
     registry.register("save", "Save current session (/save <name>)", _save_handler)
     registry.register("load", "Load a saved session (/load <name>)", _load_handler)
     registry.register("sessions", "List saved sessions", _sessions_handler)

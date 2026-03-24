@@ -63,7 +63,7 @@ def validate(yaml_path: str, verbose: bool) -> None:
 
     # --- Load YAML ---
     try:
-        from pact.governance.yaml_loader import ConfigurationError, load_org_yaml
+        from kailash.trust.pact.yaml_loader import ConfigurationError, load_org_yaml
 
         loaded = load_org_yaml(path)
     except ConfigurationError as e:
@@ -78,7 +78,7 @@ def validate(yaml_path: str, verbose: bool) -> None:
 
     # --- Compile ---
     try:
-        from pact.governance.compilation import CompilationError, compile_org
+        from kailash.trust.pact.compilation import CompilationError, compile_org
 
         compiled = compile_org(org_def)
     except CompilationError as e:

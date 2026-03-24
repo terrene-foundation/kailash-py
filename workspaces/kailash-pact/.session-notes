@@ -1,30 +1,29 @@
-## Session: 2026-03-21 — Trust Merge + PACT Integration + Release
+# Session Notes — 2026-03-24
 
-### Accomplished
-- EATP + trust-plane merged into kailash.trust (kailash 2.0.0)
-- kailash-pact integrated: 977 tests passing (959 unit + 18 integration)
-- Red team: 6 CRITICALs fixed (timing, NaN, file I/O, bounded collections)
-- Codified: pact-specialist agent, 8 skill files (29-pact/), governance rules
-- Security-reviewer updated with governance attack vectors
-- COC synced to kailash-coc-claude-py (PR #5)
-- PR #27 merged to main, GitHub Release v2.0.0 created
-- All 5 packages published to PyPI: kailash 2.0.0, kaizen 2.0.0, pact 0.2.0, dataflow 1.1.0, nexus 1.4.3
-- Trusted publisher configured for kailash-pact on PyPI (environment: pypi)
-- Stale `pip install trust-plane/eatp` references fixed across 9 source files
-- Cross-SDK security invariants from kailash-rs added to pact-specialist
+## Accomplished
+- Resolved ALL 9 open GitHub issues (#59-68) in one session
+- #68: Session file permissions (0o600/0o700, atomic writes via os.open)
+- #67: Clearance mapping auto-resolved by #60 (restricted→RESTRICTED)
+- #66: CostModel class with per-model rates, wired to GovernedSupervisor + /cost handler
+- #65: /compact (sync message pruning) + /plan (GovernedSupervisor display)
+- #60: DataClassification→ConfidentialityLevel (CARE terminology, 12+ files)
+- #59: ConstraintEnvelope→ConstraintEnvelopeConfig big-bang (11 production files, Pydantic)
+- #61: External HELD mechanism (GovernanceHeldError catch, resolve_hold(), asyncio.Event)
+- #63: 22 governance modules moved to src/kailash/trust/pact/ (api/cli/mcp stay in kailash-pact)
+- #64: PactEngine facade (Dual Plane bridge, progressive disclosure, v0.4.0)
+- Red team converged: all HIGH/MEDIUM findings fixed (thread safety, NaN validation, bounded collections, TOCTOU, fuzzy match)
+- Dependency audit: numpy/pandas/discord/graphql/scipy/starlette — guarded or declared
+- 189 new tests, 3243 total passing, 0 regressions
 
-### In Progress
-- Nothing — all milestones complete, release published
+## In Progress
+- Nothing — all issues closed, red team converged
 
-### Blockers
+## Blockers
 - None
 
-### Next Steps
-- Merge COC sync PR #5 on kailash-coc-claude-py
-- Update kailash-coc-claude-py pyproject.toml dependency pins to 2.0.0
-- Address tracked HIGH findings (pre-existing in trust-plane) in a dedicated hardening workspace
-- Consider publishing eatp/trust-plane shim packages for backward compat
-
-### Active Todo
-- All todos completed (M1-M7 kailash-pact, M0-M5+M7 eatp-merge)
-- M6 (publishing) done — all packages on PyPI
+## Next Steps
+- Commit all changes (large changeset: ~130 files, 1771 insertions, 11048 deletions)
+- Create PR for review
+- Release kailash core 2.1.0 + kailash-pact 0.4.0 + kaizen-agents minor bump
+- COC sync to USE repos
+- Address pre-existing kailash-pact HIGHs from prior session (H1 GovernanceDecision, H2 TOCTOU in _evaluate)

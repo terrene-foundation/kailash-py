@@ -255,8 +255,8 @@ Notice what is NOT connected:
 ## Step 5: Load and Use
 
 ```python
-from pact.governance.yaml_loader import load_org_yaml
-from pact.governance.engine import GovernanceEngine
+from kailash.trust.pact.yaml_loader import load_org_yaml
+from kailash.trust.pact.engine import GovernanceEngine
 
 loaded = load_org_yaml("bookstore-org.yaml")
 engine = GovernanceEngine(loaded.org_definition)
@@ -279,8 +279,8 @@ print(f"Sales Associate refund: {verdict.level}")
 Assign AI agents to roles and let them operate within their governance boundaries:
 
 ```python
-from pact.governance.agent import PactGovernedAgent
-from pact.governance.decorators import governed_tool
+from kailash.trust.pact.agent import PactGovernedAgent
+from kailash.trust.pact.decorators import governed_tool
 from pact.build.config.schema import TrustPostureLevel
 
 @governed_tool("read", cost=0.0)
@@ -341,7 +341,7 @@ dependencies = [
 Use `MockGovernedAgent` for deterministic testing without LLM calls:
 
 ```python
-from pact.governance.testing import MockGovernedAgent
+from kailash.trust.pact.testing import MockGovernedAgent
 
 mock = MockGovernedAgent(
     engine=engine,
@@ -359,7 +359,7 @@ Test blocked actions:
 
 ```python
 import pytest
-from pact.governance.agent import GovernanceBlockedError
+from kailash.trust.pact.agent import GovernanceBlockedError
 
 mock = MockGovernedAgent(
     engine=engine,

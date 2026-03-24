@@ -13,7 +13,7 @@ Provides LLM-driven intelligence on top of kailash-kaizen SDK primitives:
 - Governance: accountability, clearance, cascade, vacancy, dereliction, bypass, budget
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from kaizen_agents.supervisor import GovernedSupervisor, SupervisorResult
 

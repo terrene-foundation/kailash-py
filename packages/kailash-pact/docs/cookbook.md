@@ -7,8 +7,8 @@ Working recipes for common governance tasks. Each recipe is self-contained and c
 ```python
 from pact.build.config.schema import DepartmentConfig, TeamConfig
 from pact.build.org.builder import OrgDefinition
-from pact.governance.compilation import RoleDefinition, compile_org
-from pact.governance.engine import GovernanceEngine
+from kailash.trust.pact.compilation import RoleDefinition, compile_org
+from kailash.trust.pact.engine import GovernanceEngine
 
 # Define the org structure
 org = OrgDefinition(
@@ -51,8 +51,8 @@ for addr in sorted(compiled.nodes.keys()):
 ## Recipe 2: Load an Organization from YAML
 
 ```python
-from pact.governance.yaml_loader import load_org_yaml
-from pact.governance.engine import GovernanceEngine
+from kailash.trust.pact.yaml_loader import load_org_yaml
+from kailash.trust.pact.engine import GovernanceEngine
 
 loaded = load_org_yaml("my-org.yaml")
 engine = GovernanceEngine(loaded.org_definition)
@@ -64,7 +64,7 @@ print(f"Departments: {len([n for n in engine.get_org().nodes.values() if n.node_
 ## Recipe 3: Set Up Role Envelopes
 
 ```python
-from pact.governance.envelopes import RoleEnvelope
+from kailash.trust.pact.envelopes import RoleEnvelope
 from pact.build.config.schema import (
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
@@ -112,7 +112,7 @@ engine.set_role_envelope(support_envelope)
 ## Recipe 4: Grant Clearances
 
 ```python
-from pact.governance.clearance import RoleClearance
+from kailash.trust.pact.clearance import RoleClearance
 from pact.build.config.schema import ConfidentialityLevel
 
 # CEO gets SECRET clearance (self-granted as root authority)
@@ -151,7 +151,7 @@ engine.grant_clearance(
 ## Recipe 5: Create a Cross-Functional Bridge
 
 ```python
-from pact.governance.access import PactBridge
+from kailash.trust.pact.access import PactBridge
 from pact.build.config.schema import ConfidentialityLevel
 from datetime import datetime, timedelta, UTC
 
@@ -181,7 +181,7 @@ engine.create_bridge(PactBridge(
 ## Recipe 6: Create a Knowledge Share Policy
 
 ```python
-from pact.governance.access import KnowledgeSharePolicy
+from kailash.trust.pact.access import KnowledgeSharePolicy
 from pact.build.config.schema import ConfidentialityLevel
 
 # Operations shares RESTRICTED data with Support
@@ -197,7 +197,7 @@ engine.create_ksp(KnowledgeSharePolicy(
 ## Recipe 7: Check Knowledge Access
 
 ```python
-from pact.governance.knowledge import KnowledgeItem
+from kailash.trust.pact.knowledge import KnowledgeItem
 from pact.build.config.schema import ConfidentialityLevel, TrustPostureLevel
 
 # A confidential operations report
@@ -227,8 +227,8 @@ print(f"Support Lead: allowed={decision.allowed}, reason={decision.reason}")
 ## Recipe 8: Create a Governed Agent
 
 ```python
-from pact.governance.agent import PactGovernedAgent, GovernanceBlockedError
-from pact.governance.decorators import governed_tool
+from kailash.trust.pact.agent import PactGovernedAgent, GovernanceBlockedError
+from kailash.trust.pact.decorators import governed_tool
 from pact.build.config.schema import TrustPostureLevel
 
 # Define tools with governance metadata
@@ -270,8 +270,8 @@ except GovernanceBlockedError as e:
 ## Recipe 9: Use the MockGovernedAgent for Testing
 
 ```python
-from pact.governance.testing import MockGovernedAgent
-from pact.governance.decorators import governed_tool
+from kailash.trust.pact.testing import MockGovernedAgent
+from kailash.trust.pact.decorators import governed_tool
 from pact.build.config.schema import TrustPostureLevel
 
 @governed_tool("read", cost=0.0)
@@ -319,7 +319,7 @@ data = ctx.to_dict()
 print(f"Serialized: {data}")
 
 # Deserialize
-from pact.governance.context import GovernanceContext
+from kailash.trust.pact.context import GovernanceContext
 restored = GovernanceContext.from_dict(data)
 assert restored.role_address == ctx.role_address
 ```
@@ -327,8 +327,8 @@ assert restored.role_address == ctx.role_address
 ## Recipe 11: Explain Governance Decisions
 
 ```python
-from pact.governance.explain import describe_address, explain_access
-from pact.governance.knowledge import KnowledgeItem
+from kailash.trust.pact.explain import describe_address, explain_access
+from kailash.trust.pact.knowledge import KnowledgeItem
 from pact.build.config.schema import ConfidentialityLevel, TrustPostureLevel
 
 # Describe a positional address in human-readable form
@@ -363,7 +363,7 @@ print(trace)
 ## Recipe 12: Use SQLite Persistence
 
 ```python
-from pact.governance.engine import GovernanceEngine
+from kailash.trust.pact.engine import GovernanceEngine
 
 # Create engine with SQLite backend
 engine = GovernanceEngine(
@@ -393,7 +393,7 @@ python -m pact.governance.cli validate my-org.yaml
 ## Recipe 14: Set Up Posture-Based Default Envelopes
 
 ```python
-from pact.governance.envelopes import default_envelope_for_posture
+from kailash.trust.pact.envelopes import default_envelope_for_posture
 from pact.build.config.schema import TrustPostureLevel
 
 # Get conservative default envelopes for each posture level

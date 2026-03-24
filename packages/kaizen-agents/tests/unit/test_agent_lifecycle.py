@@ -29,6 +29,7 @@ from kaizen_agents._agent_lifecycle import AgentLifecycleManager
 from kaizen_agents.types import (
     AgentSpec as LocalAgentSpec,
     ConstraintEnvelope,
+    make_envelope,
     MemoryConfig,
 )
 
@@ -59,7 +60,7 @@ def _make_local_spec(
         description=f"Agent: {name}",
         capabilities=capabilities or ["test"],
         tool_ids=tool_ids or [],
-        envelope=envelope or ConstraintEnvelope(financial={"limit": 5.0}),
+        envelope=envelope or make_envelope(financial={"limit": 5.0}),
         memory_config=memory_config or MemoryConfig(session=True, shared=False, persistent=False),
         max_lifetime=max_lifetime,
         max_children=max_children,
@@ -420,7 +421,7 @@ class TestSpecConversion:
     async def test_envelope_converted_to_dict(self) -> None:
         """ConstraintEnvelope should be serialized to a plain dict."""
         manager, _, _ = _make_lifecycle_manager()
-        envelope = ConstraintEnvelope(
+        envelope = make_envelope(
             financial={"limit": 50.0},
             operational={"allowed": ["search"], "blocked": ["delete"]},
         )
@@ -429,9 +430,9 @@ class TestSpecConversion:
         sdk_spec = manager._convert_spec(local)
 
         assert isinstance(sdk_spec.envelope, dict)
-        assert sdk_spec.envelope["financial"] == {"limit": 50.0}
-        assert sdk_spec.envelope["operational"]["allowed"] == ["search"]
-        assert sdk_spec.envelope["operational"]["blocked"] == ["delete"]
+        assert sdk_spec.envelope["financial"]["max_spend_usd"] == 50.0
+        assert sdk_spec.envelope["operational"]["allowed_actions"] == ["search"]
+        assert sdk_spec.envelope["operational"]["blocked_actions"] == ["delete"]
 
     async def test_memory_config_converted_to_dict(self) -> None:
         """MemoryConfig should be serialized to a plain dict with session/shared/persistent keys."""
@@ -514,7 +515,7 @@ class TestSpecConversion:
     async def test_full_round_trip_spawn(self) -> None:
         """spawn_agent should use _convert_spec internally and produce a valid instance."""
         manager, _, registry = _make_lifecycle_manager()
-        envelope = ConstraintEnvelope(
+        envelope = make_envelope(
             financial={"limit": 100.0},
             operational={"allowed": ["read", "write"], "blocked": []},
             temporal={"window_start": "08:00", "window_end": "18:00"},

@@ -17,7 +17,11 @@ Design Philosophy:
 """
 
 from .base import AlertNode, AlertSeverity
-from .discord import DiscordAlertNode
+
+try:
+    from .discord import DiscordAlertNode
+except ImportError:
+    DiscordAlertNode = None  # type: ignore[assignment,misc]
 
 __all__ = [
     "AlertNode",

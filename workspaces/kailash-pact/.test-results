@@ -1,14 +1,14 @@
-commit: 70653845 (base) + uncommitted M1-M4 changes
-timestamp: 2026-03-21T17:50:00+08:00
-baseline_pass: 0 (package was not importable before integration)
-baseline_fail: 0
-final_pass: 959
-final_fail: 0
-final_skipped: 10
-new_tests: 0 (all tests migrated from standalone pact repo)
+timestamp: 2026-03-24T04:30:00Z
+baseline_kaizen_agents_pass: 1041
+baseline_kaizen_agents_fail: 0
+baseline_kailash_pact_pass: 1111
+baseline_kailash_pact_fail: 0
+final_kaizen_agents_pass: 1185
+final_kaizen_agents_fail: 0
+final_kailash_pact_pass: 1156
+final_kailash_pact_fail: 0
+final_trust_pact_pass: 902
+final_trust_pact_fail: 0
+new_tests: 189
 regressions: 0
-skipped_reasons:
-  - 3 tests: GradientEngine/ConstraintEnvelope deprecation bridge (old API removed)
-  - 7 tests: pact.use.* execution layer not yet migrated
-core_regression_check: 88 passed (tests/unit/core/)
-command: python -m pytest packages/kailash-pact/tests/ -x --tb=short -q --timeout=120
+command: pytest packages/kaizen-agents/tests/ packages/kailash-pact/tests/ tests/trust/pact/ -x --tb=short -q

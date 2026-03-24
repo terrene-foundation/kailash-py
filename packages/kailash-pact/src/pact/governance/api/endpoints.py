@@ -30,14 +30,14 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from pact.governance.config import (
+from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
     TrustPostureLevel,
 )
-from pact.governance.access import KnowledgeSharePolicy, PactBridge
+from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
 from pact.governance.api.auth import GovernanceAuth
 from pact.governance.api.events import GovernanceEventType, emit_governance_event
 from pact.governance.api.schemas import (
@@ -52,10 +52,10 @@ from pact.governance.api.schemas import (
     VerifyActionRequest,
     VerifyActionResponse,
 )
-from pact.governance.clearance import RoleClearance, VettingStatus
-from pact.governance.engine import GovernanceEngine
-from pact.governance.envelopes import RoleEnvelope
-from pact.governance.knowledge import KnowledgeItem
+from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+from kailash.trust.pact.engine import GovernanceEngine
+from kailash.trust.pact.envelopes import RoleEnvelope
+from kailash.trust.pact.knowledge import KnowledgeItem
 
 logger = logging.getLogger(__name__)
 

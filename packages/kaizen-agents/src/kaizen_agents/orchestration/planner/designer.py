@@ -21,6 +21,11 @@ from typing import Any
 
 from kaizen_agents.llm import LLMClient
 from kaizen_agents.orchestration.planner.decomposer import Subtask
+from kailash.trust.pact.config import (
+    ConstraintEnvelopeConfig,
+    FinancialConstraintConfig,
+    OperationalConstraintConfig,
+)
 from kaizen_agents.types import (
     AgentSpec,
     ConstraintEnvelope,
@@ -327,7 +332,9 @@ class SpawnPolicy:
         Returns:
             A SpawnDecision indicating spawn or inline with justification.
         """
-        financial_limit = parent_envelope.financial.get("limit", float("inf"))
+        financial_limit = (
+            parent_envelope.financial.max_spend_usd if parent_envelope.financial else float("inf")
+        )
 
         # If budget is very tight, prefer inline to avoid spawn overhead
         if financial_limit < self._budget_threshold:
@@ -459,11 +466,10 @@ def _build_design_user_prompt(
 ) -> str:
     """Build the user prompt for agent design."""
     budget_str = ""
-    financial_limit = parent_envelope.financial.get("limit")
-    if financial_limit is not None:
-        budget_str = f"\n  Financial limit: ${financial_limit}"
+    if parent_envelope.financial is not None:
+        budget_str = f"\n  Financial limit: ${parent_envelope.financial.max_spend_usd}"
 
-    blocked = parent_envelope.operational.get("blocked", [])
+    blocked = parent_envelope.operational.blocked_actions
     blocked_str = ""
     if blocked:
         blocked_str = f"\n  Blocked operations: {', '.join(blocked)}"
@@ -755,8 +761,8 @@ class AgentDesigner:
         - Financial: child.limit <= parent.remaining (uses ratio)
         - Operational: inherits parent's constraints
         - Temporal: inherits parent's window
-        - Data Access: inherits parent's ceiling and scopes
-        - Communication: inherits parent's recipients and channels
+        - Data Access: inherits parent's paths and blocked types
+        - Communication: inherits parent's channels
 
         Args:
             parent: The parent's constraint envelope.
@@ -767,24 +773,22 @@ class AgentDesigner:
         Returns:
             A new ConstraintEnvelope that is strictly tighter than the parent's.
         """
-        parent_limit = parent.financial.get("limit", 10.0)
+        import uuid
+
+        parent_limit = parent.financial.max_spend_usd if parent.financial else 10.0
         child_limit = parent_limit * financial_ratio
 
-        return ConstraintEnvelope(
-            financial={"limit": child_limit},
-            operational={
-                "allowed": list(parent.operational.get("allowed", [])),
-                "blocked": list(parent.operational.get("blocked", [])),
-            },
-            temporal=dict(parent.temporal),
-            data_access={
-                "ceiling": parent.data_access.get("ceiling", "internal"),
-                "scopes": list(parent.data_access.get("scopes", [])),
-            },
-            communication={
-                "recipients": list(parent.communication.get("recipients", [])),
-                "channels": list(parent.communication.get("channels", [])),
-            },
+        return ConstraintEnvelopeConfig(
+            id=f"child-{uuid.uuid4().hex[:8]}",
+            financial=FinancialConstraintConfig(max_spend_usd=child_limit),
+            operational=OperationalConstraintConfig(
+                allowed_actions=list(parent.operational.allowed_actions),
+                blocked_actions=list(parent.operational.blocked_actions),
+            ),
+            temporal=parent.temporal,
+            data_access=parent.data_access,
+            communication=parent.communication,
+            confidentiality_clearance=parent.confidentiality_clearance,
         )
 
     def _validate_and_tighten(
@@ -808,28 +812,52 @@ class AgentDesigner:
         Returns:
             The spec with any invalid tools removed and envelope constraints enforced.
         """
+        import uuid
+
         available_set = set(available_tools)
         valid_tools = [t for t in spec.tool_ids if t in available_set]
         spec.tool_ids = valid_tools
 
         # Enforce financial tightening
-        parent_limit = parent_envelope.financial.get("limit", float("inf"))
-        child_limit = spec.envelope.financial.get("limit", parent_limit)
+        parent_limit = (
+            parent_envelope.financial.max_spend_usd if parent_envelope.financial else float("inf")
+        )
+        child_limit = (
+            spec.envelope.financial.max_spend_usd if spec.envelope.financial else parent_limit
+        )
         if child_limit > parent_limit:
-            spec.envelope.financial["limit"] = parent_limit
+            child_limit = parent_limit
 
         # Ensure blocked operations are a superset of parent's
-        parent_blocked = set(parent_envelope.operational.get("blocked", []))
-        child_blocked = set(spec.envelope.operational.get("blocked", []))
-        merged_blocked = parent_blocked | child_blocked
-        spec.envelope.operational["blocked"] = sorted(merged_blocked)
+        parent_blocked = set(parent_envelope.operational.blocked_actions)
+        child_blocked = set(spec.envelope.operational.blocked_actions)
+        merged_blocked = sorted(parent_blocked | child_blocked)
 
         # Ensure allowed operations are a subset of parent's (if parent restricts)
-        parent_allowed = parent_envelope.operational.get("allowed", [])
+        parent_allowed = parent_envelope.operational.allowed_actions
         if parent_allowed:
             parent_allowed_set = set(parent_allowed)
-            child_allowed = spec.envelope.operational.get("allowed", [])
+            child_allowed = spec.envelope.operational.allowed_actions
             filtered_allowed = [a for a in child_allowed if a in parent_allowed_set]
-            spec.envelope.operational["allowed"] = filtered_allowed
+        else:
+            filtered_allowed = list(spec.envelope.operational.allowed_actions)
+
+        # Reconstruct the envelope with enforced constraints (frozen model)
+        spec.envelope = ConstraintEnvelopeConfig(
+            id=(
+                spec.envelope.id
+                if hasattr(spec.envelope, "id")
+                else f"tightened-{uuid.uuid4().hex[:8]}"
+            ),
+            financial=FinancialConstraintConfig(max_spend_usd=child_limit),
+            operational=OperationalConstraintConfig(
+                allowed_actions=filtered_allowed,
+                blocked_actions=merged_blocked,
+            ),
+            temporal=spec.envelope.temporal,
+            data_access=spec.envelope.data_access,
+            communication=spec.envelope.communication,
+            confidentiality_clearance=spec.envelope.confidentiality_clearance,
+        )
 
         return spec

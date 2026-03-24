@@ -34,9 +34,9 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
-from pact.governance.config import TrustPostureLevel
-from pact.governance.agent import PactGovernedAgent
-from pact.governance.engine import GovernanceEngine
+from kailash.trust.pact.config import TrustPostureLevel
+from kailash.trust.pact.agent import PactGovernedAgent
+from kailash.trust.pact.engine import GovernanceEngine
 
 logger = logging.getLogger(__name__)
 

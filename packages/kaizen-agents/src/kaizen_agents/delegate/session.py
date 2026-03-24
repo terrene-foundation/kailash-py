@@ -9,8 +9,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
+import stat
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
@@ -20,6 +23,18 @@ if TYPE_CHECKING:
     from kaizen_agents.delegate.config.loader import KzConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _secure_write(path: Path, content: str) -> None:
+    """Write content to file with 0o600 permissions, no TOCTOU window on POSIX."""
+    if sys.platform == "win32":
+        path.write_text(content, encoding="utf-8")
+        return
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, stat.S_IRUSR | stat.S_IWUSR)
+    try:
+        os.write(fd, content.encode("utf-8"))
+    finally:
+        os.close(fd)
 
 
 class SessionManager:
@@ -35,6 +50,8 @@ class SessionManager:
     def __init__(self, sessions_dir: Path | str) -> None:
         self._dir = Path(sessions_dir)
         self._dir.mkdir(parents=True, exist_ok=True)
+        if sys.platform != "win32":
+            os.chmod(self._dir, 0o700)
 
     @property
     def sessions_dir(self) -> Path:
@@ -96,7 +113,7 @@ class SessionManager:
         }
 
         path = self._session_path(name)
-        path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+        _secure_write(path, json.dumps(data, indent=2, default=str))
         logger.info("Session saved: %s", path)
         return path
 
@@ -191,7 +208,7 @@ class SessionManager:
             data = json.loads(dest_path.read_text(encoding="utf-8"))
             data["name"] = new_name
             data["timestamp"] = datetime.now(timezone.utc).isoformat()
-            dest_path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+            _secure_write(dest_path, json.dumps(data, indent=2, default=str))
         except (json.JSONDecodeError, OSError) as exc:
             logger.error("Failed to update forked session metadata: %s", exc)
 

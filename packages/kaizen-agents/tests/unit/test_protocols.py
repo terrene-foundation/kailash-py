@@ -33,6 +33,7 @@ from kaizen_agents.orchestration.protocols.escalation import (
 from kaizen_agents.types import (
     CompletionPayload,
     ConstraintEnvelope,
+    make_envelope,
     EscalationPayload,
     EscalationSeverity,
     Priority,
@@ -75,7 +76,7 @@ class TestDelegationComposition:
         )
 
         protocol = DelegationProtocol(llm_client=llm)
-        envelope = ConstraintEnvelope(financial={"limit": 5.0})
+        envelope = make_envelope(financial={"limit": 5.0})
         context = {
             "stack": "Python/FastAPI",
             "auth_provider": "Auth0",
@@ -114,7 +115,7 @@ class TestDelegationComposition:
         payload = protocol.compose_delegation(
             subtask_description="Urgent task",
             context={},
-            envelope=ConstraintEnvelope(),
+            envelope=make_envelope(),
             deadline=deadline,
         )
 
@@ -135,7 +136,7 @@ class TestDelegationComposition:
         payload = protocol.compose_delegation(
             subtask_description="Fix critical error",
             context={"error_log": "StackOverflow at line 42"},
-            envelope=ConstraintEnvelope(),
+            envelope=make_envelope(),
         )
 
         assert payload.priority == Priority.CRITICAL
@@ -155,7 +156,7 @@ class TestDelegationComposition:
         payload = protocol.compose_delegation(
             subtask_description="Clean up temp files",
             context={},
-            envelope=ConstraintEnvelope(),
+            envelope=make_envelope(),
         )
 
         assert payload.priority == Priority.LOW
@@ -174,7 +175,7 @@ class TestDelegationComposition:
         payload = protocol.compose_delegation(
             subtask_description="Task",
             context={},
-            envelope=ConstraintEnvelope(),
+            envelope=make_envelope(),
         )
 
         assert payload.priority == Priority.NORMAL
@@ -193,7 +194,7 @@ class TestDelegationComposition:
         payload = protocol.compose_delegation(
             subtask_description="Original description",
             context={},
-            envelope=ConstraintEnvelope(),
+            envelope=make_envelope(),
         )
 
         assert payload.task_description == "Original description"
@@ -212,7 +213,7 @@ class TestDelegationComposition:
         protocol.compose_delegation(
             subtask_description="Test",
             context={},
-            envelope=ConstraintEnvelope(),
+            envelope=make_envelope(),
         )
 
         call_kwargs = llm.complete_structured.call_args
@@ -233,7 +234,7 @@ class TestDelegationComposition:
         payload = protocol.compose_delegation(
             subtask_description="Test",
             context={"exists": "value"},
-            envelope=ConstraintEnvelope(),
+            envelope=make_envelope(),
         )
 
         assert payload.context_snapshot == {"exists": "value"}

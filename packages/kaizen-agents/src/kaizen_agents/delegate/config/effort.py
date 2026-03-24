@@ -31,29 +31,40 @@ class EffortPreset:
 
 
 # Default presets — can be overridden by config.
-_PRESETS: dict[EffortLevel, EffortPreset] = {
-    EffortLevel.LOW: EffortPreset(
-        level=EffortLevel.LOW,
-        model="gpt-4o-mini",
-        temperature=0.2,
-        max_tokens=4096,
-        reasoning_effort="low",
-    ),
-    EffortLevel.MEDIUM: EffortPreset(
-        level=EffortLevel.MEDIUM,
-        model="gpt-4o",
-        temperature=0.4,
-        max_tokens=16384,
-        reasoning_effort="medium",
-    ),
-    EffortLevel.HIGH: EffortPreset(
-        level=EffortLevel.HIGH,
-        model="o3",
-        temperature=1.0,
-        max_tokens=65536,
-        reasoning_effort="high",
-    ),
-}
+def _default_presets() -> dict[EffortLevel, EffortPreset]:
+    """Build presets using .env model names when available."""
+    import os
+
+    default_model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
+    dev_model = os.environ.get("OPENAI_DEV_MODEL", "gpt-4o-mini")
+    prod_model = os.environ.get("OPENAI_PROD_MODEL", default_model)
+
+    return {
+        EffortLevel.LOW: EffortPreset(
+            level=EffortLevel.LOW,
+            model=dev_model,
+            temperature=0.2,
+            max_tokens=4096,
+            reasoning_effort="low",
+        ),
+        EffortLevel.MEDIUM: EffortPreset(
+            level=EffortLevel.MEDIUM,
+            model=default_model,
+            temperature=0.4,
+            max_tokens=16384,
+            reasoning_effort="medium",
+        ),
+        EffortLevel.HIGH: EffortPreset(
+            level=EffortLevel.HIGH,
+            model=prod_model,
+            temperature=1.0,
+            max_tokens=65536,
+            reasoning_effort="high",
+        ),
+    }
+
+
+_PRESETS: dict[EffortLevel, EffortPreset] | None = None
 
 
 def get_effort_preset(
@@ -82,6 +93,10 @@ def get_effort_preset(
     """
     if isinstance(level, str):
         level = EffortLevel(level.lower())
+
+    global _PRESETS
+    if _PRESETS is None:
+        _PRESETS = _default_presets()
 
     base = _PRESETS[level]
 

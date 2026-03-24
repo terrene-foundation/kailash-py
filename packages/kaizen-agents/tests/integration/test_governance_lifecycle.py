@@ -183,18 +183,14 @@ class TestGovernanceEnforcement:
         audit.record_genesis("root", {"clearance": "C3"})
 
         # Register classified values
-        enforcer.register_value(
-            ClassifiedValue("public_data", "hello", DataClassification.C0_PUBLIC)
-        )
-        enforcer.register_value(
-            ClassifiedValue("api_key", "sk-secret", DataClassification.C3_SECRET)
-        )
+        enforcer.register_value(ClassifiedValue("public_data", "hello", DataClassification.PUBLIC))
+        enforcer.register_value(ClassifiedValue("api_key", "sk-secret", DataClassification.SECRET))
 
         # Child with C1 clearance
         tracker.register_child("child", "root")
 
         # C1 agent cannot see C3 data
-        visible = enforcer.filter_for_clearance(DataClassification.C1_INTERNAL)
+        visible = enforcer.filter_for_clearance(DataClassification.RESTRICTED)
         assert "public_data" in visible
         assert "api_key" not in visible
 

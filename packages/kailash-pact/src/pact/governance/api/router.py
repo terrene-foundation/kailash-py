@@ -23,7 +23,7 @@ from slowapi.util import get_remote_address
 
 from pact.governance.api.auth import GovernanceAuth
 from pact.governance.api.endpoints import create_governance_router
-from pact.governance.engine import GovernanceEngine
+from kailash.trust.pact.engine import GovernanceEngine
 
 logger = logging.getLogger(__name__)
 

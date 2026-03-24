@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from pact.governance.config import (
+from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     DepartmentConfig,
@@ -23,14 +23,14 @@ from pact.governance.config import (
     TeamConfig,
     TrustPostureLevel,
 )
-from pact.governance.access import PactBridge
+from kailash.trust.pact.access import PactBridge
 from pact.governance.api.auth import GovernanceAuth
 from pact.governance.api.router import create_governance_app
-from pact.governance.clearance import RoleClearance, VettingStatus
-from pact.governance.compilation import CompiledOrg, RoleDefinition, compile_org
-from pact.governance.engine import GovernanceEngine
-from pact.governance.envelopes import RoleEnvelope
-from pact.governance.knowledge import KnowledgeItem
+from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
+from kailash.trust.pact.engine import GovernanceEngine
+from kailash.trust.pact.envelopes import RoleEnvelope
+from kailash.trust.pact.knowledge import KnowledgeItem
 
 
 # ===================================================================

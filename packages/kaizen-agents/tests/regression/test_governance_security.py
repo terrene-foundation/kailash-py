@@ -168,37 +168,37 @@ class TestClassificationBypass:
     def test_monotonic_floor_enforced(self) -> None:
         """Cannot lower classification once set."""
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("key", "val", DataClassification.C3_SECRET))
+        enforcer.register_value(ClassifiedValue("key", "val", DataClassification.SECRET))
         with pytest.raises(ValueError, match="Monotonic floor"):
-            enforcer.register_value(ClassifiedValue("key", "val", DataClassification.C0_PUBLIC))
+            enforcer.register_value(ClassifiedValue("key", "val", DataClassification.PUBLIC))
 
     def test_hidden_api_key_in_text(self) -> None:
         """API key embedded in free text is still classified as secret."""
         assigner = ClassificationAssigner()
         text = "The config says api_key = sk-abc123def456ghi789jklmnop and that's the key"
         level = assigner.classify("config_text", text)
-        assert level >= DataClassification.C3_SECRET
+        assert level >= DataClassification.SECRET
 
     def test_ssn_in_description(self) -> None:
         """SSN embedded in a description field is classified as top-secret."""
         assigner = ClassificationAssigner()
         level = assigner.classify("description", "Employee SSN: 123-45-6789")
-        assert level >= DataClassification.C4_TOP_SECRET
+        assert level >= DataClassification.TOP_SECRET
 
     def test_c1_agent_cannot_see_c3(self) -> None:
         """C1-cleared agent cannot access C3 data through filter."""
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("secret", "data", DataClassification.C3_SECRET))
-        visible = enforcer.filter_for_clearance(DataClassification.C1_INTERNAL)
+        enforcer.register_value(ClassifiedValue("secret", "data", DataClassification.SECRET))
+        visible = enforcer.filter_for_clearance(DataClassification.RESTRICTED)
         assert "secret" not in visible
 
     def test_c0_agent_sees_nothing_classified(self) -> None:
         """C0 agent only sees C0 data."""
         enforcer = ClearanceEnforcer()
-        enforcer.register_value(ClassifiedValue("pub", "x", DataClassification.C0_PUBLIC))
-        enforcer.register_value(ClassifiedValue("int", "y", DataClassification.C1_INTERNAL))
-        enforcer.register_value(ClassifiedValue("sec", "z", DataClassification.C3_SECRET))
-        visible = enforcer.filter_for_clearance(DataClassification.C0_PUBLIC)
+        enforcer.register_value(ClassifiedValue("pub", "x", DataClassification.PUBLIC))
+        enforcer.register_value(ClassifiedValue("int", "y", DataClassification.RESTRICTED))
+        enforcer.register_value(ClassifiedValue("sec", "z", DataClassification.SECRET))
+        visible = enforcer.filter_for_clearance(DataClassification.PUBLIC)
         assert visible == {"pub": "x"}
 
 

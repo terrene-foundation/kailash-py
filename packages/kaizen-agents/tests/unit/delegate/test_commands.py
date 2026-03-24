@@ -276,11 +276,12 @@ class TestBuiltinCommands:
 
     # -- /plan --
 
-    def test_plan_placeholder(self, registry):
+    def test_plan_without_supervisor_returns_preview(self, registry):
         output = registry.execute("/plan build a web app")
         assert output is not None
-        assert "not yet connected" in output.lower()
-        assert "build a web app" in output
+        assert "plan preview" in output.lower()
+        assert "build a web app" in output.lower()
+        assert "governedsupervisor" in output.lower()
 
     def test_plan_no_args(self, registry):
         output = registry.execute("/plan")
@@ -289,11 +290,11 @@ class TestBuiltinCommands:
 
     # -- /compact --
 
-    def test_compact_placeholder(self, registry, conversation):
+    def test_compact_small_conversation_noop(self, registry, conversation):
         output = registry.execute("/compact", conversation=conversation)
         assert output is not None
         assert "messages" in output.lower()
-        assert "not yet connected" in output.lower()
+        assert "nothing to compact" in output.lower()
 
     def test_compact_no_conversation(self, registry):
         output = registry.execute("/compact")
