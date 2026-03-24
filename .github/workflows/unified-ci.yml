@@ -97,7 +97,7 @@ jobs:
       - name: Type check (pyright)
         run: |
           uv pip install pyright --python .venv/bin/python
-          .venv/bin/pyright src/kailash/ --pythonversion ${{ matrix.python-version }} --level basic
+          .venv/bin/pyright src/kailash/ --pythonversion ${{ matrix.python-version }} --level warning
 
       - name: Test (Tier 1 — unit tests)
         timeout-minutes: 5

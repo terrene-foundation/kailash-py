@@ -41,7 +41,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install kailash with trust extra
-        run: pip install -e ".[trust,dev]"
+        run: pip install -e ".[trust,trust-sso,trust-encryption,dev]"
 
       - name: Run trust protocol tests
         run: pytest tests/trust/ -x -q --tb=short --ignore=tests/trust/plane
