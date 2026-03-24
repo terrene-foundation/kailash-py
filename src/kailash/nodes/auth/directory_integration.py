@@ -220,30 +220,30 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
                 search_query = query or kwargs.get("query") or kwargs.get("filter")
                 search_filters = filters if isinstance(filters, dict) else None
                 result = await self._search_directory(
-                    search_query, search_filters, attributes, **kwargs
+                    search_query, search_filters, attributes, **kwargs  # type: ignore[arg-type]
                 )
             elif action == "authenticate":
                 auth_credentials = credentials or {
                     "username": kwargs.get("username"),
                     "password": kwargs.get("password"),
                 }
-                result = await self._authenticate_user(auth_credentials, **kwargs)
+                result = await self._authenticate_user(auth_credentials, **kwargs)  # type: ignore[arg-type]
             elif action == "get_user":
-                result = await self._get_user(user_id, attributes, **kwargs)
+                result = await self._get_user(user_id, attributes, **kwargs)  # type: ignore[arg-type]
             elif action == "get_groups":
                 result = await self._get_groups(user_id, filters, **kwargs)
             elif action == "get_user_groups":
-                result = await self._get_user_groups(kwargs.get("username"))
+                result = await self._get_user_groups(kwargs.get("username"))  # type: ignore[arg-type]
             elif action == "get_user_details":
                 result = await self._get_user_details(
-                    kwargs.get("username"),
+                    kwargs.get("username"),  # type: ignore[arg-type]
                     **{k: v for k, v in kwargs.items() if k != "username"},
                 )
             elif action == "provision":
-                result = await self._provision_user(user_id, attributes, **kwargs)
+                result = await self._provision_user(user_id, attributes, **kwargs)  # type: ignore[arg-type]
             elif action == "provision_user":
                 result = await self._provision_user_full(
-                    kwargs.get("user_data"),
+                    kwargs.get("user_data"),  # type: ignore[arg-type]
                     **{k: v for k, v in kwargs.items() if k != "user_data"},
                 )
             elif action == "test_connection":
@@ -339,7 +339,7 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             self.sync_status[self.directory_type] = sync_stats
 
             # Log sync completion
-            await self.audit_logger.execute_async(
+            await self.audit_logger.execute_async(  # type: ignore[attr-defined]
                 action="directory_sync_completed", details=sync_stats
             )
 
@@ -588,14 +588,14 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             auth_result["user_dn"] = f"CN={username},OU=Users,DC=test,DC=com"
 
             # Log successful authentication
-            await self.audit_logger.execute_async(
+            await self.audit_logger.execute_async(  # type: ignore[attr-defined]
                 action="directory_authentication_success",
                 user_id=username,
                 details={"directory_type": self.directory_type},
             )
         else:
             # Log failed authentication
-            await self.security_logger.execute_async(
+            await self.security_logger.execute_async(  # type: ignore[attr-defined]
                 event_type="authentication_failure",
                 severity="HIGH",
                 source="directory_integration",
@@ -764,7 +764,7 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         }
 
         # Log user provisioning
-        await self.audit_logger.execute_async(
+        await self.audit_logger.execute_async(  # type: ignore[attr-defined]
             action="user_provisioned_from_directory",
             user_id=user_id,
             details={
@@ -1372,7 +1372,7 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         else:
             severity = "MEDIUM"
 
-        await self.security_logger.execute_async(
+        await self.security_logger.execute_async(  # type: ignore[attr-defined]
             event_type=event_type,
             severity=severity,
             source="directory_integration_node",

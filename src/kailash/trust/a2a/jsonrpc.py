@@ -378,7 +378,7 @@ class A2AMethodHandlers:
                 delegatee_agent_id=delegation.delegatee_id,
                 task_id=delegation.task_id,
                 capabilities_delegated=delegation.capabilities_delegated,
-                constraints=delegation.constraint_subset,
+                constraints=delegation.constraint_subset,  # type: ignore[arg-type]
                 delegated_at=delegation.delegated_at,
                 expires_at=delegation.expires_at,
                 signature=delegation.signature,

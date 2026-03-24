@@ -240,13 +240,17 @@ class PseudoAgent:
         """
         # Check session validity
         if not self.is_session_valid:
-            raise ValueError(f"Session expired for {self._origin.human_id}. User must re-authenticate.")
+            raise ValueError(
+                f"Session expired for {self._origin.human_id}. User must re-authenticate."
+            )
 
         # Check capability whitelist if configured
         if self._config.allowed_capabilities is not None:
             for cap in capabilities:
                 if cap not in self._config.allowed_capabilities:
-                    raise ValueError(f"Capability '{cap}' not in allowed capabilities list for {self._origin.human_id}")
+                    raise ValueError(
+                        f"Capability '{cap}' not in allowed capabilities list for {self._origin.human_id}"
+                    )
 
         # Create initial context from this human
         ctx = self.create_execution_context(constraints)
@@ -310,13 +314,14 @@ class PseudoAgent:
                 # and all downstream delegations
                 await self._trust_ops.revoke_delegation(
                     delegation_id=delegation_id,
-                    delegator_id=self.agent_id,
-                    cascade=True,
+                    delegatee_id=self.agent_id,
                 )
                 revoked.append(delegation_id)
             except Exception as e:
                 # Log the error but continue revoking others
-                logger.warning(f"Failed to revoke delegation {delegation_id}: {e}. Continuing with other revocations.")
+                logger.warning(
+                    f"Failed to revoke delegation {delegation_id}: {e}. Continuing with other revocations."
+                )
                 failed.append((delegation_id, str(e)))
 
         # Clear tracking regardless of individual failures
@@ -482,7 +487,7 @@ class PseudoAgentFactory:
 
         origin = HumanOrigin(
             human_id=human_id,
-            display_name=display_name,
+            display_name=display_name or human_id,
             auth_provider=auth_provider,
             session_id=session_id,
             authenticated_at=authenticated_at,

@@ -245,14 +245,14 @@ class ExternalAgentRateLimiter:
 
         try:
             # Create connection pool for performance
-            self.connection_pool = ConnectionPool.from_url(
+            self.connection_pool = ConnectionPool.from_url(  # type: ignore[union-attr]
                 self.redis_url,
                 max_connections=self.config.redis_max_connections,
                 decode_responses=False,  # Binary mode for performance
             )
 
             # Create Redis client with pool
-            self.redis_client = redis.Redis(
+            self.redis_client = redis.Redis(  # type: ignore[union-attr]
                 connection_pool=self.connection_pool,
                 socket_timeout=self.config.redis_timeout_seconds,
                 socket_connect_timeout=self.config.redis_timeout_seconds,

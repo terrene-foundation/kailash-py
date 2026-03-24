@@ -282,7 +282,7 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             ),
         }
 
-    def run(
+    def run(  # type: ignore[override]
         self,
         action: str,
         data_type: Optional[str] = None,
@@ -384,7 +384,7 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 for purpose, granted in consent_updates.items():
                     if granted:
                         consent_result = self._record_consent(
-                            user_id,
+                            user_id or "",  # type: ignore[arg-type]
                             purpose,
                             {
                                 "consent_source": consent_source,
@@ -398,7 +398,7 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 result = {
                     "success": True,
                     "consent_record_id": (
-                        consent_records[0] if consent_records else "consent_" + user_id
+                        consent_records[0] if consent_records else "consent_" + (user_id or "")  # type: ignore[operator]
                     ),
                     "consent_valid": len(consent_records) > 0,
                     "consent_records": consent_records,
@@ -407,13 +407,13 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
             elif action == "get_consent_status":
                 user_id = kwargs.get("user_id")
-                result = self._get_consent_status(user_id)
+                result = self._get_consent_status(user_id or "")  # type: ignore[arg-type]
 
             elif action == "process_access_request":
                 user_id = kwargs.get("user_id")
                 include_data_sources = kwargs.get("include_data_sources", False)
                 format_type = kwargs.get("format", "json")
-                result = self._process_access_request(user_id, f"request_{user_id}")
+                result = self._process_access_request(user_id or "", f"request_{user_id or ''}")  # type: ignore[arg-type]
 
             elif action == "process_erasure_request":
                 user_id = kwargs.get("user_id")
@@ -421,7 +421,7 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 legal_basis_check = kwargs.get("legal_basis_check", True)
                 verify_erasure = kwargs.get("verify_erasure", True)
                 result = self._process_erasure_request_detailed(
-                    user_id, erasure_scope, legal_basis_check, verify_erasure
+                    user_id or "", erasure_scope, legal_basis_check, verify_erasure  # type: ignore[arg-type]
                 )
 
             elif action == "export_user_data":
@@ -432,7 +432,7 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     "include_processing_history", True
                 )
                 result = self._export_user_data(
-                    user_id,
+                    user_id or "",  # type: ignore[arg-type]
                     format_type,
                     include_consent_history,
                     include_processing_history,
@@ -447,7 +447,7 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 lawful_basis = kwargs.get("lawful_basis")
                 user_id = kwargs.get("user_id")
                 result = self._validate_lawful_basis(
-                    processing_purpose, lawful_basis, user_id
+                    processing_purpose or "", lawful_basis or "", user_id  # type: ignore[arg-type]
                 )
 
             elif action == "assess_privacy_design":
@@ -533,7 +533,7 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         # Check for required consent
         consent_required = self._check_consent_requirements(data_type, data)
         if consent_required and not self._has_valid_consent(
-            data.get("user_id"), data_type
+            data.get("user_id") or "", data_type  # type: ignore[arg-type]
         ):
             compliance_issues.append("Valid consent required for processing this data")
             recommendations.append("Obtain explicit consent from data subject")
@@ -996,11 +996,11 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         purpose = params.get("purpose")
 
         if action == "record":
-            return self._record_consent(user_id, purpose, params)
+            return self._record_consent(user_id or "", purpose or "", params)  # type: ignore[arg-type]
         elif action == "withdraw":
-            return self._withdraw_consent(user_id, purpose)
+            return self._withdraw_consent(user_id or "", purpose or "")  # type: ignore[arg-type]
         elif action == "check":
-            return self._check_consent_status(user_id, purpose)
+            return self._check_consent_status(user_id or "", purpose or "")  # type: ignore[arg-type]
         else:
             return {"success": False, "error": f"Unknown consent action: {action}"}
 
@@ -1349,13 +1349,13 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         policy_lower = policy.lower()
 
         if "year" in policy_lower:
-            years = int(re.search(r"(\d+)", policy_lower).group(1))
+            years = int(re.search(r"(\d+)", policy_lower).group(1))  # type: ignore[union-attr]
             return years * 365
         elif "month" in policy_lower:
-            months = int(re.search(r"(\d+)", policy_lower).group(1))
+            months = int(re.search(r"(\d+)", policy_lower).group(1))  # type: ignore[union-attr]
             return months * 30
         elif "day" in policy_lower:
-            days = int(re.search(r"(\d+)", policy_lower).group(1))
+            days = int(re.search(r"(\d+)", policy_lower).group(1))  # type: ignore[union-attr]
             return days
         else:
             return 365 * 7  # Default 7 years
@@ -1883,7 +1883,7 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             **self.compliance_stats,
             "frameworks_supported": self.frameworks,
             "auto_anonymize_enabled": self.auto_anonymize,
-            "ai_analysis_enabled": self.ai_analysis,
+            "ai_analysis_enabled": self.ai_analysis,  # type: ignore[attr-defined]
             "retention_policies_count": len(self.retention_policies),
             "consent_records_count": len(self.consent_records),
             "pending_requests": len(

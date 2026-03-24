@@ -507,7 +507,11 @@ class BudgetTracker:
                     )
 
         # C3: Save the snapshot that was captured consistently inside the lock.
-        if snapshot_to_save is not None and self._tracker_id is not None:
+        if (
+            snapshot_to_save is not None
+            and self._tracker_id is not None
+            and self._store is not None
+        ):
             try:
                 self._store.save_snapshot(self._tracker_id, snapshot_to_save)
             except Exception:

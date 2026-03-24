@@ -196,7 +196,7 @@ class AccessToken:
 
     def is_expired(self) -> bool:
         """Check if token is expired."""
-        return time.time() > self.expires_at
+        return time.time() > (self.expires_at or 0)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary format."""
@@ -587,7 +587,7 @@ class JWTManager:
                 ]:
                     payload[key] = token_data_dict[key]
 
-        token = jwt.encode(payload, self.private_key, algorithm=self.algorithm)
+        token = jwt.encode(payload, self.private_key, algorithm=self.algorithm)  # type: ignore[arg-type]
 
         # For backward compatibility, return string if called with dict
         if token_data_dict:
@@ -597,8 +597,8 @@ class JWTManager:
             token=token,
             expires_in=expires_in,
             scope=scope,
-            client_id=client_id,
-            subject=subject,
+            client_id=client_id,  # type: ignore[arg-type]
+            subject=subject,  # type: ignore[arg-type]
             audience=audience,
             issued_at=now,
             expires_at=expires_at,
@@ -614,7 +614,7 @@ class JWTManager:
             Token payload or None if invalid
         """
         try:
-            payload = jwt.decode(token, self.public_key, algorithms=[self.algorithm])
+            payload = jwt.decode(token, self.public_key, algorithms=[self.algorithm])  # type: ignore[arg-type]
 
             # Verify token type
             if payload.get("token_type") != "access_token":
@@ -659,7 +659,7 @@ class JWTManager:
         else:
             payload["client_id"] = token_data
 
-        return jwt.encode(payload, self.private_key, algorithm=self.algorithm)
+        return jwt.encode(payload, self.private_key, algorithm=self.algorithm)  # type: ignore[arg-type]
 
     def verify_refresh_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Verify JWT refresh token.
@@ -671,9 +671,9 @@ class JWTManager:
             Token payload if valid, None otherwise
         """
         try:
-            payload = jwt.decode(
+            payload = jwt.decode(  # type: ignore[arg-type]
                 token,
-                self.public_key,
+                self.public_key,  # type: ignore[reportArgumentType]
                 algorithms=[self.algorithm],
                 options={"verify_aud": False},
             )
@@ -702,7 +702,7 @@ class JWTManager:
         Returns:
             JWKS public key
         """
-        public_numbers = self.public_key.public_numbers()
+        public_numbers = self.public_key.public_numbers()  # type: ignore[union-attr]
 
         # Convert to base64url encoding
         def int_to_base64url(value: int) -> str:
@@ -716,8 +716,8 @@ class JWTManager:
                     "kty": "RSA",
                     "use": "sig",
                     "alg": self.algorithm,
-                    "n": int_to_base64url(public_numbers.n),
-                    "e": int_to_base64url(public_numbers.e),
+                    "n": int_to_base64url(public_numbers.n),  # type: ignore[union-attr]
+                    "e": int_to_base64url(public_numbers.e),  # type: ignore[union-attr]
                 }
             ]
         }
@@ -1103,6 +1103,7 @@ class AuthorizationServer:
                 raise AuthorizationError("Invalid client credentials")
 
         # First try to verify the refresh token as JWT
+        refresh_token_obj = None
         try:
             token_data = self.jwt_manager.verify_refresh_token(refresh_token)
             if token_data:
@@ -1125,6 +1126,8 @@ class AuthorizationServer:
             if not refresh_token_obj:
                 raise AuthorizationError("Invalid refresh token")
 
+        if not refresh_token_obj:
+            raise AuthorizationError("Invalid refresh token")
         if refresh_token_obj.client_id != client_id:
             raise AuthorizationError("Client mismatch")
 
@@ -1633,7 +1636,7 @@ class OAuth2Client:
         expires_in = token_response.get("expires_in", 3600)
         self._token_expires_at = time.time() + expires_in
 
-        return self._access_token
+        return self._access_token  # type: ignore[return-value]
 
     async def refresh_token(self, refresh_token: str) -> Dict[str, Any]:
         """Refresh access token.

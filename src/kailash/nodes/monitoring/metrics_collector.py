@@ -243,7 +243,7 @@ class MetricsCollectorNode(AsyncNode):
 
         # CPU metrics
         if "system.cpu" in metric_types or "system.cpu.percent" in metric_types:
-            cpu_percent = psutil.cpu_percent(interval=0.1, percpu=True)
+            cpu_percent = psutil.cpu_percent(interval=0.1, percpu=True)  # type: ignore[union-attr]
             metrics.append(
                 {
                     "name": "system_cpu_usage_percent",
@@ -268,7 +268,7 @@ class MetricsCollectorNode(AsyncNode):
 
         # Memory metrics
         if "system.memory" in metric_types:
-            memory = psutil.virtual_memory()
+            memory = psutil.virtual_memory()  # type: ignore[union-attr]
             metrics.extend(
                 [
                     {
@@ -300,9 +300,9 @@ class MetricsCollectorNode(AsyncNode):
 
         # Disk metrics
         if "system.disk" in metric_types:
-            for partition in psutil.disk_partitions():
+            for partition in psutil.disk_partitions():  # type: ignore[union-attr]
                 try:
-                    usage = psutil.disk_usage(partition.mountpoint)
+                    usage = psutil.disk_usage(partition.mountpoint)  # type: ignore[union-attr]
                     metrics.extend(
                         [
                             {
@@ -342,7 +342,7 @@ class MetricsCollectorNode(AsyncNode):
 
         # Network metrics
         if "system.network" in metric_types:
-            net_io = psutil.net_io_counters()
+            net_io = psutil.net_io_counters()  # type: ignore[union-attr]
             metrics.extend(
                 [
                     {
@@ -389,7 +389,7 @@ class MetricsCollectorNode(AsyncNode):
 
         for pid in pids_to_monitor:
             try:
-                process = psutil.Process(pid)
+                process = psutil.Process(pid)  # type: ignore[union-attr]
 
                 # Process CPU usage
                 cpu_percent = process.cpu_percent(interval=0.1)
@@ -447,7 +447,7 @@ class MetricsCollectorNode(AsyncNode):
                     }
                 )
 
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+            except (psutil.NoSuchProcess, psutil.AccessDenied):  # type: ignore[union-attr]
                 self.logger.warning(f"Could not collect metrics for PID {pid}")
                 continue
 

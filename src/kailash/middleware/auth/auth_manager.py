@@ -296,7 +296,7 @@ class MiddlewareAuthManager:
             raise HTTPException(status_code=401, detail="Invalid API key")
 
     async def check_permission(
-        self, user_id: str, permission: str, resource: Dict[str, Any] = None
+        self, user_id: str, permission: str, resource: Optional[Dict[str, Any]] = None  # type: ignore[assignment]
     ) -> bool:
         """
         Check user permission using PermissionCheckNode.
@@ -329,7 +329,7 @@ class MiddlewareAuthManager:
 
         return granted
 
-    def get_current_user_dependency(self, required_permissions: List[str] = None):
+    def get_current_user_dependency(self, required_permissions: List[str] = None):  # type: ignore[reportArgumentType]
         """
         Create FastAPI dependency for user authentication.
 

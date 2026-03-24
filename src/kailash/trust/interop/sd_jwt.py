@@ -112,23 +112,31 @@ def _create_disclosure(claim_name: str, claim_value: Any) -> tuple[str, str]:
 def _ed25519_sign(payload_bytes: bytes, private_key_b64: str) -> bytes:
     """Sign bytes with Ed25519 private key, returning raw 64-byte signature."""
     if not NACL_AVAILABLE:
-        raise ImportError("PyNaCl is required for SD-JWT signing. Install with: pip install pynacl")
+        raise ImportError(
+            "PyNaCl is required for SD-JWT signing. Install with: pip install pynacl"
+        )
     private_key_bytes = base64.b64decode(private_key_b64)
-    signing_key = SigningKey(private_key_bytes)
+    signing_key = SigningKey(private_key_bytes)  # type: ignore[misc]
     signed = signing_key.sign(payload_bytes)
     return signed.signature
 
 
-def _ed25519_verify(payload_bytes: bytes, signature_bytes: bytes, public_key_b64: str) -> None:
+def _ed25519_verify(
+    payload_bytes: bytes, signature_bytes: bytes, public_key_b64: str
+) -> None:
     """Verify Ed25519 signature.  Raises on failure."""
     if not NACL_AVAILABLE:
-        raise ImportError("PyNaCl is required for SD-JWT verification. Install with: pip install pynacl")
+        raise ImportError(
+            "PyNaCl is required for SD-JWT verification. Install with: pip install pynacl"
+        )
     public_key_bytes = base64.b64decode(public_key_b64)
-    verify_key = VerifyKey(public_key_bytes)
+    verify_key = VerifyKey(public_key_bytes)  # type: ignore[misc]
     try:
         verify_key.verify(payload_bytes, signature_bytes)
     except BadSignatureError as exc:
-        raise InvalidSignatureError(f"SD-JWT signature verification failed: {exc}") from exc
+        raise InvalidSignatureError(
+            f"SD-JWT signature verification failed: {exc}"
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +159,9 @@ def _serialize_capability_claims(attestation: CapabilityAttestation) -> Dict[str
         "constraints": attestation.constraints,
         "attester_id": attestation.attester_id,
         "attested_at": attestation.attested_at.isoformat(),
-        "expires_at": (attestation.expires_at.isoformat() if attestation.expires_at else None),
+        "expires_at": (
+            attestation.expires_at.isoformat() if attestation.expires_at else None
+        ),
         "signature": attestation.signature,
         "scope": attestation.scope,
     }
@@ -193,9 +203,13 @@ def create_sd_jwt(
         ImportError: If PyNaCl is not installed.
     """
     if not signing_key:
-        raise ValueError("signing_key must be a non-empty string. Provide a base64-encoded Ed25519 private key.")
+        raise ValueError(
+            "signing_key must be a non-empty string. Provide a base64-encoded Ed25519 private key."
+        )
     if not claims:
-        raise ValueError("claims must be a non-empty dictionary. Provide at least one claim for the SD-JWT.")
+        raise ValueError(
+            "claims must be a non-empty dictionary. Provide at least one claim for the SD-JWT."
+        )
 
     if always_visible is None:
         always_visible = []
@@ -302,10 +316,14 @@ def verify_sd_jwt(token: str, public_key: str) -> Dict[str, Any]:
         ImportError: If PyNaCl is not installed.
     """
     if not public_key:
-        raise ValueError("public_key must be a non-empty string. Provide a base64-encoded Ed25519 public key.")
+        raise ValueError(
+            "public_key must be a non-empty string. Provide a base64-encoded Ed25519 public key."
+        )
 
     if not token or "~" not in token:
-        raise ValueError("Invalid SD-JWT token format. Expected combined format: <JWT>~<disc1>~...~")
+        raise ValueError(
+            "Invalid SD-JWT token format. Expected combined format: <JWT>~<disc1>~...~"
+        )
 
     # Split into JWT and disclosures
     parts = token.split("~")
@@ -315,7 +333,9 @@ def verify_sd_jwt(token: str, public_key: str) -> Dict[str, Any]:
     # Parse and verify the JWT
     jwt_segments = jwt_part.split(".")
     if len(jwt_segments) != 3:
-        raise ValueError(f"Invalid JWT format: expected 3 segments (header.payload.signature), got {len(jwt_segments)}")
+        raise ValueError(
+            f"Invalid JWT format: expected 3 segments (header.payload.signature), got {len(jwt_segments)}"
+        )
 
     header_b64, payload_b64, signature_b64 = jwt_segments
 
@@ -503,7 +523,10 @@ def _apply_reasoning_confidentiality(
         )
 
     # Compute hash if not already present -- needed for all non-PUBLIC levels
-    if "reasoning_trace_hash" not in delegation_dict or delegation_dict["reasoning_trace_hash"] is None:
+    if (
+        "reasoning_trace_hash" not in delegation_dict
+        or delegation_dict["reasoning_trace_hash"] is None
+    ):
         trace_obj = ReasoningTrace.from_dict(reasoning_data)
         delegation_dict["reasoning_trace_hash"] = hash_reasoning_trace(trace_obj)
 
@@ -530,7 +553,9 @@ def _apply_reasoning_confidentiality(
     if level == ConfidentialityLevel.CONFIDENTIAL:
         # Strip alternatives_considered at CONFIDENTIAL level (copy to avoid mutation)
         delegation_dict["reasoning_trace"] = {
-            k: v for k, v in delegation_dict["reasoning_trace"].items() if k != "alternatives_considered"
+            k: v
+            for k, v in delegation_dict["reasoning_trace"].items()
+            if k != "alternatives_considered"
         }
 
     return delegation_dict

@@ -668,7 +668,7 @@ class LogProcessorNode(AsyncNode):
                 threshold = alert_config.get("threshold", 1)
 
                 if pattern_name in pattern_results:
-                    match_count = pattern_results[pattern_name]["match_count"]
+                    match_count = pattern_results[pattern_name]["match_count"]  # type: ignore[index]
                     if match_count >= threshold:
                         triggered_alerts.append(
                             {

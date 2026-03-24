@@ -902,7 +902,11 @@ class GovernanceEngine:
             )
 
             anc_order = level_order.get(anc_level, 0)
-            current_order = level_order.get(most_restrictive_level, -1)
+            current_order = (
+                level_order.get(most_restrictive_level, -1)
+                if most_restrictive_level is not None
+                else -1
+            )
 
             if anc_order > current_order:
                 most_restrictive_level = anc_level

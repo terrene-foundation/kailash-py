@@ -732,7 +732,7 @@ class MCPServer:
             )
 
             # Register with FastMCP
-            mcp_tool = self._mcp.tool()(enhanced_func)
+            mcp_tool = self._mcp.tool()(enhanced_func)  # type: ignore[union-attr]
 
             # Track in registry with enhanced metadata
             self._tool_registry[tool_name] = {
@@ -759,7 +759,7 @@ class MCPServer:
                 f"auth: {required_permission is not None}, "
                 f"rate_limited: {rate_limit is not None})"
             )
-            return mcp_tool
+            return mcp_tool  # type: ignore[reportReturnType]
 
         return decorator
 
@@ -817,8 +817,8 @@ class MCPServer:
                         .get("id", "anonymous")
                     )
                     try:
-                        self.auth_manager.rate_limiter.check_rate_limit(
-                            user_id, tool_name, **rate_limit
+                        self.auth_manager.rate_limiter.check_rate_limit(  # type: ignore[reportOptionalMemberAccess]
+                            user_id, tool_name, **rate_limit  # type: ignore[reportCallIssue]
                         )
                     except RateLimitError as e:
                         if self.error_aggregator:
@@ -904,7 +904,7 @@ class MCPServer:
                 # Cache result if enabled
                 if cache_key and self.cache.enabled:
                     # For sync functions with Redis, handle async operations
-                    if cache.is_redis:
+                    if cache.is_redis:  # type: ignore[reportOptionalMemberAccess]
                         try:
                             # Check if we're already in an async context
                             try:
@@ -914,11 +914,11 @@ class MCPServer:
                                 pass
                             except RuntimeError:
                                 # Not in async context, we can use asyncio.run
-                                asyncio.run(cache.aset(cache_lookup_key, result))
+                                asyncio.run(cache.aset(cache_lookup_key, result))  # type: ignore[reportOptionalMemberAccess, reportArgumentType]
                         except Exception as e:
                             logger.debug(f"Redis cache set error in sync context: {e}")
                     else:
-                        cache.set(cache_lookup_key, result)
+                        cache.set(cache_lookup_key, result)  # type: ignore[reportOptionalMemberAccess, reportArgumentType]
                     logger.debug(f"Cached result for {tool_name}")
 
                 # Track success metrics
@@ -1024,8 +1024,8 @@ class MCPServer:
                         .get("id", "anonymous")
                     )
                     try:
-                        self.auth_manager.rate_limiter.check_rate_limit(
-                            user_id, tool_name, **rate_limit
+                        self.auth_manager.rate_limiter.check_rate_limit(  # type: ignore[reportOptionalMemberAccess]
+                            user_id, tool_name, **rate_limit  # type: ignore[reportCallIssue]
                         )
                     except RateLimitError as e:
                         if self.error_aggregator:

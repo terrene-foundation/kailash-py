@@ -169,7 +169,7 @@ class EdgeCoordinationNode(AsyncNode):
         """Handle leader election operation."""
         self.metrics["elections_started"] += 1
 
-        result = await self.leader_election.start_election()
+        result = await self.leader_election.start_election()  # type: ignore[union-attr]
 
         return {
             "success": True,
@@ -180,7 +180,7 @@ class EdgeCoordinationNode(AsyncNode):
 
     async def _handle_get_leader(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Handle get current leader operation."""
-        leader_info = self.leader_election.get_current_leader()
+        leader_info = self.leader_election.get_current_leader()  # type: ignore[union-attr]
 
         return {
             "success": True,
@@ -200,7 +200,7 @@ class EdgeCoordinationNode(AsyncNode):
             }
 
         # Check if we have a leader
-        leader_info = self.leader_election.get_current_leader()
+        leader_info = self.leader_election.get_current_leader()  # type: ignore[union-attr]
         if not leader_info["leader"]:
             return {
                 "success": False,
@@ -210,7 +210,7 @@ class EdgeCoordinationNode(AsyncNode):
         self.metrics["consensus_proposals"] += 1
 
         # Submit proposal through Raft
-        result = await self.raft_node.propose(proposal)
+        result = await self.raft_node.propose(proposal)  # type: ignore[union-attr]
 
         return {
             "success": result["success"],
@@ -228,7 +228,7 @@ class EdgeCoordinationNode(AsyncNode):
         self.metrics["ordering_requests"] += 1
 
         # Order events
-        result = await self.ordering_service.order_events(events)
+        result = await self.ordering_service.order_events(events)  # type: ignore[union-attr]
 
         return {
             "success": True,

@@ -354,9 +354,9 @@ class CacheNode(AsyncNode):
             redis_url = kwargs.get("redis_url", "redis://localhost:6379")
             try:
                 # Create a new client for this operation
-                redis_client = redis.from_url(redis_url, decode_responses=False)
+                redis_client = redis.from_url(redis_url, decode_responses=False)  # type: ignore[possibly-unbound]
                 # Test connection
-                await redis_client.ping()
+                await redis_client.ping()  # type: ignore[misc]
 
                 # Store the client for this operation
                 self._redis_client = redis_client
@@ -675,7 +675,7 @@ class CacheNode(AsyncNode):
 
             # Calculate hit rate
             total_reads = stats["hits"] + stats["misses"]
-            stats["hit_rate"] = stats["hits"] / total_reads if total_reads > 0 else 0
+            stats["hit_rate"] = stats["hits"] / total_reads if total_reads > 0 else 0  # type: ignore[assignment]
 
             return {
                 "success": True,
@@ -1035,7 +1035,7 @@ class CacheNode(AsyncNode):
     ) -> tuple[Any, bool]:
         """Get value from Redis cache."""
         try:
-            raw_value = await self._redis_client.get(key)
+            raw_value = await self._redis_client.get(key)  # type: ignore[union-attr]
             if raw_value is None:
                 return None, False
 
@@ -1091,9 +1091,9 @@ class CacheNode(AsyncNode):
 
             # Store in Redis
             if ttl > 0:
-                await self._redis_client.setex(key, ttl, serialized)
+                await self._redis_client.setex(key, ttl, serialized)  # type: ignore[union-attr]
             else:
-                await self._redis_client.set(key, serialized)
+                await self._redis_client.set(key, serialized)  # type: ignore[union-attr]
 
             return True
 

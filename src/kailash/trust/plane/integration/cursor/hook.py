@@ -116,7 +116,7 @@ def _log_verdict(
         mode: Current enforcement mode.
         details: Additional context from the verdict response.
     """
-    entry = {
+    entry: dict[str, Any] = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "tool": tool_name,
         "resource": resource,

@@ -158,7 +158,7 @@ def _audit_record_to_dict(record: AuditRecord) -> Dict[str, Any]:
             else:
                 data[field_name] = value
     elif hasattr(record, "to_dict"):
-        data = record.to_dict()
+        data = record.to_dict()  # type: ignore[attr-defined]
     else:
         # Fallback: use __dict__
         for k, v in vars(record).items():
@@ -368,7 +368,9 @@ def verify_witness_export(
     )
 
     try:
-        signature_valid = verify_signature(sign_payload, export.signature, authority_public_key)
+        signature_valid = verify_signature(
+            sign_payload, export.signature, authority_public_key
+        )
     except Exception as e:
         signature_valid = False
         errors.append(f"Signature verification failed: {e}")
@@ -380,7 +382,9 @@ def verify_witness_export(
         json.dumps(export.chain_hashes, sort_keys=True),
     )
     if not chain_valid:
-        errors.append("Hash chain integrity check failed — records may have been tampered with")
+        errors.append(
+            "Hash chain integrity check failed — records may have been tampered with"
+        )
 
     # 3. Verify non-redactable fields are present
     for record in export.records:
@@ -390,7 +394,9 @@ def verify_witness_export(
         for required_field in NON_REDACTABLE_FIELDS:
             if required_field in record.data:
                 if _is_redacted(record.data[required_field]):
-                    errors.append(f"Non-redactable field '{required_field}' is redacted in record {record.id}")
+                    errors.append(
+                        f"Non-redactable field '{required_field}' is redacted in record {record.id}"
+                    )
 
     return WitnessVerificationResult(
         valid=signature_valid and chain_valid and len(errors) == 0,

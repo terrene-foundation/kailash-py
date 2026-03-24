@@ -2062,6 +2062,6 @@ class TrustOperations:
             Base64-encoded public key string, or None if not found
         """
         try:
-            return self.key_manager.get_public_key(agent_id)
+            return self.key_manager.get_public_key(agent_id)  # type: ignore[attr-defined]
         except Exception:
             return None

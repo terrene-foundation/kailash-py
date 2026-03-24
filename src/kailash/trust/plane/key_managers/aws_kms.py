@@ -45,6 +45,8 @@ try:
 except ImportError:
     _BOTO3_AVAILABLE = False
     boto3 = None  # type: ignore[assignment]
+    BotoCoreError = Exception  # type: ignore[assignment,misc]
+    ClientError = Exception  # type: ignore[assignment,misc]
 
 
 class AwsKmsKeyManager:
@@ -142,6 +144,7 @@ class AwsKmsKeyManager:
                     key_id=self._key_id,
                 ) from exc
             self._public_key_cache = response["PublicKey"]
+        assert self._public_key_cache is not None
         return self._public_key_cache
 
     def key_id(self) -> str:

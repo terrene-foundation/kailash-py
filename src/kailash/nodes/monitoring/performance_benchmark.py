@@ -474,7 +474,7 @@ class PerformanceBenchmarkNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
                 if metric_type == "resources":
                     result = self._get_current_resource_metrics()
                 else:
-                    result = self._monitor_continuous(operations, duration_seconds)
+                    result = self._monitor_continuous(operations, duration_seconds)  # type: ignore[arg-type]
 
             elif action == "start_monitoring":
                 result = self._start_continuous_monitoring(operations)

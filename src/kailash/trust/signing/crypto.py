@@ -51,9 +51,11 @@ def generate_keypair() -> Tuple[str, str]:
         True
     """
     if not NACL_AVAILABLE:
-        raise ImportError("PyNaCl is required for cryptographic operations. Install with: pip install pynacl")
+        raise ImportError(
+            "PyNaCl is required for cryptographic operations. Install with: pip install pynacl"
+        )
 
-    signing_key = SigningKey.generate()
+    signing_key = SigningKey.generate()  # type: ignore[union-attr]
     private_key_bytes = bytes(signing_key)
     public_key_bytes = bytes(signing_key.verify_key)
 
@@ -137,7 +139,9 @@ def sign(payload: Union[bytes, str, dict], private_key: str) -> str:
         True
     """
     if not NACL_AVAILABLE:
-        raise ImportError("PyNaCl is required for cryptographic operations. Install with: pip install pynacl")
+        raise ImportError(
+            "PyNaCl is required for cryptographic operations. Install with: pip install pynacl"
+        )
 
     # Convert payload to bytes
     if isinstance(payload, dict):
@@ -150,7 +154,7 @@ def sign(payload: Union[bytes, str, dict], private_key: str) -> str:
     # Decode private key
     try:
         private_key_bytes = base64.b64decode(private_key)
-        signing_key = SigningKey(private_key_bytes)
+        signing_key = SigningKey(private_key_bytes)  # type: ignore[misc]
     except Exception as e:
         raise ValueError(f"Invalid private key: {e}")
 
@@ -161,7 +165,9 @@ def sign(payload: Union[bytes, str, dict], private_key: str) -> str:
     return base64.b64encode(signature).decode("utf-8")
 
 
-def verify_signature(payload: Union[bytes, str, dict], signature: str, public_key: str) -> bool:
+def verify_signature(
+    payload: Union[bytes, str, dict], signature: str, public_key: str
+) -> bool:
     """
     Verify an Ed25519 signature.
 
@@ -186,7 +192,9 @@ def verify_signature(payload: Union[bytes, str, dict], signature: str, public_ke
         False
     """
     if not NACL_AVAILABLE:
-        raise ImportError("PyNaCl is required for cryptographic operations. Install with: pip install pynacl")
+        raise ImportError(
+            "PyNaCl is required for cryptographic operations. Install with: pip install pynacl"
+        )
 
     # Convert payload to bytes
     if isinstance(payload, dict):
@@ -200,7 +208,7 @@ def verify_signature(payload: Union[bytes, str, dict], signature: str, public_ke
         # Decode signature and public key
         signature_bytes = base64.b64decode(signature)
         public_key_bytes = base64.b64decode(public_key)
-        verify_key = VerifyKey(public_key_bytes)
+        verify_key = VerifyKey(public_key_bytes)  # type: ignore[misc]
 
         # Verify
         verify_key.verify(payload_bytes, signature_bytes)
@@ -275,7 +283,9 @@ def hash_chain(data: Union[str, dict, bytes]) -> str:
     return hashlib.sha256(data_bytes).hexdigest()
 
 
-def hash_trust_chain_state(genesis_id: str, capability_ids: list, delegation_ids: list, constraint_hash: str) -> str:
+def hash_trust_chain_state(
+    genesis_id: str, capability_ids: list, delegation_ids: list, constraint_hash: str
+) -> str:
     """
     Compute hash of current trust chain state.
 
@@ -384,7 +394,9 @@ def hash_reasoning_trace(trace: ReasoningTrace) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
-def sign_reasoning_trace(trace: ReasoningTrace, private_key: str, context_id: Optional[str] = None) -> str:
+def sign_reasoning_trace(
+    trace: ReasoningTrace, private_key: str, context_id: Optional[str] = None
+) -> str:
     """
     Sign a reasoning trace using an agent's Ed25519 private key.
 
@@ -555,7 +567,9 @@ def hmac_sign(payload: Union[bytes, str, dict], hmac_key: bytes) -> str:
     return base64.b64encode(mac.digest()).decode("utf-8")
 
 
-def hmac_verify(payload: Union[bytes, str, dict], hmac_signature: str, hmac_key: bytes) -> bool:
+def hmac_verify(
+    payload: Union[bytes, str, dict], hmac_signature: str, hmac_key: bytes
+) -> bool:
     """
     Verify HMAC-SHA256 signature.
 
@@ -637,7 +651,11 @@ def dual_verify(
     if not verify_signature(payload, dual_sig.ed25519_signature, public_key):
         return False
     # HMAC verification (if present and key available)
-    if dual_sig.has_hmac and hmac_key is not None:
+    if (
+        dual_sig.has_hmac
+        and hmac_key is not None
+        and dual_sig.hmac_signature is not None
+    ):
         if not hmac_verify(payload, dual_sig.hmac_signature, hmac_key):
             return False
     return True

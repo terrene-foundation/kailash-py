@@ -222,7 +222,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             # Check rate limiting
             if self.rate_limiting_enabled and action == "authenticate":
                 rate_limit_check = await self._check_rate_limiting(
-                    user_id, risk_context
+                    user_id, risk_context  # type: ignore[arg-type]
                 )
                 if not rate_limit_check["allowed"]:
                     return rate_limit_check
@@ -230,22 +230,22 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             # Route to appropriate handler
             if action == "authenticate":
                 result = await self._authenticate(
-                    auth_method, credentials, user_id, risk_context, auth_id, **kwargs
+                    auth_method, credentials, user_id, risk_context, auth_id, **kwargs  # type: ignore[arg-type]
                 )
             elif action == "authorize":
                 result = await self._authorize(
-                    user_id, session_id, permissions, resource, risk_context, **kwargs
+                    user_id, session_id, permissions, resource, risk_context, **kwargs  # type: ignore[arg-type]
                 )
             elif action == "logout":
-                result = await self._logout(user_id, session_id, **kwargs)
+                result = await self._logout(user_id, session_id, **kwargs)  # type: ignore[arg-type]
             elif action == "validate":
-                result = await self._validate_session(session_id, **kwargs)
+                result = await self._validate_session(session_id, **kwargs)  # type: ignore[arg-type]
             elif action == "assess_risk":
-                result = await self._assess_risk(user_id, risk_context, **kwargs)
+                result = await self._assess_risk(user_id, risk_context, **kwargs)  # type: ignore[arg-type]
             elif action == "get_methods":
-                result = await self._get_available_methods(user_id, **kwargs)
+                result = await self._get_available_methods(user_id, **kwargs)  # type: ignore[arg-type]
             elif action == "challenge_mfa":
-                result = await self._challenge_mfa(user_id, auth_method, **kwargs)
+                result = await self._challenge_mfa(user_id, auth_method, **kwargs)  # type: ignore[arg-type]
             else:
                 raise ValueError(f"Unsupported authentication action: {action}")
 

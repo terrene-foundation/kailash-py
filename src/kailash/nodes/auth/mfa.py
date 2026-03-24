@@ -451,7 +451,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     user_id, device_info or {}, trust_token
                 )
             elif action == "set_preference":
-                result = self._set_user_preference(user_id, preferred_method)
+                result = self._set_user_preference(user_id, preferred_method)  # type: ignore[reportArgumentType]
             elif action == "get_methods":
                 result = self._get_user_methods(user_id)
             elif action == "disable":
@@ -1757,9 +1757,9 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             Base64-encoded QR code image
         """
         try:
-            qr = qrcode.QRCode(
+            qr = qrcode.QRCode(  # type: ignore[reportAttributeAccessIssue]
                 version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,  # type: ignore[reportAttributeAccessIssue]
                 box_size=10,
                 border=4,
             )

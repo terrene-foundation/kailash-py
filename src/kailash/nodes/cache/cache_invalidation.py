@@ -373,7 +373,7 @@ class CacheInvalidationNode(AsyncNode):
             if self._redis_client:
                 try:
                     # Test if current connection is still valid
-                    await asyncio.wait_for(self._redis_client.ping(), timeout=1.0)
+                    await asyncio.wait_for(self._redis_client.ping(), timeout=1.0)  # type: ignore[arg-type]
                     # Connection is good, reuse it
                     return
                 except:
@@ -384,17 +384,17 @@ class CacheInvalidationNode(AsyncNode):
                         pass  # Ignore errors when closing old client
 
             try:
-                self._redis_client = redis.from_url(redis_url)
+                self._redis_client = redis.from_url(redis_url)  # type: ignore[possibly-unbound]
                 # Test connection with proper error handling
                 try:
-                    await asyncio.wait_for(self._redis_client.ping(), timeout=2.0)
+                    await asyncio.wait_for(self._redis_client.ping(), timeout=2.0)  # type: ignore[arg-type]
                     self.logger.debug(
                         f"Fresh Redis connection established to {redis_url}"
                     )
                 except (asyncio.TimeoutError, RuntimeError) as e:
                     if "Event loop is closed" in str(e):
                         # Event loop issue - create new client without ping test
-                        self._redis_client = redis.from_url(redis_url)
+                        self._redis_client = redis.from_url(redis_url)  # type: ignore[possibly-unbound]
                         self.logger.debug(
                             "Created Redis client without ping test due to event loop issue"
                         )

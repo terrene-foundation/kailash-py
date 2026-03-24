@@ -584,4 +584,4 @@ def register_server_manually(
         return asyncio.run(registry.register_server(server_config))
     except RuntimeError:
         # Already in event loop
-        return asyncio.create_task(registry.register_server(server_config))
+        return asyncio.create_task(registry.register_server(server_config))  # type: ignore[return-value]

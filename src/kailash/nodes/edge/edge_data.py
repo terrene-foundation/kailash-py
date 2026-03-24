@@ -152,7 +152,7 @@ class EdgeDataNode(EdgeNode):
         version = self._get_next_version(key)
 
         # Store locally first
-        edge_name = self.current_edge.name
+        edge_name = self.current_edge.name  # type: ignore[union-attr]
         if edge_name not in self._edge_data:
             self._edge_data[edge_name] = {}
             self._data_versions[edge_name] = {}
