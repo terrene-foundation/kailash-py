@@ -30,10 +30,23 @@ from kailash.trust.chain import (
     VerificationLevel,
     VerificationResult,
 )
-from kailash.trust.signing.crypto import generate_keypair, hash_chain, sign, verify_signature
+from kailash.trust.signing.crypto import (
+    generate_keypair,
+    hash_chain,
+    sign,
+    verify_signature,
+)
 
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "wire_format"
 SCHEMA_DIR = Path(__file__).parent.parent.parent / "schemas"
+
+# Skip if schema directory doesn't exist (schemas not yet generated)
+if not SCHEMA_DIR.exists():
+    pytest.skip(
+        f"Schema directory not found: {SCHEMA_DIR}. "
+        "Generate schemas first with: python -m kailash.trust generate-schemas",
+        allow_module_level=True,
+    )
 
 
 def load_fixture(name: str) -> dict:
@@ -90,15 +103,25 @@ class TestSchemaConformance:
             if isinstance(field_type, list):
                 field_type = [t for t in field_type if t != "null"][0]
             if field_type == "string" and not isinstance(value, str):
-                errors.append(f"{field_name}: expected string, got {type(value).__name__}")
+                errors.append(
+                    f"{field_name}: expected string, got {type(value).__name__}"
+                )
             elif field_type == "integer" and not isinstance(value, int):
-                errors.append(f"{field_name}: expected integer, got {type(value).__name__}")
+                errors.append(
+                    f"{field_name}: expected integer, got {type(value).__name__}"
+                )
             elif field_type == "boolean" and not isinstance(value, bool):
-                errors.append(f"{field_name}: expected boolean, got {type(value).__name__}")
+                errors.append(
+                    f"{field_name}: expected boolean, got {type(value).__name__}"
+                )
             elif field_type == "array" and not isinstance(value, list):
-                errors.append(f"{field_name}: expected array, got {type(value).__name__}")
+                errors.append(
+                    f"{field_name}: expected array, got {type(value).__name__}"
+                )
             elif field_type == "object" and not isinstance(value, dict):
-                errors.append(f"{field_name}: expected object, got {type(value).__name__}")
+                errors.append(
+                    f"{field_name}: expected object, got {type(value).__name__}"
+                )
         return errors
 
     def test_genesis_record_schema(self):
