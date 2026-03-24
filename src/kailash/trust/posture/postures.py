@@ -55,25 +55,25 @@ class TrustPosture(str, Enum):
         """Check if this posture can downgrade to target posture."""
         return target.autonomy_level < self.autonomy_level
 
-    def __lt__(self, other: TrustPosture) -> bool:
+    def __lt__(self, other: object) -> bool:
         """Less than comparison based on autonomy level."""
         if not isinstance(other, TrustPosture):
             return NotImplemented
         return self.autonomy_level < other.autonomy_level
 
-    def __le__(self, other: TrustPosture) -> bool:
+    def __le__(self, other: object) -> bool:
         """Less than or equal comparison based on autonomy level."""
         if not isinstance(other, TrustPosture):
             return NotImplemented
         return self.autonomy_level <= other.autonomy_level
 
-    def __gt__(self, other: TrustPosture) -> bool:
+    def __gt__(self, other: object) -> bool:
         """Greater than comparison based on autonomy level."""
         if not isinstance(other, TrustPosture):
             return NotImplemented
         return self.autonomy_level > other.autonomy_level
 
-    def __ge__(self, other: TrustPosture) -> bool:
+    def __ge__(self, other: object) -> bool:
         """Greater than or equal comparison based on autonomy level."""
         if not isinstance(other, TrustPosture):
             return NotImplemented

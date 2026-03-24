@@ -129,8 +129,8 @@ class MiddlewareAuthManager:
     async def create_access_token(
         self,
         user_id: str,
-        permissions: List[str] = None,
-        metadata: Dict[str, Any] = None,
+        permissions: List[str] | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> str:
         """
         Create JWT access token using SDK nodes.

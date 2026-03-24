@@ -24,8 +24,8 @@ except ImportError:
     try:
         import aioredis as redis
     except ImportError:
-        redis = None
-asyncpg = None  # Lazy-loaded in PostgreSQLStorage methods
+        redis: Any = None
+asyncpg: Any = None  # Lazy-loaded in PostgreSQLStorage methods
 
 
 class StorageBackend(ABC):
@@ -73,7 +73,7 @@ class RedisStorage(StorageBackend):
         self.db = db
         self.password = password
         self.key_prefix = key_prefix
-        self._redis: Optional[redis.Redis] = None
+        self._redis: Any = None
 
     async def _get_redis(self) -> redis.Redis:
         """Get Redis connection."""
@@ -259,7 +259,7 @@ class RedisEventStorage:
         self.db = db
         self.password = password
         self.key_prefix = key_prefix
-        self._redis: Optional[redis.Redis] = None
+        self._redis: Any = None
 
     async def _get_redis(self) -> redis.Redis:
         """Get Redis connection."""

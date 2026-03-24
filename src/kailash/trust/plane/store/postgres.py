@@ -27,7 +27,7 @@ import logging
 import re
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, Generator
+from typing import Any, Generator, cast
 
 try:
     import psycopg
@@ -193,7 +193,7 @@ class PostgresTrustPlaneStore:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get_connection(self) -> psycopg.Connection:
+    def _get_connection(self) -> psycopg.Connection[Any]:
         """Return a connection from the pool.
 
         This should be used as a context manager via ``self._pool.connection()``.
@@ -206,14 +206,16 @@ class PostgresTrustPlaneStore:
             raise RuntimeError(
                 "PostgresTrustPlaneStore not initialized. Call initialize() first."
             )
-        return self._pool.connection()
+        return cast(Any, self._pool.connection())
 
     def _sanitize_conninfo(self, msg: str) -> str:
         """Remove password fragments from error messages."""
         return re.sub(r"password=[^\s&]+", "password=***", msg)
 
     @contextmanager
-    def _safe_connection(self) -> Generator[psycopg.Connection, None, None]:
+    def _safe_connection(
+        self,
+    ) -> Generator[psycopg.Connection[Any], None, None]:
         """Yield a pooled connection, wrapping psycopg errors in store exceptions.
 
         Raises:
@@ -228,7 +230,7 @@ class PostgresTrustPlaneStore:
             )
         try:
             with self._pool.connection() as conn:
-                yield conn
+                yield cast(psycopg.Connection[Any], conn)
         except StoreConnectionError:
             raise
         except StoreQueryError:
@@ -246,7 +248,7 @@ class PostgresTrustPlaneStore:
     # Schema versioning & migrations
     # ------------------------------------------------------------------
 
-    def _read_schema_version(self, conn: psycopg.Connection) -> int | None:
+    def _read_schema_version(self, conn: psycopg.Connection[Any]) -> int | None:
         """Read the current schema version from the meta table.
 
         Returns None if the meta table does not exist (fresh database).
@@ -257,16 +259,16 @@ class PostgresTrustPlaneStore:
             "  WHERE table_name = 'meta'"
             ")"
         ).fetchone()
-        if row is None or not row[0]:
+        if row is None or not row["exists"]:
             return None
         result = conn.execute(
             "SELECT value FROM meta WHERE key = 'schema_version'"
         ).fetchone()
         if result is None:
             return None
-        return int(result[0])
+        return int(result["value"])
 
-    def _set_schema_version(self, conn: psycopg.Connection, version: int) -> None:
+    def _set_schema_version(self, conn: psycopg.Connection[Any], version: int) -> None:
         """Write the schema version to the meta table."""
         conn.execute(
             "INSERT INTO meta (key, value) VALUES ('schema_version', %s) "
@@ -274,7 +276,7 @@ class PostgresTrustPlaneStore:
             (str(version),),
         )
 
-    def _run_migrations(self, conn: psycopg.Connection, from_version: int) -> None:
+    def _run_migrations(self, conn: psycopg.Connection[Any], from_version: int) -> None:
         """Apply migrations sequentially from *from_version* to SCHEMA_VERSION.
 
         Each migration runs in its own savepoint. On failure, the
@@ -329,9 +331,9 @@ class PostgresTrustPlaneStore:
 
             # Create all tables (IF NOT EXISTS -- safe for re-init)
             for stmt in _ALL_CREATE_STMTS:
-                conn.execute(stmt)
+                conn.execute(cast(Any, stmt))
             for idx_stmt in _CREATE_INDEXES_SQL:
-                conn.execute(idx_stmt)
+                conn.execute(cast(Any, idx_stmt))
             conn.commit()
 
             if existing_version is None:

@@ -60,8 +60,8 @@ class ServerInfo:
 
     name: str
     transport: str  # stdio, sse, http
-    capabilities: List[str] = None  # List of tool names or capability strings
-    metadata: Dict[str, Any] = None
+    capabilities: List[str] | None = None  # List of tool names or capability strings
+    metadata: Dict[str, Any] | None = None
     id: Optional[str] = None
     endpoint: Optional[str] = None  # URL or command
     command: Optional[str] = None  # For stdio transport
@@ -495,7 +495,7 @@ class NetworkDiscovery(asyncio.DatagramProtocol):
     def __init__(
         self,
         port: int = DISCOVERY_PORT,
-        multicast_group: str = None,
+        multicast_group: str | None = None,
         interface: str = "0.0.0.0",
     ):
         """Initialize network discovery.

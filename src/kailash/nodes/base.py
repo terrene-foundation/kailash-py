@@ -26,7 +26,7 @@ import threading
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, Field, ValidationError
 

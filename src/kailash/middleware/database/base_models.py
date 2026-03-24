@@ -4,9 +4,11 @@ Base abstract models for common entities.
 Applications extend these models for their specific needs.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from sqlalchemy import (
     JSON,
@@ -71,7 +73,7 @@ class BaseWorkflowModel(Base, EnterpriseBaseMixin):
     optimization_hints = Column(JSON, default=dict)
 
     @declared_attr
-    def __table_args__(cls):
+    def __table_args__(cls) -> Any:
         return (
             Index(f"idx_{cls.__tablename__}_tenant_status", "tenant_id", "status"),
             Index(f"idx_{cls.__tablename__}_owner_tenant", "owner_id", "tenant_id"),
@@ -164,7 +166,7 @@ class BaseExecutionModel(Base, BaseMixin):
     debug_info = Column(JSON, default=dict)
 
     @declared_attr
-    def __table_args__(cls):
+    def __table_args__(cls) -> Any:
         return (
             Index(f"idx_{cls.__tablename__}_workflow", "workflow_id"),
             Index(f"idx_{cls.__tablename__}_tenant_status", "tenant_id", "status"),
@@ -276,7 +278,7 @@ class BaseTemplateModel(Base, BaseMixin):
     is_public = Column(Boolean, default=False)
 
     @declared_attr
-    def __table_args__(cls):
+    def __table_args__(cls) -> Any:
         return (
             Index(f"idx_{cls.__tablename__}_category", "category"),
             Index(f"idx_{cls.__tablename__}_tenant_public", "tenant_id", "is_public"),
@@ -352,7 +354,7 @@ class BaseSecurityEventModel(Base, BaseMixin, ComplianceMixin):
     resolved_at = Column(DateTime(timezone=True))
 
     @declared_attr
-    def __table_args__(cls):
+    def __table_args__(cls) -> Any:
         return (
             Index(f"idx_{cls.__tablename__}_type_severity", "event_type", "severity"),
             Index(
@@ -430,7 +432,7 @@ class BaseAuditLogModel(Base, BaseMixin, ComplianceMixin):
     signature = Column(Text)
 
     @declared_attr
-    def __table_args__(cls):
+    def __table_args__(cls) -> Any:
         return (
             Index(
                 f"idx_{cls.__tablename__}_action_resource", "action", "resource_type"
@@ -497,7 +499,7 @@ class BaseComplianceModel(Base, BaseMixin):
     certification_valid_until = Column(DateTime(timezone=True))
 
     @declared_attr
-    def __table_args__(cls):
+    def __table_args__(cls) -> Any:
         return (
             Index(
                 f"idx_{cls.__tablename__}_framework_tenant", "framework", "tenant_id"
