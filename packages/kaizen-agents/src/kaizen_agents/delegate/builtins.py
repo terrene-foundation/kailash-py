@@ -416,6 +416,59 @@ def _fork_handler(args: str, **context: Any) -> str:
     return f"Session forked as: {name}"
 
 
+def _holds_handler(args: str, **context: Any) -> str:
+    """List currently held governance actions awaiting approval."""
+    supervisor = context.get("supervisor")
+    if supervisor is None:
+        return "No supervisor configured."
+
+    held = supervisor.held_nodes
+    if not held:
+        return "No held actions."
+
+    lines = ["Held actions awaiting approval:", ""]
+    for node_id, record in held.items():
+        lines.append(f"  [{node_id}] {record.reason}")
+        lines.append(f"    held at: {record.held_at.isoformat()}")
+    lines.append("")
+    lines.append("Use /approve <node_id> or /reject <node_id> to resolve.")
+    return "\n".join(lines)
+
+
+def _approve_handler(args: str, **context: Any) -> str:
+    """Approve a held governance action."""
+    supervisor = context.get("supervisor")
+    if supervisor is None:
+        return "No supervisor configured."
+
+    node_id = args.strip() if args else ""
+    if not node_id:
+        return "Usage: /approve <node_id>"
+
+    try:
+        supervisor.resolve_hold(node_id, approved=True)
+        return f"Approved: {node_id}"
+    except ValueError as exc:
+        return str(exc)
+
+
+def _reject_handler(args: str, **context: Any) -> str:
+    """Reject a held governance action."""
+    supervisor = context.get("supervisor")
+    if supervisor is None:
+        return "No supervisor configured."
+
+    node_id = args.strip() if args else ""
+    if not node_id:
+        return "Usage: /reject <node_id>"
+
+    try:
+        supervisor.resolve_hold(node_id, approved=False)
+        return f"Rejected: {node_id}"
+    except ValueError as exc:
+        return str(exc)
+
+
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
@@ -436,6 +489,9 @@ def register_builtins(registry: CommandRegistry) -> None:
     registry.register("load", "Load a saved session (/load <name>)", _load_handler)
     registry.register("sessions", "List saved sessions", _sessions_handler)
     registry.register("fork", "Fork current session (/fork <name>)", _fork_handler)
+    registry.register("holds", "List held governance actions", _holds_handler)
+    registry.register("approve", "Approve a held action (/approve <node_id>)", _approve_handler)
+    registry.register("reject", "Reject a held action (/reject <node_id>)", _reject_handler)
 
 
 def create_default_commands() -> CommandRegistry:
