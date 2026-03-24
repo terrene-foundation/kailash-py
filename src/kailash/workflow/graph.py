@@ -154,7 +154,9 @@ class Workflow:
         # P0B-004/005: Cached graph computations (invalidated on mutation)
         # P0D-003: Use tuple for immutability — prevents callers from corrupting cache
         self._topo_cache: tuple[str, ...] | None = None
-        self._dag_cycle_cache: tuple[tuple, ...] | None = None  # H3: immutable tuples
+        self._dag_cycle_cache: tuple[tuple[tuple, ...], tuple[tuple, ...]] | None = (
+            None  # H3: immutable tuples
+        )
 
         logger.info(f"Created workflow '{name}' (ID: {workflow_id})")
 
@@ -514,7 +516,7 @@ class Workflow:
             self.connections.append(connection)
 
         # FIXED: Add edge to graph ONCE with the complete mapping
-        edge_data = {
+        edge_data: dict[str, Any] = {
             "mapping": mapping,  # Complete mapping dictionary
         }
 
@@ -554,7 +556,7 @@ class Workflow:
             # Merge with existing mapping
             merged_mapping = existing_edge_data["mapping"].copy()
             merged_mapping.update(mapping)
-            edge_data = {
+            edge_data: dict[str, Any] = {
                 "mapping": merged_mapping,  # Merged mapping dictionary
             }
 
@@ -728,7 +730,9 @@ class Workflow:
         # Fallback to _node_instances
         return self._node_instances.get(node_id)
 
-    def separate_dag_and_cycle_edges(self) -> tuple[list[tuple], list[tuple]]:
+    def separate_dag_and_cycle_edges(
+        self,
+    ) -> tuple[tuple[tuple, ...], tuple[tuple, ...]]:
         """Separate DAG edges from cycle edges.
 
         Returns:
@@ -813,7 +817,11 @@ class Workflow:
                             if successor in target_scc:
                                 # This is an edge within the SCC
                                 edge_data = self.graph.get_edge_data(node, successor)
-                                if not edge_data.get("cycle", False):
+                                if edge_data is None or not edge_data.get(
+                                    "cycle", False
+                                ):
+                                    if edge_data is None:
+                                        continue
                                     # Add as a synthetic cycle edge for execution planning
                                     synthetic_edge_data = edge_data.copy()
                                     synthetic_edge_data.update(

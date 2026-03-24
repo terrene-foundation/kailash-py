@@ -686,7 +686,7 @@ class BusinessWorkflowTemplates:
         """
         # Add data fetching node if not exists
         if data_source not in workflow.nodes:
-            from kailash.nodes.data import HTTPRequestNode
+            from kailash.nodes.api.http import HTTPRequestNode
 
             workflow.add_node(
                 data_source,
@@ -1471,15 +1471,15 @@ def add_data_processing_pipeline(
 
 
 # Add convenience methods to Workflow class
-Workflow.add_optimization_cycle = add_optimization_cycle
-Workflow.add_retry_cycle = add_retry_cycle
-Workflow.add_data_quality_cycle = add_data_quality_cycle
-Workflow.add_learning_cycle = add_learning_cycle
-Workflow.add_convergence_cycle = add_convergence_cycle
-Workflow.add_batch_processing_cycle = add_batch_processing_cycle
+setattr(Workflow, "add_optimization_cycle", add_optimization_cycle)
+setattr(Workflow, "add_retry_cycle", add_retry_cycle)
+setattr(Workflow, "add_data_quality_cycle", add_data_quality_cycle)
+setattr(Workflow, "add_learning_cycle", add_learning_cycle)
+setattr(Workflow, "add_convergence_cycle", add_convergence_cycle)
+setattr(Workflow, "add_batch_processing_cycle", add_batch_processing_cycle)
 
 # Add business workflow methods to Workflow class
-Workflow.add_investment_pipeline = add_investment_pipeline
-Workflow.add_document_ai_workflow = add_document_ai_workflow
-Workflow.add_api_integration_pattern = add_api_integration_pattern
-Workflow.add_data_processing_pipeline = add_data_processing_pipeline
+setattr(Workflow, "add_investment_pipeline", add_investment_pipeline)
+setattr(Workflow, "add_document_ai_workflow", add_document_ai_workflow)
+setattr(Workflow, "add_api_integration_pattern", add_api_integration_pattern)
+setattr(Workflow, "add_data_processing_pipeline", add_data_processing_pipeline)

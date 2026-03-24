@@ -180,7 +180,7 @@ class TaskRun(BaseModel):
             return (self.completed_at - self.started_at).total_seconds()
         return None
 
-    def validate(self) -> None:
+    def validate_state(self) -> None:
         """Validate task state."""
         # Check for valid state transitions
         if self.status == TaskStatus.COMPLETED or self.status == TaskStatus.FAILED:
@@ -191,14 +191,13 @@ class TaskRun(BaseModel):
 
         # Validate state transitions (only in test_task_state_transitions test)
         # This is a bit of a hack for the test but works
-        if hasattr(self, "_from_status") and hasattr(self, "_to_status"):
-            if (
-                self._to_status not in VALID_TASK_TRANSITIONS[self._from_status]
-                and self._from_status != self._to_status
-            ):
+        _from = getattr(self, "_from_status", None)
+        _to = getattr(self, "_to_status", None)
+        if _from is not None and _to is not None:
+            if _to not in VALID_TASK_TRANSITIONS[_from] and _from != _to:
                 raise KailashValidationError(
-                    f"Invalid state transition from {self._from_status} to {self._to_status}. "
-                    f"Valid transitions: {', '.join(str(s) for s in VALID_TASK_TRANSITIONS[self._from_status])}"
+                    f"Invalid state transition from {_from} to {_to}. "
+                    f"Valid transitions: {', '.join(str(s) for s in VALID_TASK_TRANSITIONS[_from])}"
                 )
 
         # Check other validation rules as needed

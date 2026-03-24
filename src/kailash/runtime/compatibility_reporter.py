@@ -145,7 +145,7 @@ class CompatibilityReporter:
 
     def __init__(self):
         """Initialize compatibility reporter."""
-        self.analyzer = None
+        self.analyzer: Optional[ConditionalBranchAnalyzer] = None
 
     def analyze_workflow(self, workflow: Workflow) -> CompatibilityReport:
         """Analyze workflow compatibility with conditional execution.
@@ -187,6 +187,7 @@ class CompatibilityReporter:
 
     def _analyze_basic_switches(self, report: CompatibilityReport) -> None:
         """Analyze basic switch patterns."""
+        assert self.analyzer is not None
         switch_nodes = self.analyzer._find_switch_nodes()
 
         if switch_nodes:
@@ -240,6 +241,7 @@ class CompatibilityReporter:
 
     def _analyze_cycles(self, workflow: Workflow, report: CompatibilityReport) -> None:
         """Analyze cycle patterns."""
+        assert self.analyzer is not None
         try:
             cycles = workflow.graph.simple_cycles()
 
@@ -345,6 +347,7 @@ class CompatibilityReporter:
 
     def _analyze_hierarchical_switches(self, report: CompatibilityReport) -> None:
         """Analyze hierarchical switch patterns."""
+        assert self.analyzer is not None
         switch_nodes = self.analyzer._find_switch_nodes()
 
         if len(switch_nodes) > 1:
@@ -376,6 +379,7 @@ class CompatibilityReporter:
         self, workflow: Workflow, report: CompatibilityReport
     ) -> None:
         """Analyze complex dependency patterns."""
+        assert self.analyzer is not None
         # Check for nodes that depend on multiple switches
         switch_nodes = set(self.analyzer._find_switch_nodes())
 
@@ -424,6 +428,7 @@ class CompatibilityReporter:
 
     def _add_performance_estimate(self, report: CompatibilityReport) -> None:
         """Add performance improvement estimate."""
+        assert self.analyzer is not None
         if report.switch_count == 0:
             report.execution_estimate = (
                 "No conditional branches detected. No performance improvement expected."

@@ -81,6 +81,8 @@ class ResourceMonitor:
             Current memory usage in megabytes
         """
         try:
+            if psutil is None:
+                return 0.0
             process = psutil.Process()
             memory_info = process.memory_info()
             return memory_info.rss / (1024 * 1024)  # Convert to MB
@@ -209,6 +211,8 @@ class ResourceMonitor:
     def _get_cpu_usage(self) -> float:
         """Get current CPU usage percentage."""
         try:
+            if psutil is None:
+                return 0.0
             return psutil.cpu_percent(interval=0.1)
         except Exception as e:
             logger.warning(f"Failed to get CPU usage: {e}")
@@ -362,7 +366,7 @@ class RuntimeMonitor:
             List of execution metrics
         """
         with self._lock:
-            return self._execution_metrics.copy()
+            return list(self._execution_metrics)
 
     def register_health_check(self, name: str, check_function: Callable) -> None:
         """Register a health check function.
@@ -488,7 +492,7 @@ class RuntimeMonitor:
             List of performance benchmarks
         """
         with self._lock:
-            return self._performance_benchmarks.copy()
+            return list(self._performance_benchmarks)
 
     def log_audit_event(self, event_type: str, details: Dict[str, Any]) -> None:
         """Log an audit event.
@@ -641,7 +645,9 @@ class PrometheusAdapter:
                 "Prometheus client not available - metrics will be logged only"
             )
 
-    def counter(self, name: str, description: str, labels: List[str] = None) -> Any:
+    def counter(
+        self, name: str, description: str, labels: Optional[List[str]] = None
+    ) -> Any:
         """Get or create a counter metric."""
         full_name = f"{self.prefix}_{name}"
 
@@ -649,13 +655,16 @@ class PrometheusAdapter:
             return MockMetric(full_name, "counter")
 
         if full_name not in self._metrics_cache:
+            assert self.prometheus_client is not None
             self._metrics_cache[full_name] = self.prometheus_client.Counter(
                 full_name, description, labels or []
             )
 
         return self._metrics_cache[full_name]
 
-    def gauge(self, name: str, description: str, labels: List[str] = None) -> Any:
+    def gauge(
+        self, name: str, description: str, labels: Optional[List[str]] = None
+    ) -> Any:
         """Get or create a gauge metric."""
         full_name = f"{self.prefix}_{name}"
 
@@ -663,6 +672,7 @@ class PrometheusAdapter:
             return MockMetric(full_name, "gauge")
 
         if full_name not in self._metrics_cache:
+            assert self.prometheus_client is not None
             self._metrics_cache[full_name] = self.prometheus_client.Gauge(
                 full_name, description, labels or []
             )
@@ -673,13 +683,15 @@ class PrometheusAdapter:
 class DataDogAdapter:
     """Adapter for DataDog metrics integration."""
 
-    def __init__(self, prefix: str = "kailash", tags: List[str] = None):
+    def __init__(self, prefix: str = "kailash", tags: Optional[List[str]] = None):
         """Initialize DataDog adapter."""
         self.prefix = prefix
         self.default_tags = tags or []
 
         try:
-            import datadog
+            import importlib
+
+            datadog = importlib.import_module("datadog")
 
             self.datadog = datadog
             self.enabled = True
@@ -689,22 +701,26 @@ class DataDogAdapter:
             self.enabled = False
             logger.warning("DataDog client not available - metrics will be logged only")
 
-    def increment(self, metric: str, value: int = 1, tags: List[str] = None) -> None:
+    def increment(
+        self, metric: str, value: int = 1, tags: Optional[List[str]] = None
+    ) -> None:
         """Increment a counter metric."""
         full_name = f"{self.prefix}.{metric}"
         all_tags = self.default_tags + (tags or [])
 
-        if self.enabled:
+        if self.enabled and self.datadog is not None:
             self.datadog.statsd.increment(full_name, value, tags=all_tags)
         else:
             logger.info(f"DataDog metric: {full_name} += {value} (tags: {all_tags})")
 
-    def gauge(self, metric: str, value: float, tags: List[str] = None) -> None:
+    def gauge(
+        self, metric: str, value: float, tags: Optional[List[str]] = None
+    ) -> None:
         """Set a gauge metric."""
         full_name = f"{self.prefix}.{metric}"
         all_tags = self.default_tags + (tags or [])
 
-        if self.enabled:
+        if self.enabled and self.datadog is not None:
             self.datadog.statsd.gauge(full_name, value, tags=all_tags)
         else:
             logger.info(f"DataDog metric: {full_name} = {value} (tags: {all_tags})")

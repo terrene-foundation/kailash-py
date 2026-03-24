@@ -106,7 +106,7 @@ class WorkflowAPIGateway:
         description: str = "Unified API for Kailash workflows",
         version: str = "1.0.0",
         max_workers: int = 10,
-        cors_origins: list[str] = None,
+        cors_origins: list[str] | None = None,
     ):
         """Initialize the API gateway.
 
@@ -397,7 +397,7 @@ class WorkflowAPIGateway:
         workflow: Workflow,
         description: str | None = None,
         version: str = "1.0.0",
-        tags: list[str] = None,
+        tags: list[str] | None = None,
         **kwargs,
     ):
         """Register an embedded workflow.
@@ -418,7 +418,7 @@ class WorkflowAPIGateway:
             workflow=workflow,
             app_name=f"{name} Workflow API",
             version=version,
-            description=description,
+            description=description or f"Workflow: {name}",
         )
 
         # Mount the workflow app as a sub-application
@@ -443,7 +443,7 @@ class WorkflowAPIGateway:
         health_check: str = "/health",
         description: str | None = None,
         version: str = "1.0.0",
-        tags: list[str] = None,
+        tags: list[str] | None = None,
     ):
         """Register a proxied workflow with real request forwarding.
 

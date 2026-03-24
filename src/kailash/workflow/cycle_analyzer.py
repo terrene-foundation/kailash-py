@@ -294,7 +294,7 @@ class CycleAnalyzer:
             >>> report = analyzer.generate_cycle_report(trace)
             >>> print(f"Cycle efficiency: {report['performance']['efficiency_score']}")
         """
-        report = {
+        report: dict[str, Any] = {
             "analysis_info": {
                 "cycle_id": trace.cycle_id,
                 "workflow_id": trace.workflow_id,
@@ -354,7 +354,7 @@ class CycleAnalyzer:
         target_session = session_id or self.current_session
         traces_to_analyze = self.session_traces if session_id is None else []
 
-        report = {
+        report: dict[str, Any] = {
             "session_info": {
                 "session_id": target_session,
                 "analysis_level": self.analysis_level,
@@ -407,7 +407,7 @@ class CycleAnalyzer:
         report["insights"] = self._generate_session_insights(traces_to_analyze)
 
         # Export to file if configured
-        if self.output_directory:
+        if self.output_directory and target_session is not None:
             self._export_session_report(report, target_session)
 
         return report
@@ -512,7 +512,7 @@ class CycleAnalyzer:
             if self.output_directory:
                 filepath = str(self.output_directory / filepath)
 
-        export_data = {
+        export_data: dict[str, Any] = {
             "analysis_metadata": {
                 "session_id": self.current_session,
                 "analysis_level": self.analysis_level,

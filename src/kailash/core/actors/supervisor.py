@@ -71,9 +71,13 @@ class ActorSupervisor:
         self.restart_counts: Dict[str, List[datetime]] = {}
 
         # Callbacks
-        self.on_actor_failure: Optional[Callable[[str, Exception], None]] = None
+        self.on_actor_failure: Optional[Callable[[str, Optional[Exception]], None]] = (
+            None
+        )
         self.on_actor_restart: Optional[Callable[[str, int], None]] = None
-        self.on_supervisor_failure: Optional[Callable[[Exception], None]] = None
+        self.on_supervisor_failure: Optional[Callable[[Optional[Exception]], None]] = (
+            None
+        )
 
         # Supervisor state
         self._running = False

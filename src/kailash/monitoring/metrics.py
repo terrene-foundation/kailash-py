@@ -664,14 +664,20 @@ def get_metrics_registry() -> MetricsRegistry:
 
 def get_validation_metrics() -> ValidationMetrics:
     """Get the validation metrics collector."""
-    return _global_registry.get_collector("validation")
+    collector = _global_registry.get_collector("validation")
+    assert isinstance(collector, ValidationMetrics)
+    return collector
 
 
 def get_security_metrics() -> SecurityMetrics:
     """Get the security metrics collector."""
-    return _global_registry.get_collector("security")
+    collector = _global_registry.get_collector("security")
+    assert isinstance(collector, SecurityMetrics)
+    return collector
 
 
 def get_performance_metrics() -> PerformanceMetrics:
     """Get the performance metrics collector."""
-    return _global_registry.get_collector("performance")
+    collector = _global_registry.get_collector("performance")
+    assert isinstance(collector, PerformanceMetrics)
+    return collector

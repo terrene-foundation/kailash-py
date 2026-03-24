@@ -252,6 +252,10 @@ class WorkflowBuilder:
                 if isinstance(args[0], Node):
                     # Pattern: add_node(node_instance)
                     return self._add_node_instance(args[0], None)
+                raise WorkflowValidationError(
+                    f"Invalid node type: {type(args[0]).__name__}. "
+                    "Expected: str (node type name), Node class, or Node instance"
+                )
 
         elif len(args) == 3 and isinstance(args[0], str) and isinstance(args[2], dict):
             # Pattern 1: Current API - add_node("NodeType", "node_id", {"param": value})
@@ -263,7 +267,7 @@ class WorkflowBuilder:
                 raise WorkflowValidationError(
                     f"Legacy fluent API (add_node('node_id', NodeClass, ...)) was removed in v1.0.0.\n"
                     f"Use the current API instead:\n"
-                    f"  add_node('{getattr(args[1], '__name__', str(args[1]))}', '{args[0]}', {dict(kwargs) if kwargs else {{}}})"
+                    f"  add_node('{getattr(args[1], '__name__', str(args[1]))}', '{args[0]}', {dict(kwargs) if kwargs else dict()})"
                 )
             elif isinstance(args[1], str):
                 # Two strings - assume current API: add_node("NodeType", "node_id")
@@ -279,7 +283,7 @@ class WorkflowBuilder:
                     "Expected: str (node type name), Node class, or Node instance"
                 )
 
-        elif len(args) >= 2 and hasattr(args[0], "__name__"):
+        elif len(args) >= 2 and isinstance(args[0], type):
             # Pattern 3: Alternative - add_node(NodeClass, "node_id", param=value)
             # Handle both dict config and keyword args
             if len(args) == 3 and isinstance(args[2], dict):
@@ -313,6 +317,12 @@ class WorkflowBuilder:
                 f"  add_node('HTTPRequestNode', 'api_call', {{'url': 'https://api.com'}})\n"
                 f"  add_node('csv_reader', CSVReaderNode, file_path='data.csv')"
             )
+
+        # Fallback for any unmatched pattern
+        raise WorkflowValidationError(
+            f"Invalid add_node call with {len(args)} positional arguments. "
+            "Use: add_node('NodeType', 'node_id', {'param': value})"
+        )
 
     def _add_node_current(
         self, node_type: str, node_id: str | None, config: dict[str, Any]
@@ -647,9 +657,9 @@ class WorkflowBuilder:
         self,
         from_node: str,
         to_node: str,
-        mapping: dict = None,
-        from_output: str = None,
-        to_input: str = None,
+        mapping: Optional[dict] = None,
+        from_output: Optional[str] = None,
+        to_input: Optional[str] = None,
     ) -> None:
         """
         Connect two nodes in the workflow with flexible parameter formats.
@@ -768,9 +778,9 @@ class WorkflowBuilder:
         if validate_immediately:
             # Validate that contract schemas are valid
             try:
-                if contract.source_schema:
-                    from jsonschema import Draft7Validator
+                from jsonschema import Draft7Validator
 
+                if contract.source_schema:
                     Draft7Validator.check_schema(contract.source_schema)
                 if contract.target_schema:
                     Draft7Validator.check_schema(contract.target_schema)
@@ -822,10 +832,10 @@ class WorkflowBuilder:
 
         for connection_id, contract in self.connection_contracts.items():
             try:
+                from jsonschema import Draft7Validator
+
                 # Validate contract schemas
                 if contract.source_schema:
-                    from jsonschema import Draft7Validator
-
                     Draft7Validator.check_schema(contract.source_schema)
                 if contract.target_schema:
                     Draft7Validator.check_schema(contract.target_schema)
@@ -1001,10 +1011,10 @@ class WorkflowBuilder:
 
         # Add connections to workflow
         for conn in self.connections:
+            from_node = conn.get("from_node", "<unknown>")
+            to_node = conn.get("to_node", "<unknown>")
             try:
-                from_node = conn["from_node"]
                 from_output = conn["from_output"]
-                to_node = conn["to_node"]
                 to_input = conn["to_input"]
 
                 # Add the connection to workflow
@@ -1028,7 +1038,9 @@ class WorkflowBuilder:
                 node_info = self.nodes[node_id]
                 node_instance = workflow.get_node(node_id)
 
-                if hasattr(node_instance, "get_parameters"):
+                if node_instance is not None and hasattr(
+                    node_instance, "get_parameters"
+                ):
                     params = node_instance.get_parameters()
 
                     # Check which required parameters are missing from config

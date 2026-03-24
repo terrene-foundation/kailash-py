@@ -129,7 +129,8 @@ class WorkflowState:
         self.node_outputs: dict[str, Any] = {}
         self.execution_order: list[str] = []
         self.metadata: dict[str, Any] = {}
-        self.runtime = None  # Will be set by executor for enterprise features
+        self.initial_parameters: dict[str, Any] = {}
+        self.runtime: Any = None  # Will be set by executor for enterprise features
 
 
 class CyclicWorkflowExecutor:
@@ -143,7 +144,7 @@ class CyclicWorkflowExecutor:
         """
         self.safety_manager = safety_manager or CycleSafetyManager()
         self.cycle_state_manager = CycleStateManager()
-        self.dag_runner = WorkflowRunner()  # For executing DAG portions
+        self.dag_runner: Any = WorkflowRunner()  # For executing DAG portions
 
     def execute(
         self,
@@ -300,7 +301,9 @@ class CyclicWorkflowExecutor:
         cycle_groups = workflow.get_cycle_groups()
 
         # Create execution plan
-        execution_plan = self._create_execution_plan(workflow, dag_edges, cycle_groups)
+        execution_plan = self._create_execution_plan(
+            workflow, list(dag_edges), cycle_groups
+        )
 
         # Initialize workflow state
         state = WorkflowState(run_id=run_id)
@@ -411,7 +414,7 @@ class CyclicWorkflowExecutor:
         Returns:
             Execution results
         """
-        results = {}
+        results: dict[str, Any] = {}
 
         # Track nodes that need execution after cycles
         pending_post_cycle_nodes = set()
@@ -423,7 +426,7 @@ class CyclicWorkflowExecutor:
             logger.info(
                 f"Executing stage {i + 1}: is_cycle={stage.is_cycle}, nodes={stage_nodes}"
             )
-            if stage.is_cycle:
+            if stage.is_cycle and stage.cycle_group is not None:
                 logger.info(
                     f"Stage {i + 1} is a cycle group: {stage.cycle_group.cycle_id}"
                 )
@@ -531,7 +534,7 @@ class CyclicWorkflowExecutor:
         Returns:
             Dictionary with node IDs as keys and their results as values
         """
-        results = {}
+        results: dict[str, Any] = {}
 
         for cycle_group in cycle_groups:
             logger.info(f"Executing cycle group: {cycle_group.cycle_id}")
@@ -584,7 +587,7 @@ class CyclicWorkflowExecutor:
         cycle_group: "CycleGroup",
         state: WorkflowState,
         task_manager: TaskManager | None = None,
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], set[str] | None]:
         """Execute a cycle group with proper parameter propagation.
 
         Args:
@@ -594,7 +597,7 @@ class CyclicWorkflowExecutor:
             task_manager: Optional task manager for tracking
 
         Returns:
-            Cycle execution results
+            Tuple of (cycle execution results, downstream nodes or None)
         """
         cycle_id = cycle_group.cycle_id
         logger.info(f"Executing cycle group: {cycle_id}")
@@ -654,6 +657,7 @@ class CyclicWorkflowExecutor:
                     logger.warning(f"Failed to create cycle group task: {e}")
 
             loop_count = 0
+            converged = False
             while True:
                 loop_count += 1
                 logger.info(f"Cycle {cycle_id} - Starting loop iteration {loop_count}")
@@ -787,9 +791,7 @@ class CyclicWorkflowExecutor:
                             ended_at=datetime.now(UTC),
                             result=iteration_results,
                             metadata={
-                                "converged": (
-                                    converged if "converged" in locals() else False
-                                ),
+                                "converged": (converged),
                                 "terminated": should_terminate,
                             },
                         )
@@ -1044,9 +1046,7 @@ class CyclicWorkflowExecutor:
                         result=results,
                         metadata={
                             "total_iterations": loop_count,
-                            "converged": (
-                                converged if "converged" in locals() else False
-                            ),
+                            "converged": (converged),
                             "summary": summary,
                         },
                     )
@@ -1190,7 +1190,7 @@ class CyclicWorkflowExecutor:
                     inputs[dst_key] = pred_output
 
         # Create context with cycle information
-        context = {
+        context: dict[str, Any] = {
             "workflow_id": workflow.workflow_id,
             "run_id": state.run_id,
             "node_id": node_id,
@@ -1243,7 +1243,7 @@ class CyclicWorkflowExecutor:
                     )
 
                 # Create metadata
-                task_metadata = {
+                task_metadata: dict[str, Any] = {
                     "node_type": node.__class__.__name__,
                 }
                 if cycle_state:

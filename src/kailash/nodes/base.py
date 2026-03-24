@@ -110,7 +110,7 @@ class NodeParameter(BaseModel):
     """
 
     name: str
-    type: type
+    type: Any = None
     required: bool = True
     default: Any = None
     description: str = ""

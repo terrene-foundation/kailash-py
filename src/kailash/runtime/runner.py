@@ -38,7 +38,7 @@ class WorkflowRunner:
         workflow: Workflow,
         parameters: dict[str, dict[str, Any]] | None = None,
         runtime_type: str = "local",
-    ) -> tuple[dict[str, Any], str]:
+    ) -> tuple[dict[str, Any], str | None]:
         """Run a workflow.
 
         Args:
@@ -108,5 +108,5 @@ class WorkflowRunner:
         Returns:
             List of run summaries
         """
-        runs = self.task_manager.list_runs(workflow_name=workflow_name, limit=limit)
+        runs = self.task_manager.list_runs(workflow_name=workflow_name)
         return [run.model_dump() for run in runs]

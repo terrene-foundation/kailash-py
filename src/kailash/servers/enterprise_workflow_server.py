@@ -232,7 +232,7 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
 
             try:
                 resource = await self.resource_registry.get_resource(resource_name)
-                health = await self.resource_registry.check_health(resource_name)
+                health = await self.resource_registry._is_healthy(resource_name)
 
                 return {
                     "name": resource_name,
@@ -305,36 +305,47 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
                     status_code=404, detail=f"Workflow '{workflow_id}' not found"
                 )
 
+            # Create enhanced request outside try so it's always bound
+            workflow_request = WorkflowRequest(
+                inputs=request.get("inputs", {}),
+                resources=request.get("resources", {}),
+                context=request.get("context", {}),
+            )
+
             try:
-                # Create enhanced request
-                workflow_request = WorkflowRequest(
-                    inputs=request.get("inputs", {}),
-                    resources=request.get("resources", {}),
-                    context=request.get("context", {}),
-                )
 
                 # Resolve resources if enabled
                 resolved_inputs = workflow_request.inputs.copy()
-                if self.enable_resource_management and workflow_request.resources:
-                    resolved_resources = (
-                        await self._resource_resolver.resolve_resources(
-                            workflow_request.resources
-                        )
-                    )
+                if (
+                    self.enable_resource_management
+                    and self._resource_resolver
+                    and workflow_request.resources
+                ):
+                    resolved_resources: Dict[str, Any] = {}
+                    for res_name, res_ref in workflow_request.resources.items():
+                        if isinstance(res_ref, ResourceReference):
+                            resolved_resources[res_name] = (
+                                await self._resource_resolver.resolve(res_ref)
+                            )
+                        else:
+                            resolved_resources[res_name] = res_ref
                     resolved_inputs.update(resolved_resources)
 
                 # Execute workflow asynchronously
                 workflow_obj = self.workflows[workflow_id].workflow
                 execution_context = ExecutionContext(
-                    request_id=workflow_request.request_id,
-                    workflow_id=workflow_id,
-                    metadata=workflow_request.context,
+                    resource_registry=self.resource_registry,
                 )
+                execution_context.variables["request_id"] = workflow_request.request_id
+                execution_context.variables["workflow_id"] = workflow_id
+                execution_context.variables["metadata"] = workflow_request.context
+
+                if self._async_runtime is None:
+                    raise RuntimeError("Async runtime not initialized")
 
                 result = await self._async_runtime.execute_async(
                     workflow_obj,
-                    inputs=resolved_inputs,
-                    context=execution_context,
+                    parameters=resolved_inputs,
                 )
 
                 # Create response
@@ -347,9 +358,13 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
                     completed_at=datetime.now(UTC),
                 )
 
-                response.execution_time = (
-                    response.completed_at - response.started_at
-                ).total_seconds()
+                if (
+                    response.completed_at is not None
+                    and response.started_at is not None
+                ):
+                    response.execution_time = (
+                        response.completed_at - response.started_at
+                    ).total_seconds()
 
                 return response.to_dict()
 
@@ -385,7 +400,7 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
         try:
             for resource_name in self.resource_registry.list_resources():
                 try:
-                    health = await self.resource_registry.check_health(resource_name)
+                    health = await self.resource_registry._is_healthy(resource_name)
                     resource_health["resources"][resource_name] = health
                 except Exception as e:
                     resource_health["resources"][resource_name] = {
@@ -439,7 +454,24 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
         if not self.enable_resource_management:
             raise RuntimeError("Resource management disabled")
 
-        self.resource_registry.register_factory(name, lambda: resource)
+        from ..resources.factory import ResourceFactory as _ResourceFactory
+
+        class _StaticResourceFactory(_ResourceFactory):
+            """Factory that returns a pre-created resource."""
+
+            def __init__(self, res: Any) -> None:
+                self._resource = res
+
+            async def create(self) -> Any:
+                return self._resource
+
+            def get_config(self) -> Dict[str, Any]:
+                return {
+                    "type": "static",
+                    "resource_type": type(self._resource).__name__,
+                }
+
+        self.resource_registry.register_factory(name, _StaticResourceFactory(resource))
         logger.info(f"Registered enterprise resource: {name}")
 
     def _register_root_endpoints(self):

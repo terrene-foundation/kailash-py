@@ -4,11 +4,13 @@ Authentication Exceptions for Kailash Middleware
 Provides exception classes for authentication errors without circular dependencies.
 """
 
+from typing import Optional
+
 
 class AuthenticationError(Exception):
     """Base exception for authentication errors."""
 
-    def __init__(self, message: str, error_code: str = None):
+    def __init__(self, message: str, error_code: Optional[str] = None):
         super().__init__(message)
         self.error_code = error_code
 
@@ -52,7 +54,9 @@ class PermissionDeniedError(AuthenticationError):
     """Raised when user lacks required permissions."""
 
     def __init__(
-        self, message: str = "Permission denied", required_permission: str = None
+        self,
+        message: str = "Permission denied",
+        required_permission: Optional[str] = None,
     ):
         super().__init__(message, "PERMISSION_DENIED")
         self.required_permission = required_permission
@@ -61,7 +65,9 @@ class PermissionDeniedError(AuthenticationError):
 class RateLimitError(AuthenticationError):
     """Raised when authentication rate limit is exceeded."""
 
-    def __init__(self, message: str = "Rate limit exceeded", retry_after: int = None):
+    def __init__(
+        self, message: str = "Rate limit exceeded", retry_after: Optional[int] = None
+    ):
         super().__init__(message, "RATE_LIMIT_EXCEEDED")
         self.retry_after = retry_after
 

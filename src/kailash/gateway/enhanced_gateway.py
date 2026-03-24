@@ -90,9 +90,9 @@ class EnhancedDurableAPIGateway(DurableAPIGateway):
 
     def __init__(
         self,
-        resource_registry: ResourceRegistry = None,
-        secret_manager: SecretManager = None,
-        **kwargs,
+        resource_registry: Optional[ResourceRegistry] = None,
+        secret_manager: Optional[SecretManager] = None,
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.resource_registry = resource_registry or ResourceRegistry()
@@ -105,13 +105,13 @@ class EnhancedDurableAPIGateway(DurableAPIGateway):
         self._active_requests: Dict[str, WorkflowResponse] = {}
         self._cleanup_tasks: List[asyncio.Task] = []
 
-    def register_workflow(
+    def register_workflow(  # type: ignore[override]
         self,
         workflow_id: str,
         workflow: Workflow,
-        required_resources: List[str] = None,
-        description: str = None,
-    ):
+        required_resources: Optional[List[str]] = None,
+        description: Optional[str] = None,
+    ) -> None:
         """Register workflow with resource requirements."""
         # Use parent's register_workflow method
         super().register_workflow(workflow_id, workflow)
@@ -153,6 +153,10 @@ class EnhancedDurableAPIGateway(DurableAPIGateway):
 
             workflow_reg = self.workflows[workflow_id]
             workflow = workflow_reg.workflow
+            if workflow is None:
+                raise WorkflowNotFoundError(
+                    f"Workflow {workflow_id} has no workflow definition"
+                )
 
             # Update status
             response.status = "running"
@@ -171,18 +175,20 @@ class EnhancedDurableAPIGateway(DurableAPIGateway):
                 result.get("results", result) if isinstance(result, dict) else result
             )
             response.completed_at = datetime.now(UTC)
-            response.execution_time = (
-                response.completed_at - response.started_at
-            ).total_seconds()
+            if response.started_at is not None:
+                response.execution_time = (
+                    response.completed_at - response.started_at
+                ).total_seconds()
 
         except Exception as e:
             # Handle error
             response.status = "failed"
             response.error = str(e)
             response.completed_at = datetime.now(UTC)
-            response.execution_time = (
-                response.completed_at - response.started_at
-            ).total_seconds()
+            if response.started_at is not None:
+                response.execution_time = (
+                    response.completed_at - response.started_at
+                ).total_seconds()
 
             # Log error
             logger.error(f"Workflow {workflow_id} failed: {e}", exc_info=True)
@@ -216,12 +222,20 @@ class EnhancedDurableAPIGateway(DurableAPIGateway):
 
                     # Register the resource under the expected name
                     # Create a wrapper factory that returns the already-created resource
-                    class ExistingResourceFactory:
-                        def __init__(self, resource):
+                    from ..resources.factory import ResourceFactory as _ResourceFactory
+
+                    class ExistingResourceFactory(_ResourceFactory):
+                        def __init__(self, resource: Any):
                             self._resource = resource
 
-                        async def create(self):
+                        async def create(self) -> Any:
                             return self._resource
+
+                        def get_config(self) -> Dict[str, Any]:
+                            return {
+                                "type": "existing",
+                                "resource_type": type(self._resource).__name__,
+                            }
 
                     self.resource_registry.register_factory(
                         name, ExistingResourceFactory(resource)
@@ -236,8 +250,8 @@ class EnhancedDurableAPIGateway(DurableAPIGateway):
                     # Resource will be fetched on demand
 
                 elif isinstance(ref, dict) and "type" in ref:
-                    # Inline resource reference
-                    resource_ref = ResourceReference(**ref)
+                    # Inline resource reference (when resources dict contains raw dicts)
+                    resource_ref = ResourceReference.from_dict(ref)
                     resource = await self._resource_resolver.resolve(resource_ref)
 
         # Add required resources to context
@@ -280,6 +294,8 @@ class EnhancedDurableAPIGateway(DurableAPIGateway):
 
         for workflow_id, workflow_reg in self.workflows.items():
             workflow = workflow_reg.workflow
+            if workflow is None:
+                continue
             metadata = getattr(workflow, "metadata", {})
             workflows[workflow_id] = {
                 "name": workflow.name,
@@ -339,12 +355,11 @@ class EnhancedDurableAPIGateway(DurableAPIGateway):
                 resource = await self.resource_registry.get_resource(resource_name)
                 # Try to get health check
                 factory = self.resource_registry._factories.get(resource_name)
-                if (
-                    factory
-                    and hasattr(factory, "health_check")
-                    and factory.health_check
-                ):
-                    is_healthy = await factory.health_check(resource)
+                health_check_fn = (
+                    getattr(factory, "health_check", None) if factory else None
+                )
+                if health_check_fn is not None:
+                    is_healthy = await health_check_fn(resource)
                     health["resources"][resource_name] = (
                         "healthy" if is_healthy else "unhealthy"
                     )

@@ -30,6 +30,7 @@ try:
 
     PSUTIL_AVAILABLE = True
 except ImportError:
+    psutil = None  # type: ignore[assignment]
     PSUTIL_AVAILABLE = False
 
 
@@ -193,11 +194,15 @@ class MetricsContext:
         """Start metrics collection."""
         self.start_time = time.time()
 
-        if self.monitoring_enabled:
+        if self.monitoring_enabled and psutil is not None:
             try:
                 self.process = psutil.Process()
-                self.initial_memory = self.process.memory_info().rss / 1024 / 1024  # MB
-                self.peak_memory = self.initial_memory
+                assert self.process is not None
+                mem_info = self.process.memory_info()
+                self.initial_memory = mem_info.rss / 1024 / 1024  # MB
+                self.peak_memory = (
+                    self.initial_memory if self.initial_memory is not None else 0.0
+                )
 
                 # Get initial I/O counters if available
                 if hasattr(self.process, "io_counters"):
@@ -228,6 +233,8 @@ class MetricsContext:
 
     def _monitor_resources(self):
         """Monitor resources in background thread."""
+        if self.process is None:
+            return
         while not self._stop_monitoring.is_set():
             try:
                 # Sample CPU usage
@@ -236,10 +243,11 @@ class MetricsContext:
                     self.cpu_samples.append(cpu)
 
                 # Track peak memory
-                memory = self.process.memory_info().rss / 1024 / 1024  # MB
+                mem_info = self.process.memory_info()
+                memory = mem_info.rss / 1024 / 1024  # MB
                 self.peak_memory = max(self.peak_memory, memory)
 
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
+            except Exception:
                 break
 
             self._stop_monitoring.wait(self.sampling_interval)
@@ -252,7 +260,7 @@ class MetricsContext:
         if self.start_time and self.end_time:
             metrics.duration = self.end_time - self.start_time
 
-        if self.monitoring_enabled and self.process:
+        if self.monitoring_enabled and self.process and psutil is not None:
             try:
                 # CPU usage (average of samples)
                 if self.cpu_samples:

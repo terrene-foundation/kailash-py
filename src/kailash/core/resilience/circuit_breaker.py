@@ -29,7 +29,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Awaitable, Callable, Dict, Generic, List, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +153,9 @@ class ConnectionCircuitBreaker(Generic[T]):
         self._rolling_window = deque(maxlen=self.config.window_size)
         self._listeners: List[Callable] = []
 
-    async def call(self, func: Callable[..., T], *args, **kwargs) -> T:
+    async def call(
+        self, func: Callable[..., Awaitable[T]], *args: Any, **kwargs: Any
+    ) -> T:
         """Execute function with circuit breaker protection.
 
         Args:

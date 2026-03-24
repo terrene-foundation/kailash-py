@@ -37,15 +37,42 @@ Version:
 import logging
 import time
 from abc import abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from kailash.sdk_exceptions import RuntimeExecutionError, WorkflowValidationError
 from kailash.workflow import Workflow
+
+if TYPE_CHECKING:
+    pass
 
 logger = logging.getLogger(__name__)
 
 
 class ConditionalExecutionMixin:
+    # Declare attributes provided by BaseRuntime (used by mixin methods)
+    logger: logging.Logger
+    debug: bool
+    enable_monitoring: bool
+    conditional_execution: str
+
+    # Methods provided by ValidationMixin (co-mixed in concrete runtimes)
+    def _validate_conditional_execution_prerequisites(
+        self, workflow: Workflow
+    ) -> bool: ...
+
+    def _validate_switch_results(
+        self, switch_results: Dict[str, Dict[str, Any]]
+    ) -> bool: ...
+
+    def _validate_conditional_execution_results(
+        self, results: Dict[str, Dict[str, Any]], workflow: Workflow
+    ) -> bool: ...
+
+    # Methods provided by concrete runtimes (optional, checked with hasattr)
+    def _record_execution_metrics(self, *args: Any, **kwargs: Any) -> None: ...
+
+    def _should_stop_on_error(self, *args: Any, **kwargs: Any) -> bool: ...
+
     """
     Conditional execution capabilities for workflow runtimes.
 
@@ -700,7 +727,7 @@ class ConditionalExecutionMixin:
 
             # Execute pruned plan
             remaining_results = await self._execute_pruned_plan(
-                workflow, execution_plan, inputs, **kwargs
+                workflow, inputs, execution_plan=execution_plan, **kwargs
             )
 
             # Merge remaining results
@@ -745,7 +772,9 @@ class ConditionalExecutionMixin:
 
             try:
                 # Execute fallback with additional monitoring
-                fallback_results = await self._execute_async(workflow, inputs)
+                fallback_results = await self._execute_async(
+                    workflow, parameters=inputs
+                )
 
                 # Track fallback usage for monitoring
                 self._track_fallback_usage(workflow, fallback_reason or str(e))
@@ -931,9 +960,8 @@ class ConditionalExecutionMixin:
     async def _execute_pruned_plan(
         self,
         workflow: Workflow,
-        execution_plan: List[str],
-        inputs: Dict[str, Any],
-        **kwargs,
+        inputs: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """
         Execute pruned execution plan based on SwitchNode results (template method).
@@ -961,8 +989,13 @@ class ConditionalExecutionMixin:
         Raises:
             None - Errors are logged and execution continues with other nodes
         """
+        # Extract execution_plan from kwargs (may be passed as positional or kwarg)
+        execution_plan: List[str] = kwargs.get("execution_plan", [])
+        if inputs is None:
+            inputs = {}
+
         self.logger.info("Phase 2: Executing pruned plan based on switch results")
-        remaining_results = {}
+        remaining_results: Dict[str, Any] = {}
 
         try:
             if not execution_plan:
@@ -1031,9 +1064,7 @@ class ConditionalExecutionMixin:
     # ========================================================================
 
     @abstractmethod
-    async def _execute_async(
-        self, workflow: Workflow, inputs: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    async def _execute_async(self, workflow: Workflow, **kwargs: Any) -> Any:
         """
         Execute workflow asynchronously (runtime-specific).
 
@@ -1043,10 +1074,11 @@ class ConditionalExecutionMixin:
 
         Args:
             workflow: Workflow to execute
-            inputs: Workflow inputs
+            **kwargs: Runtime-specific keyword arguments (e.g. task_manager,
+                parameters, cancellation_token, execution_tracker, search_attributes)
 
         Returns:
-            Execution results
+            Execution results (Dict[str, Any] or tuple[Dict[str, Any], str | None])
 
         Raises:
             NotImplementedError: Must be implemented by runtime
@@ -1054,9 +1086,7 @@ class ConditionalExecutionMixin:
         pass
 
     @abstractmethod
-    def _execute_single_node(
-        self, node_id: str, workflow: Workflow, node_inputs: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _execute_single_node(self, node_id: str, **kwargs: Any) -> Dict[str, Any]:
         """
         Execute single node (runtime-specific).
 
@@ -1065,8 +1095,8 @@ class ConditionalExecutionMixin:
 
         Args:
             node_id: Node identifier
-            workflow: Workflow containing the node
-            node_inputs: Prepared inputs for the node
+            **kwargs: Runtime-specific keyword arguments (e.g. node_instance,
+                workflow, node_inputs, task_manager, run_id, workflow_context)
 
         Returns:
             Node execution results

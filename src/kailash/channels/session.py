@@ -250,7 +250,7 @@ class SessionManager:
         session = CrossChannelSession(session_id=session_id, user_id=user_id)
 
         if timeout:
-            session.extends_at = time.time() + timeout
+            session.expires_at = time.time() + timeout
 
         self._sessions[session_id] = session
         logger.info(f"Created session {session_id} for user {user_id}")

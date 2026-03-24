@@ -20,7 +20,7 @@ class CallRecord:
     args: tuple
     kwargs: dict
     timestamp: datetime
-    result: Any = None
+    result: Optional[Any] = None
     exception: Optional[Exception] = None
     duration: float = 0.0
 
@@ -37,8 +37,8 @@ class MockResource:
         method_name: str,
         args: tuple,
         kwargs: dict,
-        result: Any = None,
-        exception: Exception = None,
+        result: Optional[Any] = None,
+        exception: Optional[Exception] = None,
         duration: float = 0.0,
     ):
         """Record a method call."""
@@ -53,7 +53,7 @@ class MockResource:
         )
         self._call_records.append(record)
 
-    def get_calls(self, method_name: str = None) -> List[CallRecord]:
+    def get_calls(self, method_name: Optional[str] = None) -> List[CallRecord]:
         """Get call records, optionally filtered by method."""
         if method_name:
             return [r for r in self._call_records if r.method == method_name]
@@ -77,7 +77,7 @@ class MockResourceRegistry:
         if not isinstance(mock, (Mock, AsyncMock)):
             self._wrap_mock_methods(name, mock)
 
-    async def create_mock(self, name: str, factory: Any, spec: Any = None) -> Any:
+    async def create_mock(self, name: str, factory: Any, spec: Optional[Any] = None) -> Any:
         """Create a mock resource from factory."""
         # Determine what to mock
         if spec is None and hasattr(factory, "create"):
@@ -330,7 +330,7 @@ class MockResourceRegistry:
             return sync_wrapper
 
     def get_calls(
-        self, resource_name: str, method_name: str = None
+        self, resource_name: str, method_name: Optional[str] = None
     ) -> List[CallRecord]:
         """Get call history for a resource."""
         calls = self._call_history.get(resource_name, [])
@@ -427,7 +427,7 @@ class MockResourceRegistry:
         """Get a mock resource."""
         return self._mocks.get(name)
 
-    def reset_history(self, resource_name: str = None):
+    def reset_history(self, resource_name: Optional[str] = None):
         """Reset call history."""
         if resource_name:
             self._call_history[resource_name] = []
@@ -445,8 +445,8 @@ class MockResourceRegistry:
         self,
         resource_name: str,
         method_name: str,
-        returns: Any = None,
-        raises: Exception = None,
+        returns: Optional[Any] = None,
+        raises: Optional[Exception] = None,
     ) -> "Expectation":
         """Set up an expectation for a call."""
         expectation = Expectation(resource_name, method_name, returns, raises)
@@ -473,7 +473,7 @@ class Expectation:
 
     resource_name: str
     method_name: str
-    returns: Any = None
+    returns: Optional[Any] = None
     raises: Optional[Exception] = None
     times: Optional[int] = None
     with_args: Optional[tuple] = None

@@ -93,7 +93,7 @@ class ImportPathValidator:
 
         return sdk_modules
 
-    def validate_file(self, file_path: str) -> List[ImportIssue]:
+    def validate_file(self, file_path: str | Path) -> List[ImportIssue]:
         """
         Validate imports in a single Python file.
 
@@ -103,32 +103,32 @@ class ImportPathValidator:
         Returns:
             List of import issues found
         """
-        file_path = Path(file_path)
-        if not file_path.exists() or not file_path.suffix == ".py":
+        file_path_obj = Path(file_path)
+        if not file_path_obj.exists() or not file_path_obj.suffix == ".py":
             return []
 
         issues = []
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path_obj, "r", encoding="utf-8") as f:
                 content = f.read()
 
             # Parse AST to find imports
-            tree = ast.parse(content, filename=str(file_path))
+            tree = ast.parse(content, filename=str(file_path_obj))
 
             # Check each import statement
             for node in ast.walk(tree):
                 if isinstance(node, ast.ImportFrom):
-                    issue = self._check_import_from(node, file_path, content)
+                    issue = self._check_import_from(node, file_path_obj, content)
                     if issue:
                         issues.append(issue)
                 elif isinstance(node, ast.Import):
-                    issue = self._check_import(node, file_path, content)
+                    issue = self._check_import(node, file_path_obj, content)
                     if issue:
                         issues.append(issue)
 
         except Exception as e:
-            logger.warning(f"Failed to parse {file_path}: {e}")
+            logger.warning(f"Failed to parse {file_path_obj}: {e}")
 
         return issues
 
@@ -325,7 +325,7 @@ class ImportPathValidator:
             return f"from {suggested_module} import ..."
 
     def validate_directory(
-        self, directory: str, recursive: bool = True
+        self, directory: str | Path, recursive: bool = True
     ) -> List[ImportIssue]:
         """
         Validate all Python files in a directory.
@@ -337,14 +337,14 @@ class ImportPathValidator:
         Returns:
             List of all import issues found
         """
-        directory = Path(directory)
-        if not directory.exists() or not directory.is_dir():
+        dir_path = Path(directory)
+        if not dir_path.exists() or not dir_path.is_dir():
             return []
 
         all_issues = []
 
         pattern = "**/*.py" if recursive else "*.py"
-        for py_file in directory.glob(pattern):
+        for py_file in dir_path.glob(pattern):
             # Skip test files by default (can be configured)
             if "test" in py_file.name or "__pycache__" in str(py_file):
                 continue

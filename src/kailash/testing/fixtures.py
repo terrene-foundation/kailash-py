@@ -18,6 +18,7 @@ try:
 
     HAS_AIOFILES = True
 except ImportError:
+    aiofiles = None  # type: ignore[assignment]
     HAS_AIOFILES = False
     logger.warning("aiofiles not available for async file operations")
 
@@ -99,17 +100,18 @@ class AsyncWorkflowFixtures:
         database: str = "test",
         user: str = "test",
         password: str = "test",
-        port: int = None,
+        port: Optional[int] = None,
     ) -> DatabaseFixture:
         """Create test database with Docker."""
         if not HAS_DOCKER:
             raise RuntimeError("Docker not available for test database")
 
+        assert docker is not None
         client = docker.from_env()
 
         if engine == "postgresql":
             # Start PostgreSQL container
-            container = client.containers.execute(
+            container = client.containers.run(
                 f"postgres:{tag}",
                 environment={
                     "POSTGRES_DB": database,
@@ -162,7 +164,7 @@ class AsyncWorkflowFixtures:
 
         elif engine == "mysql":
             # Start MySQL container
-            container = client.containers.execute(
+            container = client.containers.run(
                 f"mysql:{tag}",
                 environment={
                     "MYSQL_ROOT_PASSWORD": password,
@@ -206,7 +208,7 @@ class AsyncWorkflowFixtures:
             full_path = os.path.join(directory, path)
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
 
-            if HAS_AIOFILES:
+            if HAS_AIOFILES and aiofiles is not None:
                 async with aiofiles.open(full_path, "w") as f:
                     if isinstance(content, dict):
                         await f.write(json.dumps(content, indent=2))
@@ -232,7 +234,7 @@ class AsyncWorkflowFixtures:
 
     @staticmethod
     @asynccontextmanager
-    async def mock_time(start_time: float = None, speed: float = 1.0):
+    async def mock_time(start_time: Optional[float] = None, speed: float = 1.0):
         """Mock time for testing time-dependent code."""
         import time as time_module
 
@@ -274,7 +276,7 @@ class HttpCall:
 class MockResponse:
     """Mock HTTP response."""
 
-    def __init__(self, data: Any, status: int = 200, headers: Dict = None):
+    def __init__(self, data: Any, status: int = 200, headers: Optional[Dict] = None):
         self._data = data
         self.status = status
         self.headers = headers or {}
@@ -312,7 +314,7 @@ class MockHttpClient:
         url: str,
         response: Any,
         status: int = 200,
-        headers: Dict[str, str] = None,
+        headers: Optional[Dict[str, str]] = None,
     ):
         """Add a mock response."""
         key = f"{method.upper()}:{url}"
@@ -367,7 +369,9 @@ class MockHttpClient:
     async def delete(self, url: str, **kwargs):
         return await self.request("DELETE", url, **kwargs)
 
-    def get_calls(self, method: str = None, url: str = None) -> List[HttpCall]:
+    def get_calls(
+        self, method: Optional[str] = None, url: Optional[str] = None
+    ) -> List[HttpCall]:
         """Get recorded calls."""
         calls = self._calls
         if method:
@@ -376,7 +380,7 @@ class MockHttpClient:
             calls = [c for c in calls if c.url == url]
         return calls
 
-    def assert_called(self, method: str, url: str, times: int = None):
+    def assert_called(self, method: str, url: str, times: Optional[int] = None):
         """Assert endpoint was called."""
         calls = self.get_calls(method, url)
         if times is not None:
@@ -412,7 +416,7 @@ class MockCache:
 
         return self._data.get(key)
 
-    async def set(self, key: str, value: Any, ttl: int = None):
+    async def set(self, key: str, value: Any, ttl: Optional[int] = None):
         """Set value in cache."""
         self._calls.append(("set", (key, value), {"ttl": ttl}))
         self._data[key] = value
@@ -441,13 +445,13 @@ class MockCache:
         self._data.clear()
         self._expiry.clear()
 
-    def get_calls(self, method: str = None) -> List[tuple[str, tuple, dict]]:
+    def get_calls(self, method: Optional[str] = None) -> List[tuple[str, tuple, dict]]:
         """Get recorded calls."""
         if method:
             return [c for c in self._calls if c[0] == method]
         return self._calls.copy()
 
-    def assert_called(self, method: str, times: int = None):
+    def assert_called(self, method: str, times: Optional[int] = None):
         """Assert method was called."""
         calls = self.get_calls(method)
         if times is not None:

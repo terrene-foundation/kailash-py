@@ -32,15 +32,17 @@ class WorkflowRequest(BaseModel):
     """Base request model for workflow execution."""
 
     inputs: dict[str, Any] | None = Field(
-        None, description="Input data for workflow nodes"
+        default=None, description="Input data for workflow nodes"
     )
     parameters: dict[str, Any] | None = Field(
-        None, description="Legacy: parameters for workflow execution"
+        default=None, description="Legacy: parameters for workflow execution"
     )
     config: dict[str, Any] | None = Field(
-        None, description="Node configuration overrides"
+        default=None, description="Node configuration overrides"
     )
-    mode: ExecutionMode = Field(ExecutionMode.SYNC, description="Execution mode")
+    mode: ExecutionMode = Field(
+        default=ExecutionMode.SYNC, description="Execution mode"
+    )
 
     def get_inputs(self) -> dict[str, Any]:
         """Get inputs, supporting both 'inputs' and 'parameters' format."""
@@ -304,20 +306,23 @@ class WorkflowAPI:
 
             if isinstance(self.runtime, AsyncLocalRuntime):
                 # Use native async execution - no thread creation, no deadlock
-                results = await self.runtime.execute_workflow_async(
+                async_result = await self.runtime.execute_workflow_async(
                     self.workflow_graph,
                     inputs=request.get_inputs(),
                 )
-                # AsyncLocalRuntime returns dict with 'results' key
-                if isinstance(results, dict) and "results" in results:
-                    results = results["results"]
-            else:
+                # execute_workflow_async returns Tuple[Dict, str]
+                results = (
+                    async_result[0] if isinstance(async_result, tuple) else async_result
+                )
+            elif self.runtime is not None:
                 # Fallback to sync runtime with threading (backward compatibility)
                 results = await asyncio.to_thread(
                     self.runtime.execute,
                     self.workflow_graph,
                     parameters=request.get_inputs(),
                 )
+            else:
+                raise RuntimeError("No runtime configured for workflow execution")
 
             # Handle tuple return from runtime
             if isinstance(results, tuple):

@@ -9,7 +9,9 @@ from kailash.sdk_exceptions import NodeConfigurationError
 class MockNode(Node):
     """Mock node for testing."""
 
-    def __init__(self, node_id: str = None, name: str = None, **kwargs):
+    def __init__(
+        self, node_id: str | None = None, name: str | None = None, **kwargs: Any
+    ):
         """Initialize mock node."""
         self.node_id = node_id
         self.name = name or node_id
@@ -42,7 +44,7 @@ NODE_TYPES = [
 
 for node_type in NODE_TYPES:
     try:
-        NodeRegistry._registry[node_type] = MockNode
+        NodeRegistry._nodes[node_type] = MockNode
     except Exception:
         pass
 

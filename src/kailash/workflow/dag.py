@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from typing import Any, Iterable, Iterator
+from typing import Any, Iterable, Iterator, Literal, overload
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,11 @@ class _NodeView:
 
     def __init__(self, node_attrs: dict[str, dict[str, Any]]) -> None:
         self._node_attrs = node_attrs
+
+    @overload
+    def __call__(self, data: Literal[False] = ...) -> list[str]: ...
+    @overload
+    def __call__(self, data: Literal[True]) -> list[tuple[str, dict[str, Any]]]: ...
 
     def __call__(
         self, data: bool = False
@@ -90,6 +95,13 @@ class _EdgeView:
 
     def __init__(self, edge_attrs: dict[tuple[str, str], dict[str, Any]]) -> None:
         self._edge_attrs = edge_attrs
+
+    @overload
+    def __call__(self, data: Literal[False] = ...) -> list[tuple[str, str]]: ...
+    @overload
+    def __call__(
+        self, data: Literal[True]
+    ) -> list[tuple[str, str, dict[str, Any]]]: ...
 
     def __call__(
         self, data: bool = False
@@ -333,6 +345,15 @@ class WorkflowDAG:
             raise KeyError(f"Node '{node}' not in graph")
         return iter(self._successors[node])
 
+    @overload
+    def in_edges(
+        self, node: str, data: Literal[False] = ...
+    ) -> list[tuple[str, str]]: ...
+    @overload
+    def in_edges(
+        self, node: str, data: Literal[True]
+    ) -> list[tuple[str, str, dict[str, Any]]]: ...
+
     def in_edges(
         self, node: str, data: bool = False
     ) -> list[tuple[str, str]] | list[tuple[str, str, dict[str, Any]]]:
@@ -353,6 +374,15 @@ class WorkflowDAG:
                 for src in self._predecessors[node]
             ]
         return [(src, node) for src in self._predecessors[node]]
+
+    @overload
+    def out_edges(
+        self, node: str, data: Literal[False] = ...
+    ) -> list[tuple[str, str]]: ...
+    @overload
+    def out_edges(
+        self, node: str, data: Literal[True]
+    ) -> list[tuple[str, str, dict[str, Any]]]: ...
 
     def out_edges(
         self, node: str, data: bool = False

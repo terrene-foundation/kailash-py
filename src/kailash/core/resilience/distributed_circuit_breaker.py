@@ -193,7 +193,7 @@ class RedisCircuitBreakerBackend:
             raw = client.get(self._failure_count_key(name))
             if raw is None:
                 return 0
-            return int(raw)
+            return int(str(raw))
         except Exception as exc:
             logger.warning(
                 "Redis unavailable for circuit breaker '%s' failure count read: %s",
@@ -217,7 +217,7 @@ class RedisCircuitBreakerBackend:
             raw = client.get(self._last_failure_key(name))
             if raw is None:
                 return 0.0
-            return float(raw)
+            return float(str(raw))
         except Exception as exc:
             logger.warning(
                 "Redis unavailable for circuit breaker '%s' last failure read: %s",
@@ -272,6 +272,7 @@ class RedisCircuitBreakerBackend:
         """
         try:
             client = self._get_client()
+            assert self._transition_script is not None
             result = self._transition_script(
                 keys=[
                     self._state_key(name),
@@ -300,11 +301,12 @@ class RedisCircuitBreakerBackend:
         """
         try:
             client = self._get_client()
+            assert self._failure_script is not None
             count = self._failure_script(
                 keys=[self._failure_count_key(name), self._last_failure_key(name)],
                 args=[str(time.time()), str(self.key_ttl)],
             )
-            return int(count)
+            return int(str(count))
         except Exception as exc:
             logger.warning(
                 "Redis unavailable for circuit breaker '%s' failure recording: %s",
@@ -369,7 +371,7 @@ class RedisCircuitBreakerBackend:
         """
         try:
             client = self._get_client()
-            return client.ping()
+            return bool(client.ping())
         except Exception:
             return False
 

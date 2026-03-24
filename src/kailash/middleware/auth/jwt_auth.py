@@ -51,10 +51,10 @@ class JWTAuthManager:
 
     def __init__(
         self,
-        config: JWTConfig = None,
-        secret_key: str = None,
-        algorithm: str = None,
-        use_rsa: bool = None,
+        config: Optional[JWTConfig] = None,
+        secret_key: Optional[str] = None,
+        algorithm: Optional[str] = None,
+        use_rsa: Optional[bool] = None,
         **kwargs,
     ):
         """
@@ -85,14 +85,18 @@ class JWTAuthManager:
                 setattr(self.config, key, value)
 
         # Key management
-        self._private_key: Optional[rsa.RSAPrivateKey] = None
-        self._public_key: Optional[rsa.RSAPublicKey] = None
+        self._private_key: Optional[Any] = (
+            None  # rsa.RSAPrivateKey when rsa is available
+        )
+        self._public_key: Optional[Any] = None  # rsa.RSAPublicKey when rsa is available
         self._secret_key: Optional[str] = self.config.secret_key
         self._key_id = str(uuid.uuid4())
         self._key_generated_at = datetime.now(timezone.utc)
 
         # Token tracking
-        self._blacklisted_tokens: set = set() if self.config.enable_blacklist else None
+        self._blacklisted_tokens: Optional[set] = (
+            set() if self.config.enable_blacklist else None
+        )
         self._refresh_tokens: Dict[str, Dict[str, Any]] = {}
         self._failed_attempts: Dict[str, List[datetime]] = {}
 
@@ -132,6 +136,9 @@ class JWTAuthManager:
             from cryptography.hazmat.backends import default_backend
             from cryptography.hazmat.primitives import serialization
 
+            if self.config.private_key is None or self.config.public_key is None:
+                raise ValueError("RSA mode requires both private_key and public_key")
+
             self._private_key = serialization.load_pem_private_key(
                 self.config.private_key.encode(),
                 password=None,
@@ -147,6 +154,8 @@ class JWTAuthManager:
 
     def _generate_key_pair(self):
         """Generate new RSA key pair for token signing."""
+        if rsa is None:
+            raise ImportError("cryptography package is required for RSA key generation")
         self._private_key = rsa.generate_private_key(
             public_exponent=65537, key_size=2048
         )
@@ -168,10 +177,10 @@ class JWTAuthManager:
         self,
         user_id: str,
         token_type: str = "access",
-        tenant_id: str = None,
-        session_id: str = None,
-        permissions: List[str] = None,
-        roles: List[str] = None,
+        tenant_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        permissions: Optional[List[str]] = None,
+        roles: Optional[List[str]] = None,
         **kwargs,
     ) -> TokenPayload:
         """Create token payload with all claims."""
@@ -201,10 +210,10 @@ class JWTAuthManager:
     def create_access_token(
         self,
         user_id: str,
-        tenant_id: str = None,
-        session_id: str = None,
-        permissions: List[str] = None,
-        roles: List[str] = None,
+        tenant_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        permissions: Optional[List[str]] = None,
+        roles: Optional[List[str]] = None,
         **kwargs,
     ) -> str:
         """Create JWT access token."""
@@ -238,6 +247,9 @@ class JWTAuthManager:
         }
         payload_dict.update(kwargs)
 
+        if jwt is None:
+            raise ImportError("PyJWT package is required for JWT operations")
+
         # Sign token based on algorithm
         if self.config.use_rsa or self.config.algorithm.startswith("RS"):
             # RSA signing
@@ -260,7 +272,11 @@ class JWTAuthManager:
         return token
 
     def create_refresh_token(
-        self, user_id: str, tenant_id: str = None, session_id: str = None, **kwargs
+        self,
+        user_id: str,
+        tenant_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        **kwargs,
     ) -> str:
         """Create JWT refresh token."""
         payload = self._create_token_payload(
@@ -285,6 +301,9 @@ class JWTAuthManager:
             "refresh_count": payload.refresh_count,
         }
         payload_dict.update(kwargs)
+
+        if jwt is None:
+            raise ImportError("PyJWT package is required for JWT operations")
 
         # Sign token based on algorithm
         if self.config.use_rsa or self.config.algorithm.startswith("RS"):
@@ -318,10 +337,10 @@ class JWTAuthManager:
     def create_token_pair(
         self,
         user_id: str,
-        tenant_id: str = None,
-        session_id: str = None,
-        permissions: List[str] = None,
-        roles: List[str] = None,
+        tenant_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        permissions: Optional[List[str]] = None,
+        roles: Optional[List[str]] = None,
         **kwargs,
     ) -> TokenPair:
         """Create access and refresh token pair."""
@@ -350,6 +369,9 @@ class JWTAuthManager:
         Returns:
             Decoded token payload or raises exception
         """
+        if jwt is None:
+            raise ImportError("PyJWT package is required for JWT operations")
+
         try:
             # Check if token is blacklisted
             if self._blacklisted_tokens and token in self._blacklisted_tokens:
@@ -408,6 +430,9 @@ class JWTAuthManager:
         Returns:
             New token pair with refreshed access token
         """
+        if jwt is None:
+            raise ImportError("PyJWT package is required for JWT operations")
+
         try:
             # Verify refresh token
             payload = self.verify_token(refresh_token)
@@ -416,7 +441,7 @@ class JWTAuthManager:
                 raise jwt.InvalidTokenError("Token is not a refresh token")
 
             jti = payload.get("jti")
-            if jti not in self._refresh_tokens:
+            if jti is None or jti not in self._refresh_tokens:
                 raise jwt.InvalidTokenError("Refresh token not found")
 
             refresh_data = self._refresh_tokens[jti]
@@ -431,10 +456,12 @@ class JWTAuthManager:
             refresh_data["last_used"] = datetime.now(timezone.utc)
 
             # Create new token pair
+            tenant_id: Optional[str] = payload.get("tenant_id")
+            session_id: Optional[str] = payload.get("session_id")
             return self.create_token_pair(
                 user_id=payload["sub"],
-                tenant_id=payload.get("tenant_id"),
-                session_id=payload.get("session_id"),
+                tenant_id=tenant_id,
+                session_id=session_id,
                 permissions=payload.get("permissions", []),
                 roles=payload.get("roles", []),
             )
@@ -445,13 +472,15 @@ class JWTAuthManager:
 
     def revoke_token(self, token: str):
         """Add token to blacklist."""
+        if self._blacklisted_tokens is None:
+            return
         try:
             payload = self.verify_token(token)
             jti = payload.get("jti")
             if jti:
                 self._blacklisted_tokens.add(token)
                 logger.info(f"Revoked token {jti}")
-        except:
+        except Exception:
             # Even if verification fails, add to blacklist
             self._blacklisted_tokens.add(token)
 

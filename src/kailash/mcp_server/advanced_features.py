@@ -112,7 +112,7 @@ class Content:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary format."""
-        result = {
+        result: Dict[str, Any] = {
             "type": self.type.value,
         }
 

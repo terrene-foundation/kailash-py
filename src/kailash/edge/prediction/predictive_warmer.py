@@ -335,7 +335,7 @@ class PredictiveWarmer:
                 edge_usage[pattern.edge_node] += 1
 
             if edge_usage:
-                best_edge = max(edge_usage, key=edge_usage.get)
+                best_edge = max(edge_usage, key=lambda k: edge_usage[k])
                 confidence = edge_usage[best_edge] / len(patterns)
 
                 decisions.append(

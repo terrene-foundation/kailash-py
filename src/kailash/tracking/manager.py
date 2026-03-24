@@ -33,7 +33,9 @@ class TaskManager:
             TaskException: If initialization fails
         """
         try:
-            self.storage = storage_backend or SQLiteStorage()
+            # Storage may be a subclass with extra methods (query_tasks, get_all_tasks, etc.)
+            # accessed via hasattr checks, so we type as Any to allow dynamic dispatch
+            self.storage: Any = storage_backend or SQLiteStorage()
             self.logger = logger
 
             # In-memory caches

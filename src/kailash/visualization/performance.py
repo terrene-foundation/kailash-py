@@ -5,6 +5,7 @@ No external dependencies required.
 """
 
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -61,9 +62,17 @@ class PerformanceVisualizer:
         completed = [t for t in tasks if t.status == TaskStatus.COMPLETED and t.metrics]
 
         if completed:
-            total_duration = sum(t.metrics.duration or 0 for t in completed)
-            avg_cpu = mean([t.metrics.cpu_usage or 0 for t in completed])
-            max_memory = max((t.metrics.memory_usage_mb or 0) for t in completed)
+            total_duration = sum(
+                (t.metrics.duration or 0) for t in completed if t.metrics is not None
+            )
+            avg_cpu = mean(
+                [(t.metrics.cpu_usage or 0) for t in completed if t.metrics is not None]
+            )
+            max_memory = max(
+                (t.metrics.memory_usage_mb or 0)
+                for t in completed
+                if t.metrics is not None
+            )
 
             lines.append("## Summary\n")
             lines.append(f"| Metric | Value |")
@@ -76,7 +85,7 @@ class PerformanceVisualizer:
         # Execution timeline as Mermaid Gantt
         timed_tasks = [t for t in tasks if t.started_at and t.ended_at]
         if timed_tasks:
-            timed_tasks.sort(key=lambda t: t.started_at)
+            timed_tasks.sort(key=lambda t: t.started_at or datetime.min)
             lines.append("## Execution Timeline\n")
             lines.append("```mermaid")
             lines.append("gantt")
@@ -84,8 +93,13 @@ class PerformanceVisualizer:
             lines.append("    axisFormat %s")
             lines.append(f"    title Task Execution Timeline")
 
-            min_time = min(t.started_at for t in timed_tasks)
+            started_times = [
+                t.started_at for t in timed_tasks if t.started_at is not None
+            ]
+            min_time = min(started_times) if started_times else datetime.min
             for task in timed_tasks:
+                if task.started_at is None or task.ended_at is None:
+                    continue
                 start_s = int((task.started_at - min_time).total_seconds())
                 duration_s = max(
                     1, int((task.ended_at - task.started_at).total_seconds())
@@ -137,23 +151,37 @@ class PerformanceVisualizer:
             )
 
         # Bottleneck analysis
-        if completed:
+        metriced = [t for t in completed if t.metrics is not None]
+        if metriced:
             lines.append("\n## Bottleneck Analysis\n")
-            slowest = max(completed, key=lambda t: t.metrics.duration or 0)
-            lines.append(
-                f"- **Slowest node:** `{slowest.node_id}` ({slowest.metrics.duration:.2f}s)"
+            slowest = max(
+                metriced, key=lambda t: (t.metrics.duration if t.metrics else 0) or 0
             )
+            if slowest.metrics:
+                lines.append(
+                    f"- **Slowest node:** `{slowest.node_id}` ({slowest.metrics.duration or 0:.2f}s)"
+                )
 
-            highest_cpu = max(completed, key=lambda t: t.metrics.cpu_usage or 0)
-            if highest_cpu.metrics.cpu_usage and highest_cpu.metrics.cpu_usage > 80:
+            highest_cpu = max(
+                metriced, key=lambda t: (t.metrics.cpu_usage if t.metrics else 0) or 0
+            )
+            if (
+                highest_cpu.metrics
+                and highest_cpu.metrics.cpu_usage
+                and highest_cpu.metrics.cpu_usage > 80
+            ):
                 lines.append(
                     f"- **High CPU:** `{highest_cpu.node_id}` ({highest_cpu.metrics.cpu_usage:.1f}%)"
                 )
 
-            highest_mem = max(completed, key=lambda t: t.metrics.memory_usage_mb or 0)
-            lines.append(
-                f"- **Peak memory:** `{highest_mem.node_id}` ({highest_mem.metrics.memory_usage_mb:.1f} MB)"
+            highest_mem = max(
+                metriced,
+                key=lambda t: (t.metrics.memory_usage_mb if t.metrics else 0) or 0,
             )
+            if highest_mem.metrics:
+                lines.append(
+                    f"- **Peak memory:** `{highest_mem.node_id}` ({highest_mem.metrics.memory_usage_mb or 0:.1f} MB)"
+                )
 
         output_path.write_text("\n".join(lines))
         return output_path
@@ -181,9 +209,23 @@ class PerformanceVisualizer:
                 t for t in tasks if t.status == TaskStatus.COMPLETED and t.metrics
             ]
             if completed:
-                total_dur = sum(t.metrics.duration or 0 for t in completed)
-                avg_cpu = mean([t.metrics.cpu_usage or 0 for t in completed])
-                max_mem = max((t.metrics.memory_usage_mb or 0) for t in completed)
+                total_dur = sum(
+                    (t.metrics.duration or 0)
+                    for t in completed
+                    if t.metrics is not None
+                )
+                avg_cpu = mean(
+                    [
+                        (t.metrics.cpu_usage or 0)
+                        for t in completed
+                        if t.metrics is not None
+                    ]
+                )
+                max_mem = max(
+                    (t.metrics.memory_usage_mb or 0)
+                    for t in completed
+                    if t.metrics is not None
+                )
                 lines.append(
                     f"| `{run_id}` | {total_dur:.2f} | {avg_cpu:.1f} | {max_mem:.1f} | {len(completed)} |"
                 )

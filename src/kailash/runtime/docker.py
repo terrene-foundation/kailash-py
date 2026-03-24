@@ -348,9 +348,9 @@ ENTRYPOINT ["/app/entrypoint.py"]
 
     def run_container(
         self,
-        network: str = None,
-        env_vars: dict[str, str] = None,
-        resource_limits: dict[str, str] = None,
+        network: str | None = None,
+        env_vars: dict[str, str] | None = None,
+        resource_limits: dict[str, str] | None = None,
     ) -> bool:
         """
         Run the node in a Docker container.
@@ -565,9 +565,9 @@ class DockerRuntime:
     def execute(
         self,
         workflow: Workflow,
-        inputs: dict[str, dict[str, Any]] = None,
-        node_resource_limits: dict[str, dict[str, str]] = None,
-    ) -> tuple[dict[str, dict[str, Any]], str]:
+        inputs: dict[str, dict[str, Any]] | None = None,
+        node_resource_limits: dict[str, dict[str, str]] | None = None,
+    ) -> tuple[dict[str, dict[str, Any]], str | None]:
         """
         Execute a workflow using Docker containers.
 
@@ -625,9 +625,12 @@ class DockerRuntime:
                 node_inputs = inputs.get(node_id, {}).copy()
 
                 # Add inputs from upstream nodes
-                for upstream_id, mapping in workflow.connections.get(
+                _conn_map = getattr(workflow.connections, "get", lambda *a: {})(
                     node_id, {}
-                ).items():
+                )
+                for upstream_id, mapping in (
+                    _conn_map.items() if isinstance(_conn_map, dict) else []
+                ):
                     if upstream_id in results:
                         for dest_param, src_param in mapping.items():
                             if src_param in results[upstream_id]:

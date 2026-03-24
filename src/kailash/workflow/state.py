@@ -6,7 +6,7 @@ making it easier to handle state transitions in a predictable manner.
 
 import logging
 from copy import deepcopy
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, cast
 
 from pydantic import BaseModel
 
@@ -182,7 +182,7 @@ class WorkflowStateWrapper(Generic[StateT]):
         Returns:
             A new state wrapper with the update applied
         """
-        new_state = StateManager.update_in(self._state, path, value)
+        new_state = cast(StateT, StateManager.update_in(self._state, path, value))
         return WorkflowStateWrapper(new_state)
 
     def batch_update(
@@ -196,7 +196,7 @@ class WorkflowStateWrapper(Generic[StateT]):
         Returns:
             A new state wrapper with all updates applied
         """
-        new_state = StateManager.batch_update(self._state, updates)
+        new_state = cast(StateT, StateManager.batch_update(self._state, updates))
         return WorkflowStateWrapper(new_state)
 
     def get_in(self, path: list[str]) -> Any:
@@ -219,7 +219,7 @@ class WorkflowStateWrapper(Generic[StateT]):
         Returns:
             A new state wrapper with the updates applied
         """
-        new_state = StateManager.merge(self._state, **updates)
+        new_state = cast(StateT, StateManager.merge(self._state, **updates))
         return WorkflowStateWrapper(new_state)
 
     def get_state(self) -> StateT:

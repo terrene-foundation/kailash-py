@@ -16,20 +16,28 @@ from .base import (
 )
 
 try:
-    from ..middleware.mcp.enhanced_server import MCPServerConfig, MiddlewareMCPServer
+    from ..middleware.mcp.enhanced_server import MCPServerConfig as _MCPServerConfig
+    from ..middleware.mcp.enhanced_server import (
+        MiddlewareMCPServer as _MiddlewareMCPServer,
+    )
 
+    MCPServerConfig: Any = _MCPServerConfig
+    MiddlewareMCPServer: Any = _MiddlewareMCPServer
     _MCP_AVAILABLE = True
 except ImportError:
     _MCP_AVAILABLE = False
 
     # Create mock classes for when MCP is not available
-    class MiddlewareMCPServer:
-        def __init__(self, *args, **kwargs):
+    class _MiddlewareMCPServerFallback:
+        def __init__(self, *args: Any, **kwargs: Any):
             raise ImportError("MCP server not available")
 
-    class MCPServerConfig:
-        def __init__(self):
+    class _MCPServerConfigFallback:
+        def __init__(self) -> None:
             pass
+
+    MiddlewareMCPServer: Any = _MiddlewareMCPServerFallback
+    MCPServerConfig: Any = _MCPServerConfigFallback
 
 
 from ..runtime.local import LocalRuntime
@@ -60,7 +68,7 @@ class MCPChannel(Channel):
     def __init__(
         self,
         config: ChannelConfig,
-        mcp_server: Optional[MiddlewareMCPServer] = None,
+        mcp_server: Optional[Any] = None,
         runtime: Optional[LocalRuntime] = None,
     ):
         """Initialize MCP channel.
@@ -94,11 +102,11 @@ class MCPChannel(Channel):
         # MCP-specific state
         self._clients: Dict[str, Dict[str, Any]] = {}
         self._server_task: Optional[asyncio.Task] = None
-        self._mcp_server_task: Optional[asyncio.Task] = None
+        self._mcp_server_task: Optional[asyncio.Future[Any]] = None
 
         logger.info(f"Initialized MCP channel {self.name}")
 
-    def _create_mcp_server(self) -> MiddlewareMCPServer:
+    def _create_mcp_server(self) -> Any:
         """Create a new MCP server with channel configuration."""
         if not _MCP_AVAILABLE:
             raise ImportError("MCP server components not available")
@@ -123,7 +131,7 @@ class MCPChannel(Channel):
                     "description", f"MCP server for {self.name} channel"
                 )
             except Exception as e:
-                self.logger.warning(f"Failed to translate platform config: {e}")
+                logger.warning(f"Failed to translate platform config: {e}")
                 # Fall back to default configuration
                 mcp_config.name = f"{self.name}-mcp-server"
                 mcp_config.description = f"MCP server for {self.name} channel"
@@ -145,7 +153,7 @@ class MCPChannel(Channel):
 
         return server
 
-    def _setup_default_tools(self, server: MiddlewareMCPServer) -> None:
+    def _setup_default_tools(self, server: Any) -> None:
         """Set up default MCP tools for workflow execution."""
 
         # Tool: List available workflows
@@ -448,7 +456,7 @@ class MCPChannel(Channel):
             elif registration.workflow_name:
                 # Execute workflow
                 workflow = self._workflow_registry.get(registration.workflow_name)
-                if workflow:
+                if workflow and self.runtime is not None:
                     results, run_id = await self.runtime.execute_async(
                         workflow, parameters=arguments
                     )
@@ -595,6 +603,9 @@ class MCPChannel(Channel):
             return {"error": f"Workflow not found: {workflow_name}"}
 
         workflow = self._workflow_registry[workflow_name]
+
+        if self.runtime is None:
+            return {"success": False, "error": "Runtime not available"}
 
         try:
             results, run_id = await self.runtime.execute_async(

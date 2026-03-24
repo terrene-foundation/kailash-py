@@ -43,7 +43,7 @@ import signal
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from kailash.runtime.base import BaseRuntime
 from kailash.workflow import Workflow
@@ -256,14 +256,14 @@ class TaskQueue:
             return None
 
         try:
-            task = TaskMessage.from_json(raw)
+            task = TaskMessage.from_json(cast(str, raw))
             task.attempts += 1
             # Update the task in the processing list with incremented attempts
             return task
         except (json.JSONDecodeError, TypeError, KeyError) as exc:
             logger.error("Failed to parse task from queue: %s", exc)
             # Remove malformed message from processing list
-            client.lrem(self._processing_key, 1, raw)
+            client.lrem(self._processing_key, 1, cast(str, raw))
             return None
 
     def ack(self, task: TaskMessage) -> bool:
@@ -353,7 +353,7 @@ class TaskQueue:
         if raw is None:
             return None
         try:
-            return TaskResult.from_json(raw)
+            return TaskResult.from_json(cast(str, raw))
         except (json.JSONDecodeError, TypeError) as exc:
             logger.error("Failed to parse result for task %s: %s", task_id, exc)
             return None
@@ -365,7 +365,7 @@ class TaskQueue:
             Number of pending tasks.
         """
         client = self._get_client()
-        return client.llen(self._queue_key)
+        return cast(int, client.llen(self._queue_key))
 
     def processing_length(self) -> int:
         """Get the number of tasks currently being processed.
@@ -374,7 +374,7 @@ class TaskQueue:
             Number of tasks in the processing list.
         """
         client = self._get_client()
-        return client.llen(self._processing_key)
+        return cast(int, client.llen(self._processing_key))
 
     def _remove_from_processing(self, task_id: str) -> bool:
         """Remove a task from the processing list by scanning for its task_id.
@@ -389,7 +389,7 @@ class TaskQueue:
         """
         client = self._get_client()
         # Scan the processing list for a matching task_id
-        items = client.lrange(self._processing_key, 0, -1)
+        items = cast(list, client.lrange(self._processing_key, 0, -1))
         for item in items:
             try:
                 parsed = json.loads(item)
@@ -414,7 +414,7 @@ class TaskQueue:
             Number of tasks recovered.
         """
         client = self._get_client()
-        items = client.lrange(self._processing_key, 0, -1)
+        items = cast(list, client.lrange(self._processing_key, 0, -1))
         recovered = 0
         now = time.time()
 
@@ -442,7 +442,7 @@ class TaskQueue:
             True if Redis responds to PING.
         """
         try:
-            return self._get_client().ping()
+            return cast(bool, self._get_client().ping())
         except Exception:
             return False
 
@@ -494,8 +494,9 @@ class DistributedRuntime(BaseRuntime):
         Cleans up the task queue connection and any execution metadata.
         """
         self._execution_metadata.clear()
-        if hasattr(self._queue, "close"):
-            self._queue.close()
+        _close = getattr(self._queue, "close", None)
+        if _close is not None:
+            _close()
 
     def execute(
         self,
@@ -723,6 +724,7 @@ class Worker:
                     continue
 
                 # Acquire semaphore for concurrency control
+                assert self._semaphore is not None
                 await self._semaphore.acquire()
                 async_task = asyncio.create_task(self._execute_task(task))
                 self._tasks.add(async_task)
@@ -822,7 +824,8 @@ class Worker:
         from kailash.workflow.graph import Workflow
 
         workflow = Workflow.from_dict(task.workflow_data)
-        built = workflow.build() if hasattr(workflow, "build") else workflow
+        _build = getattr(workflow, "build", None)
+        built = _build() if _build is not None else workflow
         results, run_id = runtime.execute(built, parameters=task.parameters)
         return results
 
@@ -899,7 +902,7 @@ class Worker:
         """Check for dead workers and clean up."""
         try:
             client = self._get_redis_client()
-            workers = client.smembers(_WORKER_SET_KEY)
+            workers = cast(set, client.smembers(_WORKER_SET_KEY))
 
             for worker_id in workers:
                 if worker_id == self._worker_id:

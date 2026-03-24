@@ -70,16 +70,28 @@ class WorkflowConnection:
         elif operator == "!=":
             return field_value != expected_value
         elif operator == ">":
+            if field_value is None or expected_value is None:
+                return False
             return field_value > expected_value
         elif operator == ">=":
+            if field_value is None or expected_value is None:
+                return False
             return field_value >= expected_value
         elif operator == "<":
+            if field_value is None or expected_value is None:
+                return False
             return field_value < expected_value
         elif operator == "<=":
+            if field_value is None or expected_value is None:
+                return False
             return field_value <= expected_value
         elif operator == "in":
+            if field_value is None or expected_value is None:
+                return False
             return field_value in expected_value
         elif operator == "not in":
+            if field_value is None or expected_value is None:
+                return True
             return field_value not in expected_value
         else:
             # Unknown operator, default to always follow

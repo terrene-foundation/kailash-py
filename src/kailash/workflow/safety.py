@@ -4,6 +4,7 @@ import logging
 import threading
 import time
 from contextlib import contextmanager
+from typing import Any
 
 try:
     import psutil
@@ -104,7 +105,7 @@ class CycleSafetyManager:
 
         return violations
 
-    def get_cycle_status(self, cycle_id: str) -> dict[str, any] | None:
+    def get_cycle_status(self, cycle_id: str) -> dict[str, Any] | None:
         """Get status of a specific cycle.
 
         Args:
@@ -225,7 +226,11 @@ class CycleMonitor:
         current_time = time.time()
 
         # Check timeout
-        if self.timeout and (current_time - self.start_time) > self.timeout:
+        if (
+            self.timeout
+            and self.start_time is not None
+            and (current_time - self.start_time) > self.timeout
+        ):
             violation = f"Timeout exceeded: {current_time - self.start_time:.1f}s > {self.timeout}s"
             self.violations.append(violation)
             return True
@@ -261,7 +266,7 @@ class CycleMonitor:
         time_since_progress = time.time() - self.last_progress_time
         return time_since_progress > stall_threshold
 
-    def get_status(self) -> dict[str, any]:
+    def get_status(self) -> dict[str, Any]:
         """Get current monitor status.
 
         Returns:

@@ -568,6 +568,9 @@ class AsyncLocalRuntime(LocalRuntime):
         workflow,
         task_manager: Optional[TaskManager] = None,
         parameters: Optional[Dict[str, Any]] = None,
+        cancellation_token: Any = None,
+        search_attributes: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
     ) -> Tuple[Dict[str, Any], Optional[str]]:
         """
         Execute workflow without creating threads (Docker-safe).
@@ -604,13 +607,18 @@ class AsyncLocalRuntime(LocalRuntime):
                 raise
             # Otherwise it's the "no running loop" error - proceed with asyncio.run()
             inputs = parameters if parameters else {}
-            result_dict = asyncio.run(
-                self.execute_workflow_async(workflow, inputs=inputs)
-            )
+            result = asyncio.run(self.execute_workflow_async(workflow, inputs=inputs))
 
-            # Extract results and generate run_id for compatibility
-            results = result_dict.get("results", result_dict)
-            run_id = result_dict.get("run_id", None)
+            # extract_workflow_async returns Tuple[Dict, str]
+            if isinstance(result, tuple):
+                results = result[0]
+                run_id = result[1] if len(result) > 1 else None
+            elif isinstance(result, dict):
+                results = result.get("results", result)
+                run_id = result.get("run_id", None)
+            else:
+                results = result
+                run_id = None
 
             return (results, run_id)
 
@@ -619,6 +627,10 @@ class AsyncLocalRuntime(LocalRuntime):
         workflow,
         task_manager: Optional[TaskManager] = None,
         parameters: Optional[Dict[str, Any]] = None,
+        cancellation_token: Any = None,
+        execution_tracker: Any = None,
+        search_attributes: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
     ) -> Tuple[Dict[str, Any], Optional[str]]:
         """
         Execute workflow asynchronously (for LocalRuntime compatibility).
@@ -635,11 +647,18 @@ class AsyncLocalRuntime(LocalRuntime):
             Tuple of (results dict, run_id)
         """
         inputs = parameters if parameters else {}
-        result_dict = await self.execute_workflow_async(workflow, inputs=inputs)
+        result = await self.execute_workflow_async(workflow, inputs=inputs)
 
-        # Extract results and generate run_id for compatibility
-        results = result_dict.get("results", result_dict)
-        run_id = result_dict.get("run_id", None)
+        # execute_workflow_async returns Tuple[Dict, str]
+        if isinstance(result, tuple):
+            results = result[0]
+            run_id = result[1] if len(result) > 1 else None
+        elif isinstance(result, dict):
+            results = result.get("results", result)
+            run_id = result.get("run_id", None)
+        else:
+            results = result
+            run_id = None
 
         return (results, run_id)
 
@@ -1209,9 +1228,12 @@ class AsyncLocalRuntime(LocalRuntime):
                     f"Node '{node_id}' execution failed: {e}"
                 ) from e
             finally:
-                if node_instance and hasattr(node_instance, "cleanup"):
+                _cleanup = (
+                    getattr(node_instance, "cleanup", None) if node_instance else None
+                )
+                if _cleanup is not None:
                     try:
-                        await node_instance.cleanup()
+                        await _cleanup()
                     except Exception as cleanup_error:
                         logger.warning(
                             f"Error during node '{node_id}' cleanup: {cleanup_error}"
@@ -1462,15 +1484,17 @@ class AsyncLocalRuntime(LocalRuntime):
         try:
             from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
-            await asyncio.wait_for(
-                AsyncSQLDatabaseNode.clear_shared_pools(graceful=True), timeout=5.0
-            )
+            _clear_pools = getattr(AsyncSQLDatabaseNode, "clear_shared_pools", None)
+            if _clear_pools is not None:
+                await asyncio.wait_for(_clear_pools(graceful=True), timeout=5.0)
         except Exception as e:
             logger.warning(f"Error disposing AsyncSQL pools during cleanup: {e}")
         try:
             from kailash.nodes.data.sql import SQLDatabaseNode
 
-            SQLDatabaseNode.cleanup_pools()
+            _cleanup = getattr(SQLDatabaseNode, "cleanup_pools", None)
+            if _cleanup is not None:
+                _cleanup()
         except Exception as e:
             logger.warning(f"Error disposing SQL pools during cleanup: {e}")
 

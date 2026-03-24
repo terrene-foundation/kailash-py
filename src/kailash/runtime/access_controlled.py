@@ -128,7 +128,7 @@ class AccessControlledRuntime:
 
     def execute(
         self, workflow: Workflow, parameters: dict[str, Any] | None = None
-    ) -> tuple[Any, str]:
+    ) -> tuple[Any, str | None]:
         """
         Execute workflow with access control.
 
@@ -147,7 +147,7 @@ class AccessControlledRuntime:
 
         # Execute with base runtime - it's managed via context manager
         # The base runtime's context manager is entered in __enter__ if we own it
-        return self.base_runtime.execute(workflow, parameters)
+        return self.base_runtime.execute(workflow, parameters=parameters)
 
     def close(self) -> None:
         """Close the runtime and clean up resources.
@@ -226,15 +226,17 @@ class AccessControlledRuntime:
 
             def validate_config(self):
                 """Delegate to original node if it has the method"""
-                if hasattr(self._original_node, "validate_config"):
-                    return self._original_node.validate_config()
+                _validate = getattr(self._original_node, "validate_config", None)
+                if _validate is not None:
+                    return _validate()
                 return True
 
             def get_output_schema(self):
                 """Delegate to original node"""
-                if hasattr(self._original_node, "get_output_schema"):
-                    return self._original_node.get_output_schema()
-                return None
+                _schema = getattr(self._original_node, "get_output_schema", None)
+                if _schema is not None:
+                    return _schema()
+                return {}
 
             def run(self, **inputs) -> Any:
                 """Execute with access control checks"""
@@ -430,7 +432,7 @@ def execute_with_access_control(
     user_context: UserContext,
     parameters: dict[str, Any] | None = None,
     access_config: AccessControlConfig | None = None,
-) -> tuple[Any, str]:
+) -> tuple[Any, str | None]:
     """
     Convenience function to execute a workflow with access control.
 

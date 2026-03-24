@@ -119,8 +119,8 @@ class RealTimeDashboard:
         self._current_run_id: str | None = None
 
         # Event callbacks
-        self._status_callbacks: list[callable] = []
-        self._metrics_callbacks: list[callable] = []
+        self._status_callbacks: list[Any] = []
+        self._metrics_callbacks: list[Any] = []
 
         self.logger = logger
 
@@ -219,15 +219,19 @@ class RealTimeDashboard:
             if completed:
                 # CPU and memory aggregation
                 cpu_values = [
-                    t.metrics.cpu_usage for t in completed if t.metrics.cpu_usage
+                    t.metrics.cpu_usage
+                    for t in completed
+                    if t.metrics is not None and t.metrics.cpu_usage
                 ]
                 memory_values = [
                     t.metrics.memory_usage_mb
                     for t in completed
-                    if t.metrics.memory_usage_mb
+                    if t.metrics is not None and t.metrics.memory_usage_mb
                 ]
                 duration_values = [
-                    t.metrics.duration for t in completed if t.metrics.duration
+                    t.metrics.duration
+                    for t in completed
+                    if t.metrics is not None and t.metrics.duration
                 ]
 
                 if cpu_values:
@@ -281,7 +285,7 @@ class RealTimeDashboard:
                 except Exception as e:
                     self.logger.warning(f"Status callback failed: {e}")
 
-    def add_metrics_callback(self, callback: callable):
+    def add_metrics_callback(self, callback: Any):
         """Add callback for metrics updates.
 
         Args:
@@ -289,7 +293,7 @@ class RealTimeDashboard:
         """
         self._metrics_callbacks.append(callback)
 
-    def add_status_callback(self, callback: callable):
+    def add_status_callback(self, callback: Any):
         """Add callback for status changes.
 
         Args:

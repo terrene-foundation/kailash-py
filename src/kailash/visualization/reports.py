@@ -283,7 +283,9 @@ class WorkflowPerformanceReporter:
         if completed_with_metrics:
             # Duration metrics
             durations = [
-                t.metrics.duration for t in completed_with_metrics if t.metrics.duration
+                t.metrics.duration
+                for t in completed_with_metrics
+                if t.metrics is not None and t.metrics.duration
             ]
             if durations:
                 summary.total_duration = sum(durations)
@@ -292,7 +294,7 @@ class WorkflowPerformanceReporter:
             cpu_values = [
                 t.metrics.cpu_usage
                 for t in completed_with_metrics
-                if t.metrics.cpu_usage
+                if t.metrics is not None and t.metrics.cpu_usage
             ]
             if cpu_values:
                 summary.avg_cpu_usage = mean(cpu_values)
@@ -301,14 +303,14 @@ class WorkflowPerformanceReporter:
             memory_values = [
                 t.metrics.memory_usage_mb
                 for t in completed_with_metrics
-                if t.metrics.memory_usage_mb
+                if t.metrics is not None and t.metrics.memory_usage_mb
             ]
             if memory_values:
                 summary.peak_memory_usage = max(memory_values)
 
             # I/O metrics
             for task in completed_with_metrics:
-                if task.metrics.custom_metrics:
+                if task.metrics is not None and task.metrics.custom_metrics:
                     custom = task.metrics.custom_metrics
                     summary.total_io_read += custom.get("io_read_bytes", 0)
                     summary.total_io_write += custom.get("io_write_bytes", 0)
@@ -362,15 +364,19 @@ class WorkflowPerformanceReporter:
 
             if completed:
                 durations = [
-                    t.metrics.duration for t in completed if t.metrics.duration
+                    t.metrics.duration
+                    for t in completed
+                    if t.metrics is not None and t.metrics.duration
                 ]
                 cpu_values = [
-                    t.metrics.cpu_usage for t in completed if t.metrics.cpu_usage
+                    t.metrics.cpu_usage
+                    for t in completed
+                    if t.metrics is not None and t.metrics.cpu_usage
                 ]
                 memory_values = [
                     t.metrics.memory_usage_mb
                     for t in completed
-                    if t.metrics.memory_usage_mb
+                    if t.metrics is not None and t.metrics.memory_usage_mb
                 ]
 
                 analysis["by_node_type"][node_type] = {
@@ -385,7 +391,8 @@ class WorkflowPerformanceReporter:
 
         # Execution order analysis
         ordered_tasks = sorted(
-            [t for t in tasks if t.started_at], key=lambda t: t.started_at
+            [t for t in tasks if t.started_at],
+            key=lambda t: t.started_at or datetime.min,
         )
 
         analysis["execution_order"] = [
@@ -413,26 +420,34 @@ class WorkflowPerformanceReporter:
             return bottlenecks
 
         # Find duration outliers
-        durations = [t.metrics.duration for t in completed_tasks if t.metrics.duration]
+        durations = [
+            t.metrics.duration
+            for t in completed_tasks
+            if t.metrics is not None and t.metrics.duration
+        ]
         if durations:
             duration_threshold = percentile(durations, 90)
             slow_tasks = [
                 t
                 for t in completed_tasks
-                if t.metrics.duration and t.metrics.duration > duration_threshold
+                if t.metrics is not None
+                and t.metrics.duration
+                and t.metrics.duration > duration_threshold
             ]
 
             for task in slow_tasks:
+                task_dur = task.metrics.duration if task.metrics is not None else None
                 bottlenecks.append(
                     {
                         "type": "duration",
                         "node_id": task.node_id,
                         "node_type": task.node_type,
-                        "value": task.metrics.duration,
+                        "value": task_dur,
                         "threshold": duration_threshold,
                         "severity": (
                             "high"
-                            if task.metrics.duration > duration_threshold * 2
+                            if task_dur is not None
+                            and task_dur > duration_threshold * 2
                             else "medium"
                         ),
                     }
@@ -442,28 +457,32 @@ class WorkflowPerformanceReporter:
         memory_values = [
             t.metrics.memory_usage_mb
             for t in completed_tasks
-            if t.metrics.memory_usage_mb
+            if t.metrics is not None and t.metrics.memory_usage_mb
         ]
         if memory_values:
             memory_threshold = percentile(memory_values, 90)
             memory_intensive_tasks = [
                 t
                 for t in completed_tasks
-                if t.metrics.memory_usage_mb
+                if t.metrics is not None
+                and t.metrics.memory_usage_mb
                 and t.metrics.memory_usage_mb > memory_threshold
             ]
 
             for task in memory_intensive_tasks:
+                task_mem = (
+                    task.metrics.memory_usage_mb if task.metrics is not None else None
+                )
                 bottlenecks.append(
                     {
                         "type": "memory",
                         "node_id": task.node_id,
                         "node_type": task.node_type,
-                        "value": task.metrics.memory_usage_mb,
+                        "value": task_mem,
                         "threshold": memory_threshold,
                         "severity": (
                             "high"
-                            if task.metrics.memory_usage_mb > memory_threshold * 2
+                            if task_mem is not None and task_mem > memory_threshold * 2
                             else "medium"
                         ),
                     }
@@ -471,25 +490,34 @@ class WorkflowPerformanceReporter:
 
         # Find CPU outliers
         cpu_values = [
-            t.metrics.cpu_usage for t in completed_tasks if t.metrics.cpu_usage
+            t.metrics.cpu_usage
+            for t in completed_tasks
+            if t.metrics is not None and t.metrics.cpu_usage
         ]
         if cpu_values:
             cpu_threshold = percentile(cpu_values, 90)
             cpu_intensive_tasks = [
                 t
                 for t in completed_tasks
-                if t.metrics.cpu_usage and t.metrics.cpu_usage > cpu_threshold
+                if t.metrics is not None
+                and t.metrics.cpu_usage
+                and t.metrics.cpu_usage > cpu_threshold
             ]
 
             for task in cpu_intensive_tasks:
+                task_cpu = task.metrics.cpu_usage if task.metrics is not None else None
                 bottlenecks.append(
                     {
                         "type": "cpu",
                         "node_id": task.node_id,
                         "node_type": task.node_type,
-                        "value": task.metrics.cpu_usage,
+                        "value": task_cpu,
                         "threshold": cpu_threshold,
-                        "severity": "high" if task.metrics.cpu_usage > 80 else "medium",
+                        "severity": (
+                            "high"
+                            if task_cpu is not None and task_cpu > 80
+                            else "medium"
+                        ),
                     }
                 )
 
@@ -513,7 +541,9 @@ class WorkflowPerformanceReporter:
 
         # CPU distribution analysis
         cpu_values = [
-            t.metrics.cpu_usage for t in completed_tasks if t.metrics.cpu_usage
+            t.metrics.cpu_usage
+            for t in completed_tasks
+            if t.metrics is not None and t.metrics.cpu_usage
         ]
         if cpu_values:
             analysis["cpu_distribution"] = {
@@ -533,7 +563,7 @@ class WorkflowPerformanceReporter:
         memory_values = [
             t.metrics.memory_usage_mb
             for t in completed_tasks
-            if t.metrics.memory_usage_mb
+            if t.metrics is not None and t.metrics.memory_usage_mb
         ]
         if memory_values:
             analysis["memory_distribution"] = {
@@ -556,7 +586,7 @@ class WorkflowPerformanceReporter:
         io_intensive_tasks = 0
 
         for task in completed_tasks:
-            if task.metrics.custom_metrics:
+            if task.metrics is not None and task.metrics.custom_metrics:
                 custom = task.metrics.custom_metrics
                 read_bytes = custom.get("io_read_bytes", 0)
                 write_bytes = custom.get("io_write_bytes", 0)
@@ -618,11 +648,11 @@ class WorkflowPerformanceReporter:
 
         # Error timeline
         failed_with_time = [t for t in failed_tasks if t.started_at]
-        failed_with_time.sort(key=lambda t: t.started_at)
+        failed_with_time.sort(key=lambda t: t.started_at or datetime.min)
 
         analysis["error_timeline"] = [
             {
-                "time": t.started_at.isoformat(),
+                "time": t.started_at.isoformat() if t.started_at else None,
                 "node_id": t.node_id,
                 "node_type": t.node_type,
                 "error": t.error,

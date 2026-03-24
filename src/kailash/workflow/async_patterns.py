@@ -5,7 +5,7 @@ This module provides reusable patterns for common async scenarios like
 retry with backoff, rate limiting, timeout with fallback, and batch processing.
 """
 
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional
 
 from .async_builder import AsyncWorkflowBuilder
 
@@ -23,8 +23,8 @@ class AsyncPatterns:
         initial_backoff: float = 1.0,
         backoff_factor: float = 2.0,
         max_backoff: float = 60.0,
-        retry_on: List[str] = None,
-        description: str = None,
+        retry_on: Optional[List[str]] = None,
+        description: Optional[str] = None,
     ) -> AsyncWorkflowBuilder:
         """Add node with exponential backoff retry logic."""
         # Build retry exception list
@@ -131,8 +131,8 @@ result["total_attempts"] = len(attempts)
         operation_code: str,
         *,
         requests_per_second: float = 10,
-        burst_size: int = None,
-        description: str = None,
+        burst_size: Optional[int] = None,
+        description: Optional[str] = None,
     ) -> AsyncWorkflowBuilder:
         """Add node with rate limiting using token bucket algorithm."""
         if burst_size is None:
@@ -215,7 +215,7 @@ if isinstance(result, dict):
         fallback_code: str,
         *,
         timeout_seconds: float = 5.0,
-        description: str = None,
+        description: Optional[str] = None,
     ) -> AsyncWorkflowBuilder:
         """Add primary operation with timeout and fallback."""
         # Indent the primary code properly
@@ -315,7 +315,7 @@ else:
         *,
         batch_size: int = 100,
         flush_interval: float = 5.0,
-        description: str = None,
+        description: Optional[str] = None,
     ) -> AsyncWorkflowBuilder:
         """Add batch processing node with time-based flushing."""
         # Indent the process batch code properly
@@ -405,7 +405,7 @@ result = {{
         *,
         failure_threshold: int = 5,
         reset_timeout: float = 60.0,
-        description: str = None,
+        description: Optional[str] = None,
     ) -> AsyncWorkflowBuilder:
         """Add circuit breaker pattern for fault tolerance."""
         # Indent the operation code properly
@@ -510,7 +510,7 @@ else:
         *,
         timeout_per_operation: float = 10.0,
         continue_on_error: bool = True,
-        description: str = None,
+        description: Optional[str] = None,
     ) -> AsyncWorkflowBuilder:
         """Add node that performs multiple async operations in parallel."""
         # Build the fetch operations
@@ -600,7 +600,7 @@ result = {{
         cache_resource: str = "cache",
         cache_key_template: str = "key_{item_id}",
         ttl_seconds: int = 3600,
-        description: str = None,
+        description: Optional[str] = None,
     ) -> AsyncWorkflowBuilder:
         """Add cache-aside pattern with cache check, fetch, and store."""
 

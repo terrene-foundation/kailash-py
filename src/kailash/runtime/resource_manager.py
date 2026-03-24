@@ -59,7 +59,7 @@ class ResourceCoordinator:
         self._coordination_lock = threading.RLock()
 
         # Async operations tracking
-        self._async_operations: Dict[str, asyncio.Task] = {}
+        self._async_operations: Dict[str, Any] = {}
 
         logger.info(f"ResourceCoordinator initialized for runtime {runtime_id}")
 
@@ -800,7 +800,7 @@ class CircuitBreaker:
         name: str,
         failure_threshold: int = 5,
         timeout_seconds: int = 60,
-        expected_exception: type = Exception,
+        expected_exception: type[BaseException] = Exception,
         recovery_threshold: int = 3,
     ):
         """Initialize circuit breaker.
@@ -1013,7 +1013,9 @@ class RetryPolicy:
                 else:
                     logger.error(f"All {self.max_attempts} attempts failed")
 
-        raise last_exception
+        if last_exception is not None:
+            raise last_exception
+        raise RuntimeError("All retry attempts exhausted with no exception captured")
 
     def _calculate_delay(self, attempt: int) -> float:
         """Calculate delay for given attempt.
@@ -1240,6 +1242,7 @@ class ResourceLimitEnforcer:
 
         # Get current memory usage
         # Get current process memory usage, not system-wide
+        assert psutil is not None, "psutil required for memory monitoring"
         process = psutil.Process()
         memory_info = process.memory_info()
         current_mb = memory_info.rss / (1024 * 1024)  # RSS is resident set size
@@ -1293,6 +1296,7 @@ class ResourceLimitEnforcer:
             )
 
         # Get current CPU usage
+        assert psutil is not None, "psutil required for CPU monitoring"
         cpu_percent = psutil.cpu_percent(interval=0.1)
         usage_percentage = cpu_percent / self.max_cpu_percent
 
@@ -1541,6 +1545,7 @@ class ResourceLimitEnforcer:
             Dict containing comprehensive resource metrics
         """
         # Get current process metrics, not system-wide
+        assert psutil is not None, "psutil required for resource monitoring"
         process = psutil.Process()
         memory_info = process.memory_info()
         cpu_percent = process.cpu_percent()
@@ -1673,7 +1678,7 @@ class RetryAttempt:
     """Record of a single retry attempt."""
 
     timestamp: datetime
-    exception_type: Type[Exception]
+    exception_type: Optional[Type[Exception]]
     attempt_number: int
     delay_used: float
     success: bool
@@ -2050,7 +2055,7 @@ class ExceptionClassifier:
         }
 
         # Built-in non-retriable exceptions (system, user, permanent)
-        self.non_retriable_exceptions: Set[Type[Exception]] = {
+        self.non_retriable_exceptions: Set[Type[BaseException]] = {
             KeyboardInterrupt,
             SystemExit,
             SystemError,
@@ -2244,7 +2249,12 @@ class RetryMetrics:
 
             self.total_delay_time += attempt.delay_used
             self.total_execution_time += attempt.execution_time
-            self.exception_counts[attempt.exception_type.__name__] += 1
+            exc_name = (
+                attempt.exception_type.__name__
+                if attempt.exception_type is not None
+                else "None"
+            )
+            self.exception_counts[exc_name] += 1
 
     @property
     def success_rate(self) -> float:
@@ -2289,7 +2299,11 @@ class RetryMetrics:
                     {
                         "timestamp": attempt.timestamp,
                         "attempt_number": attempt.attempt_number,
-                        "exception_type": attempt.exception_type.__name__,
+                        "exception_type": (
+                            attempt.exception_type.__name__
+                            if attempt.exception_type is not None
+                            else None
+                        ),
                         "delay_used": attempt.delay_used,
                         "success": attempt.success,
                         "execution_time": attempt.execution_time,
@@ -2688,6 +2702,8 @@ class RetryPolicyEngine:
             f"Starting retry session {session_id} with strategy: {current_strategy.name}"
         )
 
+        attempt_start = start_time
+        attempt_time = 0.0
         for attempt_num in range(1, current_strategy.max_attempts + 1):
             # Check timeout
             if timeout and (time.time() - start_time) >= timeout:
@@ -2729,7 +2745,7 @@ class RetryPolicyEngine:
                     # Success
                     attempt = RetryAttempt(
                         timestamp=datetime.now(UTC),
-                        exception_type=type(None),
+                        exception_type=None,
                         attempt_number=attempt_num,
                         delay_used=0.0,
                         success=True,
@@ -2787,7 +2803,7 @@ class RetryPolicyEngine:
                     # Success
                     attempt = RetryAttempt(
                         timestamp=datetime.now(UTC),
-                        exception_type=type(None),
+                        exception_type=None,
                         attempt_number=attempt_num,
                         delay_used=0.0,
                         success=True,

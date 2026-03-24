@@ -227,8 +227,8 @@ class EmailNotificationChannel(NotificationChannel):
     def send_notification(self, alert: Alert, context: Dict[str, Any]) -> bool:
         """Send notification via email."""
         try:
-            from email.mime.multipart import MimeMultipart
-            from email.mime.text import MimeText
+            from email.mime.multipart import MIMEMultipart as MimeMultipart
+            from email.mime.text import MIMEText as MimeText
 
             msg = MimeMultipart()
             msg["From"] = self.from_email
@@ -546,7 +546,10 @@ class AlertManager:
     def _get_current_metric_value(self, alert: Alert) -> Optional[Union[int, float]]:
         """Get current metric value for alert context."""
         for collector in self.metrics_registry.get_all_collectors().values():
-            metric_series = collector.get_metric(alert.labels.get("metric"))
+            metric_name = alert.labels.get("metric")
+            if metric_name is None:
+                continue
+            metric_series = collector.get_metric(metric_name)
             if metric_series:
                 return metric_series.get_latest_value()
         return None

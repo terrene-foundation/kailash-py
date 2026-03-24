@@ -42,7 +42,10 @@ import threading
 import time
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Union
+
+if TYPE_CHECKING:
+    from kailash.runtime.shutdown import ShutdownCoordinator
 
 from kailash.nodes import Node
 from kailash.runtime.base import BaseRuntime
@@ -94,7 +97,8 @@ logger = logging.getLogger(__name__)
 class ContentAwareExecutionError(Exception):
     """Exception raised when content-aware success detection identifies a failure."""
 
-    pass
+    node_id: str
+    failure_data: Any
 
 
 def detect_success(result):
@@ -741,6 +745,7 @@ class LocalRuntime(
         parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
         cancellation_token: CancellationToken | None = None,
         search_attributes: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
     ) -> tuple[dict[str, Any], str | None]:
         """
         Execute a workflow synchronously.
@@ -1219,14 +1224,16 @@ class LocalRuntime(
                                 AsyncSQLDatabaseNode,
                             )
 
-                            loop.run_until_complete(
-                                asyncio.wait_for(
-                                    AsyncSQLDatabaseNode.clear_shared_pools(
-                                        graceful=True
-                                    ),
-                                    timeout=5.0,
-                                )
+                            _clear_pools = getattr(
+                                AsyncSQLDatabaseNode, "clear_shared_pools", None
                             )
+                            if _clear_pools is not None:
+                                loop.run_until_complete(
+                                    asyncio.wait_for(
+                                        _clear_pools(graceful=True),
+                                        timeout=5.0,
+                                    )
+                                )
                         except Exception as e:
                             logger.warning(
                                 f"Error disposing AsyncSQL pools during shutdown: {e}"
@@ -1234,7 +1241,9 @@ class LocalRuntime(
                         try:
                             from kailash.nodes.data.sql import SQLDatabaseNode
 
-                            SQLDatabaseNode.cleanup_pools()
+                            _cleanup = getattr(SQLDatabaseNode, "cleanup_pools", None)
+                            if _cleanup is not None:
+                                _cleanup()
                         except Exception as e:
                             logger.warning(
                                 f"Error disposing SQL pools during shutdown: {e}"
@@ -1463,7 +1472,7 @@ class LocalRuntime(
         exc_type: Optional[type],
         exc_val: Optional[BaseException],
         exc_tb: Optional[Any],
-    ) -> bool:
+    ) -> None:
         """
         Exit context manager, cleaning up event loop.
 
@@ -1512,8 +1521,7 @@ class LocalRuntime(
         # Reset context-managed flag
         self._is_context_managed = False
 
-        # Don't suppress exceptions
-        return False
+        # Don't suppress exceptions (return None = do not suppress)
 
     def _execute_sync(
         self,
@@ -1574,18 +1582,24 @@ class LocalRuntime(
                     try:
                         from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
-                        loop.run_until_complete(
-                            asyncio.wait_for(
-                                AsyncSQLDatabaseNode.clear_shared_pools(graceful=True),
-                                timeout=5.0,
-                            )
+                        _clear_pools = getattr(
+                            AsyncSQLDatabaseNode, "clear_shared_pools", None
                         )
+                        if _clear_pools is not None:
+                            loop.run_until_complete(
+                                asyncio.wait_for(
+                                    _clear_pools(graceful=True),
+                                    timeout=5.0,
+                                )
+                            )
                     except Exception:
                         pass
                     try:
                         from kailash.nodes.data.sql import SQLDatabaseNode
 
-                        SQLDatabaseNode.cleanup_pools()
+                        _cleanup = getattr(SQLDatabaseNode, "cleanup_pools", None)
+                        if _cleanup is not None:
+                            _cleanup()
                     except Exception:
                         pass
                 if loop:
@@ -1603,11 +1617,7 @@ class LocalRuntime(
     async def _execute_async(
         self,
         workflow: Workflow,
-        task_manager: TaskManager | None = None,
-        parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
-        cancellation_token: CancellationToken | None = None,
-        execution_tracker: ExecutionTracker | None = None,
-        search_attributes: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
     ) -> tuple[dict[str, Any], str | None]:
         """Core async execution implementation with enterprise features.
 
@@ -1623,11 +1633,12 @@ class LocalRuntime(
 
         Args:
             workflow: Workflow to execute.
-            task_manager: Optional task manager for tracking.
-            parameters: Optional parameter overrides per node.
-            cancellation_token: Optional token to request cancellation.
-            execution_tracker: Optional tracker for checkpoint/restore.
-            search_attributes: Optional typed key-value pairs for indexing.
+            **kwargs: Optional arguments:
+                task_manager: Optional task manager for tracking.
+                parameters: Optional parameter overrides per node.
+                cancellation_token: Optional token to request cancellation.
+                execution_tracker: Optional tracker for checkpoint/restore.
+                search_attributes: Optional typed key-value pairs for indexing.
 
         Returns:
             Tuple of (results dict, run_id).
@@ -1638,6 +1649,15 @@ class LocalRuntime(
             WorkflowCancelledError: If cancellation is requested.
             PermissionError: If access control denies execution.
         """
+        # Extract kwargs for backward compatibility
+        task_manager: TaskManager | None = kwargs.get("task_manager")
+        parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = kwargs.get(
+            "parameters"
+        )
+        cancellation_token: CancellationToken | None = kwargs.get("cancellation_token")
+        execution_tracker: ExecutionTracker | None = kwargs.get("execution_tracker")
+        search_attributes: dict[str, Any] | None = kwargs.get("search_attributes")
+
         if not workflow:
             raise RuntimeExecutionError("No workflow provided")
 
@@ -2261,6 +2281,7 @@ class LocalRuntime(
                 parent_span=_wf_span,
             )
 
+            inputs: dict[str, Any] = {}
             try:
                 # Prepare inputs
                 inputs = self._prepare_node_inputs(
@@ -2562,7 +2583,9 @@ class LocalRuntime(
                             "context": evt,
                         }
                     )
-                task_manager.storage.save_audit_events(enriched_events)
+                _save_audit = getattr(task_manager.storage, "save_audit_events", None)
+                if _save_audit is not None:
+                    _save_audit(enriched_events)
             except Exception as audit_err:
                 self.logger.warning(
                     "Failed to persist execution audit trail: %s", audit_err
@@ -3179,8 +3202,9 @@ class LocalRuntime(
 
             audit_node = AuditLogNode()
             # Use the SDK pattern - try async first, fallback to sync
-            if hasattr(audit_node, "async_run"):
-                await audit_node.async_run(
+            _async_run = getattr(audit_node, "async_run", None)
+            if _async_run is not None:
+                await _async_run(
                     event_type=event_type,
                     event_data=event_data,
                     user_context=self.user_context,
@@ -3265,13 +3289,17 @@ class LocalRuntime(
         if self._retry_policy_engine and self._circuit_breaker:
             # Enterprise retry with circuit breaker integration
             try:
-                if hasattr(node, "async_run"):
+                _cb_call = getattr(
+                    self._circuit_breaker, "call_async", None
+                ) or getattr(self._circuit_breaker, "call", None)
+                _node_fn = getattr(node, "async_run", None) or node.execute
+                if _cb_call is not None:
                     node_result = await self._retry_policy_engine.execute_with_retry(
-                        self._circuit_breaker.call_async(node.async_run), **inputs
+                        _cb_call(_node_fn), **inputs
                     )
                 else:
                     node_result = await self._retry_policy_engine.execute_with_retry(
-                        self._circuit_breaker.call_sync(node.execute), **inputs
+                        _node_fn, **inputs
                     )
             except Exception as e:
                 logger.error(f"Enterprise node execution failed for {node_id}: {e}")
@@ -3280,14 +3308,10 @@ class LocalRuntime(
         elif self._retry_policy_engine:
             # Retry policy without circuit breaker
             try:
-                if hasattr(node, "async_run"):
-                    node_result = await self._retry_policy_engine.execute_with_retry(
-                        node.async_run, **inputs
-                    )
-                else:
-                    node_result = await self._retry_policy_engine.execute_with_retry(
-                        node.execute, **inputs
-                    )
+                _node_fn = getattr(node, "async_run", None) or node.execute
+                node_result = await self._retry_policy_engine.execute_with_retry(
+                    _node_fn, **inputs
+                )
             except Exception as e:
                 logger.error(f"Retry policy node execution failed for {node_id}: {e}")
                 raise
@@ -3295,14 +3319,8 @@ class LocalRuntime(
         elif self._circuit_breaker:
             # Circuit breaker without retry policy
             try:
-                if hasattr(node, "async_run"):
-                    node_result = await self._circuit_breaker.call_async(
-                        node.async_run, **inputs
-                    )
-                else:
-                    node_result = self._circuit_breaker.call_sync(
-                        node.execute, **inputs
-                    )
+                _node_fn = getattr(node, "async_run", None) or node.execute
+                node_result = await self._circuit_breaker.call(_node_fn, **inputs)
             except Exception as e:
                 logger.error(
                     f"Circuit breaker node execution failed for {node_id}: {e}"
@@ -3572,7 +3590,7 @@ class LocalRuntime(
     def _is_node_specific_format(
         self,
         parameters: dict[str, Any],
-        workflow: Workflow = None,
+        workflow: Workflow | None = None,
         node_ids_set: frozenset | set | None = None,
     ) -> bool:
         """Detect if parameters are in node-specific format.
@@ -3618,10 +3636,8 @@ class LocalRuntime(
     async def _execute_conditional_approach(
         self,
         workflow: Workflow,
-        parameters: dict[str, Any],
-        task_manager: TaskManager,
-        run_id: str,
-        workflow_context: dict[str, Any],
+        inputs: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> dict[str, dict[str, Any]]:
         """
         Execute workflow using conditional approach with two-phase execution.
@@ -3631,16 +3647,24 @@ class LocalRuntime(
 
         Args:
             workflow: Workflow to execute
-            parameters: Node-specific parameters
-            task_manager: Task manager for execution
-            run_id: Unique run identifier
-            workflow_context: Workflow execution context
+            inputs: Workflow inputs (alias for parameters, for mixin compatibility)
+            **kwargs: Additional arguments:
+                parameters: Node-specific parameters
+                task_manager: Task manager for execution
+                run_id: Unique run identifier
+                workflow_context: Workflow execution context
 
         Returns:
             Dictionary mapping node_id -> execution results
         """
+        # Extract kwargs with defaults
+        parameters: dict[str, Any] = kwargs.get("parameters") or inputs or {}
+        task_manager: TaskManager | None = kwargs.get("task_manager")
+        run_id: str = kwargs.get("run_id", "")
+        workflow_context: dict[str, Any] = kwargs.get("workflow_context") or {}
+
         self.logger.info("Starting conditional execution approach")
-        results = {}
+        results: dict[str, dict[str, Any]] = {}
         fallback_reason = None
         start_time = time.time()
         total_nodes = len(workflow.graph.nodes())
@@ -3775,26 +3799,34 @@ class LocalRuntime(
     async def _execute_switch_nodes(
         self,
         workflow: Workflow,
-        parameters: dict[str, Any],
-        task_manager: TaskManager,
-        run_id: str,
-        workflow_context: dict[str, Any],
+        inputs: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> dict[str, dict[str, Any]]:
         """
         Execute SwitchNodes first to determine conditional branches.
 
         Args:
             workflow: Workflow being executed
-            parameters: Node-specific parameters
-            task_manager: Task manager for execution
-            run_id: Unique run identifier
-            workflow_context: Workflow execution context
+            inputs: Workflow inputs (alias for parameters, for mixin compatibility)
+            **kwargs: Additional arguments:
+                parameters: Node-specific parameters
+                task_manager: Task manager for execution
+                run_id: Unique run identifier
+                workflow_context: Workflow execution context
 
         Returns:
             Dictionary mapping switch_node_id -> execution results
         """
+        # Extract kwargs with defaults
+        parameters: dict[str, Any] = kwargs.get("parameters") or inputs or {}
+        task_manager: TaskManager | None = kwargs.get("task_manager")
+        run_id: str = kwargs.get("run_id", "")
+        workflow_context: dict[str, Any] = kwargs.get("workflow_context") or {}
+
         self.logger.info("Phase 1: Executing SwitchNodes and their dependencies")
-        all_phase1_results = {}  # Store ALL results from Phase 1, not just switches
+        all_phase1_results: dict[str, dict[str, Any]] = (
+            {}
+        )  # Store ALL results from Phase 1, not just switches
 
         try:
             # Import here to avoid circular dependencies
@@ -3924,7 +3956,7 @@ class LocalRuntime(
                     if not node_inputs or "input_data" not in node_inputs:
                         # Get incoming edges to check if input_data is expected
                         has_input_connection = False
-                        for edge in workflow.graph.in_edges(switch_id, data=True):
+                        for edge in workflow.graph.in_edges(node_id, data=True):
                             mapping = edge[2].get("mapping", {})
                             if "input_data" in mapping.values():
                                 has_input_connection = True
@@ -3936,7 +3968,7 @@ class LocalRuntime(
                             node_inputs["input_data"] = None
 
                     # Execute the switch
-                    self.logger.debug(f"Executing SwitchNode: {switch_id}")
+                    self.logger.debug(f"Executing SwitchNode: {node_id}")
                     result = await self._execute_single_node(
                         node_id=node_id,
                         node_instance=node_instance,
@@ -3980,30 +4012,36 @@ class LocalRuntime(
     async def _execute_pruned_plan(
         self,
         workflow: Workflow,
-        switch_results: dict[str, dict[str, Any]],
-        parameters: dict[str, Any],
-        task_manager: TaskManager,
-        run_id: str,
-        workflow_context: dict[str, Any],
-        existing_results: dict[str, dict[str, Any]],
+        inputs: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> dict[str, dict[str, Any]]:
         """
         Execute pruned execution plan based on SwitchNode results.
 
         Args:
             workflow: Workflow being executed
-            switch_results: Results from SwitchNode execution
-            parameters: Node-specific parameters
-            task_manager: Task manager for execution
-            run_id: Unique run identifier
-            workflow_context: Workflow execution context
-            existing_results: Results from previous execution phases
+            inputs: Workflow inputs (alias for parameters, for mixin compatibility)
+            **kwargs: Additional arguments:
+                switch_results: Results from SwitchNode execution
+                parameters: Node-specific parameters
+                task_manager: Task manager for execution
+                run_id: Unique run identifier
+                workflow_context: Workflow execution context
+                existing_results: Results from previous execution phases
 
         Returns:
             Dictionary mapping node_id -> execution results for remaining nodes
         """
+        # Extract kwargs with defaults
+        switch_results: dict[str, dict[str, Any]] = kwargs.get("switch_results", {})
+        parameters: dict[str, Any] = kwargs.get("parameters") or inputs or {}
+        task_manager: TaskManager | None = kwargs.get("task_manager")
+        run_id: str = kwargs.get("run_id", "")
+        workflow_context: dict[str, Any] = kwargs.get("workflow_context") or {}
+        existing_results: dict[str, dict[str, Any]] = kwargs.get("existing_results", {})
+
         self.logger.info("Phase 2: Executing pruned plan based on switch results")
-        remaining_results = {}
+        remaining_results: dict[str, dict[str, Any]] = {}
 
         try:
             # Import here to avoid circular dependencies
@@ -4131,28 +4169,32 @@ class LocalRuntime(
     async def _execute_single_node(
         self,
         node_id: str,
-        node_instance: Any,
-        node_inputs: dict[str, Any],
-        task_manager: Any,
-        workflow: Workflow,
-        run_id: str,
-        workflow_context: dict[str, Any],
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """
         Execute a single node with proper validation and context setup.
 
         Args:
             node_id: Node identifier
-            node_instance: Node instance to execute
-            node_inputs: Prepared inputs for the node
-            task_manager: Task manager for tracking
-            workflow: Workflow being executed
-            run_id: Unique run identifier
-            workflow_context: Workflow execution context
+            **kwargs: Runtime-specific arguments:
+                node_instance: Node instance to execute
+                node_inputs: Prepared inputs for the node
+                task_manager: Task manager for tracking
+                workflow: Workflow being executed
+                run_id: Unique run identifier
+                workflow_context: Workflow execution context
 
         Returns:
             Node execution results
         """
+        # Extract kwargs
+        node_instance: Any = kwargs.get("node_instance")
+        node_inputs: dict[str, Any] = kwargs.get("node_inputs", {})
+        task_manager: Any = kwargs.get("task_manager")
+        workflow: Workflow | None = kwargs.get("workflow")
+        run_id: str = kwargs.get("run_id", "")
+        workflow_context: dict[str, Any] = kwargs.get("workflow_context", {})
+
         # P0B-001: Removed VP#1 (DataTypeValidator.validate_node_input)
         # Node.execute() performs authoritative validation via VP#3
 
@@ -4219,9 +4261,13 @@ class LocalRuntime(
                             f"Node '{node_id}' failed after {retry_result.total_attempts} retry attempts: "
                             f"{retry_result.final_exception}"
                         )
-                        enhanced_error.node_id = node_id
-                        enhanced_error.retry_context = retry_context
-                        enhanced_error.original_exception = retry_result.final_exception
+                        setattr(enhanced_error, "node_id", node_id)
+                        setattr(enhanced_error, "retry_context", retry_context)
+                        setattr(
+                            enhanced_error,
+                            "original_exception",
+                            retry_result.final_exception,
+                        )
                         raise enhanced_error
                     else:
                         # Fallback error if no final exception available
@@ -4652,6 +4698,7 @@ class LocalRuntime(
 
             # Performance indicators
             recent_executions = self._analytics_data["performance_history"][-10:]
+            avg_execution_time = 0.0
             if recent_executions:
                 avg_execution_time = sum(
                     e["execution_time"] for e in recent_executions
@@ -5051,7 +5098,7 @@ class LocalRuntime(
         }
 
         # Resource metrics
-        resources = {
+        resources: dict[str, int | float] = {
             "memory_mb": 0,
             "active_connections": 0,
             "active_workflows": (
@@ -5308,10 +5355,15 @@ class LocalRuntime(
             # Cleanup connection pools
             if self._pool_coordinator:
                 # Call cleanup method if it exists (for test compatibility)
-                if hasattr(self._pool_coordinator, "cleanup"):
-                    await self._pool_coordinator.cleanup()
-                elif hasattr(self._pool_coordinator, "cleanup_unused_pools"):
-                    await self._pool_coordinator.cleanup_unused_pools()
+                _cleanup_fn = getattr(self._pool_coordinator, "cleanup", None)
+                if _cleanup_fn is not None:
+                    await _cleanup_fn()
+                else:
+                    _cleanup_unused = getattr(
+                        self._pool_coordinator, "cleanup_unused_pools", None
+                    )
+                    if _cleanup_unused is not None:
+                        await _cleanup_unused()
 
             # Shutdown lifecycle manager
             if self._lifecycle_manager:

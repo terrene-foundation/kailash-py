@@ -513,11 +513,11 @@ def _get_cached_allowed_types() -> list[type]:
         if hasattr(np, "matrix"):
             numpy_types.append(np.matrix)
         if hasattr(np, "string_"):
-            numpy_types.append(np.string_)
+            numpy_types.append(getattr(np, "string_"))
         elif hasattr(np, "bytes_"):
             numpy_types.append(np.bytes_)
         if hasattr(np, "unicode_"):
-            numpy_types.append(np.unicode_)
+            numpy_types.append(getattr(np, "unicode_"))
         elif hasattr(np, "str_"):
             numpy_types.append(np.str_)
         if hasattr(np, "float128"):
@@ -535,23 +535,28 @@ def _get_cached_allowed_types() -> list[type]:
     try:
         import torch
 
-        allowed_types.extend(
-            [
-                torch.Tensor,
-                torch.nn.Module,
-                torch.nn.Parameter,
-                torch.cuda.FloatTensor,
-                torch.cuda.DoubleTensor,
-                torch.cuda.IntTensor,
-                torch.cuda.LongTensor,
-            ]
-        )
+        torch_types: list[type] = [
+            torch.Tensor,
+            torch.nn.Module,
+            torch.nn.Parameter,
+        ]
+        for cuda_type_name in (
+            "FloatTensor",
+            "DoubleTensor",
+            "IntTensor",
+            "LongTensor",
+        ):
+            cuda_type = getattr(torch.cuda, cuda_type_name, None)
+            if cuda_type is not None:
+                torch_types.append(cuda_type)
+        allowed_types.extend(torch_types)
     except ImportError:
         pass
 
     try:
-        import tensorflow as tf
+        import importlib
 
+        tf = importlib.import_module("tensorflow")
         allowed_types.extend(
             [
                 tf.Tensor,
@@ -562,7 +567,7 @@ def _get_cached_allowed_types() -> list[type]:
                 tf.data.Dataset,
             ]
         )
-    except ImportError:
+    except (ImportError, AttributeError):
         pass
 
     # Scientific computing
@@ -594,17 +599,19 @@ def _get_cached_allowed_types() -> list[type]:
         pass
 
     try:
-        import xgboost as xgb
+        import importlib as _importlib
 
+        xgb = _importlib.import_module("xgboost")
         allowed_types.extend([xgb.DMatrix, xgb.Booster])
-    except ImportError:
+    except (ImportError, AttributeError):
         pass
 
     try:
-        import lightgbm as lgb
+        import importlib as _importlib2
 
+        lgb = _importlib2.import_module("lightgbm")
         allowed_types.extend([lgb.Dataset, lgb.Booster])
-    except ImportError:
+    except (ImportError, AttributeError):
         pass
 
     # Data visualization
@@ -625,10 +632,11 @@ def _get_cached_allowed_types() -> list[type]:
 
     # Statistical modeling
     try:
-        import statsmodels.api as sm
+        import importlib as _importlib3
 
+        sm = _importlib3.import_module("statsmodels.api")
         allowed_types.extend([sm.OLS, sm.GLM, sm.GLS, sm.WLS])
-    except ImportError:
+    except (ImportError, AttributeError):
         pass
 
     # Image processing
@@ -646,10 +654,11 @@ def _get_cached_allowed_types() -> list[type]:
 
     # NLP libraries
     try:
-        from spacy.tokens import Doc, Span, Token
+        import importlib as _importlib4
 
-        allowed_types.extend([Doc, Span, Token])
-    except ImportError:
+        spacy_tokens = _importlib4.import_module("spacy.tokens")
+        allowed_types.extend([spacy_tokens.Doc, spacy_tokens.Span, spacy_tokens.Token])
+    except (ImportError, AttributeError):
         pass
 
     # Graph/Network analysis
@@ -662,11 +671,12 @@ def _get_cached_allowed_types() -> list[type]:
 
     # Time series
     try:
-        from prophet import Prophet
-        from prophet.forecaster import Prophet as ProphetModel
+        import importlib as _importlib5
 
-        allowed_types.extend([Prophet, ProphetModel])
-    except ImportError:
+        prophet_mod = _importlib5.import_module("prophet")
+        prophet_forecaster = _importlib5.import_module("prophet.forecaster")
+        allowed_types.extend([prophet_mod.Prophet, prophet_forecaster.Prophet])
+    except (ImportError, AttributeError):
         pass
 
     # Freeze as tuple for thread safety and immutability

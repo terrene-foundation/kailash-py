@@ -543,7 +543,9 @@ class CLIChannel(Channel):
                 return await self._execute_workflow_command(execution_params)
             elif target_type == "handler":
                 return await self._execute_handler_command(
-                    handler_name, execution_params, session
+                    str(handler_name) if handler_name is not None else "",
+                    execution_params,
+                    session,
                 )
             else:
                 return {
@@ -616,10 +618,17 @@ class CLIChannel(Channel):
             workflow = workflow_def
 
         # Execute workflow
+        if self.runtime is None:
+            return {
+                "success": False,
+                "error": "Runtime not available",
+                "workflow_name": workflow_name,
+            }
+
         start_time = time.monotonic()
         try:
-            results, run_id = await self.runtime.execute_workflow_async(
-                workflow, inputs=inputs
+            results, run_id = await self.runtime.execute_async(
+                workflow, parameters=inputs
             )
         except Exception as e:
             logger.error(f"Workflow execution failed for '{workflow_name}': {e}")

@@ -236,7 +236,7 @@ class ParameterHandlingMixin:
         ):
             # Get edge data which contains the mapping
             edge_data = workflow.graph.get_edge_data(source_node_id, target_node_id)
-            mapping = edge_data.get("mapping", {})
+            mapping = edge_data.get("mapping", {}) if edge_data is not None else {}
 
             # Apply mapping to source results
             for source_key, target_key in mapping.items():

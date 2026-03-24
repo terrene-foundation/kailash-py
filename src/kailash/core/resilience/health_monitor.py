@@ -277,7 +277,7 @@ class RedisHealthCheck(HealthCheck):
             await asyncio.wait_for(asyncio.to_thread(client.ping), timeout=self.timeout)
 
             # Get Redis info
-            info = await asyncio.to_thread(client.info)
+            info: Any = await asyncio.to_thread(client.info)
 
             response_time = (time.time() - start_time) * 1000
 
@@ -820,9 +820,11 @@ class HealthCheckManager:
         self.status_change_callbacks: List[Callable] = []
         self._running = False
 
-    def register_health_check(self, health_check: HealthCheck, interval: float = None):
+    def register_health_check(
+        self, health_check: HealthCheck, interval: Optional[float] = None
+    ):
         """Register a health check with optional interval."""
-        check_name = health_check.check_name
+        check_name = health_check.name
         self.health_checks[check_name] = health_check
         self.check_intervals[check_name] = interval or self.default_interval
         self.history[check_name] = []
@@ -907,7 +909,7 @@ class HealthCheckManager:
         self.status_change_callbacks.append(callback)
 
     def get_health_history(
-        self, check_name: str, limit: int = None
+        self, check_name: str, limit: Optional[int] = None
     ) -> List[HealthCheckResult]:
         """Get health check history for a specific check."""
         history = self.history.get(check_name, [])

@@ -57,11 +57,11 @@ class MiddlewareAuthManager:
 
     def __init__(
         self,
-        secret_key: str = None,
+        secret_key: Optional[str] = None,
         token_expiry_hours: int = 24,
         enable_api_keys: bool = True,
         enable_audit: bool = True,
-        database_url: str = None,
+        database_url: Optional[str] = None,
     ):
         """
         Initialize SDK Auth Manager.

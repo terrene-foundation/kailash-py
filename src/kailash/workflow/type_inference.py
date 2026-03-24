@@ -122,7 +122,9 @@ class TypeInferenceEngine:
 
     def __init__(self):
         """Initialize the type inference engine."""
-        self._compatibility_cache: Dict[Tuple[Type, Type], TypeCompatibilityResult] = {}
+        self._compatibility_cache: Dict[
+            Tuple[Type, Type, bool], TypeCompatibilityResult
+        ] = {}
         self._coercion_rules = self._build_coercion_rules()
 
     def _build_coercion_rules(self) -> Dict[Tuple[Type, Type], CoercionRule]:
@@ -329,7 +331,11 @@ class TypeInferenceEngine:
         # Origins must be compatible
         if source_origin != target_origin:
             # Check for coercible origins (list <-> tuple)
-            coercion_rule = self._coercion_rules.get((source_origin, target_origin))
+            coercion_rule = (
+                self._coercion_rules.get((source_origin, target_origin))
+                if source_origin is not None and target_origin is not None
+                else None
+            )
             if not (allow_coercion and coercion_rule):
                 return TypeCompatibilityResult(
                     is_compatible=False,
@@ -365,7 +371,11 @@ class TypeInferenceEngine:
 
         # Determine final coercion rule
         final_coercion = None
-        if source_origin != target_origin:
+        if (
+            source_origin != target_origin
+            and source_origin is not None
+            and target_origin is not None
+        ):
             final_coercion = self._coercion_rules.get((source_origin, target_origin))
         elif requires_coercion:
             final_coercion = CoercionRule.DICT_TO_OBJECT  # Generic placeholder
@@ -492,8 +502,12 @@ class TypeInferenceEngine:
             ConnectionInferenceResult with detailed analysis
         """
         # Get port types
-        source_type = source_port.type_hint or Any
-        target_type = target_port.type_hint or Any
+        source_type: Type = (
+            source_port.type_hint if source_port.type_hint is not None else type(Any)
+        )
+        target_type: Type = (
+            target_port.type_hint if target_port.type_hint is not None else type(Any)
+        )
 
         # Check compatibility
         compatibility = self.check_compatibility(

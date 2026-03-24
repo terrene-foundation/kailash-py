@@ -56,9 +56,9 @@ class AsyncWorkflowBuilder(WorkflowBuilder):
 
     def __init__(
         self,
-        name: str = None,
-        resource_registry: ResourceRegistry = None,
-        description: str = None,
+        name: Optional[str] = None,
+        resource_registry: Optional[ResourceRegistry] = None,
+        description: Optional[str] = None,
     ):
         super().__init__()
         self.name = name or f"async_workflow_{uuid.uuid4().hex[:8]}"
@@ -82,10 +82,10 @@ class AsyncWorkflowBuilder(WorkflowBuilder):
         *,
         timeout: int = 30,
         max_concurrent_tasks: int = 10,
-        retry_policy: RetryPolicy = None,
-        error_handler: ErrorHandler = None,
-        required_resources: List[str] = None,
-        description: str = None,
+        retry_policy: Optional[RetryPolicy] = None,
+        error_handler: Optional[ErrorHandler] = None,
+        required_resources: Optional[List[str]] = None,
+        description: Optional[str] = None,
         **kwargs,
     ) -> "AsyncWorkflowBuilder":
         """Add async Python code node with enhanced configuration."""
@@ -141,10 +141,10 @@ class AsyncWorkflowBuilder(WorkflowBuilder):
         input_field: str = "items",
         output_field: str = "results",
         max_workers: int = 10,
-        batch_size: int = None,
+        batch_size: Optional[int] = None,
         timeout_per_item: int = 5,
         continue_on_error: bool = False,
-        description: str = None,
+        description: Optional[str] = None,
     ) -> "AsyncWorkflowBuilder":
         """Add node that processes items in parallel using asyncio.gather."""
         # Validate function
@@ -317,10 +317,10 @@ result = {{
         node_id: str,
         resource_name: str,
         operation: str,
-        params: Dict[str, Any] = None,
+        params: Optional[Dict[str, Any]] = None,
         *,
         output_field: str = "result",
-        description: str = None,
+        description: Optional[str] = None,
         **kwargs,
     ) -> "AsyncWorkflowBuilder":
         """Add node that interacts with a registered resource."""
@@ -381,7 +381,7 @@ result = {{
         worker_count: int = 4,
         scatter_field: str = "items",
         gather_field: str = "results",
-        description: str = None,
+        description: Optional[str] = None,
     ) -> "AsyncWorkflowBuilder":
         """Add scatter-gather pattern for parallel processing."""
         # Use parallel_map which is simpler and more reliable
@@ -433,9 +433,9 @@ result = {{
         self,
         name: str,
         factory: ResourceFactory,
-        health_check: Callable = None,
-        cleanup_handler: Callable = None,
-        description: str = None,
+        health_check: Optional[Callable] = None,
+        cleanup_handler: Optional[Callable] = None,
+        description: Optional[str] = None,
     ) -> "AsyncWorkflowBuilder":
         """Declare a required resource for this workflow."""
         # Register with resource registry
@@ -461,9 +461,9 @@ result = {{
         name: str = "db",
         host: str = "localhost",
         port: int = 5432,
-        database: str = None,
-        user: str = None,
-        password: str = None,
+        database: Optional[str] = None,
+        user: Optional[str] = None,
+        password: Optional[str] = None,
         min_size: int = 10,
         max_size: int = 20,
         **kwargs,
@@ -513,8 +513,8 @@ result = {{
     def with_http_client(
         self,
         name: str = "http",
-        base_url: str = None,
-        headers: Dict[str, str] = None,
+        base_url: Optional[str] = None,
+        headers: Optional[Dict[str, str]] = None,
         timeout: int = 30,
         **kwargs,
     ) -> "AsyncWorkflowBuilder":
@@ -579,7 +579,7 @@ result = {{
         else:
             raise ValueError(f"Unsupported cache backend: {backend}")
 
-    def build(self) -> Workflow:
+    def build(self, workflow_id: str | None = None, **kwargs: Any) -> Workflow:
         """Build the async workflow with enhanced metadata."""
         # Add resource requirements to workflow metadata
         self._workflow_metadata["required_resources"] = list(
@@ -588,7 +588,7 @@ result = {{
         self._workflow_metadata["node_metadata"] = self._node_metadata
 
         # Build base workflow
-        workflow = super().build()
+        workflow = super().build(workflow_id, **kwargs)
 
         # Enhance workflow with async metadata
         if hasattr(workflow, "metadata"):
@@ -596,8 +596,8 @@ result = {{
         else:
             workflow.metadata = self._workflow_metadata
 
-        # Attach resource registry to workflow
-        workflow.resource_registry = self._resource_registry
+        # Attach resource registry to workflow (stored in metadata for type safety)
+        workflow.metadata["_resource_registry"] = self._resource_registry
 
         return workflow
 

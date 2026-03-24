@@ -5,7 +5,11 @@ This module provides easy-to-use Prometheus metrics for monitoring AsyncSQL
 per-pool locking performance and contention patterns.
 """
 
+from __future__ import annotations
+
+import importlib
 import time
+import types
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
@@ -14,6 +18,7 @@ try:
 
     PROMETHEUS_AVAILABLE = True
 except ImportError:
+    prometheus_client: types.ModuleType = types.ModuleType("prometheus_client")  # type: ignore[no-redef]
     PROMETHEUS_AVAILABLE = False
 
 
@@ -23,7 +28,7 @@ class AsyncSQLMetrics:
     def __init__(
         self,
         enabled: bool = True,
-        registry: Optional[prometheus_client.CollectorRegistry] = None,
+        registry: Any = None,
     ):
         """
         Initialize AsyncSQL metrics collector.
@@ -188,7 +193,7 @@ def set_global_metrics(metrics: Optional[AsyncSQLMetrics]):
 
 
 def enable_metrics(
-    registry: Optional[prometheus_client.CollectorRegistry] = None,
+    registry: Any = None,
 ) -> AsyncSQLMetrics:
     """
     Enable global AsyncSQL metrics collection.
@@ -250,16 +255,20 @@ def integrate_with_async_sql():
     from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
     # Store original methods
-    original_get_pool_creation_lock = AsyncSQLDatabaseNode._get_pool_creation_lock
-    original_acquire_lock = AsyncSQLDatabaseNode._acquire_pool_lock_with_timeout
+    original_get_pool_creation_lock = getattr(
+        AsyncSQLDatabaseNode, "_get_pool_creation_lock"
+    )
+    original_acquire_lock = getattr(
+        AsyncSQLDatabaseNode, "_acquire_pool_lock_with_timeout"
+    )
 
-    @classmethod
+    @classmethod  # type: ignore[misc]
     def instrumented_get_pool_creation_lock(cls, pool_key: str):
         """Instrumented version that records pool operations."""
         record_pool_operation(pool_key, "acquire")
         return original_get_pool_creation_lock(pool_key)
 
-    @classmethod
+    @classmethod  # type: ignore[misc]
     async def instrumented_acquire_lock(cls, pool_key: str, timeout: float = 5.0):
         """Instrumented version that records lock acquisitions."""
         async with metrics.timed_lock_acquisition(pool_key):
@@ -267,8 +276,16 @@ def integrate_with_async_sql():
                 yield
 
     # Apply instrumentation
-    AsyncSQLDatabaseNode._get_pool_creation_lock = instrumented_get_pool_creation_lock
-    AsyncSQLDatabaseNode._acquire_pool_lock_with_timeout = instrumented_acquire_lock
+    setattr(
+        AsyncSQLDatabaseNode,
+        "_get_pool_creation_lock",
+        instrumented_get_pool_creation_lock,
+    )
+    setattr(
+        AsyncSQLDatabaseNode,
+        "_acquire_pool_lock_with_timeout",
+        instrumented_acquire_lock,
+    )
 
     return metrics
 
