@@ -20,17 +20,21 @@ class TestWorkflowInputHandler:
     @pytest.fixture
     def mock_workflow(self):
         """Create a mock workflow with graph and nodes."""
-        workflow = Mock(spec=Workflow)
-        workflow._graph = Mock()
+        workflow = Mock()
+        workflow.graph = Mock()
+        workflow._graph = workflow.graph
         workflow._nodes = {}
+        workflow._node_instances = {}
         workflow._metadata = {}
+        workflow.metadata = {}
         return workflow
 
     @pytest.fixture
     def mock_node_with_params(self):
         """Create a mock node with parameters."""
-        node = Mock(spec=Node)
+        node = Mock()
         node.config = {}
+        node.metadata = {}
         node.get_parameters = Mock(
             return_value={
                 "required_param": Mock(required=True),
@@ -44,11 +48,11 @@ class TestWorkflowInputHandler:
     def test_inject_workflow_parameters_no_entry_nodes(self, mock_workflow):
         """Test injection when all nodes have incoming connections."""
         # Setup: All nodes have incoming edges
-        mock_workflow._graph.edges.return_value = [
+        mock_workflow.graph.edges.return_value = [
             ("node1", "node2"),
             ("node2", "node3"),
         ]
-        mock_workflow._graph.nodes.return_value = ["node1", "node2", "node3"]
+        mock_workflow.graph.nodes.return_value = ["node1", "node2", "node3"]
 
         # No entry nodes should be processed
         WorkflowInputHandler.inject_workflow_parameters(
@@ -63,9 +67,9 @@ class TestWorkflowInputHandler:
     ):
         """Test injection into nodes without incoming connections."""
         # Setup: node1 has no incoming edges
-        mock_workflow._graph.edges.return_value = [("node1", "node2")]
-        mock_workflow._graph.nodes.return_value = ["node1", "node2"]
-        mock_workflow._nodes = {"node1": mock_node_with_params}
+        mock_workflow.graph.edges.return_value = [("node1", "node2")]
+        mock_workflow.graph.nodes.return_value = ["node1", "node2"]
+        mock_workflow._node_instances = {"node1": mock_node_with_params}
 
         parameters = {"required_param": "test_value", "extra_param": "extra_value"}
 
@@ -81,9 +85,9 @@ class TestWorkflowInputHandler:
     ):
         """Test default tenant_id injection."""
         # Setup entry node without tenant_id in parameters
-        mock_workflow._graph.edges.return_value = []
-        mock_workflow._graph.nodes.return_value = ["node1"]
-        mock_workflow._nodes = {"node1": mock_node_with_params}
+        mock_workflow.graph.edges.return_value = []
+        mock_workflow.graph.nodes.return_value = ["node1"]
+        mock_workflow._node_instances = {"node1": mock_node_with_params}
 
         WorkflowInputHandler.inject_workflow_parameters(mock_workflow, {})
 
@@ -95,9 +99,9 @@ class TestWorkflowInputHandler:
     ):
         """Test database config injection from various sources."""
         # Setup
-        mock_workflow._graph.edges.return_value = []
-        mock_workflow._graph.nodes.return_value = ["node1"]
-        mock_workflow._nodes = {"node1": mock_node_with_params}
+        mock_workflow.graph.edges.return_value = []
+        mock_workflow.graph.nodes.return_value = ["node1"]
+        mock_workflow._node_instances = {"node1": mock_node_with_params}
 
         # Test 1: database_config in parameters
         parameters = {"database_config": {"host": "localhost"}}
@@ -116,7 +120,7 @@ class TestWorkflowInputHandler:
         mock_node_with_params.config = {}
 
         # Test 3: database_config in workflow metadata
-        mock_workflow._metadata = {"database_config": {"host": "metadata_host"}}
+        mock_workflow.metadata = {"database_config": {"host": "metadata_host"}}
         WorkflowInputHandler.inject_workflow_parameters(mock_workflow, {})
         assert mock_node_with_params.config["database_config"] == {
             "host": "metadata_host"
@@ -127,10 +131,10 @@ class TestWorkflowInputHandler:
     ):
         """Test that existing node config is not overwritten."""
         # Setup node with existing config
-        mock_workflow._graph.edges.return_value = []
-        mock_workflow._graph.nodes.return_value = ["node1"]
+        mock_workflow.graph.edges.return_value = []
+        mock_workflow.graph.nodes.return_value = ["node1"]
         mock_node_with_params.config = {"required_param": "existing_value"}
-        mock_workflow._nodes = {"node1": mock_node_with_params}
+        mock_workflow._node_instances = {"node1": mock_node_with_params}
 
         parameters = {"required_param": "new_value"}
         WorkflowInputHandler.inject_workflow_parameters(mock_workflow, parameters)
@@ -147,8 +151,8 @@ class TestWorkflowInputHandler:
         node.config = {}
         del node.get_parameters  # Remove the method
 
-        mock_workflow._graph.edges.return_value = []
-        mock_workflow._graph.nodes.return_value = ["node1"]
+        mock_workflow.graph.edges.return_value = []
+        mock_workflow.graph.nodes.return_value = ["node1"]
         mock_workflow._nodes = {"node1": node}
 
         # Should not raise error
