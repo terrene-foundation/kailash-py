@@ -231,7 +231,9 @@ class PendingMultiSig:
     def __post_init__(self):
         """Calculate expiry time from policy if not set."""
         if self.expires_at is None:
-            self.expires_at = self.created_at + timedelta(hours=self.policy.expiry_hours)
+            self.expires_at = self.created_at + timedelta(
+                hours=self.policy.expiry_hours
+            )
 
     def is_complete(self) -> bool:
         """Check if enough signatures have been collected."""
@@ -273,7 +275,11 @@ class PendingMultiSig:
             policy=MultiSigPolicy.from_dict(data["policy"]),
             signatures=data.get("signatures", {}),
             created_at=datetime.fromisoformat(data["created_at"]),
-            expires_at=(datetime.fromisoformat(data["expires_at"]) if data.get("expires_at") else None),
+            expires_at=(
+                datetime.fromisoformat(data["expires_at"])
+                if data.get("expires_at")
+                else None
+            ),
         )
 
 
@@ -360,7 +366,7 @@ class MultiSigManager:
         if pending.is_expired():
             raise SigningOperationExpiredError(
                 operation_id,
-                pending.expires_at,  # type: ignore
+                pending.expires_at,  # type: ignore[reportArgumentType]
             )
 
         # Check signer is authorized
@@ -379,10 +385,14 @@ class MultiSigManager:
             try:
                 is_valid = verify_signature(pending.payload, signature, public_key)
                 if not is_valid:
-                    raise ValueError(f"Invalid signature from signer {signer_id}: signature verification failed")
+                    raise ValueError(
+                        f"Invalid signature from signer {signer_id}: signature verification failed"
+                    )
             except Exception as e:
                 # Re-raise as ValueError for consistent error handling
-                raise ValueError(f"Invalid signature from signer {signer_id}: {e}") from e
+                raise ValueError(
+                    f"Invalid signature from signer {signer_id}: {e}"
+                ) from e
 
         # Store signature
         pending.signatures[signer_id] = signature
@@ -470,7 +480,9 @@ class MultiSigManager:
         Returns:
             Number of operations removed
         """
-        expired_ids = [op_id for op_id, pending in self._pending.items() if pending.is_expired()]
+        expired_ids = [
+            op_id for op_id, pending in self._pending.items() if pending.is_expired()
+        ]
 
         for op_id in expired_ids:
             del self._pending[op_id]

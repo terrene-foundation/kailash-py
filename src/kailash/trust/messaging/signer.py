@@ -78,6 +78,7 @@ class MessageSigner:
             self._private_key = base64.b64encode(private_key).decode("utf-8")
         else:
             self._private_key = private_key
+        del private_key  # Clear raw key material from local scope
         self._trust_ops = trust_operations
 
     @property
