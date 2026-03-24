@@ -64,9 +64,9 @@ class MCPToolNode(Node):
         name: str,
         tool_name: str,
         description: str = "",
-        parameters_schema: Dict[str, Any] = None,
+        parameters_schema: Optional[Dict[str, Any]] = None,
     ):
-        super().__init__(name)
+        super().__init__(name)  # type: ignore[call-arg]
         self.tool_name = tool_name
         self.description = description
         self.parameters_schema = parameters_schema or {}
@@ -119,7 +119,7 @@ class MCPResourceNode(Node):
         resource_type: str = "text",
         description: str = "",
     ):
-        super().__init__(name)
+        super().__init__(name)  # type: ignore[call-arg]
         self.resource_uri = resource_uri
         self.resource_type = resource_type
         self.description = description
@@ -158,9 +158,9 @@ class MiddlewareMCPServer:
 
     def __init__(
         self,
-        config: MCPServerConfig = None,
-        event_stream: EventStream = None,
-        agent_ui: AgentUIMiddleware = None,
+        config: Optional[MCPServerConfig] = None,
+        event_stream: Optional[EventStream] = None,
+        agent_ui: Optional[AgentUIMiddleware] = None,
         runtime: Optional[LocalRuntime] = None,
     ):
         self.config = config or MCPServerConfig()

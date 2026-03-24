@@ -202,7 +202,7 @@ class JsonRpcHandler:
                 data = data.decode("utf-8")
             if isinstance(data, str):
                 data = json.loads(data)
-            return JsonRpcRequest.from_dict(data)
+            return JsonRpcRequest.from_dict(data)  # type: ignore[arg-type]
         except json.JSONDecodeError as e:
             raise JsonRpcParseError(f"Invalid JSON: {e}")
         except Exception as e:
@@ -374,11 +374,11 @@ class A2AMethodHandlers:
 
             return DelegationResponse(
                 delegation_id=delegation.id,
-                delegator_agent_id=delegation.delegator_agent_id,
-                delegatee_agent_id=delegation.delegatee_agent_id,
+                delegator_agent_id=delegation.delegator_id,
+                delegatee_agent_id=delegation.delegatee_id,
                 task_id=delegation.task_id,
                 capabilities_delegated=delegation.capabilities_delegated,
-                constraints=delegation.constraints,
+                constraints=delegation.constraint_subset,
                 delegated_at=delegation.delegated_at,
                 expires_at=delegation.expires_at,
                 signature=delegation.signature,
@@ -449,8 +449,8 @@ class A2AMethodHandlers:
                 if chain and chain.delegations:
                     delegation_chain = [
                         {
-                            "delegator": d.delegator_agent_id,
-                            "delegatee": d.delegatee_agent_id,
+                            "delegator": d.delegator_id,
+                            "delegatee": d.delegatee_id,
                             "task_id": d.task_id,
                             "capabilities": d.capabilities_delegated,
                             "delegated_at": d.delegated_at.isoformat(),

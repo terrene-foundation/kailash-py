@@ -105,7 +105,7 @@ class BaseWorkflowModel(Base, EnterpriseBaseMixin):
             "workflow_id": self.workflow_id,
             "name": self.name,
             "description": self.description,
-            "status": self.status.value if self.status else None,
+            "status": self.status.value if self.status is not None else None,
             "version": self.version,
             "tenant_id": self.tenant_id,
             "owner_id": self.owner_id,
@@ -115,8 +115,12 @@ class BaseWorkflowModel(Base, EnterpriseBaseMixin):
             "metadata": self.workflow_metadata or {},
             "security_classification": self.security_classification,
             "compliance_requirements": self.compliance_requirements or [],
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": (
+                self.created_at.isoformat() if self.created_at is not None else None
+            ),
+            "updated_at": (
+                self.updated_at.isoformat() if self.updated_at is not None else None
+            ),
         }
 
 
@@ -185,30 +189,30 @@ class BaseExecutionModel(Base, BaseMixin):
             ),
         )
 
-    def start(self, started_by: str = None):
+    def start(self, started_by: Optional[str] = None):
         """Mark execution as started."""
         self.status = ExecutionStatus.RUNNING
         self.started_at = datetime.now(timezone.utc)
         self.started_by = started_by
 
-    def complete(self, outputs: Dict[str, Any] = None):
+    def complete(self, outputs: Optional[Dict[str, Any]] = None):
         """Mark execution as completed."""
         self.status = ExecutionStatus.COMPLETED
         self.completed_at = datetime.now(timezone.utc)
         if outputs:
             self.outputs = outputs
-        if self.started_at:
+        if self.started_at is not None:
             self.runtime_seconds = (self.completed_at - self.started_at).total_seconds()
         self.progress_percentage = 100.0
 
-    def fail(self, error_message: str, error_details: Dict[str, Any] = None):
+    def fail(self, error_message: str, error_details: Optional[Dict[str, Any]] = None):
         """Mark execution as failed."""
         self.status = ExecutionStatus.FAILED
         self.completed_at = datetime.now(timezone.utc)
         self.error_message = error_message
         if error_details:
             self.error_details = error_details
-        if self.started_at:
+        if self.started_at is not None:
             self.runtime_seconds = (self.completed_at - self.started_at).total_seconds()
 
     def to_dict(self) -> Dict[str, Any]:
@@ -216,7 +220,7 @@ class BaseExecutionModel(Base, BaseMixin):
         return {
             "execution_id": self.execution_id,
             "workflow_id": self.workflow_id,
-            "status": self.status.value if self.status else None,
+            "status": self.status.value if self.status is not None else None,
             "progress": {
                 "total_nodes": self.total_nodes,
                 "completed_nodes": self.completed_nodes,
@@ -228,14 +232,18 @@ class BaseExecutionModel(Base, BaseMixin):
             "outputs": self.outputs or {},
             "error_message": self.error_message,
             "error_details": self.error_details or {},
-            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "started_at": (
+                self.started_at.isoformat() if self.started_at is not None else None
+            ),
             "completed_at": (
-                self.completed_at.isoformat() if self.completed_at else None
+                self.completed_at.isoformat() if self.completed_at is not None else None
             ),
             "runtime_seconds": self.runtime_seconds,
             "tenant_id": self.tenant_id,
             "started_by": self.started_by,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": (
+                self.created_at.isoformat() if self.created_at is not None else None
+            ),
         }
 
 
@@ -299,7 +307,7 @@ class BaseTemplateModel(Base, BaseMixin):
             "template_id": self.template_id,
             "name": self.name,
             "description": self.description,
-            "category": self.category.value if self.category else None,
+            "category": self.category.value if self.category is not None else None,
             "tags": self.tags or [],
             "difficulty_level": self.difficulty_level,
             "workflow_definition": self.workflow_definition or {},
@@ -308,7 +316,9 @@ class BaseTemplateModel(Base, BaseMixin):
             "is_certified": self.is_certified,
             "tenant_id": self.tenant_id,
             "is_public": self.is_public,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": (
+                self.created_at.isoformat() if self.created_at is not None else None
+            ),
         }
 
 
@@ -372,14 +382,18 @@ class BaseSecurityEventModel(Base, BaseMixin, ComplianceMixin):
         """Convert to dictionary for API responses."""
         return {
             "event_id": self.event_id,
-            "event_type": self.event_type.value if self.event_type else None,
+            "event_type": (
+                self.event_type.value if self.event_type is not None else None
+            ),
             "severity": self.severity,
             "description": self.description,
             "user_id": self.user_id,
             "session_id": self.session_id,
             "tenant_id": self.tenant_id,
             "event_data": self.event_data or {},
-            "occurred_at": self.occurred_at.isoformat() if self.occurred_at else None,
+            "occurred_at": (
+                self.occurred_at.isoformat() if self.occurred_at is not None else None
+            ),
         }
 
 
@@ -456,7 +470,9 @@ class BaseAuditLogModel(Base, BaseMixin, ComplianceMixin):
             "session_id": self.session_id,
             "tenant_id": self.tenant_id,
             "success": self.success,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "timestamp": (
+                self.timestamp.isoformat() if self.timestamp is not None else None
+            ),
         }
 
 
@@ -516,12 +532,14 @@ class BaseComplianceModel(Base, BaseMixin):
         """Convert to dictionary for API responses."""
         return {
             "assessment_id": self.assessment_id,
-            "framework": self.framework.value if self.framework else None,
+            "framework": self.framework.value if self.framework is not None else None,
             "tenant_id": self.tenant_id,
             "overall_score": self.overall_score,
             "violations": self.violations or [],
             "assessment_date": (
-                self.assessment_date.isoformat() if self.assessment_date else None
+                self.assessment_date.isoformat()
+                if self.assessment_date is not None
+                else None
             ),
             "remediation_status": self.remediation_status,
         }

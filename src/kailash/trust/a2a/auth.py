@@ -175,7 +175,7 @@ class A2AAuthenticator:
                 if not result.valid:
                     raise TrustVerificationError(
                         claims.iss,
-                        f"Trust verification failed: {result.errors}",
+                        f"Trust verification failed: {result.reason}",
                     )
 
                 # Verify trust chain hash matches

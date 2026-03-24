@@ -51,18 +51,18 @@ class BaseRepository:
         )
 
     async def _execute_query(
-        self, query: str, params: Dict[str, Any] = None
+        self, query: str, params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Execute database query using SDK node."""
         try:
             if self.use_async:
-                result = await self.db_node.execute_async(
+                result = self.db_node.execute(  # type: ignore[union-attr]
                     query=query, params=params or {}
                 )
             else:
                 result = self.db_node.execute(query=query, params=params or {})
 
-            return result
+            return result  # type: ignore[return-value]
         except Exception as e:
             logger.error(f"Database query failed: {e}")
             raise
@@ -72,12 +72,15 @@ class BaseRepository:
         if not data:
             return data
 
-        result = await self.transformer.execute(data=data, schema=schema)
+        result = self.transformer.execute(data=data, schema=schema)  # type: ignore[misc]
 
         return result["result"]
 
     async def _log_operation(
-        self, operation: str, entity_id: str = None, details: Dict[str, Any] = None
+        self,
+        operation: str,
+        entity_id: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
     ):
         """Log database operation for audit trail."""
         logger.info(
@@ -226,7 +229,7 @@ class MiddlewareWorkflowRepository(BaseRepository):
         self,
         limit: int = 100,
         offset: int = 0,
-        created_by: str = None,
+        created_by: Optional[str] = None,
         is_active: bool = True,
     ) -> List[Dict[str, Any]]:
         """List workflows with filtering."""
@@ -234,7 +237,7 @@ class MiddlewareWorkflowRepository(BaseRepository):
         SELECT * FROM workflows
         WHERE is_active = :is_active
         """
-        params = {"is_active": is_active}
+        params: Dict[str, Any] = {"is_active": is_active}
 
         if created_by:
             query += " AND created_by = :created_by"
@@ -405,8 +408,8 @@ class MiddlewareExecutionRepository(BaseRepository):
         self,
         execution_id: str,
         status: str,
-        outputs: Dict[str, Any] = None,
-        error: str = None,
+        outputs: Optional[Dict[str, Any]] = None,
+        error: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Update execution status."""
         query = """
@@ -446,11 +449,11 @@ class MiddlewareExecutionRepository(BaseRepository):
         return None
 
     async def list_by_workflow(
-        self, workflow_id: str, limit: int = 100, status: str = None
+        self, workflow_id: str, limit: int = 100, status: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """List executions for a workflow."""
         query = "SELECT * FROM executions WHERE workflow_id = :workflow_id"
-        params = {"workflow_id": workflow_id}
+        params: Dict[str, Any] = {"workflow_id": workflow_id}
 
         if status:
             query += " AND status = :status"
@@ -623,8 +626,8 @@ class MiddlewarePermissionRepository(BaseRepository):
         user_id: str,
         resource: str,
         action: str,
-        granted_by: str = None,
-        expires_at: datetime = None,
+        granted_by: Optional[str] = None,
+        expires_at: Optional[datetime] = None,
     ):
         """Grant permission to user."""
         # First ensure permission exists
