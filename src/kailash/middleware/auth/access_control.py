@@ -5,6 +5,8 @@ Consolidates existing Kailash access control implementations (RBAC/ABAC)
 into the middleware layer for unified authentication and authorization.
 """
 
+import uuid
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 # Import existing Kailash access control components
@@ -218,7 +220,9 @@ class MiddlewareAccessControlManager:
             from ..communication.events import WorkflowEvent
 
             event = WorkflowEvent(
+                id=str(uuid.uuid4()),
                 type=EventType.SYSTEM_STATUS,
+                timestamp=datetime.now(timezone.utc),
                 workflow_id="access_control",
                 data={
                     "action": "role_assigned",
@@ -287,11 +291,13 @@ class MiddlewareAccessControlManager:
         from ..communication.events import WorkflowEvent
 
         event = WorkflowEvent(
+            id=str(uuid.uuid4()),
             type=(
                 EventType.SYSTEM_STATUS
                 if decision.allowed
                 else EventType.SYSTEM_WARNING
             ),
+            timestamp=datetime.now(timezone.utc),
             workflow_id="access_control",
             data={
                 "access_decision": {

@@ -174,7 +174,7 @@ class MiddlewareAuthManager:
                 details={"permissions": permissions},
             )
 
-        return token_result.get("token")
+        return token_result.get("token") or ""
 
     async def verify_token(self, token: str) -> Dict[str, Any]:
         """
