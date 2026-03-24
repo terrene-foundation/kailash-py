@@ -147,7 +147,9 @@ class SpendTracker:
         """
         budget = self._budgets.get(agent_id)
         if budget is None:
-            raise ValueError(f"No budget configured for agent '{agent_id}'. Call set_budget() first.")
+            raise ValueError(
+                f"No budget configured for agent '{agent_id}'. Call set_budget() first."
+            )
 
         # Check for period reset
         self._check_period_reset(budget)
@@ -214,7 +216,9 @@ class SpendTracker:
             warning_threshold_pct=budget.warning_threshold_pct,
         )
 
-    def reset_budget(self, agent_id: str, period: Optional[BudgetPeriod] = None) -> None:
+    def reset_budget(
+        self, agent_id: str, period: Optional[BudgetPeriod] = None
+    ) -> None:
         """Reset an agent's budget.
 
         Args:
@@ -256,7 +260,10 @@ class SpendTracker:
         if since:
             events = [e for e in events if e.timestamp >= since]
 
-        return sorted(events, key=lambda e: e.timestamp, reverse=True)[:limit]
+        # Events are appended in order; reverse for most-recent-first
+        # Using list reversal (not timestamp sort) to maintain stable insertion order
+        # when timestamps are identical (e.g., Windows low-resolution clock)
+        return list(reversed(events))[:limit]
 
     def would_exceed(self, agent_id: str, amount: float) -> bool:
         """Check if a spend would exceed the budget.
