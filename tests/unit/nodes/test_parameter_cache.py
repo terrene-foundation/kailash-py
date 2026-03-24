@@ -137,6 +137,7 @@ class TestParameterCache:
         """Test LRU cache eviction behavior."""
         # Create node with small cache
         os.environ["KAILASH_PARAM_CACHE_SIZE"] = "3"
+        Node._clear_env_cache()
         node = CacheTestNode()
         node.clear_cache()
 
@@ -168,6 +169,7 @@ class TestParameterCache:
 
         # Cleanup
         del os.environ["KAILASH_PARAM_CACHE_SIZE"]
+        Node._clear_env_cache()
 
     def test_cache_with_aliases(self):
         """Test cache with workflow aliases."""
@@ -217,6 +219,7 @@ class TestParameterCache:
     def test_cache_disabled(self):
         """Test behavior when cache is disabled."""
         os.environ["KAILASH_DISABLE_PARAM_CACHE"] = "true"
+        Node._clear_env_cache()
         node = CacheTestNode()
 
         # Multiple calls with same pattern
@@ -234,6 +237,7 @@ class TestParameterCache:
 
         # Cleanup
         del os.environ["KAILASH_DISABLE_PARAM_CACHE"]
+        Node._clear_env_cache()
 
     def test_thread_safety(self):
         """Test cache thread safety with concurrent access."""

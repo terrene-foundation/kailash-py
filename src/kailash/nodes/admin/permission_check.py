@@ -192,7 +192,6 @@ class PermissionCheckNode(Node):
     """
 
     def __init__(self, **config):
-        assert self._db_node is not None
         super().__init__(**config)
         self._db_node = None
         self._access_manager = None
@@ -376,7 +375,6 @@ class PermissionCheckNode(Node):
 
     def run(self, **inputs) -> Dict[str, Any]:
         """Execute permission check operation."""
-        assert self._db_node is not None
         try:
             operation = PermissionCheckOperation(inputs["operation"])
 
@@ -413,7 +411,6 @@ class PermissionCheckNode(Node):
 
     def _init_dependencies(self, inputs: Dict[str, Any]):
         """Initialize database and access manager dependencies."""
-        assert self._db_node is not None
         # Skip initialization if already initialized (for testing)
         if hasattr(self, "_db_node") and self._db_node is not None:
             return
