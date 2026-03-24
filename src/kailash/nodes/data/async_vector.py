@@ -29,11 +29,8 @@ from typing import Any, Dict, List, Optional, Union
 
 try:
     import numpy as np
-except ImportError as exc:
-    raise ImportError(
-        "numpy is required for async vector nodes. "
-        "Install it with: pip install kailash[vector]"
-    ) from exc
+except ImportError:
+    np = None  # type: ignore[assignment]  # Deferred — checked at node runtime
 
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode

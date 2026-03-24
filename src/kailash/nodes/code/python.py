@@ -52,7 +52,11 @@ import inspect
 import json
 import logging
 import os
-import resource
+
+try:
+    import resource  # Unix-only module
+except ImportError:
+    resource = None  # type: ignore[assignment]  # Not available on Windows
 import traceback
 from collections.abc import Callable
 from datetime import date, datetime
@@ -453,7 +457,11 @@ class CodeExecutor:
 
         try:
             # Set memory limit if supported (Unix systems)
-            if hasattr(resource, "RLIMIT_AS") and self.security_config.memory_limit:
+            if (
+                resource is not None
+                and hasattr(resource, "RLIMIT_AS")
+                and self.security_config.memory_limit
+            ):
                 try:
                     resource.setrlimit(
                         resource.RLIMIT_AS,
