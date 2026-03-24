@@ -164,7 +164,7 @@ class TestWorkflowInputHandler:
         """Test basic input mapping creation."""
         node = Mock(spec=Node)
         node.config = {}
-        mock_workflow._nodes = {"node1": node}
+        mock_workflow._node_instances = {"node1": node}
 
         mappings = {
             "node1": {
@@ -183,7 +183,7 @@ class TestWorkflowInputHandler:
         """Test updating existing input mappings."""
         node = Mock(spec=Node)
         node.config = {"_input_mappings": {"existing": "mapping"}}
-        mock_workflow._nodes = {"node1": node}
+        mock_workflow._node_instances = {"node1": node}
 
         mappings = {"node1": {"new_param": "new_mapping"}}
 
@@ -214,10 +214,10 @@ class TestWorkflowInputHandler:
 
         # Create mock self with workflow attributes
         mock_self = Mock()
-        mock_self._graph = Mock()
-        mock_self._graph.edges.return_value = []
-        mock_self._graph.nodes.return_value = []
-        mock_self._nodes = {}
+        mock_self.graph = Mock()
+        mock_self.graph.edges.return_value = []
+        mock_self.graph.nodes.return_value = []
+        mock_self._node_instances = {}
 
         # Test with parameters
         parameters = {"param": "value"}
@@ -244,7 +244,7 @@ class TestWorkflowInputHandler:
         # Create user_fetcher node
         user_fetcher = Mock(spec=Node)
         user_fetcher.config = {}
-        mock_workflow._nodes = {"user_fetcher": user_fetcher}
+        mock_workflow._node_instances = {"user_fetcher": user_fetcher}
 
         config = {"DATABASE_URL": "sqlite:///:memory:"}
 
@@ -306,10 +306,8 @@ class TestWorkflowInputHandlerIntegration:
             }
         )
 
-        # The input_handling module expects _nodes and _graph, but Workflow uses different names
-        # This is an architecture inconsistency - we'll add the expected attributes
-        workflow._nodes = {"reader": node}
-        workflow._graph = workflow.graph  # Alias for the inconsistency
+        # Add node to workflow's _node_instances (production API)
+        workflow._node_instances = {"reader": node}
         workflow.graph.add_node("reader")
 
         # Inject parameters
@@ -346,13 +344,12 @@ class TestWorkflowInputHandlerIntegration:
             return_value={"output_path": Mock(required=True)}
         )
 
-        # Add nodes to workflow (architecture inconsistency workaround)
-        workflow._nodes = {
+        # Add nodes to workflow's _node_instances (production API)
+        workflow._node_instances = {
             "reader": reader_node,
             "processor": processor_node,
             "writer": writer_node,
         }
-        workflow._graph = workflow.graph  # Alias for the inconsistency
 
         # Add to graph with connections
         workflow.graph.add_node("reader")
