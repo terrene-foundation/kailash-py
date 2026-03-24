@@ -1068,7 +1068,7 @@ class RESTClientNode(Node):
 
             try:
                 # Make async request for next page
-                http_result = await self._async_http_node.async_run(
+                http_result = await self._async_http_node.async_run(  # type: ignore[attr-defined]
                     url=next_url,
                     method="GET",
                     headers=kwargs.get("headers", {}),
@@ -1210,7 +1210,7 @@ class AsyncRESTClientNode(AsyncNode):
         api_key_header = kwargs.get("api_key_header", "X-API-Key")
 
         # Build full URL with path parameters (reuse from synchronous version)
-        url = self.rest_node._build_url(base_url, resource, path_params, version)
+        url = self.rest_node._build_url(base_url, resource, path_params, version)  # type: ignore[attr-defined]
 
         # Set default Content-Type header for requests with body
         if (
@@ -1246,7 +1246,7 @@ class AsyncRESTClientNode(AsyncNode):
 
         # Execute the HTTP request asynchronously
         self.logger.info(f"Making async REST {method} request to {url}")
-        result = await self.http_node.async_run(**http_params)
+        result = await self.http_node.async_run(**http_params)  # type: ignore[attr-defined]
 
         # Extract response data
         response = result.get("response")
@@ -1299,7 +1299,7 @@ class AsyncRESTClientNode(AsyncNode):
         data = response["content"]
         if paginate and method == "GET" and success:
             try:
-                data = self.rest_node._handle_pagination(
+                data = self.rest_node._handle_pagination(  # type: ignore[attr-defined]
                     data, query_params, pagination_params
                 )
             except Exception as e:

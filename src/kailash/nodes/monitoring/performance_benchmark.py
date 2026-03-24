@@ -20,7 +20,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 try:
     import psutil
-except ImportError: psutil = None  # Optional: pip install kailash[monitoring]
+except ImportError:
+    psutil = None  # Optional: pip install kailash[monitoring]
 
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
@@ -346,7 +347,7 @@ class PerformanceBenchmarkNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
 
         return self.run(**kwargs)
 
-    def run(
+    def run(  # type: ignore[override]
         self,
         action: str,
         operation_name: Optional[str] = None,

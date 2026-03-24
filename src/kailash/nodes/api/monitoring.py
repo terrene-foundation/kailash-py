@@ -167,7 +167,7 @@ class APIHealthCheckNode(Node):
 
     async def _run_checks_parallel(
         self, targets: list[dict], timeout: int, retries: int, include_metrics: bool
-    ) -> list[dict[str, Any]]:
+    ) -> list[Any]:
         """Run health checks in parallel using asyncio."""
 
         async def run_single_check(target):
@@ -200,9 +200,10 @@ class APIHealthCheckNode(Node):
         check_type = target.get("type", "unknown")
         check_id = target.get("id", f"{check_type}_{hash(str(target)) % 10000}")
 
+        result: dict[str, Any] = {}
         for attempt in range(retries + 1):
+            start_time = time.time()
             try:
-                start_time = time.time()
 
                 if check_type == "http":
                     result = self._check_http(target, timeout)
