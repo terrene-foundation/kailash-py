@@ -535,6 +535,12 @@ class ConstraintValidator:
             # Non-numeric values: can't validate numerically
             return None
 
+        # NaN/Inf bypass prevention: NaN > X is always False, defeating tightening checks
+        import math
+
+        if not math.isfinite(parent_num) or not math.isfinite(child_num):
+            return f"Non-finite value in constraint: parent={parent_val}, child={child_val}"
+
         if child_num > parent_num:
             return f"Child {child_num} exceeds parent {parent_num}"
 

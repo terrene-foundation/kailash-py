@@ -71,8 +71,8 @@ try:
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
-    redis = None  # type: ignore
-    ConnectionPool = None  # type: ignore
+    redis = None  # type: ignore[assignment]
+    ConnectionPool = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 

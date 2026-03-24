@@ -479,7 +479,7 @@ class PseudoAgentFactory:
         auth_time = claims.get("iat") or claims.get("auth_time")
         if auth_time:
             if isinstance(auth_time, (int, float)):
-                authenticated_at = datetime.fromtimestamp(auth_time)
+                authenticated_at = datetime.fromtimestamp(auth_time, tz=timezone.utc)
             else:
                 authenticated_at = datetime.now(timezone.utc)
         else:
