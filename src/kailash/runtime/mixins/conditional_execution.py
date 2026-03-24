@@ -772,7 +772,7 @@ class ConditionalExecutionMixin:
 
             try:
                 # Execute fallback with additional monitoring
-                fallback_results = await self._execute_async(workflow, inputs)
+                fallback_results = await self._execute_async(workflow, inputs=inputs)
 
                 # Track fallback usage for monitoring
                 self._track_fallback_usage(workflow, fallback_reason or str(e))
@@ -958,7 +958,7 @@ class ConditionalExecutionMixin:
     async def _execute_pruned_plan(
         self,
         workflow: Workflow,
-        execution_plan: Any,
+        execution_plan: List[str],
         inputs: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
@@ -988,8 +988,6 @@ class ConditionalExecutionMixin:
         Raises:
             None - Errors are logged and execution continues with other nodes
         """
-        # Extract execution_plan from kwargs (may be passed as positional or kwarg)
-        execution_plan: List[str] = kwargs.get("execution_plan", [])
         if inputs is None:
             inputs = {}
 

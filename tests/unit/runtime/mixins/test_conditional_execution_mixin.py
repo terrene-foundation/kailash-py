@@ -64,8 +64,8 @@ class TestConditionalRuntime(BaseRuntime, ConditionalExecutionMixin):
     # Abstract Method Implementations (Required for Testing)
     # ========================================================================
 
-    def _execute_single_node(
-        self, node_id: str, workflow: Workflow, node_inputs: Dict[str, Any]
+    async def _execute_single_node(
+        self, node_id: str, workflow: Any = None, node_inputs: Any = None, **kwargs: Any
     ) -> Dict[str, Any]:
         """Execute single node (test implementation).
 
