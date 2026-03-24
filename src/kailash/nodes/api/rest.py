@@ -530,8 +530,8 @@ class RESTClientNode(Node):
             NodeValidationError: If required parameters are missing or invalid
             NodeExecutionError: If the request fails or returns an error status
         """
-        base_url = kwargs.get("base_url")
-        resource = kwargs.get("resource")
+        base_url = kwargs.get("base_url") or ""
+        resource = kwargs.get("resource") or ""
         method = kwargs.get("method", "GET").upper()
         path_params = kwargs.get("path_params", {})
         query_params = kwargs.get("query_params", {})
@@ -541,7 +541,7 @@ class RESTClientNode(Node):
         timeout = kwargs.get("timeout", 30)
         verify_ssl = kwargs.get("verify_ssl", True)
         paginate = kwargs.get("paginate", False)
-        pagination_params = kwargs.get("pagination_params")
+        pagination_params = kwargs.get("pagination_params") or {}
         retry_count = kwargs.get("retry_count", 0)
         retry_backoff = kwargs.get("retry_backoff", 0.5)
         # Authentication parameters
@@ -645,7 +645,9 @@ class RESTClientNode(Node):
         data = response["content"] if response else None
         if paginate and method == "GET" and success:
             try:
-                data = self._handle_pagination(data, query_params, pagination_params)
+                data = self._handle_pagination(
+                    data or {}, query_params, pagination_params
+                )
             except Exception as e:
                 self.logger.warning(f"Pagination handling failed: {str(e)}")
 
@@ -978,7 +980,7 @@ class RESTClientNode(Node):
             self._async_http_node = AsyncHTTPRequestNode()
 
         # Extract REST-specific parameters
-        base_url = kwargs.get("base_url")
+        base_url = kwargs.get("base_url") or ""
         resource = kwargs.get("resource", "")
         method = kwargs.get("method", "GET").upper()
         path_params = kwargs.get("path_params", {})
@@ -1001,7 +1003,7 @@ class RESTClientNode(Node):
             headers["Accept"] = "application/json"
 
         # Execute async HTTP request
-        http_result = await self._async_http_node.async_run(
+        http_result = await self._async_http_node.async_run(  # type: ignore[attr-defined]
             url=full_url,
             method=method,
             headers=headers,

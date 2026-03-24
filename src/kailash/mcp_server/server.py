@@ -551,9 +551,7 @@ class MCPServer:
                     self.auth_manager if hasattr(self, "auth_manager") else None
                 ),
                 event_store=event_store,
-                rate_limiter=(
-                    self.rate_limiter if hasattr(self, "rate_limiter") else None
-                ),
+                rate_limiter=getattr(self, "rate_limiter", None),
             )
 
         # Transport instance (for WebSocket and other transports)
@@ -871,7 +869,7 @@ class MCPServer:
 
                     if result is not None:
                         logger.debug(f"Cache hit for {tool_name}")
-                        if self.metrics.enabled:
+                        if self.metrics.enabled and start_time is not None:
                             latency = time.time() - start_time
                             self.metrics.track_tool_call(tool_name, latency, True)
 
@@ -924,7 +922,7 @@ class MCPServer:
                     logger.debug(f"Cached result for {tool_name}")
 
                 # Track success metrics
-                if self.metrics.enabled:
+                if self.metrics.enabled and start_time is not None:
                     latency = time.time() - start_time
                     self.metrics.track_tool_call(tool_name, latency, True)
 
@@ -1113,7 +1111,7 @@ class MCPServer:
                         result = await func(*args, **clean_kwargs)
 
                 # Track success metrics
-                if self.metrics.enabled:
+                if self.metrics.enabled and start_time is not None:
                     latency = time.time() - start_time
                     self.metrics.track_tool_call(tool_name, latency, True)
 
