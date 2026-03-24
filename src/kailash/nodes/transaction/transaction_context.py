@@ -221,7 +221,7 @@ class TransactionContextNode(AsyncNode):
             **kwargs: Additional node configuration
         """
         # Set node metadata
-        metadata = NodeMetadata(
+        _node_metadata = NodeMetadata(
             name=kwargs.get("name", "transaction_context"),
             description="Workflow-level transaction coordination with automatic participant management",
             version="1.0.0",

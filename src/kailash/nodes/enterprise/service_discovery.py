@@ -14,7 +14,7 @@ class MCPServiceDiscoveryNode(Node):
     ensuring tenants only access services they're authorized to use.
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="MCPServiceDiscoveryNode",
         description="Discovers MCP services for tenant-specific requirements",
         version="1.0.0",

@@ -206,7 +206,7 @@ class TwoPhaseCommitCoordinatorNode(AsyncNode):
             **kwargs: Additional node configuration
         """
         # Set node metadata
-        metadata = NodeMetadata(
+        _node_metadata = NodeMetadata(
             name=kwargs.get("name", "two_phase_commit_coordinator"),
             description="Coordinates distributed transactions using Two-Phase Commit protocol",
             version="1.0.0",

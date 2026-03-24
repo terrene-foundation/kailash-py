@@ -16,7 +16,7 @@ class EnterpriseAuditLoggerNode(Node):
     ensuring compliance with regulations like SOX, HIPAA, and GDPR.
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="EnterpriseAuditLoggerNode",
         description="Generate comprehensive audit logs for enterprise compliance",
         version="1.0.0",

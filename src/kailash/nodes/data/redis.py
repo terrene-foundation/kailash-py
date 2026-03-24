@@ -114,8 +114,7 @@ class RedisNode(Node):
         self.ttl = ttl
         self.decode_responses = decode_responses
 
-    @classmethod
-    def get_parameters(cls) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define node parameters."""
         return {
             "host": NodeParameter(
@@ -236,6 +235,8 @@ class RedisNode(Node):
         if not key and self.operation not in ["ping", "info", "flushdb"]:
             raise NodeExecutionError("Key is required for this operation")
 
+        # key is guaranteed non-None for all operations except ping/info/flushdb
+        key = str(key) if key is not None else ""
         try:
             client = self._get_client()
             result = None

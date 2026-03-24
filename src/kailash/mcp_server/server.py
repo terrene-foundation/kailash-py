@@ -842,6 +842,8 @@ class MCPServer:
                         raise error
 
                 # Try cache first if enabled
+                cache = None
+                cache_lookup_key = None
                 if cache_key and self.cache.enabled:
                     cache = self.cache.get_cache(cache_key, ttl=cache_ttl)
                     cache_lookup_key = self.cache._create_cache_key(

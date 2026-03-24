@@ -131,7 +131,7 @@ class KafkaConsumerNode(Node):
         >>> print(f"Consumed {len(result['messages'])} messages")
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="KafkaConsumerNode",
         description="Consumes messages from Kafka",
         version="1.0.0",
@@ -419,7 +419,7 @@ class StreamPublisherNode(Node):
         >>> print(f"Published {result['published_count']} messages")
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="StreamPublisherNode",
         description="Publishes to streaming platforms",
         version="1.0.0",
@@ -710,7 +710,7 @@ class WebSocketNode(Node):
         ... })
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="WebSocketNode",
         description="WebSocket client for streaming",
         version="1.0.0",
@@ -1043,7 +1043,7 @@ class EventStreamNode(Node):
         >>> print(f"Received {len(result['events'])} events")
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="EventStreamNode",
         description="Server-sent events client",
         version="1.0.0",

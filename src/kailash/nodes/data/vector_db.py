@@ -131,7 +131,7 @@ class EmbeddingNode(Node):
         >>> print(f"Embedding dimensions: {len(result['embeddings'][0])}")
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="EmbeddingNode",
         description="Generates embeddings for text data",
         version="1.0.0",
@@ -446,7 +446,7 @@ class VectorDatabaseNode(Node):
         ... })
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="VectorDatabaseNode",
         description="Vector database operations",
         version="1.0.0",
@@ -777,7 +777,7 @@ class TextSplitterNode(Node):
         >>> print(f"Created {len(result['chunks'])} chunks")
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="TextSplitterNode",
         description="Splits text into chunks",
         version="1.0.0",

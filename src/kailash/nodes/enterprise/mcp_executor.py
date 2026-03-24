@@ -186,7 +186,7 @@ class EnterpriseMLCPExecutorNode(Node):
     and compliance-aware execution for MCP tools.
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="EnterpriseMLCPExecutorNode",
         description="Execute MCP tools with enterprise resilience patterns",
         version="1.0.0",

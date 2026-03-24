@@ -62,11 +62,11 @@ class NodeMetadata(BaseModel):
     - Kailash UI: Node palette and property panels
     """
 
-    id: str = Field("", description="Node ID")
+    id: str = Field(default="", description="Node ID")
     name: str = Field(..., description="Node name")
-    description: str = Field("", description="Node description")
-    version: str = Field("1.0.0", description="Node version")
-    author: str = Field("", description="Node author")
+    description: str = Field(default="", description="Node description")
+    version: str = Field(default="1.0.0", description="Node version")
+    author: str = Field(default="", description="Node author")
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         description="Node creation date",

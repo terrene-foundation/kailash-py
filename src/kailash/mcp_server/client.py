@@ -173,10 +173,18 @@ class MCPClient:
         # Metrics tracking
         start_time = time.time() if self.metrics else None
 
+        # Normalize server_config to dict for internal methods
+        if isinstance(server_config, str):
+            normalized_config: Dict[str, Any] = {"url": server_config}
+            transport_type_hint = self._get_transport_type(server_config)
+            normalized_config["transport"] = transport_type_hint
+        else:
+            normalized_config = server_config
+
         async def _discover_operation():
             """Internal discovery operation."""
             # Determine transport type
-            transport_type = self._get_transport_type(server_config)
+            transport_type = self._get_transport_type(normalized_config)
 
             # Update transport usage metrics
             if self.metrics:
@@ -188,13 +196,13 @@ class MCPClient:
                 )
 
             if transport_type == "stdio":
-                return await self._discover_tools_stdio(server_config, timeout)
+                return await self._discover_tools_stdio(normalized_config, timeout)
             elif transport_type == "sse":
-                return await self._discover_tools_sse(server_config, timeout)
+                return await self._discover_tools_sse(normalized_config, timeout)
             elif transport_type == "http":
-                return await self._discover_tools_http(server_config, timeout)
+                return await self._discover_tools_http(normalized_config, timeout)
             elif transport_type == "websocket":
-                return await self._discover_tools_websocket(server_config, timeout)
+                return await self._discover_tools_websocket(normalized_config, timeout)
             else:
                 raise TransportError(
                     f"Unsupported transport: {transport_type}",
@@ -213,7 +221,7 @@ class MCPClient:
 
             # Update metrics
             if self.metrics:
-                self._update_metrics("discover_tools", time.time() - start_time)
+                self._update_metrics("discover_tools", time.time() - (start_time or 0))
 
             logger.info(f"Discovered {len(tools)} tools from {server_key}")
             return tools
@@ -247,6 +255,7 @@ class MCPClient:
         )
 
         # Connect and discover tools
+        tools: List[Dict[str, Any]] = []
         async with AsyncExitStack() as stack:
             stdio = await stack.enter_async_context(stdio_client(server_params))
             session = await stack.enter_async_context(ClientSession(stdio[0], stdio[1]))
@@ -261,7 +270,6 @@ class MCPClient:
                 result = await session.list_tools()
 
             # Convert to standard format
-            tools = []
             for tool in result.tools:
                 tools.append(
                     {
@@ -271,7 +279,7 @@ class MCPClient:
                     }
                 )
 
-            return tools
+        return tools
 
     async def _discover_tools_sse(
         self, server_config: Dict[str, Any], timeout: Optional[float]
@@ -287,6 +295,7 @@ class MCPClient:
         headers = self._get_auth_headers(server_config)
         request_timeout = timeout or self.connection_timeout
 
+        tools: List[Dict[str, Any]] = []
         async with AsyncExitStack() as stack:
             sse = await stack.enter_async_context(
                 sse_client(url=url, headers=headers, timeout=request_timeout)
@@ -302,7 +311,6 @@ class MCPClient:
                 result = await session.list_tools()
 
             # Convert to standard format
-            tools = []
             for tool in result.tools:
                 tools.append(
                     {
@@ -312,7 +320,7 @@ class MCPClient:
                     }
                 )
 
-            return tools
+        return tools
 
     async def _discover_tools_http(
         self, server_config: Dict[str, Any], timeout: Optional[float]
@@ -321,6 +329,7 @@ class MCPClient:
         if not self.enable_http_transport:
             raise TransportError("HTTP transport not enabled", transport_type="http")
 
+        import httpx
         from mcp import ClientSession
         from mcp.client.streamable_http import streamable_http_client
 
@@ -328,11 +337,12 @@ class MCPClient:
         headers = self._get_auth_headers(server_config)
         request_timeout = timeout or self.connection_timeout
 
+        http_client = httpx.AsyncClient(headers=headers, timeout=request_timeout)
+
+        tools: List[Dict[str, Any]] = []
         async with AsyncExitStack() as stack:
             http = await stack.enter_async_context(
-                streamable_http_client(
-                    url=url, headers=headers, timeout=request_timeout
-                )
+                streamable_http_client(url=url, http_client=http_client)
             )
             session = await stack.enter_async_context(ClientSession(http[0], http[1]))
 
@@ -345,7 +355,6 @@ class MCPClient:
                 result = await session.list_tools()
 
             # Convert to standard format
-            tools = []
             for tool in result.tools:
                 tools.append(
                     {
@@ -355,7 +364,7 @@ class MCPClient:
                     }
                 )
 
-            return tools
+        return tools
 
     async def _discover_tools_websocket(
         self, server_config: Union[str, Dict[str, Any]], timeout: Optional[float]
@@ -443,25 +452,32 @@ class MCPClient:
                     "tool_name": tool_name,
                 }
 
+        # Normalize server_config to dict for internal methods
+        if isinstance(server_config, str):
+            tool_config: Dict[str, Any] = {"url": server_config}
+            tool_config["transport"] = self._get_transport_type(server_config)
+        else:
+            tool_config = server_config
+
         async def _tool_operation():
             """Internal tool execution operation."""
-            transport_type = self._get_transport_type(server_config)
+            transport_type = self._get_transport_type(tool_config)
 
             if transport_type == "stdio":
                 return await self._call_tool_stdio(
-                    server_config, tool_name, arguments, timeout
+                    tool_config, tool_name, arguments, timeout
                 )
             elif transport_type == "sse":
                 return await self._call_tool_sse(
-                    server_config, tool_name, arguments, timeout
+                    tool_config, tool_name, arguments, timeout
                 )
             elif transport_type == "http":
                 return await self._call_tool_http(
-                    server_config, tool_name, arguments, timeout
+                    tool_config, tool_name, arguments, timeout
                 )
             elif transport_type == "websocket":
                 return await self._call_tool_websocket(
-                    server_config, tool_name, arguments, timeout
+                    tool_config, tool_name, arguments, timeout
                 )
             else:
                 raise TransportError(
@@ -479,7 +495,7 @@ class MCPClient:
             # Update metrics
             if self.metrics:
                 self.metrics["tools_called"] += 1
-                self._update_metrics("call_tool", time.time() - start_time)
+                self._update_metrics("call_tool", time.time() - (start_time or 0))
 
             return result
 
@@ -513,6 +529,7 @@ class MCPClient:
             command=command, args=args, env=server_env
         )
 
+        tool_result: Dict[str, Any] = {}
         async with AsyncExitStack() as stack:
             stdio = await stack.enter_async_context(stdio_client(server_params))
             session = await stack.enter_async_context(ClientSession(stdio[0], stdio[1]))
@@ -532,17 +549,20 @@ class MCPClient:
             content = []
             if hasattr(result, "content"):
                 for item in result.content:
-                    if hasattr(item, "text"):
-                        content.append(item.text)
+                    text_val = getattr(item, "text", None)
+                    if text_val is not None:
+                        content.append(text_val)
                     else:
                         content.append(str(item))
 
-            return {
+            tool_result = {
                 "success": True,
                 "content": "\n".join(content) if content else "",
                 "result": result,
                 "tool_name": tool_name,
             }
+
+        return tool_result
 
     async def _call_tool_sse(
         self,
@@ -559,6 +579,7 @@ class MCPClient:
         headers = self._get_auth_headers(server_config)
         request_timeout = timeout or self.connection_timeout
 
+        tool_result: Dict[str, Any] = {}
         async with AsyncExitStack() as stack:
             sse = await stack.enter_async_context(
                 sse_client(url=url, headers=headers, timeout=request_timeout)
@@ -578,17 +599,20 @@ class MCPClient:
             content = []
             if hasattr(result, "content"):
                 for item in result.content:
-                    if hasattr(item, "text"):
-                        content.append(item.text)
+                    text_val = getattr(item, "text", None)
+                    if text_val is not None:
+                        content.append(text_val)
                     else:
                         content.append(str(item))
 
-            return {
+            tool_result = {
                 "success": True,
                 "content": "\n".join(content) if content else "",
                 "result": result,
                 "tool_name": tool_name,
             }
+
+        return tool_result
 
     async def _call_tool_http(
         self,
@@ -598,6 +622,7 @@ class MCPClient:
         timeout: Optional[float],
     ) -> Dict[str, Any]:
         """Call tool using HTTP transport."""
+        import httpx
         from mcp import ClientSession
         from mcp.client.streamable_http import streamable_http_client
 
@@ -605,11 +630,12 @@ class MCPClient:
         headers = self._get_auth_headers(server_config)
         request_timeout = timeout or self.connection_timeout
 
+        http_client = httpx.AsyncClient(headers=headers, timeout=request_timeout)
+
+        tool_result: Dict[str, Any] = {}
         async with AsyncExitStack() as stack:
             http = await stack.enter_async_context(
-                streamable_http_client(
-                    url=url, headers=headers, timeout=request_timeout
-                )
+                streamable_http_client(url=url, http_client=http_client)
             )
             session = await stack.enter_async_context(ClientSession(http[0], http[1]))
 
@@ -626,17 +652,20 @@ class MCPClient:
             content = []
             if hasattr(result, "content"):
                 for item in result.content:
-                    if hasattr(item, "text"):
-                        content.append(item.text)
+                    text_val = getattr(item, "text", None)
+                    if text_val is not None:
+                        content.append(text_val)
                     else:
                         content.append(str(item))
 
-            return {
+            tool_result = {
                 "success": True,
                 "content": "\n".join(content) if content else "",
                 "result": result,
                 "tool_name": tool_name,
             }
+
+        return tool_result
 
     async def _call_tool_websocket(
         self,
@@ -693,8 +722,9 @@ class MCPClient:
             content = []
             if hasattr(result, "content"):
                 for item in result.content:
-                    if hasattr(item, "text"):
-                        content.append(item.text)
+                    text_val = getattr(item, "text", None)
+                    if text_val is not None:
+                        content.append(text_val)
                     else:
                         content.append(str(item))
 
@@ -862,11 +892,27 @@ class MCPClient:
 
     async def read_resource_simple(
         self, resource_uri: str, timeout: Optional[float] = None
-    ) -> Dict[str, Any]:
+    ) -> Any:
         """Read a resource from the server (generic interface for tests)."""
-        # Use the config for server information if available
+        # Use the config to establish a session and read the resource
         server_config = self.config
-        return await self.read_resource(server_config, resource_uri, timeout)
+        from mcp import ClientSession, StdioServerParameters
+        from mcp.client.stdio import stdio_client
+
+        command = server_config.get("command", "python")
+        args = server_config.get("args", [])
+        env = server_config.get("env", {})
+        server_env = os.environ.copy()
+        server_env.update(env)
+        server_params = StdioServerParameters(
+            command=command, args=args, env=server_env
+        )
+
+        async with AsyncExitStack() as stack:
+            stdio = await stack.enter_async_context(stdio_client(server_params))
+            session = await stack.enter_async_context(ClientSession(stdio[0], stdio[1]))
+            await session.initialize()
+            return await self.read_resource(session, resource_uri)
 
     async def send_request(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """Send a raw JSON-RPC message to the server."""
@@ -911,7 +957,7 @@ class MCPClient:
             self.logger.error(f"Failed to list resources: {e}")
             return []
 
-    async def read_resource(self, session: "ClientSession", uri: str) -> Any:
+    async def read_resource(self, session: "ClientSession", uri: Any) -> Any:
         """
         Read a specific resource from an MCP server.
 
@@ -929,10 +975,12 @@ class MCPClient:
             if hasattr(result, "contents"):
                 content = []
                 for item in result.contents:
-                    if hasattr(item, "text"):
-                        content.append({"type": "text", "text": item.text})
-                    elif hasattr(item, "blob"):
-                        content.append({"type": "blob", "data": item.blob})
+                    item_text = getattr(item, "text", None)
+                    item_blob = getattr(item, "blob", None)
+                    if item_text is not None:
+                        content.append({"type": "text", "text": item_text})
+                    elif item_blob is not None:
+                        content.append({"type": "blob", "data": item_blob})
                     else:
                         content.append(str(item))
                 return content
@@ -964,7 +1012,7 @@ class MCPClient:
                     "arguments": [],
                 }
 
-                if hasattr(prompt, "arguments"):
+                if hasattr(prompt, "arguments") and prompt.arguments:
                     for arg in prompt.arguments:
                         prompt_dict["arguments"].append(
                             {
@@ -1007,9 +1055,7 @@ class MCPClient:
                         {
                             "role": msg.role,
                             "content": (
-                                msg.content.text
-                                if hasattr(msg.content, "text")
-                                else str(msg.content)
+                                getattr(msg.content, "text", None) or str(msg.content)
                             ),
                         }
                     )
@@ -1202,10 +1248,12 @@ class MCPClient:
             # Remove unhealthy connection
             await self._remove_connection_from_pool(url)
 
-    async def _cleanup_idle_connections(self, max_idle_seconds: float = None):
+    async def _cleanup_idle_connections(self, max_idle_seconds: float | None = None):
         """Clean up idle connections."""
         if max_idle_seconds is None:
-            max_idle_seconds = self.connection_pool_config.get("max_idle_time", 60)
+            max_idle_seconds = float(
+                self.connection_pool_config.get("max_idle_time", 60)
+            )
 
         current_time = time.time()
         urls_to_remove = []
@@ -1225,7 +1273,10 @@ class MCPClient:
             return
 
         # Find LRU connection
-        lru_url = min(self._connection_last_used, key=self._connection_last_used.get)
+        lru_url = min(
+            self._connection_last_used,
+            key=lambda k: self._connection_last_used.get(k, 0.0),
+        )
 
         # Update metrics
         if self.metrics:

@@ -201,6 +201,7 @@ class EnterpriseAuditLogNode(Node):
     """
 
     def __init__(self, **config):
+        assert self._db_node is not None
         super().__init__(**config)
         self._db_node = None
 
@@ -318,11 +319,13 @@ class EnterpriseAuditLogNode(Node):
 
     def run(self, **inputs) -> Dict[str, Any]:
         """Execute audit logging operation."""
+        assert self._db_node is not None
         try:
             operation = AuditOperation(inputs["operation"])
 
             # Initialize dependencies
             self._init_dependencies(inputs)
+            assert self._db_node is not None
 
             # Route to appropriate operation
             if operation == AuditOperation.LOG_EVENT:
@@ -355,6 +358,7 @@ class EnterpriseAuditLogNode(Node):
 
     def _init_dependencies(self, inputs: Dict[str, Any]):
         """Initialize database dependencies."""
+        assert self._db_node is not None
         # Get database config
         db_config = inputs.get(
             "database_config",
@@ -373,6 +377,7 @@ class EnterpriseAuditLogNode(Node):
 
     def _log_event(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Log a single audit event."""
+        assert self._db_node is not None
         event_data = inputs["event_data"]
         tenant_id = inputs.get("tenant_id", "default")
 
@@ -488,6 +493,7 @@ class EnterpriseAuditLogNode(Node):
 
     def _query_logs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Query audit logs with advanced filtering."""
+        assert self._db_node is not None
         query_filters = inputs.get("query_filters", {})
         pagination = inputs.get(
             "pagination", {"page": 1, "size": 20, "sort": "timestamp"}
@@ -839,6 +845,7 @@ class EnterpriseAuditLogNode(Node):
 
     def _archive_logs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Archive old audit logs for long-term storage."""
+        assert self._db_node is not None
         archive_days = inputs.get("archive_older_than_days", 90)
         archive_path = inputs.get("archive_path", "/archives/audit_logs")
         tenant_id = inputs.get("tenant_id")
@@ -907,6 +914,7 @@ class EnterpriseAuditLogNode(Node):
 
     def _delete_logs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Delete old audit logs based on retention policy."""
+        assert self._db_node is not None
         retention_days = inputs.get("retention_days", 365)
         tenant_id = inputs.get("tenant_id")
         dry_run = inputs.get("dry_run", False)
@@ -977,6 +985,7 @@ class EnterpriseAuditLogNode(Node):
 
     def _get_statistics(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Get audit log statistics and metrics."""
+        assert self._db_node is not None
         tenant_id = inputs.get("tenant_id")
         date_range = inputs.get("date_range", {})
         group_by = inputs.get(

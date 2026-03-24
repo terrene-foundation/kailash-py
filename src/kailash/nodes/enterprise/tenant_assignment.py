@@ -15,7 +15,7 @@ class TenantAssignmentNode(Node):
     tenant context including permissions, tier, and compliance settings.
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="TenantAssignmentNode",
         description="Assigns tenant context for multi-tenant applications",
         version="1.0.0",

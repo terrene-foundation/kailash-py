@@ -379,7 +379,7 @@ class AsyncPythonCodeNode(AsyncNode):
             - Memory limits may not be enforced on all platforms
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="AsyncPythonCodeNode",
         description="Execute asynchronous Python code with security controls",
         category="code",

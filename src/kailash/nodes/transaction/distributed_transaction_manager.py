@@ -231,7 +231,7 @@ class DistributedTransactionManagerNode(AsyncNode):
             **kwargs: Additional node configuration
         """
         # Set node metadata
-        metadata = NodeMetadata(
+        _node_metadata = NodeMetadata(
             name=kwargs.get("name", "distributed_transaction_manager"),
             description="High-level manager for distributed transactions with pattern selection",
             version="1.0.0",
