@@ -20,7 +20,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 try:
     import psutil
-except ImportError: psutil | None = None  # Optional: pip install kailash[monitoring]
+except ImportError: psutil = None  # Optional: pip install kailash[monitoring]
 
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin

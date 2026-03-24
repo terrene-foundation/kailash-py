@@ -125,15 +125,9 @@ class NodeParameter(BaseModel):
     default_value: Any | None = Field(
         default=None, description="Alternative default value specification"
     )
-    category: str = Field(
-        default="", description="Parameter category for grouping"
-    )
-    display_name: str = Field(
-        default="", description="Human-readable display name"
-    )
-    icon: str = Field(
-        default="", description="Icon identifier for UI display"
-    )
+    category: str = Field(default="", description="Parameter category for grouping")
+    display_name: str = Field(default="", description="Human-readable display name")
+    icon: str = Field(default="", description="Icon identifier for UI display")
 
     # Port direction markers for input/output classification
     input: bool = Field(
@@ -1274,7 +1268,8 @@ class Node(ABC):
                                 ) from e
                         else:
                             validated_outputs[param_name] = value
-                    else: validated_outputs[param_name] | None = None
+                    else:
+                        validated_outputs[param_name] = None
 
             # Include any additional outputs not in schema (for flexibility)
             for key, value in outputs.items():

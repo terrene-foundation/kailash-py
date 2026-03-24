@@ -727,7 +727,7 @@ class ConditionalExecutionMixin:
 
             # Execute pruned plan
             remaining_results = await self._execute_pruned_plan(
-                workflow, inputs, execution_plan=execution_plan, **kwargs
+                workflow, execution_plan, inputs, **kwargs
             )
 
             # Merge remaining results
@@ -772,9 +772,7 @@ class ConditionalExecutionMixin:
 
             try:
                 # Execute fallback with additional monitoring
-                fallback_results = await self._execute_async(
-                    workflow, parameters=inputs
-                )
+                fallback_results = await self._execute_async(workflow, inputs)
 
                 # Track fallback usage for monitoring
                 self._track_fallback_usage(workflow, fallback_reason or str(e))
@@ -960,6 +958,7 @@ class ConditionalExecutionMixin:
     async def _execute_pruned_plan(
         self,
         workflow: Workflow,
+        execution_plan: Any,
         inputs: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
@@ -1086,7 +1085,9 @@ class ConditionalExecutionMixin:
         pass
 
     @abstractmethod
-    async def _execute_single_node(self, node_id: str, **kwargs: Any) -> Dict[str, Any]:
+    async def _execute_single_node(
+        self, node_id: str, workflow: Any = None, node_inputs: Any = None, **kwargs: Any
+    ) -> Dict[str, Any]:
         """
         Execute single node (runtime-specific).
 

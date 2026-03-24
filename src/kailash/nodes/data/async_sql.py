@@ -71,7 +71,8 @@ except ImportError:
 
 try:
     from kailash.core.pool.sqlite_pool import AsyncSQLitePool, SQLitePoolConfig
-except ImportError: AsyncSQLitePool | None = None  # type: ignore[assignment,misc]
+except ImportError:
+    AsyncSQLitePool = None  # type: ignore[assignment,misc]
     SQLitePoolConfig = None  # type: ignore[assignment,misc]
 
     # Define minimal enums if not available
@@ -3064,7 +3065,8 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 metrics["current_loop_locks"] = len(
                     cls._pool_locks_by_loop.get(current_loop_id, {})
                 )
-            except RuntimeError: metrics["current_event_loop"] | None = None
+            except RuntimeError:
+                metrics["current_event_loop"] = None
                 metrics["current_loop_locks"] = 0
 
             return metrics

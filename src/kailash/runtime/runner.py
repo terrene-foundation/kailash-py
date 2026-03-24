@@ -108,5 +108,5 @@ class WorkflowRunner:
         Returns:
             List of run summaries
         """
-        runs = self.task_manager.list_runs(workflow_name=workflow_name)
+        runs = self.task_manager.list_runs(workflow_name=workflow_name, limit=limit)
         return [run.model_dump() for run in runs]

@@ -291,7 +291,8 @@ class EnterpriseMLCPExecutorNode(Node):
                             },
                         },
                     }
-            else: cb | None = None
+            else:
+                cb = None
                 circuit_state = CircuitState.CLOSED
 
             # Execute the MCP tool call

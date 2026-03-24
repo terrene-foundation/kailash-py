@@ -4012,6 +4012,7 @@ class LocalRuntime(
     async def _execute_pruned_plan(
         self,
         workflow: Workflow,
+        execution_plan: Any = None,
         inputs: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> dict[str, dict[str, Any]]:

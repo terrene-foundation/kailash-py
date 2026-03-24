@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 try:
     import psutil
-except ImportError: psutil | None = None  # Optional: pip install kailash[monitoring]
+except ImportError: psutil = None  # Optional: pip install kailash[monitoring]
 
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode

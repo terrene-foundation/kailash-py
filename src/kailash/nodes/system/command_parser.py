@@ -482,7 +482,7 @@ class InteractiveShellNode(Node):
                 session_state["environment"] = {}
             if "working_directory" not in session_state:
                 session_state["working_directory"] = "/"
-            if "last_command_time" not in session_state: session_state["last_command_time"] | None = None
+            if "last_command_time" not in session_state: session_state["last_command_time"] = None
 
             # Process special shell commands BEFORE adding to history
             shell_result = self._process_shell_commands(command_input, session_state)
