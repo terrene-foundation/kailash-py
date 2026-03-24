@@ -22,8 +22,9 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "kailash-kaizen>=2.1.0",
-    "kailash-pact>=0.1.0",
+    "kailash[pact]>=2.1.0",
+    "kailash-kaizen>=2.2.1",
+    "kailash-pact>=0.4.0",
     "openai>=1.30.0",
     "python-dotenv>=1.0.0",
     "structlog>=23.1.0",
