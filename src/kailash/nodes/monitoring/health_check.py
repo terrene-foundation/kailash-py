@@ -10,8 +10,15 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-import aiohttp
-import asyncpg
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None  # type: ignore[assignment]
+
+try:
+    import asyncpg
+except ImportError:
+    asyncpg = None  # type: ignore[assignment]
 
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode

@@ -8,7 +8,10 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, Union
 
-import redis
+try:
+    import redis
+except ImportError:
+    redis = None  # type: ignore[assignment]  # Optional dependency
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.sdk_exceptions import NodeExecutionError

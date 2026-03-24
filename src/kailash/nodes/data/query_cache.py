@@ -18,8 +18,12 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-import redis
-from redis.exceptions import RedisError
+try:
+    import redis
+    from redis.exceptions import RedisError
+except ImportError:
+    redis = None  # type: ignore[assignment]
+    RedisError = Exception  # type: ignore[misc,assignment]
 
 from kailash.sdk_exceptions import NodeExecutionError
 
