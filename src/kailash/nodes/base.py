@@ -169,6 +169,23 @@ class Node(ABC):
     _DEFAULT_CACHE_SIZE = 128
     _SPECIAL_PARAMS = {"context", "config"}  # Parameters excluded from cache key
     _strict_unknown_params = False  # Subclasses can set True to error on unknown params
+    _env_cache: dict[str, str | None] = {}
+
+    @classmethod
+    def _get_env(cls, key: str, default: str | None = None) -> str | None:
+        """Get environment variable with class-level caching.
+
+        Avoids repeated os.environ lookups during high-frequency node execution.
+        Use _clear_env_cache() in tests or when env vars change.
+        """
+        if key not in cls._env_cache:
+            cls._env_cache[key] = os.environ.get(key, default)
+        return cls._env_cache[key]
+
+    @classmethod
+    def _clear_env_cache(cls) -> None:
+        """Clear the environment variable cache. Use in tests for isolation."""
+        cls._env_cache.clear()
 
     def __init__(self, **kwargs):
         """Initialize the node with configuration parameters.
@@ -300,13 +317,11 @@ class Node(ABC):
 
             # Parameter resolution cache - initialize before validation
             cache_size = int(
-                os.environ.get(
-                    "KAILASH_PARAM_CACHE_SIZE", str(self._DEFAULT_CACHE_SIZE)
-                )
+                self._get_env("KAILASH_PARAM_CACHE_SIZE", str(self._DEFAULT_CACHE_SIZE))
                 or str(self._DEFAULT_CACHE_SIZE)
             )
             self._cache_enabled = (
-                os.environ.get("KAILASH_DISABLE_PARAM_CACHE", "") or ""
+                self._get_env("KAILASH_DISABLE_PARAM_CACHE", "") or ""
             ).lower() != "true"
 
             # Use OrderedDict for LRU implementation

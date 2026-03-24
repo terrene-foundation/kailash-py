@@ -58,13 +58,18 @@ class MCPChannel(Channel):
     """
 
     def __init__(
-        self, config: ChannelConfig, mcp_server: Optional[MiddlewareMCPServer] = None
+        self,
+        config: ChannelConfig,
+        mcp_server: Optional[MiddlewareMCPServer] = None,
+        runtime: Optional[LocalRuntime] = None,
     ):
         """Initialize MCP channel.
 
         Args:
             config: Channel configuration
             mcp_server: Optional existing MCP server, will create one if not provided
+            runtime: Optional shared runtime. If provided, its ref count is
+                incremented via acquire(). If None a new LocalRuntime is created.
         """
         super().__init__(config)
 
@@ -79,7 +84,12 @@ class MCPChannel(Channel):
             self.mcp_server = self._create_mcp_server()
 
         # Runtime for executing workflows
-        self.runtime = LocalRuntime()
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = LocalRuntime()
+            self._owns_runtime = True
 
         # MCP-specific state
         self._clients: Dict[str, Dict[str, Any]] = {}
@@ -285,6 +295,12 @@ class MCPChannel(Channel):
                     logger.warning(f"Error stopping MCP server: {e}")
 
             await self._cleanup()
+
+            # Release runtime reference
+            if hasattr(self, "runtime") and self.runtime is not None:
+                self.runtime.release()
+                self.runtime = None
+
             self.status = ChannelStatus.STOPPED
 
             logger.info(f"MCP channel {self.name} stopped")

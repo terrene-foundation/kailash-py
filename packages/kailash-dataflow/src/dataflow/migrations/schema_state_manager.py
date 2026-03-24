@@ -664,39 +664,47 @@ class MigrationHistoryManager:
     PostgreSQL-optimized with JSONB support and proper parameter binding.
     """
 
-    def __init__(self, dataflow_instance):
+    def __init__(self, dataflow_instance, runtime=None):
         """
         Initialize migration history manager.
 
-        Automatically detects async context and uses appropriate runtime
-        to prevent deadlocks in FastAPI, pytest async, and other async environments.
-
         Args:
             dataflow_instance: DataFlow instance for database access via WorkflowBuilder
+            runtime: Optional shared runtime. If provided, the manager acquires
+                a reference (ref-count increment). If None, creates its own.
         """
         self.dataflow = dataflow_instance
 
-        # ✅ FIX: Detect async context and use appropriate runtime
-        # This prevents deadlocks when DataFlow is used in FastAPI, pytest async, etc.
-        try:
-            asyncio.get_running_loop()
-            # Running in async context - use AsyncLocalRuntime
+        # Initialize runtime
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
             from kailash.runtime import AsyncLocalRuntime
 
-            self.runtime = AsyncLocalRuntime()
-            self._is_async = True
+            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
-                "MigrationHistoryManager: Detected async context, using AsyncLocalRuntime"
+                "MigrationHistoryManager: Using injected runtime (ref_count=%d)",
+                runtime.ref_count,
             )
-        except RuntimeError:
-            # No event loop - use sync LocalRuntime
-            from kailash.runtime.local import LocalRuntime
+        else:
+            try:
+                asyncio.get_running_loop()
+                from kailash.runtime import AsyncLocalRuntime
 
-            self.runtime = LocalRuntime()
-            self._is_async = False
-            logger.debug(
-                "MigrationHistoryManager: Detected sync context, using LocalRuntime"
-            )
+                self.runtime = AsyncLocalRuntime()
+                self._is_async = True
+                logger.debug(
+                    "MigrationHistoryManager: Detected async context, using AsyncLocalRuntime"
+                )
+            except RuntimeError:
+                from kailash.runtime.local import LocalRuntime
+
+                self.runtime = LocalRuntime()
+                self._is_async = False
+                logger.debug(
+                    "MigrationHistoryManager: Detected sync context, using LocalRuntime"
+                )
+            self._owns_runtime = True
 
         self._ensure_history_table()
 
@@ -1363,6 +1371,30 @@ class MigrationHistoryManager:
         }
 
         return risk_levels.get(operation_type, "MEDIUM")
+
+    def close(self):
+        """Release the runtime reference.
+
+        Safe to call multiple times -- subsequent calls are no-ops.
+        """
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        """Emit ResourceWarning if close() was not called explicitly."""
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
 
 
 class SchemaStateManager:

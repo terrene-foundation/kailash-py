@@ -345,6 +345,7 @@ class AgentUIMiddleware:
         enable_workflow_sharing: bool = True,
         enable_persistence: bool = True,
         database_url: str = None,
+        runtime=None,
     ):
         self.enable_dynamic_workflows = enable_dynamic_workflows
         self.max_sessions = max_sessions
@@ -359,8 +360,22 @@ class AgentUIMiddleware:
         self.event_stream = EventStream(enable_batching=True)
         from kailash.runtime.local import LocalRuntime
 
-        self.runtime = LocalRuntime(enable_async=True)
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = LocalRuntime(enable_async=True)
+            self._owns_runtime = True
         self.node_registry = NodeRegistry()
+
+    def close(self) -> None:
+        """Release runtime reference."""
+        if hasattr(self, "runtime") and self.runtime is not None:
+            if self._owns_runtime:
+                self.runtime.close()
+            else:
+                self.runtime.release()
+            self.runtime = None
 
         # Session management
         self.sessions: Dict[str, WorkflowSession] = {}

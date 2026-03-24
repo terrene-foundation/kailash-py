@@ -1482,14 +1482,95 @@ class AsyncLocalRuntime(LocalRuntime):
         self._cleaned_up = True
         logger.info("AsyncLocalRuntime cleanup complete")
 
-    def __del__(self):
-        """Cleanup on deletion."""
+    def close(self) -> None:
+        """Synchronous close that properly cleans up ALL async resources.
+
+        Overrides LocalRuntime.close() to also handle thread pool,
+        resource registry, semaphore, and SQL connection pools.
+
+        Reference-count aware: decrements _ref_count. Actual cleanup
+        only happens when _ref_count reaches 0.
+        """
+        if self.debug:
+            logger.debug(
+                f"AsyncLocalRuntime.close() called for runtime {self._runtime_id}"
+            )
+
+        with self._loop_lock:
+            self._ref_count -= 1
+            if self._ref_count > 0:
+                return  # Other consumers still active
+
+        # --- Async resource cleanup (not handled by parent close) ---
+        if not getattr(self, "_cleaned_up", False):
+            try:
+                loop = self._persistent_loop
+                if loop and not loop.is_closed():
+                    # Schedule async cleanup on the runtime's own event loop
+                    future = asyncio.run_coroutine_threadsafe(self.cleanup(), loop)
+                    try:
+                        future.result(timeout=5.0)
+                    except (TimeoutError, asyncio.TimeoutError):
+                        logger.warning("AsyncLocalRuntime cleanup timed out after 5s")
+                else:
+                    # No running loop — do sync-safe subset
+                    if hasattr(self, "thread_pool") and self.thread_pool:
+                        self.thread_pool.shutdown(wait=True)
+                        self.thread_pool = None
+                    if hasattr(self, "_semaphore"):
+                        self._semaphore = None
+                    self._cleaned_up = True
+            except Exception as e:
+                logger.warning(f"Error during AsyncLocalRuntime.close(): {e}")
+                # Fallback: at least kill thread pool
+                if hasattr(self, "thread_pool") and self.thread_pool:
+                    self.thread_pool.shutdown(wait=False)
+                    self.thread_pool = None
+
+        # --- Parent cleanup (event loop + signals) ---
+        # Call the parent's cleanup logic directly, NOT super().close()
+        # because super().close() would try to decrement _ref_count again.
+        self._workflow_signals.clear()
+        self._cleanup_event_loop()
+
+    def __del__(self) -> None:
+        """Emit ResourceWarning if runtime was not properly closed."""
+        if getattr(self, "_ref_count", 0) > 0:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__} (ref_count={self._ref_count}). "
+                f"Use 'async with {self.__class__.__name__}() as runtime:' or call runtime.close().",
+                ResourceWarning,
+                source=self,
+            )
+            # Force cleanup regardless
+            self._ref_count = 1  # Ensure close() actually cleans up
+            try:
+                self.close()
+            except Exception:
+                pass
+
+    async def __aenter__(self) -> "AsyncLocalRuntime":
+        """Async context manager entry.
+
+        Usage:
+            async with AsyncLocalRuntime() as runtime:
+                results = await runtime.execute_workflow_async(workflow, inputs)
+        """
+        self._is_context_managed = True
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Async context manager exit — calls async cleanup.
+
+        Properly awaits cleanup() for full async resource teardown,
+        then cleans up the event loop.
+        """
         try:
-            # Schedule cleanup if event loop is available
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(self.cleanup())
-        except Exception:
-            # If no event loop, just shutdown thread pool
-            if hasattr(self, "thread_pool"):
-                self.thread_pool.shutdown(wait=False)
+            await self.cleanup()
+        finally:
+            self._cleanup_event_loop()
+            self._is_context_managed = False
+            # Mark ref_count as 0 since we've fully cleaned up
+            self._ref_count = 0

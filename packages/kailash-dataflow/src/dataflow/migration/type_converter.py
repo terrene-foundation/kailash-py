@@ -354,31 +354,41 @@ class QueryImpactAnalyzer:
     types are changed, helping to identify breaking changes before migration.
     """
 
-    def __init__(self, connection_string: str):
+    def __init__(self, connection_string: str, runtime=None):
         """
         Initialize the Query Impact Analyzer.
 
         Args:
             connection_string: PostgreSQL connection string
+            runtime: Optional shared runtime. If provided, the analyzer acquires
+                a reference (ref-count increment). If None, creates its own.
         """
         self.connection_string = connection_string
 
-        # ✅ FIX: Detect async context and use appropriate runtime
-        try:
-            asyncio.get_running_loop()
-            # Running in async context - use AsyncLocalRuntime
-            self.runtime = AsyncLocalRuntime()
-            self._is_async = True
+        # Initialize runtime
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
-                "QueryImpactAnalyzer: Detected async context, using AsyncLocalRuntime"
+                "QueryImpactAnalyzer: Using injected runtime (ref_count=%d)",
+                runtime.ref_count,
             )
-        except RuntimeError:
-            # No event loop - use sync LocalRuntime
-            self.runtime = LocalRuntime()
-            self._is_async = False
-            logger.debug(
-                "QueryImpactAnalyzer: Detected sync context, using LocalRuntime"
-            )
+        else:
+            try:
+                asyncio.get_running_loop()
+                self.runtime = AsyncLocalRuntime()
+                self._is_async = True
+                logger.debug(
+                    "QueryImpactAnalyzer: Detected async context, using AsyncLocalRuntime"
+                )
+            except RuntimeError:
+                self.runtime = LocalRuntime()
+                self._is_async = False
+                logger.debug(
+                    "QueryImpactAnalyzer: Detected sync context, using LocalRuntime"
+                )
+            self._owns_runtime = True
 
         logger.info("Query Impact Analyzer initialized")
 
@@ -574,9 +584,7 @@ class QueryImpactAnalyzer:
                 },
             )
 
-            # ✅ FIX: Use LocalRuntime for migration operations to avoid async context issues
-            init_runtime = LocalRuntime()
-            results, _ = init_runtime.execute(workflow.build())
+            results, _ = self.runtime.execute(workflow.build())
 
             if "check_indexes" in results and not results["check_indexes"].get("error"):
                 indexes = results["check_indexes"].get("rows", [])
@@ -635,9 +643,7 @@ class QueryImpactAnalyzer:
                 },
             )
 
-            # ✅ FIX: Use LocalRuntime for migration operations to avoid async context issues
-            init_runtime = LocalRuntime()
-            results, _ = init_runtime.execute(workflow.build())
+            results, _ = self.runtime.execute(workflow.build())
 
             if "check_constraints" in results and not results["check_constraints"].get(
                 "error"
@@ -671,6 +677,30 @@ class QueryImpactAnalyzer:
         """Normalize type name for analysis."""
         return re.sub(r"\([^)]*\)", "", type_name.lower().strip())
 
+    def close(self):
+        """Release the runtime reference.
+
+        Safe to call multiple times -- subsequent calls are no-ops.
+        """
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        """Emit ResourceWarning if close() was not called explicitly."""
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
+
 
 class SafeTypeConverter:
     """
@@ -684,6 +714,7 @@ class SafeTypeConverter:
         self,
         connection_string: str,
         orchestration_engine: Optional[MigrationOrchestrationEngine] = None,
+        runtime=None,
     ):
         """
         Initialize the Safe Type Converter.
@@ -691,6 +722,8 @@ class SafeTypeConverter:
         Args:
             connection_string: PostgreSQL connection string
             orchestration_engine: Optional existing orchestration engine
+            runtime: Optional shared runtime. If provided, the converter acquires
+                a reference (ref-count increment). If None, creates its own.
         """
         self.connection_string = connection_string
         self.orchestration_engine = orchestration_engine
@@ -700,25 +733,33 @@ class SafeTypeConverter:
 
         self.database_type = ConnectionParser.detect_database_type(connection_string)
 
-        # Initialize components
-        self.data_validator = DataValidationEngine(connection_string)
-        self.compatibility_matrix = TypeCompatibilityMatrix()
-        self.query_analyzer = QueryImpactAnalyzer(connection_string)
-
-        # ✅ FIX: Detect async context and use appropriate runtime
-        try:
-            asyncio.get_running_loop()
-            # Running in async context - use AsyncLocalRuntime
-            self.runtime = AsyncLocalRuntime()
-            self._is_async = True
+        # Initialize runtime
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
-                "SafeTypeConverter: Detected async context, using AsyncLocalRuntime"
+                "SafeTypeConverter: Using injected runtime (ref_count=%d)",
+                runtime.ref_count,
             )
-        except RuntimeError:
-            # No event loop - use sync LocalRuntime
-            self.runtime = LocalRuntime()
-            self._is_async = False
-            logger.debug("SafeTypeConverter: Detected sync context, using LocalRuntime")
+        else:
+            try:
+                asyncio.get_running_loop()
+                self.runtime = AsyncLocalRuntime()
+                self._is_async = True
+                logger.debug(
+                    "SafeTypeConverter: Detected async context, using AsyncLocalRuntime"
+                )
+            except RuntimeError:
+                self.runtime = LocalRuntime()
+                self._is_async = False
+                logger.debug("SafeTypeConverter: Detected sync context, using LocalRuntime")
+            self._owns_runtime = True
+
+        # Initialize components (pass shared runtime to sub-components)
+        self.data_validator = DataValidationEngine(connection_string, runtime=self.runtime)
+        self.compatibility_matrix = TypeCompatibilityMatrix()
+        self.query_analyzer = QueryImpactAnalyzer(connection_string, runtime=self.runtime)
 
         logger.info("Safe Type Converter initialized")
 
@@ -1080,9 +1121,7 @@ class SafeTypeConverter:
                     },
                 )
 
-                # ✅ FIX: Use LocalRuntime for migration operations to avoid async context issues
-                init_runtime = LocalRuntime()
-                results, _ = init_runtime.execute(workflow.build())
+                results, _ = self.runtime.execute(workflow.build())
                 node_id = f"step_{i + 1}"
 
                 if node_id not in results or results[node_id].get("error"):
@@ -1112,9 +1151,7 @@ class SafeTypeConverter:
                         },
                     )
 
-                    # ✅ FIX: Use LocalRuntime for migration operations to avoid async context issues
-                    init_runtime = LocalRuntime()
-                    val_results, _ = init_runtime.execute(validation_workflow.build())
+                    val_results, _ = self.runtime.execute(validation_workflow.build())
                     if "validation" in val_results:
                         val_data = val_results["validation"]
                         if val_data.get("rows") and len(val_data["rows"]) > 0:
@@ -1142,3 +1179,32 @@ class SafeTypeConverter:
                 execution_time_ms=0,
                 error_message=str(e),
             )
+
+    def close(self):
+        """Release the runtime reference.
+
+        Safe to call multiple times -- subsequent calls are no-ops.
+        Also closes sub-component runtimes.
+        """
+        if hasattr(self, "data_validator") and self.data_validator is not None:
+            self.data_validator.close()
+        if hasattr(self, "query_analyzer") and self.query_analyzer is not None:
+            self.query_analyzer.close()
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        """Emit ResourceWarning if close() was not called explicitly."""
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass

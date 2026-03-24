@@ -53,6 +53,7 @@ class CLIChannel(Channel):
         input_stream: Optional[TextIO] = None,
         output_stream: Optional[TextIO] = None,
         workflow_server: Optional[Any] = None,
+        runtime: Optional[AsyncLocalRuntime] = None,
     ):
         """Initialize CLI channel.
 
@@ -61,6 +62,8 @@ class CLIChannel(Channel):
             input_stream: Input stream (defaults to sys.stdin)
             output_stream: Output stream (defaults to sys.stdout)
             workflow_server: Optional workflow server for accessing registered workflows
+            runtime: Optional shared runtime. If provided, its ref count is
+                incremented via acquire(). If None a new AsyncLocalRuntime is created.
         """
         super().__init__(config)
 
@@ -85,7 +88,12 @@ class CLIChannel(Channel):
         self._routing_config = self._setup_default_routing()
 
         # Runtime for executing workflows
-        self.runtime = AsyncLocalRuntime()
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = AsyncLocalRuntime()
+            self._owns_runtime = True
 
         # CLI state
         self._running = False
@@ -308,6 +316,12 @@ class CLIChannel(Channel):
                     pass
 
             await self._cleanup()
+
+            # Release runtime reference
+            if hasattr(self, "runtime") and self.runtime is not None:
+                self.runtime.release()
+                self.runtime = None
+
             self.status = ChannelStatus.STOPPED
 
             logger.info(f"CLI channel {self.name} stopped")

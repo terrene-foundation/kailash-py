@@ -130,6 +130,7 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
         enable_async_execution: bool = True,
         enable_health_checks: bool = True,
         enable_resource_management: bool = True,
+        runtime=None,
         **kwargs,
     ):
         """Initialize enterprise workflow server."""
@@ -143,6 +144,8 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
             durability_opt_in=durability_opt_in,
             **kwargs,
         )
+        self._injected_runtime = runtime
+        self._owns_runtime = runtime is None
 
         # Enterprise components
         self.resource_registry = resource_registry or ResourceRegistry()
@@ -162,10 +165,22 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
         # Register enterprise endpoints
         self._register_enterprise_endpoints()
 
+    def close(self) -> None:
+        """Release runtime reference."""
+        if hasattr(self, "_async_runtime") and self._async_runtime is not None:
+            if self._owns_runtime:
+                self._async_runtime.close()
+            else:
+                self._async_runtime.release()
+            self._async_runtime = None
+
     def _initialize_enterprise_features(self):
         """Initialize enterprise feature components."""
         if self.enable_async_execution:
-            self._async_runtime = AsyncLocalRuntime()
+            if self._injected_runtime is not None:
+                self._async_runtime = self._injected_runtime.acquire()
+            else:
+                self._async_runtime = AsyncLocalRuntime()
 
         if self.enable_resource_management:
             self._resource_resolver = ResourceResolver(

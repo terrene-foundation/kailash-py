@@ -56,6 +56,10 @@ class TestConditionalRuntime(BaseRuntime, ConditionalExecutionMixin):
         """Minimal execute implementation (required by BaseRuntime)."""
         return {}, "test-run-id"
 
+    def close(self) -> None:
+        """Minimal close implementation (required by BaseRuntime)."""
+        pass
+
     # ========================================================================
     # Abstract Method Implementations (Required for Testing)
     # ========================================================================

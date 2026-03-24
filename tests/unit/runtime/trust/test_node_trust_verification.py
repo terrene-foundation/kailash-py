@@ -43,6 +43,10 @@ class ConcreteRuntime(BaseRuntime):
     def execute(self, workflow: Workflow, **kwargs):
         return {}, "test-run-id"
 
+    def close(self) -> None:
+        """Minimal close implementation."""
+        pass
+
 
 # =============================================================================
 # Test _verify_node_trust base method directly

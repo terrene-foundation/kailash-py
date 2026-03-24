@@ -311,9 +311,19 @@ class WorkflowBasedMiddleware:
     implementations for better performance and maintainability.
     """
 
-    def __init__(self):
-        """Initialize workflow-based middleware."""
-        self.runtime = AsyncLocalRuntime(debug=True, max_concurrency=10)
+    def __init__(self, runtime: "Optional[AsyncLocalRuntime]" = None):
+        """Initialize workflow-based middleware.
+
+        Args:
+            runtime: Optional shared runtime. If provided, its ref count is
+                incremented via acquire(). If None a new AsyncLocalRuntime is created.
+        """
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = AsyncLocalRuntime(debug=True, max_concurrency=10)
+            self._owns_runtime = True
 
         # Pre-build common workflows
         self.workflows = {
@@ -390,6 +400,12 @@ class WorkflowBasedMiddleware:
         if results.get("should_retry"):
             # Schedule retry using appropriate mechanism
             pass
+
+    def close(self) -> None:
+        """Release runtime reference."""
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
 
 
 # Export workflow templates for reuse

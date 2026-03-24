@@ -21,6 +21,7 @@ from typing import (
     runtime_checkable,
 )
 
+from kailash.runtime import AsyncLocalRuntime
 from kailash.servers.gateway import create_gateway
 from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
@@ -283,6 +284,9 @@ class Nexus:
 
         # Initialize revolutionary capabilities
         self._initialize_revolutionary_capabilities()
+
+        # Server-level shared runtime — eliminates per-request runtime creation (M3-001)
+        self.runtime = AsyncLocalRuntime()
 
         # Initialize MCP server
         self._initialize_mcp_server()
@@ -662,14 +666,16 @@ Check the documentation or explore available resources.
 
         This is used when MCPChannel is not available (WebSocket-only mode).
         We manually register the workflow as a tool with the Core SDK's MCPServer.
+
+        Uses self.runtime (server-level shared runtime) instead of creating
+        a new AsyncLocalRuntime per invocation (M3-001 fix).
         """
-        # P0-6 FIX: Use AsyncLocalRuntime to prevent event loop blocking
-        from kailash.runtime import AsyncLocalRuntime
+        # Capture self.runtime in closure — all tool invocations share it
+        shared_runtime = self.runtime
 
         async def workflow_tool(**params):
             """Execute workflow with given parameters."""
-            runtime = AsyncLocalRuntime()
-            execution_result = await runtime.execute_workflow_async(
+            execution_result = await shared_runtime.execute_workflow_async(
                 workflow, inputs=params
             )
             if isinstance(execution_result, tuple):
@@ -1983,9 +1989,25 @@ Check the documentation or explore available resources.
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         )
 
+    def close(self):
+        """Release the shared runtime and clean up resources.
+
+        Idempotent: safe to call multiple times.
+        """
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.close()
+            self.runtime = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
     def stop(self):
         """Stop the Nexus server gracefully."""
         if not self._running:
+            self.close()
             return
 
         logger.info("Stopping Nexus...")
@@ -2042,6 +2064,10 @@ Check the documentation or explore available resources.
                 )
 
         self._running = False
+
+        # Release shared runtime (M3-001)
+        self.close()
+
         logger.info("Nexus stopped")
 
     def _auto_discover_workflows(self):

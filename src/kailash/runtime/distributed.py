@@ -488,6 +488,15 @@ class DistributedRuntime(BaseRuntime):
         self._visibility_timeout = visibility_timeout
         self._result_ttl = result_ttl
 
+    def close(self) -> None:
+        """Release distributed runtime resources.
+
+        Cleans up the task queue connection and any execution metadata.
+        """
+        self._execution_metadata.clear()
+        if hasattr(self._queue, "close"):
+            self._queue.close()
+
     def execute(
         self,
         workflow: Workflow,

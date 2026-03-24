@@ -18,6 +18,10 @@ class ConcreteRuntimeWithParameters(ParameterHandlingMixin, BaseRuntime):
         """Minimal execute implementation."""
         return {}, "test-run-id"
 
+    def close(self) -> None:
+        """Minimal close implementation."""
+        pass
+
 
 class TestParameterHandlingMixinInitialization:
     """Test ParameterHandlingMixin initialization."""

@@ -63,9 +63,18 @@ class DataFlowGateway:
         # Performance configuration
         enable_connection_pooling: bool = True,
         pool_config: Optional[Dict[str, Any]] = None,
+        # Runtime injection
+        runtime=None,
         **kwargs,
     ):
-        """Initialize DataFlow Gateway."""
+        """Initialize DataFlow Gateway.
+
+        Args:
+            runtime: Optional shared runtime. If provided, the gateway acquires
+                a reference (ref-count increment) and uses it for all workflow
+                executions. If None, creates its own runtime with async-context
+                detection to prevent deadlocks.
+        """
         self.name = name
         self.description = description
         self.default_database_config = default_database_config or {}
@@ -81,20 +90,28 @@ class DataFlowGateway:
         self.enable_monitoring = enable_monitoring
         self.enable_connection_pooling = enable_connection_pooling
 
-        # Initialize runtime - detect async context
-        try:
-            asyncio.get_running_loop()
-            # Running in async context - use AsyncLocalRuntime
-            self.runtime = AsyncLocalRuntime()
-            self._is_async = True
+        # Initialize runtime
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
-                "DataFlowGateway: Detected async context, using AsyncLocalRuntime"
+                "DataFlowGateway: Using injected runtime (ref_count=%d)",
+                runtime.ref_count,
             )
-        except RuntimeError:
-            # No event loop - use sync LocalRuntime
-            self.runtime = LocalRuntime()
-            self._is_async = False
-            logger.debug("DataFlowGateway: Detected sync context, using LocalRuntime")
+        else:
+            try:
+                asyncio.get_running_loop()
+                self.runtime = AsyncLocalRuntime()
+                self._is_async = True
+                logger.debug(
+                    "DataFlowGateway: Detected async context, using AsyncLocalRuntime"
+                )
+            except RuntimeError:
+                self.runtime = LocalRuntime()
+                self._is_async = False
+                logger.debug("DataFlowGateway: Detected sync context, using LocalRuntime")
+            self._owns_runtime = True
 
         # Pre-configured workflows
         self.workflows = {}
@@ -674,6 +691,30 @@ class DataFlowGateway:
         if self.nexus:
             logger.info(f"Stopping DataFlow Gateway: {self.name}")
             await self.nexus.stop()
+
+    def close(self):
+        """Release the runtime reference.
+
+        Safe to call multiple times -- subsequent calls are no-ops.
+        """
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        """Emit ResourceWarning if close() was not called explicitly."""
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
 
     def get_workflow_info(self) -> Dict[str, Any]:
         """Get information about available workflows."""

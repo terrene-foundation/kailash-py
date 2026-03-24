@@ -20,19 +20,32 @@ logger = logging.getLogger(__name__)
 class MCPWebSocketServer:
     """WebSocket server wrapper for MCP protocol handling."""
 
-    def __init__(self, mcp_server, host: str = "0.0.0.0", port: int = 3001):
+    def __init__(self, mcp_server, host: str = "0.0.0.0", port: int = 3001, runtime=None):
         """Initialize WebSocket server wrapper.
 
         Args:
             mcp_server: Core SDK MCP server instance
             host: Host to bind to
             port: Port to bind to
+            runtime: Optional shared AsyncLocalRuntime. If provided, the server
+                uses it (caller must have called acquire()). If None, the server
+                creates its own runtime.
         """
         self.mcp_server = mcp_server
         self.host = host
         self.port = port
         self._server = None
         self._clients: Set[ServerConnection] = set()
+
+        # Shared runtime (M3-001): use provided or create own
+        if runtime is not None:
+            self.runtime = runtime
+            self._owns_runtime = False
+        else:
+            from kailash.runtime import AsyncLocalRuntime
+
+            self.runtime = AsyncLocalRuntime()
+            self._owns_runtime = True
 
     async def handle_client(self, websocket: ServerConnection):
         """Handle a WebSocket client connection.
@@ -169,11 +182,8 @@ class MCPWebSocketServer:
                     hasattr(self.mcp_server, "_workflows")
                     and tool_name in self.mcp_server._workflows
                 ):
-                    # P0-6 FIX: Use AsyncLocalRuntime to prevent event loop blocking
+                    # M3-001: Use server-level shared runtime (no per-request creation)
                     workflow = self.mcp_server._workflows[tool_name]
-                    from kailash.runtime import AsyncLocalRuntime
-
-                    runtime = AsyncLocalRuntime()
 
                     # Transform tool_args to node-specific format for PythonCodeNode
                     # Format: {node_id: {"parameters": tool_args}}
@@ -182,8 +192,8 @@ class MCPWebSocketServer:
                     for node_id in workflow.nodes.keys():
                         node_params[node_id] = {"parameters": tool_args}
 
-                    # Execute with async runtime (no thread wrapper needed)
-                    execution_result = await runtime.execute_workflow_async(
+                    # Execute with shared async runtime
+                    execution_result = await self.runtime.execute_workflow_async(
                         workflow, inputs=node_params
                     )
                     if isinstance(execution_result, tuple):
@@ -310,6 +320,17 @@ class MCPWebSocketServer:
         if pattern.endswith("*"):
             return uri.startswith(pattern[:-1])
         return uri == pattern
+
+    def close(self):
+        """Release the runtime reference.
+
+        If the runtime was provided externally (shared), release() decrements
+        the ref count. If the server owns the runtime, close() fully shuts it down.
+        Idempotent: safe to call multiple times.
+        """
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
 
     async def start(self):
         """Start the WebSocket server."""

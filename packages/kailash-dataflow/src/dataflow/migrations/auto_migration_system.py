@@ -236,32 +236,41 @@ class SchemaDiff:
 class PostgreSQLSchemaInspector:
     """PostgreSQL schema inspector for DataFlow with advanced optimizations."""
 
-    def __init__(self, connection_string):
+    def __init__(self, connection_string, runtime=None):
         """
         Initialize PostgreSQL schema inspector.
 
-        Automatically detects async context and uses appropriate runtime
-        to prevent deadlocks in FastAPI, pytest async, and other async environments.
+        Args:
+            connection_string: Database connection string
+            runtime: Optional shared runtime. If provided, the inspector acquires
+                a reference (ref-count increment). If None, creates its own.
         """
         self.connection_string = connection_string
 
-        # ✅ FIX: Detect async context and use appropriate runtime
-        # This prevents deadlocks when DataFlow is used in FastAPI, pytest async, etc.
-        try:
-            asyncio.get_running_loop()
-            # Running in async context - use AsyncLocalRuntime
-            self.runtime = AsyncLocalRuntime()
-            self._is_async = True
+        # Initialize runtime
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
-                "PostgreSQLSchemaInspector: Detected async context, using AsyncLocalRuntime"
+                "PostgreSQLSchemaInspector: Using injected runtime (ref_count=%d)",
+                runtime.ref_count,
             )
-        except RuntimeError:
-            # No event loop - use sync LocalRuntime
-            self.runtime = LocalRuntime()
-            self._is_async = False
-            logger.debug(
-                "PostgreSQLSchemaInspector: Detected sync context, using LocalRuntime"
-            )
+        else:
+            try:
+                asyncio.get_running_loop()
+                self.runtime = AsyncLocalRuntime()
+                self._is_async = True
+                logger.debug(
+                    "PostgreSQLSchemaInspector: Detected async context, using AsyncLocalRuntime"
+                )
+            except RuntimeError:
+                self.runtime = LocalRuntime()
+                self._is_async = False
+                logger.debug(
+                    "PostgreSQLSchemaInspector: Detected sync context, using LocalRuntime"
+                )
+            self._owns_runtime = True
 
         # Default to PostgreSQL dialect for SQL databases
         self.dialect = "postgresql"
@@ -553,6 +562,30 @@ class PostgreSQLSchemaInspector:
                 return True
 
         return False
+
+    def close(self):
+        """Release the runtime reference.
+
+        Safe to call multiple times -- subsequent calls are no-ops.
+        """
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        """Emit ResourceWarning if close() was not called explicitly."""
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
 
 
 class PostgreSQLMigrationGenerator:
@@ -932,32 +965,41 @@ class PostgreSQLMigrationGenerator:
 class SQLiteSchemaInspector:
     """SQLite schema inspector for DataFlow."""
 
-    def __init__(self, connection_string):
+    def __init__(self, connection_string, runtime=None):
         """
         Initialize SQLite schema inspector.
 
-        Automatically detects async context and uses appropriate runtime
-        to prevent deadlocks in FastAPI, pytest async, and other async environments.
+        Args:
+            connection_string: Database connection string
+            runtime: Optional shared runtime. If provided, the inspector acquires
+                a reference (ref-count increment). If None, creates its own.
         """
         self.connection_string = connection_string
 
-        # ✅ FIX: Detect async context and use appropriate runtime
-        # This prevents deadlocks when DataFlow is used in FastAPI, pytest async, etc.
-        try:
-            asyncio.get_running_loop()
-            # Running in async context - use AsyncLocalRuntime
-            self.runtime = AsyncLocalRuntime()
-            self._is_async = True
+        # Initialize runtime
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
-                "SQLiteSchemaInspector: Detected async context, using AsyncLocalRuntime"
+                "SQLiteSchemaInspector: Using injected runtime (ref_count=%d)",
+                runtime.ref_count,
             )
-        except RuntimeError:
-            # No event loop - use sync LocalRuntime
-            self.runtime = LocalRuntime()
-            self._is_async = False
-            logger.debug(
-                "SQLiteSchemaInspector: Detected sync context, using LocalRuntime"
-            )
+        else:
+            try:
+                asyncio.get_running_loop()
+                self.runtime = AsyncLocalRuntime()
+                self._is_async = True
+                logger.debug(
+                    "SQLiteSchemaInspector: Detected async context, using AsyncLocalRuntime"
+                )
+            except RuntimeError:
+                self.runtime = LocalRuntime()
+                self._is_async = False
+                logger.debug(
+                    "SQLiteSchemaInspector: Detected sync context, using LocalRuntime"
+                )
+            self._owns_runtime = True
 
         self.dialect = "sqlite"
 
@@ -1186,6 +1228,30 @@ class SQLiteSchemaInspector:
         diff.tables_to_modify = unified_result.tables_to_modify
 
         return diff
+
+    def close(self):
+        """Release the runtime reference.
+
+        Safe to call multiple times -- subsequent calls are no-ops.
+        """
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        """Emit ResourceWarning if close() was not called explicitly."""
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
 
 
 class SQLiteMigrationGenerator:
@@ -1449,32 +1515,46 @@ class AutoMigrationSystem:
         migrations_dir: str = "migrations",
         dataflow_instance=None,
         lock_timeout: int = 30,
+        runtime=None,
     ):
         """
         Initialize Auto Migration System.
 
-        Automatically detects async context and uses appropriate runtime
-        to prevent deadlocks in FastAPI, pytest async, and other async environments.
+        Args:
+            connection_string: Database connection string
+            dialect: Database dialect (auto-detected from connection string)
+            migrations_dir: Directory for migration files
+            dataflow_instance: Optional DataFlow instance
+            lock_timeout: Lock timeout in seconds
+            runtime: Optional shared runtime. If provided, the system acquires
+                a reference (ref-count increment). If None, creates its own.
         """
         self.connection_string = connection_string
 
-        # ✅ FIX: Detect async context and use appropriate runtime
-        # This prevents deadlocks when DataFlow is used in FastAPI, pytest async, etc.
-        try:
-            asyncio.get_running_loop()
-            # Running in async context - use AsyncLocalRuntime
-            self.runtime = AsyncLocalRuntime()
-            self._is_async = True
+        # Initialize runtime
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
-                "AutoMigrationSystem: Detected async context, using AsyncLocalRuntime"
+                "AutoMigrationSystem: Using injected runtime (ref_count=%d)",
+                runtime.ref_count,
             )
-        except RuntimeError:
-            # No event loop - use sync LocalRuntime
-            self.runtime = LocalRuntime()
-            self._is_async = False
-            logger.debug(
-                "AutoMigrationSystem: Detected sync context, using LocalRuntime"
-            )
+        else:
+            try:
+                asyncio.get_running_loop()
+                self.runtime = AsyncLocalRuntime()
+                self._is_async = True
+                logger.debug(
+                    "AutoMigrationSystem: Detected async context, using AsyncLocalRuntime"
+                )
+            except RuntimeError:
+                self.runtime = LocalRuntime()
+                self._is_async = False
+                logger.debug(
+                    "AutoMigrationSystem: Detected sync context, using LocalRuntime"
+                )
+            self._owns_runtime = True
 
         # Detect database type from connection string
         self.dialect = self._detect_database_type(connection_string)
@@ -2761,3 +2841,27 @@ class AutoMigrationSystem:
             error_msg = create_result.get("error", "Unknown error")
             logger.error(f"Failed to create SQLite lock table: {error_msg}")
             raise RuntimeError(f"Lock table creation failed: {error_msg}")
+
+    def close(self):
+        """Release the runtime reference.
+
+        Safe to call multiple times -- subsequent calls are no-ops.
+        """
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        """Emit ResourceWarning if close() was not called explicitly."""
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass

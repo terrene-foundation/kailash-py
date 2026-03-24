@@ -31,6 +31,10 @@ class ConcreteRuntimeWithValidation(ValidationMixin, BaseRuntime):
         """Minimal execute implementation."""
         return {}, "test-run-id"
 
+    def close(self) -> None:
+        """Minimal close implementation."""
+        pass
+
 
 class TestValidationMixinInitialization:
     """Test ValidationMixin initialization and MRO."""

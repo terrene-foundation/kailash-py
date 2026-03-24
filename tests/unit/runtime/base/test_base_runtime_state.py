@@ -23,6 +23,10 @@ class ConcreteRuntime(BaseRuntime):
         """Minimal execute implementation."""
         return {}, "test-run-id"
 
+    def close(self) -> None:
+        """Minimal close implementation."""
+        pass
+
 
 class TestRunIDGeneration:
     """Test run ID generation and uniqueness."""

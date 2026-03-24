@@ -338,10 +338,29 @@ class SecurityTestHelper:
 class WorkflowTestHelper:
     """Helper class for testing workflows."""
 
-    def __init__(self):
-        """Initialize test helper."""
-        self.runtime = LocalRuntime(debug=True)
+    def __init__(self, runtime=None):
+        """Initialize test helper.
+
+        Args:
+            runtime: Optional shared runtime. If provided, its ref count is
+                incremented via acquire(). If None, a new LocalRuntime is created.
+        """
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = LocalRuntime(debug=True)
+            self._owns_runtime = True
         self.task_manager = None
+
+    def close(self) -> None:
+        """Release runtime reference."""
+        if hasattr(self, "runtime") and self.runtime is not None:
+            if self._owns_runtime:
+                self.runtime.close()
+            else:
+                self.runtime.release()
+            self.runtime = None
 
     def create_test_workflow(self, name: str = "test_workflow") -> Workflow:
         """Create a simple test workflow."""

@@ -112,6 +112,7 @@ class WorkflowAPI:
             from kailash.runtime.async_local import AsyncLocalRuntime
 
             self.runtime = AsyncLocalRuntime()
+            self._owns_runtime = True
             import logging
 
             logger = logging.getLogger(__name__)
@@ -126,7 +127,8 @@ class WorkflowAPI:
                     f"Got {type(runtime).__name__} which doesn't implement the runtime interface. "
                     f"Use LocalRuntime or AsyncLocalRuntime."
                 )
-            self.runtime = runtime
+            self.runtime = runtime.acquire() if hasattr(runtime, "acquire") else runtime
+            self._owns_runtime = False
             import logging
 
             logger = logging.getLogger(__name__)
@@ -145,6 +147,15 @@ class WorkflowAPI:
 
         # Cache for async executions
         self._execution_cache: dict[str, dict[str, Any]] = {}
+
+    def close(self) -> None:
+        """Release runtime reference."""
+        if hasattr(self, "runtime") and self.runtime is not None:
+            if self._owns_runtime:
+                self.runtime.close()
+            else:
+                self.runtime.release()
+            self.runtime = None
 
     @asynccontextmanager
     async def _lifespan(self, app: FastAPI):

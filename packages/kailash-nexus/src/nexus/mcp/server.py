@@ -21,7 +21,11 @@ class MCPServer:
     """Simple MCP server that exposes workflows as tools."""
 
     def __init__(
-        self, host: str = "0.0.0.0", port: int = 3001, use_transport: bool = True
+        self,
+        host: str = "0.0.0.0",
+        port: int = 3001,
+        use_transport: bool = True,
+        runtime=None,
     ):
         """Initialize MCP server.
 
@@ -29,6 +33,9 @@ class MCPServer:
             host: Host to bind to
             port: Port to listen on
             use_transport: Use WebSocketServerTransport instead of direct websockets
+            runtime: Optional shared AsyncLocalRuntime. If provided, the server
+                uses it (caller must have called acquire()). If None, the server
+                creates its own runtime.
         """
         self.host = host
         self.port = port
@@ -39,6 +46,16 @@ class MCPServer:
         self._server = None
         self._serving_task = None
         self._transport = None
+
+        # Shared runtime (M3-001): use provided or create own
+        if runtime is not None:
+            self.runtime = runtime
+            self._owns_runtime = False
+        else:
+            from kailash.runtime import AsyncLocalRuntime
+
+            self.runtime = AsyncLocalRuntime()
+            self._owns_runtime = True
 
     def _create_workflow_resource_handler(self, name: str, workflow: Any):
         """Create a resource handler function for a workflow.
@@ -201,12 +218,8 @@ class MCPServer:
 
         # Execute the workflow
         try:
-            # P0-6 FIX: Use AsyncLocalRuntime to prevent event loop blocking
-            # This allows MCP to handle concurrent requests efficiently
-            from kailash.runtime import AsyncLocalRuntime
-
+            # M3-001: Use server-level shared runtime (no per-request creation)
             workflow = self._workflows[tool_name]
-            runtime = AsyncLocalRuntime()
 
             # Transform arguments to node-specific format for PythonCodeNode
             # Format: {node_id: {"parameters": arguments}}
@@ -215,9 +228,9 @@ class MCPServer:
             for node_id in workflow.nodes.keys():
                 node_params[node_id] = {"parameters": arguments}
 
-            # Execute workflow with async runtime (no thread wrapper needed)
+            # Execute workflow with shared async runtime
             # AsyncLocalRuntime.execute_workflow_async returns (results, run_id) tuple
-            execution_result = await runtime.execute_workflow_async(
+            execution_result = await self.runtime.execute_workflow_async(
                 workflow, inputs=node_params
             )
             if isinstance(execution_result, tuple):
@@ -265,6 +278,17 @@ class MCPServer:
             )
 
         return {"type": "resources", "resources": resources}
+
+    def close(self):
+        """Release the runtime reference.
+
+        If the runtime was provided externally (shared), release() decrements
+        the ref count. If the server owns the runtime, close() fully shuts it down.
+        Idempotent: safe to call multiple times.
+        """
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
 
     async def start(self):
         """Start the MCP server."""

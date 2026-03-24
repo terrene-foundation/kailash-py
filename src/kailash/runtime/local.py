@@ -697,6 +697,7 @@ class LocalRuntime(
         self._persistent_loop: Optional[asyncio.AbstractEventLoop] = None
         self._loop_thread: Optional[threading.Thread] = None
         self._loop_lock = threading.Lock()  # Protect loop creation/cleanup
+        self._ref_count = 1  # Creator holds first reference
         self._is_context_managed = False  # Track if using context manager
         self._cleanup_registered = False  # Track if atexit cleanup registered
 
@@ -1352,8 +1353,61 @@ class LocalRuntime(
         if self.debug:
             logger.debug(f"Explicit close() called for runtime {self._runtime_id}")
 
+        with self._loop_lock:
+            self._ref_count -= 1
+            if self._ref_count > 0:
+                return  # Other consumers still active
+
         self._workflow_signals.clear()
         self._cleanup_event_loop()
+
+    def acquire(self) -> "LocalRuntime":
+        """Increment reference count. Call when sharing this runtime.
+
+        Returns self for fluent usage:
+            subsystem = Subsystem(runtime=shared_runtime.acquire())
+
+        Raises:
+            RuntimeError: If the runtime has already been fully closed (ref_count <= 0).
+        """
+        with self._loop_lock:
+            if self._ref_count <= 0:
+                raise RuntimeError(
+                    "Cannot acquire a closed runtime. "
+                    "Create a new runtime instance instead."
+                )
+            self._ref_count += 1
+        return self
+
+    def release(self) -> None:
+        """Decrement reference count. Alias for close().
+
+        Actual cleanup happens when count reaches 0.
+        """
+        self.close()
+
+    @property
+    def ref_count(self) -> int:
+        """Current reference count (for debugging/testing)."""
+        return self._ref_count
+
+    def __del__(self) -> None:
+        """Emit ResourceWarning if runtime was not properly closed."""
+        if getattr(self, "_ref_count", 0) > 0:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__} (ref_count={self._ref_count}). "
+                f"Use 'with {self.__class__.__name__}() as runtime:' or call runtime.close().",
+                ResourceWarning,
+                source=self,
+            )
+            # Force cleanup regardless
+            self._ref_count = 1  # Ensure close() actually cleans up
+            try:
+                self.close()
+            except Exception:
+                pass
 
     def __enter__(self) -> "LocalRuntime":
         """
@@ -1452,8 +1506,8 @@ class LocalRuntime(
                 f"(exception: {exc_type.__name__ if exc_type else 'None'})"
             )
 
-        # Clean up event loop
-        self._cleanup_event_loop()
+        # Use close() which handles ref counting and cleanup
+        self.close()
 
         # Reset context-managed flag
         self._is_context_managed = False
@@ -3470,7 +3524,10 @@ class LocalRuntime(
         return result if result else None
 
     def _separate_parameter_formats(
-        self, parameters: dict[str, Any], workflow: Workflow
+        self,
+        parameters: dict[str, Any],
+        workflow: Workflow,
+        node_ids_set: frozenset | set | None = None,
     ) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
         """Separate mixed format parameters into node-specific and workflow-level.
 
@@ -3480,6 +3537,7 @@ class LocalRuntime(
         Args:
             parameters: Mixed format parameters
             workflow: The workflow being executed
+            node_ids_set: Optional pre-computed node IDs to avoid redundant set() calls
 
         Returns:
             Tuple of (node_specific_params, workflow_level_params)
@@ -3487,8 +3545,12 @@ class LocalRuntime(
         node_specific_params = {}
         workflow_level_params = {}
 
-        # Get node IDs for classification
-        node_ids = set(workflow.graph.nodes()) if workflow else set()
+        # Use provided node_ids or compute once
+        node_ids = (
+            node_ids_set
+            if node_ids_set is not None
+            else (set(workflow.graph.nodes()) if workflow else set())
+        )
 
         for key, value in parameters.items():
             # Node-specific parameter: key is a node ID and value is a dict
@@ -3508,7 +3570,10 @@ class LocalRuntime(
         return node_specific_params, workflow_level_params
 
     def _is_node_specific_format(
-        self, parameters: dict[str, Any], workflow: Workflow = None
+        self,
+        parameters: dict[str, Any],
+        workflow: Workflow = None,
+        node_ids_set: frozenset | set | None = None,
     ) -> bool:
         """Detect if parameters are in node-specific format.
 
@@ -3518,6 +3583,7 @@ class LocalRuntime(
         Args:
             parameters: Parameters to check
             workflow: Optional workflow for node ID validation
+            node_ids_set: Optional pre-computed node IDs to avoid redundant set() calls
 
         Returns:
             True if node-specific format, False if workflow-level
@@ -3525,8 +3591,12 @@ class LocalRuntime(
         if not parameters:
             return True
 
-        # Get node IDs if workflow provided
-        node_ids = set(workflow.graph.nodes()) if workflow else set()
+        # Use provided node_ids or compute once
+        node_ids = (
+            node_ids_set
+            if node_ids_set is not None
+            else (set(workflow.graph.nodes()) if workflow else set())
+        )
 
         # If any key is a node ID and its value is a dict, it's node-specific
         for key, value in parameters.items():

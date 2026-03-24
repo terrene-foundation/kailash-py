@@ -161,13 +161,19 @@ class MiddlewareMCPServer:
         config: MCPServerConfig = None,
         event_stream: EventStream = None,
         agent_ui: AgentUIMiddleware = None,
+        runtime: Optional[LocalRuntime] = None,
     ):
         self.config = config or MCPServerConfig()
         self.event_stream = event_stream
         self.agent_ui = agent_ui
 
         # Kailash components
-        self.runtime = LocalRuntime()
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = LocalRuntime()
+            self._owns_runtime = True
         self.workflows: Dict[str, WorkflowBuilder] = {}
 
         # MCP registry using Kailash patterns
@@ -528,6 +534,11 @@ result = {'execution_result': execution_result}
                     ),
                 },
             )
+
+        # Release runtime reference
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
 
         logger.info(f"Stopped Kailash MCP Server: {self.config.name}")
 
