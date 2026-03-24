@@ -32,6 +32,8 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.sdk_exceptions import NodeExecutionError
 
 # Import optimistic locking for enterprise concurrency control
+OptimisticLockingNode = None  # type: ignore[assignment]
+ConflictResolution = None  # type: ignore[assignment]
 try:
     from kailash.nodes.data.optimistic_locking import (
         ConflictResolution,
@@ -201,10 +203,10 @@ class SQLDatabaseNode(Node):
     """
 
     # Class-level shared resources for connection pooling
-    _shared_pools: dict[tuple[str, frozenset], Any] = {}
-    _pool_metrics: dict[tuple[str, frozenset], dict[str, Any]] = {}
+    _shared_pools: dict[tuple[str, Any], Any] = {}
+    _pool_metrics: dict[tuple[str, Any], dict[str, Any]] = {}
     _pool_lock = threading.Lock()
-    _config_manager: Optional["SQLDatabaseNode._DatabaseConfigManager"] = None
+    _config_manager: Optional[Any] = None
 
     # NOTE: This method is deprecated in favor of direct configuration in constructor
     @classmethod
@@ -217,8 +219,9 @@ class SQLDatabaseNode(Node):
             project_config_path: Path to the project configuration YAML file
         """
         with cls._pool_lock:
-            cls._config_manager = cls._DatabaseConfigManager(project_config_path)
-            cls._config_manager.validate_config()
+            mgr = cls._DatabaseConfigManager(project_config_path)
+            cls._config_manager = mgr
+            mgr.validate_config()
 
     def __init__(
         self,
@@ -361,10 +364,10 @@ class SQLDatabaseNode(Node):
         """Convert nested dictionaries/lists to hashable tuples for cache keys."""
         if isinstance(obj, dict):
             return tuple(
-                sorted((k, SQLDatabaseNode._make_hashable(v)) for k, v in obj.items())
+                sorted((k, SQLDatabaseNode._make_hashable(v)) for k, v in obj.items())  # type: ignore[attr-defined]
             )
         elif isinstance(obj, list):
-            return tuple(SQLDatabaseNode._make_hashable(item) for item in obj)
+            return tuple(SQLDatabaseNode._make_hashable(item) for item in obj)  # type: ignore[attr-defined]
         else:
             return obj
 
@@ -375,7 +378,7 @@ class SQLDatabaseNode(Node):
         with self._pool_lock:
             if cache_key not in self._shared_pools:
                 self.logger.info(
-                    f"Creating shared pool for {SQLDatabaseNode._mask_connection_password(self.connection_string)}"
+                    f"Creating shared pool for {SQLDatabaseNode._mask_connection_password(self.connection_string)}"  # type: ignore[attr-defined]
                 )
 
                 # Apply configuration with sensible defaults
@@ -441,7 +444,7 @@ class SQLDatabaseNode(Node):
             return self._execute_with_optimistic_locking(kwargs)
 
         # Mask password in connection string for logging
-        masked_connection = SQLDatabaseNode._mask_connection_password(
+        masked_connection = SQLDatabaseNode._mask_connection_password(  # type: ignore[attr-defined]
             self.connection_string
         )
         self.logger.info(f"Executing SQL query on {masked_connection}")
@@ -472,7 +475,9 @@ class SQLDatabaseNode(Node):
                             elif isinstance(parameters, (list, tuple)):
                                 # Convert positional parameters to named parameters
                                 named_query, param_dict = (
-                                    self._convert_to_named_parameters(query, parameters)
+                                    self._convert_to_named_parameters(
+                                        query, list(parameters)
+                                    )
                                 )
                                 result = conn.execute(text(named_query), param_dict)
                             else:
@@ -578,7 +583,7 @@ class SQLDatabaseNode(Node):
             for key, engine in cls._shared_pools.items():
                 pool = engine.pool
                 connection_string = key[0]
-                masked_string = SQLDatabaseNode._mask_connection_password(
+                masked_string = SQLDatabaseNode._mask_connection_password(  # type: ignore[attr-defined]
                     connection_string
                 )
 
@@ -1010,101 +1015,6 @@ class SQLDatabaseNode(Node):
         query_upper = query.strip().upper()
         return query_upper.startswith("UPDATE")
 
-    def _execute_with_optimistic_locking(self, **kwargs) -> dict[str, Any]:
-        """Execute query with optimistic locking support."""
-        if not OPTIMISTIC_LOCKING_AVAILABLE:
-            raise NodeExecutionError(
-                "Optimistic locking requested but OptimisticLockingNode not available"
-            )
-
-        query = kwargs.get("query", "")
-        expected_version = kwargs.get("expected_version")
-
-        if expected_version is None:
-            raise NodeExecutionError(
-                "expected_version parameter is required when optimistic_locking=True"
-            )
-
-        # Extract table name and record ID from UPDATE query
-        table_info = self._extract_update_info(query, kwargs.get("parameters"))
-
-        if not table_info:
-            raise NodeExecutionError(
-                "Could not extract table and record information from UPDATE query for optimistic locking"
-            )
-
-        # Create optimistic locking node
-        locking_node = OptimisticLockingNode(
-            version_field=kwargs.get("version_field", "version"),
-            max_retries=kwargs.get("max_retries", 3),
-            default_conflict_resolution=kwargs.get("conflict_resolution", "retry"),
-        )
-
-        # Get database connection for the locking node
-        engine = self._get_shared_engine()
-
-        try:
-            with engine.connect() as conn:
-                with conn.begin() as trans:
-                    # Use optimistic locking node to handle the update
-                    locking_result = locking_node.run(
-                        action="update_with_version",
-                        connection=conn,
-                        table_name=table_info["table_name"],
-                        record_id=table_info["record_id"],
-                        update_data=table_info["update_data"],
-                        expected_version=expected_version,
-                        conflict_resolution=kwargs.get("conflict_resolution", "retry"),
-                        version_field=kwargs.get("version_field", "version"),
-                        id_field=table_info.get("id_field", "id"),
-                    )
-
-                    if not locking_result.get("success", False):
-                        # Handle optimistic locking conflicts
-                        status = locking_result.get("status", "unknown_error")
-                        if status == "version_conflict":
-                            raise NodeExecutionError(
-                                f"Version conflict: expected version {expected_version}, "
-                                f"current version {locking_result.get('current_version', 'unknown')}"
-                            )
-                        elif status == "retry_exhausted":
-                            raise NodeExecutionError(
-                                f"Maximum retries exhausted for optimistic locking. "
-                                f"Conflict resolution: {kwargs.get('conflict_resolution', 'retry')}"
-                            )
-                        else:
-                            raise NodeExecutionError(
-                                f"Optimistic locking failed: {locking_result.get('error', 'Unknown error')}"
-                            )
-
-                    # Return enhanced result with locking information
-                    return {
-                        "data": [],  # UPDATE queries typically don't return data
-                        "row_count": locking_result.get("rows_affected", 0),
-                        "columns": [],
-                        "execution_time": locking_result.get("execution_time", 0),
-                        "optimistic_locking": {
-                            "used": True,
-                            "old_version": expected_version,
-                            "new_version": locking_result.get("new_version"),
-                            "retry_count": locking_result.get("retry_count", 0),
-                            "conflict_resolution": kwargs.get(
-                                "conflict_resolution", "retry"
-                            ),
-                            "status": locking_result.get("status", "success"),
-                        },
-                    }
-
-        except Exception as e:
-            if "Version conflict" in str(e) or "retry exhausted" in str(e):
-                # Re-raise optimistic locking specific errors
-                raise
-            else:
-                # Wrap other database errors
-                raise NodeExecutionError(
-                    f"Database error during optimistic locking: {str(e)}"
-                )
-
     def _extract_update_info(self, query: str, parameters: Any) -> Optional[dict]:
         """Extract table name, record ID, and update data from UPDATE query.
 
@@ -1173,7 +1083,7 @@ class SQLDatabaseNode(Node):
                 "OptimisticLockingNode not available. Cannot use optimistic locking."
             )
 
-        query = kwargs.get("query")
+        query = kwargs.get("query") or ""
         parameters = kwargs.get("parameters")
 
         # Extract update information from the query
@@ -1211,7 +1121,7 @@ class SQLDatabaseNode(Node):
                 # Execute synchronously by calling async_run directly
                 import asyncio
 
-                read_result = asyncio.run(locking_node.async_run(**read_kwargs))
+                read_result = asyncio.run(locking_node.async_run(**read_kwargs))  # type: ignore[union-attr]
 
                 if not read_result.get("success"):
                     raise NodeExecutionError(
@@ -1234,7 +1144,7 @@ class SQLDatabaseNode(Node):
                 }
 
                 # Execute the update with optimistic locking
-                update_result = asyncio.run(locking_node.async_run(**update_kwargs))
+                update_result = asyncio.run(locking_node.async_run(**update_kwargs))  # type: ignore[union-attr]
 
                 if not update_result.get("success"):
                     raise NodeExecutionError(

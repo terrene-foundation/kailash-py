@@ -338,7 +338,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             ),
         }
 
-    def run(
+    def run(  # type: ignore[override]
         self,
         action: str,
         user_id: str,

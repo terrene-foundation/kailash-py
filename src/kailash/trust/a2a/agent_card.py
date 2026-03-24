@@ -119,19 +119,28 @@ class AgentCardGenerator:
         genesis = chain.genesis
 
         # Extract attested capabilities (TrustLineageChain uses 'capabilities')
-        attested_caps = [cap.capability for cap in chain.capabilities] if chain.capabilities else []
+        attested_caps = (
+            [cap.capability for cap in chain.capabilities] if chain.capabilities else []
+        )
 
         # Extract constraints from envelope (uses active_constraints attribute)
         constraints = None
         if chain.constraint_envelope and chain.constraint_envelope.active_constraints:
-            constraints = {c.constraint_type.value: c.value for c in chain.constraint_envelope.active_constraints}
+            constraints = {
+                c.constraint_type.value: c.value
+                for c in chain.constraint_envelope.active_constraints
+            }
 
         return TrustExtensions(
             trust_chain_hash=chain.hash(),
             genesis_authority_id=genesis.authority_id,
             genesis_authority_type=genesis.authority_type.value,
-            verification_endpoint=(f"{self._base_url}/a2a/jsonrpc" if self._base_url else None),
-            delegation_endpoint=(f"{self._base_url}/a2a/jsonrpc" if self._base_url else None),
+            verification_endpoint=(
+                f"{self._base_url}/a2a/jsonrpc" if self._base_url else None
+            ),
+            delegation_endpoint=(
+                f"{self._base_url}/a2a/jsonrpc" if self._base_url else None
+            ),
             capabilities_attested=attested_caps if attested_caps else None,
             constraints=constraints,
         )
@@ -141,10 +150,10 @@ class AgentCardGenerator:
         capabilities = []
 
         for attestation in chain.capabilities:
-            # Extract constraints for this capability
+            # Extract constraints for this capability (convert list to dict for AgentCapability)
             cap_constraints = None
             if attestation.constraints:
-                cap_constraints = attestation.constraints
+                cap_constraints = {"constraints": attestation.constraints}
 
             capability = AgentCapability(
                 name=attestation.capability,

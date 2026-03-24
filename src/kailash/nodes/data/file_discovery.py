@@ -363,7 +363,7 @@ class FileDiscoveryNode(Node):
         """Analyze a single file and return its information."""
 
         file_path_obj = Path(file_path)
-        file_info = {
+        file_info: dict[str, Any] = {
             "type": "file",
             "path": str(file_path),
             "name": file_path_obj.name,

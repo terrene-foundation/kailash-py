@@ -2033,3 +2033,35 @@ class TrustOperations:
             logger.error(f"Error finding delegations for human {human_id}: {e}")
 
         return matching_delegations
+
+    async def get_chain(self, agent_id: str) -> Optional[TrustLineageChain]:
+        """
+        Get trust chain for an agent.
+
+        Convenience wrapper around trust_store.get_chain().
+
+        Args:
+            agent_id: Agent to query
+
+        Returns:
+            TrustLineageChain or None if not found
+        """
+        try:
+            return await self.trust_store.get_chain(agent_id)
+        except TrustChainNotFoundError:
+            return None
+
+    async def get_public_key(self, agent_id: str) -> Optional[str]:
+        """
+        Get public key for an agent from the key manager.
+
+        Args:
+            agent_id: Agent to query
+
+        Returns:
+            Base64-encoded public key string, or None if not found
+        """
+        try:
+            return self.key_manager.get_public_key(agent_id)
+        except Exception:
+            return None

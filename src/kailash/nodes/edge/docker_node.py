@@ -383,6 +383,7 @@ class DockerNode(AsyncNode):
                 "error": "container_name and image are required",
             }
 
+        assert self.docker_integration is not None
         try:
             # Create container specification
             container_spec = ContainerSpec(
@@ -433,6 +434,7 @@ class DockerNode(AsyncNode):
                 "error": "container_id or container_name is required",
             }
 
+        assert self.docker_integration is not None
         try:
             result = await self.docker_integration.start_container(container_id)
 
@@ -464,6 +466,7 @@ class DockerNode(AsyncNode):
                 "error": "container_id or container_name is required",
             }
 
+        assert self.docker_integration is not None
         try:
             result = await self.docker_integration.stop_container(
                 container_id, stop_timeout
@@ -497,6 +500,7 @@ class DockerNode(AsyncNode):
                 "error": "container_id or container_name is required",
             }
 
+        assert self.docker_integration is not None
         try:
             result = await self.docker_integration.remove_container(container_id, force)
 
@@ -526,6 +530,7 @@ class DockerNode(AsyncNode):
                 "error": "container_id or container_name is required",
             }
 
+        assert self.docker_integration is not None
         try:
             status = await self.docker_integration.get_container_status(container_id)
 
@@ -545,6 +550,7 @@ class DockerNode(AsyncNode):
         all_containers = kwargs.get("all_containers", False)
         filters = kwargs.get("filters", {})
 
+        assert self.docker_integration is not None
         try:
             containers = await self.docker_integration.list_containers(
                 all_containers, filters
@@ -581,6 +587,7 @@ class DockerNode(AsyncNode):
                 "error": "service_name and image are required",
             }
 
+        assert self.docker_integration is not None
         try:
             # Create service specification
             service_spec = ServiceSpec(
@@ -630,6 +637,7 @@ class DockerNode(AsyncNode):
                 "error": "service_id or service_name is required",
             }
 
+        assert self.docker_integration is not None
         try:
             # Get current service spec and update it
             # For simplicity, we'll create a new spec with updated values
@@ -675,6 +683,7 @@ class DockerNode(AsyncNode):
                 "error": "service_id (or service_name) and replicas are required",
             }
 
+        assert self.docker_integration is not None
         try:
             result = await self.docker_integration.scale_service(service_id, replicas)
 
@@ -704,6 +713,7 @@ class DockerNode(AsyncNode):
                 "error": "service_id or service_name is required",
             }
 
+        assert self.docker_integration is not None
         try:
             status = await self.docker_integration.get_service_status(service_id)
 
@@ -728,6 +738,7 @@ class DockerNode(AsyncNode):
                 "error": "container_id or container_name is required",
             }
 
+        assert self.docker_integration is not None
         try:
             metrics = await self.docker_integration.collect_container_metrics(
                 container_id
@@ -758,6 +769,7 @@ class DockerNode(AsyncNode):
         if not self.docker_integration:
             await self._initialize_docker(**kwargs)
 
+        assert self.docker_integration is not None
         try:
             system_info = await self.docker_integration.get_system_info()
 
@@ -779,6 +791,7 @@ class DockerNode(AsyncNode):
         if not self.docker_integration:
             await self._initialize_docker(**kwargs)
 
+        assert self.docker_integration is not None
         try:
             await self.docker_integration.start_monitoring()
 

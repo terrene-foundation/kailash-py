@@ -300,7 +300,7 @@ class A2AMethodHandlers:
             )
 
         start_time = time.time()
-        result = await self._trust_ops.verify(agent_id, level=level)
+        result = await self._trust_ops.verify(agent_id, "trust_verify", level=level)
         latency_ms = (time.time() - start_time) * 1000
 
         # Build trust chain summary if valid
@@ -365,11 +365,11 @@ class A2AMethodHandlers:
         # Create delegation
         try:
             delegation = await self._trust_ops.delegate(
-                delegator_agent_id=self._agent_id,
-                delegatee_agent_id=delegatee_id,
+                delegator_id=self._agent_id,
+                delegatee_id=delegatee_id,
                 task_id=task_id,
                 capabilities=capabilities,
-                constraints=constraints,
+                additional_constraints=constraints,
             )
 
             return DelegationResponse(
@@ -430,9 +430,9 @@ class A2AMethodHandlers:
         try:
             from kailash.trust.audit_service import AuditQueryService
 
-            audit_service = AuditQueryService(self._trust_ops._audit_store)
+            audit_service = AuditQueryService(self._trust_ops._audit_store)  # type: ignore[attr-defined]
 
-            actions = await audit_service.query_actions(
+            actions = await audit_service.query_actions(  # type: ignore[attr-defined]
                 agent_id=agent_id,
                 start_time=start_dt,
                 end_time=end_dt,

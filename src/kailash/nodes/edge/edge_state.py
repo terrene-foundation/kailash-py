@@ -206,7 +206,7 @@ class EdgeStateMachine(EdgeNode):
                 )
 
         # Register as global instance
-        EdgeStateMachine._global_instances[self.state_id] = self
+        EdgeStateMachine._global_instances[self.state_id] = self  # type: ignore[attr-defined]
         self.is_primary = True
 
         # Set edge affinity for this state
@@ -217,8 +217,9 @@ class EdgeStateMachine(EdgeNode):
         lock_key = f"state:{self.state_id}"
 
         # Check if lock exists
-        if lock_key in EdgeStateMachine._global_locks:
-            lock_info = EdgeStateMachine._global_locks[lock_key]
+        _locks: Dict[str, Dict[str, Any]] = EdgeStateMachine._global_locks  # type: ignore[attr-defined]
+        if lock_key in _locks:
+            lock_info = _locks[lock_key]
 
             # Check if lock expired
             if datetime.now(UTC) < lock_info["expiry"]:
@@ -228,7 +229,7 @@ class EdgeStateMachine(EdgeNode):
         lease_duration_ms = self.config.get("lease_duration_ms", 30000)
         expiry = datetime.now(UTC) + timedelta(milliseconds=lease_duration_ms)
 
-        EdgeStateMachine._global_locks[lock_key] = {
+        _locks[lock_key] = {
             "owner": self.current_edge.name if self.current_edge else "unknown",
             "expiry": expiry,
             "state_id": self.state_id,

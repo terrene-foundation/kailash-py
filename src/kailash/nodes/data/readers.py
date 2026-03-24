@@ -252,9 +252,11 @@ class CSVReaderNode(Node):
         index_column = kwargs.get("index_column")
 
         data = []
-        data_indexed = {}
+        data_indexed: dict[Any, Any] = {}
 
         # Validate file path for security
+        if not file_path:
+            raise ValueError("file_path is required")
         validated_path = validate_file_path(file_path, operation="CSV read")
 
         with safe_open(validated_path, "r", encoding="utf-8") as f:
@@ -276,14 +278,14 @@ class CSVReaderNode(Node):
                     data.append(row_dict)
 
                     # If index column specified, add to indexed dictionary
-                    if index_column and index_pos < len(row):
+                    if index_column and index_pos is not None and index_pos < len(row):
                         key = row[index_pos]
                         data_indexed[key] = row_dict
             else:
                 for row in reader:
                     data.append(row)
 
-        result = {"data": data}
+        result: dict[str, Any] = {"data": data}
         if index_column:
             result["data_indexed"] = data_indexed
 
@@ -428,7 +430,12 @@ class CSVReaderNode(Node):
                 data.append(row_data)
 
                 # Handle index column for faster lookups
-                if index_column and headers and index_column in headers:
+                if (
+                    index_column
+                    and headers
+                    and index_column in headers
+                    and isinstance(row_data, dict)
+                ):
                     index_value = row_data.get(index_column)
                     if index_value is not None:
                         data_indexed[index_value] = row_data
@@ -437,7 +444,7 @@ class CSVReaderNode(Node):
             raise ValueError(f"Error reading CSV file: {str(e)}")
 
         # Return same format as sync version
-        result = {"data": data}
+        result: dict[str, Any] = {"data": data}
         if index_column:
             result["data_indexed"] = data_indexed
 
@@ -563,6 +570,8 @@ class JSONReaderNode(Node):
         file_path = kwargs.get("file_path") or self.config.get("file_path")
 
         # Validate file path for security
+        if not file_path:
+            raise ValueError("file_path is required")
         validated_path = validate_file_path(file_path, operation="JSON read")
 
         with safe_open(validated_path, "r", encoding="utf-8") as f:
@@ -596,6 +605,8 @@ class JSONReaderNode(Node):
         file_path = kwargs.get("file_path") or self.config.get("file_path")
 
         # Validate file path for security (same as sync version)
+        if not file_path:
+            raise ValueError("file_path is required")
         validated_path = validate_file_path(file_path, operation="JSON read")
 
         try:
@@ -750,6 +761,8 @@ class TextReaderNode(Node):
         encoding = kwargs.get("encoding", "utf-8")
 
         # Validate file path for security
+        if not file_path:
+            raise ValueError("file_path is required")
         validated_path = validate_file_path(file_path, operation="text read")
 
         with safe_open(validated_path, "r", encoding=encoding) as f:
@@ -891,7 +904,9 @@ class DocumentProcessorNode(Node):
 
         try:
             # Validate file path for security
-            validated_path = validate_file_path(file_path, operation="document read")
+            validated_path = str(
+                validate_file_path(file_path, operation="document read")
+            )
 
             # Detect document format
             document_format = self._detect_format(validated_path)

@@ -310,6 +310,7 @@ class KubernetesNode(AsyncNode):
                 "error": "resource_name, resource_type, and resource_spec are required",
             }
 
+        assert self.kubernetes_integration is not None
         try:
             # Convert string type to enum
             k8s_resource_type = KubernetesResourceType(resource_type)
@@ -361,6 +362,7 @@ class KubernetesNode(AsyncNode):
                 "error": "resource_name and resource_type are required",
             }
 
+        assert self.kubernetes_integration is not None
         try:
             # Convert string type to enum
             k8s_resource_type = KubernetesResourceType(resource_type)
@@ -408,6 +410,7 @@ class KubernetesNode(AsyncNode):
                 "error": "resource_name and resource_type are required",
             }
 
+        assert self.kubernetes_integration is not None
         try:
             # Convert string type to enum
             k8s_resource_type = KubernetesResourceType(resource_type)
@@ -445,6 +448,7 @@ class KubernetesNode(AsyncNode):
                 "error": "resource_name and resource_type are required",
             }
 
+        assert self.kubernetes_integration is not None
         try:
             # Convert string type to enum
             k8s_resource_type = KubernetesResourceType(resource_type)
@@ -471,6 +475,7 @@ class KubernetesNode(AsyncNode):
         resource_type = kwargs.get("resource_type")
         label_selector = kwargs.get("label_selector", {})
 
+        assert self.kubernetes_integration is not None
         try:
             # Convert string type to enum if provided
             k8s_resource_type = None
@@ -513,6 +518,7 @@ class KubernetesNode(AsyncNode):
                 "error": "deployment_name and replicas are required",
             }
 
+        assert self.kubernetes_integration is not None
         try:
             # Scale deployment
             result = await self.kubernetes_integration.scale_deployment(
@@ -551,6 +557,7 @@ class KubernetesNode(AsyncNode):
                 "error": "deployment_name is required",
             }
 
+        assert self.kubernetes_integration is not None
         try:
             # Create scaling specification
             scaling_spec = PodScalingSpec(
@@ -583,6 +590,7 @@ class KubernetesNode(AsyncNode):
         if not self.kubernetes_integration:
             await self._initialize_kubernetes(**kwargs)
 
+        assert self.kubernetes_integration is not None
         try:
             # Get cluster info
             cluster_info = await self.kubernetes_integration.get_cluster_info()
@@ -605,6 +613,7 @@ class KubernetesNode(AsyncNode):
         if not self.kubernetes_integration:
             await self._initialize_kubernetes(**kwargs)
 
+        assert self.kubernetes_integration is not None
         try:
             # Start monitoring
             await self.kubernetes_integration.start_monitoring()
