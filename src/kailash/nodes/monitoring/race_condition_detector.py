@@ -657,7 +657,7 @@ class RaceConditionDetectorNode(AsyncNode):
             for write_access in write_accesses:
                 if (
                     read_access.resource_id == write_access.resource_id
-                    and write_access.start_time > read_access.end_time
+                    and write_access.start_time > read_access.end_time  # type: ignore[reportOperatorIssue]
                 ):
                     # Potential check-then-act race
                     race = RaceConditionDetection(
@@ -675,7 +675,7 @@ class RaceConditionDetectorNode(AsyncNode):
                             PreventionStrategy.OPTIMISTIC_LOCKING,
                         ],
                         timing_analysis={
-                            "gap_duration": write_access.start_time
+                            "gap_duration": write_access.start_time  # type: ignore[reportOperatorIssue]
                             - read_access.end_time
                         },
                     )
@@ -1148,4 +1148,4 @@ class RaceConditionDetectorNode(AsyncNode):
     async def cleanup(self):
         """Cleanup resources when node is destroyed."""
         await self._stop_monitoring()
-        await super().cleanup() if hasattr(super(), "cleanup") else None
+        await super().cleanup() if hasattr(super(), "cleanup") else None  # type: ignore[reportAttributeAccessIssue]

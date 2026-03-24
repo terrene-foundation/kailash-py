@@ -315,7 +315,7 @@ class AsyncNode(
         """
         if (
             not hasattr(self, "security_config")
-            or not self.security_config.enable_audit_logging
+            or not self.security_config.enable_audit_logging  # type: ignore[reportAttributeAccessIssue]
         ):
             return
 
@@ -352,9 +352,9 @@ class AsyncNode(
             from kailash.security import SecurityError, validate_node_parameters
 
             # First validate using the security framework
-            validated_inputs = validate_node_parameters(inputs, self.security_config)
+            validated_inputs = validate_node_parameters(inputs, self.security_config)  # type: ignore[reportAttributeAccessIssue]
 
-            if self.security_config.enable_audit_logging:
+            if self.security_config.enable_audit_logging:  # type: ignore[reportAttributeAccessIssue]
                 await asyncio.to_thread(
                     self.logger.debug,
                     f"Inputs validated for {self.__class__.__name__}: {list(validated_inputs.keys())}",
@@ -368,7 +368,7 @@ class AsyncNode(
                 from kailash.security import SecurityError
 
                 if isinstance(e, SecurityError):
-                    if self.security_config.enable_audit_logging:
+                    if self.security_config.enable_audit_logging:  # type: ignore[reportAttributeAccessIssue]
                         await asyncio.to_thread(
                             self.logger.error,
                             f"Security validation failed for {self.__class__.__name__}: {e}",
@@ -379,7 +379,7 @@ class AsyncNode(
 
             if (
                 hasattr(self, "security_config")
-                and self.security_config.enable_audit_logging
+                and self.security_config.enable_audit_logging  # type: ignore[reportAttributeAccessIssue]
             ):
                 await asyncio.to_thread(
                     self.logger.error,

@@ -204,10 +204,10 @@ class RedisNode(Node):
             ),
         }
 
-    def _get_client(self) -> _redis_mod.Redis:
+    def _get_client(self) -> _redis_mod.Redis:  # type: ignore[reportInvalidTypeForm]
         """Get or create Redis client."""
         if not self._client:
-            self._client = _redis_mod.Redis(
+            self._client = _redis_mod.Redis(  # type: ignore[reportOptionalMemberAccess]
                 host=self.host,
                 port=self.port,
                 db=self.db,
@@ -365,7 +365,7 @@ class RedisNode(Node):
 
             return {"result": result}
 
-        except _redis_mod.RedisError as e:
+        except _redis_mod.RedisError as e:  # type: ignore[reportOptionalMemberAccess]
             logger.error(f"Redis error: {e}")
             raise NodeExecutionError(f"Redis operation failed: {str(e)}")
         except Exception as e:

@@ -608,7 +608,7 @@ class QueryRouterNode(AsyncNode):
         self._connection_pool = pool
 
     @classmethod
-    def get_parameters(cls) -> Dict[str, NodeParameter]:
+    def get_parameters(cls) -> Dict[str, NodeParameter]:  # type: ignore[reportIncompatibleMethodOverride]
         """Define node parameters."""
         return {
             "connection_pool": NodeParameter(
@@ -664,18 +664,18 @@ class QueryRouterNode(AsyncNode):
             pool_node = self._connection_pool
             if not pool_node:
                 # Try to get from runtime
-                if hasattr(self, "runtime") and hasattr(self.runtime, "get_node"):
-                    pool_node = self.runtime.get_node(self.connection_pool_name)
+                if hasattr(self, "runtime") and hasattr(self.runtime, "get_node"):  # type: ignore[reportAttributeAccessIssue]
+                    pool_node = self.runtime.get_node(self.connection_pool_name)  # type: ignore[reportAttributeAccessIssue]
                 elif hasattr(self, "runtime") and hasattr(
-                    self.runtime, "resource_registry"
+                    self.runtime, "resource_registry"  # type: ignore[reportAttributeAccessIssue]
                 ):
-                    pool_node = self.runtime.resource_registry.get(
+                    pool_node = self.runtime.resource_registry.get(  # type: ignore[reportAttributeAccessIssue]
                         self.connection_pool_name
                     )
                 elif hasattr(self, "context") and hasattr(
-                    self.context, "resource_registry"
+                    self.context, "resource_registry"  # type: ignore[reportAttributeAccessIssue]
                 ):
-                    pool_node = self.context.resource_registry.get(
+                    pool_node = self.context.resource_registry.get(  # type: ignore[reportAttributeAccessIssue]
                         self.connection_pool_name
                     )
 

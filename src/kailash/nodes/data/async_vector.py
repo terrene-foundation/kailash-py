@@ -287,7 +287,7 @@ class AsyncPostgreSQLVectorNode(AsyncNode):
 
     def validate_config(self):
         """Validate node configuration."""
-        super().validate_config()
+        super().validate_config()  # type: ignore[reportAttributeAccessIssue]
 
         # Validate connection parameters
         if not self.config.get("connection_string"):
@@ -577,7 +577,7 @@ class AsyncPostgreSQLVectorNode(AsyncNode):
                 min_size=1, max_size=self.config.get("pool_size", 10)
             )
 
-            async with self._connection_manager.get_connection(
+            async with self._connection_manager.get_connection(  # type: ignore[reportOptionalMemberAccess]
                 tenant_id=tenant_id, db_config=db_config, pool_config=pool_config
             ) as conn:
                 if operation == "create_table":

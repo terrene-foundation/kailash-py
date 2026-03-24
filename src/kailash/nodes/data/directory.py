@@ -101,7 +101,7 @@ class DirectoryReaderNode(Node):
         include_hidden = kwargs.get("include_hidden", False)
 
         # Validate directory path for security
-        validated_path = validate_file_path(directory_path, operation="directory scan")
+        validated_path = validate_file_path(directory_path, operation="directory scan")  # type: ignore[reportArgumentType]
 
         if not os.path.isdir(validated_path):
             raise FileNotFoundError(f"Directory not found: {directory_path}")

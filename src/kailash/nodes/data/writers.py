@@ -200,7 +200,7 @@ class CSVWriterNode(Node):
             return {"rows_written": 0}
 
         # Validate file path for security
-        validated_path = validate_file_path(file_path, operation="CSV write")
+        validated_path = validate_file_path(file_path, operation="CSV write")  # type: ignore[reportArgumentType]
 
         with safe_open(validated_path, "w", newline="", encoding="utf-8") as f:
             if isinstance(data[0], dict):
@@ -366,7 +366,7 @@ class JSONWriterNode(Node):
         indent = kwargs.get("indent", 2)
 
         # Validate file path for security
-        validated_path = validate_file_path(file_path, operation="JSON write")
+        validated_path = validate_file_path(file_path, operation="JSON write")  # type: ignore[reportArgumentType]
 
         with safe_open(validated_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=indent, ensure_ascii=False)
@@ -531,7 +531,7 @@ class TextWriterNode(Node):
 
         mode = "a" if append else "w"
         # Validate file path for security
-        validated_path = validate_file_path(file_path, operation="text write")
+        validated_path = validate_file_path(file_path, operation="text write")  # type: ignore[reportArgumentType]
 
         with safe_open(validated_path, mode, encoding=encoding) as f:
             f.write(text)

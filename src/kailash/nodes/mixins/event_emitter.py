@@ -9,7 +9,7 @@ import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 if TYPE_CHECKING:
-    from kailash.middleware.events import EventStream
+    from kailash.middleware.events import EventStream  # type: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class EventEmitterMixin:
         """Emit node started event."""
         if self._event_stream:
             try:
-                from kailash.middleware.events import EventType, NodeEvent
+                from kailash.middleware.events import EventType, NodeEvent  # type: ignore[reportMissingImports]
 
                 event = NodeEvent(
                     type=EventType.NODE_STARTED,
@@ -68,7 +68,7 @@ class EventEmitterMixin:
         """Emit node completed event."""
         if self._event_stream:
             try:
-                from kailash.middleware.events import EventType, NodeEvent
+                from kailash.middleware.events import EventType, NodeEvent  # type: ignore[reportMissingImports]
 
                 event = NodeEvent(
                     type=EventType.NODE_COMPLETED,
@@ -89,7 +89,7 @@ class EventEmitterMixin:
         """Emit node failed event."""
         if self._event_stream:
             try:
-                from kailash.middleware.events import EventType, NodeEvent
+                from kailash.middleware.events import EventType, NodeEvent  # type: ignore[reportMissingImports]
 
                 event = NodeEvent(
                     type=EventType.NODE_FAILED,
@@ -109,7 +109,7 @@ class EventEmitterMixin:
         """Emit node progress event."""
         if self._event_stream:
             try:
-                from kailash.middleware.events import EventType, NodeEvent
+                from kailash.middleware.events import EventType, NodeEvent  # type: ignore[reportMissingImports]
 
                 event = NodeEvent(
                     type=EventType.NODE_PROGRESS,

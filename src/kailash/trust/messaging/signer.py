@@ -139,7 +139,7 @@ class MessageSigner:
             signing_payload = envelope.get_signing_payload()
 
             # Sign with Ed25519 - returns base64-encoded string
-            signature = sign(signing_payload, self._private_key)
+            signature = sign(signing_payload, self._private_key)  # type: ignore[reportArgumentType]
 
             # Set signature in envelope (already base64-encoded by sign())
             envelope.signature = signature

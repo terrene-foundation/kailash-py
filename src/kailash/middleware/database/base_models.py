@@ -110,9 +110,9 @@ class BaseWorkflowModel(Base, EnterpriseBaseMixin):
             "tenant_id": self.tenant_id,
             "owner_id": self.owner_id,
             "session_id": self.session_id,
-            "nodes": self.nodes or [],
-            "connections": self.connections or [],
-            "metadata": self.workflow_metadata or {},
+            "nodes": self.nodes or [],  # type: ignore[reportOperatorIssue]
+            "connections": self.connections or [],  # type: ignore[reportOperatorIssue]
+            "metadata": self.workflow_metadata or {},  # type: ignore[reportOperatorIssue]
             "security_classification": self.security_classification,
             "compliance_requirements": self.compliance_requirements or [],
             "created_at": (
@@ -228,10 +228,10 @@ class BaseExecutionModel(Base, BaseMixin):
                 "current_node": self.current_node,
                 "progress_percentage": self.progress_percentage,
             },
-            "inputs": self.inputs or {},
-            "outputs": self.outputs or {},
+            "inputs": self.inputs or {},  # type: ignore[reportOperatorIssue]
+            "outputs": self.outputs or {},  # type: ignore[reportOperatorIssue]
             "error_message": self.error_message,
-            "error_details": self.error_details or {},
+            "error_details": self.error_details or {},  # type: ignore[reportOperatorIssue]
             "started_at": (
                 self.started_at.isoformat() if self.started_at is not None else None
             ),
@@ -308,9 +308,9 @@ class BaseTemplateModel(Base, BaseMixin):
             "name": self.name,
             "description": self.description,
             "category": self.category.value if self.category is not None else None,
-            "tags": self.tags or [],
+            "tags": self.tags or [],  # type: ignore[reportOperatorIssue]
             "difficulty_level": self.difficulty_level,
-            "workflow_definition": self.workflow_definition or {},
+            "workflow_definition": self.workflow_definition or {},  # type: ignore[reportOperatorIssue]
             "usage_count": self.usage_count,
             "rating_average": self.rating_average,
             "is_certified": self.is_certified,
@@ -390,7 +390,7 @@ class BaseSecurityEventModel(Base, BaseMixin, ComplianceMixin):
             "user_id": self.user_id,
             "session_id": self.session_id,
             "tenant_id": self.tenant_id,
-            "event_data": self.event_data or {},
+            "event_data": self.event_data or {},  # type: ignore[reportOperatorIssue]
             "occurred_at": (
                 self.occurred_at.isoformat() if self.occurred_at is not None else None
             ),
@@ -535,7 +535,7 @@ class BaseComplianceModel(Base, BaseMixin):
             "framework": self.framework.value if self.framework is not None else None,
             "tenant_id": self.tenant_id,
             "overall_score": self.overall_score,
-            "violations": self.violations or [],
+            "violations": self.violations or [],  # type: ignore[reportOperatorIssue]
             "assessment_date": (
                 self.assessment_date.isoformat()
                 if self.assessment_date is not None

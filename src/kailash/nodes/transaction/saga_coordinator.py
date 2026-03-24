@@ -270,7 +270,7 @@ class SagaCoordinatorNode(AsyncNode):
         step = SagaStep(
             step_id=inputs.get("step_id", str(uuid.uuid4())),
             name=inputs.get("name", f"step_{len(self.steps) + 1}"),
-            node_id=inputs.get("node_id"),
+            node_id=inputs.get("node_id"),  # type: ignore[reportArgumentType]
             parameters=inputs.get("parameters", {}),
             compensation_node_id=inputs.get("compensation_node_id"),
             compensation_parameters=inputs.get("compensation_parameters", {}),

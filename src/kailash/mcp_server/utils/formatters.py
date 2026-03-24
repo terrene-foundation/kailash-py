@@ -159,7 +159,7 @@ class TableFormatter(ResponseFormatter):
 class SearchResultFormatter(ResponseFormatter):
     """Specialized formatter for search results."""
 
-    def format(
+    def format(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         results: List[Dict[str, Any]],
         query: Optional[str] = None,
@@ -214,7 +214,7 @@ class SearchResultFormatter(ResponseFormatter):
 class MetricsFormatter(ResponseFormatter):
     """Specialized formatter for metrics data."""
 
-    def format(self, metrics: Dict[str, Any], **kwargs) -> str:
+    def format(self, metrics: Dict[str, Any], **kwargs) -> str:  # type: ignore[reportIncompatibleMethodOverride]
         """Format metrics data in human-readable format."""
         lines = []
         lines.append("# Server Metrics\n")

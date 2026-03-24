@@ -99,7 +99,7 @@ class LRUCache:
         if not self._access_order:
             return
 
-        lru_key = min(self._access_order.keys(), key=self._access_order.get)
+        lru_key = min(self._access_order.keys(), key=self._access_order.get)  # type: ignore[reportCallIssue]
         del self._cache[lru_key]
         del self._access_order[lru_key]
         self._evictions += 1
@@ -176,7 +176,7 @@ class UnifiedCache:
             # We'll implement async versions for the server to use
             return None  # Fallback for now
         else:
-            return self.lru_cache.get(key)
+            return self.lru_cache.get(key)  # type: ignore[reportOptionalMemberAccess]
 
     def set(self, key: str, value, ttl: Optional[int] = None):
         """Set value in cache."""
@@ -185,20 +185,20 @@ class UnifiedCache:
             # We'll implement async versions for the server to use
             pass  # Fallback for now
         else:
-            self.lru_cache.set(key, value, ttl or self.ttl)
+            self.lru_cache.set(key, value, ttl or self.ttl)  # type: ignore[reportOptionalMemberAccess]
 
     async def aget(self, key: str):
         """Async get value from cache."""
         if self.is_redis:
             try:
                 redis_key = self._make_key(key)
-                value = await self.redis_client.get(redis_key)
+                value = await self.redis_client.get(redis_key)  # type: ignore[reportOptionalMemberAccess]
                 return json.loads(value) if value else None
             except Exception as e:
                 logger.error(f"Redis get error: {e}")
                 return None
         else:
-            return self.lru_cache.get(key)
+            return self.lru_cache.get(key)  # type: ignore[reportOptionalMemberAccess]
 
     async def aset(self, key: str, value, ttl: Optional[int] = None):
         """Async set value in cache."""
@@ -207,13 +207,13 @@ class UnifiedCache:
                 redis_key = self._make_key(key)
                 serialized_value = json.dumps(value)
                 cache_ttl = ttl or self.ttl
-                await self.redis_client.setex(redis_key, cache_ttl, serialized_value)
+                await self.redis_client.setex(redis_key, cache_ttl, serialized_value)  # type: ignore[reportOptionalMemberAccess]
                 return True
             except Exception as e:
                 logger.error(f"Redis set error: {e}")
                 return False
         else:
-            self.lru_cache.set(key, value, ttl or self.ttl)
+            self.lru_cache.set(key, value, ttl or self.ttl)  # type: ignore[reportOptionalMemberAccess]
             return True
 
     async def get_or_compute(
@@ -279,14 +279,14 @@ class UnifiedCache:
             # For async operations, this would need to be implemented separately
             pass
         else:
-            self.lru_cache.clear()
+            self.lru_cache.clear()  # type: ignore[reportOptionalMemberAccess]
 
     def stats(self):
         """Get cache statistics."""
         if self.is_redis:
             return {"backend": "redis", "name": self.name}
         else:
-            return self.lru_cache.stats()
+            return self.lru_cache.stats()  # type: ignore[reportOptionalMemberAccess]
 
 
 class CacheManager:
@@ -399,9 +399,9 @@ class CacheManager:
 
             # Return appropriate wrapper based on function type
             if asyncio.iscoroutinefunction(func):
-                return async_wrapper
+                return async_wrapper  # type: ignore[return-value]
             else:
-                return sync_wrapper
+                return sync_wrapper  # type: ignore[return-value]
 
         return decorator
 

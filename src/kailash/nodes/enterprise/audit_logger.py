@@ -50,7 +50,7 @@ class EnterpriseAuditLoggerNode(Node):
             ),
         }
 
-    def run(
+    def run(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         execution_results: Dict,
         user_context: Dict,

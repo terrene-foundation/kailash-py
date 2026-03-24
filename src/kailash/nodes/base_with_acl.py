@@ -253,7 +253,7 @@ class AsyncNodeWithAccessControl(AsyncNode):
     async def _execute(self, **inputs) -> Any:
         """Async execution logic"""
         if hasattr(super(), "run"):
-            return await super().run(**inputs)
+            return await super().run(**inputs)  # type: ignore[reportGeneralTypeIssues]
         else:
             raise NotImplementedError("Node must implement _execute() method")
 

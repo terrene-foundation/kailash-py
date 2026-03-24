@@ -75,7 +75,7 @@ class LoopNode(Node):
             ),
         }
 
-    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:
+    def run(self, context: dict[str, Any], **kwargs) -> dict[str, Any]:  # type: ignore[reportIncompatibleMethodOverride]
         """Execute loop control logic."""
         input_data = kwargs.get("input_data")
         condition_type = kwargs.get("condition", "counter")
@@ -129,7 +129,7 @@ class LoopNode(Node):
             },
         }
 
-    def get_output_schema(self) -> dict[str, Any] | None:
+    def get_output_schema(self) -> dict[str, Any] | None:  # type: ignore[reportIncompatibleMethodOverride]
         """Define output schema for loop control."""
         return {
             "type": "object",

@@ -251,8 +251,8 @@ def create_jwks_response(
                     "kid": key_id,
                     "use": "sig",
                     "alg": algorithm,
-                    "n": encode_for_jwks(public_numbers.n),
-                    "e": encode_for_jwks(public_numbers.e),
+                    "n": encode_for_jwks(public_numbers.n),  # type: ignore[reportAttributeAccessIssue]
+                    "e": encode_for_jwks(public_numbers.e),  # type: ignore[reportAttributeAccessIssue]
                 }
             ]
         }

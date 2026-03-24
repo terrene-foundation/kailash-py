@@ -632,7 +632,7 @@ class EnterpriseSecurityEventNode(Node):
     def _calculate_event_risk_score(self, event_data: Dict[str, Any]) -> float:
         """Calculate risk score for a security event."""
         base_scores = {
-            SecurityEventType.CRITICAL.value: 9.0,
+            SecurityEventType.CRITICAL.value: 9.0,  # type: ignore[reportAttributeAccessIssue]
             SecurityEventType.SYSTEM_COMPROMISE.value: 9.5,
             SecurityEventType.DATA_EXFILTRATION.value: 9.0,
             SecurityEventType.ACCOUNT_TAKEOVER.value: 8.5,

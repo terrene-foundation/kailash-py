@@ -553,7 +553,7 @@ result = {'execution_result': execution_result}
 
         from ..communication.events import WorkflowEvent
 
-        event = WorkflowEvent(
+        event = WorkflowEvent(  # type: ignore[reportCallIssue]
             type=EventType.SYSTEM_STATUS,
             workflow_id="mcp_server",
             data={
@@ -564,7 +564,7 @@ result = {'execution_result': execution_result}
             },
         )
 
-        await self.event_stream.emit(event)
+        await self.event_stream.emit(event)  # type: ignore[reportOptionalMemberAccess]
 
     def get_stats(self) -> Dict[str, Any]:
         """Get MCP server statistics."""

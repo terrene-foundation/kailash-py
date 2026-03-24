@@ -382,10 +382,10 @@ class AsyncPythonCodeNode(AsyncNode):
     _node_metadata = NodeMetadata(
         name="AsyncPythonCodeNode",
         description="Execute asynchronous Python code with security controls",
-        category="code",
+        category="code",  # type: ignore[reportCallIssue]
         version="1.0.0",
-        display_name="Async Python Code",
-        icon="mdi-language-python",
+        display_name="Async Python Code",  # type: ignore[reportCallIssue]
+        icon="mdi-language-python",  # type: ignore[reportCallIssue]
         tags=["code", "async", "python", "script"],
     )
 

@@ -227,7 +227,7 @@ class NodeSchemaGenerator:
     ) -> FieldSchema:
         """Convert NodeParameter to FieldSchema."""
         # Map NodeParameter type to SchemaType
-        schema_type = self._map_type_to_schema_type(param.type)
+        schema_type = self._map_type_to_schema_type(param.type)  # type: ignore[reportArgumentType]
 
         # Determine widget based on parameter properties
         widget: Optional[UIWidget] = None

@@ -379,7 +379,7 @@ class CodeExecutor:
             for module_name in safe_modules:
                 try:
                     module = importlib.import_module(module_name)
-                    namespace[module_name] = module
+                    namespace[module_name] = module  # type: ignore[reportArgumentType]
                 except ImportError:
                     logger.warning(f"Module {module_name} not available")
 
@@ -395,10 +395,10 @@ class CodeExecutor:
                 try:
                     # Try to import the module directly
                     module = importlib.import_module(module_name)
-                    namespace[module_name] = module
+                    namespace[module_name] = module  # type: ignore[reportArgumentType]
                 except ImportError:
                     # If import fails, use lazy loader as fallback
-                    namespace[module_name] = LazyModuleLoader()
+                    namespace[module_name] = LazyModuleLoader()  # type: ignore[reportArgumentType]
         else:
             # Normal operation - eagerly load all modules
             for module_name in self.allowed_modules:
@@ -408,7 +408,7 @@ class CodeExecutor:
                         logger.warning("Skipping scipy import in CI environment")
                         continue
                     module = importlib.import_module(module_name)
-                    namespace[module_name] = module
+                    namespace[module_name] = module  # type: ignore[reportArgumentType]
                 except ImportError:
                     logger.warning(f"Module {module_name} not available")
 
@@ -420,9 +420,9 @@ class CodeExecutor:
                 get_output_data_path,
             )
 
-            namespace["get_input_data_path"] = get_input_data_path
-            namespace["get_output_data_path"] = get_output_data_path
-            namespace["get_data_path"] = get_data_path
+            namespace["get_input_data_path"] = get_input_data_path  # type: ignore[reportArgumentType]
+            namespace["get_output_data_path"] = get_output_data_path  # type: ignore[reportArgumentType]
+            namespace["get_data_path"] = get_data_path  # type: ignore[reportArgumentType]
         except ImportError:
             logger.warning(
                 "Could not import data path utilities - functions will not be available in PythonCodeNode execution"
@@ -449,8 +449,8 @@ class CodeExecutor:
                     "If you need stateful data, consider using explicit variables or external storage."
                 )
 
-            namespace["get_workflow_context"] = _get_workflow_context
-            namespace["set_workflow_context"] = _set_workflow_context
+            namespace["get_workflow_context"] = _get_workflow_context  # type: ignore[reportArgumentType]
+            namespace["set_workflow_context"] = _set_workflow_context  # type: ignore[reportArgumentType]
 
         # NOTE: Inputs are NOT added to global namespace
         # They are added to local_namespace below to prevent variable persistence
@@ -596,7 +596,7 @@ class CodeExecutor:
                         # Convert object to dict using its to_dict() method
                         dict_result = data.to_dict()
                         # Recursively ensure the dict result is also serializable
-                        return self._ensure_json_serializable(dict_result)
+                        return self._ensure_json_serializable(dict_result)  # type: ignore[reportAttributeAccessIssue]
                     except (TypeError, ValueError, AttributeError):
                         # If .to_dict() exists but fails, fall back to string
                         return str(data)
@@ -975,7 +975,7 @@ class ClassWrapper:
                 ) from e
 
         # Get the method from the instance
-        method = getattr(self.instance, self.process_method)
+        method = getattr(self.instance, self.process_method)  # type: ignore[reportArgumentType]
 
         # Execute the method
         result = self.executor.execute_function(method, inputs)
@@ -1237,7 +1237,7 @@ class PythonCodeNode(Node):
         # Initialize executor (trusted mode uses unrestricted allowed_modules)
         if sandbox_mode == "trusted":
             self.executor = CodeExecutor(allowed_modules=None)
-            self.executor._trusted_mode = True
+            self.executor._trusted_mode = True  # type: ignore[reportAttributeAccessIssue]
         else:
             self.executor = CodeExecutor()
 

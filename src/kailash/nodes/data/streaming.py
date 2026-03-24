@@ -233,7 +233,7 @@ class KafkaConsumerNode(Node):
         Raises:
             NodeConfigurationError: If configuration fails
         """
-        super().configure(config)
+        super().configure(config)  # type: ignore[reportAttributeAccessIssue]
 
         required_fields = ["bootstrap_servers", "topic", "group_id"]
         for field in required_fields:
@@ -269,7 +269,7 @@ class KafkaConsumerNode(Node):
         """
         return self.execute(kwargs)
 
-    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:  # type: ignore[reportIncompatibleMethodOverride]
         """Consume messages from Kafka.
 
         Polls for messages up to the specified limit or timeout.
@@ -335,7 +335,7 @@ class KafkaConsumerNode(Node):
         if self._consumer:
             # Placeholder for actual cleanup
             self._consumer = None
-        super().cleanup()
+        super().cleanup()  # type: ignore[reportAttributeAccessIssue]
 
 
 @register_node()
@@ -520,7 +520,7 @@ class StreamPublisherNode(Node):
         Raises:
             NodeConfigurationError: If configuration fails
         """
-        super().configure(config)
+        super().configure(config)  # type: ignore[reportAttributeAccessIssue]
 
         required_fields = ["protocol", "endpoint", "topic"]
         for field in required_fields:
@@ -556,7 +556,7 @@ class StreamPublisherNode(Node):
         """
         return self.execute(kwargs)
 
-    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:  # type: ignore[reportIncompatibleMethodOverride]
         """Publish messages to the streaming platform.
 
         Args:
@@ -827,7 +827,7 @@ class WebSocketNode(Node):
         Raises:
             NodeConfigurationError: If configuration is invalid
         """
-        super().configure(config)
+        super().configure(config)  # type: ignore[reportAttributeAccessIssue]
 
         if not self.config.get("url"):
             raise NodeConfigurationError("WebSocket URL is required")
@@ -852,7 +852,7 @@ class WebSocketNode(Node):
         """
         return self.execute(kwargs)
 
-    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:  # type: ignore[reportIncompatibleMethodOverride]
         """Execute WebSocket operations.
 
         Performs the requested action (connect, send, receive, disconnect).
@@ -962,7 +962,7 @@ class WebSocketNode(Node):
         """
         if self._connected:
             self._disconnect()
-        super().cleanup()
+        super().cleanup()  # type: ignore[reportAttributeAccessIssue]
 
 
 @register_node()
@@ -1145,7 +1145,7 @@ class EventStreamNode(Node):
         """
         return self.execute(kwargs)
 
-    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:  # type: ignore[reportIncompatibleMethodOverride]
         """Execute EventStream operations.
 
         Args:
@@ -1246,4 +1246,4 @@ class EventStreamNode(Node):
         """
         if self._connected:
             self._stop_stream()
-        super().cleanup()
+        super().cleanup()  # type: ignore[reportAttributeAccessIssue]

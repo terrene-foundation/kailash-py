@@ -426,7 +426,7 @@ class EventStore:
             # Store each request's events
             for request_id, request_events in by_request.items():
                 key = f"events:{request_id}"
-                await self.storage_backend.append(key, request_events)
+                await self.storage_backend.append(key, request_events)  # type: ignore[reportOptionalMemberAccess]
 
         except Exception as e:
             logger.error(f"Failed to store events: {e}")
@@ -440,7 +440,7 @@ class EventStore:
         """Load events from storage."""
         try:
             key = f"events:{request_id}"
-            stored = await self.storage_backend.get(key)
+            stored = await self.storage_backend.get(key)  # type: ignore[reportOptionalMemberAccess]
 
             if not stored:
                 return []

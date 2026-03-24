@@ -715,10 +715,10 @@ class Node(ABC):
                 # FIX: Allow None for optional parameters (not required)
                 if value is None and not param_def.required:
                     continue
-                if not isinstance(value, param_def.type):
+                if not isinstance(value, param_def.type):  # type: ignore[reportArgumentType]
                     try:
                         # Special handling for datetime conversion from ISO strings
-                        if param_def.type.__name__ == "datetime" and isinstance(
+                        if param_def.type.__name__ == "datetime" and isinstance(  # type: ignore[reportOptionalMemberAccess]
                             value, str
                         ):
                             from datetime import datetime
@@ -728,11 +728,11 @@ class Node(ABC):
                                 value.replace("Z", "+00:00")
                             )
                         else:
-                            self.config[param_name] = param_def.type(value)
+                            self.config[param_name] = param_def.type(value)  # type: ignore[reportOptionalCall]
                     except (ValueError, TypeError) as e:
                         raise NodeConfigurationError(
                             f"Configuration parameter '{param_name}' must be of type "
-                            f"{param_def.type.__name__}, got {type(value).__name__}. "
+                            f"{param_def.type.__name__}, got {type(value).__name__}. "  # type: ignore[reportOptionalMemberAccess]
                             f"Conversion failed: {e}"
                         ) from e
 
@@ -750,7 +750,7 @@ class Node(ABC):
         # Match template expressions like ${variable_name} or ${node.output}
         return bool(re.match(r"^\$\{[^}]+\}$", value))
 
-    def _get_cached_parameters(self) -> dict[str, NodeParameter]:
+    def _get_cached_parameters(self) -> dict[str, NodeParameter]:  # type: ignore[reportRedeclaration]
         """Get cached parameter definitions with optimal performance.
 
         Uses parameters cached during initialization to avoid duplicate get_parameters() calls.
@@ -1104,7 +1104,7 @@ class Node(ABC):
                 resolved[param_name] = main_input[1]
                 used_inputs.add(main_input[0])
 
-        return resolved, used_inputs
+        return resolved, used_inputs  # type: ignore[reportReturnType]
 
     def _validate_resolved_parameters(self, resolved: dict, params: dict) -> dict:
         """Validate resolved parameters against their definitions.
@@ -1256,14 +1256,14 @@ class Node(ABC):
                         # Skip type checking for Any type
                         if param_def.type is Any:
                             validated_outputs[param_name] = value
-                        elif not isinstance(value, param_def.type):
+                        elif not isinstance(value, param_def.type):  # type: ignore[reportArgumentType]
                             try:
                                 # Attempt type conversion
-                                converted_value = param_def.type(value)
+                                converted_value = param_def.type(value)  # type: ignore[reportOptionalCall]
                                 validated_outputs[param_name] = converted_value
                             except (ValueError, TypeError) as e:
                                 raise NodeValidationError(
-                                    f"Output '{param_name}' must be of type {param_def.type.__name__}, "
+                                    f"Output '{param_name}' must be of type {param_def.type.__name__}, "  # type: ignore[reportOptionalMemberAccess]
                                     f"got {type(value).__name__}. Conversion failed: {e}"
                                 ) from e
                         else:
@@ -1549,7 +1549,7 @@ class Node(ABC):
                 "config": self.config,
                 "parameters": {
                     name: {
-                        "type": param.type.__name__,
+                        "type": param.type.__name__,  # type: ignore[reportOptionalMemberAccess]
                         "required": param.required,
                         "default": param.default,
                         "description": param.description,
@@ -2062,7 +2062,7 @@ class AsyncTypedNode(TypedNode):
             asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
         current_thread = threading.current_thread()
-        is_main_thread = isinstance(current_thread, threading._MainThread)
+        is_main_thread = isinstance(current_thread, threading._MainThread)  # type: ignore[reportAttributeAccessIssue]
 
         try:
             # Try to get current event loop

@@ -50,7 +50,7 @@ class TenantAssignmentNode(Node):
             ),
         }
 
-    def run(
+    def run(  # type: ignore[reportIncompatibleMethodOverride]
         self, user_id: str, verified: bool = False, attributes: Dict | None = None, **kwargs
     ) -> Dict[str, Any]:
         """Assign tenant based on user information."""

@@ -126,7 +126,7 @@ class Port(Generic[T], ABC):
         """Extract type hint from __orig_class__ after instance creation."""
         # This will be called again from a delayed context when __orig_class__ is available
         if hasattr(self, "__orig_class__"):
-            args = get_args(self.__orig_class__)
+            args = get_args(self.__orig_class__)  # type: ignore[reportAttributeAccessIssue]
             if args:
                 self._type_hint = args[0]
                 return True
@@ -156,7 +156,7 @@ class Port(Generic[T], ABC):
 
         # If no type hint found, try to extract from the port instance itself
         if self._type_hint is None and hasattr(self, "__orig_class__"):
-            args = get_args(self.__orig_class__)
+            args = get_args(self.__orig_class__)  # type: ignore[reportAttributeAccessIssue]
             if args:
                 self._type_hint = args[0]
 
@@ -280,16 +280,16 @@ class Port(Generic[T], ABC):
 
         for constraint, constraint_value in self.metadata.constraints.items():
             if constraint == "min_length" and hasattr(value, "__len__"):
-                if len(value) < constraint_value:
+                if len(value) < constraint_value:  # type: ignore[reportArgumentType]
                     return (
                         False,
-                        f"Value length {len(value)} is less than minimum {constraint_value}",
+                        f"Value length {len(value)} is less than minimum {constraint_value}",  # type: ignore[reportArgumentType]
                     )
             elif constraint == "max_length" and hasattr(value, "__len__"):
-                if len(value) > constraint_value:
+                if len(value) > constraint_value:  # type: ignore[reportArgumentType]
                     return (
                         False,
-                        f"Value length {len(value)} is greater than maximum {constraint_value}",
+                        f"Value length {len(value)} is greater than maximum {constraint_value}",  # type: ignore[reportArgumentType]
                     )
             elif constraint == "min_value" and isinstance(value, (int, float)):
                 if value < constraint_value:
@@ -367,7 +367,7 @@ class InputPort(Port[T]):
         elif self.metadata.default is not None:
             return self.metadata.default
         elif not self.metadata.required:
-            return None
+            return None  # type: ignore[reportReturnType]
         else:
             raise ValueError(f"Required input port '{self.name}' has no value")
 

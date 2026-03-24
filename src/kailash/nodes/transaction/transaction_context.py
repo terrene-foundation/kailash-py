@@ -448,7 +448,7 @@ class TransactionContextNode(AsyncNode):
             self.participants.append(participant)
 
         # Create transaction with DTM
-        dtm_result = await self.dtm.async_run(
+        dtm_result = await self.dtm.async_run(  # type: ignore[reportAttributeAccessIssue]
             operation="create_transaction",
             transaction_name=self.transaction_name,
             requirements=self.requirements.__dict__,
@@ -463,7 +463,7 @@ class TransactionContextNode(AsyncNode):
         # Register participants with DTM
         for participant in self.participants:
             capability = participant.to_participant_capability()
-            await self.dtm.async_run(
+            await self.dtm.async_run(  # type: ignore[reportAttributeAccessIssue]
                 operation="add_participant", participant=capability.to_dict()
             )
 
@@ -473,7 +473,7 @@ class TransactionContextNode(AsyncNode):
 
         # Start monitoring
         if self._metrics_node:
-            await self._metrics_node.async_run(
+            await self._metrics_node.async_run(  # type: ignore[reportAttributeAccessIssue]
                 operation="start_transaction",
                 transaction_id=self.context_id,
                 name=self.transaction_name,
@@ -510,7 +510,7 @@ class TransactionContextNode(AsyncNode):
 
         # Register with DTM
         capability = participant.to_participant_capability()
-        dtm_result = await self.dtm.async_run(
+        dtm_result = await self.dtm.async_run(  # type: ignore[reportAttributeAccessIssue]
             operation="add_participant", participant=capability.to_dict()
         )
 
@@ -552,7 +552,7 @@ class TransactionContextNode(AsyncNode):
         # Register with DTM if transaction is active
         if self.status == WorkflowTransactionStatus.ACTIVE:
             capability = participant.to_participant_capability()
-            await self.dtm.async_run(
+            await self.dtm.async_run(  # type: ignore[reportAttributeAccessIssue]
                 operation="add_participant", participant=capability.to_dict()
             )
 
@@ -611,7 +611,7 @@ class TransactionContextNode(AsyncNode):
             self.pattern = TransactionPattern(force_pattern)
 
         # Execute transaction with DTM
-        dtm_result = await self.dtm.async_run(
+        dtm_result = await self.dtm.async_run(  # type: ignore[reportAttributeAccessIssue]
             operation="execute_transaction",
             pattern=(
                 self.pattern.value
@@ -637,7 +637,7 @@ class TransactionContextNode(AsyncNode):
 
         # End monitoring
         if self._metrics_node:
-            await self._metrics_node.async_run(
+            await self._metrics_node.async_run(  # type: ignore[reportAttributeAccessIssue]
                 operation="end_transaction",
                 transaction_id=self.context_id,
                 status=(
@@ -684,14 +684,14 @@ class TransactionContextNode(AsyncNode):
             }
 
         # Abort transaction with DTM
-        dtm_result = await self.dtm.async_run(operation="abort_transaction")
+        dtm_result = await self.dtm.async_run(operation="abort_transaction")  # type: ignore[reportAttributeAccessIssue]
 
         self.status = WorkflowTransactionStatus.ROLLED_BACK
         self.completed_at = datetime.now(UTC)
 
         # End monitoring
         if self._metrics_node:
-            await self._metrics_node.async_run(
+            await self._metrics_node.async_run(  # type: ignore[reportAttributeAccessIssue]
                 operation="end_transaction",
                 transaction_id=self.context_id,
                 status="aborted",
@@ -709,7 +709,7 @@ class TransactionContextNode(AsyncNode):
     async def _get_workflow_status(self, **kwargs) -> Dict[str, Any]:
         """Get current workflow transaction status."""
         # Get DTM status
-        dtm_status = await self.dtm.async_run(operation="get_status")
+        dtm_status = await self.dtm.async_run(operation="get_status")  # type: ignore[reportAttributeAccessIssue]
 
         participant_info = [
             {
@@ -746,7 +746,7 @@ class TransactionContextNode(AsyncNode):
         """Record error for monitoring."""
         if self._metrics_node:
             try:
-                await self._metrics_node.async_run(
+                await self._metrics_node.async_run(  # type: ignore[reportAttributeAccessIssue]
                     operation="end_transaction",
                     transaction_id=self.context_id,
                     status="error",

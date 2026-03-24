@@ -477,7 +477,7 @@ class WorkflowConnectionPool(AsyncNode):
         elif operation == "get_status":
             return await self._get_pool_status()
         elif operation == "adjust_pool_size":
-            return await self.adjust_pool_size(inputs.get("new_size"))
+            return await self.adjust_pool_size(inputs.get("new_size"))  # type: ignore[reportArgumentType]
         elif operation == "get_pool_statistics":
             return await self.get_pool_statistics()
         elif operation == "get_comprehensive_status":
@@ -501,7 +501,7 @@ class WorkflowConnectionPool(AsyncNode):
             await self.supervisor.start()
 
             # Set up callbacks
-            self.supervisor.on_actor_failure = self._on_connection_failure
+            self.supervisor.on_actor_failure = self._on_connection_failure  # type: ignore[reportAttributeAccessIssue]
             self.supervisor.on_actor_restart = self._on_connection_restart
 
             # Create minimum connections
@@ -636,7 +636,7 @@ class WorkflowConnectionPool(AsyncNode):
             # Execute query with comprehensive metrics tracking
             with self.metrics_collector.track_query(query_type) as timer:
                 result = await connection.execute(
-                    query=inputs.get("query"),
+                    query=inputs.get("query"),  # type: ignore[reportArgumentType]
                     params=inputs.get("params"),
                     fetch_mode=inputs.get("fetch_mode", "all"),
                 )
@@ -956,7 +956,7 @@ class WorkflowConnectionPool(AsyncNode):
         # Add pattern learning insights if enabled
         pattern_insights = {}
         if self.query_pattern_tracker:
-            patterns = self.query_pattern_tracker.get_all_patterns()
+            patterns = self.query_pattern_tracker.get_all_patterns()  # type: ignore[reportAttributeAccessIssue]
             pattern_insights = {
                 "detected_patterns": len(patterns),
                 "workload_forecast": self.query_pattern_tracker.get_workload_forecast(
@@ -969,8 +969,8 @@ class WorkflowConnectionPool(AsyncNode):
         if self.adaptive_controller:
             adaptive_status = {
                 "current_size": len(self.all_connections),
-                "recommended_size": self.adaptive_controller.get_recommended_size(),
-                "last_adjustment": self.adaptive_controller.get_last_adjustment(),
+                "recommended_size": self.adaptive_controller.get_recommended_size(),  # type: ignore[reportAttributeAccessIssue]
+                "last_adjustment": self.adaptive_controller.get_last_adjustment(),  # type: ignore[reportAttributeAccessIssue]
             }
 
         return {
@@ -1006,13 +1006,13 @@ class WorkflowConnectionPool(AsyncNode):
 
         try:
             # Register this pool with the global metrics aggregator
-            if hasattr(self.runtime, "metrics_aggregator"):
-                self.runtime.metrics_aggregator.register_collector(
+            if hasattr(self.runtime, "metrics_aggregator"):  # type: ignore[reportAttributeAccessIssue]
+                self.runtime.metrics_aggregator.register_collector(  # type: ignore[reportAttributeAccessIssue]
                     self.metrics_collector
                 )
 
             # Start monitoring dashboard if not already running
-            if not hasattr(self.runtime, "monitoring_dashboard"):
+            if not hasattr(self.runtime, "monitoring_dashboard"):  # type: ignore[reportAttributeAccessIssue]
                 from kailash.nodes.monitoring.connection_dashboard import (
                     ConnectionDashboardNode,
                 )
@@ -1024,8 +1024,8 @@ class WorkflowConnectionPool(AsyncNode):
                 )
 
                 # Store dashboard in runtime for sharing
-                self.runtime.monitoring_dashboard = dashboard
-                await dashboard.start()
+                self.runtime.monitoring_dashboard = dashboard  # type: ignore[reportAttributeAccessIssue]
+                await dashboard.start()  # type: ignore[reportAttributeAccessIssue]
 
                 return {
                     "status": "started",
@@ -1044,9 +1044,9 @@ class WorkflowConnectionPool(AsyncNode):
     async def _stop_monitoring_dashboard(self) -> Dict[str, Any]:
         """Stop the monitoring dashboard."""
         try:
-            if hasattr(self.runtime, "monitoring_dashboard"):
-                await self.runtime.monitoring_dashboard.stop()
-                del self.runtime.monitoring_dashboard
+            if hasattr(self.runtime, "monitoring_dashboard"):  # type: ignore[reportAttributeAccessIssue]
+                await self.runtime.monitoring_dashboard.stop()  # type: ignore[reportAttributeAccessIssue]
+                del self.runtime.monitoring_dashboard  # type: ignore[reportAttributeAccessIssue]
                 return {"status": "stopped"}
             else:
                 return {"status": "not_running"}

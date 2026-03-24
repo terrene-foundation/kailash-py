@@ -494,11 +494,11 @@ class TransactionMetricsNode(AsyncNode):
     ) -> AggregatedMetrics:
         """Calculate aggregated metrics from transaction list."""
         if not metrics:
-            return None
+            return None  # type: ignore[reportReturnType]
 
         durations = [m.duration for m in metrics if m.duration is not None]
         if not durations:
-            return None
+            return None  # type: ignore[reportReturnType]
 
         # Sort durations for percentile calculations
         sorted_durations = sorted(durations)
@@ -586,7 +586,7 @@ class TransactionMetricsNode(AsyncNode):
         elif format == MetricExportFormat.OPENTELEMETRY:
             return self._format_opentelemetry(metrics)
         else:
-            return [self._serialize_metric(m) for m in metrics]
+            return [self._serialize_metric(m) for m in metrics]  # type: ignore[reportReturnType]
 
     def _format_prometheus(self, metrics: List[TransactionMetric]) -> str:
         """Format metrics in Prometheus exposition format."""

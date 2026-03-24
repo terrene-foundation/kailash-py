@@ -807,10 +807,10 @@ class CommandRouterNode(Node):
 
         # Add target-specific parameters
         if routing_target.get("type") == "workflow":
-            exec_params["workflow_name"] = routing_target.get("workflow")
+            exec_params["workflow_name"] = routing_target.get("workflow")  # type: ignore[reportArgumentType]
             exec_params["workflow_inputs"] = arguments
         elif routing_target.get("type") == "handler":
-            exec_params["handler_name"] = routing_target.get("handler")
+            exec_params["handler_name"] = routing_target.get("handler")  # type: ignore[reportArgumentType]
 
         # Add any additional parameters from routing target
         additional_params = routing_target.get("parameters", {})

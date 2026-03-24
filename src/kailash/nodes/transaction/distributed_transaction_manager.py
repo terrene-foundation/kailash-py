@@ -583,16 +583,16 @@ class DistributedTransactionManagerNode(AsyncNode):
         all_support_2pc = all(p.supports_2pc for p in self.participants)
 
         # Analyze requirements
-        requires_strong_consistency = self.requirements.consistency in [
+        requires_strong_consistency = self.requirements.consistency in [  # type: ignore[reportOptionalMemberAccess]
             ConsistencyLevel.STRONG,
             ConsistencyLevel.IMMEDIATE,
         ]
         requires_high_availability = (
-            self.requirements.availability == AvailabilityLevel.HIGH
+            self.requirements.availability == AvailabilityLevel.HIGH  # type: ignore[reportOptionalMemberAccess]
         )
 
         # Pattern selection logic
-        if self.requirements.consistency == ConsistencyLevel.IMMEDIATE:
+        if self.requirements.consistency == ConsistencyLevel.IMMEDIATE:  # type: ignore[reportOptionalMemberAccess]
             # Immediate consistency requires 2PC
             if not all_support_2pc:
                 raise NodeExecutionError(
@@ -656,13 +656,13 @@ class DistributedTransactionManagerNode(AsyncNode):
         self._active_coordinator = self._saga_coordinator
 
         # Begin saga
-        await self._saga_coordinator.async_run(
+        await self._saga_coordinator.async_run(  # type: ignore[reportAttributeAccessIssue]
             operation="create_saga", context=self.context
         )
 
         # Add saga steps based on participants
         for participant in sorted(self.participants, key=lambda p: p.priority):
-            await self._saga_coordinator.async_run(
+            await self._saga_coordinator.async_run(  # type: ignore[reportAttributeAccessIssue]
                 operation="add_step",
                 name=f"step_{participant.participant_id}",
                 node_id=f"ParticipantNode_{participant.participant_id}",
@@ -679,7 +679,7 @@ class DistributedTransactionManagerNode(AsyncNode):
             )
 
         # Execute saga
-        return await self._saga_coordinator.async_run(operation="execute_saga")
+        return await self._saga_coordinator.async_run(operation="execute_saga")  # type: ignore[reportAttributeAccessIssue]
 
     async def _execute_2pc_pattern(self) -> Dict[str, Any]:
         """Execute transaction using Two-Phase Commit pattern."""
@@ -698,20 +698,20 @@ class DistributedTransactionManagerNode(AsyncNode):
         self._active_coordinator = self._2pc_coordinator
 
         # Begin transaction
-        await self._2pc_coordinator.async_run(
+        await self._2pc_coordinator.async_run(  # type: ignore[reportAttributeAccessIssue]
             operation="begin_transaction", context=self.context
         )
 
         # Add participants
         for participant in self.participants:
-            await self._2pc_coordinator.async_run(
+            await self._2pc_coordinator.async_run(  # type: ignore[reportAttributeAccessIssue]
                 operation="add_participant",
                 participant_id=participant.participant_id,
                 endpoint=participant.endpoint,
             )
 
         # Execute 2PC
-        return await self._2pc_coordinator.async_run(operation="execute_transaction")
+        return await self._2pc_coordinator.async_run(operation="execute_transaction")  # type: ignore[reportAttributeAccessIssue]
 
     async def _get_status(self) -> Dict[str, Any]:
         """Get current transaction status."""
@@ -748,7 +748,7 @@ class DistributedTransactionManagerNode(AsyncNode):
         # Add active coordinator status if available
         if self._active_coordinator:
             try:
-                coordinator_status = await self._active_coordinator.async_run(
+                coordinator_status = await self._active_coordinator.async_run(  # type: ignore[reportAttributeAccessIssue]
                     operation="get_status"
                 )
                 result["coordinator_status"] = coordinator_status
@@ -778,7 +778,7 @@ class DistributedTransactionManagerNode(AsyncNode):
         # Abort active coordinator if exists
         if self._active_coordinator:
             try:
-                await self._active_coordinator.async_run(operation="abort_transaction")
+                await self._active_coordinator.async_run(operation="abort_transaction")  # type: ignore[reportAttributeAccessIssue]
             except Exception as e:
                 logger.warning(f"Failed to abort coordinator: {e}")
 
@@ -832,7 +832,7 @@ class DistributedTransactionManagerNode(AsyncNode):
             )
             self._active_coordinator = self._saga_coordinator
             # Load the saga state
-            load_result = await self._saga_coordinator.async_run(
+            load_result = await self._saga_coordinator.async_run(  # type: ignore[reportAttributeAccessIssue]
                 operation="load_saga", saga_id=transaction_id
             )
             if load_result.get("status") != "success":
@@ -865,7 +865,7 @@ class DistributedTransactionManagerNode(AsyncNode):
         filter_criteria = kwargs.get("filter", {})
 
         try:
-            transaction_ids = await self._storage.list_sagas(filter_criteria)
+            transaction_ids = await self._storage.list_sagas(filter_criteria)  # type: ignore[reportAttributeAccessIssue]
             return {
                 "status": "success",
                 "transactions": transaction_ids,

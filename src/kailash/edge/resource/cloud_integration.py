@@ -23,7 +23,7 @@ except ImportError:
     AWS_AVAILABLE = False
 
 try:
-    from google.cloud import compute_v1
+    from google.cloud import compute_v1  # type: ignore[reportAttributeAccessIssue]
     from google.oauth2 import service_account
 
     GCP_AVAILABLE = True
@@ -34,8 +34,8 @@ except ImportError:
 
 try:
     from azure.identity import DefaultAzureCredential
-    from azure.mgmt.compute import ComputeManagementClient
-    from azure.mgmt.resource import ResourceManagementClient
+    from azure.mgmt.compute import ComputeManagementClient  # type: ignore[reportMissingImports]
+    from azure.mgmt.resource import ResourceManagementClient  # type: ignore[reportMissingImports]
 
     AZURE_AVAILABLE = True
 except ImportError:

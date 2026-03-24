@@ -48,7 +48,7 @@ class MCPServiceDiscoveryNode(Node):
             ),
         }
 
-    def run(
+    def run(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         tenant: Dict,
         user_context: Dict,

@@ -1166,9 +1166,9 @@ class MCPServer:
 
         # Return appropriate wrapper based on function type
         if asyncio.iscoroutinefunction(func):
-            return async_wrapper
+            return async_wrapper  # type: ignore[return-value]
         else:
-            return sync_wrapper
+            return sync_wrapper  # type: ignore[return-value]
 
     def _format_response(
         self, result: Any, response_format: Optional[str], stream_response: bool = False
@@ -1271,7 +1271,7 @@ class MCPServer:
                 wrapped_func = self.metrics.track_tool(f"resource:{uri}")(func)
 
             # Register with FastMCP
-            mcp_resource = self._mcp.resource(uri)(wrapped_func)
+            mcp_resource = self._mcp.resource(uri)(wrapped_func)  # type: ignore[reportOptionalMemberAccess]
 
             # Track in registry
             self._resource_registry[uri] = {
@@ -1283,7 +1283,7 @@ class MCPServer:
                 "created_at": time.time(),
             }
 
-            return mcp_resource
+            return mcp_resource  # type: ignore[return-value]
 
         return decorator
 
@@ -1308,7 +1308,7 @@ class MCPServer:
                 wrapped_func = self.metrics.track_tool(f"prompt:{name}")(func)
 
             # Register with FastMCP
-            mcp_prompt = self._mcp.prompt(name)(wrapped_func)
+            mcp_prompt = self._mcp.prompt(name)(wrapped_func)  # type: ignore[reportOptionalMemberAccess]
 
             # Track in registry
             self._prompt_registry[name] = {
@@ -1319,7 +1319,7 @@ class MCPServer:
                 "created_at": time.time(),
             }
 
-            return mcp_prompt
+            return mcp_prompt  # type: ignore[return-value]
 
         return decorator
 
@@ -1627,7 +1627,7 @@ class MCPServer:
             else:
                 # Default to FastMCP (STDIO) server
                 logger.info("Starting FastMCP server in STDIO mode...")
-                self._mcp.run()
+                self._mcp.run()  # type: ignore[reportOptionalMemberAccess]
 
         except KeyboardInterrupt:
             logger.info("Server stopped by user")
@@ -1671,7 +1671,7 @@ class MCPServer:
             self._transport = WebSocketServerTransport(
                 host=self.websocket_host,
                 port=self.websocket_port,
-                message_handler=self._handle_websocket_message,
+                message_handler=self._handle_websocket_message,  # type: ignore[reportArgumentType]
                 auth_provider=self.auth_provider,
                 timeout=self.transport_timeout,
                 max_message_size=self.max_request_size,
@@ -1773,7 +1773,7 @@ class MCPServer:
             }
 
     async def _handle_initialize(
-        self, params: Dict[str, Any], request_id: Any, client_id: str = None
+        self, params: Dict[str, Any], request_id: Any, client_id: str = None  # type: ignore[reportArgumentType]
     ) -> Dict[str, Any]:
         """Handle initialize request."""
         # Store client information for capability checks
@@ -1843,7 +1843,7 @@ class MCPServer:
         arguments = params.get("arguments", {})
 
         try:
-            result = self._execute_tool(tool_name, arguments)
+            result = self._execute_tool(tool_name, arguments)  # type: ignore[reportArgumentType]
 
             # Handle async results
             if asyncio.iscoroutine(result) or asyncio.isfuture(result):
@@ -1913,7 +1913,7 @@ class MCPServer:
 
                 result = {"resources": resources}
                 if next_cursor:
-                    result["nextCursor"] = next_cursor
+                    result["nextCursor"] = next_cursor  # type: ignore[reportArgumentType]
 
                 return {"jsonrpc": "2.0", "result": result, "id": request_id}
             else:
@@ -1925,7 +1925,7 @@ class MCPServer:
         return {"jsonrpc": "2.0", "result": {"resources": resources}, "id": request_id}
 
     async def _handle_read_resource(
-        self, params: Dict[str, Any], request_id: Any, client_id: str = None
+        self, params: Dict[str, Any], request_id: Any, client_id: str = None  # type: ignore[reportArgumentType]
     ) -> Dict[str, Any]:
         """Handle resources/read request with change detection."""
         uri = params.get("uri")
@@ -1934,10 +1934,10 @@ class MCPServer:
         resource_info = None
         resource_params = {}
         if uri in self._resource_registry:
-            resource_info = self._resource_registry[uri]
+            resource_info = self._resource_registry[uri]  # type: ignore[reportArgumentType]
         else:
             # Try template matching
-            resource_info, resource_params = self._match_resource_template(uri)
+            resource_info, resource_params = self._match_resource_template(uri)  # type: ignore[reportArgumentType]
 
         if resource_info is None:
             return {
@@ -1972,7 +1972,7 @@ class MCPServer:
                 # Check for changes and notify subscribers
                 change = (
                     await self.subscription_manager.resource_monitor.check_for_changes(
-                        uri, resource_data
+                        uri, resource_data  # type: ignore[reportArgumentType]
                     )
                 )
 
@@ -2040,7 +2040,7 @@ class MCPServer:
             }
 
         try:
-            prompt_info = self._prompt_registry[name]
+            prompt_info = self._prompt_registry[name]  # type: ignore[reportArgumentType]
             handler = prompt_info.get("handler")
 
             if handler:
@@ -2352,7 +2352,7 @@ class MCPServer:
                         f"({ratio:.2%} ratio)"
                     )
 
-                await self._transport.send_message(message_to_send, client_id=client_id)
+                await self._transport.send_message(message_to_send, client_id=client_id)  # type: ignore[reportArgumentType]
                 logger.debug(
                     f"Sent notification to client {client_id}: {notification['method']}"
                 )
@@ -2411,7 +2411,7 @@ class MCPServer:
         # Check if client supports roots
         client_info = self.client_info.get(params.get("client_id", ""))
         if (
-            not client_info.get("capabilities", {})
+            not client_info.get("capabilities", {})  # type: ignore[reportOptionalMemberAccess]
             .get("roots", {})
             .get("listChanged", False)
         ):
@@ -2433,7 +2433,7 @@ class MCPServer:
                 if await protocol_mgr.roots.validate_access(
                     root["uri"],
                     operation="list",
-                    user_context=self.client_info.get(params["client_id"], {}),
+                    user_context=self.client_info.get(params["client_id"], {}),  # type: ignore[reportCallIssue]
                 ):
                     filtered_roots.append(root)
             roots = filtered_roots
@@ -2813,14 +2813,14 @@ class SimpleMCPServer(MCPServerBase):
         >>> server.run()
     """
 
-    def __init__(self, name: str, description: str = None):
+    def __init__(self, name: str, description: str = None):  # type: ignore[reportArgumentType]
         """Initialize simple MCP server.
 
         Args:
             name: Server name
             description: Server description
         """
-        super().__init__(name, description)
+        super().__init__(name, description)  # type: ignore[reportArgumentType]
 
         # Disable all advanced features for simplicity
         self.enable_cache = False
@@ -2841,7 +2841,7 @@ class SimpleMCPServer(MCPServerBase):
         """Setup method - no additional setup needed for SimpleMCPServer."""
         pass
 
-    def tool(self, description: str = None):
+    def tool(self, description: str = None):  # type: ignore[reportArgumentType]
         """Register a simple tool (no auth, caching, or metrics).
 
         Args:
@@ -2871,7 +2871,7 @@ class SimpleMCPServer(MCPServerBase):
 
         return decorator
 
-    def resource(self, uri: str, description: str = None):
+    def resource(self, uri: str, description: str = None):  # type: ignore[reportArgumentType]
         """Register a simple resource.
 
         Args:

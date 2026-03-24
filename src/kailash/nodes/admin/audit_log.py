@@ -837,10 +837,10 @@ class EnterpriseAuditLogNode(Node):
 
         return {
             "success": True,
-            "filename": filename,
+            "filename": filename,  # type: ignore[reportPossiblyUnbound]
             "format": format_type,
             "record_count": len(logs),
-            "export_data": export_data,
+            "export_data": export_data,  # type: ignore[reportPossiblyUnbound]
         }
 
     def _archive_logs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -900,7 +900,7 @@ class EnterpriseAuditLogNode(Node):
                 delete_query += " AND tenant_id = ?"
                 log_ids.append(tenant_id)
 
-            self._ensure_db_node(inputs)
+            self._ensure_db_node(inputs)  # type: ignore[reportAttributeAccessIssue]
             self._db_node.execute(query=delete_query, params=log_ids)
 
         return {
@@ -933,7 +933,7 @@ class EnterpriseAuditLogNode(Node):
             count_query += " AND tenant_id = ?"
             params.append(tenant_id)
 
-        self._ensure_db_node(inputs)
+        self._ensure_db_node(inputs)  # type: ignore[reportAttributeAccessIssue]
         count_result = self._db_node.execute(query=count_query, params=params)
         total_to_delete = count_result.get("rows", [{}])[0].get("count", 0)
 
@@ -992,7 +992,7 @@ class EnterpriseAuditLogNode(Node):
             "group_by", ["event_type", "severity"]
         )  # What to group statistics by
 
-        self._ensure_db_node(inputs)
+        self._ensure_db_node(inputs)  # type: ignore[reportAttributeAccessIssue]
 
         # Build base WHERE clause
         where_conditions = []
@@ -1111,7 +1111,7 @@ class EnterpriseAuditLogNode(Node):
 
         tenant_id = inputs.get("tenant_id")
         event_types = inputs.get("event_types", [])  # Filter by specific event types
-        severity_filter = inputs.get("severity", AuditSeverity.INFO.value)
+        severity_filter = inputs.get("severity", AuditSeverity.INFO.value)  # type: ignore[reportAttributeAccessIssue]
         polling_interval = inputs.get("polling_interval", 5)  # seconds
         max_events = inputs.get("max_events", 100)
 

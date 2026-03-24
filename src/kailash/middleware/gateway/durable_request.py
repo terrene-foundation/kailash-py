@@ -373,7 +373,7 @@ class DurableRequest:
                 },
             )
 
-    async def checkpoint(self, name: str, data: Dict[str, Any] = None) -> str:
+    async def checkpoint(self, name: str, data: Dict[str, Any] = None) -> str:  # type: ignore[reportArgumentType]
         """Create a checkpoint."""
         if self._cancel_event.is_set():
             raise asyncio.CancelledError("Request was cancelled")
@@ -582,7 +582,7 @@ class DurableRequest:
         # already-completed nodes (from a prior checkpoint) are skipped,
         # and newly completed nodes are recorded for subsequent checkpoints.
         result, run_id = await self.runtime.execute_async(
-            self.workflow,
+            self.workflow,  # type: ignore[reportArgumentType]
             cancellation_token=self._cancellation_token,
             execution_tracker=self._execution_tracker,
         )

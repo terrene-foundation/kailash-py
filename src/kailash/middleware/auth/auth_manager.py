@@ -358,7 +358,7 @@ class MiddlewareAuthManager:
                         for perm in required_permissions:
                             if perm not in user_permissions:
                                 # Check using permission node
-                                if not await self.check_permission(user_id, perm):
+                                if not await self.check_permission(user_id, perm):  # type: ignore[reportArgumentType]
                                     raise HTTPException(
                                         status_code=403,
                                         detail=f"Missing required permission: {perm}",
@@ -384,7 +384,7 @@ class MiddlewareAuthManager:
                         key_permissions = metadata.get("permissions", [])
                         for perm in required_permissions:
                             if perm not in key_permissions:
-                                if not await self.check_permission(user_id, perm):
+                                if not await self.check_permission(user_id, perm):  # type: ignore[reportArgumentType]
                                     raise HTTPException(
                                         status_code=403,
                                         detail=f"Missing required permission: {perm}",
@@ -405,7 +405,7 @@ class MiddlewareAuthManager:
 
 
 # Convenience function for creating auth dependencies
-def require_auth(permissions: List[str] = None):
+def require_auth(permissions: List[str] = None):  # type: ignore[reportArgumentType]
     """
     Create authentication dependency with required permissions.
 

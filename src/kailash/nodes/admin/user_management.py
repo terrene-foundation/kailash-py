@@ -610,7 +610,7 @@ class UserManagementNode(Node):
         elif email:
             user = self._get_user_by_email(email, tenant_id)
         else:
-            user = self._get_user_by_username(username, tenant_id)
+            user = self._get_user_by_username(username, tenant_id)  # type: ignore[reportArgumentType]
 
         return {
             "result": {

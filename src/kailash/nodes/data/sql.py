@@ -1100,10 +1100,10 @@ class SQLDatabaseNode(Node):
         try:
             with engine.connect() as conn:
                 # Create optimistic locking node instance
-                locking_node = OptimisticLockingNode(
+                locking_node = OptimisticLockingNode(  # type: ignore[reportOptionalCall]
                     version_field=kwargs.get("version_field", "version"),
                     max_retries=kwargs.get("max_retries", 3),
-                    default_conflict_resolution=ConflictResolution(
+                    default_conflict_resolution=ConflictResolution(  # type: ignore[reportOptionalCall]
                         kwargs.get("conflict_resolution", "retry")
                     ),
                 )

@@ -244,7 +244,7 @@ class QueryPipelineNode(Node):
             ),
         }
 
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:  # type: ignore[reportIncompatibleMethodOverride]
         """Execute queries in pipeline mode.
 
         Input can be:
@@ -381,22 +381,22 @@ class QueryPipelineNode(Node):
             pool = self._connection_pool
         # 2. Check context
         elif hasattr(self, "context"):
-            if hasattr(self.context, "resource_registry"):
-                pool = self.context.resource_registry.get(self.connection_pool_name)
+            if hasattr(self.context, "resource_registry"):  # type: ignore[reportAttributeAccessIssue]
+                pool = self.context.resource_registry.get(self.connection_pool_name)  # type: ignore[reportAttributeAccessIssue]
             elif (
-                hasattr(self.context, "resources")
-                and self.connection_pool_name in self.context.resources
+                hasattr(self.context, "resources")  # type: ignore[reportAttributeAccessIssue]
+                and self.connection_pool_name in self.context.resources  # type: ignore[reportAttributeAccessIssue]
             ):
-                pool = self.context.resources[self.connection_pool_name]
+                pool = self.context.resources[self.connection_pool_name]  # type: ignore[reportAttributeAccessIssue]
         # 3. Check runtime
         elif hasattr(self, "runtime"):
-            if hasattr(self.runtime, "resource_registry"):
-                pool = self.runtime.resource_registry.get(self.connection_pool_name)
+            if hasattr(self.runtime, "resource_registry"):  # type: ignore[reportAttributeAccessIssue]
+                pool = self.runtime.resource_registry.get(self.connection_pool_name)  # type: ignore[reportAttributeAccessIssue]
             elif (
-                hasattr(self.runtime, "resources")
-                and self.connection_pool_name in self.runtime.resources
+                hasattr(self.runtime, "resources")  # type: ignore[reportAttributeAccessIssue]
+                and self.connection_pool_name in self.runtime.resources  # type: ignore[reportAttributeAccessIssue]
             ):
-                pool = self.runtime.resources[self.connection_pool_name]
+                pool = self.runtime.resources[self.connection_pool_name]  # type: ignore[reportAttributeAccessIssue]
 
         if not pool:
             logger.error(f"Connection pool '{self.connection_pool_name}' not found")

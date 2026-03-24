@@ -256,7 +256,7 @@ class JWTAuthManager:
             headers = {"kid": self._key_id}
             token = jwt.encode(
                 payload_dict,
-                self._private_key,
+                self._private_key,  # type: ignore[reportArgumentType]
                 algorithm=self.config.algorithm,
                 headers=headers,
             )
@@ -264,7 +264,7 @@ class JWTAuthManager:
             # HS256 signing
             token = jwt.encode(
                 payload_dict,
-                self._secret_key,
+                self._secret_key,  # type: ignore[reportArgumentType]
                 algorithm=self.config.algorithm,
             )
 
@@ -310,14 +310,14 @@ class JWTAuthManager:
             headers = {"kid": self._key_id}
             token = jwt.encode(
                 payload_dict,
-                self._private_key,
+                self._private_key,  # type: ignore[reportArgumentType]
                 algorithm=self.config.algorithm,
                 headers=headers,
             )
         else:
             token = jwt.encode(
                 payload_dict,
-                self._secret_key,
+                self._secret_key,  # type: ignore[reportArgumentType]
                 algorithm=self.config.algorithm,
             )
 
@@ -393,7 +393,7 @@ class JWTAuthManager:
                 # Verify and decode token
                 payload = jwt.decode(
                     token,
-                    self._public_key,
+                    self._public_key,  # type: ignore[reportArgumentType]
                     algorithms=[self.config.algorithm],
                     issuer=self.config.issuer,
                     audience=self.config.audience,
@@ -402,7 +402,7 @@ class JWTAuthManager:
                 # HS256 verification
                 payload = jwt.decode(
                     token,
-                    self._secret_key,
+                    self._secret_key,  # type: ignore[reportArgumentType]
                     algorithms=[self.config.algorithm],
                     issuer=self.config.issuer,
                     audience=self.config.audience,

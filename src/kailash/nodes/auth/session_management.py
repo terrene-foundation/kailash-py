@@ -229,7 +229,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             ),
         }
 
-    def run(
+    def run(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         action: str,
         session_id: Optional[str] = None,
@@ -284,7 +284,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                         "success": False,
                         "error": "user_id and ip_address required for create",
                     }
-                result = self._create_session(user_id, ip_address, device_info)
+                result = self._create_session(user_id, ip_address, device_info)  # type: ignore[reportArgumentType]
                 self.session_stats["total_sessions_created"] += 1
 
             elif action == "validate":
@@ -577,7 +577,7 @@ class SessionManagementNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                 "success": True,
                 "session_updated": True,
                 "status": session_data.status.value,
-                "new_anomalies": new_anomalies if self.anomaly_detection else [],
+                "new_anomalies": new_anomalies if self.anomaly_detection else [],  # type: ignore[reportPossiblyUnbound]
                 "total_anomalies": len(session_data.anomaly_flags),
             }
 

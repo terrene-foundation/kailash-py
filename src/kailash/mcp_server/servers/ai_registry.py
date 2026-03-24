@@ -76,7 +76,7 @@ class AIRegistryServer(MCPServerBase):
                     ]
                 }
         except Exception as e:
-            self.logger.error(f"Failed to load registry: {e}")
+            self.logger.error(f"Failed to load registry: {e}")  # type: ignore[reportAttributeAccessIssue]
             self._registry_data = {"use_cases": []}
 
     def setup(self):

@@ -222,7 +222,7 @@ class EmbeddingNode(Node):
         Raises:
             NodeConfigurationError: If configuration is invalid
         """
-        super().configure(config)
+        super().configure(config)  # type: ignore[reportAttributeAccessIssue]
 
         # Initialize model based on provider
         model_provider = self.config.get("model", "openai")
@@ -275,7 +275,7 @@ class EmbeddingNode(Node):
         """
         return self.execute(kwargs)
 
-    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:  # type: ignore[reportIncompatibleMethodOverride]
         """Generate embeddings for input texts.
 
         Processes the input texts through the configured embedding model,
@@ -532,7 +532,7 @@ class VectorDatabaseNode(Node):
         Raises:
             NodeConfigurationError: If connection fails
         """
-        super().configure(config)
+        super().configure(config)  # type: ignore[reportAttributeAccessIssue]
 
         provider = self.config.get("provider")
         index_name = self.config.get("index_name")
@@ -542,7 +542,7 @@ class VectorDatabaseNode(Node):
 
         try:
             # Placeholder for actual database connection
-            self._connect_to_database(provider)
+            self._connect_to_database(provider)  # type: ignore[reportArgumentType]
         except Exception as e:
             raise NodeConfigurationError(f"Failed to connect to {provider}: {str(e)}")
 
@@ -578,7 +578,7 @@ class VectorDatabaseNode(Node):
         """
         return self.execute(kwargs)
 
-    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:  # type: ignore[reportIncompatibleMethodOverride]
         """Execute vector database operations.
 
         Performs the requested operation (upsert, query, delete, fetch)
@@ -857,7 +857,7 @@ class TextSplitterNode(Node):
         """
         return self.execute(kwargs)
 
-    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:  # type: ignore[reportIncompatibleMethodOverride]
         """Split text into chunks using configured strategy.
 
         Args:

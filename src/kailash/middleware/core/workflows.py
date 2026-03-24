@@ -352,7 +352,7 @@ class WorkflowBasedMiddleware:
             self.workflows["session_creation"], parameters=inputs
         )
 
-        return results.get("session_id")
+        return results.get("session_id")  # type: ignore[reportReturnType]
 
     async def monitor_execution(
         self, execution_id: str, execution_data: Dict[str, Any]

@@ -75,7 +75,7 @@ class RedisStorage(StorageBackend):
         self.key_prefix = key_prefix
         self._redis: Any = None
 
-    async def _get_redis(self) -> redis.Redis:
+    async def _get_redis(self) -> redis.Redis:  # type: ignore[reportInvalidTypeForm]
         """Get Redis connection."""
         if self._redis is None:
             self._redis = await redis.from_url(
@@ -183,7 +183,7 @@ class PostgreSQLStorage(StorageBackend):
     async def _ensure_table(self) -> None:
         """Ensure storage table exists."""
         pool = self._pool
-        async with pool.acquire() as conn:
+        async with pool.acquire() as conn:  # type: ignore[reportOptionalMemberAccess]
             await conn.execute(
                 f"""
                 CREATE TABLE IF NOT EXISTS {self.table_name} (
@@ -261,7 +261,7 @@ class RedisEventStorage:
         self.key_prefix = key_prefix
         self._redis: Any = None
 
-    async def _get_redis(self) -> redis.Redis:
+    async def _get_redis(self) -> redis.Redis:  # type: ignore[reportInvalidTypeForm]
         """Get Redis connection."""
         if self._redis is None:
             self._redis = await redis.from_url(
@@ -344,7 +344,7 @@ class PostgreSQLEventStorage:
     async def _ensure_table(self) -> None:
         """Ensure events table exists."""
         pool = self._pool
-        async with pool.acquire() as conn:
+        async with pool.acquire() as conn:  # type: ignore[reportOptionalMemberAccess]
             await conn.execute(
                 f"""
                 CREATE TABLE IF NOT EXISTS {self.table_name} (

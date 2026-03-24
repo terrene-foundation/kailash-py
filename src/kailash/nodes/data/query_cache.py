@@ -158,12 +158,12 @@ class QueryCache:
         self.invalidation_strategy = invalidation_strategy
 
         self.key_generator = QueryCacheKey(key_prefix)
-        self._redis: Optional[redis.Redis] = None
+        self._redis: Optional[redis.Redis] = None  # type: ignore[reportInvalidTypeForm]
 
-    def _get_redis(self) -> redis.Redis:
+    def _get_redis(self) -> redis.Redis:  # type: ignore[reportInvalidTypeForm]
         """Get Redis connection."""
         if self._redis is None:
-            self._redis = redis.Redis(
+            self._redis = redis.Redis(  # type: ignore[reportOptionalMemberAccess]
                 host=self.redis_host,
                 port=self.redis_port,
                 db=self.redis_db,
