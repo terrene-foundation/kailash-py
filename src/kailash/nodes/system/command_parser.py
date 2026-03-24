@@ -31,7 +31,7 @@ class ParsedCommand:
     command_name: str
     arguments: Dict[str, Any]
     subcommand: Optional[str] = None
-    flags: List[str] = None
+    flags: List[str] | None = None
     raw_command: str = ""
     error: Optional[str] = None
 
@@ -482,8 +482,7 @@ class InteractiveShellNode(Node):
                 session_state["environment"] = {}
             if "working_directory" not in session_state:
                 session_state["working_directory"] = "/"
-            if "last_command_time" not in session_state:
-                session_state["last_command_time"] = None
+            if "last_command_time" not in session_state: session_state["last_command_time"] | None = None
 
             # Process special shell commands BEFORE adding to history
             shell_result = self._process_shell_commands(command_input, session_state)

@@ -193,7 +193,7 @@ class EnterpriseMLCPExecutorNode(Node):
         tags={"enterprise", "mcp", "resilience"},
     )
 
-    def __init__(self, name: str = None, **kwargs):
+    def __init__(self, name: str | None = None, **kwargs):
         self.name = name or self.__class__.__name__
         super().__init__(name=self.name, **kwargs)
 
@@ -291,8 +291,7 @@ class EnterpriseMLCPExecutorNode(Node):
                             },
                         },
                     }
-            else:
-                cb = None
+            else: cb | None = None
                 circuit_state = CircuitState.CLOSED
 
             # Execute the MCP tool call

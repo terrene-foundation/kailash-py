@@ -469,7 +469,7 @@ class RESTClientNode(Node):
         return all_items
 
     def _get_nested_value(
-        self, obj: dict[str, Any], path: str, default: Any = None
+        self, obj: dict[str, Any], path: str, default: Any | None = None
     ) -> Any:
         """Get a nested value from a dictionary using a dot-separated path.
 

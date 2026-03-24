@@ -195,8 +195,8 @@ class TransactionContextNode(AsyncNode):
 
     def __init__(
         self,
-        transaction_name: str = None,
-        context_id: str = None,
+        transaction_name: str | None = None,
+        context_id: str | None = None,
         pattern: Union[TransactionPattern, str] = TransactionPattern.AUTO,
         requirements: Optional[Dict[str, Any]] = None,
         auto_wrap_bulk_operations: bool = True,

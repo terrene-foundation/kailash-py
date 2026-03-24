@@ -186,7 +186,7 @@ class LocalNodeTransport:
     implementation while allowing callers to inject real executors.
     """
 
-    def __init__(self, executor: Any = None) -> None:
+    def __init__(self, executor: Any | None = None) -> None:
         """Initialise with an optional ``NodeExecutor``.
 
         Args:

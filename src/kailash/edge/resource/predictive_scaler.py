@@ -22,6 +22,8 @@ try:
 
     STATSMODELS_AVAILABLE = True
 except ImportError:
+    ARIMA: Any = None  # type: ignore[no-redef]
+    ExponentialSmoothing: Any = None  # type: ignore[no-redef]
     STATSMODELS_AVAILABLE = False
 
 
@@ -294,7 +296,9 @@ class PredictiveScaler:
             "resource_type": resource_type,
             "current_utilization": utilizations[-1] if utilizations else 0,
             "forecast": forecast,
-            "confidence_intervals": self._calculate_confidence_intervals(forecast),
+            "confidence_intervals": self._calculate_confidence_intervals(
+                [f["value"] for f in forecast] if forecast else []
+            ),
         }
 
     async def evaluate_scaling_decision(
@@ -943,7 +947,7 @@ class PredictiveScaler:
 
             # Predict value
             predicted_value, confidence = await self._predict_usage(
-                values, timestamps, interval_seconds * i
+                values, timestamps, int(interval_seconds * i)
             )
 
             forecast_points.append(

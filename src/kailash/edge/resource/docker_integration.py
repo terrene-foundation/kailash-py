@@ -3,7 +3,7 @@
 import asyncio
 import base64
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
@@ -15,6 +15,7 @@ try:
 
     DOCKER_AVAILABLE = True
 except ImportError:
+    docker: Any = None  # type: ignore[no-redef]
     DOCKER_AVAILABLE = False
 
 
@@ -56,26 +57,19 @@ class ContainerSpec:
     name: str
     image: str
     command: Optional[List[str]] = None
-    environment: Optional[Dict[str, str]] = None
-    ports: Optional[Dict[str, int]] = None  # container_port -> host_port
-    volumes: Optional[Dict[str, str]] = None  # host_path -> container_path
+    environment: Dict[str, str] = field(default_factory=dict)
+    ports: Dict[str, int] = field(default_factory=dict)  # container_port -> host_port
+    volumes: Dict[str, str] = field(default_factory=dict)  # host_path -> container_path
     restart_policy: RestartPolicyType = RestartPolicyType.UNLESS_STOPPED
     memory_limit: Optional[str] = None  # e.g., "512m", "1g"
     cpu_limit: Optional[float] = None  # CPU cores
     network_mode: NetworkMode = NetworkMode.BRIDGE
-    labels: Optional[Dict[str, str]] = None
+    labels: Dict[str, str] = field(default_factory=dict)
     edge_node: Optional[str] = None
     healthcheck: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
-        if self.environment is None:
-            self.environment = {}
-        if self.ports is None:
-            self.ports = {}
-        if self.volumes is None:
-            self.volumes = {}
-        if self.labels is None:
-            self.labels = {}
+        pass
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -153,30 +147,19 @@ class ServiceSpec:
     image: str
     replicas: int = 1
     command: Optional[List[str]] = None
-    environment: Optional[Dict[str, str]] = None
-    ports: Optional[List[Dict[str, Any]]] = None
-    volumes: Optional[List[Dict[str, str]]] = None
-    constraints: Optional[List[str]] = None
-    placement_preferences: Optional[List[Dict[str, Any]]] = None
+    environment: Dict[str, str] = field(default_factory=dict)
+    ports: List[Dict[str, Any]] = field(default_factory=list)
+    volumes: List[Dict[str, str]] = field(default_factory=list)
+    constraints: List[str] = field(default_factory=list)
+    placement_preferences: List[Dict[str, Any]] = field(default_factory=list)
     restart_policy: Optional[Dict[str, Any]] = None
     update_config: Optional[Dict[str, Any]] = None
     rollback_config: Optional[Dict[str, Any]] = None
-    labels: Optional[Dict[str, str]] = None
+    labels: Dict[str, str] = field(default_factory=dict)
     edge_node: Optional[str] = None
 
     def __post_init__(self):
-        if self.environment is None:
-            self.environment = {}
-        if self.ports is None:
-            self.ports = []
-        if self.volumes is None:
-            self.volumes = []
-        if self.constraints is None:
-            self.constraints = []
-        if self.placement_preferences is None:
-            self.placement_preferences = []
-        if self.labels is None:
-            self.labels = {}
+        pass
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -288,7 +271,7 @@ class DockerIntegration:
         self.timeout = timeout
 
         # Docker clients
-        self.docker_client: Optional[docker.DockerClient] = None
+        self.docker_client: Any = None
         self.swarm_enabled = False
 
         # Container tracking

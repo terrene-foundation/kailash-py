@@ -21,7 +21,7 @@ class MCPServiceDiscoveryNode(Node):
         tags={"enterprise", "mcp", "service-discovery"},
     )
 
-    def __init__(self, name: str = None, **kwargs):
+    def __init__(self, name: str | None = None, **kwargs):
         self.name = name or self.__class__.__name__
         super().__init__(name=self.name, **kwargs)
 
@@ -52,7 +52,7 @@ class MCPServiceDiscoveryNode(Node):
         self,
         tenant: Dict,
         user_context: Dict,
-        service_requirements: List[str] = None,
+        service_requirements: List[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """Discover available MCP services for the tenant."""

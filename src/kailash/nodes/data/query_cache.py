@@ -486,7 +486,7 @@ class QueryCache:
 
 
 # Factory function for creating query cache
-def create_query_cache(config: Dict[str, Any] = None) -> QueryCache:
+def create_query_cache(config: Dict[str, Any] | None = None) -> QueryCache:
     """Create a query cache instance with configuration.
 
     Args:

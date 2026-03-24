@@ -116,7 +116,7 @@ class MCPServerBase(ABC):
         self.name = name
         self.port = port
         self.host = host
-        self._mcp = None
+        self._mcp: Any = None
         self._running = False
 
     @abstractmethod

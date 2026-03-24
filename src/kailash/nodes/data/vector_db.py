@@ -138,7 +138,7 @@ class EmbeddingNode(Node):
         tags={"embedding", "nlp", "vector"},
     )
 
-    def __init__(self, name: str = None, id: str = None, **kwargs):
+    def __init__(self, name: str | None = None, id: str | None = None, **kwargs):
         """Initialize the embedding node.
 
         Sets up the node with default configuration and prepares for
@@ -453,7 +453,7 @@ class VectorDatabaseNode(Node):
         tags={"vector", "database", "storage"},
     )
 
-    def __init__(self, name: str = None, id: str = None, **kwargs):
+    def __init__(self, name: str | None = None, id: str | None = None, **kwargs):
         """Initialize the vector database node.
 
         Sets up the node and prepares for database connection.
@@ -784,7 +784,7 @@ class TextSplitterNode(Node):
         tags={"text", "processing", "nlp"},
     )
 
-    def __init__(self, name: str = None, id: str = None, **kwargs):
+    def __init__(self, name: str | None = None, id: str | None = None, **kwargs):
         """Initialize the text splitter node.
 
         Sets up the node with default configuration.

@@ -68,7 +68,7 @@ class PortMetadata:
     name: str
     description: str = ""
     required: bool = True
-    default: Any = None
+    default: Any | None = None
     constraints: Dict[str, Any] = field(default_factory=dict)
     examples: List[Any] = field(default_factory=list)
 
@@ -160,7 +160,7 @@ class Port(Generic[T], ABC):
             if args:
                 self._type_hint = args[0]
 
-    def __get__(self, instance: Any, owner: Type = None) -> "Port[T]":
+    def __get__(self, instance: Any, owner: Type | None = None) -> "Port[T]":
         """Descriptor protocol - return port instance bound to node."""
         if instance is None:
             return self

@@ -173,7 +173,7 @@ class GraphQLClientNode(Node):
     def _build_graphql_payload(
         self,
         query: str,
-        variables: dict[str, Any] = None,
+        variables: dict[str, Any] | None = None,
         operation_name: str | None = None,
     ) -> dict[str, Any]:
         """Build a GraphQL request payload.

@@ -205,15 +205,15 @@ class DistributedTransactionManagerNode(AsyncNode):
 
     def __init__(
         self,
-        transaction_name: str = None,
-        transaction_id: str = None,
+        transaction_name: str | None = None,
+        transaction_id: str | None = None,
         default_pattern: Union[TransactionPattern, str] = TransactionPattern.AUTO,
         default_timeout: int = 300,
         state_storage: str = "memory",
-        storage_config: Dict[str, Any] = None,
+        storage_config: Dict[str, Any] | None = None,
         monitoring_enabled: bool = True,
         audit_logging: bool = False,
-        retry_policy: Dict[str, Any] = None,
+        retry_policy: Dict[str, Any] | None = None,
         **kwargs,
     ):
         """Initialize Distributed Transaction Manager.

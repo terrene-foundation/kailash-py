@@ -321,8 +321,7 @@ class ConvergenceCheckerNode(CycleAwareNode):
         # Track convergence start time
         if converged and convergence_start_iteration is None:
             convergence_start_iteration = iteration
-        elif not converged:
-            convergence_start_iteration = None
+        elif not converged: convergence_start_iteration | None = None
 
         metrics["convergence_start_iteration"] = convergence_start_iteration
 

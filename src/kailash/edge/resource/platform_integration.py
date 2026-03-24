@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -54,12 +54,11 @@ class PlatformConfig:
 
     platform_type: PlatformType
     enabled: bool = True
-    config: Optional[Dict[str, Any]] = None
+    config: Dict[str, Any] = field(default_factory=dict)
     priority: int = 1  # Lower numbers = higher priority
 
     def __post_init__(self):
-        if self.config is None:
-            self.config = {}
+        pass
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -78,14 +77,11 @@ class ResourceRequest:
     resource_spec: Dict[str, Any]
     platform_preference: Optional[PlatformType] = None
     scope: ResourceScope = ResourceScope.NODE
-    tags: Optional[Dict[str, str]] = None
-    created_at: Optional[datetime] = None
+    tags: Dict[str, str] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=datetime.now)
 
     def __post_init__(self):
-        if self.created_at is None:
-            self.created_at = datetime.now()
-        if self.tags is None:
-            self.tags = {}
+        pass
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -689,6 +685,8 @@ class PlatformIntegration:
                 labels=request.tags,
             )
 
+            if self.kubernetes_integration is None:
+                raise RuntimeError("Kubernetes integration not initialized")
             result = await self.kubernetes_integration.create_resource(resource)
 
             return {
@@ -719,6 +717,8 @@ class PlatformIntegration:
                 edge_node=request.edge_node,
             )
 
+            if self.docker_integration is None:
+                raise RuntimeError("Docker integration not initialized")
             result = await self.docker_integration.create_container(container_spec)
 
             return {
@@ -749,6 +749,8 @@ class PlatformIntegration:
                 edge_node=request.edge_node,
             )
 
+            if self.cloud_integration is None:
+                raise RuntimeError("Cloud integration not initialized")
             result = await self.cloud_integration.create_instance(spec)
 
             return {

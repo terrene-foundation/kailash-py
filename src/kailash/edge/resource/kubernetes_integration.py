@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
@@ -15,6 +15,10 @@ try:
 
     KUBERNETES_AVAILABLE = True
 except ImportError:
+    client: Any = None
+    config: Any = None
+    watch: Any = None
+    ApiException = Exception  # type: ignore[assignment,misc]
     KUBERNETES_AVAILABLE = False
 
 
@@ -51,21 +55,14 @@ class KubernetesResource:
     namespace: str
     resource_type: KubernetesResourceType
     spec: Dict[str, Any]
-    labels: Optional[Dict[str, str]] = None
-    annotations: Optional[Dict[str, str]] = None
+    labels: Dict[str, str] = field(default_factory=dict)
+    annotations: Dict[str, str] = field(default_factory=dict)
     edge_node: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
 
     def __post_init__(self):
-        if self.created_at is None:
-            self.created_at = datetime.now()
-        if self.updated_at is None:
-            self.updated_at = datetime.now()
-        if self.labels is None:
-            self.labels = {}
-        if self.annotations is None:
-            self.annotations = {}
+        pass
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -215,10 +212,10 @@ class KubernetesIntegration:
         self.namespace = namespace
 
         # Kubernetes clients
-        self.core_v1 = None
-        self.apps_v1 = None
-        self.autoscaling_v2 = None
-        self.custom_objects = None
+        self.core_v1: Any = None
+        self.apps_v1: Any = None
+        self.autoscaling_v2: Any = None
+        self.custom_objects: Any = None
 
         # Resource cache
         self.resources: Dict[str, KubernetesResource] = {}

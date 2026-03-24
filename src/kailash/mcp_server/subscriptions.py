@@ -18,7 +18,7 @@ try:
 
     REDIS_AVAILABLE = True
 except ImportError:
-    redis = None
+    redis: Any = None  # type: ignore[no-redef]
     REDIS_AVAILABLE = False
 
 from .auth import AuthManager
@@ -74,7 +74,10 @@ class DataEnrichmentTransformer(ResourceTransformer):
     """Transformer that adds computed fields and metadata."""
 
     def __init__(
-        self, enrichment_functions: Dict[str, Callable[[Dict[str, Any]], Any]] = None
+        self,
+        enrichment_functions: Optional[
+            Dict[str, Callable[[Dict[str, Any]], Any]]
+        ] = None,
     ):
         self.enrichment_functions = enrichment_functions or {}
 
@@ -118,7 +121,7 @@ class DataEnrichmentTransformer(ResourceTransformer):
 class FormatConverterTransformer(ResourceTransformer):
     """Transformer that converts between data formats."""
 
-    def __init__(self, conversions: Dict[str, Callable[[Any], Any]] = None):
+    def __init__(self, conversions: Optional[Dict[str, Callable[[Any], Any]]] = None):
         self.conversions = conversions or {}
 
     def add_conversion(self, field_pattern: str, converter: Callable[[Any], Any]):
@@ -180,7 +183,7 @@ class FormatConverterTransformer(ResourceTransformer):
 class AggregationTransformer(ResourceTransformer):
     """Transformer that aggregates data from multiple sources."""
 
-    def __init__(self, data_sources: Dict[str, Callable[[str], Any]] = None):
+    def __init__(self, data_sources: Optional[Dict[str, Callable[[str], Any]]] = None):
         self.data_sources = data_sources or {}
 
     def add_data_source(self, source_name: str, fetcher: Callable[[str], Any]):
@@ -616,10 +619,10 @@ class ResourceSubscriptionManager:
     def __init__(
         self,
         auth_manager: Optional[AuthManager] = None,
-        event_store=None,
-        rate_limiter=None,
+        event_store: Any = None,
+        rate_limiter: Any = None,
     ):
-        self.auth_manager = auth_manager
+        self.auth_manager: Any = auth_manager
         self.event_store = event_store
         self.rate_limiter = rate_limiter
 
@@ -1152,8 +1155,8 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
         self.instance_timeout = instance_timeout
 
         # Redis connections
-        self.redis_client: Optional[redis.Redis] = None
-        self.redis_pubsub: Optional[redis.Redis] = None
+        self.redis_client: Any = None
+        self.redis_pubsub: Any = None
 
         # Instance management
         self._heartbeat_task: Optional[asyncio.Task] = None
@@ -1238,12 +1241,23 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
         )
 
     async def create_subscription(
-        self, connection_id: str, uri_pattern: str, **kwargs
+        self,
+        connection_id: str,
+        uri_pattern: str,
+        user_context: Optional[Dict[str, Any]] = None,
+        cursor: Optional[str] = None,
+        fields: Optional[List[str]] = None,
+        fragments: Optional[Dict[str, List[str]]] = None,
     ) -> str:
         """Create subscription and replicate to Redis."""
         # Create local subscription
         subscription_id = await super().create_subscription(
-            connection_id, uri_pattern, **kwargs
+            connection_id,
+            uri_pattern,
+            user_context=user_context,
+            cursor=cursor,
+            fields=fields,
+            fragments=fragments,
         )
 
         # Replicate to Redis

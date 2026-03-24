@@ -138,7 +138,7 @@ class KafkaConsumerNode(Node):
         tags={"streaming", "kafka", "consumer"},
     )
 
-    def __init__(self, name: str = None, id: str = None, **kwargs):
+    def __init__(self, name: str | None = None, id: str | None = None, **kwargs):
         """Initialize the Kafka consumer node.
 
         Sets up the node and prepares for consumer initialization.
@@ -426,7 +426,7 @@ class StreamPublisherNode(Node):
         tags={"streaming", "publisher", "messaging"},
     )
 
-    def __init__(self, name: str = None, id: str = None, **kwargs):
+    def __init__(self, name: str | None = None, id: str | None = None, **kwargs):
         """Initialize the stream publisher node.
 
         Sets up the node and prepares for publisher initialization.
@@ -717,7 +717,7 @@ class WebSocketNode(Node):
         tags={"streaming", "websocket", "data"},
     )
 
-    def __init__(self, name: str = None, id: str = None, **kwargs):
+    def __init__(self, name: str | None = None, id: str | None = None, **kwargs):
         """Initialize the WebSocket node.
 
         Sets up the node and prepares for WebSocket connection.
@@ -1050,7 +1050,7 @@ class EventStreamNode(Node):
         tags={"streaming", "sse", "data"},
     )
 
-    def __init__(self, name: str = None, id: str = None, **kwargs):
+    def __init__(self, name: str | None = None, id: str | None = None, **kwargs):
         """Initialize the EventStream node.
 
         Sets up the node and prepares for SSE connection.

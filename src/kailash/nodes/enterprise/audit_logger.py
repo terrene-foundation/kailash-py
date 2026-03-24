@@ -23,7 +23,7 @@ class EnterpriseAuditLoggerNode(Node):
         tags={"enterprise", "audit", "compliance"},
     )
 
-    def __init__(self, name: str = None, **kwargs):
+    def __init__(self, name: str | None = None, **kwargs):
         self.name = name or self.__class__.__name__
         super().__init__(name=self.name, **kwargs)
 

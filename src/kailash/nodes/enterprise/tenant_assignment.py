@@ -22,7 +22,7 @@ class TenantAssignmentNode(Node):
         tags={"enterprise", "tenant", "security"},
     )
 
-    def __init__(self, name: str = None, **kwargs):
+    def __init__(self, name: str | None = None, **kwargs):
         self.name = name or self.__class__.__name__
         super().__init__(name=self.name, **kwargs)
 
@@ -51,7 +51,7 @@ class TenantAssignmentNode(Node):
         }
 
     def run(
-        self, user_id: str, verified: bool = False, attributes: Dict = None, **kwargs
+        self, user_id: str, verified: bool = False, attributes: Dict | None = None, **kwargs
     ) -> Dict[str, Any]:
         """Assign tenant based on user information."""
         try:

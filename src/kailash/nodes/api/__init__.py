@@ -22,8 +22,7 @@ from .auth import APIKeyNode, BasicAuthNode, OAuth2Node
 
 try:
     from .graphql import AsyncGraphQLClientNode, GraphQLClientNode
-except ImportError:
-    AsyncGraphQLClientNode = None  # type: ignore[assignment,misc]
+except ImportError: AsyncGraphQLClientNode | None = None  # type: ignore[assignment,misc]
     GraphQLClientNode = None  # type: ignore[assignment,misc]
 
 from .http import AsyncHTTPRequestNode, HTTPRequestNode

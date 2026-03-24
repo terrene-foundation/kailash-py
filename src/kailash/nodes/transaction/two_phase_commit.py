@@ -175,15 +175,15 @@ class TwoPhaseCommitCoordinatorNode(AsyncNode):
 
     def __init__(
         self,
-        transaction_name: str = None,
-        transaction_id: str = None,
-        participants: List[str] = None,
+        transaction_name: str | None = None,
+        transaction_id: str | None = None,
+        participants: List[str] | None = None,
         timeout: int = 300,
         prepare_timeout: int = 30,
         commit_timeout: int = 30,
         max_retries: int = 3,
         state_storage: str = "memory",
-        storage_config: Dict[str, Any] = None,
+        storage_config: Dict[str, Any] | None = None,
         transport: Optional[ParticipantTransport] = None,
         **kwargs,
     ):

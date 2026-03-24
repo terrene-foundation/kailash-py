@@ -206,6 +206,10 @@ class CostOptimizer:
         # Background task
         self._optimization_task: Optional[asyncio.Task] = None
 
+        # Edge monitor and utilization cache (set via dependency injection)
+        self._edge_monitor: Any = None
+        self._utilization_cache: Dict[str, float] = {}
+
         self.logger = logging.getLogger(__name__)
 
         # Initialize default pricing data
@@ -909,8 +913,8 @@ class CostOptimizer:
         """Analyze usage patterns for a provider."""
         provider_metrics = [m for m in self.cost_metrics if m.provider == provider]
 
-        usage_patterns = defaultdict(
-            lambda: {"total_hours": 0, "consistency": 0, "monthly_cost": 0}
+        usage_patterns: Dict[str, Dict[str, float]] = defaultdict(
+            lambda: {"total_hours": 0.0, "consistency": 0.0, "monthly_cost": 0.0}
         )
 
         for metric in provider_metrics:

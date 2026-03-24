@@ -195,7 +195,7 @@ class ValidationTestExecutor:
         )
 
     def execute_code_safely(
-        self, code: str, inputs: Dict[str, Any] = None
+        self, code: str, inputs: Dict[str, Any] | None = None
     ) -> ValidationResult:
         """Execute code in a safe environment and capture results.
 

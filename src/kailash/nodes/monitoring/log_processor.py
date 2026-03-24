@@ -533,8 +533,7 @@ class LogProcessorNode(AsyncNode):
                                 "minute": dt.minute,
                                 "weekday": dt.strftime("%A"),
                             }
-                        except Exception:
-                            log_entry[field_name] = None
+                        except Exception: log_entry[field_name] | None = None
 
                     elif computation["type"] == "field_extraction":
                         # Extract field using regex

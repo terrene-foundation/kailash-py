@@ -222,14 +222,14 @@ class SQLDatabaseNode(Node):
 
     def __init__(
         self,
-        connection_string: str = None,
+        connection_string: str | None = None,
         pool_size: int = 5,
         max_overflow: int = 10,
         pool_timeout: int = 30,
         pool_recycle: int = 3600,
         pool_pre_ping: bool = True,
         echo: bool = False,
-        connect_args: dict = None,
+        connect_args: dict | None = None,
         **kwargs,
     ):
         """Initialize SQLDatabaseNode with direct database connection configuration.
@@ -737,7 +737,7 @@ class SQLDatabaseNode(Node):
         self,
         connection_string: str,
         timeout: int,
-        db_config: dict = None,
+        db_config: dict | None = None,
         max_retries: int = 3,
     ):
         """Implement connection retry logic with exponential backoff.

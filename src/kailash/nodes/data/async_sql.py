@@ -71,8 +71,7 @@ except ImportError:
 
 try:
     from kailash.core.pool.sqlite_pool import AsyncSQLitePool, SQLitePoolConfig
-except ImportError:
-    AsyncSQLitePool = None  # type: ignore[assignment,misc]
+except ImportError: AsyncSQLitePool | None = None  # type: ignore[assignment,misc]
     SQLitePoolConfig = None  # type: ignore[assignment,misc]
 
     # Define minimal enums if not available
@@ -928,7 +927,7 @@ class DatabaseAdapter(ABC):
         self._pool = None
         self._connected: bool = False
         self._runtime_coordinated: bool = False
-        self._runtime_pool: Any = None
+        self._runtime_pool: Any | None = None
 
     def _convert_row(self, row: dict) -> dict:
         """Convert database-specific types to JSON-serializable types."""
@@ -1524,7 +1523,7 @@ class SQLiteAdapter(DatabaseAdapter):
         self._connection = None
         self._memory_db_name = memory_db_name
         # Connection pool (initialized in connect())
-        self._pool: Any = None
+        self._pool: Any | None = None
         # Transaction nesting support (for SQLite nested transaction bug fix)
         self._transaction_depth = 0
         self._savepoint_counter = 0
@@ -3065,8 +3064,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 metrics["current_loop_locks"] = len(
                     cls._pool_locks_by_loop.get(current_loop_id, {})
                 )
-            except RuntimeError:
-                metrics["current_event_loop"] = None
+            except RuntimeError: metrics["current_event_loop"] | None = None
                 metrics["current_loop_locks"] = 0
 
             return metrics
@@ -4316,7 +4314,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
         params: Any,
         fetch_mode: FetchMode,
         fetch_size: Optional[int],
-        user_context: Any = None,
+        user_context: Any | None = None,
         parameter_types: Optional[dict[str, str]] = None,
     ) -> Any:
         """Execute query with retry logic for transient failures.

@@ -15,8 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 try:
     import psutil
-except ImportError:
-    psutil = None  # Optional: pip install kailash[monitoring]
+except ImportError: psutil | None = None  # Optional: pip install kailash[monitoring]
 
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
@@ -376,7 +375,7 @@ class MetricsCollectorNode(AsyncNode):
         return metrics
 
     async def _collect_process_metrics(
-        self, include_current: bool = True, process_ids: List[int] = None
+        self, include_current: bool = True, process_ids: List[int] | None = None
     ) -> List[Dict[str, Any]]:
         """Collect process-level metrics."""
         metrics = []

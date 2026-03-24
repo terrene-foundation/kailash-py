@@ -58,13 +58,13 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
     def __init__(
         self,
         name: str = "sso_auth",
-        providers: List[str] = None,
-        saml_settings: Dict[str, Any] = None,
-        oauth_settings: Dict[str, Any] = None,
-        ldap_settings: Dict[str, Any] = None,
-        jwt_settings: Dict[str, Any] = None,
+        providers: List[str] | None = None,
+        saml_settings: Dict[str, Any] | None = None,
+        oauth_settings: Dict[str, Any] | None = None,
+        ldap_settings: Dict[str, Any] | None = None,
+        jwt_settings: Dict[str, Any] | None = None,
         enable_jit_provisioning: bool = True,
-        attribute_mapping: Dict[str, str] = None,
+        attribute_mapping: Dict[str, str] | None = None,
         encryption_enabled: bool = True,
         session_timeout: timedelta = timedelta(hours=8),
         max_concurrent_sessions: int = 5,
@@ -157,12 +157,12 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
     def run(
         self,
         action: str,
-        provider: str = None,
-        request_data: Dict[str, Any] = None,
-        user_id: str = None,
-        redirect_uri: str = None,
-        attributes: Dict[str, Any] = None,
-        callback_data: Dict[str, Any] = None,
+        provider: str | None = None,
+        request_data: Dict[str, Any] | None = None,
+        user_id: str | None = None,
+        redirect_uri: str | None = None,
+        attributes: Dict[str, Any] | None = None,
+        callback_data: Dict[str, Any] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """
@@ -227,12 +227,12 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
     def _run_sync_fallback(
         self,
         action: str,
-        provider: str = None,
-        request_data: Dict[str, Any] = None,
-        user_id: str = None,
-        redirect_uri: str = None,
-        attributes: Dict[str, Any] = None,
-        callback_data: Dict[str, Any] = None,
+        provider: str | None = None,
+        request_data: Dict[str, Any] | None = None,
+        user_id: str | None = None,
+        redirect_uri: str | None = None,
+        attributes: Dict[str, Any] | None = None,
+        callback_data: Dict[str, Any] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """Synchronous fallback implementation for SSO operations."""
@@ -300,12 +300,12 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
     async def async_run(
         self,
         action: str,
-        provider: str = None,
-        request_data: Dict[str, Any] = None,
-        user_id: str = None,
-        redirect_uri: str = None,
-        attributes: Dict[str, Any] = None,
-        callback_data: Dict[str, Any] = None,
+        provider: str | None = None,
+        request_data: Dict[str, Any] | None = None,
+        user_id: str | None = None,
+        redirect_uri: str | None = None,
+        attributes: Dict[str, Any] | None = None,
+        callback_data: Dict[str, Any] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """
@@ -970,7 +970,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         user_id: str,
         provider: str,
         attributes: Dict[str, Any],
-        tokens: Dict[str, Any] = None,
+        tokens: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Create SSO session for authenticated user."""
         session_id = str(uuid.uuid4())

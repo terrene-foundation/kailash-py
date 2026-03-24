@@ -76,7 +76,7 @@ class SessionData:
     city: Optional[str] = None
 
     # Session metadata
-    metadata: Dict[str, Any] = None
+    metadata: Dict[str, Any] | None = None
 
 
 @register_node()
