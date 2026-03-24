@@ -4,14 +4,16 @@ This module provides a Redis node for performing various Redis operations
 including get, set, hget, hset, hgetall, and more.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 from typing import Any, Dict, List, Optional, Union
 
 try:
-    import redis
+    import redis as _redis_mod
 except ImportError:
-    redis = None  # type: ignore[assignment]  # Optional dependency
+    _redis_mod = None  # type: ignore[assignment]  # Optional dependency
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.sdk_exceptions import NodeExecutionError
@@ -202,10 +204,10 @@ class RedisNode(Node):
             ),
         }
 
-    def _get_client(self) -> redis.Redis:
+    def _get_client(self) -> _redis_mod.Redis:
         """Get or create Redis client."""
         if not self._client:
-            self._client = redis.Redis(
+            self._client = _redis_mod.Redis(
                 host=self.host,
                 port=self.port,
                 db=self.db,
@@ -363,7 +365,7 @@ class RedisNode(Node):
 
             return {"result": result}
 
-        except redis.RedisError as e:
+        except _redis_mod.RedisError as e:
             logger.error(f"Redis error: {e}")
             raise NodeExecutionError(f"Redis operation failed: {str(e)}")
         except Exception as e:

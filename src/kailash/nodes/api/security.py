@@ -307,7 +307,7 @@ class SecurityScannerNode(Node):
                         cert = ssock.getpeercert()
 
                         if cert is None:
-                            continue
+                            return findings
 
                         # Check certificate expiration
                         not_after = datetime.strptime(

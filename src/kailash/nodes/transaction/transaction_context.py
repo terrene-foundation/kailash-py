@@ -229,7 +229,7 @@ class TransactionContextNode(AsyncNode):
         )
 
         # Initialize AsyncNode
-        super().__init__(metadata=metadata, **kwargs)
+        super().__init__(metadata=_node_metadata, **kwargs)
 
         # Context configuration
         self.transaction_name = transaction_name or f"workflow_tx_{int(time.time())}"

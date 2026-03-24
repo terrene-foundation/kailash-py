@@ -239,7 +239,7 @@ class DistributedTransactionManagerNode(AsyncNode):
         )
 
         # Initialize AsyncNode
-        super().__init__(metadata=metadata, **kwargs)
+        super().__init__(metadata=_node_metadata, **kwargs)
 
         # Transaction configuration
         self.transaction_name = transaction_name or f"dtx_{int(time.time())}"

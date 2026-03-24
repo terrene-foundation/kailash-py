@@ -19,6 +19,7 @@ import logging
 import os
 import sqlite3
 import uuid
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -234,7 +235,7 @@ class ShadowStore:
             ended_at=(
                 datetime.fromisoformat(row["ended_at"]) if row["ended_at"] else None
             ),
-            tool_calls=tool_calls,
+            tool_calls=deque(tool_calls, maxlen=10_000),
         )
 
     def list_sessions(
@@ -277,7 +278,7 @@ class ShadowStore:
                         if row["ended_at"]
                         else None
                     ),
-                    tool_calls=tool_calls,
+                    tool_calls=deque(tool_calls, maxlen=10_000),
                 )
             )
         return sessions
