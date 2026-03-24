@@ -24,9 +24,16 @@ from typing import Any, Optional
 from uuid import UUID
 
 import yaml
-from sqlalchemy import create_engine, text
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.pool import QueuePool
+
+try:
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.exc import SQLAlchemyError
+    from sqlalchemy.pool import QueuePool
+except ImportError:
+    create_engine = None  # type: ignore[assignment,misc]
+    text = None  # type: ignore[assignment]
+    SQLAlchemyError = Exception  # type: ignore[assignment,misc]
+    QueuePool = None  # type: ignore[assignment]
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.sdk_exceptions import NodeExecutionError
@@ -387,7 +394,7 @@ class SQLDatabaseNode(Node):
                     **self.db_config,  # Use the stored db_config
                 }
 
-                engine = create_engine(self.connection_string, **pool_config)
+                engine = create_engine(self.connection_string, **pool_config)  # type: ignore[reportOptionalCall]
 
                 self._shared_pools[cache_key] = engine
                 self._pool_metrics[cache_key] = {
@@ -471,7 +478,7 @@ class SQLDatabaseNode(Node):
                         if parameters:
                             if isinstance(parameters, dict):
                                 # Named parameters - use as-is
-                                result = conn.execute(text(query), parameters)
+                                result = conn.execute(text(query), parameters)  # type: ignore[reportOptionalCall]
                             elif isinstance(parameters, (list, tuple)):
                                 # Convert positional parameters to named parameters
                                 named_query, param_dict = (
@@ -479,7 +486,7 @@ class SQLDatabaseNode(Node):
                                         query, list(parameters)
                                     )
                                 )
-                                result = conn.execute(text(named_query), param_dict)
+                                result = conn.execute(text(named_query), param_dict)  # type: ignore[reportOptionalCall]
                             else:
                                 # Single parameter
                                 named_query, param_dict = (
@@ -487,9 +494,9 @@ class SQLDatabaseNode(Node):
                                         query, [parameters]
                                     )
                                 )
-                                result = conn.execute(text(named_query), param_dict)
+                                result = conn.execute(text(named_query), param_dict)  # type: ignore[reportOptionalCall]
                         else:
-                            result = conn.execute(text(query))
+                            result = conn.execute(text(query))  # type: ignore[reportOptionalCall]
 
                         execution_time = time.time() - start_time
 
@@ -795,11 +802,11 @@ class SQLDatabaseNode(Node):
                     ]:
                         engine_config[key] = value
 
-                engine = create_engine(connection_string, **engine_config)
+                engine = create_engine(connection_string, **engine_config)  # type: ignore[reportOptionalCall]
 
                 # Test the connection
                 with engine.connect() as conn:
-                    conn.execute(text("SELECT 1"))
+                    conn.execute(text("SELECT 1"))  # type: ignore[reportCallIssue, reportOptionalCall]
 
                 if attempt > 0:
                     self.logger.info(f"Connection established after {attempt} retries")
