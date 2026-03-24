@@ -213,7 +213,7 @@ class TestPublicAPICompleteness:
         import kailash.trust
 
         assert hasattr(kailash.trust, "__version__")
-        assert kailash.trust.__version__ == "2.0.0"
+        assert kailash.trust.__version__ == "2.1.0"
 
     def test_all_list_complete(self):
         """__all__ list contains all public symbols."""
