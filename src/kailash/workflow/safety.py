@@ -239,7 +239,7 @@ class CycleMonitor:
         if self.memory_limit and psutil is not None:
             process = psutil.Process()
             current_memory = process.memory_info().rss / 1024 / 1024  # MB
-            memory_increase = current_memory - self.initial_memory
+            memory_increase = current_memory - (self.initial_memory or 0.0)
 
             if memory_increase > self.memory_limit:
                 violation = f"Memory limit exceeded: {memory_increase:.1f}MB > {self.memory_limit}MB"

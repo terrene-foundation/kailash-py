@@ -4170,6 +4170,8 @@ class LocalRuntime(
     async def _execute_single_node(
         self,
         node_id: str,
+        workflow: Any = None,
+        node_inputs: Any = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """
@@ -4177,22 +4179,24 @@ class LocalRuntime(
 
         Args:
             node_id: Node identifier
+            workflow: Workflow being executed (positional or kwarg)
+            node_inputs: Prepared inputs for the node (positional or kwarg)
             **kwargs: Runtime-specific arguments:
                 node_instance: Node instance to execute
-                node_inputs: Prepared inputs for the node
                 task_manager: Task manager for tracking
-                workflow: Workflow being executed
                 run_id: Unique run identifier
                 workflow_context: Workflow execution context
 
         Returns:
             Node execution results
         """
-        # Extract kwargs
+        # Extract kwargs (workflow and node_inputs may come as positional or kwarg)
         node_instance: Any = kwargs.get("node_instance")
-        node_inputs: dict[str, Any] = kwargs.get("node_inputs", {})
+        if node_inputs is None:
+            node_inputs = kwargs.get("node_inputs", {})
         task_manager: Any = kwargs.get("task_manager")
-        workflow: Workflow | None = kwargs.get("workflow")
+        if workflow is None:
+            workflow = kwargs.get("workflow")
         run_id: str = kwargs.get("run_id", "")
         workflow_context: dict[str, Any] = kwargs.get("workflow_context", {})
 

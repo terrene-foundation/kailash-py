@@ -71,7 +71,9 @@ class DynamicExecutionPlanner:
             reachable_nodes = self.analyzer.get_reachable_nodes(switch_results)
 
             # Add nodes that are not dependent on any switches (always reachable)
-            always_reachable = self._get_always_reachable_nodes(switch_results.keys())
+            always_reachable = self._get_always_reachable_nodes(
+                set(switch_results.keys())
+            )
             reachable_nodes.update(always_reachable)
 
             # Create pruned execution plan

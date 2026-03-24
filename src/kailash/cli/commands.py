@@ -460,7 +460,8 @@ def node_info(node_name: str):
                     f", default={param.default}" if param.default is not None else ""
                 )
 
-                click.echo(f"  {name}: {param.type.__name__} ({required}{default})")
+                type_name = param.type.__name__ if param.type is not None else "Any"
+                click.echo(f"  {name}: {type_name} ({required}{default})")
                 if param.description:
                     click.echo(f"    {param.description}")
         else:

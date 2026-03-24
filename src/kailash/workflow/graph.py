@@ -1204,7 +1204,14 @@ class Workflow:
                 results[node_id] = node_results
 
                 if task:
-                    task.update_status(TaskStatus.COMPLETED, result=node_results)
+                    task.update_status(
+                        TaskStatus.COMPLETED,
+                        result=(
+                            dict(node_results)
+                            if isinstance(node_results, dict)
+                            else None
+                        ),
+                    )
 
                 logger.info(f"Node '{node_id}' completed successfully")
 

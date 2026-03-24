@@ -171,7 +171,7 @@ class AsyncDatabaseConfig(DatabaseConfig):
 
     def get_asyncpg_config(self) -> Dict[str, Any]:
         """Get asyncpg-compatible configuration."""
-        config = {
+        config: Dict[str, Any] = {
             "min_size": self.min_size,
             "max_size": self.max_size,
             "command_timeout": self.command_timeout,
