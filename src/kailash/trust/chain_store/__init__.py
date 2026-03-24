@@ -17,10 +17,15 @@ Public utilities available via ``from kailash.trust.chain_store.filesystem impor
 - ``validate_id``: Path-traversal-safe identifier validation
 """
 
+from __future__ import annotations
+
 import copy
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from kailash.trust.chain_store.memory import InMemoryTrustStore
 
 from kailash.trust.chain import TrustLineageChain
 from kailash.trust.exceptions import TrustChainNotFoundError
