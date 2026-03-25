@@ -35,6 +35,7 @@ from .configuration import (
 )
 from .core.config import DataFlowConfig, LoggingConfig, mask_sensitive
 from .core.engine import DataFlow
+from .engine import DataFlowEngine, HealthStatus, QueryEngine
 from .core.logging_config import DEFAULT_SENSITIVE_PATTERNS
 from .core.logging_config import LoggingConfig as AdvancedLoggingConfig
 from .core.logging_config import SensitiveMaskingFilter, mask_sensitive_values
@@ -60,6 +61,9 @@ __version__ = "1.2.0"
 
 __all__ = [
     "DataFlow",
+    "DataFlowEngine",
+    "QueryEngine",
+    "HealthStatus",
     "DataFlowConfig",
     "DataFlowModel",
     "LoggingConfig",

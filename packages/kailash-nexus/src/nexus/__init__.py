@@ -26,6 +26,7 @@ Usage:
 """
 
 from .core import MiddlewareInfo, Nexus, NexusPluginProtocol, RouterInfo, create_nexus
+from .engine import EnterpriseMiddlewareConfig, NexusEngine, Preset
 from .presets import PRESETS, NexusConfig, PresetConfig, apply_preset, get_preset
 
 __version__ = "1.4.3"
@@ -33,6 +34,10 @@ __all__ = [
     # Core
     "Nexus",
     "create_nexus",
+    # Engine (cross-SDK parity with kailash-rs)
+    "NexusEngine",
+    "Preset",
+    "EnterpriseMiddlewareConfig",
     # Middleware API
     "MiddlewareInfo",
     "RouterInfo",
