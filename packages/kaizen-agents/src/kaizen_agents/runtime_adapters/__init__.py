@@ -19,10 +19,10 @@ Note: External adapters are implemented in separate files and lazily
 loaded to avoid importing heavy dependencies when not needed.
 """
 
-from kaizen.runtime.adapters.kaizen_local import LocalKaizenAdapter
+from kaizen_agents.runtime_adapters.kaizen_local import LocalKaizenAdapter
 
 # Tool mapping infrastructure
-from kaizen.runtime.adapters.tool_mapping import (
+from kaizen_agents.runtime_adapters.tool_mapping import (
     GeminiToolMapper,
     KaizenTool,
     MappedTool,
@@ -31,7 +31,7 @@ from kaizen.runtime.adapters.tool_mapping import (
     ToolMapper,
     ToolMappingError,
 )
-from kaizen.runtime.adapters.types import (
+from kaizen_agents.runtime_adapters.types import (
     AutonomousConfig,
     AutonomousPhase,
     ExecutionState,
@@ -59,6 +59,6 @@ __all__ = [
 ]
 
 # External adapters are loaded lazily - import from specific modules when needed
-# from kaizen.runtime.adapters.claude_code import ClaudeCodeAdapter
-# from kaizen.runtime.adapters.openai_codex import OpenAICodexAdapter
-# from kaizen.runtime.adapters.gemini_cli import GeminiCLIAdapter
+# from kaizen_agents.runtime_adapters.claude_code import ClaudeCodeAdapter
+# from kaizen_agents.runtime_adapters.openai_codex import OpenAICodexAdapter
+# from kaizen_agents.runtime_adapters.gemini_cli import GeminiCLIAdapter

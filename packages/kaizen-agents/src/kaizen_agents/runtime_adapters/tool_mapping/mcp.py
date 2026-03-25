@@ -24,7 +24,7 @@ MCP Tool Schema:
 import logging
 from typing import Any, Dict, List
 
-from kaizen.runtime.adapters.tool_mapping.base import (
+from kaizen_agents.runtime_adapters.tool_mapping.base import (
     KaizenTool,
     ToolMapper,
     ToolMappingError,
@@ -41,7 +41,7 @@ class MCPToolMapper(ToolMapper):
     affected - they work automatically.
 
     Example:
-        >>> from kaizen.runtime.adapters.tool_mapping import MCPToolMapper
+        >>> from kaizen_agents.runtime_adapters.tool_mapping import MCPToolMapper
         >>>
         >>> # Define a custom tool
         >>> kaizen_tools = [{

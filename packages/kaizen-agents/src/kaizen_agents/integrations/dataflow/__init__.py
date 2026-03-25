@@ -13,10 +13,10 @@ Architecture:
 - Maintain clean separation of concerns
 
 Usage:
-    from kaizen.integrations.dataflow import DATAFLOW_AVAILABLE
+    from kaizen_agents.integrations.dataflow import DATAFLOW_AVAILABLE
 
     if DATAFLOW_AVAILABLE:
-        from kaizen.integrations.dataflow import DataFlowAwareAgent
+        from kaizen_agents.integrations.dataflow import DataFlowAwareAgent
         agent = DataFlowAwareAgent(config=config, db=db)
     else:
         # Fallback to standard Kaizen agent

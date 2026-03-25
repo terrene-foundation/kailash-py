@@ -15,7 +15,7 @@ This adapter provides a Kaizen-compatible interface to Claude Code,
 NOT a replacement for its capabilities.
 
 Usage:
-    >>> from kaizen.runtime.adapters.claude_code import ClaudeCodeAdapter
+    >>> from kaizen_agents.runtime_adapters.claude_code import ClaudeCodeAdapter
     >>> from kaizen.runtime.context import ExecutionContext
     >>>
     >>> adapter = ClaudeCodeAdapter()
@@ -30,7 +30,7 @@ import os
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from kaizen.runtime.adapter import BaseRuntimeAdapter, ProgressCallback
-from kaizen.runtime.adapters.tool_mapping import MCPToolMapper
+from kaizen_agents.runtime_adapters.tool_mapping import MCPToolMapper
 from kaizen.runtime.capabilities import RuntimeCapabilities
 from kaizen.runtime.context import ExecutionContext, ExecutionResult, ExecutionStatus
 

@@ -10,7 +10,7 @@ This adapter provides a Kaizen-compatible interface to OpenAI's
 autonomous code execution capabilities.
 
 Usage:
-    >>> from kaizen.runtime.adapters.openai_codex import OpenAICodexAdapter
+    >>> from kaizen_agents.runtime_adapters.openai_codex import OpenAICodexAdapter
     >>> from kaizen.runtime.context import ExecutionContext
     >>>
     >>> adapter = OpenAICodexAdapter(api_key="sk-...")
@@ -25,7 +25,7 @@ import os
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from kaizen.runtime.adapter import BaseRuntimeAdapter, ProgressCallback
-from kaizen.runtime.adapters.tool_mapping import OpenAIToolMapper
+from kaizen_agents.runtime_adapters.tool_mapping import OpenAIToolMapper
 from kaizen.runtime.capabilities import RuntimeCapabilities
 from kaizen.runtime.context import ExecutionContext, ExecutionResult, ExecutionStatus
 

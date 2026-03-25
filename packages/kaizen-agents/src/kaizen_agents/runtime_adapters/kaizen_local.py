@@ -12,7 +12,7 @@ Supports the Specialist System (ADR-013) for user-defined specialists,
 skills, and context files loaded from .kaizen/ directories.
 
 Example:
-    >>> from kaizen.runtime.adapters import LocalKaizenAdapter
+    >>> from kaizen_agents.runtime_adapters import LocalKaizenAdapter
     >>> from kaizen.runtime import ExecutionContext
     >>> from kaizen.core import KaizenOptions
     >>>
@@ -39,7 +39,7 @@ from kaizen.core.specialist_types import (
     SpecialistDefinition,
 )
 from kaizen.runtime.adapter import BaseRuntimeAdapter, ProgressCallback
-from kaizen.runtime.adapters.types import (
+from kaizen_agents.runtime_adapters.types import (
     AutonomousConfig,
     AutonomousPhase,
     ExecutionState,

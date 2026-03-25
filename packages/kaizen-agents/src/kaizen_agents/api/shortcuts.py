@@ -139,7 +139,7 @@ def resolve_memory_shortcut(
 
 def _create_local_runtime(**kwargs) -> "RuntimeAdapterType":
     """Create a LocalKaizenAdapter for native Kaizen execution."""
-    from kaizen.runtime.adapters.kaizen_local import LocalKaizenAdapter
+    from kaizen_agents.runtime_adapters.kaizen_local import LocalKaizenAdapter
 
     return LocalKaizenAdapter(**kwargs)
 
@@ -148,7 +148,7 @@ def _create_claude_code_runtime(**kwargs) -> "RuntimeAdapterType":
     """Create a ClaudeCodeAdapter for Claude Code execution."""
     # Note: ClaudeCodeAdapter may not exist yet - TODO-196
     try:
-        from kaizen.runtime.adapters.claude_code import ClaudeCodeAdapter
+        from kaizen_agents.runtime_adapters.claude_code import ClaudeCodeAdapter
 
         return ClaudeCodeAdapter(**kwargs)
     except ImportError:
@@ -162,7 +162,7 @@ def _create_codex_runtime(**kwargs) -> "RuntimeAdapterType":
     """Create an OpenAI Codex adapter for Codex execution."""
     # Note: CodexAdapter may not exist yet - TODO-196
     try:
-        from kaizen.runtime.adapters.openai_codex import OpenAICodexAdapter
+        from kaizen_agents.runtime_adapters.openai_codex import OpenAICodexAdapter
 
         return OpenAICodexAdapter(**kwargs)
     except ImportError:
@@ -176,7 +176,7 @@ def _create_gemini_cli_runtime(**kwargs) -> "RuntimeAdapterType":
     """Create a Gemini CLI adapter for Gemini execution."""
     # Note: GeminiCLIAdapter may not exist yet - TODO-196
     try:
-        from kaizen.runtime.adapters.gemini_cli import GeminiCLIAdapter
+        from kaizen_agents.runtime_adapters.gemini_cli import GeminiCLIAdapter
 
         return GeminiCLIAdapter(**kwargs)
     except ImportError:

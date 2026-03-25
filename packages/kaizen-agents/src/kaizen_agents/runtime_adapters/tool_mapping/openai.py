@@ -28,7 +28,7 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-from kaizen.runtime.adapters.tool_mapping.base import (
+from kaizen_agents.runtime_adapters.tool_mapping.base import (
     KaizenTool,
     ToolMapper,
     ToolMappingError,
@@ -49,7 +49,7 @@ class OpenAIToolMapper(ToolMapper):
     - Parameter normalization
 
     Example:
-        >>> from kaizen.runtime.adapters.tool_mapping import OpenAIToolMapper
+        >>> from kaizen_agents.runtime_adapters.tool_mapping import OpenAIToolMapper
         >>>
         >>> kaizen_tools = [...]
         >>> # Validate and normalize

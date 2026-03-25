@@ -28,7 +28,7 @@ Key differences from OpenAI:
 import logging
 from typing import Any, Dict, List
 
-from kaizen.runtime.adapters.tool_mapping.base import (
+from kaizen_agents.runtime_adapters.tool_mapping.base import (
     KaizenTool,
     ToolMapper,
     ToolMappingError,
@@ -44,7 +44,7 @@ class GeminiToolMapper(ToolMapper):
     Gemini's function declaration format which uses uppercase type names.
 
     Example:
-        >>> from kaizen.runtime.adapters.tool_mapping import GeminiToolMapper
+        >>> from kaizen_agents.runtime_adapters.tool_mapping import GeminiToolMapper
         >>>
         >>> kaizen_tools = [{
         ...     "type": "function",

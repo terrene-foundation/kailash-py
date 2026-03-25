@@ -9,7 +9,7 @@ and the formats required by different external runtimes:
 - Gemini format: For Gemini CLI adapter
 
 Usage:
-    >>> from kaizen.runtime.adapters.tool_mapping import (
+    >>> from kaizen_agents.runtime_adapters.tool_mapping import (
     ...     MCPToolMapper,
     ...     OpenAIToolMapper,
     ...     GeminiToolMapper,
@@ -19,15 +19,15 @@ Usage:
     >>> mcp_tools = MCPToolMapper.to_mcp_format(kaizen_tools)
 """
 
-from kaizen.runtime.adapters.tool_mapping.base import (
+from kaizen_agents.runtime_adapters.tool_mapping.base import (
     KaizenTool,
     MappedTool,
     ToolMapper,
     ToolMappingError,
 )
-from kaizen.runtime.adapters.tool_mapping.gemini import GeminiToolMapper
-from kaizen.runtime.adapters.tool_mapping.mcp import MCPToolMapper
-from kaizen.runtime.adapters.tool_mapping.openai import OpenAIToolMapper
+from kaizen_agents.runtime_adapters.tool_mapping.gemini import GeminiToolMapper
+from kaizen_agents.runtime_adapters.tool_mapping.mcp import MCPToolMapper
+from kaizen_agents.runtime_adapters.tool_mapping.openai import OpenAIToolMapper
 
 __all__ = [
     # Base types
