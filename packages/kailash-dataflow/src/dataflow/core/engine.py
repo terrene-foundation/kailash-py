@@ -793,13 +793,31 @@ class DataFlow:
                 )
 
             # Initialize AutoMigrationSystem with async workflow pattern and lock manager integration
+            migrations_dir = "migrations"
+
+            # Issue #74: Try local dir first, fall back to tempdir if not writable
+            try:
+                os.makedirs(migrations_dir, exist_ok=True)
+            except (PermissionError, OSError) as dir_err:
+                import tempfile
+
+                migrations_dir = os.path.join(
+                    tempfile.gettempdir(), "dataflow_migrations"
+                )
+                os.makedirs(migrations_dir, exist_ok=True)
+                logger.warning(
+                    "Cannot write to local migrations dir, using %s: %s",
+                    migrations_dir,
+                    dir_err,
+                )
+
             self._migration_system = AutoMigrationSystem(
                 connection_string=self.config.database.get_connection_url(
                     self.config.environment
                 ),
                 dialect=dialect,
-                migrations_dir="migrations",
-                dataflow_instance=self,  # Pass DataFlow instance for lock manager integration
+                migrations_dir=migrations_dir,
+                dataflow_instance=self,
                 lock_timeout=self._migration_lock_timeout,
                 runtime=self.runtime,
             )
@@ -807,7 +825,14 @@ class DataFlow:
             logger.debug(f"Migration system initialized successfully for {dialect}")
 
         except Exception as e:
-            logger.error(f"Failed to initialize migration system: {e}")
+            # Issue #74: Warn loudly instead of silently disabling
+            logger.warning(
+                "Migration system unavailable (%s). auto_migrate=True will NOT "
+                "detect new columns on existing tables. Schema changes limited to "
+                "CREATE TABLE IF NOT EXISTS only. Fix: ensure the migrations "
+                "directory is writable or set auto_migrate=False.",
+                e,
+            )
             self._migration_system = None
 
     def _initialize_schema_state_manager(self):

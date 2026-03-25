@@ -61,7 +61,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy only source code (not tests, docs, examples)
 COPY --chown=kaizen:kaizen src ./src
-COPY --chown=kaizen:kaizen pyproject.toml setup.py README.md ./
+COPY --chown=kaizen:kaizen pyproject.toml README.md ./
 
 # Switch to non-root user
 USER kaizen
