@@ -48,6 +48,7 @@ with LocalRuntime() as runtime:
 - **[connection-patterns](connection-patterns.md)** - Linking nodes and data flow
 - **[param-passing-quick](param-passing-quick.md)** - Parameter passing strategies
 - **[runtime-execution](runtime-execution.md)** - Executing workflows (sync/async)
+- **[runtime-lifecycle](runtime-lifecycle.md)** - Runtime lifecycle, ref counting, acquire/release, context managers
 
 ### Advanced Topics
 

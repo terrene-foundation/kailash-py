@@ -251,10 +251,10 @@ Complete RAG Pipeline Example
 
    # Execute the RAG workflow
    from kailash.runtime.local import LocalRuntime
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow)
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(workflow)
 
-   print("RAG Response:", results["llm_agent"]["response"])
+       print("RAG Response:", results["llm_agent"]["response"])
 
 Node Registry Utilities
 =======================

@@ -114,7 +114,7 @@ class ExternalAgentApprovalStorage:
     # Model name used for node naming convention
     MODEL_NAME = "ExternalAgentApprovalRequest"
 
-    def __init__(self, db: "DataFlow"):
+    def __init__(self, db: "DataFlow", runtime: "AsyncLocalRuntime | None" = None):
         """
         Initialize the storage backend with a DataFlow instance.
 
@@ -124,6 +124,7 @@ class ExternalAgentApprovalStorage:
 
         Args:
             db: DataFlow instance (connected to database)
+            runtime: Optional shared AsyncLocalRuntime (avoids pool leak)
 
         Raises:
             ValueError: If db is not a DataFlow instance
@@ -149,7 +150,12 @@ class ExternalAgentApprovalStorage:
         self._models = register_approval_models(db)
 
         # Runtime for executing workflows
-        self.runtime = AsyncLocalRuntime()
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = AsyncLocalRuntime()
+            self._owns_runtime = True
 
         logger.debug(
             f"ExternalAgentApprovalStorage initialized with model: {self.MODEL_NAME}"
@@ -636,6 +642,26 @@ class ExternalAgentApprovalStorage:
         except Exception as e:
             logger.error(f"Failed to count requests by status {status}: {e}")
             raise
+
+    def close(self):
+        """Release runtime reference."""
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
 
     async def get_expired_pending_requests(
         self,

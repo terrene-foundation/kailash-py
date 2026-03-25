@@ -73,10 +73,13 @@ class E2EWorkflowPattern:
         ✅ FIX: async method must use AsyncLocalRuntime and await
         """
         runtime = AsyncLocalRuntime()
-        results, run_id = await runtime.execute_workflow_async(
-            workflow.build(), inputs={}
-        )
-        return {"results": results, "run_id": run_id}
+        try:
+            results, run_id = await runtime.execute_workflow_async(
+                workflow.build(), inputs={}
+            )
+            return {"results": results, "run_id": run_id}
+        finally:
+            runtime.close()
 
     def get_pattern_description(self) -> Dict[str, Any]:
         """Get detailed pattern description."""

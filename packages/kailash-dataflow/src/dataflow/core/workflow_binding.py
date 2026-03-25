@@ -212,12 +212,18 @@ class DataFlowWorkflowBinder:
             >>> results, run_id = binder.execute(workflow, {"user_id": "123"})
             >>> print(results["create_user"])
         """
+        created_runtime = False
         if runtime is None:
             runtime = LocalRuntime()
+            created_runtime = True
 
         logger.debug("Executing workflow with %d nodes", len(workflow.nodes))
 
-        return runtime.execute(workflow.build(), inputs or {})
+        try:
+            return runtime.execute(workflow.build(), inputs or {})
+        finally:
+            if created_runtime:
+                runtime.close()
 
     def get_available_nodes(
         self, model_name: Optional[str] = None

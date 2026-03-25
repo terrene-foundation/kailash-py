@@ -94,23 +94,22 @@ async def main():
     })
     wf = builder.build()
 
-    runtime = LocalRuntime()
+    with LocalRuntime() as runtime:
+        # First call: executes the workflow, caches the result
+        results, run_id = await executor.execute(
+            runtime, wf,
+            parameters={"process": {"data": "hello"}},
+            idempotency_key="request-abc-123",
+        )
+        print(results)  # {"process": {"output": "HELLO"}}
 
-    # First call: executes the workflow, caches the result
-    results, run_id = await executor.execute(
-        runtime, wf,
-        parameters={"process": {"data": "hello"}},
-        idempotency_key="request-abc-123",
-    )
-    print(results)  # {"process": {"output": "HELLO"}}
-
-    # Second call with same key: returns cached result, no re-execution
-    results2, run_id2 = await executor.execute(
-        runtime, wf,
-        parameters={"process": {"data": "hello"}},
-        idempotency_key="request-abc-123",
-    )
-    print(results2)  # {"process": {"output": "HELLO"}} -- same result, from cache
+        # Second call with same key: returns cached result, no re-execution
+        results2, run_id2 = await executor.execute(
+            runtime, wf,
+            parameters={"process": {"data": "hello"}},
+            idempotency_key="request-abc-123",
+        )
+        print(results2)  # {"process": {"output": "HELLO"}} -- same result, from cache
 
     await factory.close()
 

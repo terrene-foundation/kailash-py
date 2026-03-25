@@ -447,17 +447,20 @@ result = {
             # Use AsyncLocalRuntime for true async execution (no thread pool)
             runtime = AsyncLocalRuntime()
 
-            # Prepare execution parameters
-            execution_params = {}
-            if inputs:
-                # Use the first workflow node as the target for inputs
-                if self._workflow_nodes:
-                    execution_params[self._workflow_nodes[0]] = inputs
+            try:
+                # Prepare execution parameters
+                execution_params = {}
+                if inputs:
+                    # Use the first workflow node as the target for inputs
+                    if self._workflow_nodes:
+                        execution_params[self._workflow_nodes[0]] = inputs
 
-            # True async execution - uses AsyncLocalRuntime.execute_workflow_async()
-            results, run_id = await runtime.execute_workflow_async(
-                built_workflow, inputs=execution_params
-            )
+                # True async execution - uses AsyncLocalRuntime.execute_workflow_async()
+                results, run_id = await runtime.execute_workflow_async(
+                    built_workflow, inputs=execution_params
+                )
+            finally:
+                runtime.close()
 
             execution_end = time.time()
             execution_time = (

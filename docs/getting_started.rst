@@ -30,8 +30,8 @@ Everything follows one pattern:
 
    workflow = WorkflowBuilder()
    # ... add nodes and connections ...
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow.build())
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(workflow.build())
 
 Building Workflows
 ==================
@@ -100,10 +100,9 @@ For CLI scripts and synchronous contexts:
        "code": "result = {'message': 'Hello from Kailash!'}"
    })
 
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow.build())
-
-   print(results["hello"]["result"]["message"])
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(workflow.build())
+       print(results["hello"]["result"]["message"])
 
 AsyncLocalRuntime (Async)
 -------------------------
@@ -125,9 +124,12 @@ For Docker, FastAPI, and async contexts:
    })
 
    runtime = AsyncLocalRuntime()
-   results, run_id = await runtime.execute_workflow_async(
-       workflow.build(), inputs={}
-   )
+   try:
+       results, run_id = await runtime.execute_workflow_async(
+           workflow.build(), inputs={}
+       )
+   finally:
+       runtime.close()
 
 Auto-Detection
 --------------
@@ -185,12 +187,11 @@ human authorization through agent delegation.
        verification_mode=TrustVerificationMode.PERMISSIVE,
    )
 
-   runtime = LocalRuntime(
+   with LocalRuntime(
        trust_context=ctx,
        trust_verification_mode="permissive",
-   )
-
-   results, run_id = runtime.execute(workflow.build())
+   ) as runtime:
+       results, run_id = runtime.execute(workflow.build())
 
 See :doc:`core/trust` for the full trust framework documentation.
 
@@ -253,8 +254,8 @@ Data Processing Pipeline
 
    workflow.add_connection("read_data", "transform", "data", "input_data")
 
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow.build())
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(workflow.build())
 
 AI-Powered Workflow
 -------------------
@@ -277,11 +278,11 @@ AI-Powered Workflow
        "prompt": "Analyze the following data and provide insights: {input_data}"
    })
 
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(
-       workflow.build(),
-       parameters={"analyzer": {"input_data": "Q1 revenue up 15%, costs down 8%"}}
-   )
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(
+           workflow.build(),
+           parameters={"analyzer": {"input_data": "Q1 revenue up 15%, costs down 8%"}}
+       )
 
 Cyclic Workflow
 ---------------
@@ -310,8 +311,8 @@ For iterative processing with convergence detection:
    """
    })
 
-   runtime = LocalRuntime(enable_cycles=True)
-   results, run_id = runtime.execute(workflow.build())
+   with LocalRuntime(enable_cycles=True) as runtime:
+       results, run_id = runtime.execute(workflow.build())
 
 Next Steps
 ==========

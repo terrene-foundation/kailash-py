@@ -350,10 +350,10 @@ def build_workflow():
 
 if __name__ == "__main__":
     workflow = build_workflow()
-    runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow.build())
-    print(f"Execution completed: {run_id}")
-    print(results)
+    with LocalRuntime() as runtime:
+        results, run_id = runtime.execute(workflow.build())
+        print(f"Execution completed: {run_id}")
+        print(results)
 """
 
     def generate(self, workflow_def: WorkflowDefinition) -> str:

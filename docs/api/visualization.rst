@@ -143,8 +143,8 @@ Basic Real-time Monitoring
    dashboard.start_monitoring()
 
    # Execute workflow with monitoring
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow, task_manager)
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(workflow, task_manager)
 
    # Generate live dashboard
    dashboard.generate_live_report("dashboard.html", include_charts=True)

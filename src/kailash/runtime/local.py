@@ -1363,6 +1363,8 @@ class LocalRuntime(
             logger.debug(f"Explicit close() called for runtime {self._runtime_id}")
 
         with self._loop_lock:
+            if self._ref_count <= 0:
+                return  # Already fully closed
             self._ref_count -= 1
             if self._ref_count > 0:
                 return  # Other consumers still active

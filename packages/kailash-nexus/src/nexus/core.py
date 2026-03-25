@@ -128,6 +128,8 @@ class Nexus:
         cors_allow_credentials: bool = False,
         cors_expose_headers: Optional[List[str]] = None,
         cors_max_age: int = 600,
+        # Shared runtime injection (M3-001)
+        runtime=None,
     ):
         """Initialize Nexus with optional enterprise features.
 
@@ -151,6 +153,9 @@ class Nexus:
                 Set to True only with explicit origins (not wildcard).
             cors_expose_headers: Headers exposed to browser. Defaults to None.
             cors_max_age: Preflight cache duration in seconds. Defaults to 600.
+            runtime: Optional shared AsyncLocalRuntime. If provided, the Nexus
+                instance acquires a reference (caller retains ownership). If None,
+                Nexus creates and owns its own runtime.
 
         Security Notes:
             - rate_limit defaults to 100 req/min to prevent DoS attacks
@@ -286,7 +291,12 @@ class Nexus:
         self._initialize_revolutionary_capabilities()
 
         # Server-level shared runtime — eliminates per-request runtime creation (M3-001)
-        self.runtime = AsyncLocalRuntime()
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = AsyncLocalRuntime()
+            self._owns_runtime = True
 
         # Initialize MCP server
         self._initialize_mcp_server()
@@ -385,7 +395,11 @@ class Nexus:
             # Use simple MCP server for WebSocket-only mode
             from nexus.mcp import MCPServer
 
-            self._mcp_server = MCPServer(host="0.0.0.0", port=self._mcp_port)
+            self._mcp_server = MCPServer(
+                host="0.0.0.0",
+                port=self._mcp_port,
+                runtime=self.runtime.acquire(),
+            )
             self._mcp_channel = None
             # Register default Nexus resources (system, docs, config, help)
             self._register_default_mcp_resources()
@@ -418,7 +432,11 @@ class Nexus:
             )
             from nexus.mcp import MCPServer
 
-            self._mcp_server = MCPServer(host="0.0.0.0", port=self._mcp_port)
+            self._mcp_server = MCPServer(
+                host="0.0.0.0",
+                port=self._mcp_port,
+                runtime=self.runtime.acquire(),
+            )
             self._mcp_channel = None
             logger.info(f"Simple MCP server initialized on port {self._mcp_port}")
 
@@ -1990,13 +2008,39 @@ Check the documentation or explore available resources.
         )
 
     def close(self):
-        """Release the shared runtime and clean up resources.
+        """Release MCP servers and the shared runtime.
 
+        Closes child servers first (they hold acquired references to the
+        runtime), then releases the Nexus-level runtime reference.
         Idempotent: safe to call multiple times.
         """
+        # Close MCP servers first — they hold acquired runtime refs
+        for attr in ("_mcp_server", "_ws_server"):
+            server = getattr(self, attr, None)
+            if server is not None and hasattr(server, "close"):
+                try:
+                    server.close()
+                except Exception:
+                    pass
+
+        # Release or close the runtime itself
         if hasattr(self, "runtime") and self.runtime is not None:
-            self.runtime.close()
+            self.runtime.release()
             self.runtime = None
+
+    def __del__(self):
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
 
     def __enter__(self):
         return self

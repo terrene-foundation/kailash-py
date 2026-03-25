@@ -1062,21 +1062,21 @@ SelfOrganizingAgentNode
    workflow.add_node("orchestrator", orchestrator)
 
    # Execute with a complex business query
-   runtime = LocalRuntime()
-   result, _ = runtime.execute(workflow, parameters={
-       "orchestrator": {
-           "query": "Analyze market trends and develop a growth strategy",
-           "agent_pool_size": 8,
-           "mcp_servers": [
-               {"name": "market_data", "command": "mcp-market-server"},
-               {"name": "financial_data", "command": "mcp-finance-server"}
-           ],
-           "quality_threshold": 0.85,
-           "max_iterations": 3
-       }
-   })
+   with LocalRuntime() as runtime:
+       result, _ = runtime.execute(workflow, parameters={
+           "orchestrator": {
+               "query": "Analyze market trends and develop a growth strategy",
+               "agent_pool_size": 8,
+               "mcp_servers": [
+                   {"name": "market_data", "command": "mcp-market-server"},
+                   {"name": "financial_data", "command": "mcp-finance-server"}
+               ],
+               "quality_threshold": 0.85,
+               "max_iterations": 3
+           }
+       })
 
-   print(f"Solution quality: {result['orchestrator']['quality_score']:.2%}")
+       print(f"Solution quality: {result['orchestrator']['quality_score']:.2%}")
    print(f"Iterations completed: {result['orchestrator']['iterations_completed']}")
 
 Agent Providers

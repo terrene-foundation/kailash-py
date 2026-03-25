@@ -212,9 +212,9 @@ Component interaction validation with 5-second timeout:
            "query": "SELECT COUNT(*) FROM users"
        })
 
-       runtime = LocalRuntime()
-       results, run_id = runtime.execute(workflow.build())
-       assert results["db"]["row_count"] >= 0
+       with LocalRuntime() as runtime:
+           results, run_id = runtime.execute(workflow.build())
+           assert results["db"]["row_count"] >= 0
 
 **E2E Tests (21 tests):**
 
@@ -229,14 +229,14 @@ Complete scenario validation with 10-second timeout:
        workflow = create_data_pipeline_workflow()
 
        # Execute with real data
-       runtime = LocalRuntime()
-       results, run_id = runtime.execute(workflow, {
-           "input_file": "test_data.csv",
-           "output_format": "json"
-       })
+       with LocalRuntime() as runtime:
+           results, run_id = runtime.execute(workflow, {
+               "input_file": "test_data.csv",
+               "output_format": "json"
+           })
 
-       # Validate end-to-end results
-       assert results["final_step"]["status"] == "completed"
+           # Validate end-to-end results
+           assert results["final_step"]["status"] == "completed"
        assert os.path.exists(results["final_step"]["output_file"])
 
 Performance Monitoring

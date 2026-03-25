@@ -51,9 +51,9 @@ Quick Example
        "code": "result = {'message': 'Hello from Kailash!'}"
    })
 
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow.build())
-   print(results["hello"]["result"]["message"])
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(workflow.build())
+       print(results["hello"]["result"]["message"])
 
 For the complete collection of runnable examples, visit the
 `examples directory

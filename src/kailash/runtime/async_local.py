@@ -1521,6 +1521,8 @@ class AsyncLocalRuntime(LocalRuntime):
             )
 
         with self._loop_lock:
+            if self._ref_count <= 0:
+                return  # Already fully closed
             self._ref_count -= 1
             if self._ref_count > 0:
                 return  # Other consumers still active
@@ -1586,15 +1588,11 @@ class AsyncLocalRuntime(LocalRuntime):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Async context manager exit — calls async cleanup.
+        """Async context manager exit — calls close() which respects ref counting.
 
-        Properly awaits cleanup() for full async resource teardown,
-        then cleans up the event loop.
+        Uses close() instead of directly calling cleanup() to ensure the
+        ref counting contract is honored. If this runtime is shared via
+        acquire(), close() will only decrement — not destroy resources.
         """
-        try:
-            await self.cleanup()
-        finally:
-            self._cleanup_event_loop()
-            self._is_context_managed = False
-            # Mark ref_count as 0 since we've fully cleaned up
-            self._ref_count = 0
+        self._is_context_managed = False
+        self.close()

@@ -39,8 +39,8 @@ SharePoint Integration
        }
    }
 
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow, inputs=inputs)
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(workflow, inputs=inputs)
 
 API Integration
 ---------------

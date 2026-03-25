@@ -27,13 +27,13 @@ builder.add_node("PythonCodeNode", "transform", {
 wf = builder.build()
 
 # Execute
-runtime = LocalRuntime()
-results, run_id = runtime.execute(wf, parameters={
-    "transform": {"text": "hello world"}
-})
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(wf, parameters={
+        "transform": {"text": "hello world"}
+    })
 
-print(f"Result: {results['transform']}")
-print(f"Run ID: {run_id}")
+    print(f"Result: {results['transform']}")
+    print(f"Run ID: {run_id}")
 ```
 
 Run it:
@@ -155,7 +155,7 @@ from kailash.infrastructure import create_task_queue
 
 async def run_worker(worker_id: str):
     queue = await create_task_queue()
-    runtime = LocalRuntime()
+    runtime = LocalRuntime()  # Don't forget to call runtime.close() when done
 
     print(f"[{worker_id}] Worker started, polling for tasks...")
 
@@ -251,29 +251,28 @@ async def main():
     })
     wf = builder.build()
 
-    runtime = LocalRuntime()
+    with LocalRuntime() as runtime:
+        # First call -- executes the workflow
+        print("Call 1 (fresh execution):")
+        results, run_id = await executor.execute(
+            runtime, wf,
+            parameters={"transform": {"text": "hello"}},
+            idempotency_key="unique-request-001",
+        )
+        print(f"  Results: {results}")
+        print(f"  Run ID:  {run_id}")
 
-    # First call -- executes the workflow
-    print("Call 1 (fresh execution):")
-    results, run_id = await executor.execute(
-        runtime, wf,
-        parameters={"transform": {"text": "hello"}},
-        idempotency_key="unique-request-001",
-    )
-    print(f"  Results: {results}")
-    print(f"  Run ID:  {run_id}")
+        # Second call with same key -- returns cached result
+        print("\nCall 2 (cached, no re-execution):")
+        results2, run_id2 = await executor.execute(
+            runtime, wf,
+            parameters={"transform": {"text": "hello"}},
+            idempotency_key="unique-request-001",
+        )
+        print(f"  Results: {results2}")
+        print(f"  Run ID:  {run_id2}")
 
-    # Second call with same key -- returns cached result
-    print("\nCall 2 (cached, no re-execution):")
-    results2, run_id2 = await executor.execute(
-        runtime, wf,
-        parameters={"transform": {"text": "hello"}},
-        idempotency_key="unique-request-001",
-    )
-    print(f"  Results: {results2}")
-    print(f"  Run ID:  {run_id2}")
-
-    print(f"\nSame result? {results == results2}")
+        print(f"\nSame result? {results == results2}")
 
     await factory.close()
 

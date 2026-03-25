@@ -60,15 +60,18 @@ class AsyncSingleShotStrategy:
             # Use AsyncLocalRuntime for true async execution (no thread pool)
             runtime = AsyncLocalRuntime()
 
-            # Transform inputs to messages
-            messages = self._create_messages_from_inputs(agent, preprocessed_inputs)
-            workflow_params = {"agent_exec": {"messages": messages}}
+            try:
+                # Transform inputs to messages
+                messages = self._create_messages_from_inputs(agent, preprocessed_inputs)
+                workflow_params = {"agent_exec": {"messages": messages}}
 
-            # True async execution - uses AsyncLocalRuntime.execute_workflow_async()
-            # This provides 10-100x speedup for concurrent requests
-            results, run_id = await runtime.execute_workflow_async(
-                workflow.build(), inputs=workflow_params
-            )
+                # True async execution - uses AsyncLocalRuntime.execute_workflow_async()
+                # This provides 10-100x speedup for concurrent requests
+                results, run_id = await runtime.execute_workflow_async(
+                    workflow.build(), inputs=workflow_params
+                )
+            finally:
+                runtime.close()
 
             # Parse result
             parsed_result = self.parse_result(results)

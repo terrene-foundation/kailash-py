@@ -24,13 +24,13 @@ Core SDK -- Your First Workflow
    })
 
    # 2. Execute it
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(
-       workflow.build(),
-       parameters={"greet": {"name": "World"}}
-   )
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(
+           workflow.build(),
+           parameters={"greet": {"name": "World"}}
+       )
 
-   print(results["greet"]["result"]["message"])
+       print(results["greet"]["result"]["message"])
    # Output: Hello, World!
 
 The pattern is always the same: **build a workflow, then execute it with a runtime**.
@@ -187,19 +187,18 @@ Every workflow can carry a cryptographic trust chain from human to agent:
    )
 
    # Execute with trust verification
-   runtime = LocalRuntime(
-       trust_context=ctx,
-       trust_verifier=verifier,
-       trust_verification_mode="permissive",
-   )
-
    workflow = WorkflowBuilder()
    workflow.add_node("PythonCodeNode", "process", {
        "code": "result = {'processed': True}"
    })
 
-   results, run_id = runtime.execute(workflow.build())
-   # Trust context propagated; denied operations logged but allowed
+   with LocalRuntime(
+       trust_context=ctx,
+       trust_verifier=verifier,
+       trust_verification_mode="permissive",
+   ) as runtime:
+       results, run_id = runtime.execute(workflow.build())
+       # Trust context propagated; denied operations logged but allowed
 
 See :doc:`core/trust` for the complete CARE/EATP trust framework documentation.
 
@@ -225,10 +224,13 @@ When running in Docker or with FastAPI, use ``AsyncLocalRuntime``:
 
    async def main():
        runtime = AsyncLocalRuntime()
-       results, run_id = await runtime.execute_workflow_async(
-           workflow.build(), inputs={}
-       )
-       print(results)
+       try:
+           results, run_id = await runtime.execute_workflow_async(
+               workflow.build(), inputs={}
+           )
+           print(results)
+       finally:
+           runtime.close()
 
    asyncio.run(main())
 

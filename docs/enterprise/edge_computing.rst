@@ -88,13 +88,13 @@ EdgeCoordinationNode
    })
 
    # Execute coordination workflow
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow.build())
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(workflow.build())
 
-   # Verify coordination
-   assert results["coordinator"]["success"] is True
-   assert results["coordinator"]["leader"] is not None
-   assert results["get_leader"]["leader"] == results["coordinator"]["leader"]
+       # Verify coordination
+       assert results["coordinator"]["success"] is True
+       assert results["coordinator"]["leader"] is not None
+       assert results["get_leader"]["leader"] == results["coordinator"]["leader"]
 
 EdgeDiscoveryNode
 ~~~~~~~~~~~~~~~~~
@@ -209,22 +209,22 @@ Distributed Rate Limiting
    workflow.add_connection("aggregate_usage", "result", "coordinate_decision", "events")
 
    # Execute with parameters
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(
-       workflow.build(),
-       parameters={
-           "aggregate_usage": {
-               "us_east_1_usage": 400,
-               "eu_west_1_usage": 300,
-               "limit": 1000
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(
+           workflow.build(),
+           parameters={
+               "aggregate_usage": {
+                   "us_east_1_usage": 400,
+                   "eu_west_1_usage": 300,
+                   "limit": 1000
+               }
            }
-       }
-   )
+       )
 
-   # Verify coordination worked
-   assert results["rate_limit_config"]["success"] is True
-   assert results["aggregate_usage"]["total_usage"] == 700
-   assert results["coordinate_decision"]["success"] is True
+       # Verify coordination worked
+       assert results["rate_limit_config"]["success"] is True
+       assert results["aggregate_usage"]["total_usage"] == 700
+       assert results["coordinate_decision"]["success"] is True
 
 Coordinated Deployment
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -314,19 +314,19 @@ Coordinated Deployment
    workflow.add_connection("propose_deployment", "success", "execute_deployment", "accepted")
 
    # Execute deployment workflow
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(
-       workflow.build(),
-       parameters={
-           "create_plan": {
-               "timestamp": "2025-01-20T10:00:00Z"
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(
+           workflow.build(),
+           parameters={
+               "create_plan": {
+                   "timestamp": "2025-01-20T10:00:00Z"
+               }
            }
-       }
-   )
+       )
 
-   # Verify coordinated deployment
-   assert results["elect_coordinator"]["success"] is True
-   assert results["propose_deployment"]["success"] is True
+       # Verify coordinated deployment
+       assert results["elect_coordinator"]["success"] is True
+       assert results["propose_deployment"]["success"] is True
 
 Performance Characteristics
 ---------------------------

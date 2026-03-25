@@ -801,6 +801,7 @@ class DataFlow:
                 migrations_dir="migrations",
                 dataflow_instance=self,  # Pass DataFlow instance for lock manager integration
                 lock_timeout=self._migration_lock_timeout,
+                runtime=self.runtime,
             )
 
             logger.debug(f"Migration system initialized successfully for {dialect}")
@@ -6732,9 +6733,7 @@ class DataFlow:
 
         # M2-001: Reuse shared runtime instead of creating a new one
         runtime = self.runtime
-        logger.debug(
-            "_get_current_schema_via_workflow: Using shared runtime"
-        )
+        logger.debug("_get_current_schema_via_workflow: Using shared runtime")
 
         results, _ = runtime.execute(workflow.build())
 
@@ -7687,14 +7686,19 @@ class DataFlow:
         self._closed = True
 
         # M2-001: Release subsystem references to shared runtime FIRST.
-        # Each subsystem calls release() which decrements the ref_count.
+        # Each subsystem calls close() which calls release() on their runtime.
         if hasattr(self, "_model_registry") and self._model_registry is not None:
             try:
-                if hasattr(self._model_registry, "runtime") and self._model_registry.runtime is not None:
-                    self._model_registry.runtime.release()
-                    self._model_registry.runtime = None
+                self._model_registry.close()
             except Exception as e:
-                logger.debug(f"Error releasing model registry runtime: {e}")
+                logger.debug(f"Error closing model registry: {e}")
+
+        if hasattr(self, "_migration_system") and self._migration_system is not None:
+            try:
+                if hasattr(self._migration_system, "close"):
+                    self._migration_system.close()
+            except Exception as e:
+                logger.debug(f"Error closing migration system: {e}")
 
         # Stop pool monitor
         if self._pool_monitor is not None:
@@ -7766,9 +7770,7 @@ class DataFlow:
         # M2-001: Release subsystem references to shared runtime FIRST.
         if hasattr(self, "_model_registry") and self._model_registry is not None:
             try:
-                if hasattr(self._model_registry, "runtime") and self._model_registry.runtime is not None:
-                    self._model_registry.runtime.release()
-                    self._model_registry.runtime = None
+                self._model_registry.close()
             except Exception as e:
                 logger.debug(f"Error releasing model registry runtime: {e}")
 

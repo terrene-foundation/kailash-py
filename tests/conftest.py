@@ -261,6 +261,26 @@ def event_loop():
 
 
 @pytest.fixture
+def runtime():
+    """Shared runtime fixture with proper cleanup."""
+    from kailash.runtime.local import LocalRuntime
+
+    rt = LocalRuntime()
+    yield rt
+    rt.close()
+
+
+@pytest.fixture
+def async_runtime():
+    """Shared async runtime fixture with proper cleanup."""
+    from kailash.runtime.async_local import AsyncLocalRuntime
+
+    rt = AsyncLocalRuntime()
+    yield rt
+    rt.close()
+
+
+@pytest.fixture
 def _ensure_test_nodes_registered():
     """Ensure test-specific nodes are registered when needed."""
     # This fixture can be used by tests that need specific node registrations

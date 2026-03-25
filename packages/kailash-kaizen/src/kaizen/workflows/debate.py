@@ -336,15 +336,18 @@ class DebateWorkflow:
             # Use AsyncLocalRuntime for true async execution (no thread pool)
             runtime = AsyncLocalRuntime()
 
-            # Prepare execution parameters
-            execution_params = {}
-            if inputs:
-                execution_params.update(inputs)
+            try:
+                # Prepare execution parameters
+                execution_params = {}
+                if inputs:
+                    execution_params.update(inputs)
 
-            # True async execution - uses AsyncLocalRuntime.execute_workflow_async()
-            results, run_id = await runtime.execute_workflow_async(
-                workflow.build(), inputs=execution_params
-            )
+                # True async execution - uses AsyncLocalRuntime.execute_workflow_async()
+                results, run_id = await runtime.execute_workflow_async(
+                    workflow.build(), inputs=execution_params
+                )
+            finally:
+                runtime.close()
 
             execution_end = time.time()
             execution_time = (execution_end - execution_start) * 1000

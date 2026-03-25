@@ -106,9 +106,9 @@ Existing code works unchanged. Trust is disabled by default:
 
    from kailash.runtime import LocalRuntime
 
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow.build())
-   # No trust context, no verification, no audit -- same as before
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(workflow.build())
+       # No trust context, no verification, no audit -- same as before
 
 Permissive Mode (Log Only)
 ---------------------------
@@ -139,14 +139,13 @@ Log trust events without blocking. Ideal for staging and gradual rollout:
        config=TrustVerifierConfig(mode="permissive"),
    )
 
-   runtime = LocalRuntime(
+   with LocalRuntime(
        trust_context=ctx,
        trust_verifier=verifier,
        trust_verification_mode="permissive",
-   )
-
-   results, run_id = runtime.execute(workflow.build())
-   # Trust context propagated; denied operations logged but allowed
+   ) as runtime:
+       results, run_id = runtime.execute(workflow.build())
+       # Trust context propagated; denied operations logged but allowed
 
 Enforcing Mode (Block Untrusted)
 --------------------------------
@@ -178,21 +177,20 @@ Block workflows that fail trust verification. For production use:
        config=TrustVerifierConfig(mode="enforcing"),
    )
 
-   runtime = LocalRuntime(
-       trust_context=ctx,
-       trust_verifier=verifier,
-       trust_verification_mode="enforcing",
-   )
-
    workflow = WorkflowBuilder()
    workflow.add_node("PythonCodeNode", "secure_task", {
        "code": "result = {'status': 'executed with enforced trust'}"
    })
 
-   try:
-       results, run_id = runtime.execute(workflow.build())
-   except Exception as e:
-       print(f"Trust verification denied execution: {e}")
+   with LocalRuntime(
+       trust_context=ctx,
+       trust_verifier=verifier,
+       trust_verification_mode="enforcing",
+   ) as runtime:
+       try:
+           results, run_id = runtime.execute(workflow.build())
+       except Exception as e:
+           print(f"Trust verification denied execution: {e}")
 
 Trust Postures
 ==============

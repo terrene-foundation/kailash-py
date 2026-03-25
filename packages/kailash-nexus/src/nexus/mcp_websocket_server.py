@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 class MCPWebSocketServer:
     """WebSocket server wrapper for MCP protocol handling."""
 
-    def __init__(self, mcp_server, host: str = "0.0.0.0", port: int = 3001, runtime=None):
+    def __init__(
+        self, mcp_server, host: str = "0.0.0.0", port: int = 3001, runtime=None
+    ):
         """Initialize WebSocket server wrapper.
 
         Args:
@@ -39,7 +41,7 @@ class MCPWebSocketServer:
 
         # Shared runtime (M3-001): use provided or create own
         if runtime is not None:
-            self.runtime = runtime
+            self.runtime = runtime.acquire()
             self._owns_runtime = False
         else:
             from kailash.runtime import AsyncLocalRuntime
@@ -331,6 +333,20 @@ class MCPWebSocketServer:
         if hasattr(self, "runtime") and self.runtime is not None:
             self.runtime.release()
             self.runtime = None
+
+    def __del__(self):
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
 
     async def start(self):
         """Start the WebSocket server."""

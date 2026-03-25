@@ -88,7 +88,7 @@ Simple Self-Organizing System
         )
 
     # Register agents with pool manager
-    runtime = LocalRuntime()
+    runtime = LocalRuntime()  # Don't forget to call runtime.close() when done
     pool_manager = workflow._node_instances["pool_manager"]
 
     for spec in agent_specs:
@@ -317,7 +317,7 @@ Here's a complete example of a self-organizing research system:
                 )
 
         def solve_problem(self, problem_description):
-            runtime = LocalRuntime()
+            runtime = LocalRuntime()  # Don't forget to call runtime.close() when done
 
             # 1. Analyze problem
             analysis_result, _ = runtime.execute(

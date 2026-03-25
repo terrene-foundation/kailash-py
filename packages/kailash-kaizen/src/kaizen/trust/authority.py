@@ -17,7 +17,10 @@ from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
 # ---------- shared types (from kailash.trust) ----------
-from kailash.trust.authority import AuthorityPermission, OrganizationalAuthority  # noqa: F401
+from kailash.trust.authority import (
+    AuthorityPermission,
+    OrganizationalAuthority,
+)  # noqa: F401
 from kailash.trust.chain import AuthorityType  # noqa: F401
 
 from kaizen.trust.exceptions import (
@@ -63,6 +66,7 @@ class OrganizationalAuthorityRegistry:
         database_url: Optional[str] = None,
         enable_cache: bool = True,
         cache_ttl_seconds: int = 600,  # 10 minutes default
+        runtime: Optional[AsyncLocalRuntime] = None,
     ):
         """
         Initialize OrganizationalAuthorityRegistry.
@@ -71,6 +75,7 @@ class OrganizationalAuthorityRegistry:
             database_url: PostgreSQL connection string (defaults to POSTGRES_URL env var)
             enable_cache: Enable caching for get operations (default: True)
             cache_ttl_seconds: Cache TTL in seconds (default: 600)
+            runtime: Optional shared AsyncLocalRuntime (avoids pool leak)
         """
         self.database_url = database_url or os.getenv("POSTGRES_URL")
         if not self.database_url:
@@ -106,7 +111,12 @@ class OrganizationalAuthorityRegistry:
         self._Authority = Authority
 
         # Runtime for executing workflows
-        self.runtime = AsyncLocalRuntime()
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = AsyncLocalRuntime()
+            self._owns_runtime = True
 
         # In-memory cache for frequently accessed authorities
         self._cache: Dict[str, tuple[OrganizationalAuthority, datetime]] = {}
@@ -514,3 +524,21 @@ class OrganizationalAuthorityRegistry:
     async def close(self) -> None:
         """Close database connections and cleanup resources."""
         self._cache.clear()
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.runtime.release()
+                self.runtime = None
+            except Exception:
+                pass

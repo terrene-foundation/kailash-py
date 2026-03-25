@@ -541,12 +541,29 @@ result = {'execution_result': execution_result}
                 },
             )
 
-        # Release runtime reference
+        self.close()
+
+        logger.info(f"Stopped Kailash MCP Server: {self.config.name}")
+
+    def close(self):
+        """Release runtime reference."""
         if hasattr(self, "runtime") and self.runtime is not None:
             self.runtime.release()
             self.runtime = None
 
-        logger.info(f"Stopped Kailash MCP Server: {self.config.name}")
+    def __del__(self):
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() or stop() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
 
     async def _emit_mcp_event(self, event_type: str, data: Dict[str, Any]):
         """Emit MCP event to middleware event stream."""

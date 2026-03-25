@@ -92,11 +92,11 @@ Quick Start
    })
 
    # Execute the workflow
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow.build())
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(workflow.build())
 
-   print(f"Created user: {results['create_user']}")
-   print(f"Found user: {results['read_user']}")
+       print(f"Created user: {results['create_user']}")
+       print(f"Found user: {results['read_user']}")
 
 **Bulk Operations:**
 

@@ -29,8 +29,8 @@ Simple Data Processing
    workflow.connect("read", "write")
 
    # Execute
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow)
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(workflow)
 
 For more examples, see the `examples directory
 <https://github.com/terrene-foundation/kailash-py/tree/main/examples>`_.

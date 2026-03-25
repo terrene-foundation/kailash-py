@@ -1593,12 +1593,16 @@ class AutoMigrationSystem:
         self.migrations_dir = Path(migrations_dir)
         self.migrations_dir.mkdir(exist_ok=True)
 
-        # Use database-specific components
+        # Use database-specific components (pass shared runtime to sub-components)
         if self.dialect == "sqlite":
-            self.inspector = SQLiteSchemaInspector(connection_string)
+            self.inspector = SQLiteSchemaInspector(
+                connection_string, runtime=self.runtime
+            )
             self.generator = SQLiteMigrationGenerator()
         else:
-            self.inspector = PostgreSQLSchemaInspector(connection_string)
+            self.inspector = PostgreSQLSchemaInspector(
+                connection_string, runtime=self.runtime
+            )
             self.generator = PostgreSQLMigrationGenerator()
 
         # Migration history
@@ -2846,7 +2850,10 @@ class AutoMigrationSystem:
         """Release the runtime reference.
 
         Safe to call multiple times -- subsequent calls are no-ops.
+        Also closes sub-component runtimes (inspector).
         """
+        if hasattr(self, "inspector") and self.inspector is not None:
+            self.inspector.close()
         if hasattr(self, "runtime") and self.runtime is not None:
             self.runtime.release()
             self.runtime = None

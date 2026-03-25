@@ -71,9 +71,9 @@ workflow.add_node("PythonCodeNode", "step_1", {
 })
 built = workflow.build()
 
-runtime = LocalRuntime()
-results, run_id = runtime.execute(built)
-print(f"Run {run_id}: {results['step_1']}")
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(built)
+    print(f"Run {run_id}: {results['step_1']}")
 ```
 
 Test it locally first (single-process, no workers needed):
