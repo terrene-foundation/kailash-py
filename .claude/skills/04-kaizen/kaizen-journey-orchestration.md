@@ -35,7 +35,7 @@ Layer 1: Kailash Core SDK (workflows, nodes, runtime)
 ### Define a Journey
 
 ```python
-from kaizen.journey import (
+from kaizen_agents.journey import (
     Journey, Pathway, Transition, IntentTrigger,
     JourneyConfig, ReturnToPrevious
 )
@@ -134,7 +134,7 @@ async def main():
 ### Journey Class
 
 ```python
-from kaizen.journey import Journey, Pathway
+from kaizen_agents.journey import Journey, Pathway
 
 class MyJourney(Journey):
     __entry_pathway__ = "start"       # Required: First pathway
@@ -166,7 +166,7 @@ class MyJourney(Journey):
 ### Transitions
 
 ```python
-from kaizen.journey import Transition, IntentTrigger, ConditionTrigger
+from kaizen_agents.journey import Transition, IntentTrigger, ConditionTrigger
 
 # Intent-based (LLM-powered)
 Transition(
@@ -190,7 +190,7 @@ Transition(
 ### Context Accumulation
 
 ```python
-from kaizen.journey import ContextAccumulator, MergeStrategy
+from kaizen_agents.journey import ContextAccumulator, MergeStrategy
 
 # Configure merge strategies per field
 accumulator = ContextAccumulator(config)
@@ -210,7 +210,7 @@ accumulator.configure_field("total_attempts", MergeStrategy.SUM)
 ### Return Behaviors
 
 ```python
-from kaizen.journey import ReturnToPrevious, ReturnToSpecific
+from kaizen_agents.journey import ReturnToPrevious, ReturnToSpecific
 
 # FAQ detour - returns to previous pathway
 class FAQPath(Pathway):
@@ -226,7 +226,7 @@ class ErrorPath(Pathway):
 Deploy journeys via Nexus for API/CLI/MCP access:
 
 ```python
-from kaizen.journey.nexus import JourneyNexusAdapter, deploy_journey_to_nexus
+from kaizen_agents.journey.nexus import JourneyNexusAdapter, deploy_journey_to_nexus
 from nexus import Nexus
 
 # Create adapter
@@ -252,7 +252,7 @@ nexus.run()
 ## Hooks System
 
 ```python
-from kaizen.journey import PathwayManager, JourneyHookEvent
+from kaizen_agents.journey import PathwayManager, JourneyHookEvent
 
 manager = PathwayManager(journey, session_id, config)
 
@@ -297,7 +297,7 @@ python -m examples.journey.healthcare_referral.main --mode demo
 
 ```python
 import pytest
-from kaizen.journey import Journey, Pathway, JourneyConfig
+from kaizen_agents.journey import Journey, Pathway, JourneyConfig
 
 
 class TestMyJourney:
@@ -322,7 +322,7 @@ class TestMyJourney:
 ## Configuration
 
 ```python
-from kaizen.journey import JourneyConfig
+from kaizen_agents.journey import JourneyConfig
 
 config = JourneyConfig(
     # Intent Detection

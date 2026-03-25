@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Dict, List
 
 import pytest
-from kaizen.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 from kaizen.core.autonomy.interrupts.handlers import TimeoutInterruptHandler
 from kaizen.core.autonomy.interrupts.manager import InterruptManager
 from kaizen.core.autonomy.interrupts.types import InterruptedError, InterruptSource

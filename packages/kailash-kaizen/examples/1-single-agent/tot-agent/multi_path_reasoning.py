@@ -8,7 +8,7 @@ Pattern: Generate N paths → Evaluate → Select Best → Execute
 Use Case: Strategic decision-making with multiple perspectives
 """
 
-from kaizen.agents.specialized.tree_of_thoughts import ToTAgent, ToTAgentConfig
+from kaizen_agents.agents.specialized.tree_of_thoughts import ToTAgent, ToTAgentConfig
 
 
 def main():

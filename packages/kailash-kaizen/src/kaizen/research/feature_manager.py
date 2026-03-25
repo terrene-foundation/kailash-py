@@ -10,7 +10,7 @@ Components:
 
 from typing import Dict, List, Optional
 
-from kaizen.research.experimental import ExperimentalFeature
+from kaizen_agents.research_patterns.experimental import ExperimentalFeature
 from kaizen.research.registry import ResearchRegistry
 from packaging import version as pkg_version
 

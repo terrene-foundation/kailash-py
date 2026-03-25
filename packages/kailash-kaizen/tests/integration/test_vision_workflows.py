@@ -27,7 +27,7 @@ class TestE2EImageDescription:
 
     def test_e2e_image_description(self, tmp_path):
         """Test complete image description workflow with real Ollama."""
-        from kaizen.agents.vision_agent import VisionAgent, VisionAgentConfig
+        from kaizen_agents.agents.vision_agent import VisionAgent, VisionAgentConfig
 
         # Create test image
         img = Image.new("RGB", (200, 200), color="red")
@@ -50,7 +50,7 @@ class TestE2EImageDescription:
 
     def test_e2e_image_description_detailed(self, tmp_path):
         """Test detailed image description."""
-        from kaizen.agents.vision_agent import VisionAgent, VisionAgentConfig
+        from kaizen_agents.agents.vision_agent import VisionAgent, VisionAgentConfig
 
         # Create more complex test image
         img = Image.new("RGB", (400, 300), color="blue")
@@ -72,7 +72,7 @@ class TestE2EVisualQA:
 
     def test_e2e_visual_qa(self, tmp_path):
         """Test complete visual Q&A workflow."""
-        from kaizen.agents.vision_agent import VisionAgent, VisionAgentConfig
+        from kaizen_agents.agents.vision_agent import VisionAgent, VisionAgentConfig
 
         # Create test image
         img = Image.new("RGB", (150, 150), color="green")
@@ -95,7 +95,7 @@ class TestE2EVisualQA:
 
     def test_e2e_visual_qa_multiple_questions(self, tmp_path):
         """Test multiple questions about same image."""
-        from kaizen.agents.vision_agent import VisionAgent, VisionAgentConfig
+        from kaizen_agents.agents.vision_agent import VisionAgent, VisionAgentConfig
 
         # Create test image
         img = Image.new("RGB", (200, 100), color="yellow")
@@ -127,7 +127,7 @@ class TestE2EDocumentAnalysis:
 
     def test_e2e_document_analysis(self, tmp_path):
         """Test analyzing document image with OCR."""
-        from kaizen.agents.vision_agent import VisionAgent, VisionAgentConfig
+        from kaizen_agents.agents.vision_agent import VisionAgent, VisionAgentConfig
 
         # Create document-like image (white background)
         img = Image.new("RGB", (800, 600), color="white")
@@ -146,7 +146,7 @@ class TestE2EDocumentAnalysis:
 
     def test_e2e_document_analysis_with_question(self, tmp_path):
         """Test document analysis with specific question."""
-        from kaizen.agents.vision_agent import VisionAgent, VisionAgentConfig
+        from kaizen_agents.agents.vision_agent import VisionAgent, VisionAgentConfig
 
         # Create document image
         img = Image.new("RGB", (600, 400), color="white")
@@ -170,7 +170,7 @@ class TestE2EMultiImageComparison:
 
     def test_e2e_multi_image_comparison(self, tmp_path):
         """Test comparing multiple images."""
-        from kaizen.agents.vision_agent import VisionAgent, VisionAgentConfig
+        from kaizen_agents.agents.vision_agent import VisionAgent, VisionAgentConfig
 
         # Create test images with different colors
         colors = ["red", "blue", "green"]
@@ -228,7 +228,7 @@ class TestE2EVisionPerformance:
         """Test performance benchmarks for vision workflows."""
         import time
 
-        from kaizen.agents.vision_agent import VisionAgent, VisionAgentConfig
+        from kaizen_agents.agents.vision_agent import VisionAgent, VisionAgentConfig
 
         # Create test image
         img = Image.new("RGB", (300, 300), color="purple")
@@ -251,7 +251,7 @@ class TestE2EVisionPerformance:
         """Test batch analysis performance."""
         import time
 
-        from kaizen.agents.vision_agent import VisionAgent, VisionAgentConfig
+        from kaizen_agents.agents.vision_agent import VisionAgent, VisionAgentConfig
 
         # Create multiple test images
         images = []

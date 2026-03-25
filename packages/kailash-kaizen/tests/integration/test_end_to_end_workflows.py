@@ -19,7 +19,7 @@ import pytest
 try:
     from dataflow import DataFlow
 
-    from kaizen.integrations.dataflow import (
+    from kaizen_agents.integrations.dataflow import (
         DATAFLOW_AVAILABLE,
         DataQualityAgent,
         DataTransformAgent,

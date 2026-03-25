@@ -31,7 +31,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from kaizen.agents.specialized.react import ReActAgent
+from kaizen_agents.agents.specialized.react import ReActAgent
 
 
 @dataclass

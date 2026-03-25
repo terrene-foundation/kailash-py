@@ -79,7 +79,7 @@ Routes requests to the best-fit agent using semantic capability matching via Goo
 ### Routing Strategies
 
 ```python
-from kaizen.orchestration.pipeline import Pipeline
+from kaizen_agents.patterns.pipeline import Pipeline
 
 # Semantic routing (A2A capability matching) — best for specialized agents
 pipeline = Pipeline.router(
@@ -136,7 +136,7 @@ pipeline = Pipeline.router(agents=agents, error_handling="fail-fast")
 Declarative multi-step user journeys with intent-driven transitions.
 
 ```python
-from kaizen.journey import Journey, Pathway, Transition, IntentTrigger, JourneyConfig
+from kaizen_agents.journey import Journey, Pathway, Transition, IntentTrigger, JourneyConfig
 
 class IntakeSignature(Signature):
     __intent__ = "Gather patient symptoms and preferences"

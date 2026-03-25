@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kaizen-agents"
-version = "0.2.0"
-description = "PACT-governed L3 autonomous agent orchestration layer built on Kailash Kaizen SDK"
+version = "0.3.0"
+description = "PACT-governed autonomous agent engines built on Kailash Kaizen SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -23,7 +23,7 @@ classifiers = [
 ]
 dependencies = [
     "kailash[pact]>=2.1.0",
-    "kailash-kaizen>=2.2.1",
+    "kailash-kaizen>=2.3.0",
     "kailash-pact>=0.4.0",
     "openai>=1.30.0",
     "python-dotenv>=1.0.0",

@@ -16,7 +16,7 @@ import os
 import time
 
 import pytest
-from kaizen.agents.multi_modal import DocumentExtractionAgent, DocumentExtractionConfig
+from kaizen_agents.agents.multi_modal import DocumentExtractionAgent, DocumentExtractionConfig
 
 
 @pytest.mark.e2e

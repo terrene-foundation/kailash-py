@@ -14,7 +14,7 @@ import os
 import tempfile
 from typing import List
 
-from kaizen.agents.multi_modal.document_extraction_agent import (
+from kaizen_agents.agents.multi_modal.document_extraction_agent import (
     DocumentExtractionAgent,
     DocumentExtractionConfig,
 )

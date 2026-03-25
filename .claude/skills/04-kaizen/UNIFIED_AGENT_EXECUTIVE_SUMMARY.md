@@ -145,7 +145,7 @@ agent = Agent(
 **Existing code continues to work**:
 ```python
 # OLD (still works)
-from kaizen.agents import SimpleQAAgent
+from kaizen_agents.agents import SimpleQAAgent
 agent = SimpleQAAgent(llm_provider="openai", model="gpt-4")
 result = agent.ask("What is AI?")  # ✅ Still works
 
@@ -173,7 +173,7 @@ result = agent.run("What is AI?")  # ✅ New way
 
 **BEFORE (18 lines)**:
 ```python
-from kaizen.agents import SimpleQAAgent
+from kaizen_agents.agents import SimpleQAAgent
 from dataclasses import dataclass
 
 @dataclass
@@ -207,7 +207,7 @@ print(result['answer'])
 
 **BEFORE (30 lines)**:
 ```python
-from kaizen.agents import ReActAgent
+from kaizen_agents.agents import ReActAgent
 # Tools auto-configured via MCP
 
 from dataclasses import dataclass

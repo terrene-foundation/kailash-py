@@ -42,7 +42,7 @@ from kaizen.signatures import InputField, OutputField, Signature
 
 # Coordination imports
 try:
-    from kaizen.orchestration.patterns.supervisor_worker import SupervisorWorkerPattern
+    from kaizen_agents.patterns.patterns.supervisor_worker import SupervisorWorkerPattern
 
     COORDINATION_AVAILABLE = True
 except ImportError:

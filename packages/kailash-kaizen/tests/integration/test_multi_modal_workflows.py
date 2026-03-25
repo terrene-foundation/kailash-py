@@ -9,7 +9,7 @@ import pytest
 
 # Test infrastructure
 try:
-    from kaizen.agents.multi_modal import (
+    from kaizen_agents.agents.multi_modal import (
         MultiModalAgent,
         MultiModalConfig,
         TranscriptionAgent,

@@ -12,7 +12,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from kaizen.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 from kaizen.core.autonomy.interrupts.manager import InterruptManager
 from kaizen.core.autonomy.interrupts.types import InterruptMode, InterruptSource
 from kaizen.core.autonomy.state.manager import StateManager

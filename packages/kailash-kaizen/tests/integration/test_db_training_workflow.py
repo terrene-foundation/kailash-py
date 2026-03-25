@@ -51,7 +51,7 @@ class TestDBTrainingWorkflow:
 
     def test_end_to_end_training_pipeline(self, real_db):
         """Test complete training pipeline from database data."""
-        from kaizen.integrations.dataflow.db_driven_ai import DBTrainingPipeline
+        from kaizen_agents.integrations.dataflow.db_driven_ai import DBTrainingPipeline
 
         config = RealConfig()
         trainer = DBTrainingPipeline(config=config, db=real_db)
@@ -88,7 +88,7 @@ class TestDBTrainingWorkflow:
 
     def test_real_time_inference_integration(self, real_db):
         """Test inference with real database lookups."""
-        from kaizen.integrations.dataflow.db_driven_ai import (
+        from kaizen_agents.integrations.dataflow.db_driven_ai import (
             DBTrainingPipeline,
             InferencePipeline,
         )
@@ -132,7 +132,7 @@ class TestDBTrainingWorkflow:
 
     def test_pipeline_automation_workflow(self, real_db):
         """Test automated training and deployment pipeline."""
-        from kaizen.integrations.dataflow.db_driven_ai import PipelineOrchestrator
+        from kaizen_agents.integrations.dataflow.db_driven_ai import PipelineOrchestrator
 
         config = RealConfig()
         orchestrator = PipelineOrchestrator(config=config, db=real_db)
@@ -161,7 +161,7 @@ class TestDBTrainingWorkflow:
 
     def test_model_performance_tracking(self, real_db):
         """Test tracking model metrics in database."""
-        from kaizen.integrations.dataflow.db_driven_ai import DBTrainingPipeline
+        from kaizen_agents.integrations.dataflow.db_driven_ai import DBTrainingPipeline
 
         config = RealConfig()
         trainer = DBTrainingPipeline(config=config, db=real_db)
@@ -201,7 +201,7 @@ class TestLLMIntegration:
         """Test LLM recommending features from database schema."""
         from dataflow import DataFlow
 
-        from kaizen.integrations.dataflow.db_driven_ai import DBTrainingPipeline
+        from kaizen_agents.integrations.dataflow.db_driven_ai import DBTrainingPipeline
 
         db = DataFlow("sqlite:///:memory:")
 

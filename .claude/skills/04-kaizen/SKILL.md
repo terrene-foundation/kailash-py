@@ -64,7 +64,7 @@ print(result['summary'])
 ### Pipeline Patterns (Orchestration)
 
 ```python
-from kaizen.orchestration.pipeline import Pipeline
+from kaizen_agents.patterns.pipeline import Pipeline
 
 # Ensemble: Multi-perspective collaboration
 pipeline = Pipeline.ensemble(

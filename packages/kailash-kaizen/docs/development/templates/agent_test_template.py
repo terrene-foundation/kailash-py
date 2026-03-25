@@ -32,7 +32,7 @@ class Test{AgentName}Initialization:
 
     def test_zero_config_initialization(self):
         """Test agent works with zero configuration (CRITICAL TEST)."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         # Should work with no parameters
         agent = {AgentName}()
@@ -43,7 +43,7 @@ class Test{AgentName}Initialization:
 
     def test_zero_config_uses_environment_variables(self):
         """Test that zero-config reads from environment variables."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         # Set environment variables
         os.environ['KAIZEN_LLM_PROVIDER'] = 'anthropic'
@@ -68,7 +68,7 @@ class Test{AgentName}Initialization:
 
     def test_progressive_configuration_model_only(self):
         """Test progressive configuration - override model only."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}(model="gpt-3.5-turbo")
 
@@ -78,7 +78,7 @@ class Test{AgentName}Initialization:
 
     def test_progressive_configuration_multiple_params(self):
         """Test progressive configuration - override multiple parameters."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}(
             llm_provider="anthropic",
@@ -96,7 +96,7 @@ class Test{AgentName}Initialization:
 
     def test_full_config_object_initialization(self):
         """Test initialization with full config object."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}, {AgentName}Config
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}, {AgentName}Config
 
         config = {AgentName}Config(
             llm_provider="openai",
@@ -115,7 +115,7 @@ class Test{AgentName}Initialization:
 
     def test_config_object_overrides_kwargs(self):
         """Test that config object takes precedence over kwargs."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}, {AgentName}Config
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}, {AgentName}Config
 
         config = {AgentName}Config(
             model="gpt-4",
@@ -134,7 +134,7 @@ class Test{AgentName}Initialization:
 
     def test_default_configuration_values(self):
         """Test that defaults are set correctly."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}()
 
@@ -151,7 +151,7 @@ class Test{AgentName}Initialization:
 
     def test_timeout_merged_into_provider_config(self):
         """Test that timeout is merged into provider_config."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}(timeout=60)
 
@@ -169,7 +169,7 @@ class Test{AgentName}Execution:
 
     def test_main_method_exists(self):
         """Test that main convenience method exists."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}()
 
@@ -178,7 +178,7 @@ class Test{AgentName}Execution:
 
     def test_main_method_returns_dict(self):
         """Test that main method returns a dictionary."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}()
 
@@ -190,7 +190,7 @@ class Test{AgentName}Execution:
 
     def test_main_method_has_expected_output_fields(self):
         """Test that output contains expected signature fields."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}()
 
@@ -202,7 +202,7 @@ class Test{AgentName}Execution:
 
     def test_main_method_accepts_required_inputs(self):
         """Test that main method accepts required signature inputs."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}()
 
@@ -214,7 +214,7 @@ class Test{AgentName}Execution:
 
     def test_run_method_integration(self):
         """Test that agent.run() method works (inherited from BaseAgent)."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}()
 
@@ -226,7 +226,7 @@ class Test{AgentName}Execution:
 
     def test_execution_with_different_inputs(self):
         """Test execution with various input types."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}()
 
@@ -247,7 +247,7 @@ class Test{AgentName}Execution:
         """Test that execution completes in reasonable time."""
         import time
 
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}()
 
@@ -271,7 +271,7 @@ class Test{AgentName}Configuration:
 
     def test_config_class_exists(self):
         """Test that configuration class exists."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}Config
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Config
 
         assert {AgentName}Config is not None
 
@@ -279,13 +279,13 @@ class Test{AgentName}Configuration:
         """Test that config uses dataclass decorator."""
         import dataclasses
 
-        from kaizen.agents.{category}.{agent_name} import {AgentName}Config
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Config
 
         assert dataclasses.is_dataclass({AgentName}Config)
 
     def test_config_has_required_llm_fields(self):
         """Test that config has required LLM fields."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}Config
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Config
 
         config = {AgentName}Config()
 
@@ -296,7 +296,7 @@ class Test{AgentName}Configuration:
 
     def test_config_has_required_technical_fields(self):
         """Test that config has required technical fields."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}Config
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Config
 
         config = {AgentName}Config()
 
@@ -306,7 +306,7 @@ class Test{AgentName}Configuration:
 
     def test_config_environment_variable_defaults(self):
         """Test that config reads from environment variables."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}Config
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Config
 
         os.environ['KAIZEN_MODEL'] = 'test-model'
 
@@ -318,7 +318,7 @@ class Test{AgentName}Configuration:
 
     def test_config_can_be_instantiated_with_custom_values(self):
         """Test that config accepts custom values."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}Config
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Config
 
         config = {AgentName}Config(
             llm_provider="custom_provider",
@@ -335,7 +335,7 @@ class Test{AgentName}Configuration:
 
     def test_config_provider_config_is_dict(self):
         """Test that provider_config is initialized as dict."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}Config
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Config
 
         config = {AgentName}Config()
 
@@ -353,20 +353,20 @@ class Test{AgentName}Signature:
 
     def test_signature_class_exists(self):
         """Test that signature class exists."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}Signature
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Signature
 
         assert {AgentName}Signature is not None
 
     def test_signature_inherits_from_base(self):
         """Test that signature inherits from Signature base class."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}Signature
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Signature
         from kaizen.signatures import Signature
 
         assert issubclass({AgentName}Signature, Signature)
 
     def test_signature_has_input_fields(self):
         """Test that signature has defined input fields."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}Signature
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Signature
 
         sig = {AgentName}Signature()
 
@@ -376,7 +376,7 @@ class Test{AgentName}Signature:
 
     def test_signature_has_output_fields(self):
         """Test that signature has defined output fields."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}Signature
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Signature
 
         sig = {AgentName}Signature()
 
@@ -386,7 +386,7 @@ class Test{AgentName}Signature:
 
     def test_signature_field_types(self):
         """Test that signature fields have correct types."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}Signature
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Signature
         from kaizen.signatures import InputField, OutputField
 
         sig = {AgentName}Signature()
@@ -406,7 +406,7 @@ class Test{AgentName}ErrorHandling:
 
     def test_empty_input_handling(self):
         """Test handling of empty input."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}()
 
@@ -419,7 +419,7 @@ class Test{AgentName}ErrorHandling:
 
     def test_none_input_handling(self):
         """Test handling of None input."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}()
 
@@ -435,7 +435,7 @@ class Test{AgentName}ErrorHandling:
 
     def test_invalid_config_handling(self):
         """Test handling of invalid configuration values."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         # Test with invalid temperature (negative)
         try:
@@ -448,7 +448,7 @@ class Test{AgentName}ErrorHandling:
 
     def test_missing_required_parameters(self):
         """Test behavior when required parameters are missing."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}()
 
@@ -468,27 +468,27 @@ class Test{AgentName}Documentation:
 
     def test_agent_class_has_docstring(self):
         """Test that agent class has docstring."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         assert {AgentName}.__doc__ is not None
         assert len({AgentName}.__doc__) > 50  # Substantial docstring
 
     def test_main_method_has_docstring(self):
         """Test that main method has docstring."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         assert {AgentName}.{main_method}.__doc__ is not None
         assert len({AgentName}.{main_method}.__doc__) > 20
 
     def test_config_class_has_docstring(self):
         """Test that config class has docstring."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}Config
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Config
 
         assert {AgentName}Config.__doc__ is not None
 
     def test_signature_class_has_docstring(self):
         """Test that signature class has docstring."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}Signature
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}Signature
 
         assert {AgentName}Signature.__doc__ is not None
 
@@ -504,7 +504,7 @@ class Test{AgentName}TypeHints:
         """Test that main method has type hints."""
         import inspect
 
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         sig = inspect.signature({AgentName}.{main_method})
 
@@ -521,7 +521,7 @@ class Test{AgentName}TypeHints:
         """Test that __init__ has type hints."""
         import inspect
 
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         sig = inspect.signature({AgentName}.__init__)
 
@@ -553,7 +553,7 @@ class Test{AgentName}MultiCycle:
 
     def test_uses_multi_cycle_strategy(self):
         """Test that agent uses MultiCycleStrategy."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         from kailash.strategies.multi_cycle import MultiCycleStrategy
 
@@ -564,7 +564,7 @@ class Test{AgentName}MultiCycle:
 
     def test_max_cycles_configuration(self):
         """Test that max_cycles can be configured."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}(max_cycles=20)
 
@@ -572,7 +572,7 @@ class Test{AgentName}MultiCycle:
 
     def test_convergence_check_method_exists(self):
         """Test that convergence check method exists."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}()
 
@@ -590,7 +590,7 @@ class Test{AgentName}Memory:
 
     def test_memory_disabled_by_default(self):
         """Test that memory is disabled by default (opt-in)."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}()
 
@@ -598,7 +598,7 @@ class Test{AgentName}Memory:
 
     def test_memory_enabled_with_config(self):
         """Test that memory can be enabled via configuration."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}(max_turns=10)  # Or whatever param enables memory
 
@@ -615,7 +615,7 @@ class Test{AgentName}MCPTools:
 
     def test_mcp_discovery_disabled_by_default(self):
         """Test that MCP discovery is disabled by default."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}()
 
@@ -623,7 +623,7 @@ class Test{AgentName}MCPTools:
 
     def test_mcp_discovery_can_be_enabled(self):
         """Test that MCP discovery can be enabled."""
-        from kaizen.agents.{category}.{agent_name} import {AgentName}
+        from kaizen_agents.agents.{category}.{agent_name} import {AgentName}
 
         agent = {AgentName}(mcp_discovery_enabled=True)
 

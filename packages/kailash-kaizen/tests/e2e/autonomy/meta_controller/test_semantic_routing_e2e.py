@@ -26,7 +26,7 @@ from dataclasses import dataclass
 import pytest
 from dotenv import load_dotenv
 from kaizen.core.base_agent import BaseAgent
-from kaizen.orchestration.pipeline import Pipeline
+from kaizen_agents.patterns.pipeline import Pipeline
 from kaizen.signatures import InputField, OutputField, Signature
 
 from tests.utils.cost_tracking import get_global_tracker

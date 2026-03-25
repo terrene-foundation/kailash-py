@@ -62,7 +62,7 @@ class TestNLToSQLAgent:
     def nl_to_sql_agent_class(self):
         """Get NLToSQLAgent class."""
         try:
-            from kaizen.integrations.dataflow.ai_enhanced_ops import NLToSQLAgent
+            from kaizen_agents.integrations.dataflow.ai_enhanced_ops import NLToSQLAgent
 
             return NLToSQLAgent
         except ImportError:
@@ -194,7 +194,7 @@ class TestQueryOptimizationAgent:
     def query_optimizer_class(self):
         """Get QueryOptimizer class."""
         try:
-            from kaizen.integrations.dataflow.query_optimizer import QueryOptimizer
+            from kaizen_agents.integrations.dataflow.query_optimizer import QueryOptimizer
 
             return QueryOptimizer
         except ImportError:
@@ -266,7 +266,7 @@ class TestDataTransformAgent:
     def transform_agent_class(self):
         """Get DataTransformAgent class."""
         try:
-            from kaizen.integrations.dataflow.ai_enhanced_ops import DataTransformAgent
+            from kaizen_agents.integrations.dataflow.ai_enhanced_ops import DataTransformAgent
 
             return DataTransformAgent
         except ImportError:
@@ -380,7 +380,7 @@ class TestDataQualityAgent:
     def quality_agent_class(self):
         """Get DataQualityAgent class."""
         try:
-            from kaizen.integrations.dataflow.ai_enhanced_ops import DataQualityAgent
+            from kaizen_agents.integrations.dataflow.ai_enhanced_ops import DataQualityAgent
 
             return DataQualityAgent
         except ImportError:
@@ -482,7 +482,7 @@ class TestSemanticSearchAgent:
     def semantic_search_class(self):
         """Get SemanticSearchAgent class."""
         try:
-            from kaizen.integrations.dataflow.ai_enhanced_ops import SemanticSearchAgent
+            from kaizen_agents.integrations.dataflow.ai_enhanced_ops import SemanticSearchAgent
 
             return SemanticSearchAgent
         except ImportError:
@@ -538,7 +538,7 @@ class TestBulkOperationOptimization:
     def bulk_optimizer_class(self):
         """Get bulk operation optimizer class."""
         try:
-            from kaizen.integrations.dataflow.query_optimizer import (
+            from kaizen_agents.integrations.dataflow.query_optimizer import (
                 BulkOperationOptimizer,
             )
 

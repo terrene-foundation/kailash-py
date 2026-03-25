@@ -1,0 +1,30 @@
+# MANIFEST.in - Controls which files are included in source distribution
+
+# Core package files
+include README.md
+include LICENSE
+include pyproject.toml
+
+# Documentation
+recursive-include docs *.md *.rst *.txt *.png *.svg
+
+# Examples
+recursive-include examples *.py *.md *.txt *.yaml *.yml *.json
+
+# Tests
+recursive-include tests *.py
+include tests/conftest.py
+
+# Exclude compiled Python files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude __pycache__
+global-exclude .DS_Store
+
+# Exclude development/build artifacts
+global-exclude .coverage
+global-exclude coverage.xml
+global-exclude .pytest_cache
+global-exclude *.egg-info
+global-exclude dist
+global-exclude build

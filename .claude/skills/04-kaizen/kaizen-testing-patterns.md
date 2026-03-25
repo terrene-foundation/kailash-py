@@ -37,8 +37,8 @@ pytest tests/e2e/autonomy/checkpoints/ -v
 **Writing E2E Tests:**
 ```python
 import pytest
-from kaizen.agents.autonomous.base import BaseAutonomousAgent
-from kaizen.agents.autonomous.config import AutonomousConfig
+from kaizen_agents.agents.autonomous.base import BaseAutonomousAgent
+from kaizen_agents.agents.autonomous.config import AutonomousConfig
 
 @pytest.mark.e2e  # Mark as E2E test
 @pytest.mark.asyncio  # Async test

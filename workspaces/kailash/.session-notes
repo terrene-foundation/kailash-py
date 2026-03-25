@@ -1,19 +1,36 @@
-# Session Notes — 2026-03-22
+# Session Notes — 2026-03-25 (Session 5 — Kaizen Split #75)
 
 ## Accomplished
-- All 20 runtime optimization todos completed (P0A: 5, P0B: 6, P0C: 6, P0X: 2, C5: deferred)
-- WorkflowDAG class (~890 lines) replacing networkx — dual adjacency lists, Kahn's/Tarjan's/Johnson's
-- Full migration: graph.py + 8 runtime files migrated from networkx to WorkflowDAG
-- Security red team: 7 findings fixed (cache corruption, psutil null guards, ghost nodes, dead code)
-- PR #29 merged to main
-- Codified: core-workflow-dag.md skill, COC synced
+- **Full analysis**: Classified all 199K lines of kailash-kaizen (556 files) into L1/L2/SPLIT
+- **Red-teamed 3x**: 5 CRITICAL + 3 MAJOR risks identified and resolved
+- **Issue #75 updated on GH**: Expanded scope from 18K to ~44K lines, 8 deviations documented
+- **Feature branch created**: `refactor/kaizen-split-75`
+- **Source migration complete**: 327 files moved via git mv
+  - agents/ (12K), orchestration/→patterns/ (11K), journey/ (6.5K), api/ (3.8K), workflows/ (3K)
+  - integrations/dataflow/ (3.5K), runtime/adapters/ (2.3K), research patterns (1K), coordination/ (136)
+- **Import rewrite complete**: All `from kaizen.X` → `from kaizen_agents.X` in moved files
+- **L1 imports preserved**: core, signatures, strategies, memory, tools, l3 unchanged
+- **Pre-move fixes**: __init__.py conditional imports, journey Pipeline fix, agent.py deprecated
+- **Test/example migration**: 82 test files + 89 example files moved, imports rewritten
+- **Version bumps**: kailash-kaizen 2.3.0, kaizen-agents 0.3.0
+- **Root pyproject.toml**: kaizen-agents added to [kaizen] and [all] dep groups
+- **Import smoke test PASSING**: All packages import cleanly
 
-## In Progress
-- Nothing
+## Key Decisions
+- `strategies/` stays L1 (BaseAgent circular dep)
+- `governance/` stays L1 (no LLM calls)
+- `api/` (async Agent) canonical → kaizen-agents
+- `agent.py` (sync) deprecated
+- `orchestration/` renamed to `patterns/` (avoids collision)
+- No cross-SDK issue needed (kailash-rs already correct)
 
-## Blockers
-- None
+## Remaining (M5-partial, M8, M9-partial, M10)
+- MANIFEST.in (both packages), CHANGELOG.md (both), README.md (kaizen-agents)
+- COC skills update (91 files in .claude/skills/04-kaizen/)
+- Full test suite run + clean venv verification
+- PR creation, COC sync
 
-## Next Steps
-- Core SDK version bump 2.0.0 → 2.0.1 when ready for PyPI release
-- Consider removing networkx from core dependencies (currently optional, retained for viz)
+## State
+- Branch: `refactor/kaizen-split-75` (327 files, NOT yet committed)
+- Import smoke: PASSING
+- Note: kaizen-cli shadows kaizen namespace; use PYTHONPATH for testing

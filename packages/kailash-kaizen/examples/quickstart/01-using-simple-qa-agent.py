@@ -9,7 +9,7 @@ Learning Path:
 2. Creating custom agents - CREATE your own from BaseAgent
 """
 
-from kaizen.agents import SimpleQAAgent
+from kaizen_agents.agents import SimpleQAAgent
 
 
 def main():
@@ -71,7 +71,7 @@ def main():
     print("\nOption 4: One-liner for quick use")
     print("-" * 50)
 
-    from kaizen.agents.specialized.simple_qa import ask
+    from kaizen_agents.agents.specialized.simple_qa import ask
 
     answer = ask("What is deep learning?")
     print(f"Answer: {answer}\n")

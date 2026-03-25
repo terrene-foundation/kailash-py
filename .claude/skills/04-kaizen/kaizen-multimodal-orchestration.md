@@ -5,7 +5,7 @@ MultiModalAgent, vision+audio+text unified processing.
 ## MultiModalAgent
 
 ```python
-from kaizen.agents.multi_modal_agent import MultiModalAgent, MultiModalConfig
+from kaizen_agents.agents.multi_modal_agent import MultiModalAgent, MultiModalConfig
 from kaizen.signatures.multi_modal import MultiModalSignature, ImageField
 
 class DocumentOCRSignature(MultiModalSignature):

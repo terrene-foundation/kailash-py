@@ -198,7 +198,7 @@ class TestEndToEndSpeechToText:
         - Result formatting
         - Confidence calculation
         """
-        from kaizen.agents.transcription_agent import (
+        from kaizen_agents.agents.transcription_agent import (
             TranscriptionAgent,
             TranscriptionAgentConfig,
         )
@@ -244,7 +244,7 @@ class TestEndToEndMeetingTranscription:
         - Timestamp accuracy
         - Speaker transitions (if detectable)
         """
-        from kaizen.agents.transcription_agent import (
+        from kaizen_agents.agents.transcription_agent import (
             TranscriptionAgent,
             TranscriptionAgentConfig,
         )
@@ -290,7 +290,7 @@ class TestEndToEndMultiLanguage:
         - Language-specific transcription
         - Translation to English
         """
-        from kaizen.agents.transcription_agent import (
+        from kaizen_agents.agents.transcription_agent import (
             TranscriptionAgent,
             TranscriptionAgentConfig,
         )
@@ -336,7 +336,7 @@ class TestEndToEndPerformance:
         """
         import time
 
-        from kaizen.agents.transcription_agent import (
+        from kaizen_agents.agents.transcription_agent import (
             TranscriptionAgent,
             TranscriptionAgentConfig,
         )

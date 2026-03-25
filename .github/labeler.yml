@@ -40,7 +40,7 @@
           - docs/**/*
           - "*.md"
           - .claude/**/*.md
-          - # contrib (removed)/**/*.md
+          # contrib (removed)
 
 "area/studio":
   - changed-files:

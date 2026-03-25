@@ -160,7 +160,7 @@ def main():
     print("❌ Direct Agent Usage (Old Way):")
     print(
         """
-    from kaizen.agents import SimpleQAAgent, MemoryAgent
+    from kaizen_agents.agents import SimpleQAAgent, MemoryAgent
 
     qa = SimpleQAAgent(llm_provider="ollama", model="llama2")
     memory = MemoryAgent(llm_provider="ollama", model="llama2")

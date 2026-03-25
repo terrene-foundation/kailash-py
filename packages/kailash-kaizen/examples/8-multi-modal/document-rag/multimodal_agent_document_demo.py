@@ -15,7 +15,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from kaizen.agents.multi_modal.multi_modal_agent import (
+from kaizen_agents.agents.multi_modal.multi_modal_agent import (
     MultiModalAgent,
     MultiModalConfig,
 )

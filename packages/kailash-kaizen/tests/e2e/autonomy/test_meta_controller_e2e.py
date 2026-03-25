@@ -29,7 +29,7 @@ from typing import Any, Dict, List
 import pytest
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.structured_output import create_structured_output_config
-from kaizen.orchestration.pipeline import Pipeline
+from kaizen_agents.patterns.pipeline import Pipeline
 from kaizen.signatures import InputField, OutputField, Signature
 
 from tests.utils.cost_tracking import get_global_tracker

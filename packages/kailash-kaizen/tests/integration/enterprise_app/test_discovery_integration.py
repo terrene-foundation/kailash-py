@@ -12,15 +12,15 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-from kaizen.orchestration.discovery import (
+from kaizen_agents.patterns.discovery import (
     AccessConstraints,
     AccessMetadata,
     AgentSkillMetadata,
     AgentWithAccess,
     UserFilteredAgentDiscovery,
 )
-from kaizen.orchestration.registry import AgentRegistry
-from kaizen.orchestration.runtime import AgentMetadata, AgentStatus
+from kaizen_agents.patterns.registry import AgentRegistry
+from kaizen_agents.patterns.runtime import AgentMetadata, AgentStatus
 
 
 class IntegrationTestAgent:

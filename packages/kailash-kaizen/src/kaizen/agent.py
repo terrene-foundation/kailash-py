@@ -1,36 +1,30 @@
 """
-Unified Agent API for Kaizen Framework
+Unified Agent API for Kaizen Framework (DEPRECATED)
 
-Single entry point for all agent types with 3-layer architecture:
-- Layer 1 (Zero-Config): Everything works with defaults
-- Layer 2 (Configuration): agent_type and behavioral parameters
-- Layer 3 (Expert Override): Custom implementations
+.. deprecated:: 2.3.0
+    This synchronous Agent class is deprecated. Use the async-first Agent
+    from kaizen-agents instead::
 
-Part of ADR-020: Unified Agent API Architecture
+        from kaizen_agents import Agent
 
-Example (Layer 1 - Zero-Config):
-    >>> from kaizen import Agent
-    >>> agent = Agent(model="gpt-4")
-    >>> result = agent.run("What is AI?")
+    Or via the kailash-kaizen re-export (auto-resolves to async if installed)::
 
-Example (Layer 2 - Configuration):
-    >>> agent = Agent(
-    ...     model="gpt-4",
-    ...     agent_type="react",
-    ...     memory_turns=20,
-    ...     tools=["read_file", "http_get"],
-    ...     budget_limit_usd=5.0,
-    ... )
+        from kaizen import Agent
 
-Example (Layer 3 - Expert Override):
-    >>> agent = Agent(
-    ...     model="gpt-4",
-    ...     custom_memory=RedisMemory(),
-    ...     custom_mcp_servers=[{"name": "custom", "command": "python", "args": ["-m", "my.mcp.server"]}],
-    ... )
+    The async Agent provides full streaming, checkpointing, and budget
+    enforcement. This sync wrapper will be removed in 3.0.0.
 """
 
 import logging
+import warnings
+
+warnings.warn(
+    "kaizen.agent.Agent is deprecated. Use 'from kaizen_agents import Agent' "
+    "(async-first) or 'from kaizen import Agent' (auto-resolves). "
+    "This module will be removed in kailash-kaizen 3.0.0.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 import time
 from typing import Any, Dict, List, Optional, Union
 

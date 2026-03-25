@@ -30,7 +30,7 @@ from typing import Any, Dict
 
 import pytest
 from dotenv import load_dotenv
-from kaizen.agents.specialized.pev import PEVAgent
+from kaizen_agents.agents.specialized.pev import PEVAgent
 
 from tests.utils.cost_tracking import get_global_tracker
 from tests.utils.reliability_helpers import (
