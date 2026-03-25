@@ -44,7 +44,7 @@ jobs:
     steps:
       - name: Check if push event should be skipped
         id: check
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             if (context.eventName !== 'push') {
