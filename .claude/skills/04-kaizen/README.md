@@ -190,7 +190,7 @@ analysis = agent2.analyze(findings)
 ### Vision Pattern (Watch for Pitfalls!)
 
 ```python
-from kaizen.agents import VisionAgent, VisionAgentConfig
+from kaizen_agents.agents import VisionAgent, VisionAgentConfig
 
 config = VisionAgentConfig(llm_provider="ollama", model="bakllava")
 agent = VisionAgent(config=config)

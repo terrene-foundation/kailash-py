@@ -22,7 +22,7 @@ AgentRegistry provides centralized coordination for distributed multi-agent syst
 ### Basic Distributed Coordination
 
 ```python
-from kaizen.orchestration import (
+from kaizen_agents.patterns import (
     AgentRegistry,
     AgentRegistryConfig,
     RegistryEventType,
@@ -75,7 +75,7 @@ await registry.shutdown()
 Configuration for distributed agent coordination:
 
 ```python
-from kaizen.orchestration import AgentRegistryConfig
+from kaizen_agents.patterns import AgentRegistryConfig
 
 config = AgentRegistryConfig(
     enable_heartbeat_monitoring=True,    # Enable heartbeat monitoring
@@ -167,7 +167,7 @@ for metadata in agents:
 6 event types for cross-runtime coordination:
 
 ```python
-from kaizen.orchestration import RegistryEventType, RegistryEvent
+from kaizen_agents.patterns import RegistryEventType, RegistryEvent
 
 # Define event callback
 async def event_handler(event: RegistryEvent):

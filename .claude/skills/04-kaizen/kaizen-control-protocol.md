@@ -352,7 +352,7 @@ class ToolAwareAgent(BaseAgent):
 ```python
 # NOTE: kaizen.agents.coordination is DEPRECATED (removal in v0.5.0)
 # Use kaizen.orchestration.patterns instead
-from kaizen.orchestration.patterns import SupervisorWorkerPattern
+from kaizen_agents.patterns.patterns import SupervisorWorkerPattern
 
 # Supervisor can ask questions
 class InteractiveSupervisor(BaseAgent):

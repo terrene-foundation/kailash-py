@@ -9,7 +9,7 @@
 ## Quick Reference
 
 ```python
-from kaizen.agents.autonomous.base import BaseAutonomousAgent, AutonomousConfig
+from kaizen_agents.agents.autonomous.base import BaseAutonomousAgent, AutonomousConfig
 from kaizen.core.autonomy.state.storage import FilesystemStorage
 from kaizen.core.autonomy.state.manager import StateManager
 
@@ -193,7 +193,7 @@ storage = FilesystemStorage(
 ### Long-Running Autonomous Agent
 
 ```python
-from kaizen.agents.autonomous.base import BaseAutonomousAgent, AutonomousConfig
+from kaizen_agents.agents.autonomous.base import BaseAutonomousAgent, AutonomousConfig
 
 config = AutonomousConfig(
     max_cycles=50,  # Long-running

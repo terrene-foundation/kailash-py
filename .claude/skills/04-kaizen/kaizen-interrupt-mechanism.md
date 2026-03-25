@@ -21,8 +21,8 @@ The interrupt mechanism provides:
 ### Basic Interrupt Configuration
 
 ```python
-from kaizen.agents.autonomous.base import BaseAutonomousAgent
-from kaizen.agents.autonomous.config import AutonomousConfig
+from kaizen_agents.agents.autonomous.base import BaseAutonomousAgent
+from kaizen_agents.agents.autonomous.config import AutonomousConfig
 from kaizen.core.autonomy.interrupts.handlers import TimeoutInterruptHandler
 
 # Enable interrupts in config
@@ -226,7 +226,7 @@ hook_manager.register(HookEvent.POST_INTERRUPT, post_interrupt_hook)
 
 ```python
 # examples/autonomy/interrupts/01_ctrl_c_interrupt.py
-from kaizen.agents.autonomous.base import BaseAutonomousAgent
+from kaizen_agents.agents.autonomous.base import BaseAutonomousAgent
 from kaizen.core.autonomy.interrupts.handlers import SignalInterruptHandler
 
 config = AutonomousConfig(
@@ -294,7 +294,7 @@ Use interrupts when you need:
 ### Production Agent with All Handlers
 
 ```python
-from kaizen.agents.autonomous.base import BaseAutonomousAgent
+from kaizen_agents.agents.autonomous.base import BaseAutonomousAgent
 from kaizen.core.autonomy.interrupts.handlers import (
     TimeoutInterruptHandler,
     BudgetInterruptHandler,

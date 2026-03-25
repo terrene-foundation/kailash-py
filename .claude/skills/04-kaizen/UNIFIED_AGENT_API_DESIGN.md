@@ -16,7 +16,7 @@ Current Kaizen architecture suffers from **decision paralysis**:
 
 ```python
 # Which one do I use?!
-from kaizen.agents import (
+from kaizen_agents.agents import (
     SimpleQAAgent,           # For Q&A?
     ChainOfThoughtAgent,     # For reasoning?
     ReActAgent,              # For tool calling?
@@ -425,7 +425,7 @@ result = agent.run("Write a blog post and improve it 3 times")
 
 ```python
 # Separate classes for workflows
-from kaizen.agents.coordination import (
+from kaizen_agents.agents.coordination import (
     SupervisorWorkerPattern,
     ConsensusPattern,
     DebatePattern,
@@ -1000,7 +1000,7 @@ WORKFLOW_PRESETS = {
 
 ```python
 # EXISTING CODE (still works)
-from kaizen.agents import SimpleQAAgent, ReActAgent
+from kaizen_agents.agents import SimpleQAAgent, ReActAgent
 
 agent = SimpleQAAgent(llm_provider="openai", model="gpt-4")
 result = agent.ask("What is AI?")  # ✅ Still works
@@ -1062,7 +1062,7 @@ result = agent.run("What is AI?")  # ✅ New way
 
 **BEFORE (Current)**:
 ```python
-from kaizen.agents import SimpleQAAgent
+from kaizen_agents.agents import SimpleQAAgent
 from dataclasses import dataclass
 
 @dataclass
@@ -1104,7 +1104,7 @@ agent = Agent(model="gpt-4", temperature=0.7)
 
 **BEFORE (Current)**:
 ```python
-from kaizen.agents import ReActAgent
+from kaizen_agents.agents import ReActAgent
 # Tools auto-configured via MCP
 
 from dataclasses import dataclass
@@ -1154,8 +1154,8 @@ print(result['answer'])
 
 **BEFORE (Current)**:
 ```python
-from kaizen.agents import SimpleQAAgent
-from kaizen.agents.coordination import SupervisorWorkerPattern
+from kaizen_agents.agents import SimpleQAAgent
+from kaizen_agents.agents.coordination import SupervisorWorkerPattern
 from kaizen.memory import SharedMemoryPool
 
 # Create shared memory
@@ -1230,8 +1230,8 @@ result = supervisor.run("Research, analyze, and write report on AI")
 
 **BEFORE (Current)**:
 ```python
-from kaizen.agents import VisionAgent, TranscriptionAgent, MultiModalAgent
-from kaizen.agents.multi_modal import VisionAgentConfig, TranscriptionAgentConfig
+from kaizen_agents.agents import VisionAgent, TranscriptionAgent, MultiModalAgent
+from kaizen_agents.agents.multi_modal import VisionAgentConfig, TranscriptionAgentConfig
 
 # Create vision agent
 vision_config = VisionAgentConfig(

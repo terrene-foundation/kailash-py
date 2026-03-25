@@ -5,6 +5,30 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-03-25
+
+### Changed
+
+- **Structural split**: Moved ~44K lines of Layer 2 (LLM-dependent) engine code to kaizen-agents package
+- Moved modules: agents/, orchestration/ (→patterns/), journey/, api/, workflows/, coordination/, integrations/dataflow/, runtime/adapters/, research patterns
+- `from kaizen import Agent` now conditionally resolves to async Agent from kaizen-agents (fallback: CoreAgent)
+- kaizen-agents added to root `[kaizen]` optional dependency group
+
+### Deprecated
+
+- `kaizen.agent.Agent` (sync wrapper) — use `kaizen_agents.api.agent.Agent` (async) instead
+
+### Removed
+
+- `kaizen/agents/` — moved to kaizen-agents package
+- `kaizen/orchestration/` — moved to kaizen-agents as `patterns/`
+- `kaizen/journey/` — moved to kaizen-agents
+- `kaizen/api/` — moved to kaizen-agents (canonical async Agent API)
+- `kaizen/workflows/` — moved to kaizen-agents
+- `kaizen/coordination/` — moved to kaizen-agents
+- `kaizen/integrations/dataflow/` — moved to kaizen-agents
+- `kaizen/runtime/adapters/` — moved to kaizen-agents as `runtime_adapters/`
+
 ## [2.2.0] - 2026-03-24
 
 ### LLM-First Autonomous Agents

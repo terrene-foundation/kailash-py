@@ -5,7 +5,7 @@ VisionAgent, OllamaVisionProvider, image analysis with Ollama/OpenAI.
 ## Basic Vision Agent
 
 ```python
-from kaizen.agents import VisionAgent, VisionAgentConfig
+from kaizen_agents.agents import VisionAgent, VisionAgentConfig
 
 config = VisionAgentConfig(llm_provider="ollama", model="bakllava")
 agent = VisionAgent(config=config)

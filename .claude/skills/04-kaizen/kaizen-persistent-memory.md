@@ -86,7 +86,7 @@ memory_loaded.load_from_db()  # Restores conversation history
 ### Example: Conversational QA Agent
 
 ```python
-from kaizen.agents import SimpleQAAgent
+from kaizen_agents.agents import SimpleQAAgent
 from kaizen.memory import PersistentBufferMemory
 
 class ConversationalAgent(SimpleQAAgent):
