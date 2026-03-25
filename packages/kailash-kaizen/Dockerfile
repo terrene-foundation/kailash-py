@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 
 # Copy dependency files first (for better caching)
-COPY pyproject.toml setup.py README.md ./
+COPY pyproject.toml README.md ./
 
 # Copy source code
 COPY src ./src
