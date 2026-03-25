@@ -6,16 +6,23 @@ auto-optimization, and enhanced AI agent capabilities built on top of the
 proven Kailash SDK infrastructure.
 """
 
-__version__ = "2.2.1"
+__version__ = "2.3.0"
 __author__ = "Terrene Foundation"
 __license__ = "Apache-2.0"
 
 # UNIFIED AGENT API (ADR-020) - Primary user-facing agent
-from kaizen.agent import Agent  # NEW: Unified Agent with 3-layer architecture
+# Async Agent from kaizen-agents is canonical; falls back to CoreAgent
+try:
+    from kaizen_agents import Agent  # Full async Agent (requires kaizen-agents)
+except ImportError:
+    from kaizen.core.agents import Agent  # type: ignore[assignment]  # CoreAgent fallback
 
 # Import nodes module to trigger agent registration
-# This makes Kaizen agents discoverable to WorkflowBuilder and Studio
-from kaizen.agents import nodes as _agent_nodes  # noqa: F401
+# Agent nodes are registered when kaizen-agents is installed
+try:
+    from kaizen_agents.agents import nodes as _agent_nodes  # noqa: F401
+except ImportError:
+    pass  # Agent nodes available when kaizen-agents is installed
 
 # Core framework components
 from kaizen.core.agents import (  # Legacy agent for internal use; noqa: F401 - Re-exported for backward compatibility
