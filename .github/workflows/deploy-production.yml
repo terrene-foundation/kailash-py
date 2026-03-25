@@ -104,7 +104,7 @@ jobs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -162,7 +162,7 @@ jobs:
     if: ${{ !inputs.skip_tests }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -200,7 +200,7 @@ jobs:
       url: ${{ steps.deploy.outputs.url }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Deploy to Kubernetes
         id: deploy
@@ -247,7 +247,7 @@ jobs:
     needs: [setup, deploy]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Make validation script executable
         run: chmod +x ./packages/kailash-kaizen/scripts/validate_deployment.sh
@@ -276,7 +276,7 @@ jobs:
     if: failure() && needs.setup.outputs.environment != 'dev'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Make rollback script executable
         run: chmod +x ./packages/kailash-kaizen/scripts/rollback.sh
