@@ -18,7 +18,9 @@ from pathlib import Path
 import pytest
 
 # Root of the production source code under test
-_SRC_DIR = Path(__file__).resolve().parent.parent.parent.parent / "src" / "trustplane"
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent.parent
+_SRC_DIR = _PROJECT_ROOT / "src" / "kailash" / "trust" / "plane"
+_TRUST_DIR = _PROJECT_ROOT / "src" / "kailash" / "trust"
 
 
 def _collect_python_files(directory: Path) -> list[Path]:
@@ -294,7 +296,7 @@ class TestStaticONoFollow:
 
     def test_o_nofollow_in_locking_module(self) -> None:
         """The _locking module must reference O_NOFOLLOW for symlink protection."""
-        locking_path = _SRC_DIR / "_locking.py"
+        locking_path = _TRUST_DIR / "_locking.py"
         source = _read_source(locking_path)
 
         assert "O_NOFOLLOW" in source, (
@@ -324,7 +326,7 @@ class TestStaticAtomicWrite:
 
     def test_atomic_write_uses_temp_rename(self) -> None:
         """atomic_write() must use mkstemp and os.replace for atomicity."""
-        locking_path = _SRC_DIR / "_locking.py"
+        locking_path = _TRUST_DIR / "_locking.py"
         source = _read_source(locking_path)
 
         assert "mkstemp" in source, (

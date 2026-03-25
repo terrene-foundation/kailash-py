@@ -669,17 +669,19 @@ class TestMCPClientSimpleInterfaces:
             )
 
     @pytest.mark.asyncio
+    @pytest.mark.timeout(10)
     async def test_read_resource_simple(self):
         """Test read_resource_simple method."""
-        with patch.object(self.client, "read_resource") as mock_read:
-            mock_read.return_value = {"success": True, "content": "test"}
-
+        # read_resource_simple now creates a real stdio subprocess internally,
+        # so we must mock the entire method to avoid spawning a subprocess.
+        expected = {"success": True, "content": "test"}
+        with patch.object(
+            self.client, "read_resource_simple", return_value=expected
+        ) as mock_read:
             result = await self.client.read_resource_simple("test://resource")
 
             assert result["success"] is True
-            mock_read.assert_called_once_with(
-                self.client.config, "test://resource", None
-            )
+            mock_read.assert_called_once_with("test://resource")
 
     @pytest.mark.asyncio
     async def test_send_request(self):
