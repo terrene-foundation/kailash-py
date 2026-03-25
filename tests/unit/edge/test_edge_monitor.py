@@ -260,9 +260,9 @@ class TestEdgeMonitor:
         """Test analytics generation."""
         # Record metrics
         for metric in sample_metrics:
-            monitor.aggregated_metrics[metric.edge_node][metric.metric_type].append(
-                metric.value
-            )
+            monitor.aggregated_metrics[metric.edge_node][
+                metric.metric_type.value
+            ].append(metric.value)
 
         # Get analytics
         analytics = monitor.get_analytics("edge-1")
@@ -285,7 +285,7 @@ class TestEdgeMonitor:
         # Create increasing trend
         for i in range(20):
             value = 0.1 + i * 0.05  # Increasing values
-            monitor.aggregated_metrics["edge-1"][MetricType.LATENCY].append(value)
+            monitor.aggregated_metrics["edge-1"][MetricType.LATENCY.value].append(value)
 
         analytics = monitor.get_analytics("edge-1")
 
@@ -355,13 +355,13 @@ class TestEdgeMonitor:
     def test_recommendations(self, monitor):
         """Test recommendation generation."""
         # Set up problematic metrics
-        monitor.aggregated_metrics["edge-1"][MetricType.LATENCY] = [
+        monitor.aggregated_metrics["edge-1"][MetricType.LATENCY.value] = [
             1.5
         ] * 20  # High latency
-        monitor.aggregated_metrics["edge-1"][MetricType.ERROR_RATE] = [
+        monitor.aggregated_metrics["edge-1"][MetricType.ERROR_RATE.value] = [
             0.1
         ] * 20  # High errors
-        monitor.aggregated_metrics["edge-1"][MetricType.CACHE_HIT_RATE] = [
+        monitor.aggregated_metrics["edge-1"][MetricType.CACHE_HIT_RATE.value] = [
             0.5
         ] * 20  # Low cache hits
 
