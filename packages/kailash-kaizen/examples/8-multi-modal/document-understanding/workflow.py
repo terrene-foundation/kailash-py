@@ -13,7 +13,7 @@ This is the complete multi-modal workflow for Phase 4.
 from dataclasses import dataclass
 from pathlib import Path
 
-from kaizen.agents.multi_modal.multi_modal_agent import (
+from kaizen_agents.agents.multi_modal.multi_modal_agent import (
     MultiModalAgent,
     MultiModalConfig,
 )

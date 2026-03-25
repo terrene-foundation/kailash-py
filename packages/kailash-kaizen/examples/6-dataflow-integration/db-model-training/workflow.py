@@ -31,7 +31,7 @@ except ImportError:
     DATAFLOW_AVAILABLE = False
     print("⚠️  DataFlow not available. Install with: pip install kailash[dataflow]")
 
-from kaizen.integrations.dataflow.db_driven_ai import (
+from kaizen_agents.integrations.dataflow.db_driven_ai import (
     DBTrainingPipeline,
     InferencePipeline,
     PipelineOrchestrator,

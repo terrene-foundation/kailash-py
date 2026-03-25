@@ -11,7 +11,7 @@ Components:
 from typing import Any, Dict, List
 
 from kaizen.research.adapter import ResearchAdapter
-from kaizen.research.experimental import ExperimentalFeature
+from kaizen_agents.research_patterns.experimental import ExperimentalFeature
 from kaizen.research.feature_manager import FeatureManager
 from kaizen.research.parser import ResearchParser
 from kaizen.research.registry import ResearchRegistry

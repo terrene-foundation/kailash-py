@@ -19,7 +19,7 @@ Run with:
 import os
 
 from dotenv import load_dotenv
-from kaizen.agents.specialized.planning import PlanningAgent, PlanningConfig
+from kaizen_agents.agents.specialized.planning import PlanningAgent, PlanningConfig
 
 # Load environment variables
 load_dotenv()

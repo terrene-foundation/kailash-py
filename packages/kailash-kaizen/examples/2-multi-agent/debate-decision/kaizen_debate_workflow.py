@@ -25,7 +25,7 @@ from typing import Any, Dict, List
 # Kaizen Framework imports
 import kaizen
 from kaizen.config import ConfigurationError, get_default_model_config
-from kaizen.workflows import DebateWorkflow
+from kaizen_agents.workflows import DebateWorkflow
 
 # Configure logging
 logging.basicConfig(

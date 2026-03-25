@@ -18,7 +18,7 @@ from typing import Any, Dict
 
 import pytest
 
-from kaizen.runtime.adapters.types import (
+from kaizen_agents.runtime_adapters.types import (
     AutonomousConfig,
     AutonomousPhase,
     ExecutionState,

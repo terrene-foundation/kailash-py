@@ -75,7 +75,7 @@ class TestDBModelTraining:
     @pytest.mark.skipif(not DATAFLOW_AVAILABLE, reason="DataFlow not installed")
     def test_training_pipeline_creation(self, load_example):
         """Test creating training pipeline."""
-        from kaizen.integrations.dataflow.db_driven_ai import DBTrainingPipeline
+        from kaizen_agents.integrations.dataflow.db_driven_ai import DBTrainingPipeline
 
         example = load_example("examples/6-dataflow-integration/db-model-training")
         example.config_classes["TrainingConfig"]
@@ -94,7 +94,7 @@ class TestDBModelTraining:
     @pytest.mark.skipif(not DATAFLOW_AVAILABLE, reason="DataFlow not installed")
     def test_inference_pipeline_creation(self, load_example):
         """Test creating inference pipeline."""
-        from kaizen.integrations.dataflow.db_driven_ai import InferencePipeline
+        from kaizen_agents.integrations.dataflow.db_driven_ai import InferencePipeline
 
         example = load_example("examples/6-dataflow-integration/db-model-training")
         example.config_classes["TrainingConfig"]
@@ -113,7 +113,7 @@ class TestDBModelTraining:
     @pytest.mark.skipif(not DATAFLOW_AVAILABLE, reason="DataFlow not installed")
     def test_pipeline_orchestrator_creation(self, load_example):
         """Test creating pipeline orchestrator."""
-        from kaizen.integrations.dataflow.db_driven_ai import PipelineOrchestrator
+        from kaizen_agents.integrations.dataflow.db_driven_ai import PipelineOrchestrator
 
         example = load_example("examples/6-dataflow-integration/db-model-training")
         example.config_classes["TrainingConfig"]

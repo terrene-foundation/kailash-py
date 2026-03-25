@@ -10,7 +10,7 @@ Components:
 
 from typing import List
 
-from kaizen.research.experimental import ExperimentalFeature
+from kaizen_agents.research_patterns.experimental import ExperimentalFeature
 
 
 class DocumentationGenerator:

@@ -8,7 +8,7 @@ Pattern: Plan → Execute → Verify → Refine (loop until verified or max iter
 Use Case: Generate Python code with automatic verification and refinement
 """
 
-from kaizen.agents.specialized.pev import PEVAgent, PEVAgentConfig
+from kaizen_agents.agents.specialized.pev import PEVAgent, PEVAgentConfig
 
 
 def main():

@@ -8,7 +8,7 @@ import os
 import tempfile
 import time
 
-from kaizen.agents.multi_modal.document_extraction_agent import (
+from kaizen_agents.agents.multi_modal.document_extraction_agent import (
     DocumentExtractionAgent,
     DocumentExtractionConfig,
 )

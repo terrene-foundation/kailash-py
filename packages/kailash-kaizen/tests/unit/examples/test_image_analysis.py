@@ -55,7 +55,7 @@ class TestImageAnalysisExample:
     )
     def test_vision_agent_initialization(self, image_analysis_example):
         """Test VisionAgent initialization from example."""
-        from kaizen.agents.multi_modal.vision_agent import VisionAgentConfig
+        from kaizen_agents.agents.multi_modal.vision_agent import VisionAgentConfig
 
         config = VisionAgentConfig(model="llama3.2-vision", temperature=0.7)
 

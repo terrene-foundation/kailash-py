@@ -25,8 +25,8 @@ import re
 from datetime import datetime
 
 from dotenv import load_dotenv
-from kaizen.agents import MemoryAgent
-from kaizen.agents.specialized.memory_agent import MemoryConfig
+from kaizen_agents.agents import MemoryAgent
+from kaizen_agents.agents.specialized.memory_agent import MemoryConfig
 
 # Load environment variables
 load_dotenv()

@@ -18,8 +18,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from kaizen.runtime.adapter import RuntimeAdapter
-from kaizen.runtime.adapters.kaizen_local import LocalKaizenAdapter
-from kaizen.runtime.adapters.types import (
+from kaizen_agents.runtime_adapters.kaizen_local import LocalKaizenAdapter
+from kaizen_agents.runtime_adapters.types import (
     AutonomousConfig,
     ExecutionState,
     PermissionMode,

@@ -31,9 +31,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pytest
-from kaizen.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
-from kaizen.agents.specialized.pev import PEVAgent
-from kaizen.agents.specialized.planning import PlanningAgent
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
+from kaizen_agents.agents.specialized.pev import PEVAgent
+from kaizen_agents.agents.specialized.planning import PlanningAgent
 from kaizen.core.autonomy.hooks.manager import HookManager
 from kaizen.core.autonomy.hooks.types import (
     HookContext,
@@ -54,7 +54,7 @@ from kaizen.core.autonomy.interrupts.types import (
 from kaizen.core.autonomy.state.manager import StateManager
 from kaizen.core.autonomy.state.storage import FilesystemStorage
 from kaizen.core.base_agent import BaseAgent
-from kaizen.orchestration import OrchestrationRuntime, OrchestrationRuntimeConfig
+from kaizen_agents.patterns import OrchestrationRuntime, OrchestrationRuntimeConfig
 from kaizen.signatures import InputField, OutputField, Signature
 from kaizen.tools.types import DangerLevel
 

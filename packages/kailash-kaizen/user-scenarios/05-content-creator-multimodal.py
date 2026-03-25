@@ -22,8 +22,8 @@ Developer Experience Goals:
 """
 
 from dotenv import load_dotenv
-from kaizen.agents import SimpleQAAgent, VisionAgent, VisionAgentConfig
-from kaizen.agents.specialized.simple_qa import SimpleQAConfig
+from kaizen_agents.agents import SimpleQAAgent, VisionAgent, VisionAgentConfig
+from kaizen_agents.agents.specialized.simple_qa import SimpleQAConfig
 
 # Load environment variables
 load_dotenv()

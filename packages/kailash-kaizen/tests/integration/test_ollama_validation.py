@@ -11,12 +11,12 @@ import pytest
 
 # Check Ollama availability
 try:
-    from kaizen.agents.multi_modal_agent import MultiModalAgent, MultiModalConfig
-    from kaizen.agents.transcription_agent import (
+    from kaizen_agents.agents.multi_modal_agent import MultiModalAgent, MultiModalConfig
+    from kaizen_agents.agents.transcription_agent import (
         TranscriptionAgent,
         TranscriptionAgentConfig,
     )
-    from kaizen.agents.vision_agent import VisionAgent, VisionAgentConfig
+    from kaizen_agents.agents.vision_agent import VisionAgent, VisionAgentConfig
     from kaizen.cost.tracker import CostTracker
     from kaizen.providers import OLLAMA_AVAILABLE
     from kaizen.providers.multi_modal_adapter import (

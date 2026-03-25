@@ -38,7 +38,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from kaizen.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 from kaizen.core.autonomy.hooks.manager import HookManager
 from kaizen.core.autonomy.hooks.types import HookEvent, HookPriority, HookResult
 from kaizen.core.autonomy.state.manager import StateManager

@@ -231,7 +231,7 @@ async def test_ollama_bakllava_provider():
     print("=" * 70)
 
     try:
-        from kaizen.agents.vision_agent import VisionAgent, VisionAgentConfig
+        from kaizen_agents.agents.vision_agent import VisionAgent, VisionAgentConfig
 
         config = VisionAgentConfig(
             llm_provider="ollama",

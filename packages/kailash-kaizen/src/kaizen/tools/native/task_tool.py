@@ -8,7 +8,7 @@ See: TODO-203 Task/Skill Tools, ADR-013 Specialist System
 
 Example:
     >>> from kaizen.tools.native import TaskTool, KaizenToolRegistry
-    >>> from kaizen.runtime.adapters import LocalKaizenAdapter
+    >>> from kaizen_agents.runtime_adapters import LocalKaizenAdapter
     >>>
     >>> adapter = LocalKaizenAdapter(kaizen_options=options)
     >>> task_tool = TaskTool(adapter=adapter)
@@ -40,7 +40,7 @@ from kaizen.tools.native.base import BaseTool, NativeToolResult
 from kaizen.tools.types import DangerLevel, ToolCategory
 
 if TYPE_CHECKING:
-    from kaizen.runtime.adapters.kaizen_local import LocalKaizenAdapter
+    from kaizen_agents.runtime_adapters.kaizen_local import LocalKaizenAdapter
 
 logger = logging.getLogger(__name__)
 

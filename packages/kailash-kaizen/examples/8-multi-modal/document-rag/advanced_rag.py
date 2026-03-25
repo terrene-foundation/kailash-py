@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from kaizen.agents.multi_modal.document_extraction_agent import (
+from kaizen_agents.agents.multi_modal.document_extraction_agent import (
     DocumentExtractionAgent,
     DocumentExtractionConfig,
 )

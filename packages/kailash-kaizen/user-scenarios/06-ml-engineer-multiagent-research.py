@@ -26,9 +26,9 @@ Developer Experience Goals:
 from typing import Dict
 
 from dotenv import load_dotenv
-from kaizen.agents import ChainOfThoughtAgent, RAGResearchAgent, SimpleQAAgent
-from kaizen.agents.specialized.chain_of_thought import ChainOfThoughtConfig
-from kaizen.agents.specialized.rag_research import RAGConfig
+from kaizen_agents.agents import ChainOfThoughtAgent, RAGResearchAgent, SimpleQAAgent
+from kaizen_agents.agents.specialized.chain_of_thought import ChainOfThoughtConfig
+from kaizen_agents.agents.specialized.rag_research import RAGConfig
 
 # Load environment variables
 load_dotenv()

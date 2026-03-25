@@ -11,12 +11,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kaizen.runtime.adapters.claude_code import (
+from kaizen_agents.runtime_adapters.claude_code import (
     ClaudeCodeAdapter,
     is_claude_code_available,
 )
-from kaizen.runtime.adapters.gemini_cli import GeminiCLIAdapter, is_gemini_available
-from kaizen.runtime.adapters.openai_codex import OpenAICodexAdapter, is_openai_available
+from kaizen_agents.runtime_adapters.gemini_cli import GeminiCLIAdapter, is_gemini_available
+from kaizen_agents.runtime_adapters.openai_codex import OpenAICodexAdapter, is_openai_available
 from kaizen.runtime.context import ExecutionContext, ExecutionResult, ExecutionStatus
 
 # =============================================================================

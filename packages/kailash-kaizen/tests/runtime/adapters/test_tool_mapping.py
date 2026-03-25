@@ -9,7 +9,7 @@ from typing import Any, Dict, List
 
 import pytest
 
-from kaizen.runtime.adapters.tool_mapping import (
+from kaizen_agents.runtime_adapters.tool_mapping import (
     GeminiToolMapper,
     KaizenTool,
     MappedTool,
@@ -18,7 +18,7 @@ from kaizen.runtime.adapters.tool_mapping import (
     ToolMapper,
     ToolMappingError,
 )
-from kaizen.runtime.adapters.tool_mapping.base import (
+from kaizen_agents.runtime_adapters.tool_mapping.base import (
     extract_tool_call,
     format_tool_result,
 )

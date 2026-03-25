@@ -4,7 +4,7 @@ Error Handling Patterns
 Demonstrates robust error handling in document extraction.
 """
 
-from kaizen.agents.multi_modal.document_extraction_agent import (
+from kaizen_agents.agents.multi_modal.document_extraction_agent import (
     DocumentExtractionAgent,
     DocumentExtractionConfig,
 )

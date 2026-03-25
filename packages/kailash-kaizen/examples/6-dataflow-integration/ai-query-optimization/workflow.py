@@ -132,7 +132,7 @@ def demonstrate_nl_query():
     # Create NL query agent
     print("2. Creating NL to SQL agent...")
     try:
-        from kaizen.integrations.dataflow import NLToSQLAgent
+        from kaizen_agents.integrations.dataflow import NLToSQLAgent
     except ImportError:
         print("⚠ NLToSQLAgent not available (DataFlow integration not installed)")
         return
@@ -192,7 +192,7 @@ def demonstrate_query_optimization():
     print("=" * 60)
 
     try:
-        from kaizen.integrations.dataflow import QueryOptimizer
+        from kaizen_agents.integrations.dataflow import QueryOptimizer
     except ImportError:
         print("⚠ QueryOptimizer not available")
         return

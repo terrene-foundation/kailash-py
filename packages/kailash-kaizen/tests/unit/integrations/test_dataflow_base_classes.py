@@ -27,7 +27,7 @@ class TestDataFlowOperationsMixin:
     def mixin_class(self):
         """Get DataFlowOperationsMixin class."""
         try:
-            from kaizen.integrations.dataflow import (
+            from kaizen_agents.integrations.dataflow import (
                 DATAFLOW_AVAILABLE,
                 DataFlowOperationsMixin,
             )
@@ -122,7 +122,7 @@ class TestDataFlowAwareAgent:
     def agent_class(self):
         """Get DataFlowAwareAgent class."""
         try:
-            from kaizen.integrations.dataflow import (
+            from kaizen_agents.integrations.dataflow import (
                 DATAFLOW_AVAILABLE,
                 DataFlowAwareAgent,
             )
@@ -248,7 +248,7 @@ class TestBaseClassInheritance:
     def agent_class(self):
         """Get DataFlowAwareAgent class."""
         try:
-            from kaizen.integrations.dataflow import (
+            from kaizen_agents.integrations.dataflow import (
                 DATAFLOW_AVAILABLE,
                 DataFlowAwareAgent,
             )
@@ -263,7 +263,7 @@ class TestBaseClassInheritance:
     def mixin_class(self):
         """Get DataFlowOperationsMixin class."""
         try:
-            from kaizen.integrations.dataflow import (
+            from kaizen_agents.integrations.dataflow import (
                 DATAFLOW_AVAILABLE,
                 DataFlowOperationsMixin,
             )
@@ -348,7 +348,7 @@ class TestIntegrationPatterns:
     def agent_class(self):
         """Get DataFlowAwareAgent class."""
         try:
-            from kaizen.integrations.dataflow import (
+            from kaizen_agents.integrations.dataflow import (
                 DATAFLOW_AVAILABLE,
                 DataFlowAwareAgent,
             )

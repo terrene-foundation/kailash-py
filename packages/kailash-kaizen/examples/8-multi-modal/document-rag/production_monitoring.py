@@ -8,7 +8,7 @@ import tempfile
 from dataclasses import dataclass, field
 from typing import Dict, List
 
-from kaizen.agents.multi_modal.document_extraction_agent import (
+from kaizen_agents.agents.multi_modal.document_extraction_agent import (
     DocumentExtractionAgent,
     DocumentExtractionConfig,
 )

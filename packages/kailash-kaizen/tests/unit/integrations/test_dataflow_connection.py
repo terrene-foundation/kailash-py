@@ -30,7 +30,7 @@ class TestDataFlowConnection:
     def dataflow_connection_class(self):
         """Get DataFlowConnection class, skipping if DataFlow unavailable."""
         try:
-            from kaizen.integrations.dataflow import (
+            from kaizen_agents.integrations.dataflow import (
                 DATAFLOW_AVAILABLE,
                 DataFlowConnection,
             )
@@ -79,7 +79,7 @@ class TestDataFlowConnection:
         """
         try:
             from kaizen.core.config import BaseAgentConfig
-            from kaizen.integrations.dataflow import (
+            from kaizen_agents.integrations.dataflow import (
                 DATAFLOW_AVAILABLE,
                 DataFlowAwareAgent,
             )
@@ -166,7 +166,7 @@ class TestDataFlowConnection:
         """
         try:
             from kaizen.core.config import BaseAgentConfig
-            from kaizen.integrations.dataflow import (
+            from kaizen_agents.integrations.dataflow import (
                 DATAFLOW_AVAILABLE,
                 DataFlowAwareAgent,
             )
@@ -220,7 +220,7 @@ class TestConnectionOperations:
     def dataflow_connection_class(self):
         """Get DataFlowConnection class."""
         try:
-            from kaizen.integrations.dataflow import (
+            from kaizen_agents.integrations.dataflow import (
                 DATAFLOW_AVAILABLE,
                 DataFlowConnection,
             )
@@ -290,7 +290,7 @@ class TestConnectionErrorHandling:
     def dataflow_connection_class(self):
         """Get DataFlowConnection class."""
         try:
-            from kaizen.integrations.dataflow import (
+            from kaizen_agents.integrations.dataflow import (
                 DATAFLOW_AVAILABLE,
                 DataFlowConnection,
             )

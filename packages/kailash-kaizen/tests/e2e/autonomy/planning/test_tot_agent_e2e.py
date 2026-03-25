@@ -30,7 +30,7 @@ from typing import Any, Dict, List
 
 import pytest
 from dotenv import load_dotenv
-from kaizen.agents.specialized.tree_of_thoughts import ToTAgent
+from kaizen_agents.agents.specialized.tree_of_thoughts import ToTAgent
 
 from tests.utils.cost_tracking import get_global_tracker
 from tests.utils.reliability_helpers import async_retry_with_backoff

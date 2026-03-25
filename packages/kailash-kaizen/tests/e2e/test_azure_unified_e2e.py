@@ -42,7 +42,7 @@ class TestAzureUnifiedE2EBasicAgent:
 
     def test_simple_qa_with_azure(self, azure_available, azure_model):
         """Simple Q&A agent should work with Azure provider."""
-        from kaizen.agents.specialized.simple_qa import QAConfig, SimpleQAAgent
+        from kaizen_agents.agents.specialized.simple_qa import QAConfig, SimpleQAAgent
 
         config = QAConfig(
             llm_provider="azure",
@@ -59,7 +59,7 @@ class TestAzureUnifiedE2EBasicAgent:
 
     def test_chain_of_thought_with_azure(self, azure_available, azure_model):
         """Chain-of-thought agent should work with Azure provider."""
-        from kaizen.agents.specialized.chain_of_thought import (
+        from kaizen_agents.agents.specialized.chain_of_thought import (
             ChainOfThoughtAgent,
             CoTConfig,
         )

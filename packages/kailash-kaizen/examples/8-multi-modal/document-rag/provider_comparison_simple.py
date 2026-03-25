@@ -7,7 +7,7 @@ Quick demonstration of comparing all 3 providers side-by-side.
 import os
 import tempfile
 
-from kaizen.agents.multi_modal.document_extraction_agent import (
+from kaizen_agents.agents.multi_modal.document_extraction_agent import (
     DocumentExtractionAgent,
     DocumentExtractionConfig,
 )

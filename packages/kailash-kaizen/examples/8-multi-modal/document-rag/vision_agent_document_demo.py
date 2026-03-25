@@ -13,7 +13,7 @@ This example shows how to use VisionAgent's enhanced document extraction feature
 import os
 import tempfile
 
-from kaizen.agents.multi_modal.vision_agent import VisionAgent, VisionAgentConfig
+from kaizen_agents.agents.multi_modal.vision_agent import VisionAgent, VisionAgentConfig
 
 
 def create_sample_invoice() -> str:

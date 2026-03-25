@@ -21,7 +21,7 @@ Requirements:
 from dataclasses import dataclass
 
 # Check DataFlow availability
-from kaizen.integrations.dataflow import DATAFLOW_AVAILABLE
+from kaizen_agents.integrations.dataflow import DATAFLOW_AVAILABLE
 
 if not DATAFLOW_AVAILABLE:
     print("❌ DataFlow not installed.")
@@ -32,7 +32,7 @@ if not DATAFLOW_AVAILABLE:
 from dataflow import DataFlow
 
 # Import integration components
-from kaizen.integrations.dataflow import (  # Phase 1: Base integration; Phase 2: AI-enhanced operations; Phase 3: DB-driven AI workflows; Phase 4: Performance optimizations
+from kaizen_agents.integrations.dataflow import (  # Phase 1: Base integration; Phase 2: AI-enhanced operations; Phase 3: DB-driven AI workflows; Phase 4: Performance optimizations
     BatchConfig,
     BatchOptimizer,
     DataFlowConnection,

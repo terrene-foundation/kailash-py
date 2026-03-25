@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from unittest.mock import Mock
 
 import pytest
-from kaizen.integrations.dataflow.db_driven_ai import (
+from kaizen_agents.integrations.dataflow.db_driven_ai import (
     DBTrainingPipeline,
     InferencePipeline,
     InferenceSignature,

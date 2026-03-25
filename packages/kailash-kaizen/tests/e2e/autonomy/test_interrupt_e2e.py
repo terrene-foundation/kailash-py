@@ -31,7 +31,7 @@ import tempfile
 import time
 
 import pytest
-from kaizen.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
+from kaizen_agents.agents.autonomous.base import AutonomousConfig, BaseAutonomousAgent
 from kaizen.core.autonomy.interrupts.handlers import (
     BudgetInterruptHandler,
     TimeoutInterruptHandler,

@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from kaizen.agents.specialized.memory_agent import MemoryAgent
+from kaizen_agents.agents.specialized.memory_agent import MemoryAgent
 
 
 def demo_node_local_memory():

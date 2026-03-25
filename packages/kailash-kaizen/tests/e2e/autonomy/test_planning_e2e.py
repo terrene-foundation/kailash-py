@@ -28,9 +28,9 @@ from dataclasses import dataclass
 from typing import Any, Dict, List
 
 import pytest
-from kaizen.agents.specialized.pev import PEVAgent, PEVSignature
-from kaizen.agents.specialized.planning import PlanningAgent, PlanningSignature
-from kaizen.agents.specialized.tree_of_thoughts import ToTAgent, ToTSignature
+from kaizen_agents.agents.specialized.pev import PEVAgent, PEVSignature
+from kaizen_agents.agents.specialized.planning import PlanningAgent, PlanningSignature
+from kaizen_agents.agents.specialized.tree_of_thoughts import ToTAgent, ToTSignature
 from kaizen.core.structured_output import create_structured_output_config
 
 from tests.utils.cost_tracking import get_global_tracker
@@ -223,7 +223,7 @@ async def test_planning_agent_multi_step_research():
     # Note: Use PlanGenerationSignature (not PlanningSignature) because PlanningAgent
     # internally creates a temporary BaseAgent with PlanGenerationSignature for the
     # plan generation phase (see planning.py:364-366).
-    from kaizen.agents.specialized.planning import PlanGenerationSignature
+    from kaizen_agents.agents.specialized.planning import PlanGenerationSignature
 
     provider_config = {
         "response_format": create_structured_output_config(
