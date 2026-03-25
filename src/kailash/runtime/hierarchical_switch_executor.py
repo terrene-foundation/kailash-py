@@ -31,7 +31,7 @@ class HierarchicalSwitchExecutor:
         workflow: Workflow,
         debug: bool = False,
         max_parallelism: int = 10,
-        layer_timeout: float = None,
+        layer_timeout: float | None = None,
     ):
         """
         Initialize the hierarchical switch executor.
@@ -58,7 +58,7 @@ class HierarchicalSwitchExecutor:
         parameters: Dict[str, Any],
         task_manager: Optional[TaskManager] = None,
         run_id: str = "",
-        workflow_context: Dict[str, Any] = None,
+        workflow_context: Dict[str, Any] | None = None,
         node_executor=None,  # Function to execute individual nodes
     ) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Any]]:
         """
@@ -114,7 +114,7 @@ class HierarchicalSwitchExecutor:
 
             # First, execute dependencies for switches in this layer
             layer_dependencies = self._get_layer_dependencies(
-                layer_switches, all_results.keys()
+                layer_switches, set(all_results.keys())
             )
 
             if layer_dependencies:

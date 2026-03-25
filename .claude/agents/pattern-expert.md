@@ -38,6 +38,7 @@ You are a pattern specialist for Kailash SDK core patterns. Your expertise cover
    - `node-patterns-common` for node usage
    - `connection-patterns` for connection syntax
    - `param-passing-quick` for parameter passing
+   - `runtime-lifecycle` for ref counting, acquire/release, context managers
 
 3. **Apply Pattern**
    - Use skill patterns for standard cases
@@ -62,8 +63,8 @@ workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
 workflow.add_node("PythonCodeNode", "processor", {"code": "result = len(data)"})
 workflow.add_connection("reader", "data", "processor", "data")
 
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())  # ALWAYS .build()
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(workflow.build())  # ALWAYS .build()
 ```
 
 ### Connection Order

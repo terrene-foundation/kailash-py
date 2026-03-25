@@ -53,6 +53,7 @@ class CLIChannel(Channel):
         input_stream: Optional[TextIO] = None,
         output_stream: Optional[TextIO] = None,
         workflow_server: Optional[Any] = None,
+        runtime: Optional[AsyncLocalRuntime] = None,
     ):
         """Initialize CLI channel.
 
@@ -61,6 +62,8 @@ class CLIChannel(Channel):
             input_stream: Input stream (defaults to sys.stdin)
             output_stream: Output stream (defaults to sys.stdout)
             workflow_server: Optional workflow server for accessing registered workflows
+            runtime: Optional shared runtime. If provided, its ref count is
+                incremented via acquire(). If None a new AsyncLocalRuntime is created.
         """
         super().__init__(config)
 
@@ -85,7 +88,12 @@ class CLIChannel(Channel):
         self._routing_config = self._setup_default_routing()
 
         # Runtime for executing workflows
-        self.runtime = AsyncLocalRuntime()
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = AsyncLocalRuntime()
+            self._owns_runtime = True
 
         # CLI state
         self._running = False
@@ -308,6 +316,9 @@ class CLIChannel(Channel):
                     pass
 
             await self._cleanup()
+
+            self.close()
+
             self.status = ChannelStatus.STOPPED
 
             logger.info(f"CLI channel {self.name} stopped")
@@ -529,7 +540,9 @@ class CLIChannel(Channel):
                 return await self._execute_workflow_command(execution_params)
             elif target_type == "handler":
                 return await self._execute_handler_command(
-                    handler_name, execution_params, session
+                    str(handler_name) if handler_name is not None else "",
+                    execution_params,
+                    session,
                 )
             else:
                 return {
@@ -602,10 +615,17 @@ class CLIChannel(Channel):
             workflow = workflow_def
 
         # Execute workflow
+        if self.runtime is None:
+            return {
+                "success": False,
+                "error": "Runtime not available",
+                "workflow_name": workflow_name,
+            }
+
         start_time = time.monotonic()
         try:
-            results, run_id = await self.runtime.execute_workflow_async(
-                workflow, inputs=inputs
+            results, run_id = await self.runtime.execute_async(
+                workflow, parameters=inputs
             )
         except Exception as e:
             logger.error(f"Workflow execution failed for '{workflow_name}': {e}")
@@ -770,6 +790,26 @@ class CLIChannel(Channel):
         if self.output_stream:
             self.output_stream.write(text)
             self.output_stream.flush()
+
+    def close(self):
+        """Release runtime reference."""
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() or stop() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
 
     async def health_check(self) -> Dict[str, Any]:
         """Perform comprehensive health check."""

@@ -33,7 +33,9 @@ class TaskManager:
             TaskException: If initialization fails
         """
         try:
-            self.storage = storage_backend or SQLiteStorage()
+            # Storage may be a subclass with extra methods (query_tasks, get_all_tasks, etc.)
+            # accessed via hasattr checks, so we type as Any to allow dynamic dispatch
+            self.storage: Any = storage_backend or SQLiteStorage()
             self.logger = logger
 
             # In-memory caches
@@ -304,13 +306,17 @@ class TaskManager:
         return task
 
     def list_runs(
-        self, workflow_name: str | None = None, status: str | None = None
+        self,
+        workflow_name: str | None = None,
+        status: str | None = None,
+        limit: int | None = None,
     ) -> list[RunSummary]:
         """List workflow runs.
 
         Args:
             workflow_name: Filter by workflow name
             status: Filter by status
+            limit: Maximum number of runs to return
 
         Returns:
             List of run summaries
@@ -348,6 +354,8 @@ class TaskManager:
                     f"Failed to create summary for run '{run.run_id}': {e}"
                 )
 
+        if limit is not None:
+            summaries = summaries[:limit]
         return summaries
 
     def list_tasks(

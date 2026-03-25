@@ -511,6 +511,7 @@ def create_dashboard_handler(
             self._send_html(page)
 
         def _handle_verify(self, query: dict[str, list[str]]) -> None:
+            report: dict[str, Any] = {}
             try:
                 report = _run_async(self._project.verify())
                 chain_valid = report.get("chain_valid", False)

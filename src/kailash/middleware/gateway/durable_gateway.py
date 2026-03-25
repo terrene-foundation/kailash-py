@@ -308,7 +308,7 @@ class DurableAPIGateway(WorkflowAPIGateway):
                 import json
 
                 response_data = json.loads(response.body)
-            except (json.JSONDecodeError, Exception):
+            except (json.JSONDecodeError, Exception):  # type: ignore[reportPossiblyUnbound]
                 pass
 
         await self.deduplicator.cache_response(
@@ -402,7 +402,7 @@ class DurableAPIGateway(WorkflowAPIGateway):
                 event_data = event.to_dict()
                 if event_data.get("event_type") == EventType.REQUEST_CREATED:
                     request_metadata = event_data.get("data", {})
-                if event_data.get("event_type") == EventType.CHECKPOINT_CREATED:
+                if event_data.get("event_type") == EventType.CHECKPOINT_CREATED:  # type: ignore[reportAttributeAccessIssue]
                     if (
                         checkpoint_id is None
                         or event_data.get("data", {}).get("checkpoint_id")

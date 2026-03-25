@@ -10,6 +10,7 @@ import logging
 import os
 import threading
 import time
+import warnings
 from copy import deepcopy
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
@@ -417,6 +418,20 @@ class DataFlow:
         # Register specialized DataFlow nodes
         self._register_specialized_nodes()
 
+        # M2-001: Create exactly ONE shared runtime for the entire DataFlow instance.
+        # All subsystems (ModelRegistry, migration helpers, DDL executors) share this
+        # runtime via acquire()/release() ref-counting instead of creating their own.
+        self._closed = False
+        try:
+            asyncio.get_running_loop()
+            self.runtime = AsyncLocalRuntime()
+            self._is_async = True
+            logger.debug("DataFlow: Detected async context, using AsyncLocalRuntime")
+        except RuntimeError:
+            self.runtime = LocalRuntime()
+            self._is_async = False
+            logger.debug("DataFlow: Detected sync context, using LocalRuntime")
+
         # Initialize feature modules (NodeGenerator now gets TDD context)
         self._node_generator = NodeGenerator(self)
         self._bulk_operations = BulkOperations(self)
@@ -522,7 +537,7 @@ class DataFlow:
         # Initialize model registry for multi-application support
         from .model_registry import ModelRegistry
 
-        self._model_registry = ModelRegistry(self)
+        self._model_registry = ModelRegistry(self, runtime=self.runtime)
         self._enable_model_persistence = enable_model_persistence
 
         # Initialize cache integration if enabled
@@ -786,6 +801,7 @@ class DataFlow:
                 migrations_dir="migrations",
                 dataflow_instance=self,  # Pass DataFlow instance for lock manager integration
                 lock_timeout=self._migration_lock_timeout,
+                runtime=self.runtime,
             )
 
             logger.debug(f"Migration system initialized successfully for {dialect}")
@@ -2081,6 +2097,20 @@ class DataFlow:
 
         # Return False to propagate any exceptions that occurred in the with block
         return False
+
+    def __del__(self):
+        """Emit ResourceWarning if DataFlow was not properly closed."""
+        if not getattr(self, "_closed", True):
+            warnings.warn(
+                f"Unclosed DataFlow instance {getattr(self, '_instance_id', '?')}. "
+                "Use 'with DataFlow(...) as db:' or call db.close().",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
 
     def get_connection_pool(self):
         """Get the connection pool for testing.
@@ -5194,9 +5224,9 @@ class DataFlow:
                     raise
                 # No event loop running - safe to proceed with sync execution
 
-            # Use sync LocalRuntime
-            runtime = LocalRuntime()
-            logger.debug("_ensure_migration_tables: Using sync LocalRuntime")
+            # M2-001: Reuse shared runtime instead of creating a new one
+            runtime = self.runtime
+            logger.debug("_ensure_migration_tables: Using shared runtime")
 
             # Get connection info
             connection_string = self.config.database.get_connection_url(
@@ -5317,9 +5347,9 @@ class DataFlow:
             return
 
         try:
-            # Use async runtime
-            runtime = AsyncLocalRuntime()
-            logger.debug("_ensure_migration_tables_async: Using AsyncLocalRuntime")
+            # M2-001: Reuse shared runtime instead of creating a new one
+            runtime = self.runtime
+            logger.debug("_ensure_migration_tables_async: Using shared runtime")
 
             # Get connection info
             connection_string = self.config.database.get_connection_url(
@@ -6093,8 +6123,8 @@ class DataFlow:
         )
         database_type = ConnectionParser.detect_database_type(safe_connection_string)
 
-        # Use async runtime for execution
-        runtime = AsyncLocalRuntime()
+        # M2-001: Reuse shared runtime instead of creating a new one
+        runtime = self.runtime
 
         # Execute statements using async runtime
         for idx, statement in enumerate(all_statements):
@@ -6659,7 +6689,6 @@ class DataFlow:
 
     async def _get_current_schema_via_workflow(self) -> Dict[str, Any]:
         """Get current database schema using WorkflowBuilder pattern."""
-        from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
         workflow = WorkflowBuilder()
@@ -6702,22 +6731,9 @@ class DataFlow:
             },
         )
 
-        # ✅ FIX: Detect async context and use appropriate runtime
-        try:
-            asyncio.get_running_loop()
-            # Running in async context - use AsyncLocalRuntime
-            runtime = AsyncLocalRuntime()
-            is_async = True
-            logger.debug(
-                "_get_database_schema_postgresql: Detected async context, using AsyncLocalRuntime"
-            )
-        except RuntimeError:
-            # No event loop - use sync LocalRuntime
-            runtime = LocalRuntime()
-            is_async = False
-            logger.debug(
-                "_get_database_schema_postgresql: Detected sync context, using LocalRuntime"
-            )
+        # M2-001: Reuse shared runtime instead of creating a new one
+        runtime = self.runtime
+        logger.debug("_get_current_schema_via_workflow: Using shared runtime")
 
         results, _ = runtime.execute(workflow.build())
 
@@ -7656,12 +7672,33 @@ class DataFlow:
         For async contexts (FastAPI, pytest async fixtures), use close_async() instead.
 
         This method safely closes:
+        - Model registry (releases shared runtime reference)
         - Pool monitor thread
         - Connection pool manager pools
         - Connection manager connections
         - Persistent :memory: connections
+        - Shared runtime (actual cleanup at ref_count=0)
         """
         import asyncio
+
+        if self._closed:
+            return
+        self._closed = True
+
+        # M2-001: Release subsystem references to shared runtime FIRST.
+        # Each subsystem calls close() which calls release() on their runtime.
+        if hasattr(self, "_model_registry") and self._model_registry is not None:
+            try:
+                self._model_registry.close()
+            except Exception as e:
+                logger.debug(f"Error closing model registry: {e}")
+
+        if hasattr(self, "_migration_system") and self._migration_system is not None:
+            try:
+                if hasattr(self._migration_system, "close"):
+                    self._migration_system.close()
+            except Exception as e:
+                logger.debug(f"Error closing migration system: {e}")
 
         # Stop pool monitor
         if self._pool_monitor is not None:
@@ -7697,6 +7734,15 @@ class DataFlow:
             finally:
                 self._memory_connection = None
 
+        # M2-001: Close the shared runtime LAST (actual cleanup at ref_count=0)
+        if hasattr(self, "runtime") and self.runtime is not None:
+            try:
+                self.runtime.close()
+            except Exception as e:
+                logger.debug(f"Error closing shared runtime: {e}")
+            finally:
+                self.runtime = None
+
     async def close_async(self):
         """Close database connections and clean up resources (async version).
 
@@ -7711,10 +7757,23 @@ class DataFlow:
                 await db.close_async()  # Proper async cleanup
 
         This method safely closes:
+        - Model registry (releases shared runtime reference)
         - Cached AsyncSQLDatabaseNode instances (awaited)
         - Connection manager connections
         - Persistent :memory: connections (awaited)
+        - Shared runtime (actual cleanup at ref_count=0)
         """
+        if self._closed:
+            return
+        self._closed = True
+
+        # M2-001: Release subsystem references to shared runtime FIRST.
+        if hasattr(self, "_model_registry") and self._model_registry is not None:
+            try:
+                self._model_registry.close()
+            except Exception as e:
+                logger.debug(f"Error releasing model registry runtime: {e}")
+
         # Stop pool monitor (same cleanup as sync close())
         if self._pool_monitor is not None:
             try:
@@ -7757,6 +7816,15 @@ class DataFlow:
                 logger.debug(f"Failed to close memory connection: {e}")
             finally:
                 self._memory_connection = None
+
+        # M2-001: Close the shared runtime LAST (actual cleanup at ref_count=0)
+        if hasattr(self, "runtime") and self.runtime is not None:
+            try:
+                self.runtime.close()
+            except Exception as e:
+                logger.debug(f"Error closing shared runtime: {e}")
+            finally:
+                self.runtime = None
 
         logger.debug(f"DataFlow instance {self._instance_id} closed (async)")
 

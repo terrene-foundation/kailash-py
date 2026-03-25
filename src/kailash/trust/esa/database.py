@@ -52,7 +52,7 @@ class QueryParseResult:
     tables: List[str]
     operations: List[str]
     is_safe: bool = True
-    violations: List[str] = None
+    violations: List[str] | None = None
 
     def __post_init__(self):
         if self.violations is None:
@@ -149,8 +149,8 @@ class DatabaseESA(EnterpriseSystemAgent):
         self.allowed_tables = allowed_tables
 
         # Database connection
-        self._connection = None
-        self._pool = None
+        self._connection: Any = None
+        self._pool: Any = None
 
         # Capability discoverer
         self._discoverer: Optional[DatabaseCapabilityDiscoverer] = None
@@ -373,7 +373,10 @@ class DatabaseESA(EnterpriseSystemAgent):
                             await cursor.execute(query)
                             rows = await cursor.fetchall()
                             # Convert to dict-like rows
-                            return [dict(zip([d[0] for d in cursor.description], row)) for row in rows]
+                            return [
+                                dict(zip([d[0] for d in cursor.description], row))
+                                for row in rows
+                            ]
                 elif self.esa.database_type == DatabaseType.SQLITE:
                     cursor = await self.esa._connection.execute(query)
                     rows = await cursor.fetchall()
@@ -404,7 +407,9 @@ class DatabaseESA(EnterpriseSystemAgent):
         def _validate_table_name(name: str) -> str:
             if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", name):
                 raise ESAOperationError(
-                    f"Invalid table name: {name!r}. Table names must be alphanumeric with underscores."
+                    operation=operation,
+                    system_id=self.system_id,
+                    reason=f"Invalid table name: {name!r}. Table names must be alphanumeric with underscores.",
                 )
             return name
 
@@ -471,7 +476,7 @@ class DatabaseESA(EnterpriseSystemAgent):
                 raise ESAOperationError(
                     operation="execute_query",
                     system_id=self.system_id,
-                    reason=f"Query validation failed: {', '.join(parse_result.violations)}",
+                    reason=f"Query validation failed: {', '.join(parse_result.violations or [])}",
                 )
 
             # Apply limit constraint
@@ -514,6 +519,14 @@ class DatabaseESA(EnterpriseSystemAgent):
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
 
+            raise ESAOperationError(
+                operation="execute_query",
+                system_id=self.system_id,
+                reason=f"Unsupported database type: {self.database_type}",
+            )
+
+        except ESAOperationError:
+            raise
         except Exception as e:
             raise ESAOperationError(
                 operation="execute_query",
@@ -560,7 +573,9 @@ class DatabaseESA(EnterpriseSystemAgent):
                         reason=f"Invalid column name: {col!r}",
                     )
             placeholders = self._get_placeholders(len(columns))
-            query = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
+            query = (
+                f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
+            )
             values = list(data.values())
 
             # Execute insert
@@ -589,6 +604,14 @@ class DatabaseESA(EnterpriseSystemAgent):
                     "last_insert_id": cursor.lastrowid,
                 }
 
+            raise ESAOperationError(
+                operation="execute_insert",
+                system_id=self.system_id,
+                reason=f"Unsupported database type: {self.database_type}",
+            )
+
+        except ESAOperationError:
+            raise
         except Exception as e:
             raise ESAOperationError(
                 operation="execute_insert",
@@ -645,9 +668,14 @@ class DatabaseESA(EnterpriseSystemAgent):
             # Execute update
             if self.database_type == DatabaseType.POSTGRESQL:
                 # Use $1, $2 for asyncpg
-                set_clause = ", ".join([f"{col} = ${i + 1}" for i, col in enumerate(data.keys())])
+                set_clause = ", ".join(
+                    [f"{col} = ${i + 1}" for i, col in enumerate(data.keys())]
+                )
                 where_conditions = " AND ".join(
-                    [f"{col} = ${i + len(data) + 1}" for i, col in enumerate(conditions.keys())]
+                    [
+                        f"{col} = ${i + len(data) + 1}"
+                        for i, col in enumerate(conditions.keys())
+                    ]
                 )
                 query = f"UPDATE {table} SET {set_clause} WHERE {where_conditions}"
                 async with self._pool.acquire() as conn:
@@ -667,6 +695,14 @@ class DatabaseESA(EnterpriseSystemAgent):
                 await self._connection.commit()
                 return {"affected_rows": cursor.rowcount}
 
+            raise ESAOperationError(
+                operation="execute_update",
+                system_id=self.system_id,
+                reason=f"Unsupported database type: {self.database_type}",
+            )
+
+        except ESAOperationError:
+            raise
         except Exception as e:
             raise ESAOperationError(
                 operation="execute_update",
@@ -719,7 +755,9 @@ class DatabaseESA(EnterpriseSystemAgent):
 
             # Execute delete
             if self.database_type == DatabaseType.POSTGRESQL:
-                where_conditions = " AND ".join([f"{col} = ${i + 1}" for i, col in enumerate(conditions.keys())])
+                where_conditions = " AND ".join(
+                    [f"{col} = ${i + 1}" for i, col in enumerate(conditions.keys())]
+                )
                 query = f"DELETE FROM {table} WHERE {where_conditions}"
                 async with self._pool.acquire() as conn:
                     result = await conn.execute(query, *values)
@@ -738,6 +776,14 @@ class DatabaseESA(EnterpriseSystemAgent):
                 await self._connection.commit()
                 return {"affected_rows": cursor.rowcount}
 
+            raise ESAOperationError(
+                operation="execute_delete",
+                system_id=self.system_id,
+                reason=f"Unsupported database type: {self.database_type}",
+            )
+
+        except ESAOperationError:
+            raise
         except Exception as e:
             raise ESAOperationError(
                 operation="execute_delete",

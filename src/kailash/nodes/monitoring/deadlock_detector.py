@@ -961,4 +961,4 @@ class DeadlockDetectorNode(AsyncNode):
     async def cleanup(self):
         """Cleanup resources when node is destroyed."""
         await self._stop_monitoring()
-        await super().cleanup() if hasattr(super(), "cleanup") else None
+        await super().cleanup() if hasattr(super(), "cleanup") else None  # type: ignore[attr-defined]

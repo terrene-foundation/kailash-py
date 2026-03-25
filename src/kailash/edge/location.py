@@ -120,8 +120,8 @@ class EdgeCapabilities:
     cdn_enabled: bool = True
 
     # Service capabilities
-    database_support: List[str] = None  # ["postgresql", "mongodb", "redis"]
-    ai_models_available: List[str] = None  # ["llama", "gpt", "claude"]
+    database_support: Optional[List[str]] = None  # ["postgresql", "mongodb", "redis"]
+    ai_models_available: Optional[List[str]] = None  # ["llama", "gpt", "claude"]
     container_runtime: str = "docker"
 
     # Compliance and security
@@ -162,7 +162,7 @@ class EdgeMetrics:
     storage_cost_per_gb_month: float = 0.0
 
     # Timestamp
-    collected_at: datetime = None
+    collected_at: Optional[datetime] = None
 
     def __post_init__(self):
         if self.collected_at is None:
@@ -183,9 +183,9 @@ class EdgeLocation:
         region: EdgeRegion,
         coordinates: GeographicCoordinates,
         capabilities: EdgeCapabilities,
-        compliance_zones: List[ComplianceZone] = None,
+        compliance_zones: Optional[List[ComplianceZone]] = None,
         provider: str = "kailash",
-        endpoint_url: str = None,
+        endpoint_url: Optional[str] = None,
         **metadata,
     ):
         """Initialize edge location.

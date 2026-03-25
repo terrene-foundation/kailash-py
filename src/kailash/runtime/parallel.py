@@ -59,7 +59,9 @@ class ParallelRuntime:
         else:
             self.logger.setLevel(logging.INFO)
 
-        self.semaphore = None  # Will be initialized during execution
+        self.semaphore: asyncio.Semaphore | None = (
+            None  # Will be initialized during execution
+        )
 
     async def execute(
         self,
@@ -123,9 +125,7 @@ class ParallelRuntime:
                 try:
                     end_time = time.time()
                     execution_time = end_time - start_time
-                    task_manager.update_run_status(
-                        run_id, "completed", metadata={"execution_time": execution_time}
-                    )
+                    task_manager.update_run_status(run_id, "completed")
                 except Exception as e:
                     self.logger.warning(f"Failed to update run status: {e}")
 
@@ -364,6 +364,7 @@ class ParallelRuntime:
 
         try:
             # Limit concurrent execution
+            assert self.semaphore is not None, "Semaphore not initialized"
             async with self.semaphore:
                 # Update task status
                 if task:

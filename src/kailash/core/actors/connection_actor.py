@@ -114,7 +114,7 @@ class ActorConnection:
         self.state = ConnectionState.INITIALIZING
         self.mailbox = asyncio.Queue(maxsize=100)
         self.stats = ConnectionStats()
-        self.supervisor = None
+        self.supervisor: Any = None
 
         # Physical connection (set during connect)
         self._connection = None
@@ -275,8 +275,13 @@ class ActorConnection:
             fetch_mode_str = query_params.get("fetch_mode", "all")
             fetch_mode = FetchMode(fetch_mode_str.lower())
 
+            if self._adapter is None:
+                raise RuntimeError("Connection adapter not initialized")
+            query = query_params.get("query")
+            if query is None:
+                raise ValueError("Query parameter is required")
             result = await self._adapter.execute(
-                query=query_params.get("query"),
+                query=query,
                 params=query_params.get("params"),
                 fetch_mode=fetch_mode,
             )
@@ -318,6 +323,8 @@ class ActorConnection:
             from kailash.nodes.data.async_sql import FetchMode
 
             # Run health check query
+            if self._adapter is None:
+                raise RuntimeError("Connection adapter not initialized")
             await self._adapter.execute(
                 query=self.health_check_query, params=None, fetch_mode=FetchMode.ONE
             )

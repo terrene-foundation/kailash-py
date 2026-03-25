@@ -59,8 +59,8 @@ class KailashClient:
         """Async context manager exit."""
         await self.close()
 
-    async def _ensure_session(self):
-        """Ensure HTTP session exists."""
+    async def _ensure_session(self) -> aiohttp.ClientSession:
+        """Ensure HTTP session exists and return it."""
         if not self._session:
             headers = {}
             if self.api_key:
@@ -68,6 +68,7 @@ class KailashClient:
 
             timeout = aiohttp.ClientTimeout(total=self.timeout)
             self._session = aiohttp.ClientSession(headers=headers, timeout=timeout)
+        return self._session
 
     async def close(self):
         """Close HTTP session."""
@@ -86,7 +87,7 @@ class KailashClient:
         max_wait: float = 300.0,
     ) -> WorkflowResult:
         """Execute workflow with resource support."""
-        await self._ensure_session()
+        session = await self._ensure_session()
 
         # Prepare request
         request_data = {
@@ -96,7 +97,7 @@ class KailashClient:
         }
 
         # Execute workflow
-        async with self._session.post(
+        async with session.post(
             f"{self.base_url}/api/v1/workflows/{workflow_id}/execute", json=request_data
         ) as response:
             response.raise_for_status()
@@ -144,9 +145,9 @@ class KailashClient:
         self, workflow_id: str, request_id: str
     ) -> WorkflowResult:
         """Get workflow execution status."""
-        await self._ensure_session()
+        session = await self._ensure_session()
 
-        async with self._session.get(
+        async with session.get(
             f"{self.base_url}/api/v1/workflows/{workflow_id}/status/{request_id}"
         ) as response:
             response.raise_for_status()
@@ -156,17 +157,17 @@ class KailashClient:
 
     async def list_workflows(self) -> Dict[str, Any]:
         """List available workflows."""
-        await self._ensure_session()
+        session = await self._ensure_session()
 
-        async with self._session.get(f"{self.base_url}/api/v1/workflows") as response:
+        async with session.get(f"{self.base_url}/api/v1/workflows") as response:
             response.raise_for_status()
             return await response.json()
 
     async def get_workflow_details(self, workflow_id: str) -> Dict[str, Any]:
         """Get details of a specific workflow."""
-        await self._ensure_session()
+        session = await self._ensure_session()
 
-        async with self._session.get(
+        async with session.get(
             f"{self.base_url}/api/v1/workflows/{workflow_id}"
         ) as response:
             response.raise_for_status()
@@ -174,17 +175,17 @@ class KailashClient:
 
     async def health_check(self) -> Dict[str, Any]:
         """Check gateway health."""
-        await self._ensure_session()
+        session = await self._ensure_session()
 
-        async with self._session.get(f"{self.base_url}/api/v1/health") as response:
+        async with session.get(f"{self.base_url}/api/v1/health") as response:
             response.raise_for_status()
             return await response.json()
 
     async def list_resources(self) -> List[str]:
         """List available resources."""
-        await self._ensure_session()
+        session = await self._ensure_session()
 
-        async with self._session.get(f"{self.base_url}/api/v1/resources") as response:
+        async with session.get(f"{self.base_url}/api/v1/resources") as response:
             response.raise_for_status()
             return await response.json()
 

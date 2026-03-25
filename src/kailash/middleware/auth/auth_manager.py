@@ -57,11 +57,11 @@ class MiddlewareAuthManager:
 
     def __init__(
         self,
-        secret_key: str = None,
+        secret_key: Optional[str] = None,
         token_expiry_hours: int = 24,
         enable_api_keys: bool = True,
         enable_audit: bool = True,
-        database_url: str = None,
+        database_url: Optional[str] = None,
     ):
         """
         Initialize SDK Auth Manager.
@@ -78,7 +78,7 @@ class MiddlewareAuthManager:
         self.enable_audit = enable_audit
 
         # Initialize SDK security nodes
-        self._initialize_security_nodes(secret_key, database_url)
+        self._initialize_security_nodes(secret_key or "", database_url or "")
 
         # FastAPI security scheme
         self.bearer_scheme = HTTPBearer(auto_error=False)
@@ -129,8 +129,8 @@ class MiddlewareAuthManager:
     async def create_access_token(
         self,
         user_id: str,
-        permissions: List[str] = None,
-        metadata: Dict[str, Any] = None,
+        permissions: List[str] | None = None,
+        metadata: Dict[str, Any] | None = None,
     ) -> str:
         """
         Create JWT access token using SDK nodes.
@@ -174,7 +174,7 @@ class MiddlewareAuthManager:
                 details={"permissions": permissions},
             )
 
-        return token_result.get("token")
+        return token_result.get("token") or ""
 
     async def verify_token(self, token: str) -> Dict[str, Any]:
         """
@@ -209,7 +209,7 @@ class MiddlewareAuthManager:
             raise HTTPException(status_code=401, detail="Invalid authentication token")
 
     async def create_api_key(
-        self, user_id: str, key_name: str, permissions: List[str] = None
+        self, user_id: str, key_name: str, permissions: Optional[List[str]] = None
     ) -> str:
         """
         Create API key using RotatingCredentialNode.
@@ -296,7 +296,7 @@ class MiddlewareAuthManager:
             raise HTTPException(status_code=401, detail="Invalid API key")
 
     async def check_permission(
-        self, user_id: str, permission: str, resource: Dict[str, Any] = None
+        self, user_id: str, permission: str, resource: Optional[Dict[str, Any]] = None  # type: ignore[assignment]
     ) -> bool:
         """
         Check user permission using PermissionCheckNode.
@@ -329,7 +329,7 @@ class MiddlewareAuthManager:
 
         return granted
 
-    def get_current_user_dependency(self, required_permissions: List[str] = None):
+    def get_current_user_dependency(self, required_permissions: List[str] = None):  # type: ignore[reportArgumentType]
         """
         Create FastAPI dependency for user authentication.
 
@@ -358,7 +358,7 @@ class MiddlewareAuthManager:
                         for perm in required_permissions:
                             if perm not in user_permissions:
                                 # Check using permission node
-                                if not await self.check_permission(user_id, perm):
+                                if not await self.check_permission(user_id, perm):  # type: ignore[reportArgumentType]
                                     raise HTTPException(
                                         status_code=403,
                                         detail=f"Missing required permission: {perm}",
@@ -384,7 +384,7 @@ class MiddlewareAuthManager:
                         key_permissions = metadata.get("permissions", [])
                         for perm in required_permissions:
                             if perm not in key_permissions:
-                                if not await self.check_permission(user_id, perm):
+                                if not await self.check_permission(user_id, perm):  # type: ignore[reportArgumentType]
                                     raise HTTPException(
                                         status_code=403,
                                         detail=f"Missing required permission: {perm}",
@@ -405,7 +405,7 @@ class MiddlewareAuthManager:
 
 
 # Convenience function for creating auth dependencies
-def require_auth(permissions: List[str] = None):
+def require_auth(permissions: List[str] = None):  # type: ignore[reportArgumentType]
     """
     Create authentication dependency with required permissions.
 

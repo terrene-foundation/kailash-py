@@ -4,7 +4,7 @@ import asyncio
 import base64
 import json
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
@@ -17,23 +17,31 @@ try:
 
     AWS_AVAILABLE = True
 except ImportError:
+    boto3: Any = None  # type: ignore[no-redef]
+    ClientError: Any = type("ClientError", (Exception,), {"response": {}})  # type: ignore[no-redef]
+    NoCredentialsError: Any = type("NoCredentialsError", (Exception,), {})  # type: ignore[no-redef]
     AWS_AVAILABLE = False
 
 try:
-    from google.cloud import compute_v1
+    from google.cloud import compute_v1  # type: ignore[reportAttributeAccessIssue]
     from google.oauth2 import service_account
 
     GCP_AVAILABLE = True
 except ImportError:
+    compute_v1: Any = None  # type: ignore[no-redef]
+    service_account: Any = None  # type: ignore[no-redef]
     GCP_AVAILABLE = False
 
 try:
     from azure.identity import DefaultAzureCredential
-    from azure.mgmt.compute import ComputeManagementClient
-    from azure.mgmt.resource import ResourceManagementClient
+    from azure.mgmt.compute import ComputeManagementClient  # type: ignore[reportMissingImports]
+    from azure.mgmt.resource import ResourceManagementClient  # type: ignore[reportMissingImports]
 
     AZURE_AVAILABLE = True
 except ImportError:
+    DefaultAzureCredential: Any = None  # type: ignore[no-redef]
+    ComputeManagementClient: Any = None  # type: ignore[no-redef]
+    ResourceManagementClient: Any = None  # type: ignore[no-redef]
     AZURE_AVAILABLE = False
 
 
@@ -83,19 +91,14 @@ class CloudInstance:
     state: InstanceState = InstanceState.PENDING
     public_ip: Optional[str] = None
     private_ip: Optional[str] = None
-    security_groups: Optional[List[str]] = None
-    tags: Optional[Dict[str, str]] = None
+    security_groups: List[str] = field(default_factory=list)
+    tags: Dict[str, str] = field(default_factory=dict)
     edge_node: Optional[str] = None
-    created_at: Optional[datetime] = None
+    created_at: datetime = field(default_factory=datetime.now)
     launched_at: Optional[datetime] = None
 
     def __post_init__(self):
-        if self.created_at is None:
-            self.created_at = datetime.now()
-        if self.security_groups is None:
-            self.security_groups = []
-        if self.tags is None:
-            self.tags = {}
+        pass
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -119,19 +122,16 @@ class InstanceSpec:
     region: str
     zone: Optional[str] = None
     subnet_id: Optional[str] = None
-    security_group_ids: Optional[List[str]] = None
+    security_group_ids: List[str] = field(default_factory=list)
     key_name: Optional[str] = None
     user_data: Optional[str] = None
-    tags: Optional[Dict[str, str]] = None
+    tags: Dict[str, str] = field(default_factory=dict)
     edge_node: Optional[str] = None
     min_count: int = 1
     max_count: int = 1
 
     def __post_init__(self):
-        if self.security_group_ids is None:
-            self.security_group_ids = []
-        if self.tags is None:
-            self.tags = {}
+        pass
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""

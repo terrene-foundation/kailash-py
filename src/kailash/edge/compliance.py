@@ -73,8 +73,8 @@ class ComplianceRequirement:
     description: str
     enforcement_level: str  # "required", "recommended", "optional"
     applicable_data_types: List[DataClassification]
-    applicable_regions: List[EdgeRegion] = None
-    exceptions: List[str] = None
+    applicable_regions: Optional[List[EdgeRegion]] = None
+    exceptions: Optional[List[str]] = None
 
     def __post_init__(self):
         if self.applicable_regions is None:
@@ -91,7 +91,7 @@ class ComplianceContext:
     data_classification: DataClassification
     data_size_gb: float = 0.0
     contains_personal_data: bool = False
-    subject_countries: List[str] = None  # ISO country codes
+    subject_countries: Optional[List[str]] = None  # ISO country codes
 
     # User context
     user_location: Optional[GeographicCoordinates] = None
@@ -104,7 +104,7 @@ class ComplianceContext:
     sharing_scope: str = "internal"  # "internal", "third_party", "public"
 
     # Compliance overrides
-    explicit_compliance_zones: List[ComplianceZone] = None
+    explicit_compliance_zones: Optional[List[ComplianceZone]] = None
     override_data_residency: bool = False
 
     def __post_init__(self):
@@ -466,7 +466,7 @@ class ComplianceRouter:
                     "CZ",
                     "PL",
                 ]
-                for country in context.subject_countries
+                for country in (context.subject_countries or [])
             ):
                 zones.append(ComplianceZone.GDPR)
 

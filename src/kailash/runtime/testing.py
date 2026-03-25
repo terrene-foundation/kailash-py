@@ -64,7 +64,7 @@ class TestDataGenerator:
 
     @staticmethod
     def generate_csv_data(
-        rows: int = 10, columns: list[str] = None
+        rows: int = 10, columns: list[str] | None = None
     ) -> list[dict[str, Any]]:
         """Generate mock CSV data."""
         if columns is None:
@@ -296,7 +296,7 @@ class SecurityTestHelper:
         return workflow
 
     def test_credential_scenarios(
-        self, credential_type: str, scenarios: list[str] = None
+        self, credential_type: str, scenarios: list[str] | None = None
     ) -> dict[str, Any]:
         """Test multiple credential scenarios and return results."""
         from kailash.nodes.testing import CredentialTestingNode
@@ -338,10 +338,29 @@ class SecurityTestHelper:
 class WorkflowTestHelper:
     """Helper class for testing workflows."""
 
-    def __init__(self):
-        """Initialize test helper."""
-        self.runtime = LocalRuntime(debug=True)
-        self.task_manager = None
+    def __init__(self, runtime: Any = None):
+        """Initialize test helper.
+
+        Args:
+            runtime: Optional shared runtime. If provided, its ref count is
+                incremented via acquire(). If None, a new LocalRuntime is created.
+        """
+        if runtime is not None:
+            self.runtime: LocalRuntime | None = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = LocalRuntime(debug=True)
+            self._owns_runtime = True
+        self.task_manager: TaskManager | None = None
+
+    def close(self) -> None:
+        """Release runtime reference."""
+        if hasattr(self, "runtime") and self.runtime is not None:
+            if self._owns_runtime:
+                self.runtime.close()
+            else:
+                self.runtime.release()
+            self.runtime = None
 
     def create_test_workflow(self, name: str = "test_workflow") -> Workflow:
         """Create a simple test workflow."""
@@ -370,6 +389,7 @@ class WorkflowTestHelper:
         else:
             self.task_manager = None
 
+        assert self.runtime is not None, "Runtime not initialized"
         return self.runtime.execute(workflow, self.task_manager, parameters)
 
     def assert_workflow_success(
@@ -482,20 +502,25 @@ class WorkflowTestReporter:
         run = self.task_manager.get_run_summary(run_id)
         tasks = self.task_manager.list_tasks(run_id)
 
-        report = {
+        report: dict[str, Any] = {
             "run_id": run_id,
-            "workflow": run.workflow_name,
-            "status": run.status,
-            "duration": run.duration,
-            "started_at": run.started_at,
-            "ended_at": run.ended_at,
-            "summary": {
-                "total_tasks": run.task_count,
-                "completed": run.completed_tasks,
-                "failed": run.failed_tasks,
-            },
             "tasks": [],
         }
+        if run is not None:
+            report.update(
+                {
+                    "workflow": run.workflow_name,
+                    "status": run.status,
+                    "duration": run.duration,
+                    "started_at": run.started_at,
+                    "ended_at": run.ended_at,
+                    "summary": {
+                        "total_tasks": run.task_count,
+                        "completed": run.completed_tasks,
+                        "failed": run.failed_tasks,
+                    },
+                }
+            )
 
         # Add task details
         for task in tasks:
@@ -536,7 +561,7 @@ def create_test_workflow(
     name: str = "test_workflow", nodes: list[dict] | None = None
 ) -> Workflow:
     """Create a test workflow with specified nodes."""
-    workflow = Workflow(name=name)
+    workflow = Workflow(workflow_id=name, name=name)
 
     if nodes:
         for node_config in nodes:
@@ -547,9 +572,9 @@ def create_test_workflow(
             node = create_test_node(node_type, **config)
             workflow.add_node(node_id, node, **config)
 
-        # Add connections if specified
-        if "connections" in node_config:
-            for conn in node_config["connections"]:
+        # Add connections if specified (using last node_config from loop)
+        if nodes and "connections" in nodes[-1]:
+            for conn in nodes[-1]["connections"]:
                 workflow.connect(conn["from"], conn["to"], conn.get("mapping", {}))
 
     return workflow

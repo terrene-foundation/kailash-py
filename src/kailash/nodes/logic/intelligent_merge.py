@@ -311,7 +311,7 @@ class IntelligentMergeNode(Node):
             for decision in decisions:
                 decision_counts[decision] = decision_counts.get(decision, 0) + 1
 
-            majority_decision = max(decision_counts, key=decision_counts.get)
+            majority_decision = max(decision_counts, key=decision_counts.get)  # type: ignore[reportCallIssue]
             majority_count = decision_counts[majority_decision]
 
             return {
@@ -328,7 +328,7 @@ class IntelligentMergeNode(Node):
             value_counts[value_str] = value_counts.get(value_str, 0) + 1
 
         if value_counts:
-            most_common = max(value_counts, key=value_counts.get)
+            most_common = max(value_counts, key=value_counts.get)  # type: ignore[reportCallIssue]
             most_common_count = value_counts[most_common]
 
             # Find the actual value (not string representation)

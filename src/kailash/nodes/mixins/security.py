@@ -35,14 +35,20 @@ class SecurityMixin:
         """Get current security context."""
         return self._security_context
 
-    def audit_log(self, action: str, details: Dict[str, Any]) -> None:
-        """Log an audit event."""
+    def audit_log(self, action: str, details: Dict[str, Any]) -> Any:
+        """Log an audit event.
+
+        Return type is Any to allow async overrides in AsyncNode subclasses.
+        """
         if self._audit_enabled:
             # In a real implementation, this would integrate with AuditLogNode
             print(f"[AUDIT] {action}: {details}")
 
-    def validate_and_sanitize_inputs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate and sanitize input parameters."""
+    def validate_and_sanitize_inputs(self, inputs: Dict[str, Any]) -> Any:
+        """Validate and sanitize input parameters.
+
+        Return type is Any to allow async overrides in AsyncNode subclasses.
+        """
         # Basic implementation - in production this would do more validation
         sanitized = {}
         for key, value in inputs.items():
@@ -123,26 +129,40 @@ class LoggingMixin:
         """Set logging context."""
         self._log_context.update(context)
 
-    def log_info(self, message: str, **extra):
-        """Log info message with context."""
+    def log_info(self, message: str, **extra) -> Any:
+        """Log info message with context.
+
+        Return type is Any to allow async overrides in AsyncNode subclasses.
+        """
         self.logger.info(message, extra={**self._log_context, **extra})
 
-    def log_error(self, message: str, error: Optional[Exception] = None, **extra):
-        """Log error message with context."""
+    def log_error(
+        self, message: str, error: Optional[Exception] = None, **extra
+    ) -> Any:
+        """Log error message with context.
+
+        Return type is Any to allow async overrides in AsyncNode subclasses.
+        """
         log_data = {**self._log_context, **extra}
         if error:
             log_data["error_type"] = type(error).__name__
             log_data["error_message"] = str(error)
         self.logger.error(message, extra=log_data)
 
-    def log_warning(self, message: str, **extra):
-        """Log warning message with context."""
+    def log_warning(self, message: str, **extra) -> Any:
+        """Log warning message with context.
+
+        Return type is Any to allow async overrides in AsyncNode subclasses.
+        """
         self.logger.warning(message, extra={**self._log_context, **extra})
 
     def log_error_with_traceback(
         self, error: Exception, operation: str = "unknown"
-    ) -> None:
-        """Log an error with full traceback information."""
+    ) -> Any:
+        """Log an error with full traceback information.
+
+        Return type is Any to allow async overrides in AsyncNode subclasses.
+        """
         import traceback
 
         self.log_error(
@@ -151,12 +171,18 @@ class LoggingMixin:
             traceback=traceback.format_exc(),
         )
 
-    def log_node_execution(self, operation: str, **context) -> None:
-        """Log node execution information."""
+    def log_node_execution(self, operation: str, **context) -> Any:
+        """Log node execution information.
+
+        Return type is Any to allow async overrides in AsyncNode subclasses.
+        """
         self.log_info(f"Node operation: {operation}", **context)
 
-    def log_with_context(self, level: str, message: str, **context) -> None:
-        """Log a message with additional context."""
+    def log_with_context(self, level: str, message: str, **context) -> Any:
+        """Log a message with additional context.
+
+        Return type is Any to allow async overrides in AsyncNode subclasses.
+        """
         full_context = {**self._log_context, **context}
         context_str = " | ".join(f"{k}={v}" for k, v in full_context.items())
         full_message = f"{message} | {context_str}"

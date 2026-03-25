@@ -16,7 +16,7 @@ from typing import Any
 # Use low-level server implementation with fallback
 try:
     from mcp.server.lowlevel import Server
-    from mcp.types import Resource, TextContent, Tool
+    from mcp.types import Resource, TextContent, Tool  # type: ignore[assignment]
 except ImportError:
     # Fallback if official MCP is broken
     print("Warning: Official MCP server not available, using fallback")
@@ -52,7 +52,7 @@ class AIRegistryServer:
 
     def __init__(self, registry_file: str = "research/combined_ai_registry.json"):
         """Initialize the AI Registry MCP server."""
-        self.server = Server("ai-registry")
+        self.server = Server("ai-registry")  # type: ignore[abstract]
         self.registry_data = self._load_registry_data(registry_file)
         self._setup_tools()
         self._setup_resources()
@@ -147,7 +147,7 @@ class AIRegistryServer:
     def _setup_tools(self):
         """Setup MCP tools using the official SDK."""
 
-        @self.server.list_tools()
+        @self.server.list_tools()  # type: ignore[attr-defined]
         async def handle_list_tools():
             """List all available AI Registry tools."""
             return [
@@ -318,7 +318,7 @@ class AIRegistryServer:
                 ),
             ]
 
-        @self.server.call_tool()
+        @self.server.call_tool()  # type: ignore[attr-defined, arg-type]
         async def handle_call_tool(name: str, arguments: dict):
             """Handle tool execution requests."""
             if name == "search_use_cases":
@@ -391,7 +391,7 @@ class AIRegistryServer:
     def _setup_resources(self):
         """Setup MCP resources using the official SDK."""
 
-        @self.server.list_resources()
+        @self.server.list_resources()  # type: ignore[attr-defined]
         async def handle_list_resources():
             """List all available AI Registry resources."""
             resources = []
@@ -421,7 +421,7 @@ class AIRegistryServer:
 
             return resources
 
-        @self.server.read_resource()
+        @self.server.read_resource()  # type: ignore[attr-defined, arg-type]
         async def handle_read_resource(uri: str):
             """Handle resource read requests."""
             if uri == "ai-registry://overview":
@@ -711,8 +711,8 @@ class AIRegistryServer:
         from mcp.server.stdio import stdio_server
 
         async with stdio_server() as (read_stream, write_stream):
-            await self.server.run(
-                read_stream, write_stream, self.server.create_initialization_options()
+            await self.server.run(  # type: ignore[attr-defined]
+                read_stream, write_stream, self.server.create_initialization_options()  # type: ignore[attr-defined]
             )
 
 

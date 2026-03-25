@@ -221,7 +221,7 @@ class ConnectionDashboardNode(Node):
             ),
         }
 
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:  # type: ignore[override]
         """Execute dashboard action.
 
         Actions:
@@ -685,8 +685,8 @@ class ConnectionDashboardNode(Node):
         # Try to get real pools from resource registry
         pools_info = {}
 
-        if hasattr(self, "runtime") and hasattr(self.runtime, "resource_registry"):
-            resources = self.runtime.resource_registry.list_resources()
+        if hasattr(self, "runtime") and hasattr(self.runtime, "resource_registry"):  # type: ignore[attr-defined]
+            resources = self.runtime.resource_registry.list_resources()  # type: ignore[attr-defined]
 
             for name, resource in resources.items():
                 if hasattr(resource, "get_pool_statistics"):

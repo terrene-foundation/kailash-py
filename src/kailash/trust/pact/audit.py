@@ -335,7 +335,9 @@ class AuditChain:
                     )
             else:
                 expected_prev = self.anchors[i - 1].content_hash
-                if not hmac_mod.compare_digest(anchor.previous_hash, expected_prev):
+                if anchor.previous_hash is None or not hmac_mod.compare_digest(
+                    anchor.previous_hash, expected_prev
+                ):
                     errors.append(
                         f"Anchor {i}: previous_hash doesn't match anchor {i - 1}"
                     )

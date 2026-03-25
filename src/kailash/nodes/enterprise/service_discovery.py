@@ -14,14 +14,14 @@ class MCPServiceDiscoveryNode(Node):
     ensuring tenants only access services they're authorized to use.
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="MCPServiceDiscoveryNode",
         description="Discovers MCP services for tenant-specific requirements",
         version="1.0.0",
         tags={"enterprise", "mcp", "service-discovery"},
     )
 
-    def __init__(self, name: str = None, **kwargs):
+    def __init__(self, name: str | None = None, **kwargs):
         self.name = name or self.__class__.__name__
         super().__init__(name=self.name, **kwargs)
 
@@ -48,11 +48,11 @@ class MCPServiceDiscoveryNode(Node):
             ),
         }
 
-    def run(
+    def run(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         tenant: Dict,
         user_context: Dict,
-        service_requirements: List[str] = None,
+        service_requirements: List[str] | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """Discover available MCP services for the tenant."""

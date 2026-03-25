@@ -40,34 +40,29 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Setup Python
-        run: |
-          if command -v pyenv &> /dev/null; then
-            export PYENV_ROOT="$HOME/.pyenv"
-            export PATH="$PYENV_ROOT/bin:$PATH"
-            eval "$(pyenv init -)"
-          fi
-          python3 --version
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
 
       - name: Install uv
-        run: |
-          export CARGO_HOME="${GITHUB_WORKSPACE}/.cargo"
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "${GITHUB_WORKSPACE}/.cargo/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@v6
 
       - name: Install dependencies
         run: |
-          uv pip install -e ".[trust,dev]" --system --break-system-packages
-          uv pip install -e "packages/kailash-kaizen[dev]" --system --break-system-packages
-          uv pip install -e "packages/kailash-dataflow[dev]" --system --break-system-packages
-          uv pip install -e "packages/kailash-nexus[dev]" --system --break-system-packages
+          uv venv .venv
+          source .venv/bin/activate
+          uv pip install -e ".[trust,dev]"
+          uv pip install -e "packages/kailash-kaizen[dev]"
+          uv pip install -e "packages/kailash-dataflow[dev]"
+          uv pip install -e "packages/kailash-nexus[dev]"
 
       - name: Create reports directory
         run: mkdir -p reports
 
       - name: Run Core SDK Trust Tests
         run: |
-          python -m pytest tests/unit/runtime/trust/ \
+          .venv/bin/python -m pytest tests/unit/runtime/trust/ \
             -v --tb=short --timeout=60 \
             --junitxml=reports/core-trust-results.xml \
             2>&1 | tee reports/core-trust.log
@@ -75,7 +70,7 @@ jobs:
 
       - name: Run Kaizen Trust Unit Tests
         run: |
-          python -m pytest packages/kailash-kaizen/tests/unit/trust/ \
+          .venv/bin/python -m pytest packages/kailash-kaizen/tests/unit/trust/ \
             -v --tb=short --timeout=120 \
             --junitxml=reports/kaizen-trust-results.xml \
             2>&1 | tee reports/kaizen-trust.log
@@ -83,7 +78,7 @@ jobs:
 
       - name: Run DataFlow Trust Tests
         run: |
-          python -m pytest packages/kailash-dataflow/tests/unit/trust/ \
+          .venv/bin/python -m pytest packages/kailash-dataflow/tests/unit/trust/ \
             -v --tb=short --timeout=60 \
             --junitxml=reports/dataflow-trust-results.xml \
             2>&1 | tee reports/dataflow-trust.log
@@ -91,7 +86,7 @@ jobs:
 
       - name: Run Nexus Trust Tests
         run: |
-          python -m pytest packages/kailash-nexus/tests/unit/trust/ \
+          .venv/bin/python -m pytest packages/kailash-nexus/tests/unit/trust/ \
             -v --tb=short --timeout=60 \
             --junitxml=reports/nexus-trust-results.xml \
             2>&1 | tee reports/nexus-trust.log

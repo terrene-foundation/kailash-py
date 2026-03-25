@@ -60,8 +60,8 @@ class TokenPayload:
     tenant_id: Optional[str] = None
     session_id: Optional[str] = None
     user_type: str = "user"
-    permissions: List[str] = None
-    roles: List[str] = None
+    permissions: Optional[List[str]] = None
+    roles: Optional[List[str]] = None
 
     # Token metadata
     token_type: str = "access"  # access, refresh
@@ -94,7 +94,7 @@ class RefreshTokenData:
     user_id: str
     tenant_id: Optional[str] = None
     session_id: Optional[str] = None
-    created_at: datetime = None
+    created_at: Optional[datetime] = None
     last_used: Optional[datetime] = None
     refresh_count: int = 0
     ip_address: Optional[str] = None
@@ -113,9 +113,9 @@ class UserClaims:
     tenant_id: Optional[str] = None
     email: Optional[str] = None
     username: Optional[str] = None
-    roles: List[str] = None
-    permissions: List[str] = None
-    metadata: dict = None
+    roles: Optional[List[str]] = None
+    permissions: Optional[List[str]] = None
+    metadata: Optional[dict] = None
 
     def __post_init__(self):
         if self.roles is None:

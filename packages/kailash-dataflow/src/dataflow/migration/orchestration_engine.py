@@ -148,6 +148,7 @@ class MigrationOrchestrationEngine:
         schema_state_manager,
         connection_string: str,
         connection_pool_name: str = "default",
+        runtime=None,
     ):
         """
         Initialize the Migration Orchestration Engine.
@@ -156,6 +157,11 @@ class MigrationOrchestrationEngine:
             auto_migration_system: Existing AutoMigrationSystem instance
             schema_state_manager: Existing SchemaStateManager instance
             connection_string: Database connection string
+            connection_pool_name: Connection pool name
+            runtime: Optional shared runtime. If provided, the engine acquires
+                a reference (ref-count increment) and uses it for all workflow
+                executions. If None, creates its own runtime with async-context
+                detection to prevent deadlocks.
         """
         self.auto_migration_system = auto_migration_system
         self.schema_state_manager = schema_state_manager
@@ -167,22 +173,30 @@ class MigrationOrchestrationEngine:
 
         self.database_type = ConnectionParser.detect_database_type(connection_string)
 
-        # ✅ FIX: Detect async context and use appropriate runtime
-        try:
-            asyncio.get_running_loop()
-            # Running in async context - use AsyncLocalRuntime
-            self.runtime = AsyncLocalRuntime()
-            self._is_async = True
+        # Initialize runtime
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
-                "OrchestrationEngine: Detected async context, using AsyncLocalRuntime"
+                "OrchestrationEngine: Using injected runtime (ref_count=%d)",
+                runtime.ref_count,
             )
-        except RuntimeError:
-            # No event loop - use sync LocalRuntime
-            self.runtime = LocalRuntime()
-            self._is_async = False
-            logger.debug(
-                "OrchestrationEngine: Detected sync context, using LocalRuntime"
-            )
+        else:
+            try:
+                asyncio.get_running_loop()
+                self.runtime = AsyncLocalRuntime()
+                self._is_async = True
+                logger.debug(
+                    "OrchestrationEngine: Detected async context, using AsyncLocalRuntime"
+                )
+            except RuntimeError:
+                self.runtime = LocalRuntime()
+                self._is_async = False
+                logger.debug(
+                    "OrchestrationEngine: Detected sync context, using LocalRuntime"
+                )
+            self._owns_runtime = True
 
         # TODO: Integrate with DataFlow connection pooling
         # from dataflow.core.connection_manager import get_connection_pool
@@ -220,6 +234,30 @@ class MigrationOrchestrationEngine:
             return False, str(node_result["error"])
 
         return True, None
+
+    def close(self):
+        """Release the runtime reference.
+
+        Safe to call multiple times -- subsequent calls are no-ops.
+        """
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        """Emit ResourceWarning if close() was not called explicitly."""
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
 
     async def execute_migration(self, migration: Migration) -> MigrationResult:
         """
@@ -571,9 +609,7 @@ class MigrationOrchestrationEngine:
                 },
             )
 
-            # ✅ FIX: Use LocalRuntime for migration operations to avoid async context issues
-            init_runtime = LocalRuntime()
-            results, _ = init_runtime.execute(workflow.build())
+            results, _ = self.runtime.execute(workflow.build())
             node_id = f"execute_{operation.operation_type.value}"
 
             success, error_msg = self._check_node_result(results, node_id)
@@ -627,9 +663,7 @@ class MigrationOrchestrationEngine:
                         },
                     )
 
-                    # ✅ FIX: Use LocalRuntime for migration operations to avoid async context issues
-                    init_runtime = LocalRuntime()
-                    results, _ = init_runtime.execute(workflow.build())
+                    results, _ = self.runtime.execute(workflow.build())
                     node_id = f"rollback_{operation.operation_type.value}"
 
                     if node_id not in results or results[node_id].get("error"):

@@ -335,7 +335,13 @@ class DurableWorkflowServer(WorkflowServer):
                 return {
                     "request_id": request_id,
                     "state": req.state.value,
-                    "metadata": req.metadata.model_dump(),
+                    "metadata": {
+                        "request_id": req.metadata.request_id,
+                        "method": req.metadata.method,
+                        "path": req.metadata.path,
+                        "created_at": req.metadata.created_at.isoformat(),
+                        "updated_at": req.metadata.updated_at.isoformat(),
+                    },
                     "active": True,
                 }
 
@@ -397,18 +403,21 @@ class DurableWorkflowServer(WorkflowServer):
         @self.app.get("/durability/events")
         async def list_events(limit: int = 100, offset: int = 0):
             """List recent durability events."""
-            events = await self.event_store.get_events(limit=limit, offset=offset)
+            # Access in-memory event stream directly for listing
+            async with self.event_store._stream_lock:
+                all_events = list(self.event_store._event_stream)
+            events = all_events[offset : offset + limit]
             return {
                 "events": [
                     {
-                        "type": event.type.value,
+                        "type": event.event_type.value,
                         "data": event.data,
                         "timestamp": event.timestamp.isoformat(),
                         "event_id": event.event_id,
                     }
                     for event in events
                 ],
-                "total": len(events),
+                "total": len(all_events),
                 "limit": limit,
                 "offset": offset,
             }

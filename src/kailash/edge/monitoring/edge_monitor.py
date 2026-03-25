@@ -215,7 +215,7 @@ class EdgeMonitor:
         self.metrics[key].append(metric)
 
         # Update aggregated metrics for fast queries
-        self.aggregated_metrics[metric.edge_node][metric.metric_type].append(
+        self.aggregated_metrics[metric.edge_node][metric.metric_type.value].append(
             metric.value
         )
 
@@ -372,7 +372,7 @@ class EdgeMonitor:
                 continue
 
             # Basic statistics
-            analytics["metrics_summary"][metric_type.value] = {
+            analytics["metrics_summary"][metric_type] = {
                 "count": len(values),
                 "mean": statistics.mean(values),
                 "median": statistics.median(values),
@@ -397,7 +397,7 @@ class EdgeMonitor:
                 elif recent_avg < older_avg * 0.9:
                     trend = "decreasing"
 
-                analytics["trends"][metric_type.value] = {
+                analytics["trends"][metric_type] = {
                     "direction": trend,
                     "change_percent": (
                         ((recent_avg - older_avg) / older_avg * 100) if older_avg else 0
@@ -459,7 +459,7 @@ class EdgeMonitor:
                 threshold_value = thresholds["warning"]
 
         # Create alert if threshold violated
-        if severity:
+        if severity and threshold_value is not None:
             alert = EdgeAlert(
                 alert_id=f"{alert_key}:{int(time.time())}",
                 timestamp=datetime.now(),
@@ -596,11 +596,11 @@ class EdgeMonitor:
 
     def _update_baseline(self, edge_node: str):
         """Update baseline metrics for anomaly detection."""
-        for metric_type, values in self.aggregated_metrics[edge_node].items():
+        for metric_type_str, values in self.aggregated_metrics[edge_node].items():
             if len(values) > 100:
                 # Use median as baseline (more robust to outliers)
-                self.baseline_metrics[edge_node][metric_type] = statistics.median(
-                    values
+                self.baseline_metrics[edge_node][MetricType(metric_type_str)] = (
+                    statistics.median(values)
                 )
 
     def _detect_anomalies(self, edge_node: str) -> List[EdgeAlert]:
@@ -611,7 +611,7 @@ class EdgeMonitor:
             return anomalies
 
         for metric_type, baseline in self.baseline_metrics[edge_node].items():
-            recent_values = self.aggregated_metrics[edge_node][metric_type][-10:]
+            recent_values = self.aggregated_metrics[edge_node][metric_type.value][-10:]
 
             if not recent_values:
                 continue

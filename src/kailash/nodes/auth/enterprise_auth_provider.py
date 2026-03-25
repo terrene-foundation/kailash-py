@@ -47,13 +47,13 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
     def __init__(
         self,
         name: str = "enterprise_auth_provider",
-        enabled_methods: List[str] = None,
+        enabled_methods: List[str] | None = None,
         primary_method: str = "sso",
-        fallback_methods: List[str] = None,
-        sso_config: Dict[str, Any] = None,
-        mfa_config: Dict[str, Any] = None,
-        directory_config: Dict[str, Any] = None,
-        session_config: Dict[str, Any] = None,
+        fallback_methods: List[str] | None = None,
+        sso_config: Dict[str, Any] | None = None,
+        mfa_config: Dict[str, Any] | None = None,
+        directory_config: Dict[str, Any] | None = None,
+        session_config: Dict[str, Any] | None = None,
         risk_assessment_enabled: bool = True,
         adaptive_auth_enabled: bool = True,
         fraud_detection_enabled: bool = True,
@@ -183,13 +183,13 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
     async def async_run(
         self,
         action: str,
-        auth_method: str = None,
-        credentials: Dict[str, Any] = None,
-        user_id: str = None,
-        session_id: str = None,
-        risk_context: Dict[str, Any] = None,
-        permissions: List[str] = None,
-        resource: str = None,
+        auth_method: str | None = None,
+        credentials: Dict[str, Any] | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        risk_context: Dict[str, Any] | None = None,
+        permissions: List[str] | None = None,
+        resource: str | None = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """
@@ -222,7 +222,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             # Check rate limiting
             if self.rate_limiting_enabled and action == "authenticate":
                 rate_limit_check = await self._check_rate_limiting(
-                    user_id, risk_context
+                    user_id, risk_context  # type: ignore[arg-type]
                 )
                 if not rate_limit_check["allowed"]:
                     return rate_limit_check
@@ -230,22 +230,22 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             # Route to appropriate handler
             if action == "authenticate":
                 result = await self._authenticate(
-                    auth_method, credentials, user_id, risk_context, auth_id, **kwargs
+                    auth_method, credentials, user_id, risk_context, auth_id, **kwargs  # type: ignore[arg-type]
                 )
             elif action == "authorize":
                 result = await self._authorize(
-                    user_id, session_id, permissions, resource, risk_context, **kwargs
+                    user_id, session_id, permissions, resource, risk_context, **kwargs  # type: ignore[arg-type]
                 )
             elif action == "logout":
-                result = await self._logout(user_id, session_id, **kwargs)
+                result = await self._logout(user_id, session_id, **kwargs)  # type: ignore[arg-type]
             elif action == "validate":
-                result = await self._validate_session(session_id, **kwargs)
+                result = await self._validate_session(session_id, **kwargs)  # type: ignore[arg-type]
             elif action == "assess_risk":
-                result = await self._assess_risk(user_id, risk_context, **kwargs)
+                result = await self._assess_risk(user_id, risk_context, **kwargs)  # type: ignore[arg-type]
             elif action == "get_methods":
-                result = await self._get_available_methods(user_id, **kwargs)
+                result = await self._get_available_methods(user_id, **kwargs)  # type: ignore[arg-type]
             elif action == "challenge_mfa":
-                result = await self._challenge_mfa(user_id, auth_method, **kwargs)
+                result = await self._challenge_mfa(user_id, auth_method, **kwargs)  # type: ignore[arg-type]
             else:
                 raise ValueError(f"Unsupported authentication action: {action}")
 
@@ -383,7 +383,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
 
         # All authentication successful - create session
         self.log_info(f"Creating session for user {user_id}...")
-        session_result = await self.session_node.execute_async(
+        session_result = await self.session_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
             action="create",
             user_id=user_id,
             auth_method=auth_method,
@@ -420,7 +420,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
     ) -> Dict[str, Any]:
         """Perform authentication using specified method."""
         if auth_method == "sso":
-            return await self.sso_node.execute_async(
+            return await self.sso_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
                 action="callback",
                 provider=credentials.get("provider"),
                 request_data=credentials.get("request_data"),
@@ -428,12 +428,12 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             )
 
         elif auth_method == "directory":
-            return await self.directory_node.execute_async(
+            return await self.directory_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
                 action="authenticate", credentials=credentials
             )
 
         elif auth_method == "mfa":
-            return await self.mfa_node.execute_async(
+            return await self.mfa_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
                 action="verify",
                 user_id=user_id,
                 code=credentials.get("mfa_code"),
@@ -610,7 +610,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
 
         try:
             # Make request to validate token
-            response = await self.http_client.execute_async(
+            response = await self.http_client.execute_async(  # type: ignore[reportAttributeAccessIssue]
                 method="GET",
                 url=url,
                 headers={"Authorization": f"Bearer {access_token}"},
@@ -741,7 +741,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                 }
 
             # Verify MFA
-            mfa_result = await self.mfa_node.execute_async(
+            mfa_result = await self.mfa_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
                 action="verify",
                 user_id=user_id,
                 code=mfa_code,
@@ -1137,7 +1137,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         """Authorize user access to resource."""
         # Validate session
         if session_id:
-            session_validation = await self.session_node.execute_async(
+            session_validation = await self.session_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
                 action="validate", session_id=session_id
             )
 
@@ -1192,13 +1192,13 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
 
         # Logout from session management
         if session_id:
-            session_result = await self.session_node.execute_async(
+            session_result = await self.session_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
                 action="terminate", session_id=session_id
             )
             logout_results.append({"component": "session", "result": session_result})
 
         # Logout from SSO if applicable
-        sso_result = await self.sso_node.execute_async(action="logout", user_id=user_id)
+        sso_result = await self.sso_node.execute_async(action="logout", user_id=user_id)  # type: ignore[reportAttributeAccessIssue]
         logout_results.append({"component": "sso", "result": sso_result})
 
         # Clear risk scores
@@ -1206,7 +1206,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             del self.risk_scores[user_id]
 
         # Log logout
-        await self.audit_logger.execute_async(
+        await self.audit_logger.execute_async(  # type: ignore[reportAttributeAccessIssue]
             action="user_logout",
             user_id=user_id,
             details={"session_id": session_id, "logout_results": logout_results},
@@ -1221,7 +1221,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
 
     async def _validate_session(self, session_id: str, **kwargs) -> Dict[str, Any]:
         """Validate session."""
-        result = await self.session_node.execute_async(
+        result = await self.session_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
             action="validate", session_id=session_id
         )
 
@@ -1243,7 +1243,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
 
             if method == "mfa":
                 # Check if user has MFA configured
-                mfa_status = await self.mfa_node.execute_async(
+                mfa_status = await self.mfa_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
                     action="status", user_id=user_id
                 )
                 method_info["configured"] = mfa_status.get("mfa_enabled", False)
@@ -1261,7 +1261,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         self, user_id: str, auth_method: str, **kwargs
     ) -> Dict[str, Any]:
         """Challenge user for MFA."""
-        return await self.mfa_node.execute_async(
+        return await self.mfa_node.execute_async(  # type: ignore[reportAttributeAccessIssue]
             action="challenge", user_id=user_id, method=auth_method
         )
 
@@ -1276,7 +1276,7 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         else:
             severity = "MEDIUM"
 
-        await self.security_logger.execute_async(
+        await self.security_logger.execute_async(  # type: ignore[reportAttributeAccessIssue]
             event_type=event_type,
             severity=severity,
             source="enterprise_auth_provider",

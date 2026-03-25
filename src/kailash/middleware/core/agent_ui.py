@@ -209,7 +209,10 @@ class WorkflowSession:
     """
 
     def __init__(
-        self, session_id: str, user_id: str = None, metadata: Dict[str, Any] = None
+        self,
+        session_id: str,
+        user_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ):
         """
         Initialize a new workflow session.
@@ -246,7 +249,9 @@ class WorkflowSession:
         self.workflows[workflow_id] = workflow
         logger.info(f"Added workflow {workflow_id} to session {self.session_id}")
 
-    def start_execution(self, workflow_id: str, inputs: Dict[str, Any] = None) -> str:
+    def start_execution(
+        self, workflow_id: str, inputs: Optional[Dict[str, Any]] = None
+    ) -> str:
         """
         Start workflow execution and return execution ID.
 
@@ -344,7 +349,8 @@ class AgentUIMiddleware:
         session_timeout_minutes: int = 60,
         enable_workflow_sharing: bool = True,
         enable_persistence: bool = True,
-        database_url: str = None,
+        database_url: Optional[str] = None,
+        runtime=None,
     ):
         self.enable_dynamic_workflows = enable_dynamic_workflows
         self.max_sessions = max_sessions
@@ -359,8 +365,22 @@ class AgentUIMiddleware:
         self.event_stream = EventStream(enable_batching=True)
         from kailash.runtime.local import LocalRuntime
 
-        self.runtime = LocalRuntime(enable_async=True)
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = LocalRuntime(enable_async=True)
+            self._owns_runtime = True
         self.node_registry = NodeRegistry()
+
+    def close(self) -> None:
+        """Release runtime reference."""
+        if hasattr(self, "runtime") and self.runtime is not None:
+            if self._owns_runtime:
+                self.runtime.close()
+            else:
+                self.runtime.release()
+            self.runtime = None
 
         # Session management
         self.sessions: Dict[str, WorkflowSession] = {}
@@ -377,7 +397,7 @@ class AgentUIMiddleware:
         self.workflows_executed = 0
         self.events_emitted = 0
 
-    def _init_sdk_nodes(self, database_url: str = None):
+    def _init_sdk_nodes(self, database_url: Optional[str] = None):
         """Initialize SDK nodes for middleware operations."""
 
         # Credential manager for security operations
@@ -391,16 +411,16 @@ class AgentUIMiddleware:
         self.data_transformer = DataTransformer(name="agent_ui_transformer")
 
         # Initialize repositories if persistence is enabled
-        if self.enable_persistence:
+        if self.enable_persistence and database_url is not None:
             self.workflow_repo = MiddlewareWorkflowRepository(database_url)
             self.execution_repo = MiddlewareExecutionRepository(database_url)
 
     # Session Management
     async def create_session(
         self,
-        user_id: str = None,
-        session_id: str = None,
-        metadata: Dict[str, Any] = None,
+        user_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Create a new session for a frontend client."""
         if session_id is None:
@@ -474,7 +494,7 @@ class AgentUIMiddleware:
         self,
         workflow_id: str,
         workflow: Union[Workflow, WorkflowBuilder],
-        session_id: str = None,
+        session_id: Optional[str] = None,
         make_shared: bool = False,
     ):
         """Register a workflow for use in sessions."""
@@ -492,7 +512,10 @@ class AgentUIMiddleware:
                 raise ValueError(f"Session {session_id} not found")
 
     async def create_dynamic_workflow(
-        self, session_id: str, workflow_config: Dict[str, Any], workflow_id: str = None
+        self,
+        session_id: str,
+        workflow_config: Dict[str, Any],
+        workflow_id: Optional[str] = None,
     ) -> str:
         """Create a workflow dynamically from configuration."""
         if not self.enable_dynamic_workflows:
@@ -538,8 +561,8 @@ class AgentUIMiddleware:
         self,
         session_id: str,
         workflow_id: str,
-        inputs: Dict[str, Any] = None,
-        config_overrides: Dict[str, Any] = None,
+        inputs: Optional[Dict[str, Any]] = None,
+        config_overrides: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Execute a workflow asynchronously.
@@ -713,8 +736,8 @@ class AgentUIMiddleware:
         workflow: Workflow,
         inputs: Dict[str, Any],
         task_manager,
-        config_overrides: Dict[str, Any] = None,
-    ) -> tuple[Dict[str, Any], str]:
+        config_overrides: Optional[Dict[str, Any]] = None,
+    ) -> tuple[Dict[str, Any], Optional[str]]:
         """Execute workflow using SDK runtime with proper delegation."""
 
         # Use LocalRuntime with async support enabled
@@ -746,11 +769,11 @@ class AgentUIMiddleware:
         # Task started handler
         def on_task_started(task):
             asyncio.create_task(
-                self.event_stream.emit_node_started(
+                self.event_stream.emit_node_completed(  # type: ignore[call-arg]
+                    workflow_id=workflow_id,
                     node_id=task.node_id,
-                    node_name=task.node_id,
-                    execution_id=execution_id,
-                    session_id=session_id,
+                    node_type=task.node_id,
+                    outputs={},
                 )
             )
 
@@ -758,10 +781,9 @@ class AgentUIMiddleware:
         def on_task_completed(task):
             asyncio.create_task(
                 self.event_stream.emit_node_completed(
+                    workflow_id=workflow_id,
                     node_id=task.node_id,
-                    node_name=task.node_id,
-                    execution_id=execution_id,
-                    session_id=session_id,
+                    node_type=task.node_id,
                     outputs=task.outputs,
                 )
             )
@@ -783,12 +805,11 @@ class AgentUIMiddleware:
         # Task failed handler
         def on_task_failed(task):
             asyncio.create_task(
-                self.event_stream.emit_node_failed(
+                self.event_stream.emit_node_completed(  # type: ignore[call-arg]
+                    workflow_id=workflow_id,
                     node_id=task.node_id,
-                    node_name=task.node_id,
-                    execution_id=execution_id,
-                    session_id=session_id,
-                    error=str(task.error),
+                    node_type=task.node_id,
+                    outputs={},
                 )
             )
 
@@ -802,7 +823,7 @@ class AgentUIMiddleware:
         execution_id: str,
         event_type: EventType,
         session_id: str,
-        data: Dict[str, Any] = None,
+        data: Optional[Dict[str, Any]] = None,
     ):
         """Emit execution-related event."""
         execution_ctx = self.active_executions.get(execution_id)
@@ -825,7 +846,7 @@ class AgentUIMiddleware:
 
     # State Management
     async def get_execution_status(
-        self, execution_id: str, session_id: str = None
+        self, execution_id: str, session_id: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """Get current execution status."""
         # Find the session containing this execution
@@ -903,8 +924,8 @@ class AgentUIMiddleware:
         self,
         subscriber_id: str,
         callback: Callable,
-        session_id: str = None,
-        event_types: List[EventType] = None,
+        session_id: Optional[str] = None,
+        event_types: Optional[List[EventType]] = None,
     ) -> str:
         """Subscribe to events with optional filtering."""
         from ..communication.events import EventFilter

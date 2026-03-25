@@ -160,9 +160,9 @@ async def _execute_mcp_tool(
                 content_parts = []
                 for item in result.content:
                     if hasattr(item, "text"):
-                        content_parts.append(item.text)
+                        content_parts.append(item.text)  # type: ignore[reportAttributeAccessIssue]
                     elif hasattr(item, "data"):
-                        content_parts.append(item.data)
+                        content_parts.append(item.data)  # type: ignore[reportAttributeAccessIssue]
 
                 return {
                     "data": (
@@ -186,14 +186,14 @@ class EnterpriseMLCPExecutorNode(Node):
     and compliance-aware execution for MCP tools.
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="EnterpriseMLCPExecutorNode",
         description="Execute MCP tools with enterprise resilience patterns",
         version="1.0.0",
         tags={"enterprise", "mcp", "resilience"},
     )
 
-    def __init__(self, name: str = None, **kwargs):
+    def __init__(self, name: str | None = None, **kwargs):
         self.name = name or self.__class__.__name__
         super().__init__(name=self.name, **kwargs)
 
@@ -221,7 +221,7 @@ class EnterpriseMLCPExecutorNode(Node):
             ),
         }
 
-    def run(
+    def run(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         tool_request: Dict,
         circuit_breaker_enabled: bool = True,
@@ -388,7 +388,7 @@ class EnterpriseMLCPExecutorNode(Node):
                 )
                 cb.record_failure()
 
-            execution_time_ms = round((time.time() - execution_start) * 1000, 2)
+            execution_time_ms = round((time.time() - execution_start) * 1000, 2)  # type: ignore[reportPossiblyUnbound]
             server_id = tool_request.get("server_id", "default-mcp")
             tool_name = tool_request.get("tool", "unknown")
 
@@ -398,7 +398,7 @@ class EnterpriseMLCPExecutorNode(Node):
                 "execution_time_ms": execution_time_ms,
                 "server_id": server_id,
                 "tool_name": tool_name,
-                "circuit_state": cb.state if cb else CircuitState.CLOSED,
+                "circuit_state": cb.state if cb else CircuitState.CLOSED,  # type: ignore[reportPossiblyUnbound]
                 "retry_recommended": True,
             }
 

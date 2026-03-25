@@ -151,7 +151,7 @@ class AdminSchemaManager:
             self.logger.error(f"Schema validation failed: {e}")
             raise NodeExecutionError(f"Failed to validate schema: {str(e)}")
 
-    def migrate_schema(self, target_version: str = None) -> Dict[str, Any]:
+    def migrate_schema(self, target_version: str | None = None) -> Dict[str, Any]:
         """
         Migrate schema to target version.
 

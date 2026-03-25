@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import pathlib
 import sqlite3
 import stat
 import sys
@@ -78,10 +79,18 @@ class SqliteEventStoreBackend:
 
         # Open connection: check_same_thread=False for cross-thread access
         # (guarded by self._lock)
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn: sqlite3.Connection | None = sqlite3.connect(
+            db_path, check_same_thread=False
+        )
 
         self._enable_optimizations()
         self._initialize_schema()
+
+    def _get_conn(self) -> sqlite3.Connection:
+        """Return the active connection, raising if closed."""
+        if self._conn is None:
+            raise RuntimeError("SQLiteEventStore connection is closed")
+        return self._conn
 
     def _set_file_permissions(self, db_path: str) -> None:
         """Set restrictive file permissions on POSIX systems.
@@ -103,7 +112,7 @@ class SqliteEventStoreBackend:
 
         Mirrors the pragma set from kailash.tracking.storage.database.SQLiteStorage.
         """
-        cursor = self._conn.cursor()
+        cursor = self._get_conn().cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA busy_timeout=5000")
         cursor.execute("PRAGMA synchronous=NORMAL")
@@ -111,11 +120,11 @@ class SqliteEventStoreBackend:
         cursor.execute("PRAGMA temp_store=MEMORY")
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.execute("PRAGMA automatic_index=ON")
-        self._conn.commit()
+        self._get_conn().commit()
 
     def _initialize_schema(self) -> None:
         """Create the events table and indexes if they do not exist."""
-        cursor = self._conn.cursor()
+        cursor = self._get_conn().cursor()
 
         # Schema versioning table
         cursor.execute(
@@ -140,7 +149,7 @@ class SqliteEventStoreBackend:
                 (self.SCHEMA_VERSION, datetime.now(UTC).isoformat()),
             )
 
-        self._conn.commit()
+        self._get_conn().commit()
 
     def _create_schema_v1(self, cursor: sqlite3.Cursor) -> None:
         """Create version 1 schema."""
@@ -190,7 +199,7 @@ class SqliteEventStoreBackend:
             return
 
         with self._lock:
-            cursor = self._conn.cursor()
+            cursor = self._get_conn().cursor()
 
             # Determine next sequence number for this stream
             cursor.execute(
@@ -218,7 +227,7 @@ class SqliteEventStoreBackend:
                 """,
                 rows,
             )
-            self._conn.commit()
+            self._get_conn().commit()
 
         logger.debug("Appended %d events to stream %s", len(events), key)
 
@@ -232,7 +241,7 @@ class SqliteEventStoreBackend:
             List of event dicts, ordered by sequence ascending.
         """
         with self._lock:
-            cursor = self._conn.cursor()
+            cursor = self._get_conn().cursor()
             cursor.execute(
                 "SELECT data FROM events WHERE stream_key = ? ORDER BY sequence",
                 (key,),
@@ -256,7 +265,7 @@ class SqliteEventStoreBackend:
             List of event dicts ordered by sequence.
         """
         with self._lock:
-            cursor = self._conn.cursor()
+            cursor = self._get_conn().cursor()
             cursor.execute(
                 "SELECT data FROM events WHERE stream_key = ? AND sequence > ? ORDER BY sequence",
                 (key, after_sequence),
@@ -278,13 +287,13 @@ class SqliteEventStoreBackend:
             Number of deleted rows.
         """
         with self._lock:
-            cursor = self._conn.cursor()
+            cursor = self._get_conn().cursor()
             cursor.execute(
                 "DELETE FROM events WHERE timestamp < ?",
                 (timestamp,),
             )
             deleted = cursor.rowcount
-            self._conn.commit()
+            self._get_conn().commit()
 
         if deleted > 0:
             logger.info("GC: deleted %d events older than %s", deleted, timestamp)
@@ -301,7 +310,7 @@ class SqliteEventStoreBackend:
             Number of matching events.
         """
         with self._lock:
-            cursor = self._conn.cursor()
+            cursor = self._get_conn().cursor()
             if key is not None:
                 cursor.execute(
                     "SELECT COUNT(*) FROM events WHERE stream_key = ?", (key,)
@@ -317,7 +326,7 @@ class SqliteEventStoreBackend:
             Sorted list of stream keys.
         """
         with self._lock:
-            cursor = self._conn.cursor()
+            cursor = self._get_conn().cursor()
             cursor.execute("SELECT DISTINCT stream_key FROM events ORDER BY stream_key")
             return [row[0] for row in cursor.fetchall()]
 
@@ -338,10 +347,10 @@ class SqliteEventStoreBackend:
         with self._lock:
             if self._conn is None:
                 return
-            cursor = self._conn.cursor()
+            cursor = self._get_conn().cursor()
             cursor.execute("ANALYZE")
             cursor.execute("PRAGMA optimize")
-            self._conn.commit()
+            self._get_conn().commit()
 
     # ------------------------------------------------------------------
     # Context manager and cleanup
@@ -369,7 +378,7 @@ class SqliteEventStoreBackend:
 # ------------------------------------------------------------------
 
 
-def _to_path(p: str) -> "os.PathLike":
+def _to_path(p: str) -> "pathlib.Path":
     """Convert string to pathlib.Path (lazy import to keep module light)."""
     from pathlib import Path
 

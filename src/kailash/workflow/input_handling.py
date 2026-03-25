@@ -32,20 +32,20 @@ class WorkflowInputHandler:
         """
         # Find nodes without incoming connections
         nodes_with_inputs = set()
-        for edge in workflow._graph.edges():
+        for edge in workflow.graph.edges():
             nodes_with_inputs.add(edge[1])  # target node
 
-        all_nodes = set(workflow._graph.nodes())
+        all_nodes = set(workflow.graph.nodes())
         entry_nodes = all_nodes - nodes_with_inputs
 
         logger.debug(f"Found entry nodes without inputs: {entry_nodes}")
 
         # Process each entry node
         for node_id in entry_nodes:
-            if node_id not in workflow._nodes:
+            if node_id not in workflow._node_instances:
                 continue
 
-            node_instance = workflow._nodes[node_id]
+            node_instance = workflow._node_instances[node_id]
             node_type = type(node_instance).__name__
 
             logger.debug(f"Processing entry node '{node_id}' of type {node_type}")
@@ -82,7 +82,7 @@ class WorkflowInputHandler:
                                 db_config = (
                                     parameters.get("database_config")
                                     or parameters.get("db_config")
-                                    or workflow._metadata.get("database_config")
+                                    or workflow.metadata.get("database_config")
                                 )
                                 if db_config:
                                     node_instance.config[param_name] = db_config
@@ -102,11 +102,11 @@ class WorkflowInputHandler:
             mappings: Dict of node_id -> {workflow_param: node_param} mappings
         """
         for node_id, param_mappings in mappings.items():
-            if node_id not in workflow._nodes:
+            if node_id not in workflow._node_instances:
                 logger.warning(f"Node '{node_id}' not found in workflow")
                 continue
 
-            node_instance = workflow._nodes[node_id]
+            node_instance = workflow._node_instances[node_id]
 
             # Store mappings in node metadata for runtime use
             if "_input_mappings" not in node_instance.config:
@@ -126,7 +126,7 @@ def enhance_workflow_execution(original_execute):
     distributed to nodes before execution begins.
     """
 
-    def enhanced_execute(self, parameters: Dict[str, Any] = None, **kwargs):
+    def enhanced_execute(self, parameters: Optional[Dict[str, Any]] = None, **kwargs):
         # Inject parameters before execution
         if parameters:
             WorkflowInputHandler.inject_workflow_parameters(self, parameters)
@@ -159,8 +159,8 @@ def fix_login_workflow(workflow: Workflow, config: Dict[str, Any]) -> None:
     WorkflowInputHandler.create_input_mappings(workflow, mappings)
 
     # Set default values for common parameters
-    if "user_fetcher" in workflow._nodes:
-        node = workflow._nodes["user_fetcher"]
+    if "user_fetcher" in workflow._node_instances:
+        node = workflow._node_instances["user_fetcher"]
         if "tenant_id" not in node.config:
             node.config["tenant_id"] = "default"
         if "database_config" not in node.config:

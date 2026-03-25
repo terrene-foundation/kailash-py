@@ -69,12 +69,12 @@ class MCPCapabilityMixin:
 
         for server in mcp_servers:
             try:
-                tools = await self.mcp_client.discover_tools(server)
+                tools = await self.mcp_client.discover_tools(server)  # type: ignore[reportAttributeAccessIssue]
                 all_tools.extend(tools)
             except Exception as e:
                 # Log error but continue with other servers
                 if hasattr(self, "logger"):
-                    self.logger.warning(f"Failed to discover tools from {server}: {e}")
+                    self.logger.warning(f"Failed to discover tools from {server}: {e}")  # type: ignore[reportAttributeAccessIssue]
 
         return all_tools
 
@@ -94,7 +94,7 @@ class MCPCapabilityMixin:
         Returns:
             Tool execution result
         """
-        return await self.mcp_client.call_tool(server_config, tool_name, arguments)
+        return await self.mcp_client.call_tool(server_config, tool_name, arguments)  # type: ignore[reportArgumentType]
 
     async def list_mcp_resources(
         self, server_config: str | dict[str, Any]
@@ -107,7 +107,7 @@ class MCPCapabilityMixin:
         Returns:
             List of available resources
         """
-        return await self.mcp_client.list_resources(server_config)
+        return await self.mcp_client.list_resources(server_config)  # type: ignore[reportAttributeAccessIssue]
 
     async def read_mcp_resource(
         self, server_config: str | dict[str, Any], uri: str
@@ -121,7 +121,7 @@ class MCPCapabilityMixin:
         Returns:
             Resource content
         """
-        return await self.mcp_client.read_resource(server_config, uri)
+        return await self.mcp_client.read_resource(server_config, uri)  # type: ignore[reportAttributeAccessIssue]
 
     # Synchronous wrappers for non-async nodes
 

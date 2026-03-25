@@ -261,6 +261,26 @@ def event_loop():
 
 
 @pytest.fixture
+def runtime():
+    """Shared runtime fixture with proper cleanup."""
+    from kailash.runtime.local import LocalRuntime
+
+    rt = LocalRuntime()
+    yield rt
+    rt.close()
+
+
+@pytest.fixture
+def async_runtime():
+    """Shared async runtime fixture with proper cleanup."""
+    from kailash.runtime.async_local import AsyncLocalRuntime
+
+    rt = AsyncLocalRuntime()
+    yield rt
+    rt.close()
+
+
+@pytest.fixture
 def _ensure_test_nodes_registered():
     """Ensure test-specific nodes are registered when needed."""
     # This fixture can be used by tests that need specific node registrations
@@ -877,9 +897,17 @@ def cleanup_async_tasks(request):
 def isolate_global_state():
     """Automatically isolate global state for each test to prevent pollution."""
     # Import modules that have global state
-    import kailash.gateway.api as gateway_api
     from kailash.nodes.base import NodeRegistry
-    from kailash.nodes.data.async_connection import AsyncConnectionManager
+
+    try:
+        import kailash.gateway.api as gateway_api
+    except (ImportError, ModuleNotFoundError):
+        gateway_api = None  # type: ignore[assignment]  # Optional in Trust-only CI
+
+    try:
+        from kailash.nodes.data.async_connection import AsyncConnectionManager
+    except (ImportError, ModuleNotFoundError):
+        AsyncConnectionManager = None  # type: ignore[assignment]
 
     # In isolated worker processes (pytest-xdist), we need to ensure nodes are registered first
     if len(NodeRegistry._nodes) == 0:
@@ -892,10 +920,14 @@ def isolate_global_state():
     original_node_instance = NodeRegistry._instance
 
     # Save original AsyncConnectionManager state
-    original_pool_instance = AsyncConnectionManager._instance
+    original_pool_instance = (
+        AsyncConnectionManager._instance if AsyncConnectionManager else None
+    )
 
     # Save original gateway instance
-    original_gateway = getattr(gateway_api, "_gateway_instance", None)
+    original_gateway = (
+        getattr(gateway_api, "_gateway_instance", None) if gateway_api else None
+    )
 
     yield
 
@@ -911,10 +943,12 @@ def isolate_global_state():
     NodeRegistry._instance = original_node_instance
 
     # Restore AsyncConnectionManager state
-    AsyncConnectionManager._instance = original_pool_instance
+    if AsyncConnectionManager is not None:
+        AsyncConnectionManager._instance = original_pool_instance
 
     # Restore gateway instance
-    gateway_api._gateway_instance = original_gateway
+    if gateway_api is not None:
+        gateway_api._gateway_instance = original_gateway
 
     # Clear any async tasks that might be hanging (only in async context)
     import asyncio

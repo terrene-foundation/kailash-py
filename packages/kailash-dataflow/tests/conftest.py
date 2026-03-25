@@ -153,8 +153,10 @@ def workflow_builder():
 
 @pytest.fixture
 def runtime():
-    """Create a LocalRuntime instance."""
-    return LocalRuntime()
+    """Create a LocalRuntime instance with proper cleanup."""
+    rt = LocalRuntime()
+    yield rt
+    rt.close()
 
 
 @pytest.fixture

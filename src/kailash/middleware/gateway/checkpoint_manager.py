@@ -371,7 +371,7 @@ class CheckpointManager:
     async def _save_to_cloud(self, key: str, data: bytes) -> None:
         """Save to cloud storage asynchronously."""
         try:
-            await self.cloud_storage.save(key, data)
+            await self.cloud_storage.save(key, data)  # type: ignore[reportOptionalMemberAccess]
             logger.debug(f"Saved checkpoint {key} to cloud storage")
         except Exception as e:
             logger.error(f"Failed to save checkpoint {key} to cloud: {e}")

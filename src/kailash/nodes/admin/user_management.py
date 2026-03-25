@@ -237,6 +237,7 @@ class UserManagementNode(Node):
     """
 
     def __init__(self, **config):
+        assert self._db_node is not None
         super().__init__(**config)
         self._db_node = None
         self._schema_manager = None
@@ -383,11 +384,13 @@ class UserManagementNode(Node):
 
     def run(self, **inputs) -> Dict[str, Any]:
         """Execute user management operation."""
+        assert self._db_node is not None
         try:
             operation = UserOperation(inputs["operation"])
 
             # Initialize dependencies
             self._init_dependencies(inputs)
+            assert self._db_node is not None
 
             # Route to appropriate operation
             if operation == UserOperation.CREATE_USER:
@@ -436,6 +439,7 @@ class UserManagementNode(Node):
 
     def _init_dependencies(self, inputs: Dict[str, Any]):
         """Initialize database and schema manager dependencies."""
+        assert self._db_node is not None
         # Skip initialization if already initialized (for testing)
         if hasattr(self, "_db_node") and self._db_node is not None:
             return
@@ -463,6 +467,7 @@ class UserManagementNode(Node):
 
     def _create_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new user."""
+        assert self._db_node is not None
         user_data = inputs["user_data"]
         tenant_id = inputs["tenant_id"]
 
@@ -553,6 +558,7 @@ class UserManagementNode(Node):
 
     def _get_user_by_id(self, user_id: str, tenant_id: str) -> User:
         """Get user by ID and tenant."""
+        assert self._db_node is not None
         query = """
         SELECT user_id, email, username, first_name, last_name, display_name,
                roles, attributes, status, tenant_id, external_auth_id, auth_provider,
@@ -604,7 +610,7 @@ class UserManagementNode(Node):
         elif email:
             user = self._get_user_by_email(email, tenant_id)
         else:
-            user = self._get_user_by_username(username, tenant_id)
+            user = self._get_user_by_username(username, tenant_id)  # type: ignore[reportArgumentType]
 
         return {
             "result": {
@@ -616,6 +622,7 @@ class UserManagementNode(Node):
 
     def _get_user_by_email(self, email: str, tenant_id: str) -> User:
         """Get user by email and tenant."""
+        assert self._db_node is not None
         query = """
         SELECT user_id, email, username, first_name, last_name, display_name,
                roles, attributes, status, tenant_id, external_auth_id, auth_provider,
@@ -653,6 +660,7 @@ class UserManagementNode(Node):
 
     def _get_user_by_username(self, username: str, tenant_id: str) -> User:
         """Get user by username and tenant."""
+        assert self._db_node is not None
         query = """
         SELECT user_id, email, username, first_name, last_name, display_name,
                roles, attributes, status, tenant_id, external_auth_id, auth_provider,
@@ -690,6 +698,7 @@ class UserManagementNode(Node):
 
     def _update_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Update an existing user."""
+        assert self._db_node is not None
         user_id = inputs["user_id"]
         user_data = inputs["user_data"]
         tenant_id = inputs["tenant_id"]
@@ -769,6 +778,7 @@ class UserManagementNode(Node):
 
     def _delete_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Delete (or soft-delete) a user."""
+        assert self._db_node is not None
         user_id = inputs["user_id"]
         tenant_id = inputs["tenant_id"]
         hard_delete = inputs.get("hard_delete", False)
@@ -804,6 +814,7 @@ class UserManagementNode(Node):
 
     def _list_users(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """List users with filtering and pagination."""
+        assert self._db_node is not None
         tenant_id = inputs["tenant_id"]
         status = inputs.get("status")
         limit = inputs.get("limit", 50)
@@ -910,6 +921,7 @@ class UserManagementNode(Node):
         self, inputs: Dict[str, Any], new_status: UserStatus, operation: str
     ) -> Dict[str, Any]:
         """Helper method to change user status."""
+        assert self._db_node is not None
         user_id = inputs["user_id"]
         tenant_id = inputs["tenant_id"]
 
@@ -940,6 +952,7 @@ class UserManagementNode(Node):
 
     def _set_password(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Set user password hash."""
+        assert self._db_node is not None
         user_id = inputs["user_id"]
         tenant_id = inputs["tenant_id"]
         password = inputs.get("password", "")
@@ -1126,6 +1139,7 @@ class UserManagementNode(Node):
 
     def _get_user_roles(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Get roles assigned to a user."""
+        assert self._db_node is not None
         user_id = inputs["user_id"]
         tenant_id = inputs["tenant_id"]
 
@@ -1182,6 +1196,7 @@ class UserManagementNode(Node):
 
     def _search_users(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Search users by query."""
+        assert self._db_node is not None
         search_query = inputs["search_query"]
         tenant_id = inputs["tenant_id"]
         limit = inputs.get("limit", 50)
@@ -1330,6 +1345,7 @@ class UserManagementNode(Node):
 
     def _generate_reset_token(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Generate a password reset token for a user."""
+        assert self._db_node is not None
         user_id = inputs["user_id"]
         tenant_id = inputs["tenant_id"]
 
@@ -1374,6 +1390,7 @@ class UserManagementNode(Node):
 
     def _reset_password(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Reset user password using a valid token."""
+        assert self._db_node is not None
         token = inputs["token"]
         new_password = inputs["new_password"]
         tenant_id = inputs["tenant_id"]
@@ -1436,6 +1453,7 @@ class UserManagementNode(Node):
 
     def _authenticate(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Authenticate a user with username/email and password."""
+        assert self._db_node is not None
         username = inputs.get("username")
         email = inputs.get("email")
         password = inputs["password"]

@@ -73,18 +73,13 @@ from __future__ import annotations
 import logging
 import time
 from abc import ABC, abstractmethod
-from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional
 from uuid import uuid4
 
 if TYPE_CHECKING:
     from kailash.runtime.trust.context import RuntimeTrustContext
 
-from kailash.sdk_exceptions import (
-    RuntimeExecutionError,
-    WorkflowExecutionError,
-    WorkflowValidationError,
-)
+from kailash.sdk_exceptions import RuntimeExecutionError
 from kailash.workflow import Workflow
 
 logger = logging.getLogger(__name__)
@@ -806,6 +801,43 @@ class BaseRuntime(ABC):
         return not self.enable_audit
 
     # === Abstract Methods (Runtime-Specific) ===
+
+    @abstractmethod
+    def close(self) -> None:
+        """Release runtime resources.
+
+        All runtime subclasses MUST implement proper cleanup.
+        This ensures event loops, thread pools, connection pools,
+        and other resources are released when the runtime is no
+        longer needed.
+
+        Usage:
+            >>> runtime = LocalRuntime()
+            >>> try:
+            ...     results = runtime.execute(workflow)
+            ... finally:
+            ...     runtime.close()
+
+        Or use context manager (preferred):
+            >>> with LocalRuntime() as runtime:
+            ...     results = runtime.execute(workflow)
+
+        See Also:
+            - acquire(): Increment reference count for shared runtimes
+            - release(): Alias for close()
+            - __enter__/__exit__: Context manager protocol
+
+        Added in: v0.12.0 (issue #71 — runtime lifecycle enforcement)
+        """
+        ...
+
+    def __enter__(self) -> "BaseRuntime":
+        """Enter context manager."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:  # noqa: ARG002
+        """Exit context manager — calls close()."""
+        self.close()
 
     @abstractmethod
     def execute(self, workflow: Workflow, **kwargs):

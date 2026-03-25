@@ -78,7 +78,8 @@ class ParameterInjectionMixin:
         if connection_params and not self._is_initialized:
             self.initialize_with_runtime_config()
 
-        return super().validate_inputs(**kwargs)
+        _validate = getattr(super(), "validate_inputs", None)
+        return _validate(**kwargs) if _validate is not None else kwargs
 
     def _extract_connection_params(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Extract connection-related parameters from runtime inputs.
@@ -138,6 +139,7 @@ class ConfigurableOAuth2Node:
             kwargs["metadata"] = NodeMetadata(
                 id=kwargs.get("name", "configurable_oauth2").replace(" ", "_").lower(),
                 name=kwargs.get("name", "ConfigurableOAuth2Node"),
+                author="",
                 description="OAuth2 node with runtime parameter injection",
                 tags={"auth", "oauth2", "configurable"},
                 version="1.0.0",
@@ -213,8 +215,12 @@ class ConfigurableOAuth2Node:
         """Execute OAuth2 authentication with runtime configuration."""
         # Ensure initialization with current parameters
         if not self._is_initialized:
-            self.set_runtime_parameters(**kwargs)
-            self.initialize_with_runtime_config()
+            _set_params = getattr(self, "set_runtime_parameters", None)
+            if _set_params is not None:
+                _set_params(**kwargs)
+            _init_config = getattr(self, "initialize_with_runtime_config", None)
+            if _init_config is not None:
+                _init_config()
 
         if not self._oauth_node:
             raise RuntimeError(
@@ -332,7 +338,10 @@ class ConfigurableAsyncSQLNode(ParameterInjectionMixin):
             )
 
         # Delegate to the initialized AsyncSQLDatabaseNode
-        return await self._sql_node.async_run(**kwargs)
+        _async_run = getattr(self._sql_node, "async_run", None)
+        if _async_run is not None:
+            return await _async_run(**kwargs)
+        return self._sql_node.execute(**kwargs)
 
     def run(self, **kwargs):
         """Synchronous wrapper for async_run."""

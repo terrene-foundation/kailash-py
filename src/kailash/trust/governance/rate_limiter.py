@@ -62,7 +62,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 
 try:
     import redis.asyncio as redis
@@ -71,8 +71,8 @@ try:
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
-    redis = None  # type: ignore
-    ConnectionPool = None  # type: ignore
+    redis = None  # type: ignore[assignment]
+    ConnectionPool = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -210,12 +210,14 @@ class ExternalAgentRateLimiter:
             ImportError: If redis package not installed
         """
         if not REDIS_AVAILABLE:
-            raise ImportError("redis package required for ExternalAgentRateLimiter. Install with: pip install redis")
+            raise ImportError(
+                "redis package required for ExternalAgentRateLimiter. Install with: pip install redis"
+            )
 
         self.redis_url = redis_url
         self.config = config or RateLimitConfig()
-        self.redis_client: Optional[redis.Redis] = None
-        self.connection_pool: Optional[ConnectionPool] = None
+        self.redis_client: Any = None
+        self.connection_pool: Any = None
         self._initialized = False
 
         # Metrics tracking
@@ -243,14 +245,14 @@ class ExternalAgentRateLimiter:
 
         try:
             # Create connection pool for performance
-            self.connection_pool = ConnectionPool.from_url(
+            self.connection_pool = ConnectionPool.from_url(  # type: ignore[union-attr]
                 self.redis_url,
                 max_connections=self.config.redis_max_connections,
                 decode_responses=False,  # Binary mode for performance
             )
 
             # Create Redis client with pool
-            self.redis_client = redis.Redis(
+            self.redis_client = redis.Redis(  # type: ignore[union-attr]
                 connection_pool=self.connection_pool,
                 socket_timeout=self.config.redis_timeout_seconds,
                 socket_connect_timeout=self.config.redis_timeout_seconds,
@@ -260,12 +262,16 @@ class ExternalAgentRateLimiter:
             await self.redis_client.ping()
             self._initialized = True
 
-            logger.info(f"ExternalAgentRateLimiter initialized with Redis: {self.redis_url}")
+            logger.info(
+                f"ExternalAgentRateLimiter initialized with Redis: {self.redis_url}"
+            )
         except Exception as e:
             logger.error(f"Failed to initialize Redis connection: {e}")
             if not self.config.fail_open_on_error:
                 raise
-            logger.warning("Continuing with fail-open mode (rate limiting disabled until Redis available)")
+            logger.warning(
+                "Continuing with fail-open mode (rate limiting disabled until Redis available)"
+            )
 
     async def close(self) -> None:
         """
@@ -366,15 +372,21 @@ class ExternalAgentRateLimiter:
                 if current >= effective_limit:
                     # Rate limit exceeded
                     duration, _ = self._windows[window_name]
-                    reset_time = datetime.now(timezone.utc) + timedelta(seconds=duration)
+                    reset_time = datetime.now(timezone.utc) + timedelta(
+                        seconds=duration
+                    )
 
                     # Calculate retry_after from oldest entry
                     oldest_key = f"rl:ea:{scope_key}:{window_name}"
                     try:
-                        oldest_entries = await self.redis_client.zrange(oldest_key, 0, 0, withscores=True)
+                        oldest_entries = await self.redis_client.zrange(
+                            oldest_key, 0, 0, withscores=True
+                        )
                         if oldest_entries:
                             oldest_timestamp = float(oldest_entries[0][1])
-                            retry_after = int((oldest_timestamp + duration) - time.time())
+                            retry_after = int(
+                                (oldest_timestamp + duration) - time.time()
+                            )
                             retry_after = max(1, retry_after)  # At least 1 second
                         else:
                             retry_after = int(duration)
@@ -536,7 +548,9 @@ class ExternalAgentRateLimiter:
         Returns:
             RateLimitCheckResult with allowed=True
         """
-        logger.warning(f"Rate limiting unavailable (fail-open): {reason}. Request allowed without rate limiting.")
+        logger.warning(
+            f"Rate limiting unavailable (fail-open): {reason}. Request allowed without rate limiting."
+        )
 
         if self.metrics:
             self.metrics.fail_open_total += 1

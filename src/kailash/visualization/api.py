@@ -22,28 +22,38 @@ Downstream Consumers:
 - Third-party analytics platforms
 """
 
+from __future__ import annotations
+
 import asyncio
+import importlib
 import json
 import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-try:
-    from fastapi import (
-        BackgroundTasks,
-        FastAPI,
-        HTTPException,
-        WebSocket,
-        WebSocketDisconnect,
-    )
-    from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import FileResponse
-    from pydantic import BaseModel
+from pydantic import BaseModel
 
+# FastAPI is optional - import via importlib to avoid pyright errors on absent modules
+_fastapi: Any = None
+_fastapi_responses: Any = None
+_fastapi_cors: Any = None
+try:
+    _fastapi = importlib.import_module("fastapi")
+    _fastapi_responses = importlib.import_module("fastapi.responses")
+    _fastapi_cors = importlib.import_module("fastapi.middleware.cors")
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
+
+# Re-export names for use in function signatures and bodies
+FastAPI: Any = getattr(_fastapi, "FastAPI", None)
+HTTPException: Any = getattr(_fastapi, "HTTPException", None)
+WebSocket: Any = getattr(_fastapi, "WebSocket", None)
+WebSocketDisconnect: Any = getattr(_fastapi, "WebSocketDisconnect", None)
+BackgroundTasks: Any = getattr(_fastapi, "BackgroundTasks", None)
+CORSMiddleware: Any = getattr(_fastapi_cors, "CORSMiddleware", None)
+FileResponse: Any = getattr(_fastapi_responses, "FileResponse", None)
 
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskStatus
@@ -93,8 +103,8 @@ if FASTAPI_AVAILABLE:
         run_id: str
         workflow_name: str
         status: str
-        started_at: datetime | None
-        ended_at: datetime | None
+        started_at: Any = None
+        ended_at: Any = None
         total_tasks: int
         completed_tasks: int
         failed_tasks: int
@@ -145,7 +155,7 @@ class DashboardAPIServer:
         self.reporter = WorkflowPerformanceReporter(task_manager)
 
         # WebSocket connections for real-time updates
-        self._websocket_connections: list[WebSocket] = []
+        self._websocket_connections: list[Any] = []
         self._broadcast_task: asyncio.Task | None = None
 
         # Create FastAPI app
@@ -376,9 +386,7 @@ class DashboardAPIServer:
                 raise HTTPException(status_code=500, detail=str(e))
 
         @self.app.post("/api/v1/reports/generate")
-        async def generate_report(
-            request: ReportRequest, background_tasks: BackgroundTasks
-        ):
+        async def generate_report(request: ReportRequest, background_tasks: Any):
             """Generate performance report."""
             try:
                 # Validate format
@@ -453,7 +461,7 @@ class DashboardAPIServer:
                 raise HTTPException(status_code=500, detail=str(e))
 
         @self.app.websocket("/api/v1/metrics/stream")
-        async def websocket_metrics_stream(websocket: WebSocket):
+        async def websocket_metrics_stream(websocket: Any):
             """WebSocket endpoint for real-time metrics streaming."""
             await websocket.accept()
             self._websocket_connections.append(websocket)
@@ -471,7 +479,7 @@ class DashboardAPIServer:
                     self._websocket_connections.remove(websocket)
 
         @self.app.websocket("/api/v1/metrics/ws")
-        async def websocket_metrics_push(websocket: WebSocket):
+        async def websocket_metrics_push(websocket: Any):
             """WebSocket endpoint that pushes metrics at the dashboard update interval.
 
             Unlike ``/api/v1/metrics/stream`` which waits for client messages,

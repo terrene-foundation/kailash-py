@@ -59,6 +59,19 @@ def temp_workspace(tmp_path):
 
 
 @pytest.fixture
+def runtime():
+    """Provide a shared AsyncLocalRuntime for tests.
+
+    Yields the runtime and closes it after the test to prevent leaks.
+    """
+    from kailash.runtime import AsyncLocalRuntime
+
+    rt = AsyncLocalRuntime()
+    yield rt
+    rt.close()
+
+
+@pytest.fixture
 def mock_workflow():
     """Create a mock workflow for testing."""
     from kailash.workflow.builder import WorkflowBuilder

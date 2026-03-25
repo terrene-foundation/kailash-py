@@ -234,12 +234,15 @@ def create_jwks_response(
         from cryptography.hazmat.primitives import serialization
 
         # Load public key
+        from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
+
         public_key = serialization.load_pem_public_key(
             public_key_pem.encode(), backend=default_backend()
         )
 
-        # Get public numbers
-        public_numbers = public_key.public_numbers()
+        # Get public numbers (RSA only)
+        rsa_key = public_key  # type: ignore[assignment]
+        public_numbers = rsa_key.public_numbers()  # type: ignore[attr-defined]
 
         return {
             "keys": [
@@ -248,8 +251,8 @@ def create_jwks_response(
                     "kid": key_id,
                     "use": "sig",
                     "alg": algorithm,
-                    "n": encode_for_jwks(public_numbers.n),
-                    "e": encode_for_jwks(public_numbers.e),
+                    "n": encode_for_jwks(public_numbers.n),  # type: ignore[reportAttributeAccessIssue]
+                    "e": encode_for_jwks(public_numbers.e),  # type: ignore[reportAttributeAccessIssue]
                 }
             ]
         }

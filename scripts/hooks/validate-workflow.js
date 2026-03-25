@@ -108,6 +108,7 @@ function validateFile(data) {
     const pyBlocked = checkPythonPatterns(content, filePath, messages);
     if (pyBlocked) shouldBlock = true;
     checkPoolPatterns(content, filePath, messages);
+    checkRuntimeLeaks(content, filePath, messages);
   }
 
   // -- Hardcoded model detection (code files only -- configs may list models intentionally)
@@ -360,6 +361,63 @@ function checkPoolPatterns(content, filePath, messages) {
           `This triples the connection footprint. Use max(2, pool_size // 2) instead. ` +
           `See rules/dataflow-pool.md.`,
       );
+    }
+  }
+
+  return false;
+}
+
+// =====================================================================
+// Unmanaged runtime construction detection (Issue #71)
+// =====================================================================
+
+/**
+ * Detect LocalRuntime() or AsyncLocalRuntime() construction without lifecycle
+ * management (close(), release(), context manager, or acquire()).
+ * WARNING only — never blocks. See rules/dataflow-pool.md Rule 6.
+ */
+function checkRuntimeLeaks(content, filePath, messages) {
+  if (isTestFile(filePath)) return false;
+
+  const lines = content.split("\n");
+  const RUNTIME_PATTERN = /(?:Local|AsyncLocal)Runtime\(\)/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Skip comments, strings, docstrings
+    if (trimmed.startsWith("#")) continue;
+    if (trimmed.startsWith('"""') || trimmed.startsWith("'''")) continue;
+    if (trimmed.startsWith(">>>")) continue;
+
+    if (RUNTIME_PATTERN.test(line)) {
+      // Check if line has lifecycle management
+      const hasLifecycle =
+        /\bwith\s+/.test(line) ||
+        /\.close\(\)/.test(line) ||
+        /\.release\(\)/.test(line) ||
+        /\.acquire\(\)/.test(line) ||
+        /self\.runtime\s*=/.test(line) ||
+        /self\._runtime\s*=/.test(line) ||
+        /self\._async_runtime\s*=/.test(line);
+
+      // Check surrounding lines (3 lines after) for close/finally
+      let hasNearbyCleanup = false;
+      for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+        if (/\.close\(\)|\.release\(\)|finally:/.test(lines[j])) {
+          hasNearbyCleanup = true;
+          break;
+        }
+      }
+
+      if (!hasLifecycle && !hasNearbyCleanup) {
+        messages.push(
+          `WARNING: Unmanaged runtime at ${path.basename(filePath)}:${i + 1}. ` +
+            `Use 'with LocalRuntime() as runtime:' or call runtime.close(). ` +
+            `See rules/dataflow-pool.md Rule 6 and issue #71.`,
+        );
+      }
     }
   }
 

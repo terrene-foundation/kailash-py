@@ -177,7 +177,7 @@ class RiskAssessmentNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             ),
         }
 
-    def run(
+    def run(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         action: str,
         context: Dict[str, Any],
@@ -848,9 +848,9 @@ class RiskAssessmentNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
         # Update average processing time
         if self.assessment_stats["avg_assessment_time_ms"] == 0:
-            self.assessment_stats["avg_assessment_time_ms"] = processing_time_ms
+            self.assessment_stats["avg_assessment_time_ms"] = processing_time_ms  # type: ignore[reportArgumentType]
         else:
-            self.assessment_stats["avg_assessment_time_ms"] = (
+            self.assessment_stats["avg_assessment_time_ms"] = (  # type: ignore[reportArgumentType]
                 self.assessment_stats["avg_assessment_time_ms"] * 0.9
                 + processing_time_ms * 0.1
             )

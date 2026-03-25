@@ -64,9 +64,9 @@ class MCPToolNode(Node):
         name: str,
         tool_name: str,
         description: str = "",
-        parameters_schema: Dict[str, Any] = None,
+        parameters_schema: Optional[Dict[str, Any]] = None,
     ):
-        super().__init__(name)
+        super().__init__(name)  # type: ignore[call-arg]
         self.tool_name = tool_name
         self.description = description
         self.parameters_schema = parameters_schema or {}
@@ -119,7 +119,7 @@ class MCPResourceNode(Node):
         resource_type: str = "text",
         description: str = "",
     ):
-        super().__init__(name)
+        super().__init__(name)  # type: ignore[call-arg]
         self.resource_uri = resource_uri
         self.resource_type = resource_type
         self.description = description
@@ -158,16 +158,22 @@ class MiddlewareMCPServer:
 
     def __init__(
         self,
-        config: MCPServerConfig = None,
-        event_stream: EventStream = None,
-        agent_ui: AgentUIMiddleware = None,
+        config: Optional[MCPServerConfig] = None,
+        event_stream: Optional[EventStream] = None,
+        agent_ui: Optional[AgentUIMiddleware] = None,
+        runtime: Optional[LocalRuntime] = None,
     ):
         self.config = config or MCPServerConfig()
         self.event_stream = event_stream
         self.agent_ui = agent_ui
 
         # Kailash components
-        self.runtime = LocalRuntime()
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = LocalRuntime()
+            self._owns_runtime = True
         self.workflows: Dict[str, WorkflowBuilder] = {}
 
         # MCP registry using Kailash patterns
@@ -184,7 +190,7 @@ class MiddlewareMCPServer:
         self.base_server = None
         if _KAILASH_MCP_AVAILABLE:
             try:
-                self.base_server = MCPServer(self.config.name)
+                self.base_server = MCPServer(self.config.name)  # type: ignore[possibly-undefined]
             except Exception as e:
                 logger.warning(f"Could not initialize base MCP server: {e}")
 
@@ -285,8 +291,8 @@ result = {'execution_result': execution_result}
         self,
         name: str,
         description: str,
-        handler: Callable = None,
-        parameters_schema: Dict[str, Any] = None,
+        handler: Optional[Callable] = None,
+        parameters_schema: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Register MCP tool using Kailash workflow."""
 
@@ -298,6 +304,7 @@ result = {'execution_result': execution_result}
         }
 
         workflow = self.tool_register_workflow.build()
+        assert self.runtime is not None, "Runtime has been stopped"
         results, _ = self.runtime.execute(workflow, parameters={"tool_data": tool_data})
 
         registration_result = results.get("register_tool", {})
@@ -342,7 +349,7 @@ result = {'execution_result': execution_result}
         uri: str,
         resource_type: str = "text",
         description: str = "",
-        handler: Callable = None,
+        handler: Optional[Callable] = None,
     ) -> Dict[str, Any]:
         """Register MCP resource using Kailash patterns."""
 
@@ -378,7 +385,10 @@ result = {'execution_result': execution_result}
         return {"success": True, "resource_uri": uri}
 
     async def execute_tool(
-        self, tool_name: str, arguments: Dict[str, Any], session_id: str = None
+        self,
+        tool_name: str,
+        arguments: Dict[str, Any],
+        session_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Execute MCP tool using Kailash workflow."""
 
@@ -424,7 +434,9 @@ result = {'execution_result': execution_result}
 
             return {"success": False, "error": str(e), "tool_name": tool_name}
 
-    async def get_resource(self, uri: str, session_id: str = None) -> Dict[str, Any]:
+    async def get_resource(
+        self, uri: str, session_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Get MCP resource using Kailash patterns."""
 
         if uri not in self.resources:
@@ -437,7 +449,7 @@ result = {'execution_result': execution_result}
         resource_node = self.resources[uri]
 
         try:
-            result = resource_node.execute({"resource_uri": uri})
+            result = resource_node.execute(resource_uri=uri)
 
             # Emit middleware event
             if self.event_stream:
@@ -529,14 +541,36 @@ result = {'execution_result': execution_result}
                 },
             )
 
+        self.close()
+
         logger.info(f"Stopped Kailash MCP Server: {self.config.name}")
+
+    def close(self):
+        """Release runtime reference."""
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() or stop() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
 
     async def _emit_mcp_event(self, event_type: str, data: Dict[str, Any]):
         """Emit MCP event to middleware event stream."""
 
-        from ..events import WorkflowEvent
+        from ..communication.events import WorkflowEvent
 
-        event = WorkflowEvent(
+        event = WorkflowEvent(  # type: ignore[reportCallIssue]
             type=EventType.SYSTEM_STATUS,
             workflow_id="mcp_server",
             data={
@@ -547,7 +581,7 @@ result = {'execution_result': execution_result}
             },
         )
 
-        await self.event_stream.emit(event)
+        await self.event_stream.emit(event)  # type: ignore[reportOptionalMemberAccess]
 
     def get_stats(self) -> Dict[str, Any]:
         """Get MCP server statistics."""

@@ -104,7 +104,7 @@ class RegistryNodeExecutor:
         ):
             try:
                 result = await asyncio.wait_for(
-                    node.async_run(**params),
+                    node.async_run(**params),  # type: ignore[reportAttributeAccessIssue]
                     timeout=timeout,
                 )
             except asyncio.TimeoutError:

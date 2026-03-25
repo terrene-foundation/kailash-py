@@ -46,9 +46,9 @@ workflow.add_node("PythonCodeNode", "greet", {
 })
 wf = workflow.build()
 
-runtime = LocalRuntime()
-results, run_id = runtime.execute(wf, parameters={"greet": {"name": "World"}})
-print(results["greet"])  # Hello, World!
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(wf, parameters={"greet": {"name": "World"}})
+    print(results["greet"])  # Hello, World!
 ```
 
 ### Level 1: Add a Database URL
@@ -134,8 +134,8 @@ workflow.add_node("PythonCodeNode", "process", {
 })
 wf = workflow.build()
 
-runtime = LocalRuntime()
-results, run_id = runtime.execute(wf, parameters={"process": {"data": "hello"}})
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(wf, parameters={"process": {"data": "hello"}})
 ```
 
 At Level 0, this stores events in local SQLite. At Level 1 with `KAILASH_DATABASE_URL` set, the same call persists events to PostgreSQL. The `StoreFactory` handles the detection and wiring transparently.

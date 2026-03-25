@@ -248,8 +248,10 @@ class SharePointGraphReader(Node):
             scopes=["https://graph.microsoft.com/.default"]
         )
 
-        if "access_token" not in result:
-            error_msg = result.get("error_description", "Unknown authentication error")
+        if not result or "access_token" not in result:
+            error_msg = (result or {}).get(
+                "error_description", "Unknown authentication error"
+            )
             raise NodeExecutionError(f"Authentication failed: {error_msg}")
 
         return {
@@ -306,6 +308,12 @@ class SharePointGraphReader(Node):
                 raise NodeConfigurationError(f"Failed to load certificate: {e}")
 
             # Get thumbprint
+            if certificate is None:
+                raise NodeConfigurationError("Failed to load certificate from file")
+            if private_key is None:
+                raise NodeConfigurationError(
+                    "Failed to load private key from certificate"
+                )
             thumbprint = (
                 base64.urlsafe_b64encode(certificate.fingerprint(hashes.SHA1()))
                 .decode("utf-8")
@@ -338,8 +346,10 @@ class SharePointGraphReader(Node):
             scopes=["https://graph.microsoft.com/.default"]
         )
 
-        if "access_token" not in result:
-            error_msg = result.get("error_description", "Unknown authentication error")
+        if not result or "access_token" not in result:
+            error_msg = (result or {}).get(
+                "error_description", "Unknown authentication error"
+            )
             raise NodeExecutionError(f"Certificate authentication failed: {error_msg}")
 
         return {
@@ -594,7 +604,7 @@ class SharePointGraphReader(Node):
         library_name: str,
         file_name: str,
         folder_path: str,
-        local_path: str,
+        local_path: Optional[str],
         headers: dict[str, str],
     ) -> dict[str, Any]:
         """Download a file from SharePoint."""
@@ -725,6 +735,7 @@ class SharePointGraphReader(Node):
                     "tenant_id, client_id, and client_secret are required for client_credentials auth"
                 )
 
+            assert tenant_id and client_id and client_secret
             auth_data = self._authenticate(tenant_id, client_id, client_secret)
 
         elif auth_method == "certificate":
@@ -736,6 +747,7 @@ class SharePointGraphReader(Node):
                     "tenant_id and client_id are required for certificate auth"
                 )
 
+            assert tenant_id and client_id
             auth_data = self._authenticate_certificate(
                 tenant_id=tenant_id,
                 client_id=client_id,
@@ -755,6 +767,7 @@ class SharePointGraphReader(Node):
                     "tenant_id, client_id, username, and password are required for username_password auth"
                 )
 
+            assert tenant_id and client_id and username and password
             auth_data = self._authenticate_username_password(
                 tenant_id=tenant_id,
                 client_id=client_id,
@@ -777,6 +790,7 @@ class SharePointGraphReader(Node):
                     "tenant_id and client_id are required for device_code auth"
                 )
 
+            assert tenant_id and client_id
             auth_data = self._authenticate_device_code(
                 tenant_id=tenant_id,
                 client_id=client_id,
@@ -837,6 +851,8 @@ class SharePointGraphReader(Node):
             query = kwargs["search_query"]
 
             return self._search_files(site_id, library_name, query, headers)
+
+        raise NodeValidationError(f"Unhandled operation: {operation}")
 
 
 @register_node()
@@ -939,14 +955,16 @@ class SharePointGraphWriter(Node):
                 "tenant_id, client_id, client_secret, site_url, and local_path are required"
             )
 
+        assert tenant_id and client_id and client_secret and site_url and local_path
+
         if not os.path.exists(local_path):
             raise NodeValidationError(f"Local file '{local_path}' not found")
 
         # Reuse authentication logic from reader
         reader = SharePointGraphReader()
-        auth_data = reader._authenticate(tenant_id, client_id, client_secret)
+        auth_data = reader._authenticate(tenant_id, client_id, client_secret)  # type: ignore[attr-defined]
         headers = auth_data["headers"]
-        site_data = reader._get_site_data(site_url, headers)
+        site_data = reader._get_site_data(site_url, headers)  # type: ignore[attr-defined]
         site_id = site_data["id"]
 
         # Get parameters
@@ -955,7 +973,7 @@ class SharePointGraphWriter(Node):
         sharepoint_name = kwargs.get("sharepoint_name") or os.path.basename(local_path)
 
         # Get drive ID
-        drive_id = reader._get_drive_id(site_id, library_name, headers)
+        drive_id = reader._get_drive_id(site_id, library_name, headers)  # type: ignore[attr-defined]
         if not drive_id:
             raise NodeExecutionError(f"Library '{library_name}' not found")
 

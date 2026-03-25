@@ -96,8 +96,8 @@ Always call ``.build()`` before execution:
 
    from kailash.runtime import LocalRuntime
 
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow.build())
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(workflow.build())
 
 .. warning::
 
@@ -181,8 +181,8 @@ Enable iterative processing with convergence detection:
    """
    })
 
-   runtime = LocalRuntime(enable_cycles=True)
-   results, run_id = runtime.execute(workflow.build())
+   with LocalRuntime(enable_cycles=True) as runtime:
+       results, run_id = runtime.execute(workflow.build())
 
 .. note::
 
@@ -210,8 +210,8 @@ Use ``SwitchNode`` for conditional branching:
        "code": "result = {'handled': 'category B'}"
    })
 
-   runtime = LocalRuntime(conditional_execution="skip_branches")
-   results, run_id = runtime.execute(workflow.build())
+   with LocalRuntime(conditional_execution="skip_branches") as runtime:
+       results, run_id = runtime.execute(workflow.build())
 
 Connection Validation
 =====================
@@ -263,13 +263,12 @@ Attach a CARE trust context to any workflow execution:
        config=TrustVerifierConfig(mode="enforcing"),
    )
 
-   runtime = LocalRuntime(
+   with LocalRuntime(
        trust_context=ctx,
        trust_verifier=verifier,
        trust_verification_mode="enforcing",
-   )
-
-   results, run_id = runtime.execute(workflow.build())
+   ) as runtime:
+       results, run_id = runtime.execute(workflow.build())
 
 See :doc:`trust` for the complete CARE trust documentation.
 

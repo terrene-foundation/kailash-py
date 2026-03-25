@@ -710,7 +710,11 @@ def _export_siem(
     """
     import logging as _logging
 
-    from kailash.trust.plane.siem import create_syslog_handler, export_events, format_cef
+    from kailash.trust.plane.siem import (
+        create_syslog_handler,
+        export_events,
+        format_cef,
+    )
 
     # Parse --since into a datetime
     since = None
@@ -1784,6 +1788,9 @@ def identity_status(ctx):
         return
 
     provider = config.get_provider()
+    if provider is None:
+        click.echo("No OIDC identity provider configured.")
+        return
     click.echo("OIDC Identity Configuration:")
     click.echo(f"  Provider: {provider.provider_type}")
     click.echo(f"  Domain:   {provider.domain}")
@@ -1822,6 +1829,9 @@ def identity_verify(ctx, token):
         sys.exit(1)
 
     provider = config.get_provider()
+    if provider is None:
+        click.echo("Failed to load identity provider configuration.", err=True)
+        sys.exit(1)
 
     # Use JWKS auto-discovery
     jwks = JWKSProvider(issuer_url=provider.issuer_url)
@@ -1987,8 +1997,9 @@ def rbac_check(ctx, user_id, operation):
 
     if allowed:
         role = mgr.get_role(user_id)
+        role_val = role.value if role else "none"
         click.echo(
-            f"ALLOWED: user '{user_id}' (role={role.value}) may perform '{operation}'"
+            f"ALLOWED: user '{user_id}' (role={role_val}) may perform '{operation}'"
         )
     else:
         role = mgr.get_role(user_id)
@@ -2083,7 +2094,11 @@ def siem_test(
     """
     import logging as _logging
 
-    from kailash.trust.plane.models import DecisionRecord, DecisionType, ReviewRequirement
+    from kailash.trust.plane.models import (
+        DecisionRecord,
+        DecisionType,
+        ReviewRequirement,
+    )
     from kailash.trust.plane.siem import create_syslog_handler, format_cef, format_ocsf
 
     # Create a test decision record
@@ -2111,7 +2126,10 @@ def siem_test(
     if send:
         click.echo()
         if tls:
-            from kailash.trust.plane.siem import TLSSyslogError, create_tls_syslog_handler
+            from kailash.trust.plane.siem import (
+                TLSSyslogError,
+                create_tls_syslog_handler,
+            )
 
             tls_port = siem_port if siem_port != 514 else 6514
             click.echo(f"Sending to {target} at {host}:{tls_port} via TLS...")

@@ -15,14 +15,14 @@ class TenantAssignmentNode(Node):
     tenant context including permissions, tier, and compliance settings.
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="TenantAssignmentNode",
         description="Assigns tenant context for multi-tenant applications",
         version="1.0.0",
         tags={"enterprise", "tenant", "security"},
     )
 
-    def __init__(self, name: str = None, **kwargs):
+    def __init__(self, name: str | None = None, **kwargs):
         self.name = name or self.__class__.__name__
         super().__init__(name=self.name, **kwargs)
 
@@ -50,8 +50,8 @@ class TenantAssignmentNode(Node):
             ),
         }
 
-    def run(
-        self, user_id: str, verified: bool = False, attributes: Dict = None, **kwargs
+    def run(  # type: ignore[reportIncompatibleMethodOverride]
+        self, user_id: str, verified: bool = False, attributes: Dict | None = None, **kwargs
     ) -> Dict[str, Any]:
         """Assign tenant based on user information."""
         try:

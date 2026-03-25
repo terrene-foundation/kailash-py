@@ -469,7 +469,7 @@ class RESTClientNode(Node):
         return all_items
 
     def _get_nested_value(
-        self, obj: dict[str, Any], path: str, default: Any = None
+        self, obj: dict[str, Any], path: str, default: Any | None = None
     ) -> Any:
         """Get a nested value from a dictionary using a dot-separated path.
 
@@ -530,8 +530,8 @@ class RESTClientNode(Node):
             NodeValidationError: If required parameters are missing or invalid
             NodeExecutionError: If the request fails or returns an error status
         """
-        base_url = kwargs.get("base_url")
-        resource = kwargs.get("resource")
+        base_url = kwargs.get("base_url") or ""
+        resource = kwargs.get("resource") or ""
         method = kwargs.get("method", "GET").upper()
         path_params = kwargs.get("path_params", {})
         query_params = kwargs.get("query_params", {})
@@ -541,7 +541,7 @@ class RESTClientNode(Node):
         timeout = kwargs.get("timeout", 30)
         verify_ssl = kwargs.get("verify_ssl", True)
         paginate = kwargs.get("paginate", False)
-        pagination_params = kwargs.get("pagination_params")
+        pagination_params = kwargs.get("pagination_params") or {}
         retry_count = kwargs.get("retry_count", 0)
         retry_backoff = kwargs.get("retry_backoff", 0.5)
         # Authentication parameters
@@ -645,7 +645,9 @@ class RESTClientNode(Node):
         data = response["content"] if response else None
         if paginate and method == "GET" and success:
             try:
-                data = self._handle_pagination(data, query_params, pagination_params)
+                data = self._handle_pagination(
+                    data or {}, query_params, pagination_params
+                )
             except Exception as e:
                 self.logger.warning(f"Pagination handling failed: {str(e)}")
 
@@ -978,7 +980,7 @@ class RESTClientNode(Node):
             self._async_http_node = AsyncHTTPRequestNode()
 
         # Extract REST-specific parameters
-        base_url = kwargs.get("base_url")
+        base_url = kwargs.get("base_url") or ""
         resource = kwargs.get("resource", "")
         method = kwargs.get("method", "GET").upper()
         path_params = kwargs.get("path_params", {})
@@ -1001,7 +1003,7 @@ class RESTClientNode(Node):
             headers["Accept"] = "application/json"
 
         # Execute async HTTP request
-        http_result = await self._async_http_node.async_run(
+        http_result = await self._async_http_node.async_run(  # type: ignore[attr-defined]
             url=full_url,
             method=method,
             headers=headers,
@@ -1066,7 +1068,7 @@ class RESTClientNode(Node):
 
             try:
                 # Make async request for next page
-                http_result = await self._async_http_node.async_run(
+                http_result = await self._async_http_node.async_run(  # type: ignore[attr-defined]
                     url=next_url,
                     method="GET",
                     headers=kwargs.get("headers", {}),
@@ -1208,7 +1210,7 @@ class AsyncRESTClientNode(AsyncNode):
         api_key_header = kwargs.get("api_key_header", "X-API-Key")
 
         # Build full URL with path parameters (reuse from synchronous version)
-        url = self.rest_node._build_url(base_url, resource, path_params, version)
+        url = self.rest_node._build_url(base_url, resource, path_params, version)  # type: ignore[attr-defined]
 
         # Set default Content-Type header for requests with body
         if (
@@ -1244,7 +1246,7 @@ class AsyncRESTClientNode(AsyncNode):
 
         # Execute the HTTP request asynchronously
         self.logger.info(f"Making async REST {method} request to {url}")
-        result = await self.http_node.async_run(**http_params)
+        result = await self.http_node.async_run(**http_params)  # type: ignore[attr-defined]
 
         # Extract response data
         response = result.get("response")
@@ -1297,7 +1299,7 @@ class AsyncRESTClientNode(AsyncNode):
         data = response["content"]
         if paginate and method == "GET" and success:
             try:
-                data = self.rest_node._handle_pagination(
+                data = self.rest_node._handle_pagination(  # type: ignore[attr-defined]
                     data, query_params, pagination_params
                 )
             except Exception as e:

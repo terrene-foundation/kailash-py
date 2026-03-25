@@ -177,9 +177,9 @@ class MetricsCollector:
 
             # Return appropriate wrapper based on function type
             if asyncio.iscoroutinefunction(func):
-                return async_wrapper
+                return async_wrapper  # type: ignore[return-value]
             else:
-                return sync_wrapper
+                return sync_wrapper  # type: ignore[return-value]
 
         return decorator
 

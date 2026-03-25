@@ -27,6 +27,7 @@ class ParallelCyclicRuntime:
         max_workers: int = 4,
         enable_cycles: bool = True,
         enable_async: bool = True,
+        runtime=None,
     ):
         """Initialize the parallel cyclic runtime.
 
@@ -42,8 +43,13 @@ class ParallelCyclicRuntime:
         self.enable_async = enable_async
         self.logger = logger
 
-        # Initialize components
-        self.local_runtime = LocalRuntime(debug=debug, enable_cycles=enable_cycles)
+        # Initialize components — use shared runtime if provided
+        if runtime is not None:
+            self.local_runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.local_runtime = LocalRuntime(debug=debug, enable_cycles=enable_cycles)
+            self._owns_runtime = True
         if enable_cycles:
             self.cyclic_executor = CyclicWorkflowExecutor()
 
@@ -526,3 +532,23 @@ class ParallelCyclicRuntime:
         # If the failed node has dependents, we should stop
         # Future enhancement: implement more sophisticated error handling policies
         return has_dependents
+
+    def close(self):
+        """Release runtime reference."""
+        if hasattr(self, "local_runtime") and self.local_runtime is not None:
+            self.local_runtime.release()
+            self.local_runtime = None
+
+    def __del__(self):
+        if getattr(self, "local_runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass

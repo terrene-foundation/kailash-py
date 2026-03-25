@@ -928,7 +928,7 @@ class DatabaseAdapter(ABC):
         self._pool = None
         self._connected: bool = False
         self._runtime_coordinated: bool = False
-        self._runtime_pool: Any = None
+        self._runtime_pool: Any | None = None
 
     def _convert_row(self, row: dict) -> dict:
         """Convert database-specific types to JSON-serializable types."""
@@ -1524,7 +1524,7 @@ class SQLiteAdapter(DatabaseAdapter):
         self._connection = None
         self._memory_db_name = memory_db_name
         # Connection pool (initialized in connect())
-        self._pool: Any = None
+        self._pool: Any | None = None
         # Transaction nesting support (for SQLite nested transaction bug fix)
         self._transaction_depth = 0
         self._savepoint_counter = 0
@@ -4316,7 +4316,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
         params: Any,
         fetch_mode: FetchMode,
         fetch_size: Optional[int],
-        user_context: Any = None,
+        user_context: Any | None = None,
         parameter_types: Optional[dict[str, str]] = None,
     ) -> Any:
         """Execute query with retry logic for transient failures.

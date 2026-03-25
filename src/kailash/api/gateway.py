@@ -106,7 +106,7 @@ class WorkflowAPIGateway:
         description: str = "Unified API for Kailash workflows",
         version: str = "1.0.0",
         max_workers: int = 10,
-        cors_origins: list[str] = None,
+        cors_origins: list[str] | None = None,
     ):
         """Initialize the API gateway.
 
@@ -397,7 +397,7 @@ class WorkflowAPIGateway:
         workflow: Workflow,
         description: str | None = None,
         version: str = "1.0.0",
-        tags: list[str] = None,
+        tags: list[str] | None = None,
         **kwargs,
     ):
         """Register an embedded workflow.
@@ -418,7 +418,7 @@ class WorkflowAPIGateway:
             workflow=workflow,
             app_name=f"{name} Workflow API",
             version=version,
-            description=description,
+            description=description or f"Workflow: {name}",
         )
 
         # Mount the workflow app as a sub-application
@@ -443,7 +443,7 @@ class WorkflowAPIGateway:
         health_check: str = "/health",
         description: str | None = None,
         version: str = "1.0.0",
-        tags: list[str] = None,
+        tags: list[str] | None = None,
     ):
         """Register a proxied workflow with real request forwarding.
 
@@ -643,34 +643,36 @@ class WorkflowOrchestrator:
             raise ValueError(f"Chain '{chain_name}' not found")
 
         result = initial_input
-        runtime = LocalRuntime()
 
-        for workflow_name in self.chains[chain_name]:
-            reg = self.gateway.workflows[workflow_name]
+        with LocalRuntime() as runtime:
+            for workflow_name in self.chains[chain_name]:
+                reg = self.gateway.workflows[workflow_name]
 
-            if reg.type == "embedded" and reg.workflow is not None:
-                # Execute embedded workflow in-process
-                wf_results, _run_id = runtime.execute(reg.workflow, parameters=result)
-                # Flatten results: use all node outputs as next input
-                result = {}
-                for _node_id, node_output in wf_results.items():
-                    if isinstance(node_output, dict):
-                        result.update(node_output)
-                    else:
-                        result[_node_id] = node_output
+                if reg.type == "embedded" and reg.workflow is not None:
+                    # Execute embedded workflow in-process
+                    wf_results, _run_id = runtime.execute(
+                        reg.workflow, parameters=result
+                    )
+                    # Flatten results: use all node outputs as next input
+                    result = {}
+                    for _node_id, node_output in wf_results.items():
+                        if isinstance(node_output, dict):
+                            result.update(node_output)
+                        else:
+                            result[_node_id] = node_output
 
-            elif reg.type == "proxied" and reg.proxy_url:
-                # Forward to proxied backend via HTTP POST
-                client = await self.gateway._get_proxy_client()
-                url = f"{reg.proxy_url.rstrip('/')}/execute"
-                resp = await client.post(url, json=result, timeout=60.0)
-                resp.raise_for_status()
-                result = resp.json()
+                elif reg.type == "proxied" and reg.proxy_url:
+                    # Forward to proxied backend via HTTP POST
+                    client = await self.gateway._get_proxy_client()
+                    url = f"{reg.proxy_url.rstrip('/')}/execute"
+                    resp = await client.post(url, json=result, timeout=60.0)
+                    resp.raise_for_status()
+                    result = resp.json()
 
-            else:
-                raise ValueError(
-                    f"Workflow '{workflow_name}' is not executable "
-                    f"(type={reg.type}, workflow={reg.workflow is not None})"
-                )
+                else:
+                    raise ValueError(
+                        f"Workflow '{workflow_name}' is not executable "
+                        f"(type={reg.type}, workflow={reg.workflow is not None})"
+                    )
 
         return result

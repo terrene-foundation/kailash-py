@@ -316,6 +316,7 @@ class CloudNode(AsyncNode):
         region = kwargs.get("region", "us-west-2")
         profile_name = kwargs.get("profile_name")
 
+        assert self.cloud_integration is not None
         try:
             self.cloud_integration.register_aws(region, profile_name)
 
@@ -353,6 +354,7 @@ class CloudNode(AsyncNode):
                 "error": "project_id is required for GCP registration",
             }
 
+        assert self.cloud_integration is not None
         try:
             self.cloud_integration.register_gcp(project_id, zone, credentials_path)
 
@@ -390,6 +392,7 @@ class CloudNode(AsyncNode):
                 "error": "subscription_id and resource_group are required for Azure registration",
             }
 
+        assert self.cloud_integration is not None
         try:
             self.cloud_integration.register_azure(subscription_id, resource_group)
 
@@ -429,6 +432,12 @@ class CloudNode(AsyncNode):
                 "error": "provider, instance_name, instance_type, image_id, and region are required",
             }
 
+        assert provider is not None
+        assert instance_name is not None
+        assert instance_type is not None
+        assert image_id is not None
+        assert region is not None
+        assert self.cloud_integration is not None
         try:
             # Create instance specification
             spec = InstanceSpec(
@@ -478,6 +487,7 @@ class CloudNode(AsyncNode):
                 "error": "provider and instance_id (or instance_name) are required",
             }
 
+        assert self.cloud_integration is not None
         try:
             status = await self.cloud_integration.get_instance_status(
                 CloudProvider(provider), instance_id, kwargs.get("zone")
@@ -506,6 +516,7 @@ class CloudNode(AsyncNode):
                 "error": "provider and instance_id (or instance_name) are required",
             }
 
+        assert self.cloud_integration is not None
         try:
             result = await self.cloud_integration.terminate_instance(
                 CloudProvider(provider), instance_id, kwargs.get("zone")
@@ -536,6 +547,7 @@ class CloudNode(AsyncNode):
         if not provider:
             return {"status": "error", "instances": [], "error": "provider is required"}
 
+        assert self.cloud_integration is not None
         try:
             instances = await self.cloud_integration.list_instances(
                 CloudProvider(provider), filters
@@ -569,6 +581,7 @@ class CloudNode(AsyncNode):
                 "error": "provider and instance_id (or instance_name) are required",
             }
 
+        assert self.cloud_integration is not None
         try:
             # Determine time range
             if kwargs.get("start_time") and kwargs.get("end_time"):
@@ -612,6 +625,7 @@ class CloudNode(AsyncNode):
         if not self.cloud_integration:
             await self._initialize_cloud(**kwargs)
 
+        assert self.cloud_integration is not None
         try:
             providers = await self.cloud_integration.get_supported_providers()
 
@@ -642,6 +656,7 @@ class CloudNode(AsyncNode):
                 "error": "provider is required",
             }
 
+        assert self.cloud_integration is not None
         try:
             provider_info = await self.cloud_integration.get_provider_info(
                 CloudProvider(provider)
@@ -665,6 +680,7 @@ class CloudNode(AsyncNode):
         if not self.cloud_integration:
             await self._initialize_cloud(**kwargs)
 
+        assert self.cloud_integration is not None
         try:
             await self.cloud_integration.start_monitoring()
 

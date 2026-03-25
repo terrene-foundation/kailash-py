@@ -36,15 +36,17 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Union
 
-try:
-    import base64
-    import os
+import base64
+import os
 
+try:
     import jwt
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 except ImportError:
-    jwt = None
+    jwt = None  # type: ignore[assignment]
+    hashes = None  # type: ignore[assignment]
+    PBKDF2HMAC = None  # type: ignore[assignment, misc]
     logger = logging.getLogger(__name__)
     logger.warning(
         "JWT dependencies not available. Install with: pip install pyjwt cryptography"
@@ -286,8 +288,8 @@ class BearerTokenAuth(AuthProvider):
             raise AuthenticationError("JWT validation not available")
 
         try:
-            payload = jwt.decode(
-                token, self.jwt_secret, algorithms=[self.jwt_algorithm]
+            payload = jwt.decode(  # type: ignore[union-attr]
+                token, self.jwt_secret, algorithms=[self.jwt_algorithm]  # type: ignore[arg-type]
             )
 
             return {
@@ -326,15 +328,15 @@ class BearerTokenAuth(AuthProvider):
         """Get server configuration."""
         config = {"type": "bearer"}
         if self.validate_jwt:
-            config.update(
-                {
+            config.update(  # type: ignore[call-overload]
+                {  # type: ignore[reportArgumentType]
                     "validate_jwt": True,
                     "jwt_secret": self.jwt_secret,
                     "jwt_algorithm": self.jwt_algorithm,
                 }
             )
         else:
-            config["tokens"] = list(self.tokens.keys())
+            config["tokens"] = list(self.tokens.keys())  # type: ignore[assignment]
         return config
 
 
@@ -400,7 +402,7 @@ class JWTAuth(BearerTokenAuth):
             **payload,
         }
 
-        return jwt.encode(jwt_payload, self.jwt_secret, algorithm=self.jwt_algorithm)
+        return jwt.encode(jwt_payload, self.jwt_secret, algorithm=self.jwt_algorithm)  # type: ignore[union-attr, arg-type]
 
 
 class BasicAuth(AuthProvider):
@@ -464,8 +466,8 @@ class BasicAuth(AuthProvider):
     def _hash_password(self, password: str) -> str:
         """Hash a password using PBKDF2."""
         salt = os.urandom(32)
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
+        kdf = PBKDF2HMAC(  # type: ignore[operator]
+            algorithm=hashes.SHA256(),  # type: ignore[union-attr]
             length=32,
             salt=salt,
             iterations=100000,
@@ -480,8 +482,8 @@ class BasicAuth(AuthProvider):
             salt = decoded[:32]
             stored_key = decoded[32:]
 
-            kdf = PBKDF2HMAC(
-                algorithm=hashes.SHA256(),
+            kdf = PBKDF2HMAC(  # type: ignore[operator]
+                algorithm=hashes.SHA256(),  # type: ignore[union-attr]
                 length=32,
                 salt=salt,
                 iterations=100000,

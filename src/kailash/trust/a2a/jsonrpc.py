@@ -8,10 +8,15 @@ Implements the JSON-RPC 2.0 specification for A2A method calls
 including agent invocation, trust verification, and delegation.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import time
-from typing import Any, Callable, Coroutine, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Coroutine, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from kailash.trust.operations import TrustOperations
 
 from kailash.trust.a2a.exceptions import (
     A2AError,
@@ -118,7 +123,9 @@ class JsonRpcHandler:
                 if not auth_token:
                     from kailash.trust.a2a.exceptions import AuthenticationError
 
-                    raise AuthenticationError(f"Authentication required for method: {request.method}")
+                    raise AuthenticationError(
+                        f"Authentication required for method: {request.method}"
+                    )
 
             # Dispatch to handler
             if request.method not in self._methods:
@@ -195,7 +202,7 @@ class JsonRpcHandler:
                 data = data.decode("utf-8")
             if isinstance(data, str):
                 data = json.loads(data)
-            return JsonRpcRequest.from_dict(data)
+            return JsonRpcRequest.from_dict(data)  # type: ignore[arg-type]
         except json.JSONDecodeError as e:
             raise JsonRpcParseError(f"Invalid JSON: {e}")
         except Exception as e:
@@ -204,14 +211,18 @@ class JsonRpcHandler:
     def _validate_request(self, request: JsonRpcRequest) -> None:
         """Validate JSON-RPC request structure."""
         if request.jsonrpc != "2.0":
-            raise JsonRpcInvalidRequestError(f"Invalid jsonrpc version: {request.jsonrpc}")
+            raise JsonRpcInvalidRequestError(
+                f"Invalid jsonrpc version: {request.jsonrpc}"
+            )
         if not request.method:
             raise JsonRpcInvalidRequestError("Missing method")
         if not isinstance(request.method, str):
             raise JsonRpcInvalidRequestError("Method must be a string")
         if request.params is not None and not isinstance(request.params, dict):
             # We only support named params, not positional
-            raise JsonRpcInvalidParamsError("Parameters must be an object (named parameters)")
+            raise JsonRpcInvalidParamsError(
+                "Parameters must be an object (named parameters)"
+            )
 
 
 class A2AMethodHandlers:
@@ -289,7 +300,7 @@ class A2AMethodHandlers:
             )
 
         start_time = time.time()
-        result = await self._trust_ops.verify(agent_id, level=level)
+        result = await self._trust_ops.verify(agent_id, "trust_verify", level=level)
         latency_ms = (time.time() - start_time) * 1000
 
         # Build trust chain summary if valid
@@ -343,7 +354,9 @@ class A2AMethodHandlers:
         constraints = params.get("constraints", {})
 
         if not delegatee_id:
-            raise JsonRpcInvalidParamsError("Missing required parameter: delegatee_agent_id")
+            raise JsonRpcInvalidParamsError(
+                "Missing required parameter: delegatee_agent_id"
+            )
         if not task_id:
             raise JsonRpcInvalidParamsError("Missing required parameter: task_id")
         if not capabilities:
@@ -352,20 +365,20 @@ class A2AMethodHandlers:
         # Create delegation
         try:
             delegation = await self._trust_ops.delegate(
-                delegator_agent_id=self._agent_id,
-                delegatee_agent_id=delegatee_id,
+                delegator_id=self._agent_id,
+                delegatee_id=delegatee_id,
                 task_id=task_id,
                 capabilities=capabilities,
-                constraints=constraints,
+                additional_constraints=constraints,
             )
 
             return DelegationResponse(
                 delegation_id=delegation.id,
-                delegator_agent_id=delegation.delegator_agent_id,
-                delegatee_agent_id=delegation.delegatee_agent_id,
+                delegator_agent_id=delegation.delegator_id,
+                delegatee_agent_id=delegation.delegatee_id,
                 task_id=delegation.task_id,
                 capabilities_delegated=delegation.capabilities_delegated,
-                constraints=delegation.constraints,
+                constraints=delegation.constraint_subset,  # type: ignore[arg-type]
                 delegated_at=delegation.delegated_at,
                 expires_at=delegation.expires_at,
                 signature=delegation.signature,
@@ -417,9 +430,9 @@ class A2AMethodHandlers:
         try:
             from kailash.trust.audit_service import AuditQueryService
 
-            audit_service = AuditQueryService(self._trust_ops._audit_store)
+            audit_service = AuditQueryService(self._trust_ops._audit_store)  # type: ignore[attr-defined]
 
-            actions = await audit_service.query_actions(
+            actions = await audit_service.query_actions(  # type: ignore[attr-defined]
                 agent_id=agent_id,
                 start_time=start_dt,
                 end_time=end_dt,
@@ -436,8 +449,8 @@ class A2AMethodHandlers:
                 if chain and chain.delegations:
                     delegation_chain = [
                         {
-                            "delegator": d.delegator_agent_id,
-                            "delegatee": d.delegatee_agent_id,
+                            "delegator": d.delegator_id,
+                            "delegatee": d.delegatee_id,
                             "task_id": d.task_id,
                             "capabilities": d.capabilities_delegated,
                             "delegated_at": d.delegated_at.isoformat(),

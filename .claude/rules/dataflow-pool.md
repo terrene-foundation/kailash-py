@@ -51,6 +51,36 @@ max_overflow = max(2, pool_size // 2)
 max_overflow = pool_size * 2  # Triples connection footprint!
 ```
 
+### 6. No Orphan Runtimes
+
+DataFlow subsystem classes MUST accept an optional `runtime` parameter. If provided, call `runtime.acquire()` and store. If `None`, create own runtime. All classes MUST implement `close()` that calls `self.runtime.release()`.
+
+```python
+# DO:
+class SubsystemClass:
+    def __init__(self, ..., runtime=None):
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = LocalRuntime()
+            self._owns_runtime = True
+
+    def close(self):
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+# DO NOT:
+class SubsystemClass:
+    def __init__(self, ...):
+        self.runtime = LocalRuntime()  # Orphan — no close(), no sharing
+```
+
+**Why**: Five independent runtimes per DataFlow instance caused the connection pool exhaustion crisis of #71. Each runtime opens 7-16 connections; without sharing, a single `DataFlow(auto_migrate=True)` consumed 28-64 connections.
+
+**Enforced by**: `validate-workflow.js` emits WARNING on unmanaged `LocalRuntime()` or `AsyncLocalRuntime()` construction.
+
 ## MUST NOT Rules
 
 ### 1. No New Pool Size Defaults

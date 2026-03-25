@@ -9,7 +9,7 @@ import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 if TYPE_CHECKING:
-    from kailash.middleware.events import EventStream
+    from kailash.middleware.events import EventStream  # type: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +32,9 @@ class EventEmitterMixin:
     def set_event_context(
         self,
         event_stream: "EventStream",
-        session_id: str = None,
-        workflow_id: str = None,
-        execution_id: str = None,
+        session_id: str | None = None,
+        workflow_id: str | None = None,
+        execution_id: str | None = None,
     ):
         """Set the event context for this node."""
         self._event_stream = event_stream
@@ -42,11 +42,11 @@ class EventEmitterMixin:
         self._workflow_id = workflow_id
         self._execution_id = execution_id
 
-    async def emit_node_started(self, inputs: Dict[str, Any] = None):
+    async def emit_node_started(self, inputs: Dict[str, Any] | None = None):
         """Emit node started event."""
         if self._event_stream:
             try:
-                from kailash.middleware.events import EventType, NodeEvent
+                from kailash.middleware.events import EventType, NodeEvent  # type: ignore[reportMissingImports]
 
                 event = NodeEvent(
                     type=EventType.NODE_STARTED,
@@ -63,12 +63,12 @@ class EventEmitterMixin:
                 logger.warning(f"Failed to emit node started event: {e}")
 
     async def emit_node_completed(
-        self, outputs: Dict[str, Any] = None, execution_time_ms: float = None
+        self, outputs: Dict[str, Any] | None = None, execution_time_ms: float | None = None
     ):
         """Emit node completed event."""
         if self._event_stream:
             try:
-                from kailash.middleware.events import EventType, NodeEvent
+                from kailash.middleware.events import EventType, NodeEvent  # type: ignore[reportMissingImports]
 
                 event = NodeEvent(
                     type=EventType.NODE_COMPLETED,
@@ -89,7 +89,7 @@ class EventEmitterMixin:
         """Emit node failed event."""
         if self._event_stream:
             try:
-                from kailash.middleware.events import EventType, NodeEvent
+                from kailash.middleware.events import EventType, NodeEvent  # type: ignore[reportMissingImports]
 
                 event = NodeEvent(
                     type=EventType.NODE_FAILED,
@@ -105,11 +105,11 @@ class EventEmitterMixin:
             except Exception as e:
                 logger.warning(f"Failed to emit node failed event: {e}")
 
-    async def emit_node_progress(self, progress_percent: float, message: str = None):
+    async def emit_node_progress(self, progress_percent: float, message: str | None = None):
         """Emit node progress event."""
         if self._event_stream:
             try:
-                from kailash.middleware.events import EventType, NodeEvent
+                from kailash.middleware.events import EventType, NodeEvent  # type: ignore[reportMissingImports]
 
                 event = NodeEvent(
                     type=EventType.NODE_PROGRESS,

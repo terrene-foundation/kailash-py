@@ -103,7 +103,6 @@ def run(workflow_file: str, params: str | None, debug: bool, no_tracking: bool):
                 raise CLIException(f"Invalid JSON in parameters file: {e}")
 
         # Create runtime and task manager
-        runtime = LocalRuntime(debug=debug)
         task_manager = None
 
         if not no_tracking:
@@ -116,7 +115,8 @@ def run(workflow_file: str, params: str | None, debug: bool, no_tracking: bool):
         click.echo(f"Running workflow: {workflow.name}")
 
         # Execute workflow
-        results, run_id = runtime.execute(workflow, task_manager, parameters)
+        with LocalRuntime(debug=debug) as runtime:
+            results, run_id = runtime.execute(workflow, task_manager, parameters)
 
         click.echo("Workflow completed successfully!")
 
@@ -157,8 +157,8 @@ def validate(workflow_file: str):
             )
 
         # Validate workflow
-        runtime = LocalRuntime()
-        warnings = runtime.validate_workflow(workflow)
+        with LocalRuntime() as runtime:
+            warnings = runtime.validate_workflow(workflow)
 
         if warnings:
             click.echo("Workflow validation warnings:")
@@ -460,7 +460,8 @@ def node_info(node_name: str):
                     f", default={param.default}" if param.default is not None else ""
                 )
 
-                click.echo(f"  {name}: {param.type.__name__} ({required}{default})")
+                type_name = param.type.__name__ if param.type is not None else "Any"
+                click.echo(f"  {name}: {type_name} ({required}{default})")
                 if param.description:
                     click.echo(f"    {param.description}")
         else:
@@ -505,7 +506,7 @@ def _load_python_workflow(workflow_file: str) -> Workflow:
                 workflow = obj
                 workflow_count += 1
 
-        if workflow_count == 0:
+        if workflow_count == 0 or workflow is None:
             raise CLIException(
                 "No Workflow instance found in file. "
                 "Make sure your file creates a Workflow object."

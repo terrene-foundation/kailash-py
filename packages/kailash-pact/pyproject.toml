@@ -29,6 +29,7 @@ dependencies = [
     "kailash[pact]>=2.1.0",
     "click>=8.0",
     "fastapi>=0.109",
+    "slowapi>=0.1.9",
 ]
 
 [project.urls]

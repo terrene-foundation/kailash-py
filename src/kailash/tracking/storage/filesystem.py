@@ -332,7 +332,9 @@ class FileSystemStorage(StorageBackend):
                     task_path = self.tasks_dir / f"{task.task_id}.json"
 
             # Update task file
-            path_to_use = task_path if task_path.exists() else run_task_path
+            path_to_use = (
+                task_path if task_path.exists() else (run_task_path or task_path)
+            )
             with open(path_to_use, "w") as f:
                 json.dump(task.to_dict(), f, indent=2)
 

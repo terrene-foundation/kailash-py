@@ -158,11 +158,11 @@ Use custom nodes in workflows:
        "multiplier": 3.0
    })
 
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(
-       workflow.build(),
-       parameters={"doubler": {"input_data": [1, 2, 3]}}
-   )
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(
+           workflow.build(),
+           parameters={"doubler": {"input_data": [1, 2, 3]}}
+       )
 
 Async Custom Nodes
 ------------------

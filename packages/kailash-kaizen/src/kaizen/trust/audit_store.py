@@ -69,6 +69,7 @@ class PostgresAuditStore(AuditStore):
         database_url: Optional[str] = None,
         enable_cache: bool = True,
         cache_ttl_seconds: int = 60,  # Short TTL for audit data
+        runtime: Optional[AsyncLocalRuntime] = None,
     ):
         """
         Initialize PostgresAuditStore.
@@ -77,6 +78,7 @@ class PostgresAuditStore(AuditStore):
             database_url: PostgreSQL connection string
             enable_cache: Enable caching for get operations
             cache_ttl_seconds: Cache TTL in seconds
+            runtime: Optional shared AsyncLocalRuntime (avoids pool leak)
         """
         self.database_url = database_url or os.getenv("POSTGRES_URL")
         if not self.database_url:
@@ -114,7 +116,12 @@ class PostgresAuditStore(AuditStore):
         self._AuditRecord = AuditRecord
 
         # Runtime for workflow execution
-        self.runtime = AsyncLocalRuntime()
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = AsyncLocalRuntime()
+            self._owns_runtime = True
 
         # In-memory cache for frequently accessed anchors
         self._cache: Dict[str, tuple[AuditAnchor, datetime]] = {}
@@ -513,5 +520,23 @@ class PostgresAuditStore(AuditStore):
         self._cache.clear()
 
     async def close(self) -> None:
-        """Close database connections."""
+        """Close database connections and release runtime."""
         self._cache.clear()
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.runtime.release()
+                self.runtime = None
+            except Exception:
+                pass

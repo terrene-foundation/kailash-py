@@ -52,7 +52,7 @@ class AsyncTestUtils:
 
     @staticmethod
     async def assert_completes_within(
-        coro: Coroutine, seconds: float, message: str = None
+        coro: Coroutine, seconds: float, message: Optional[str] = None
     ) -> T:
         """Assert that a coroutine completes within time limit."""
         try:
@@ -87,7 +87,9 @@ class AsyncTestUtils:
 
     @staticmethod
     @asynccontextmanager
-    async def assert_duration(min_seconds: float = None, max_seconds: float = None):
+    async def assert_duration(
+        min_seconds: Optional[float] = None, max_seconds: Optional[float] = None
+    ):
         """Context manager to assert execution duration."""
         start = asyncio.get_event_loop().time()
         yield
@@ -131,7 +133,7 @@ class AsyncTestUtils:
         def decorator(func):
             @functools.wraps(func)
             async def wrapper(*args, **kwargs):
-                last_exception = None
+                last_exception: Optional[Exception] = None
                 current_delay = delay
 
                 for attempt in range(max_attempts):
@@ -143,7 +145,9 @@ class AsyncTestUtils:
                             await asyncio.sleep(current_delay)
                             current_delay *= backoff
 
-                raise last_exception
+                if last_exception is not None:
+                    raise last_exception
+                raise RuntimeError("async_retry exhausted all attempts")
 
             return wrapper
 
@@ -159,7 +163,7 @@ class AsyncAssertions:
         expected: Any,
         timeout: float = 5.0,
         interval: float = 0.1,
-        message: str = None,
+        message: Optional[str] = None,
     ):
         """Assert that a value eventually equals expected."""
 
@@ -181,7 +185,7 @@ class AsyncAssertions:
     async def assert_eventually_true(
         condition: Callable[[], Union[bool, Coroutine[Any, Any, bool]]],
         timeout: float = 5.0,
-        message: str = None,
+        message: Optional[str] = None,
     ):
         """Assert that a condition eventually becomes true."""
         await AsyncTestUtils.wait_for_condition(
@@ -275,8 +279,8 @@ class AsyncAssertions:
     @staticmethod
     async def assert_performance(
         coro: Coroutine,
-        max_time: float = None,
-        min_throughput: float = None,
+        max_time: Optional[float] = None,
+        min_throughput: Optional[float] = None,
         operations: int = 1,
     ) -> Any:
         """Assert performance requirements are met."""

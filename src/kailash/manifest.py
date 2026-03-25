@@ -89,12 +89,13 @@ class KailashManifest(BaseModel):
             KailashManifest instance
         """
         # Default metadata
+        meta = workflow.metadata or {}
         default_metadata = {
-            "id": workflow.metadata.name,
-            "name": workflow.metadata.name,
-            "version": workflow.metadata.version,
-            "author": workflow.metadata.author,
-            "description": workflow.metadata.description,
+            "id": meta.get("name", workflow.name),
+            "name": meta.get("name", workflow.name),
+            "version": meta.get("version", "1.0.0"),
+            "author": meta.get("author", ""),
+            "description": meta.get("description", ""),
             "created_at": datetime.now(UTC).isoformat(),
         }
 
@@ -169,31 +170,37 @@ class DeploymentConfig(BaseModel):
     """Configuration for deployment manifest."""
 
     name: str = Field(..., description="Deployment name")
-    namespace: str = Field("default", description="Kubernetes namespace")
-    replicas: int = Field(1, description="Number of replicas")
-    strategy: str = Field("RollingUpdate", description="Deployment strategy")
+    namespace: str = Field(default="default", description="Kubernetes namespace")
+    replicas: int = Field(default=1, description="Number of replicas")
+    strategy: str = Field(default="RollingUpdate", description="Deployment strategy")
     labels: dict[str, str] = Field(
         default_factory=dict, description="Kubernetes labels"
     )
     annotations: dict[str, str] = Field(
         default_factory=dict, description="Kubernetes annotations"
     )
-    image_pull_policy: str = Field("IfNotPresent", description="Image pull policy")
-    service_account: str | None = Field(None, description="Service account name")
+    image_pull_policy: str = Field(
+        default="IfNotPresent", description="Image pull policy"
+    )
+    service_account: str | None = Field(
+        default=None, description="Service account name"
+    )
     node_selector: dict[str, str] = Field(
         default_factory=dict, description="Node selector"
     )
     tolerations: list[dict[str, Any]] = Field(
         default_factory=list, description="Pod tolerations"
     )
-    affinity: dict[str, Any] | None = Field(None, description="Pod affinity rules")
+    affinity: dict[str, Any] | None = Field(
+        default=None, description="Pod affinity rules"
+    )
 
 
 class ServiceConfig(BaseModel):
     """Configuration for Kubernetes service."""
 
     name: str = Field(..., description="Service name")
-    type: str = Field("ClusterIP", description="Service type")
+    type: str = Field(default="ClusterIP", description="Service type")
     ports: list[dict[str, Any]] = Field(
         default_factory=list, description="Service ports"
     )
@@ -205,18 +212,18 @@ class VolumeConfig(BaseModel):
     """Configuration for volumes."""
 
     name: str = Field(..., description="Volume name")
-    type: str = Field("configMap", description="Volume type")
+    type: str = Field(default="configMap", description="Volume type")
     source: str = Field(..., description="Volume source")
     mount_path: str = Field(..., description="Mount path in container")
-    read_only: bool = Field(True, description="Read-only mount")
-    sub_path: str | None = Field(None, description="Sub-path within volume")
+    read_only: bool = Field(default=True, description="Read-only mount")
+    sub_path: str | None = Field(default=None, description="Sub-path within volume")
 
 
 class ConfigMapConfig(BaseModel):
     """Configuration for ConfigMap."""
 
     name: str = Field(..., description="ConfigMap name")
-    namespace: str = Field("default", description="Namespace")
+    namespace: str = Field(default="default", description="Namespace")
     data: dict[str, str] = Field(default_factory=dict, description="ConfigMap data")
     binary_data: dict[str, str] = Field(default_factory=dict, description="Binary data")
     labels: dict[str, str] = Field(default_factory=dict, description="Labels")
@@ -226,8 +233,8 @@ class SecretConfig(BaseModel):
     """Configuration for Secret."""
 
     name: str = Field(..., description="Secret name")
-    namespace: str = Field("default", description="Namespace")
-    type: str = Field("Opaque", description="Secret type")
+    namespace: str = Field(default="default", description="Namespace")
+    type: str = Field(default="Opaque", description="Secret type")
     data: dict[str, str] = Field(default_factory=dict, description="Secret data")
     string_data: dict[str, str] = Field(default_factory=dict, description="String data")
     labels: dict[str, str] = Field(default_factory=dict, description="Labels")
@@ -343,6 +350,8 @@ class ManifestBuilder:
     def _build_deployment(self) -> dict[str, Any]:
         """Build deployment manifest."""
         config = self.deployment_config
+        if config is None:
+            raise ManifestError("Deployment configuration is required")
 
         deployment = {
             "apiVersion": "apps/v1",
@@ -359,14 +368,18 @@ class ManifestBuilder:
                 "selector": {
                     "matchLabels": {
                         "app": config.name,
-                        "workflow": self.workflow.metadata.name,
+                        "workflow": (self.workflow.metadata or {}).get(
+                            "name", self.workflow.name
+                        ),
                     }
                 },
                 "template": {
                     "metadata": {
                         "labels": {
                             "app": config.name,
-                            "workflow": self.workflow.metadata.name,
+                            "workflow": (self.workflow.metadata or {}).get(
+                                "name", self.workflow.name
+                            ),
                             **config.labels,
                         }
                     },
@@ -401,7 +414,7 @@ class ManifestBuilder:
             volume_mounts = []
 
             for vol_config in self.volume_configs:
-                volume = {"name": vol_config.name}
+                volume: dict[str, Any] = {"name": vol_config.name}
 
                 if vol_config.type == "configMap":
                     volume["configMap"] = {"name": vol_config.source}
@@ -431,14 +444,27 @@ class ManifestBuilder:
             "image": "kailash/workflow-controller:latest",
             "imagePullPolicy": config.image_pull_policy,
             "env": [
-                {"name": "WORKFLOW_NAME", "value": self.workflow.metadata.name},
+                {
+                    "name": "WORKFLOW_NAME",
+                    "value": (self.workflow.metadata or {}).get(
+                        "name", self.workflow.name
+                    ),
+                },
                 {"name": "NAMESPACE", "value": config.namespace},
             ],
             "resources": {"requests": {"cpu": "100m", "memory": "256Mi"}},
         }
 
-        if hasattr(self, "volume_mounts"):
-            controller_container["volumeMounts"] = volume_mounts
+        if self.volume_configs:
+            controller_container["volumeMounts"] = [
+                {
+                    "name": vc.name,
+                    "mountPath": vc.mount_path,
+                    "readOnly": vc.read_only,
+                    **({"subPath": vc.sub_path} if vc.sub_path else {}),
+                }
+                for vc in self.volume_configs
+            ]
 
         deployment["spec"]["template"]["spec"]["containers"].append(
             controller_container
@@ -448,20 +474,25 @@ class ManifestBuilder:
 
     def _build_service(self, config: ServiceConfig) -> dict[str, Any]:
         """Build service manifest."""
+        deploy_config = self.deployment_config
+        if deploy_config is None:
+            raise ManifestError("Deployment configuration is required")
         service = {
             "apiVersion": "v1",
             "kind": "Service",
             "metadata": {
                 "name": config.name,
-                "namespace": self.deployment_config.namespace,
+                "namespace": deploy_config.namespace,
                 "labels": config.labels,
             },
             "spec": {
                 "type": config.type,
                 "selector": config.selector
                 or {
-                    "app": self.deployment_config.name,
-                    "workflow": self.workflow.metadata.name,
+                    "app": deploy_config.name,
+                    "workflow": (self.workflow.metadata or {}).get(
+                        "name", self.workflow.name
+                    ),
                 },
                 "ports": config.ports,
             },
@@ -511,6 +542,8 @@ class ManifestBuilder:
         from kailash.utils.export import ExportConfig, WorkflowExporter
 
         # Use exporter to get workflow data
+        if self.deployment_config is None:
+            raise ManifestError("Deployment configuration is required")
         export_config = ExportConfig(
             namespace=self.deployment_config.namespace,
             include_metadata=True,
@@ -543,13 +576,14 @@ class ManifestGenerator:
         builder = ManifestBuilder(workflow)
 
         # Add deployment
+        meta = workflow.metadata or {}
         deployment_config = DeploymentConfig(
             name=name,
             namespace=namespace,
             labels={
                 "app": name,
-                "workflow": workflow.metadata.name,
-                "version": workflow.metadata.version,
+                "workflow": meta.get("name", workflow.name),
+                "version": meta.get("version", "1.0.0"),
             },
         )
         builder.with_deployment(deployment_config)
@@ -613,8 +647,8 @@ class ManifestGenerator:
                 "labels",
                 {
                     "app": name,
-                    "workflow": workflow.metadata.name,
-                    "version": workflow.metadata.version,
+                    "workflow": (workflow.metadata or {}).get("name", workflow.name),
+                    "version": (workflow.metadata or {}).get("version", "1.0.0"),
                 },
             ),
             annotations=kwargs.get("annotations", {}),

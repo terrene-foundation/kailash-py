@@ -40,7 +40,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from kailash.trust.signing.crypto import generate_keypair, serialize_for_signing, sign, verify_signature
+from kailash.trust.signing.crypto import (
+    generate_keypair,
+    serialize_for_signing,
+    sign,
+    verify_signature,
+)
 from kailash.trust.exceptions import TrustError
 
 try:
@@ -652,7 +657,7 @@ class InMemoryKeyManager(KeyManagerInterface):
             "Use a persistent backend like AWSKMSKeyManager for serializable key management."
         )
 
-    def __reduce_ex__(self, protocol: int):
+    def __reduce_ex__(self, protocol: int):  # type: ignore[override]
         """
         Prevent pickle serialization (all protocols) to protect private keys.
 
@@ -778,8 +783,10 @@ class AWSKMSKeyManager(KeyManagerInterface):
             self._kms_client = kms_client
         else:
             if not BOTO3_AVAILABLE:
-                raise ImportError("boto3 is required for AWS KMS key management. Install with: pip install boto3")
-            self._kms_client = boto3.client("kms", region_name=region_name)
+                raise ImportError(
+                    "boto3 is required for AWS KMS key management. Install with: pip install boto3"
+                )
+            self._kms_client = boto3.client("kms", region_name=region_name)  # type: ignore[union-attr]
 
         self._pending_deletion_days = pending_deletion_days
         # key_id -> KMS key ARN
@@ -813,7 +820,7 @@ class AWSKMSKeyManager(KeyManagerInterface):
         error_message = str(error)
 
         if hasattr(error, "response"):
-            error_info = error.response.get("Error", {})
+            error_info = error.response.get("Error", {})  # type: ignore[attr-defined]
             error_code = error_info.get("Code", "Unknown")
             error_message = error_info.get("Message", str(error))
 
@@ -991,7 +998,9 @@ class AWSKMSKeyManager(KeyManagerInterface):
         ) as e:
             raise self._handle_kms_error(e, "sign", key_id) from e
 
-    async def verify(self, payload: Union[str, dict, bytes], signature: str, public_key: str) -> bool:
+    async def verify(
+        self, payload: Union[str, dict, bytes], signature: str, public_key: str
+    ) -> bool:
         """
         Verify an ECDSA P-256 signature using AWS KMS Verify API.
 

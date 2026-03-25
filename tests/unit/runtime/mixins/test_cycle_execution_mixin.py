@@ -110,6 +110,10 @@ class TestCycleRuntime(BaseRuntime, CycleExecutionMixin):
         self.executed_workflows.append(workflow.workflow_id)
         return {}, "test-run-id"
 
+    def close(self) -> None:
+        """Minimal close implementation (required by BaseRuntime)."""
+        pass
+
 
 # ============================================================================
 # Helper Functions

@@ -373,7 +373,7 @@ def get_module_suggestions(module_name: str) -> list[str]:
     return suggestions
 
 
-def format_dangerous_function_error(function_name: str, module_name: str = None) -> str:
+def format_dangerous_function_error(function_name: str, module_name: str | None = None) -> str:
     """Format consistent error message for dangerous function calls.
 
     Args:
@@ -433,7 +433,7 @@ def validate_module_name(module_name: str, is_async: bool = False) -> tuple[bool
         return False, error_msg
 
 
-def is_dangerous_function(function_name: str, module_name: str = None) -> bool:
+def is_dangerous_function(function_name: str, module_name: str | None = None) -> bool:
     """Check if a function call is dangerous.
 
     Args:

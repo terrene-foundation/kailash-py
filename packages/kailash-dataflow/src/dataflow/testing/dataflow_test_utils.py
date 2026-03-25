@@ -24,27 +24,41 @@ logger = logging.getLogger(__name__)
 class DataFlowTestUtils:
     """Utilities for DataFlow testing using built-in components."""
 
-    def __init__(self, database_url: str):
-        """Initialize test utilities with database connection."""
+    def __init__(self, database_url: str, runtime=None):
+        """Initialize test utilities with database connection.
+
+        Args:
+            database_url: Database connection string
+            runtime: Optional shared runtime. If provided, the utils acquire
+                a reference (ref-count increment). If None, creates its own.
+        """
         self.database_url = database_url
         self.dataflow = DataFlow(database_url=database_url)
         # AutoMigrationSystem needs a connection, not a URL
         # For now, we'll skip it and use the visual migration builder directly
 
-        # ✅ FIX: Detect async context and use appropriate runtime
-        try:
-            asyncio.get_running_loop()
-            # Running in async context - use AsyncLocalRuntime
-            self.runtime = AsyncLocalRuntime()
-            self._is_async = True
+        # Initialize runtime
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
-                "DataFlowTestUtils: Detected async context, using AsyncLocalRuntime"
+                "DataFlowTestUtils: Using injected runtime (ref_count=%d)",
+                runtime.ref_count,
             )
-        except RuntimeError:
-            # No event loop - use sync LocalRuntime
-            self.runtime = LocalRuntime()
-            self._is_async = False
-            logger.debug("DataFlowTestUtils: Detected sync context, using LocalRuntime")
+        else:
+            try:
+                asyncio.get_running_loop()
+                self.runtime = AsyncLocalRuntime()
+                self._is_async = True
+                logger.debug(
+                    "DataFlowTestUtils: Detected async context, using AsyncLocalRuntime"
+                )
+            except RuntimeError:
+                self.runtime = LocalRuntime()
+                self._is_async = False
+                logger.debug("DataFlowTestUtils: Detected sync context, using LocalRuntime")
+            self._owns_runtime = True
 
     def drop_all_tables(self) -> None:
         """Drop all tables in the database using DataFlow migrations."""
@@ -104,9 +118,7 @@ class DataFlowTestUtils:
 
         # Execute the workflow
         try:
-            # ✅ FIX: Use LocalRuntime for test operations to avoid async context issues
-            init_runtime = LocalRuntime()
-            results, _ = init_runtime.execute(workflow.build())
+            results, _ = self.runtime.execute(workflow.build())
             logger.info(f"SQL executed successfully: {sql[:50]}...")
         except Exception as e:
             logger.error(f"Failed to execute SQL: {e}")
@@ -144,9 +156,7 @@ class DataFlowTestUtils:
         )
 
         # Execute workflow
-        # ✅ FIX: Use LocalRuntime for test operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
         return results["bulk_insert"]
 
     def query_data(
@@ -161,9 +171,7 @@ class DataFlowTestUtils:
         )
 
         # Execute workflow
-        # ✅ FIX: Use LocalRuntime for test operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
         return results["query"]["records"]
 
     def update_data(
@@ -176,9 +184,7 @@ class DataFlowTestUtils:
         workflow.add_node(f"{model_name}UpdateNode", "update", {"id": id, **updates})
 
         # Execute workflow
-        # ✅ FIX: Use LocalRuntime for test operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
         return results["update"]
 
     def delete_data(self, model_name: str, id: int) -> Dict[str, Any]:
@@ -189,9 +195,7 @@ class DataFlowTestUtils:
         workflow.add_node(f"{model_name}DeleteNode", "delete", {"id": id})
 
         # Execute workflow
-        # ✅ FIX: Use LocalRuntime for test operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
         return results["delete"]
 
     def execute_transaction(self, operations: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -222,9 +226,7 @@ class DataFlowTestUtils:
         workflow.add_connection(prev_node, "commit_txn")
 
         # Execute workflow
-        # ✅ FIX: Use LocalRuntime for test operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
         return results
 
     def run_migration(self, migration_operations: List[Dict[str, Any]]) -> None:
@@ -266,6 +268,30 @@ class DataFlowTestUtils:
         for operation in migration.operations:
             logger.info(f"Running migration: {operation.description}")
             self._execute_sql(operation.sql_up)
+
+    def close(self):
+        """Release the runtime reference.
+
+        Safe to call multiple times -- subsequent calls are no-ops.
+        """
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        """Emit ResourceWarning if close() was not called explicitly."""
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
 
     def verify_schema(self, expected_tables: List[str]) -> bool:
         """Verify that expected tables exist using DataFlow schema discovery."""

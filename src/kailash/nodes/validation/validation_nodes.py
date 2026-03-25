@@ -327,12 +327,11 @@ class WorkflowValidationNode(Node):
                 try:
                     from kailash.runtime.local import LocalRuntime
 
-                    runtime = LocalRuntime()
-
-                    # Execute with test parameters
-                    results, run_id = runtime.execute(
-                        built_workflow, parameters=test_parameters
-                    )
+                    with LocalRuntime() as runtime:
+                        # Execute with test parameters
+                        results, run_id = runtime.execute(
+                            built_workflow, parameters=test_parameters
+                        )
 
                     # Check for errors
                     execution_errors = []

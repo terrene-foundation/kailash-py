@@ -13,7 +13,7 @@ from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
 from kailash.edge.compliance import ComplianceRouter
-from kailash.edge.discovery import EdgeDiscovery
+from kailash.edge.discovery import EdgeDiscovery, EdgeSelectionStrategy
 from kailash.edge.location import EdgeLocation
 from kailash.utils.resource_manager import AsyncResourcePool
 
@@ -275,11 +275,13 @@ class EdgeInfrastructure:
         discovery = self.get_discovery()
         return discovery.get_all_edges()
 
-    async def select_edge(self, criteria: Dict[str, Any]) -> Optional[EdgeLocation]:
+    async def select_edge(
+        self, criteria: Optional[EdgeSelectionStrategy] = None
+    ) -> Optional[EdgeLocation]:
         """Select an edge location based on criteria.
 
         Args:
-            criteria: Selection criteria
+            criteria: Selection strategy
 
         Returns:
             Selected EdgeLocation or None

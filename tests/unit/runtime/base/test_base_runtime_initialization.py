@@ -17,6 +17,14 @@ class ConcreteRuntime(BaseRuntime):
         """Minimal execute implementation."""
         return {}, "test-run-id"
 
+    def close(self):
+        """Minimal close implementation."""
+        pass
+
+    def close(self) -> None:
+        """Minimal close implementation."""
+        pass
+
 
 class TestBaseRuntimeInitialization:
     """Test BaseRuntime initialization and configuration."""
@@ -273,6 +281,9 @@ class TestBaseRuntimeInitialization:
             def execute(self, workflow, **kwargs):
                 return {}, "test-run-id"
 
+            def close(self):
+                pass
+
         runtime = MixedRuntime()
 
         # Both BaseRuntime and TestMixin should be initialized
@@ -413,9 +424,15 @@ class TestBaseRuntimeAbstractMethods:
             def execute(self, workflow, parameters=None, **kwargs):
                 return {"sync": True}, "sync-run-id"
 
+            def close(self):
+                pass
+
         class AsyncRuntime(BaseRuntime):
             async def execute(self, workflow, parameters=None, **kwargs):
                 return {"async": True}, "async-run-id"
+
+            def close(self):
+                pass
 
         # Both should instantiate successfully
         sync_runtime = SyncRuntime()

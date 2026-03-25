@@ -349,7 +349,7 @@ class APIChannel(Channel):
             tags: Optional tags
         """
         self.workflow_server.register_workflow(
-            name=name, workflow=workflow, description=description, tags=tags
+            name=name, workflow=workflow, description=description or "", tags=tags or []
         )
         logger.info(f"Registered workflow '{name}' with API channel {self.name}")
 
@@ -373,9 +373,9 @@ class APIChannel(Channel):
         self.workflow_server.proxy_workflow(
             name=name,
             proxy_url=proxy_url,
-            health_check=health_check,
-            description=description,
-            tags=tags,
+            health_check=health_check or "/health",
+            description=description or "",
+            tags=tags or [],
         )
         logger.info(
             f"Registered proxied workflow '{name}' with API channel {self.name}"

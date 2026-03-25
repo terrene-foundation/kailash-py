@@ -132,9 +132,9 @@ Verify Installation
    })
 
    # Execute
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow.build())
-   print(results["test"]["result"]["status"])
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(workflow.build())
+       print(results["test"]["result"]["status"])
 
 Docker Installation
 ===================
@@ -171,10 +171,13 @@ Example ``main.py`` for Docker:
        })
 
        runtime = AsyncLocalRuntime()
-       results, run_id = await runtime.execute_workflow_async(
-           workflow.build(), inputs={}
-       )
-       print(results)
+       try:
+           results, run_id = await runtime.execute_workflow_async(
+               workflow.build(), inputs={}
+           )
+           print(results)
+       finally:
+           runtime.close()
 
    if __name__ == "__main__":
        import asyncio

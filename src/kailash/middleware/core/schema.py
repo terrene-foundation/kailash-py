@@ -67,14 +67,14 @@ class FieldSchema:
         self,
         name: str,
         type: SchemaType,
-        widget: UIWidget = None,
-        label: str = None,
-        description: str = None,
+        widget: Optional[UIWidget] = None,
+        label: Optional[str] = None,
+        description: Optional[str] = None,
         required: bool = False,
         default: Any = None,
-        options: List[Dict[str, Any]] = None,
-        validation: Dict[str, Any] = None,
-        ui_hints: Dict[str, Any] = None,
+        options: Optional[List[Dict[str, Any]]] = None,
+        validation: Optional[Dict[str, Any]] = None,
+        ui_hints: Optional[Dict[str, Any]] = None,
     ):
         self.name = name
         self.type = type
@@ -197,7 +197,7 @@ class NodeSchemaGenerator:
             if hasattr(node_class, "get_parameters"):
                 # Create a temporary instance to get parameters
                 try:
-                    temp_instance = node_class("temp")
+                    temp_instance = node_class(name="temp")
                     parameters = temp_instance.get_parameters()
 
                     for param_name, param in parameters.items():
@@ -227,32 +227,34 @@ class NodeSchemaGenerator:
     ) -> FieldSchema:
         """Convert NodeParameter to FieldSchema."""
         # Map NodeParameter type to SchemaType
-        schema_type = self._map_type_to_schema_type(param.type)
+        schema_type = self._map_type_to_schema_type(param.type)  # type: ignore[reportArgumentType]
 
         # Determine widget based on parameter properties
-        widget = None
+        widget: Optional[UIWidget] = None
         if hasattr(param, "widget"):
-            widget = param.widget
+            widget = getattr(param, "widget", None)
         elif param.type is bool:
             widget = UIWidget.TOGGLE
-        elif hasattr(param, "choices") and param.choices:
+        elif hasattr(param, "choices") and getattr(param, "choices", None):
             widget = UIWidget.SELECT
 
         # Extract validation rules
-        validation = {}
-        if hasattr(param, "min_value") and param.min_value is not None:
-            validation["min"] = param.min_value
-        if hasattr(param, "max_value") and param.max_value is not None:
-            validation["max"] = param.max_value
-        if hasattr(param, "pattern") and param.pattern:
-            validation["pattern"] = param.pattern
+        validation: Dict[str, Any] = {}
+        min_val = getattr(param, "min_value", None)
+        if min_val is not None:
+            validation["min"] = min_val
+        max_val = getattr(param, "max_value", None)
+        if max_val is not None:
+            validation["max"] = max_val
+        pattern_val = getattr(param, "pattern", None)
+        if pattern_val:
+            validation["pattern"] = pattern_val
 
         # Extract options for enums/choices
-        options = []
-        if hasattr(param, "choices") and param.choices:
-            options = [
-                {"value": choice, "label": str(choice)} for choice in param.choices
-            ]
+        options: List[Dict[str, Any]] = []
+        choices = getattr(param, "choices", None)
+        if choices:
+            options = [{"value": choice, "label": str(choice)} for choice in choices]
 
         return FieldSchema(
             name=name,
@@ -390,7 +392,7 @@ class NodeSchemaGenerator:
 class WorkflowSchemaGenerator:
     """Generates schemas for workflows."""
 
-    def __init__(self, node_schema_generator: NodeSchemaGenerator = None):
+    def __init__(self, node_schema_generator: Optional[NodeSchemaGenerator] = None):
         self.node_generator = node_schema_generator or NodeSchemaGenerator()
 
     def generate_workflow_schema(self, workflow: Workflow) -> Dict[str, Any]:
@@ -605,7 +607,9 @@ class DynamicSchemaRegistry:
             schemas[node_class.__name__] = self.get_node_schema(node_class)
         return schemas
 
-    def invalidate_cache(self, node_class: Type[Node] = None, workflow_id: str = None):
+    def invalidate_cache(
+        self, node_class: Optional[Type[Node]] = None, workflow_id: Optional[str] = None
+    ):
         """Invalidate cached schemas."""
         if node_class:
             class_name = node_class.__name__

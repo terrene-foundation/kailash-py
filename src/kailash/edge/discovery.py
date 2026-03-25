@@ -42,8 +42,8 @@ class EdgeDiscoveryRequest:
 
     # Geographic preferences
     user_coordinates: Optional[GeographicCoordinates] = None
-    preferred_regions: List[EdgeRegion] = None
-    excluded_regions: List[EdgeRegion] = None
+    preferred_regions: Optional[List[EdgeRegion]] = None
+    excluded_regions: Optional[List[EdgeRegion]] = None
 
     # Resource requirements
     min_cpu_cores: int = 1
@@ -53,11 +53,11 @@ class EdgeDiscoveryRequest:
     bandwidth_requirements: float = 1.0  # Gbps
 
     # Service requirements
-    database_support: List[str] = None
-    ai_models_required: List[str] = None
+    database_support: Optional[List[str]] = None
+    ai_models_required: Optional[List[str]] = None
 
     # Compliance requirements
-    compliance_zones: List[ComplianceZone] = None
+    compliance_zones: Optional[List[ComplianceZone]] = None
     data_residency_required: bool = False
 
     # Performance requirements
@@ -105,8 +105,8 @@ class EdgeScore:
     available_capacity_percentage: float = 0.0
 
     # Reasoning
-    selection_reasons: List[str] = None
-    warnings: List[str] = None
+    selection_reasons: Optional[List[str]] = None
+    warnings: Optional[List[str]] = None
 
     def __post_init__(self):
         if self.selection_reasons is None:
@@ -124,7 +124,7 @@ class EdgeDiscovery:
 
     def __init__(
         self,
-        locations: List[EdgeLocation] = None,
+        locations: Optional[List[EdgeLocation]] = None,
         health_check_interval_seconds: int = 60,
         cost_model_enabled: bool = True,
         performance_tracking_enabled: bool = True,
@@ -314,8 +314,8 @@ class EdgeDiscovery:
 
     def list_locations(
         self,
-        regions: List[EdgeRegion] = None,
-        compliance_zones: List[ComplianceZone] = None,
+        regions: Optional[List[EdgeRegion]] = None,
+        compliance_zones: Optional[List[ComplianceZone]] = None,
         healthy_only: bool = True,
     ) -> List[EdgeLocation]:
         """List edge locations with optional filtering."""
@@ -414,7 +414,9 @@ class EdgeDiscovery:
                 continue
 
             # Check compliance requirements
-            if not location.supports_compliance(request.compliance_zones):
+            if request.compliance_zones and not location.supports_compliance(
+                request.compliance_zones
+            ):
                 continue
 
             # Check performance requirements
@@ -564,7 +566,7 @@ class EdgeDiscovery:
         self, location: EdgeLocation, request: EdgeDiscoveryRequest
     ) -> float:
         """Calculate compliance score (0.0 to 1.0, higher is better)."""
-        required_zones = set(request.compliance_zones)
+        required_zones = set(request.compliance_zones or [])
         available_zones = set(location.compliance_zones)
 
         # Perfect match gets full score
@@ -617,7 +619,7 @@ class EdgeDiscovery:
             )
 
         # Compliance reasoning
-        compliance_match = set(request.compliance_zones).issubset(
+        compliance_match = set(request.compliance_zones or []).issubset(
             set(score.location.compliance_zones)
         )
         if compliance_match:
@@ -738,7 +740,7 @@ class EdgeDiscovery:
         return await self.discover_optimal_edges(request)
 
     async def find_cheapest_edge(
-        self, requirements: Dict[str, Any] = None, max_results: int = 1
+        self, requirements: Optional[Dict[str, Any]] = None, max_results: int = 1
     ) -> List[EdgeScore]:
         """Find cheapest edge location(s) meeting requirements."""
         request = EdgeDiscoveryRequest(
@@ -786,7 +788,9 @@ class EdgeDiscovery:
         return None
 
     async def select_edge(
-        self, strategy: EdgeSelectionStrategy = None, compliance_zones: List[str] = None
+        self,
+        strategy: Optional[EdgeSelectionStrategy] = None,
+        compliance_zones: Optional[List[str]] = None,
     ) -> Optional[EdgeLocation]:
         """Select an edge based on strategy and compliance zones."""
         # For now, just return the first available edge

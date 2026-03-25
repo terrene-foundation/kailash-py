@@ -29,11 +29,8 @@ from typing import Any, Dict, List, Optional, Union
 
 try:
     import numpy as np
-except ImportError as exc:
-    raise ImportError(
-        "numpy is required for async vector nodes. "
-        "Install it with: pip install kailash[vector]"
-    ) from exc
+except ImportError:
+    np = None  # type: ignore[assignment]  # Deferred — checked at node runtime
 
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
@@ -290,7 +287,7 @@ class AsyncPostgreSQLVectorNode(AsyncNode):
 
     def validate_config(self):
         """Validate node configuration."""
-        super().validate_config()
+        super().validate_config()  # type: ignore[reportAttributeAccessIssue]
 
         # Validate connection parameters
         if not self.config.get("connection_string"):
@@ -580,7 +577,7 @@ class AsyncPostgreSQLVectorNode(AsyncNode):
                 min_size=1, max_size=self.config.get("pool_size", 10)
             )
 
-            async with self._connection_manager.get_connection(
+            async with self._connection_manager.get_connection(  # type: ignore[reportOptionalMemberAccess]
                 tenant_id=tenant_id, db_config=db_config, pool_config=pool_config
             ) as conn:
                 if operation == "create_table":

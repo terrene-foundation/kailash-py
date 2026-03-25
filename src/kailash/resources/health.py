@@ -53,7 +53,7 @@ class HealthStatus:
     state: HealthState
     message: Optional[str] = None
     details: Optional[Dict[str, Any]] = None
-    timestamp: datetime = None
+    timestamp: Optional[datetime] = None
 
     def __post_init__(self):
         if self.timestamp is None:
@@ -70,12 +70,16 @@ class HealthStatus:
         return cls(HealthState.HEALTHY, message)
 
     @classmethod
-    def unhealthy(cls, message: str, details: Dict[str, Any] = None) -> "HealthStatus":
+    def unhealthy(
+        cls, message: str, details: Optional[Dict[str, Any]] = None
+    ) -> "HealthStatus":
         """Create an unhealthy status."""
         return cls(HealthState.UNHEALTHY, message, details)
 
     @classmethod
-    def degraded(cls, message: str, details: Dict[str, Any] = None) -> "HealthStatus":
+    def degraded(
+        cls, message: str, details: Optional[Dict[str, Any]] = None
+    ) -> "HealthStatus":
         """Create a degraded status."""
         return cls(HealthState.DEGRADED, message, details)
 

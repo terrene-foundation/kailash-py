@@ -26,7 +26,7 @@ import threading
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -62,11 +62,11 @@ class NodeMetadata(BaseModel):
     - Kailash UI: Node palette and property panels
     """
 
-    id: str = Field("", description="Node ID")
+    id: str = Field(default="", description="Node ID")
     name: str = Field(..., description="Node name")
-    description: str = Field("", description="Node description")
-    version: str = Field("1.0.0", description="Node version")
-    author: str = Field("", description="Node author")
+    description: str = Field(default="", description="Node description")
+    version: str = Field(default="1.0.0", description="Node version")
+    author: str = Field(default="", description="Node author")
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         description="Node creation date",
@@ -110,10 +110,32 @@ class NodeParameter(BaseModel):
     """
 
     name: str
-    type: type
+    type: Any | None = None
     required: bool = True
-    default: Any = None
+    default: Any | None = None
     description: str = ""
+
+    # Extended parameter metadata for UI generation and validation
+    choices: list[Any] | None = Field(
+        default=None, description="Valid choices for this parameter"
+    )
+    enum: list[Any] | None = Field(
+        default=None, description="Enumerated values for this parameter"
+    )
+    default_value: Any | None = Field(
+        default=None, description="Alternative default value specification"
+    )
+    category: str = Field(default="", description="Parameter category for grouping")
+    display_name: str = Field(default="", description="Human-readable display name")
+    icon: str = Field(default="", description="Icon identifier for UI display")
+
+    # Port direction markers for input/output classification
+    input: bool = Field(
+        default=False, description="Whether this parameter is an input port"
+    )
+    output: bool = Field(
+        default=False, description="Whether this parameter is an output port"
+    )
 
     # Enhanced auto-mapping capabilities
     auto_map_from: list[str] = Field(
@@ -169,6 +191,23 @@ class Node(ABC):
     _DEFAULT_CACHE_SIZE = 128
     _SPECIAL_PARAMS = {"context", "config"}  # Parameters excluded from cache key
     _strict_unknown_params = False  # Subclasses can set True to error on unknown params
+    _env_cache: dict[str, str | None] = {}
+
+    @classmethod
+    def _get_env(cls, key: str, default: str | None = None) -> str | None:
+        """Get environment variable with class-level caching.
+
+        Avoids repeated os.environ lookups during high-frequency node execution.
+        Use _clear_env_cache() in tests or when env vars change.
+        """
+        if key not in cls._env_cache:
+            cls._env_cache[key] = os.environ.get(key, default)
+        return cls._env_cache[key]
+
+    @classmethod
+    def _clear_env_cache(cls) -> None:
+        """Clear the environment variable cache. Use in tests for isolation."""
+        cls._env_cache.clear()
 
     def __init__(self, **kwargs):
         """Initialize the node with configuration parameters.
@@ -300,13 +339,11 @@ class Node(ABC):
 
             # Parameter resolution cache - initialize before validation
             cache_size = int(
-                os.environ.get(
-                    "KAILASH_PARAM_CACHE_SIZE", str(self._DEFAULT_CACHE_SIZE)
-                )
+                self._get_env("KAILASH_PARAM_CACHE_SIZE", str(self._DEFAULT_CACHE_SIZE))
                 or str(self._DEFAULT_CACHE_SIZE)
             )
             self._cache_enabled = (
-                os.environ.get("KAILASH_DISABLE_PARAM_CACHE", "") or ""
+                self._get_env("KAILASH_DISABLE_PARAM_CACHE", "") or ""
             ).lower() != "true"
 
             # Use OrderedDict for LRU implementation
@@ -328,7 +365,7 @@ class Node(ABC):
                 f"Failed to initialize node '{self.id}': {e}"
             ) from e
 
-    def get_workflow_context(self, key: str, default: Any = None) -> Any:
+    def get_workflow_context(self, key: str, default: Any | None = None) -> Any:
         """Get a value from the workflow context.
 
         This method allows nodes to retrieve shared state from the workflow
@@ -678,10 +715,10 @@ class Node(ABC):
                 # FIX: Allow None for optional parameters (not required)
                 if value is None and not param_def.required:
                     continue
-                if not isinstance(value, param_def.type):
+                if not isinstance(value, param_def.type):  # type: ignore[reportArgumentType]
                     try:
                         # Special handling for datetime conversion from ISO strings
-                        if param_def.type.__name__ == "datetime" and isinstance(
+                        if param_def.type.__name__ == "datetime" and isinstance(  # type: ignore[reportOptionalMemberAccess]
                             value, str
                         ):
                             from datetime import datetime
@@ -691,11 +728,11 @@ class Node(ABC):
                                 value.replace("Z", "+00:00")
                             )
                         else:
-                            self.config[param_name] = param_def.type(value)
+                            self.config[param_name] = param_def.type(value)  # type: ignore[reportOptionalCall]
                     except (ValueError, TypeError) as e:
                         raise NodeConfigurationError(
                             f"Configuration parameter '{param_name}' must be of type "
-                            f"{param_def.type.__name__}, got {type(value).__name__}. "
+                            f"{param_def.type.__name__}, got {type(value).__name__}. "  # type: ignore[reportOptionalMemberAccess]
                             f"Conversion failed: {e}"
                         ) from e
 
@@ -713,7 +750,7 @@ class Node(ABC):
         # Match template expressions like ${variable_name} or ${node.output}
         return bool(re.match(r"^\$\{[^}]+\}$", value))
 
-    def _get_cached_parameters(self) -> dict[str, NodeParameter]:
+    def _get_cached_parameters(self) -> dict[str, NodeParameter]:  # type: ignore[reportRedeclaration]
         """Get cached parameter definitions with optimal performance.
 
         Uses parameters cached during initialization to avoid duplicate get_parameters() calls.
@@ -1067,7 +1104,7 @@ class Node(ABC):
                 resolved[param_name] = main_input[1]
                 used_inputs.add(main_input[0])
 
-        return resolved, used_inputs
+        return resolved, used_inputs  # type: ignore[reportReturnType]
 
     def _validate_resolved_parameters(self, resolved: dict, params: dict) -> dict:
         """Validate resolved parameters against their definitions.
@@ -1219,14 +1256,14 @@ class Node(ABC):
                         # Skip type checking for Any type
                         if param_def.type is Any:
                             validated_outputs[param_name] = value
-                        elif not isinstance(value, param_def.type):
+                        elif not isinstance(value, param_def.type):  # type: ignore[reportArgumentType]
                             try:
                                 # Attempt type conversion
-                                converted_value = param_def.type(value)
+                                converted_value = param_def.type(value)  # type: ignore[reportOptionalCall]
                                 validated_outputs[param_name] = converted_value
                             except (ValueError, TypeError) as e:
                                 raise NodeValidationError(
-                                    f"Output '{param_name}' must be of type {param_def.type.__name__}, "
+                                    f"Output '{param_name}' must be of type {param_def.type.__name__}, "  # type: ignore[reportOptionalMemberAccess]
                                     f"got {type(value).__name__}. Conversion failed: {e}"
                                 ) from e
                         else:
@@ -1512,7 +1549,7 @@ class Node(ABC):
                 "config": self.config,
                 "parameters": {
                     name: {
-                        "type": param.type.__name__,
+                        "type": param.type.__name__,  # type: ignore[reportOptionalMemberAccess]
                         "required": param.required,
                         "default": param.default,
                         "description": param.description,
@@ -2025,7 +2062,7 @@ class AsyncTypedNode(TypedNode):
             asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
         current_thread = threading.current_thread()
-        is_main_thread = isinstance(current_thread, threading._MainThread)
+        is_main_thread = isinstance(current_thread, threading._MainThread)  # type: ignore[reportAttributeAccessIssue]
 
         try:
             # Try to get current event loop

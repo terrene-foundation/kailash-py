@@ -98,9 +98,9 @@ workflow = WorkflowBuilder()
 workflow.add_node("TransformNode", "process", {"operation": "uppercase"})
 built = workflow.build()
 
-runtime = LocalRuntime()
-results, run_id = runtime.execute(built, parameters={"input": "hello"})
-print(results["process"])
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(built, parameters={"input": "hello"})
+    print(results["process"])
 ```
 
 No environment variables. No database. No queue. Works immediately after `pip install kailash`.

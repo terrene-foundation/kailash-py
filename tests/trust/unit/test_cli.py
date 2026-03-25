@@ -93,7 +93,7 @@ class TestVersionCommand:
         """'eatp version' must display the version number."""
         result = runner.invoke(main, ["version"])
         assert result.exit_code == 0
-        assert "2.0.0" in result.output
+        assert "2.1.0" in result.output
 
     def test_version_json_output(self, runner):
         """'eatp version --json' must output valid JSON."""
@@ -101,7 +101,7 @@ class TestVersionCommand:
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert "version" in data
-        assert data["version"] == "2.0.0"
+        assert data["version"] == "2.1.0"
 
 
 # ---------------------------------------------------------------------------

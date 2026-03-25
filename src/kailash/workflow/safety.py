@@ -4,6 +4,7 @@ import logging
 import threading
 import time
 from contextlib import contextmanager
+from typing import Any
 
 try:
     import psutil
@@ -104,7 +105,7 @@ class CycleSafetyManager:
 
         return violations
 
-    def get_cycle_status(self, cycle_id: str) -> dict[str, any] | None:
+    def get_cycle_status(self, cycle_id: str) -> dict[str, Any] | None:
         """Get status of a specific cycle.
 
         Args:
@@ -225,7 +226,11 @@ class CycleMonitor:
         current_time = time.time()
 
         # Check timeout
-        if self.timeout and (current_time - self.start_time) > self.timeout:
+        if (
+            self.timeout
+            and self.start_time is not None
+            and (current_time - self.start_time) > self.timeout
+        ):
             violation = f"Timeout exceeded: {current_time - self.start_time:.1f}s > {self.timeout}s"
             self.violations.append(violation)
             return True
@@ -234,7 +239,7 @@ class CycleMonitor:
         if self.memory_limit and psutil is not None:
             process = psutil.Process()
             current_memory = process.memory_info().rss / 1024 / 1024  # MB
-            memory_increase = current_memory - self.initial_memory
+            memory_increase = current_memory - (self.initial_memory or 0.0)
 
             if memory_increase > self.memory_limit:
                 violation = f"Memory limit exceeded: {memory_increase:.1f}MB > {self.memory_limit}MB"
@@ -261,7 +266,7 @@ class CycleMonitor:
         time_since_progress = time.time() - self.last_progress_time
         return time_since_progress > stall_threshold
 
-    def get_status(self) -> dict[str, any]:
+    def get_status(self) -> dict[str, Any]:
         """Get current monitor status.
 
         Returns:

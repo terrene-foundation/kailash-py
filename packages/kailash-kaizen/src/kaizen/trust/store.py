@@ -64,6 +64,7 @@ class PostgresTrustStore(TrustStore):
         database_url: Optional[str] = None,
         enable_cache: bool = True,
         cache_ttl_seconds: int = 300,  # 5 minutes default
+        runtime: Optional[AsyncLocalRuntime] = None,
     ):
         """
         Initialize PostgresTrustStore.
@@ -72,6 +73,7 @@ class PostgresTrustStore(TrustStore):
             database_url: PostgreSQL connection string (defaults to POSTGRES_URL env var)
             enable_cache: Enable caching for get operations (default: True)
             cache_ttl_seconds: Cache TTL in seconds (default: 300)
+            runtime: Optional shared AsyncLocalRuntime (avoids pool leak)
         """
         self.database_url = database_url or os.getenv("POSTGRES_URL")
         if not self.database_url:
@@ -120,7 +122,12 @@ class PostgresTrustStore(TrustStore):
         self._TrustChain = TrustChain
 
         # Runtime for executing workflows
-        self.runtime = AsyncLocalRuntime()
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = AsyncLocalRuntime()
+            self._owns_runtime = True
 
         # Track initialization state
         self._initialized = False
@@ -570,6 +577,21 @@ class PostgresTrustStore(TrustStore):
 
         Should be called when shutting down the application.
         """
-        # DataFlow handles connection cleanup automatically
-        # This method is a placeholder for explicit cleanup if needed
-        pass
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.runtime.release()
+                self.runtime = None
+            except Exception:
+                pass

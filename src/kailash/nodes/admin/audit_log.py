@@ -201,6 +201,7 @@ class EnterpriseAuditLogNode(Node):
     """
 
     def __init__(self, **config):
+        assert self._db_node is not None
         super().__init__(**config)
         self._db_node = None
 
@@ -318,11 +319,13 @@ class EnterpriseAuditLogNode(Node):
 
     def run(self, **inputs) -> Dict[str, Any]:
         """Execute audit logging operation."""
+        assert self._db_node is not None
         try:
             operation = AuditOperation(inputs["operation"])
 
             # Initialize dependencies
             self._init_dependencies(inputs)
+            assert self._db_node is not None
 
             # Route to appropriate operation
             if operation == AuditOperation.LOG_EVENT:
@@ -355,6 +358,7 @@ class EnterpriseAuditLogNode(Node):
 
     def _init_dependencies(self, inputs: Dict[str, Any]):
         """Initialize database dependencies."""
+        assert self._db_node is not None
         # Get database config
         db_config = inputs.get(
             "database_config",
@@ -373,6 +377,7 @@ class EnterpriseAuditLogNode(Node):
 
     def _log_event(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Log a single audit event."""
+        assert self._db_node is not None
         event_data = inputs["event_data"]
         tenant_id = inputs.get("tenant_id", "default")
 
@@ -488,6 +493,7 @@ class EnterpriseAuditLogNode(Node):
 
     def _query_logs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Query audit logs with advanced filtering."""
+        assert self._db_node is not None
         query_filters = inputs.get("query_filters", {})
         pagination = inputs.get(
             "pagination", {"page": 1, "size": 20, "sort": "timestamp"}
@@ -831,14 +837,15 @@ class EnterpriseAuditLogNode(Node):
 
         return {
             "success": True,
-            "filename": filename,
+            "filename": filename,  # type: ignore[reportPossiblyUnbound]
             "format": format_type,
             "record_count": len(logs),
-            "export_data": export_data,
+            "export_data": export_data,  # type: ignore[reportPossiblyUnbound]
         }
 
     def _archive_logs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Archive old audit logs for long-term storage."""
+        assert self._db_node is not None
         archive_days = inputs.get("archive_older_than_days", 90)
         archive_path = inputs.get("archive_path", "/archives/audit_logs")
         tenant_id = inputs.get("tenant_id")
@@ -893,7 +900,7 @@ class EnterpriseAuditLogNode(Node):
                 delete_query += " AND tenant_id = ?"
                 log_ids.append(tenant_id)
 
-            self._ensure_db_node(inputs)
+            self._ensure_db_node(inputs)  # type: ignore[reportAttributeAccessIssue]
             self._db_node.execute(query=delete_query, params=log_ids)
 
         return {
@@ -907,6 +914,7 @@ class EnterpriseAuditLogNode(Node):
 
     def _delete_logs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Delete old audit logs based on retention policy."""
+        assert self._db_node is not None
         retention_days = inputs.get("retention_days", 365)
         tenant_id = inputs.get("tenant_id")
         dry_run = inputs.get("dry_run", False)
@@ -925,7 +933,7 @@ class EnterpriseAuditLogNode(Node):
             count_query += " AND tenant_id = ?"
             params.append(tenant_id)
 
-        self._ensure_db_node(inputs)
+        self._ensure_db_node(inputs)  # type: ignore[reportAttributeAccessIssue]
         count_result = self._db_node.execute(query=count_query, params=params)
         total_to_delete = count_result.get("rows", [{}])[0].get("count", 0)
 
@@ -977,13 +985,14 @@ class EnterpriseAuditLogNode(Node):
 
     def _get_statistics(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Get audit log statistics and metrics."""
+        assert self._db_node is not None
         tenant_id = inputs.get("tenant_id")
         date_range = inputs.get("date_range", {})
         group_by = inputs.get(
             "group_by", ["event_type", "severity"]
         )  # What to group statistics by
 
-        self._ensure_db_node(inputs)
+        self._ensure_db_node(inputs)  # type: ignore[reportAttributeAccessIssue]
 
         # Build base WHERE clause
         where_conditions = []
@@ -1102,7 +1111,7 @@ class EnterpriseAuditLogNode(Node):
 
         tenant_id = inputs.get("tenant_id")
         event_types = inputs.get("event_types", [])  # Filter by specific event types
-        severity_filter = inputs.get("severity", AuditSeverity.INFO.value)
+        severity_filter = inputs.get("severity", AuditSeverity.INFO.value)  # type: ignore[reportAttributeAccessIssue]
         polling_interval = inputs.get("polling_interval", 5)  # seconds
         max_events = inputs.get("max_events", 100)
 

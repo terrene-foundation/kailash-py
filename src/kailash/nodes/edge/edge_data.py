@@ -152,7 +152,7 @@ class EdgeDataNode(EdgeNode):
         version = self._get_next_version(key)
 
         # Store locally first
-        edge_name = self.current_edge.name
+        edge_name = self.current_edge.name  # type: ignore[union-attr]
         if edge_name not in self._edge_data:
             self._edge_data[edge_name] = {}
             self._data_versions[edge_name] = {}
@@ -388,7 +388,7 @@ class EdgeDataNode(EdgeNode):
         all_edges = self.edge_discovery.get_all_edges()
 
         # Remove current edge
-        target_edges = [e for e in all_edges if e.name != self.current_edge.name]
+        target_edges = [e for e in all_edges if e.name != self.current_edge.name]  # type: ignore[reportOptionalMemberAccess]
 
         # Filter by compliance if needed
         if self.compliance_zones:
@@ -454,7 +454,7 @@ class EdgeDataNode(EdgeNode):
     ) -> bool:
         """Commit phase of 2PC replication."""
         # Actually replicate the data
-        data_entry = self._edge_data.get(self.current_edge.name, {}).get(key)
+        data_entry = self._edge_data.get(self.current_edge.name, {}).get(key)  # type: ignore[reportOptionalMemberAccess]
         if data_entry:
             return await self._replicate_to_edge(
                 edge.name, key, data_entry["data"], version
@@ -551,7 +551,7 @@ class EdgeDataNode(EdgeNode):
         """Resolve version conflict using configured strategy."""
         # For now, last write wins (highest version)
         if not versions:
-            return (None, 0)
+            return (None, 0)  # type: ignore[reportReturnType]
 
         winner_edge = max(versions.items(), key=lambda x: x[1])
         return winner_edge

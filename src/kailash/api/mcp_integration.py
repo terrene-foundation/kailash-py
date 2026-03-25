@@ -75,7 +75,7 @@ class MCPIntegration:
     """
 
     def __init__(
-        self, name: str, description: str = "", capabilities: list[str] = None
+        self, name: str, description: str = "", capabilities: list[str] | None = None
     ):
         """Initialize MCP integration.
 
@@ -96,7 +96,7 @@ class MCPIntegration:
         name: str,
         function: Callable | Callable[..., asyncio.Future],
         description: str = "",
-        parameters: dict[str, Any] = None,
+        parameters: dict[str, Any] | None = None,
     ):
         """Add a tool to the MCP server.
 
@@ -154,8 +154,10 @@ class MCPIntegration:
 
         if tool.async_function:
             sig = inspect.signature(tool.async_function)
-        else:
+        elif tool.function:
             sig = inspect.signature(tool.function)
+        else:
+            raise ValueError(f"Tool '{tool_name}' has no function or async_function")
 
         if "_context" in sig.parameters:
             params = {**parameters, "_context": self._context}
@@ -299,7 +301,10 @@ class MCPToolNode(AsyncNode):
     """
 
     def __init__(
-        self, mcp_server: str, tool_name: str, parameter_mapping: dict[str, str] = None
+        self,
+        mcp_server: str,
+        tool_name: str,
+        parameter_mapping: dict[str, str] | None = None,
     ):
         """Initialize MCP tool node.
 

@@ -214,7 +214,7 @@ class BulkCreateNode(AsyncSQLDatabaseNode, BulkOperationMixin):
         self.table_name = table_name
 
         # Get adapter
-        adapter = await self._get_adapter()
+        adapter = await self._get_adapter()  # type: ignore[reportAttributeAccessIssue]
 
         # Determine database type for optimization
         db_type = DatabaseType(self.config.get("database_type", "postgresql").lower())
@@ -445,7 +445,7 @@ class BulkUpdateNode(AsyncSQLDatabaseNode, BulkOperationMixin):
             raise NodeValidationError("No update values provided")
 
         # Get adapter
-        adapter = await self._get_adapter()
+        adapter = await self._get_adapter()  # type: ignore[reportAttributeAccessIssue]
 
         result = BulkOperationResult(
             total_records=0, successful_records=0, failed_records=0
@@ -604,7 +604,7 @@ class BulkDeleteNode(AsyncSQLDatabaseNode, BulkOperationMixin):
             )
 
         # Get adapter
-        adapter = await self._get_adapter()
+        adapter = await self._get_adapter()  # type: ignore[reportAttributeAccessIssue]
 
         result = BulkOperationResult(
             total_records=0, successful_records=0, failed_records=0
@@ -762,7 +762,7 @@ class BulkUpsertNode(AsyncSQLDatabaseNode, BulkOperationMixin):
                 ]
 
         # Get adapter and database type
-        adapter = await self._get_adapter()
+        adapter = await self._get_adapter()  # type: ignore[reportAttributeAccessIssue]
         db_type = DatabaseType(self.config["database_type"].lower())
 
         result = BulkOperationResult(

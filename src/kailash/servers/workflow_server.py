@@ -105,7 +105,7 @@ class WorkflowServer:
         description: str = "Multi-workflow hosting server",
         version: str = "1.0.0",
         max_workers: int = 10,
-        cors_origins: list[str] = None,
+        cors_origins: list[str] | None = None,
         runtime: Any = None,
         **kwargs,
     ):
@@ -431,8 +431,8 @@ class WorkflowServer:
         self,
         name: str,
         workflow: Workflow,
-        description: str = None,
-        tags: list[str] = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
     ):
         """Register a workflow with the server.
 
@@ -491,8 +491,8 @@ class WorkflowServer:
         name: str,
         proxy_url: str,
         health_check: str = "/health",
-        description: str = None,
-        tags: list[str] = None,
+        description: str | None = None,
+        tags: list[str] | None = None,
     ):
         """Register a proxied workflow running on another server.
 

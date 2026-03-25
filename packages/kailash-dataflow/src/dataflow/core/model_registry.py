@@ -29,30 +29,47 @@ class ModelRegistry:
     # Extend existing migration tables rather than creating new ones
     # This prevents conflicts and leverages proven infrastructure
 
-    def __init__(self, dataflow_instance, migration_system=None):
+    def __init__(self, dataflow_instance, runtime=None, migration_system=None):
         """
         Initialize model registry with DataFlow instance.
 
-        Automatically detects async context and uses appropriate runtime
-        to prevent deadlocks in FastAPI, pytest async, and other async environments.
+        Args:
+            dataflow_instance: The DataFlow instance this registry belongs to.
+            runtime: Optional shared runtime. If provided, the registry acquires
+                a reference (ref-count increment) and uses it for all workflow
+                executions. If None, creates its own runtime with async-context
+                detection to prevent deadlocks.
+            migration_system: Optional migration system for transactional operations.
         """
         self.dataflow = dataflow_instance
 
-        # ✅ FIX: Detect async context and use appropriate runtime
-        # This prevents deadlocks when DataFlow is used in FastAPI, pytest async, etc.
-        try:
-            asyncio.get_running_loop()
-            # Running in async context - use AsyncLocalRuntime
-            self.runtime = AsyncLocalRuntime()
-            self._is_async = True
+        if runtime is not None:
+            # Shared runtime provided — acquire a reference so the caller's
+            # close() won't tear down the loop while we still need it.
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
-                "ModelRegistry: Detected async context, using AsyncLocalRuntime"
+                "ModelRegistry: Using injected runtime (ref_count=%d)",
+                runtime.ref_count,
             )
-        except RuntimeError:
-            # No event loop - use sync LocalRuntime
-            self.runtime = LocalRuntime()
-            self._is_async = False
-            logger.debug("ModelRegistry: Detected sync context, using LocalRuntime")
+        else:
+            # No runtime provided — create our own (backward-compatible path).
+            # Detect async context to prevent deadlocks in FastAPI / pytest-async.
+            try:
+                asyncio.get_running_loop()
+                self.runtime = AsyncLocalRuntime()
+                self._is_async = True
+                logger.debug(
+                    "ModelRegistry: Detected async context, using AsyncLocalRuntime"
+                )
+            except RuntimeError:
+                self.runtime = LocalRuntime()
+                self._is_async = False
+                logger.debug(
+                    "ModelRegistry: Detected sync context, using LocalRuntime"
+                )
+            self._owns_runtime = True
 
         self.migration_system = migration_system
         self._initialized = False
@@ -220,11 +237,9 @@ class ModelRegistry:
                     },
                 )
 
-                # ✅ FIX: Use synchronous SQLDatabaseNode with LocalRuntime for DDL operations
-                # SQLDatabaseNode is synchronous and works in all contexts (sync/async/pytest)
+                # Use shared runtime for DDL operations
                 try:
-                    init_runtime = LocalRuntime()
-                    results, _ = init_runtime.execute(workflow.build())
+                    results, _ = self.runtime.execute(workflow.build())
                     if f"create_registry_table_{i}" not in results or results[
                         f"create_registry_table_{i}"
                     ].get("error"):
@@ -607,9 +622,7 @@ class ModelRegistry:
                     },
                 )
 
-            # ✅ FIX: Use LocalRuntime for registry operations to avoid async context issues
-            init_runtime = LocalRuntime()
-            results, _ = init_runtime.execute(workflow.build())
+            results, _ = self.runtime.execute(workflow.build())
 
             if results.get("register_model", {}).get("error"):
                 logger.error(
@@ -685,9 +698,7 @@ class ModelRegistry:
             },
         )
 
-        # ✅ FIX: Use LocalRuntime for registry operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
 
         models = {}
         data = self._extract_query_data(results, "discover")
@@ -760,9 +771,7 @@ class ModelRegistry:
             },
         )
 
-        # ✅ FIX: Use LocalRuntime for registry operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
 
         data = self._extract_query_data(results, "get_version")
         if data and len(data) > 0:
@@ -806,9 +815,7 @@ class ModelRegistry:
             },
         )
 
-        # ✅ FIX: Use LocalRuntime for registry operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
 
         history = []
         data = self._extract_query_data(results, "get_history")
@@ -890,9 +897,7 @@ class ModelRegistry:
             },
         )
 
-        # ✅ FIX: Use LocalRuntime for registry operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
 
         data = self._extract_query_data(results, "check_checksum")
         if data and len(data) > 0:
@@ -1151,9 +1156,7 @@ class ModelRegistry:
             },
         )
 
-        # ✅ FIX: Use LocalRuntime for registry operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
 
         data = self._extract_query_data(results, "get_models")
         if data:
@@ -1205,9 +1208,7 @@ class ModelRegistry:
             },
         )
 
-        # ✅ FIX: Use LocalRuntime for registry operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
 
         checksums = {}
         data = self._extract_query_data(results, "get_checksums")
@@ -1250,9 +1251,7 @@ class ModelRegistry:
             },
         )
 
-        # ✅ FIX: Use LocalRuntime for registry operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
 
         data = self._extract_query_data(results, "get_model")
         if data and len(data) > 0:
@@ -1291,9 +1290,7 @@ class ModelRegistry:
             },
         )
 
-        # ✅ FIX: Use LocalRuntime for registry operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
         data = self._extract_query_data(results, "list_apps")
 
         if data:
@@ -1340,9 +1337,7 @@ class ModelRegistry:
             },
         )
 
-        # ✅ FIX: Use LocalRuntime for registry operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
         data = self._extract_query_data(results, "get_by_app")
 
         models = []
@@ -1401,9 +1396,7 @@ class ModelRegistry:
             },
         )
 
-        # ✅ FIX: Use LocalRuntime for registry operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
         data = self._extract_query_data(results, "get_by_checksum")
 
         if data and len(data) > 0:
@@ -1456,9 +1449,7 @@ class ModelRegistry:
             },
         )
 
-        # ✅ FIX: Use LocalRuntime for registry operations to avoid async context issues
-        init_runtime = LocalRuntime()
-        results, _ = init_runtime.execute(workflow.build())
+        results, _ = self.runtime.execute(workflow.build())
 
         if results.get("cleanup", {}).get("error"):
             logger.error(
@@ -1480,3 +1471,31 @@ class ModelRegistry:
         else:
             # No transaction support, just yield
             yield
+
+    def close(self):
+        """Release the runtime reference.
+
+        Safe to call multiple times — subsequent calls are no-ops.
+        If this registry created its own runtime (_owns_runtime=True),
+        close() decrements its ref-count which triggers cleanup when it
+        reaches zero. If using a shared runtime, close() merely releases
+        one reference so the owner can still use it.
+        """
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        """Emit ResourceWarning if close() was not called explicitly."""
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass

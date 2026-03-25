@@ -112,7 +112,7 @@ class Content:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary format."""
-        result = {
+        result: Dict[str, Any] = {
             "type": self.type.value,
         }
 
@@ -400,6 +400,7 @@ class StructuredTool:
 
             # Progress reporting setup
             progress_token = None
+            protocol = None
             if self.progress_reporting:
                 protocol = get_protocol_manager()
                 progress_token = protocol.progress.start_progress(func.__name__)
@@ -420,7 +421,7 @@ class StructuredTool:
                         )
 
                 # Complete progress
-                if progress_token:
+                if progress_token and protocol is not None:
                     await protocol.progress.complete_progress(
                         progress_token, "completed"
                     )
@@ -429,7 +430,7 @@ class StructuredTool:
 
             except Exception as e:
                 # Error handling
-                if progress_token:
+                if progress_token and protocol is not None:
                     await protocol.progress.complete_progress(
                         progress_token, f"failed: {str(e)}"
                     )

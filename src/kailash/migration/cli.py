@@ -82,6 +82,7 @@ def cmd_migrate(args):
     print(f"Estimated duration: {plan.estimated_duration_minutes} minutes")
     print(f"Risk level: {plan.risk_level}")
 
+    result = None
     if not args.plan_only:
         print("\n🔄 Executing migration...")
         result = assistant.execute_migration(plan)

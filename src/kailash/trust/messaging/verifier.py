@@ -212,7 +212,9 @@ class MessageVerifier:
         signature_valid = await self._verify_signature(envelope, errors, warnings)
 
         # Step 2: Verify trust chain
-        trust_valid, sender_verified = await self._verify_trust(envelope, errors, warnings)
+        trust_valid, sender_verified = await self._verify_trust(
+            envelope, errors, warnings
+        )
 
         # Step 3: Verify message freshness
         not_expired = self._verify_freshness(envelope, errors, warnings)
@@ -221,7 +223,13 @@ class MessageVerifier:
         not_replayed = await self._verify_replay(envelope, errors, warnings)
 
         # Aggregate result
-        valid = signature_valid and trust_valid and not_expired and not_replayed and sender_verified
+        valid = (
+            signature_valid
+            and trust_valid
+            and not_expired
+            and not_replayed
+            and sender_verified
+        )
 
         result = MessageVerificationResult(
             valid=valid,
@@ -261,18 +269,25 @@ class MessageVerifier:
             chain = await self._trust_ops.get_chain(envelope.sender_agent_id)
 
             if not chain:
-                logger.warning(f"Cannot verify capability for {envelope.sender_agent_id}: no trust chain")
+                logger.warning(
+                    f"Cannot verify capability for {envelope.sender_agent_id}: no trust chain"
+                )
                 return False
 
             # Check capability attestations
-            for attestation in chain.capability_attestations:
+            for attestation in chain.capabilities:
                 if attestation.capability == required_capability:
                     # Check if not expired
-                    if attestation.expires_at and attestation.expires_at < datetime.now(timezone.utc):
+                    if (
+                        attestation.expires_at
+                        and attestation.expires_at < datetime.now(timezone.utc)
+                    ):
                         continue
                     return True
 
-            logger.debug(f"Sender {envelope.sender_agent_id} does not have capability {required_capability}")
+            logger.debug(
+                f"Sender {envelope.sender_agent_id} does not have capability {required_capability}"
+            )
             return False
 
         except Exception as e:
@@ -326,11 +341,18 @@ class MessageVerifier:
             signing_payload = envelope.get_signing_payload()
 
             # Verify signature (verify_signature handles base64 decoding internally)
-            is_valid = verify_signature(signing_payload, envelope.signature, public_key)
+            import base64
+
+            public_key_b64 = base64.b64encode(public_key).decode("ascii")
+            is_valid = verify_signature(
+                signing_payload, envelope.signature, public_key_b64
+            )
 
             if not is_valid:
                 errors.append("Invalid signature")
-                logger.warning(f"Invalid signature for message {envelope.message_id} from {envelope.sender_agent_id}")
+                logger.warning(
+                    f"Invalid signature for message {envelope.message_id} from {envelope.sender_agent_id}"
+                )
 
             return is_valid
 
@@ -378,9 +400,11 @@ class MessageVerifier:
                 return False, False
 
             # Verify chain hash matches
-            current_hash = chain.compute_hash()
+            current_hash = chain.hash()
             if current_hash != envelope.trust_chain_hash:
-                warnings.append("Trust chain hash mismatch - chain may have been updated")
+                warnings.append(
+                    "Trust chain hash mismatch - chain may have been updated"
+                )
                 # This is a warning, not an error - chain can be updated
 
             # Verify sender matches chain identity
@@ -481,8 +505,8 @@ class MessageVerifier:
         # Fall back to trust chain
         try:
             chain = await self._trust_ops.get_chain(agent_id)
-            if chain and chain.genesis.public_key:
-                return bytes.fromhex(chain.genesis.public_key)
+            if chain and chain.genesis.metadata.get("public_key"):
+                return bytes.fromhex(chain.genesis.metadata["public_key"])
         except Exception as e:
             logger.debug(f"Could not get public key from trust chain: {e}")
 

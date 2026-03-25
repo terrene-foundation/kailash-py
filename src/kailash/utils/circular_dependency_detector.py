@@ -11,13 +11,13 @@ import os
 import sys
 from collections import defaultdict, deque
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 class CircularDependencyDetector:
     """Detects circular dependencies in Python modules."""
 
-    def __init__(self, root_path: str):
+    def __init__(self, root_path: str | Path):
         """Initialize the detector with the root path of the codebase."""
         self.root_path = Path(root_path)
         self.import_graph: Dict[str, Set[str]] = defaultdict(set)
@@ -138,7 +138,7 @@ class CircularDependencyDetector:
 
         return unique_cycles
 
-    def check_lazy_loading_safety(self, module_path: str) -> Dict[str, any]:
+    def check_lazy_loading_safety(self, module_path: str) -> Dict[str, Any]:
         """Check if lazy loading is safe for a given module."""
         result = {
             "module": module_path,

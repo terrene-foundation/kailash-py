@@ -275,7 +275,7 @@ class SignalWaitNode(Node):
             finally:
                 loop.close()
 
-    def get_output_schema(self) -> dict[str, Any] | None:
+    def get_output_schema(self) -> dict[str, Any] | None:  # type: ignore[reportIncompatibleMethodOverride]
         """Define output schema for signal wait node."""
         return {
             "type": "object",

@@ -243,6 +243,7 @@ class EnterpriseSecurityEventNode(Node):
     """
 
     def __init__(self, **config):
+        assert self._db_node is not None
         super().__init__(**config)
         self._db_node = None
         self._audit_node = None
@@ -358,11 +359,13 @@ class EnterpriseSecurityEventNode(Node):
 
     def run(self, **inputs) -> Dict[str, Any]:
         """Execute security operation."""
+        assert self._db_node is not None
         try:
             operation = SecurityOperation(inputs["operation"])
 
             # Initialize dependencies
             self._init_dependencies(inputs)
+            assert self._db_node is not None
 
             # Route to appropriate operation
             if operation == SecurityOperation.CREATE_EVENT:
@@ -399,6 +402,7 @@ class EnterpriseSecurityEventNode(Node):
 
     def _init_dependencies(self, inputs: Dict[str, Any]):
         """Initialize database and audit dependencies."""
+        assert self._db_node is not None
         # Get database config
         db_config = inputs.get(
             "database_config",
@@ -420,6 +424,8 @@ class EnterpriseSecurityEventNode(Node):
 
     def _create_event(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new security event with risk scoring."""
+        assert self._db_node is not None
+        assert self._audit_node is not None
         event_data = inputs["event_data"]
         tenant_id = inputs.get("tenant_id", "default")
 
@@ -526,6 +532,7 @@ class EnterpriseSecurityEventNode(Node):
 
     def _analyze_threats(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze security threats in a time window."""
+        assert self._db_node is not None
         analysis_config = inputs.get("analysis_config", {})
         tenant_id = inputs.get("tenant_id", "default")
         time_window = analysis_config.get("time_window", 3600)  # 1 hour default
@@ -574,6 +581,7 @@ class EnterpriseSecurityEventNode(Node):
 
     def _monitor_user_behavior(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Monitor user behavior for anomalies."""
+        assert self._db_node is not None
         user_id = inputs["user_id"]
         analysis_config = inputs.get("analysis_config", {})
         tenant_id = inputs.get("tenant_id", "default")
@@ -624,7 +632,7 @@ class EnterpriseSecurityEventNode(Node):
     def _calculate_event_risk_score(self, event_data: Dict[str, Any]) -> float:
         """Calculate risk score for a security event."""
         base_scores = {
-            SecurityEventType.CRITICAL.value: 9.0,
+            SecurityEventType.CRITICAL.value: 9.0,  # type: ignore[reportAttributeAccessIssue]
             SecurityEventType.SYSTEM_COMPROMISE.value: 9.5,
             SecurityEventType.DATA_EXFILTRATION.value: 9.0,
             SecurityEventType.ACCOUNT_TAKEOVER.value: 8.5,
@@ -778,6 +786,7 @@ class EnterpriseSecurityEventNode(Node):
 
     def _auto_create_incident(self, security_event: SecurityEvent) -> str:
         """Automatically create an incident for high-risk security events."""
+        assert self._db_node is not None
         incident_id = self._generate_event_id()
         now = datetime.now(UTC)
 
@@ -841,6 +850,7 @@ class EnterpriseSecurityEventNode(Node):
 
     def _detect_anomalies(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Detect anomalies using ML-based analysis."""
+        assert self._db_node is not None
         analysis_config = inputs.get("analysis_config", {})
         tenant_id = inputs.get("tenant_id", "default")
         user_id = inputs.get("user_id")
@@ -891,6 +901,7 @@ class EnterpriseSecurityEventNode(Node):
 
     def _generate_alerts(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Generate security alerts based on events."""
+        assert self._db_node is not None
         analysis_config = inputs.get("analysis_config", {})
         tenant_id = inputs.get("tenant_id", "default")
         risk_threshold = analysis_config.get("risk_threshold", 7.0)
@@ -952,6 +963,7 @@ class EnterpriseSecurityEventNode(Node):
 
     def _get_incidents(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Get security incidents with filtering."""
+        assert self._db_node is not None
         tenant_id = inputs.get("tenant_id", "default")
         filters = inputs.get("filters", {})
         pagination = inputs.get("pagination", {"page": 1, "size": 20})
@@ -1010,6 +1022,7 @@ class EnterpriseSecurityEventNode(Node):
 
     def _create_incident(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Create security incident manually."""
+        assert self._db_node is not None
         incident_data = inputs["incident_data"]
         tenant_id = inputs.get("tenant_id", "default")
 
@@ -1083,6 +1096,7 @@ class EnterpriseSecurityEventNode(Node):
 
     def _update_incident(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Update security incident status and details."""
+        assert self._db_node is not None
         incident_id = inputs["incident_id"]
         incident_data = inputs["incident_data"]
         tenant_id = inputs.get("tenant_id", "default")
@@ -1181,6 +1195,7 @@ class EnterpriseSecurityEventNode(Node):
 
     def _calculate_risk_score(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate comprehensive risk score for entity."""
+        assert self._db_node is not None
         entity_type = inputs.get("entity_type", "user")  # user, ip, domain
         entity_id = inputs["entity_id"]
         analysis_config = inputs.get("analysis_config", {})
@@ -1314,6 +1329,7 @@ class EnterpriseSecurityEventNode(Node):
 
     def _forensic_analysis(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Perform forensic analysis on security events."""
+        assert self._db_node is not None
         analysis_config = inputs.get("analysis_config", {})
         event_ids = inputs.get("event_ids", [])
         incident_id = inputs.get("incident_id")

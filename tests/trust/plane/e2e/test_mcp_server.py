@@ -8,6 +8,9 @@ import threading
 
 import pytest
 
+# MCP server tests require the 'mcp' package
+pytest.importorskip("mcp")
+
 import kailash.trust.plane.mcp_server as mcp_mod
 from kailash.trust.plane.models import ConstraintEnvelope, OperationalConstraints
 from kailash.trust.plane.project import TrustProject

@@ -306,9 +306,12 @@ class SecurityScannerNode(Node):
                     with context.wrap_socket(sock, server_hostname=hostname) as ssock:
                         cert = ssock.getpeercert()
 
+                        if cert is None:
+                            return findings
+
                         # Check certificate expiration
                         not_after = datetime.strptime(
-                            cert["notAfter"], "%b %d %H:%M:%S %Y %Z"
+                            str(cert["notAfter"]), "%b %d %H:%M:%S %Y %Z"
                         )
                         days_until_expiry = (not_after - datetime.now()).days
 

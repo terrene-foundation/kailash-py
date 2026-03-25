@@ -823,10 +823,10 @@ Built-in Performance Tracking
 
     # Performance metrics are collected automatically
     task_manager = TaskManager()
-    runtime = LocalRuntime()
 
-    # Execute workflow with tracking
-    results, run_id = runtime.execute(workflow, task_manager=task_manager)
+    with LocalRuntime() as runtime:
+        # Execute workflow with tracking
+        results, run_id = runtime.execute(workflow, task_manager=task_manager)
 
     # Generate performance visualizations
     perf_viz = PerformanceVisualizer(task_manager)

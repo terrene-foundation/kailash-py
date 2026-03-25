@@ -11,7 +11,7 @@ import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, AsyncGenerator, Dict, List, Optional, Set, Union
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Set, Union
 from urllib.parse import parse_qs
 
 from fastapi import Request, Response, WebSocket, WebSocketDisconnect
@@ -42,9 +42,9 @@ class ConnectionManager:
         self,
         websocket: WebSocket,
         connection_id: str,
-        session_id: str = None,
-        user_id: str = None,
-        event_filter: EventFilter = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        event_filter: Optional[EventFilter] = None,
     ):
         """Accept and register a WebSocket connection."""
         await websocket.accept()
@@ -143,7 +143,7 @@ class ConnectionManager:
         return sent_count
 
     async def broadcast(
-        self, message: Dict[str, Any], event_filter: EventFilter = None
+        self, message: Dict[str, Any], event_filter: Optional[EventFilter] = None
     ):
         """Broadcast message to all matching connections."""
         sent_count = 0
@@ -179,7 +179,7 @@ class ConnectionManager:
         }
 
     def filter_events(
-        self, events: List[BaseEvent], event_filter: EventFilter = None
+        self, events: List[BaseEvent], event_filter: Optional[EventFilter] = None
     ) -> List[BaseEvent]:
         """Filter events based on event filter criteria."""
         if not event_filter:
@@ -198,10 +198,7 @@ class ConnectionManager:
                     continue
 
             # Apply event type filter
-            if (
-                event_filter.event_types
-                and event.event_type not in event_filter.event_types
-            ):
+            if event_filter.event_types and event.type not in event_filter.event_types:
                 continue
 
             filtered.append(event)
@@ -221,7 +218,7 @@ class ConnectionManager:
 
     # Alias methods for compatibility
     def event_filter(
-        self, events: List[BaseEvent], filter_criteria: EventFilter = None
+        self, events: List[BaseEvent], filter_criteria: Optional[EventFilter] = None
     ) -> List[BaseEvent]:
         """Alias for filter_events method."""
         return self.filter_events(events, filter_criteria)
@@ -239,11 +236,9 @@ class ConnectionManager:
         message = {
             "type": "event",
             "event_type": (
-                event.event_type.value
-                if hasattr(event.event_type, "value")
-                else str(event.event_type)
+                event.type.value if hasattr(event.type, "value") else str(event.type)
             ),
-            "data": event.data,
+            "data": getattr(event, "data", {}),
             "timestamp": (
                 event.timestamp.isoformat()
                 if hasattr(event, "timestamp")
@@ -276,7 +271,7 @@ class ConnectionManager:
 
                 # Apply event type filter
                 if hasattr(event_filter, "event_types") and event_filter.event_types:
-                    if event.event_type not in event_filter.event_types:
+                    if event.type not in event_filter.event_types:
                         should_send = False
 
             if should_send:
@@ -295,9 +290,9 @@ class SSEManager:
     def create_stream(
         self,
         stream_id: str,
-        session_id: str = None,
-        user_id: str = None,
-        event_filter: EventFilter = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        event_filter: Optional[EventFilter] = None,
     ) -> AsyncGenerator[str, None]:
         """Create a new SSE stream."""
 
@@ -408,9 +403,9 @@ class WebhookManager:
         self,
         webhook_id: str,
         url: str,
-        secret: str = None,
-        event_filter: EventFilter = None,
-        headers: Dict[str, str] = None,
+        secret: Optional[str] = None,
+        event_filter: Optional[EventFilter] = None,
+        headers: Optional[Dict[str, str]] = None,
     ):
         """Register a webhook endpoint."""
         self.webhooks[webhook_id] = {
@@ -589,7 +584,7 @@ class RealtimeMiddleware:
     async def _subscribe_to_events(self):
         """Subscribe to and process events from agent UI."""
 
-        async def event_handler(event: BaseEvent):
+        async def event_handler(event: "Union[BaseEvent, Any]") -> None:
             start_time = time.time()
 
             try:
@@ -636,9 +631,9 @@ class RealtimeMiddleware:
     async def handle_websocket(
         self,
         websocket: WebSocket,
-        session_id: str = None,
-        user_id: str = None,
-        event_types: List[str] = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        event_types: Optional[List[str]] = None,
     ):
         """Handle WebSocket connection lifecycle."""
         if not self.enable_websockets:
@@ -653,6 +648,10 @@ class RealtimeMiddleware:
             session_id=session_id,
             user_id=user_id,
         )
+
+        if not self.connection_manager:
+            await websocket.close(code=1000)
+            return
 
         try:
             await self.connection_manager.connect(
@@ -683,6 +682,9 @@ class RealtimeMiddleware:
         self, connection_id: str, message: Dict[str, Any]
     ):
         """Handle incoming WebSocket messages."""
+        if not self.connection_manager:
+            return
+
         message_type = message.get("type")
 
         if message_type == "ping":
@@ -696,8 +698,8 @@ class RealtimeMiddleware:
 
         elif message_type == "execute_workflow":
             # Handle workflow execution request
-            session_id = message.get("session_id")
-            workflow_id = message.get("workflow_id")
+            session_id = message.get("session_id", "")
+            workflow_id = message.get("workflow_id", "")
             inputs = message.get("inputs", {})
 
             try:
@@ -722,10 +724,10 @@ class RealtimeMiddleware:
     def create_sse_stream(
         self,
         request: Request,
-        session_id: str = None,
-        user_id: str = None,
-        event_types: List[str] = None,
-    ) -> StreamingResponse:
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        event_types: Optional[List[str]] = None,
+    ) -> Union[StreamingResponse, Response]:
         """Create Server-Sent Events stream."""
         if not self.enable_sse:
             return Response("SSE not enabled", status_code=501)
@@ -738,6 +740,9 @@ class RealtimeMiddleware:
             session_id=session_id,
             user_id=user_id,
         )
+
+        if not self.sse_manager:
+            return Response("SSE not available", status_code=501)
 
         generator = self.sse_manager.create_stream(
             stream_id, session_id, user_id, event_filter
@@ -758,13 +763,13 @@ class RealtimeMiddleware:
         self,
         webhook_id: str,
         url: str,
-        secret: str = None,
-        event_types: List[str] = None,
-        session_id: str = None,
-        headers: Dict[str, str] = None,
+        secret: Optional[str] = None,
+        event_types: Optional[List[str]] = None,
+        session_id: Optional[str] = None,
+        headers: Optional[Dict[str, str]] = None,
     ):
         """Register webhook endpoint."""
-        if not self.enable_webhooks:
+        if not self.enable_webhooks or not self.webhook_manager:
             raise ValueError("Webhooks not enabled")
 
         event_filter = EventFilter(

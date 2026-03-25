@@ -146,7 +146,7 @@ Use MCP tools with an LLM agent:
 
    async def main():
        # Create runtime and agent
-       runtime = LocalRuntime()
+       runtime = LocalRuntime()  # Don't forget to call runtime.close() when done
 
        # Create agent with MCP integration
        model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")

@@ -407,6 +407,10 @@ class ResourceMonitor:
     """Monitors system resources for constraint enforcement."""
 
     def __init__(self):
+        if psutil is None:
+            raise ImportError(
+                "psutil is required for ResourceMonitor. Install with: pip install kailash[monitoring]"
+            )
         self.process = psutil.Process()
         self.last_check_time = datetime.min
         self.check_interval = timedelta(seconds=10)
@@ -423,7 +427,8 @@ class ResourceMonitor:
         ):
             return self.cached_constraints
 
-        # Get system memory
+        # Get system memory (psutil validated in __init__)
+        assert psutil is not None
         memory = psutil.virtual_memory()
         available_memory_mb = memory.available / (1024 * 1024)
 

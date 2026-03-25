@@ -155,6 +155,7 @@ class VaultKeyManager:
             latest_version = str(max(int(k) for k in keys))
             pub_key_pem = keys[latest_version]["public_key"]
             self._public_key_cache = pub_key_pem.encode("utf-8")
+        assert self._public_key_cache is not None
         return self._public_key_cache
 
     def key_id(self) -> str:

@@ -192,7 +192,7 @@ class ProgressNotification:
         status: Optional[str] = None,
     ) -> "ProgressNotification":
         """Create progress notification."""
-        params = {"progressToken": progress_token}
+        params: Dict[str, Any] = {"progressToken": progress_token}
 
         if progress is not None:
             params["progress"] = progress
@@ -256,7 +256,7 @@ class CompletionResult:
         cls, values: List[str], total: Optional[int] = None
     ) -> "CompletionResult":
         """Create completion result."""
-        completion = {"values": values}
+        completion: Dict[str, Any] = {"values": values}
         if total is not None:
             completion["total"] = total
         return cls(completion=completion)
@@ -282,7 +282,7 @@ class SamplingRequest:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> "SamplingRequest":
         """Create sampling request."""
-        params = {"messages": messages}
+        params: Dict[str, Any] = {"messages": messages}
 
         if model_preferences:
             params["modelPreferences"] = model_preferences
@@ -370,7 +370,7 @@ class ToolResult:
         cls, uri: str, text: Optional[str] = None, mime_type: Optional[str] = None
     ) -> "ToolResult":
         """Create resource result."""
-        content = {"type": "resource", "resource": {"uri": uri}}
+        content: Dict[str, Any] = {"type": "resource", "resource": {"uri": uri}}
         if text:
             content["resource"]["text"] = text
         if mime_type:
@@ -379,7 +379,7 @@ class ToolResult:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
-        result = {"content": self.content}
+        result: Dict[str, Any] = {"content": self.content}
         if self.is_error:
             result["isError"] = self.is_error
         return result
@@ -472,7 +472,7 @@ class ProgressManager:
 
         # Create notification
         notification = ProgressNotification.create(
-            progress_token=progress_token.value,
+            progress_token=progress_token.value,  # type: ignore[arg-type]
             progress=progress_info["current"],
             total=progress_info.get("total"),
             status=progress_info["status"],
@@ -684,8 +684,8 @@ class CompletionManager:
 
     async def get_completions(
         self,
-        completion_type: str = None,
-        ref_type: str = None,
+        completion_type: Optional[str] = None,
+        ref_type: Optional[str] = None,
         ref_name: Optional[str] = None,
         partial: Optional[str] = None,
         prefix: Optional[str] = None,
@@ -720,7 +720,7 @@ class CompletionManager:
             return resources
 
         # Use registered provider if available
-        provider = self._completion_providers.get(type_to_use)
+        provider = self._completion_providers.get(type_to_use)  # type: ignore[reportArgumentType]
         if not provider:
             return []
 
@@ -1060,7 +1060,7 @@ class ProtocolManager:
         params = request.get("params", {})
         request_id = request.get("id")
 
-        handler = self._get_handler(method)
+        handler = self._get_handler(method)  # type: ignore[arg-type]
         if not handler:
             raise MCPError(
                 f"Method not found: {method}", error_code=MCPErrorCode.METHOD_NOT_FOUND

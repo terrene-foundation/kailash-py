@@ -604,38 +604,38 @@ class CycleLinter:
                     if not node:
                         continue
 
-                # Check if node supports cycle context
-                if hasattr(node, "run"):
-                    # Check if node accesses cycle context safely
-                    if self._uses_unsafe_cycle_access(node):
-                        self.issues.append(
-                            ValidationIssue(
-                                severity=IssueSeverity.ERROR,
-                                category="node_compatibility",
-                                code="CYC012",
-                                message=f"Node '{node_id}' uses unsafe cycle context access",
-                                node_id=node_id,
-                                cycle_id=cycle_id,
-                                suggestion="Use context.get('cycle', {}) instead of direct access",
-                                documentation_link=".claude/skills/06-cheatsheets/cycle-debugging.md",
+                    # Check if node supports cycle context
+                    if hasattr(node, "run"):
+                        # Check if node accesses cycle context safely
+                        if self._uses_unsafe_cycle_access(node):
+                            self.issues.append(
+                                ValidationIssue(
+                                    severity=IssueSeverity.ERROR,
+                                    category="node_compatibility",
+                                    code="CYC012",
+                                    message=f"Node '{node_id}' uses unsafe cycle context access",
+                                    node_id=node_id,
+                                    cycle_id=cycle_id,
+                                    suggestion="Use context.get('cycle', {}) instead of direct access",
+                                    documentation_link=".claude/skills/06-cheatsheets/cycle-debugging.md",
+                                )
                             )
-                        )
 
-                # Check for PythonCodeNode parameter access
-                if hasattr(node, "code") and node.code:
-                    if self._has_unsafe_parameter_access(node.code):
-                        self.issues.append(
-                            ValidationIssue(
-                                severity=IssueSeverity.WARNING,
-                                category="node_compatibility",
-                                code="CYC013",
-                                message=f"PythonCodeNode '{node_id}' may have unsafe parameter access",
-                                node_id=node_id,
-                                cycle_id=cycle_id,
-                                suggestion="Use try/except pattern for cycle parameter access",
-                                documentation_link=".claude/skills/06-cheatsheets/common-mistakes-catalog.md",
+                    # Check for PythonCodeNode parameter access
+                    if hasattr(node, "code") and node.code:
+                        if self._has_unsafe_parameter_access(node.code):
+                            self.issues.append(
+                                ValidationIssue(
+                                    severity=IssueSeverity.WARNING,
+                                    category="node_compatibility",
+                                    code="CYC013",
+                                    message=f"PythonCodeNode '{node_id}' may have unsafe parameter access",
+                                    node_id=node_id,
+                                    cycle_id=cycle_id,
+                                    suggestion="Use try/except pattern for cycle parameter access",
+                                    documentation_link=".claude/skills/06-cheatsheets/common-mistakes-catalog.md",
+                                )
                             )
-                        )
 
     def _check_convergence_conditions(self):
         """Check convergence conditions for validity."""

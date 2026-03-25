@@ -221,7 +221,7 @@ from kailash.infrastructure import create_task_queue
 
 async def worker_loop(queue_url: str, worker_id: str):
     queue = await create_task_queue(queue_url)
-    runtime = LocalRuntime()
+    runtime = LocalRuntime()  # Don't forget to call runtime.close() when done
 
     while True:
         task = await queue.dequeue(queue_name="default", worker_id=worker_id)

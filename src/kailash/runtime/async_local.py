@@ -568,6 +568,9 @@ class AsyncLocalRuntime(LocalRuntime):
         workflow,
         task_manager: Optional[TaskManager] = None,
         parameters: Optional[Dict[str, Any]] = None,
+        cancellation_token: Any = None,
+        search_attributes: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
     ) -> Tuple[Dict[str, Any], Optional[str]]:
         """
         Execute workflow without creating threads (Docker-safe).
@@ -604,13 +607,18 @@ class AsyncLocalRuntime(LocalRuntime):
                 raise
             # Otherwise it's the "no running loop" error - proceed with asyncio.run()
             inputs = parameters if parameters else {}
-            result_dict = asyncio.run(
-                self.execute_workflow_async(workflow, inputs=inputs)
-            )
+            result = asyncio.run(self.execute_workflow_async(workflow, inputs=inputs))
 
-            # Extract results and generate run_id for compatibility
-            results = result_dict.get("results", result_dict)
-            run_id = result_dict.get("run_id", None)
+            # extract_workflow_async returns Tuple[Dict, str]
+            if isinstance(result, tuple):
+                results = result[0]
+                run_id = result[1] if len(result) > 1 else None
+            elif isinstance(result, dict):
+                results = result.get("results", result)
+                run_id = result.get("run_id", None)
+            else:
+                results = result
+                run_id = None
 
             return (results, run_id)
 
@@ -619,6 +627,10 @@ class AsyncLocalRuntime(LocalRuntime):
         workflow,
         task_manager: Optional[TaskManager] = None,
         parameters: Optional[Dict[str, Any]] = None,
+        cancellation_token: Any = None,
+        execution_tracker: Any = None,
+        search_attributes: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
     ) -> Tuple[Dict[str, Any], Optional[str]]:
         """
         Execute workflow asynchronously (for LocalRuntime compatibility).
@@ -635,11 +647,18 @@ class AsyncLocalRuntime(LocalRuntime):
             Tuple of (results dict, run_id)
         """
         inputs = parameters if parameters else {}
-        result_dict = await self.execute_workflow_async(workflow, inputs=inputs)
+        result = await self.execute_workflow_async(workflow, inputs=inputs)
 
-        # Extract results and generate run_id for compatibility
-        results = result_dict.get("results", result_dict)
-        run_id = result_dict.get("run_id", None)
+        # execute_workflow_async returns Tuple[Dict, str]
+        if isinstance(result, tuple):
+            results = result[0]
+            run_id = result[1] if len(result) > 1 else None
+        elif isinstance(result, dict):
+            results = result.get("results", result)
+            run_id = result.get("run_id", None)
+        else:
+            results = result
+            run_id = None
 
         return (results, run_id)
 
@@ -1209,9 +1228,12 @@ class AsyncLocalRuntime(LocalRuntime):
                     f"Node '{node_id}' execution failed: {e}"
                 ) from e
             finally:
-                if node_instance and hasattr(node_instance, "cleanup"):
+                _cleanup = (
+                    getattr(node_instance, "cleanup", None) if node_instance else None
+                )
+                if _cleanup is not None:
                     try:
-                        await node_instance.cleanup()
+                        await _cleanup()
                     except Exception as cleanup_error:
                         logger.warning(
                             f"Error during node '{node_id}' cleanup: {cleanup_error}"
@@ -1462,15 +1484,17 @@ class AsyncLocalRuntime(LocalRuntime):
         try:
             from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
-            await asyncio.wait_for(
-                AsyncSQLDatabaseNode.clear_shared_pools(graceful=True), timeout=5.0
-            )
+            _clear_pools = getattr(AsyncSQLDatabaseNode, "clear_shared_pools", None)
+            if _clear_pools is not None:
+                await asyncio.wait_for(_clear_pools(graceful=True), timeout=5.0)
         except Exception as e:
             logger.warning(f"Error disposing AsyncSQL pools during cleanup: {e}")
         try:
             from kailash.nodes.data.sql import SQLDatabaseNode
 
-            SQLDatabaseNode.cleanup_pools()
+            _cleanup = getattr(SQLDatabaseNode, "cleanup_pools", None)
+            if _cleanup is not None:
+                _cleanup()
         except Exception as e:
             logger.warning(f"Error disposing SQL pools during cleanup: {e}")
 
@@ -1482,14 +1506,93 @@ class AsyncLocalRuntime(LocalRuntime):
         self._cleaned_up = True
         logger.info("AsyncLocalRuntime cleanup complete")
 
-    def __del__(self):
-        """Cleanup on deletion."""
-        try:
-            # Schedule cleanup if event loop is available
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(self.cleanup())
-        except Exception:
-            # If no event loop, just shutdown thread pool
-            if hasattr(self, "thread_pool"):
-                self.thread_pool.shutdown(wait=False)
+    def close(self) -> None:
+        """Synchronous close that properly cleans up ALL async resources.
+
+        Overrides LocalRuntime.close() to also handle thread pool,
+        resource registry, semaphore, and SQL connection pools.
+
+        Reference-count aware: decrements _ref_count. Actual cleanup
+        only happens when _ref_count reaches 0.
+        """
+        if self.debug:
+            logger.debug(
+                f"AsyncLocalRuntime.close() called for runtime {self._runtime_id}"
+            )
+
+        with self._loop_lock:
+            if self._ref_count <= 0:
+                return  # Already fully closed
+            self._ref_count -= 1
+            if self._ref_count > 0:
+                return  # Other consumers still active
+
+        # --- Async resource cleanup (not handled by parent close) ---
+        if not getattr(self, "_cleaned_up", False):
+            try:
+                loop = self._persistent_loop
+                if loop and not loop.is_closed():
+                    # Schedule async cleanup on the runtime's own event loop
+                    future = asyncio.run_coroutine_threadsafe(self.cleanup(), loop)
+                    try:
+                        future.result(timeout=5.0)
+                    except (TimeoutError, asyncio.TimeoutError):
+                        logger.warning("AsyncLocalRuntime cleanup timed out after 5s")
+                else:
+                    # No running loop — do sync-safe subset
+                    if hasattr(self, "thread_pool") and self.thread_pool:
+                        self.thread_pool.shutdown(wait=True)
+                        self.thread_pool = None
+                    if hasattr(self, "_semaphore"):
+                        self._semaphore = None
+                    self._cleaned_up = True
+            except Exception as e:
+                logger.warning(f"Error during AsyncLocalRuntime.close(): {e}")
+                # Fallback: at least kill thread pool
+                if hasattr(self, "thread_pool") and self.thread_pool:
+                    self.thread_pool.shutdown(wait=False)
+                    self.thread_pool = None
+
+        # --- Parent cleanup (event loop + signals) ---
+        # Call the parent's cleanup logic directly, NOT super().close()
+        # because super().close() would try to decrement _ref_count again.
+        self._workflow_signals.clear()
+        self._cleanup_event_loop()
+
+    def __del__(self) -> None:
+        """Emit ResourceWarning if runtime was not properly closed."""
+        if getattr(self, "_ref_count", 0) > 0:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__} (ref_count={self._ref_count}). "
+                f"Use 'async with {self.__class__.__name__}() as runtime:' or call runtime.close().",
+                ResourceWarning,
+                source=self,
+            )
+            # Force cleanup regardless
+            self._ref_count = 1  # Ensure close() actually cleans up
+            try:
+                self.close()
+            except Exception:
+                pass
+
+    async def __aenter__(self) -> "AsyncLocalRuntime":
+        """Async context manager entry.
+
+        Usage:
+            async with AsyncLocalRuntime() as runtime:
+                results = await runtime.execute_workflow_async(workflow, inputs)
+        """
+        self._is_context_managed = True
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Async context manager exit — calls close() which respects ref counting.
+
+        Uses close() instead of directly calling cleanup() to ensure the
+        ref counting contract is honored. If this runtime is shared via
+        acquire(), close() will only decrement — not destroy resources.
+        """
+        self._is_context_managed = False
+        self.close()

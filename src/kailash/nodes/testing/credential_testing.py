@@ -240,14 +240,14 @@ class CredentialTestingNode(Node):
             )
 
         # Add common metadata
-        result["metadata"] = {
+        result["metadata"] = {  # type: ignore[reportPossiblyUnbound]
             "scenario": scenario,
             "credential_type": credential_type,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "test_id": str(uuid4()),
         }
 
-        return result
+        return result  # type: ignore[reportPossiblyUnbound]
 
     def _generate_oauth2_credentials(
         self, scenario: str, mock_data: dict, validation_rules: dict, ttl_seconds: int

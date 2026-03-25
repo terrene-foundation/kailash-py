@@ -25,7 +25,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -39,10 +39,10 @@ try:
     CRYPTOGRAPHY_AVAILABLE = True
 except ImportError:
     CRYPTOGRAPHY_AVAILABLE = False
-    Fernet = None
-    PBKDF2HMAC = None
-    hashes = None
-    default_backend = None
+    Fernet: Any = None
+    PBKDF2HMAC: Any = None
+    hashes: Any = None
+    default_backend: Any = None
 
 from kailash.trust.exceptions import TrustError
 
@@ -202,7 +202,9 @@ class TrustSecurityValidator:
     """
 
     # Regex patterns for validation
-    UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+    UUID_PATTERN = re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+    )
     AUTHORITY_ID_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9\-_]{0,63}$")
 
     # Unsafe characters/patterns in metadata
@@ -341,7 +343,9 @@ class TrustSecurityValidator:
             if isinstance(value, dict):
                 sanitized[sanitized_key] = self.sanitize_metadata(value)
             elif isinstance(value, list):
-                sanitized[sanitized_key] = [self._sanitize_value(item) for item in value]
+                sanitized[sanitized_key] = [
+                    self._sanitize_value(item) for item in value
+                ]
             else:
                 sanitized[sanitized_key] = self._sanitize_value(value)
 
@@ -407,14 +411,16 @@ class SecureKeyStorage:
             EncryptionError: If master key cannot be derived
         """
         if not CRYPTOGRAPHY_AVAILABLE:
-            raise ImportError("cryptography is required for secure key storage. Install with: pip install cryptography")
+            raise ImportError(
+                "cryptography is required for secure key storage. Install with: pip install cryptography"
+            )
 
         self.master_key_source = master_key_source
         self._keys: Dict[str, bytes] = {}  # Encrypted keys in memory
         self._salt = salt  # CARE-001: per-instance salt
         self._fernet = self._initialize_fernet()
 
-    def _initialize_fernet(self) -> Fernet:
+    def _initialize_fernet(self) -> Any:
         """
         Initialize Fernet cipher with derived key.
 
@@ -429,7 +435,9 @@ class SecureKeyStorage:
         """
         master_key = os.environ.get(self.master_key_source)
         if not master_key:
-            raise EncryptionError(f"Master key not found. Set {self.master_key_source} environment variable.")
+            raise EncryptionError(
+                f"Master key not found. Set {self.master_key_source} environment variable."
+            )
 
         # CARE-001: Use per-instance salt instead of static salt
         # Priority: 1) explicit salt from __init__, 2) env var, 3) generate new
@@ -593,7 +601,9 @@ class TrustRateLimiter:
         self.verify_per_minute = verify_per_minute
 
         # Track operations: {operation: {authority_id: [timestamps]}}
-        self._operations: Dict[str, Dict[str, List[float]]] = defaultdict(lambda: defaultdict(list))
+        self._operations: Dict[str, Dict[str, List[float]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
         self._lock = asyncio.Lock()
 
     async def check_rate(self, operation: str, authority_id: str) -> bool:

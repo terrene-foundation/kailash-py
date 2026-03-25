@@ -18,8 +18,12 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-import redis
-from redis.exceptions import RedisError
+try:
+    import redis
+    from redis.exceptions import RedisError
+except ImportError:
+    redis = None  # type: ignore[assignment]
+    RedisError = Exception  # type: ignore[misc,assignment]
 
 from kailash.sdk_exceptions import NodeExecutionError
 
@@ -154,12 +158,12 @@ class QueryCache:
         self.invalidation_strategy = invalidation_strategy
 
         self.key_generator = QueryCacheKey(key_prefix)
-        self._redis: Optional[redis.Redis] = None
+        self._redis: Optional[redis.Redis] = None  # type: ignore[reportInvalidTypeForm]
 
-    def _get_redis(self) -> redis.Redis:
+    def _get_redis(self) -> redis.Redis:  # type: ignore[reportInvalidTypeForm]
         """Get Redis connection."""
         if self._redis is None:
-            self._redis = redis.Redis(
+            self._redis = redis.Redis(  # type: ignore[reportOptionalMemberAccess]
                 host=self.redis_host,
                 port=self.redis_port,
                 db=self.redis_db,
@@ -486,7 +490,7 @@ class QueryCache:
 
 
 # Factory function for creating query cache
-def create_query_cache(config: Dict[str, Any] = None) -> QueryCache:
+def create_query_cache(config: Dict[str, Any] | None = None) -> QueryCache:
     """Create a query cache instance with configuration.
 
     Args:

@@ -78,24 +78,22 @@ workflow = Workflow("mcp-workflow", "MCP Workflow")
 # Add LLM agent that uses MCP tools
 workflow.add_node("agent", LLMAgentNode())
 
-# Create runtime
-runtime = LocalRuntime()
-
-# Execute with MCP configuration
-results, run_id = runtime.execute(workflow, parameters={
-    "agent": {
-        "provider": "ollama",
-        "model": "llama3.2",
-        "messages": [{"role": "user", "content": "Hello MCP!"}],
-        "mcp_servers": [{
-            "name": "hello-server",
-            "transport": "stdio",
-            "command": "echo",
-            "args": ["mock"]
-        }],
-        "auto_discover_tools": True
-    }
-})
+# Create runtime and execute with MCP configuration
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(workflow, parameters={
+        "agent": {
+            "provider": "ollama",
+            "model": "llama3.2",
+            "messages": [{"role": "user", "content": "Hello MCP!"}],
+            "mcp_servers": [{
+                "name": "hello-server",
+                "transport": "stdio",
+                "command": "echo",
+                "args": ["mock"]
+            }],
+            "auto_discover_tools": True
+        }
+    })
 
 print("Workflow executed successfully!")
 ```

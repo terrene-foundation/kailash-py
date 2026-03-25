@@ -16,20 +16,28 @@ from .base import (
 )
 
 try:
-    from ..middleware.mcp.enhanced_server import MCPServerConfig, MiddlewareMCPServer
+    from ..middleware.mcp.enhanced_server import MCPServerConfig as _MCPServerConfig
+    from ..middleware.mcp.enhanced_server import (
+        MiddlewareMCPServer as _MiddlewareMCPServer,
+    )
 
+    MCPServerConfig: Any = _MCPServerConfig
+    MiddlewareMCPServer: Any = _MiddlewareMCPServer
     _MCP_AVAILABLE = True
 except ImportError:
     _MCP_AVAILABLE = False
 
     # Create mock classes for when MCP is not available
-    class MiddlewareMCPServer:
-        def __init__(self, *args, **kwargs):
+    class _MiddlewareMCPServerFallback:
+        def __init__(self, *args: Any, **kwargs: Any):
             raise ImportError("MCP server not available")
 
-    class MCPServerConfig:
-        def __init__(self):
+    class _MCPServerConfigFallback:
+        def __init__(self) -> None:
             pass
+
+    MiddlewareMCPServer: Any = _MiddlewareMCPServerFallback
+    MCPServerConfig: Any = _MCPServerConfigFallback
 
 
 from ..runtime.local import LocalRuntime
@@ -58,13 +66,18 @@ class MCPChannel(Channel):
     """
 
     def __init__(
-        self, config: ChannelConfig, mcp_server: Optional[MiddlewareMCPServer] = None
+        self,
+        config: ChannelConfig,
+        mcp_server: Optional[Any] = None,
+        runtime: Optional[LocalRuntime] = None,
     ):
         """Initialize MCP channel.
 
         Args:
             config: Channel configuration
             mcp_server: Optional existing MCP server, will create one if not provided
+            runtime: Optional shared runtime. If provided, its ref count is
+                incremented via acquire(). If None a new LocalRuntime is created.
         """
         super().__init__(config)
 
@@ -79,16 +92,21 @@ class MCPChannel(Channel):
             self.mcp_server = self._create_mcp_server()
 
         # Runtime for executing workflows
-        self.runtime = LocalRuntime()
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = LocalRuntime()
+            self._owns_runtime = True
 
         # MCP-specific state
         self._clients: Dict[str, Dict[str, Any]] = {}
         self._server_task: Optional[asyncio.Task] = None
-        self._mcp_server_task: Optional[asyncio.Task] = None
+        self._mcp_server_task: Optional[asyncio.Future[Any]] = None
 
         logger.info(f"Initialized MCP channel {self.name}")
 
-    def _create_mcp_server(self) -> MiddlewareMCPServer:
+    def _create_mcp_server(self) -> Any:
         """Create a new MCP server with channel configuration."""
         if not _MCP_AVAILABLE:
             raise ImportError("MCP server components not available")
@@ -113,7 +131,7 @@ class MCPChannel(Channel):
                     "description", f"MCP server for {self.name} channel"
                 )
             except Exception as e:
-                self.logger.warning(f"Failed to translate platform config: {e}")
+                logger.warning(f"Failed to translate platform config: {e}")
                 # Fall back to default configuration
                 mcp_config.name = f"{self.name}-mcp-server"
                 mcp_config.description = f"MCP server for {self.name} channel"
@@ -135,7 +153,7 @@ class MCPChannel(Channel):
 
         return server
 
-    def _setup_default_tools(self, server: MiddlewareMCPServer) -> None:
+    def _setup_default_tools(self, server: Any) -> None:
         """Set up default MCP tools for workflow execution."""
 
         # Tool: List available workflows
@@ -285,6 +303,9 @@ class MCPChannel(Channel):
                     logger.warning(f"Error stopping MCP server: {e}")
 
             await self._cleanup()
+
+            self.close()
+
             self.status = ChannelStatus.STOPPED
 
             logger.info(f"MCP channel {self.name} stopped")
@@ -432,7 +453,7 @@ class MCPChannel(Channel):
             elif registration.workflow_name:
                 # Execute workflow
                 workflow = self._workflow_registry.get(registration.workflow_name)
-                if workflow:
+                if workflow and self.runtime is not None:
                     results, run_id = await self.runtime.execute_async(
                         workflow, parameters=arguments
                     )
@@ -580,6 +601,9 @@ class MCPChannel(Channel):
 
         workflow = self._workflow_registry[workflow_name]
 
+        if self.runtime is None:
+            return {"success": False, "error": "Runtime not available"}
+
         try:
             results, run_id = await self.runtime.execute_async(
                 workflow, parameters=inputs
@@ -642,6 +666,26 @@ class MCPChannel(Channel):
             )
 
         return status_info
+
+    def close(self):
+        """Release runtime reference."""
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() or stop() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
 
     async def health_check(self) -> Dict[str, Any]:
         """Perform comprehensive health check."""

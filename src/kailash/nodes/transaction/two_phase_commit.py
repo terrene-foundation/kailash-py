@@ -175,15 +175,15 @@ class TwoPhaseCommitCoordinatorNode(AsyncNode):
 
     def __init__(
         self,
-        transaction_name: str = None,
-        transaction_id: str = None,
-        participants: List[str] = None,
+        transaction_name: str | None = None,
+        transaction_id: str | None = None,
+        participants: List[str] | None = None,
         timeout: int = 300,
         prepare_timeout: int = 30,
         commit_timeout: int = 30,
         max_retries: int = 3,
         state_storage: str = "memory",
-        storage_config: Dict[str, Any] = None,
+        storage_config: Dict[str, Any] | None = None,
         transport: Optional[ParticipantTransport] = None,
         **kwargs,
     ):
@@ -206,7 +206,7 @@ class TwoPhaseCommitCoordinatorNode(AsyncNode):
             **kwargs: Additional node configuration
         """
         # Set node metadata
-        metadata = NodeMetadata(
+        _node_metadata = NodeMetadata(
             name=kwargs.get("name", "two_phase_commit_coordinator"),
             description="Coordinates distributed transactions using Two-Phase Commit protocol",
             version="1.0.0",
@@ -214,7 +214,7 @@ class TwoPhaseCommitCoordinatorNode(AsyncNode):
         )
 
         # Initialize AsyncNode
-        super().__init__(metadata=metadata, **kwargs)
+        super().__init__(metadata=_node_metadata, **kwargs)
 
         # Transaction configuration
         self.transaction_name = transaction_name or f"2pc_{int(time.time())}"

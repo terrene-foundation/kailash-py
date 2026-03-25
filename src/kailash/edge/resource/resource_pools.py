@@ -85,6 +85,7 @@ class ResourceAllocation:
     allocated_at: datetime = field(default_factory=datetime.now)
     expires_at: Optional[datetime] = None
     status: str = "active"  # active, expired, released
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_expired(self) -> bool:

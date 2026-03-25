@@ -376,13 +376,13 @@ class BehaviorAnalysisNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                 # Handle single activity analysis for compatibility
                 if "activity" in safe_params:
                     activity = safe_params["activity"]
-                    result = self._analyze_single_activity(user_id, activity)
+                    result = self._analyze_single_activity(user_id, activity)  # type: ignore[reportArgumentType]
                     # Update baseline if requested
                     if safe_params.get("update_baseline", True):
-                        self._update_user_baseline(user_id, [activity])
+                        self._update_user_baseline(user_id, [activity])  # type: ignore[reportArgumentType]
                 else:
                     result = self._analyze_user_behavior(
-                        user_id, recent_activity, time_window
+                        user_id, recent_activity, time_window  # type: ignore[reportArgumentType]
                     )
                 self.analysis_stats["total_analyses"] += 1
             elif action == "establish_baseline":
@@ -391,27 +391,27 @@ class BehaviorAnalysisNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     "historical_activities",
                     safe_params.get("historical_activities", []),
                 )
-                result = self._establish_baseline(user_id, historical_activities)
+                result = self._establish_baseline(user_id, historical_activities)  # type: ignore[reportArgumentType]
                 self.analysis_stats["profiles_updated"] += 1
             elif action == "update_baseline":
                 # Use new_activities if provided, otherwise use recent_activity
                 activities = kwargs.get("new_activities", recent_activity)
-                result = self._update_user_baseline(user_id, activities)
+                result = self._update_user_baseline(user_id, activities)  # type: ignore[reportArgumentType]
                 self.analysis_stats["profiles_updated"] += 1
             elif action == "get_profile":
-                result = self._get_user_profile(user_id)
+                result = self._get_user_profile(user_id)  # type: ignore[reportArgumentType]
             elif action == "detect_anomalies":
-                result = self._detect_user_anomalies(user_id, recent_activity)
+                result = self._detect_user_anomalies(user_id, recent_activity)  # type: ignore[reportArgumentType]
             elif action == "detect_patterns":
                 activities = kwargs.get("activities", safe_params.get("activities", []))
                 pattern_types = kwargs.get(
                     "pattern_types",
                     safe_params.get("pattern_types", ["temporal", "resource"]),
                 )
-                result = self._detect_patterns(user_id, activities, pattern_types)
+                result = self._detect_patterns(user_id, activities, pattern_types)  # type: ignore[reportArgumentType]
             elif action == "compare_peer_group":
                 result = self._compare_to_peer_group(
-                    user_id, kwargs.get("peer_group", [])
+                    user_id, kwargs.get("peer_group", [])  # type: ignore[reportArgumentType]
                 )
             elif action == "track":
                 # Track user activity for later analysis
@@ -424,11 +424,11 @@ class BehaviorAnalysisNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     **event_data,
                 }
                 # Use existing profile system to track activity
-                profile = self._get_or_create_profile(user_id)
+                profile = self._get_or_create_profile(user_id)  # type: ignore[reportArgumentType]
                 # Process the activity into the profile using existing method
                 self._update_profile_baseline(profile, [activity])
                 # Also store in activity history for risk scoring
-                self.user_activity_history[user_id].append(activity)
+                self.user_activity_history[user_id].append(activity)  # type: ignore[reportArgumentType]
                 result = {"success": True, "tracked": True}
             elif action == "train_model":
                 # Train model on user's historical data
@@ -457,7 +457,7 @@ class BehaviorAnalysisNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                                 from sklearn.ensemble import IsolationForest
 
                                 model = IsolationForest(
-                                    contamination=0.1, random_state=42
+                                    contamination=0.1, random_state=42  # type: ignore[reportArgumentType]
                                 )
                                 model.fit(training_data)
                                 result = {
@@ -498,22 +498,22 @@ class BehaviorAnalysisNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     "user_id": user_id,
                     "event_type": event_type,
                     "timestamp": datetime.now(UTC).isoformat(),
-                    **event_data,
+                    **event_data,  # type: ignore[reportGeneralTypeIssues]
                 }
-                result = self._detect_user_anomalies(user_id, [activity])
+                result = self._detect_user_anomalies(user_id, [activity])  # type: ignore[reportArgumentType]
                 # Add anomaly flag for test compatibility
                 result["is_anomaly"] = bool(result.get("anomalies", []))
                 result["anomaly"] = result["is_anomaly"]
             elif action == "create_profile":
                 # Create user profile
-                result = self._establish_baseline(user_id, kwargs.get("activities", []))
+                result = self._establish_baseline(user_id, kwargs.get("activities", []))  # type: ignore[reportArgumentType]
             elif action == "update_profile":
                 # Update user profile
                 activities = kwargs.get("activities", [])
-                result = self._update_user_baseline(user_id, activities)
+                result = self._update_user_baseline(user_id, activities)  # type: ignore[reportArgumentType]
             elif action == "get_statistics":
                 # Get profile statistics
-                profile = self._get_user_profile(user_id)
+                profile = self._get_user_profile(user_id)  # type: ignore[reportArgumentType]
                 if profile.get("success"):
                     stats = {
                         "activity_count": len(profile.get("activities", [])),
@@ -540,8 +540,8 @@ class BehaviorAnalysisNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     event_count = 0
 
                     for activity in user_activities:
-                        if "risk_factor" in activity:
-                            total_risk += float(activity["risk_factor"])
+                        if "risk_factor" in activity:  # type: ignore[reportOperatorIssue]
+                            total_risk += float(activity["risk_factor"])  # type: ignore[reportOptionalSubscript]
                             event_count += 1
 
                     if event_count > 0:
@@ -552,7 +552,7 @@ class BehaviorAnalysisNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     else:
                         # Fall back to anomaly detection
                         anomaly_result = self._detect_user_anomalies(
-                            user_id, recent_activity
+                            user_id, recent_activity  # type: ignore[reportArgumentType]
                         )
                         risk_score = min(
                             1.0, len(anomaly_result.get("anomalies", [])) * 0.2
@@ -696,7 +696,7 @@ This is an automated security alert from the Behavior Analysis System.
             elif action == "compare_to_baseline":
                 # Compare current behavior to baseline
                 current_data = kwargs.get("current_data", [])
-                anomaly_result = self._detect_user_anomalies(user_id, current_data)
+                anomaly_result = self._detect_user_anomalies(user_id, current_data)  # type: ignore[reportArgumentType]
                 result = {
                     "success": True,
                     "baseline_comparison": {
@@ -716,7 +716,7 @@ This is an automated security alert from the Behavior Analysis System.
             elif action == "analyze_temporal_pattern":
                 # Analyze temporal patterns
                 activities = kwargs.get("activities", [])
-                result = self._detect_patterns(user_id, activities, ["temporal"])
+                result = self._detect_patterns(user_id, activities, ["temporal"])  # type: ignore[reportArgumentType]
             elif action == "detect_seasonal_pattern":
                 # Detect seasonal patterns
                 activities = kwargs.get("activities", [])
@@ -792,9 +792,9 @@ This is an automated security alert from the Behavior Analysis System.
 
             # Add timing information
             processing_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
-            result["processing_time_ms"] = processing_time
-            result["analysis_time_ms"] = processing_time  # For test compatibility
-            result["timestamp"] = start_time.isoformat()
+            result["processing_time_ms"] = processing_time  # type: ignore[reportArgumentType]
+            result["analysis_time_ms"] = processing_time  # type: ignore[reportArgumentType]
+            result["timestamp"] = start_time.isoformat()  # type: ignore[reportArgumentType]
 
             # Track analysis time
             self.analysis_times.append(processing_time)
@@ -818,7 +818,7 @@ This is an automated security alert from the Behavior Analysis System.
                         metadata={
                             "action": action,
                             "risk_score": result.get("risk_score"),
-                            "anomaly_count": len(result.get("anomalies", [])),
+                            "anomaly_count": len(result.get("anomalies", [])),  # type: ignore[reportArgumentType]
                             "is_anomalous": result.get("is_anomalous", False),
                         },
                     )
@@ -1472,12 +1472,12 @@ This is an automated security alert from the Behavior Analysis System.
                 else 0
             ),
             "most_common_location": (
-                max(profile.locations.keys(), key=profile.locations.get)
+                max(profile.locations.keys(), key=profile.locations.get)  # type: ignore[reportArgumentType]
                 if profile.locations
                 else None
             ),
             "most_common_device": (
-                max(profile.devices.keys(), key=profile.devices.get)
+                max(profile.devices.keys(), key=profile.devices.get)  # type: ignore[reportArgumentType]
                 if profile.devices
                 else None
             ),

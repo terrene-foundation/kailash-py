@@ -44,8 +44,8 @@ Synchronous runtime for CLI scripts and non-async contexts:
        "code": "result = {'msg': 'Hello!'}"
    })
 
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow.build())
+   with LocalRuntime() as runtime:
+       results, run_id = runtime.execute(workflow.build())
 
 AsyncLocalRuntime
 =================
@@ -67,9 +67,12 @@ Async-optimized runtime for Docker and FastAPI deployments:
    })
 
    runtime = AsyncLocalRuntime()
-   results, run_id = await runtime.execute_workflow_async(
-       workflow.build(), inputs={}
-   )
+   try:
+       results, run_id = await runtime.execute_workflow_async(
+           workflow.build(), inputs={}
+       )
+   finally:
+       runtime.close()
 
 ``AsyncLocalRuntime`` extends ``LocalRuntime`` with:
 
@@ -157,12 +160,12 @@ Validation Metrics
 
 .. code-block:: python
 
-   runtime = LocalRuntime(connection_validation="strict")
-   results, run_id = runtime.execute(workflow.build())
+   with LocalRuntime(connection_validation="strict") as runtime:
+       results, run_id = runtime.execute(workflow.build())
 
-   # Inspect validation results
-   metrics = runtime.get_validation_metrics()
-   print(metrics)
+       # Inspect validation results
+       metrics = runtime.get_validation_metrics()
+       print(metrics)
 
    # Reset for next run
    runtime.reset_validation_metrics()
@@ -196,13 +199,12 @@ Attach a CARE trust context to any runtime for cryptographic accountability:
        config=TrustVerifierConfig(mode="enforcing"),
    )
 
-   runtime = LocalRuntime(
+   with LocalRuntime(
        trust_context=ctx,
        trust_verifier=verifier,
        trust_verification_mode="enforcing",
-   )
-
-   results, run_id = runtime.execute(workflow.build())
+   ) as runtime:
+       results, run_id = runtime.execute(workflow.build())
 
 See :doc:`trust` for the complete CARE trust documentation.
 

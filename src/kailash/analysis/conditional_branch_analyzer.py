@@ -300,7 +300,7 @@ class ConditionalBranchAnalyzer:
 
         for switch_id in switch_nodes:
             # Check if this switch leads to other switches
-            if switch_id in self._branch_map:
+            if self._branch_map is not None and switch_id in self._branch_map:
                 for port, downstream in self._branch_map[switch_id].items():
                     switch_chain = [switch_id]
 
@@ -346,7 +346,7 @@ class ConditionalBranchAnalyzer:
         switch_deps.add_nodes_from(switch_nodes)
 
         for switch_id in switch_nodes:
-            if switch_id in self._branch_map:
+            if self._branch_map is not None and switch_id in self._branch_map:
                 for port, downstream in self._branch_map[switch_id].items():
                     for downstream_switch in downstream:
                         if downstream_switch in switch_nodes:
@@ -363,7 +363,7 @@ class ConditionalBranchAnalyzer:
         multi_case = []
 
         for switch_id in switch_nodes:
-            if switch_id in self._branch_map:
+            if self._branch_map is not None and switch_id in self._branch_map:
                 ports = list(self._branch_map[switch_id].keys())
 
                 # Multi-case switches have more than 2 output ports or case_X patterns

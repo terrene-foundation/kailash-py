@@ -24,8 +24,8 @@ except ImportError:
     try:
         import aioredis as redis
     except ImportError:
-        redis = None
-asyncpg = None  # Lazy-loaded in PostgreSQLStorage methods
+        redis: Any = None
+asyncpg: Any = None  # Lazy-loaded in PostgreSQLStorage methods
 
 
 class StorageBackend(ABC):
@@ -73,9 +73,9 @@ class RedisStorage(StorageBackend):
         self.db = db
         self.password = password
         self.key_prefix = key_prefix
-        self._redis: Optional[redis.Redis] = None
+        self._redis: Any = None
 
-    async def _get_redis(self) -> redis.Redis:
+    async def _get_redis(self) -> redis.Redis:  # type: ignore[reportInvalidTypeForm]
         """Get Redis connection."""
         if self._redis is None:
             self._redis = await redis.from_url(
@@ -183,7 +183,7 @@ class PostgreSQLStorage(StorageBackend):
     async def _ensure_table(self) -> None:
         """Ensure storage table exists."""
         pool = self._pool
-        async with pool.acquire() as conn:
+        async with pool.acquire() as conn:  # type: ignore[reportOptionalMemberAccess]
             await conn.execute(
                 f"""
                 CREATE TABLE IF NOT EXISTS {self.table_name} (
@@ -259,9 +259,9 @@ class RedisEventStorage:
         self.db = db
         self.password = password
         self.key_prefix = key_prefix
-        self._redis: Optional[redis.Redis] = None
+        self._redis: Any = None
 
-    async def _get_redis(self) -> redis.Redis:
+    async def _get_redis(self) -> redis.Redis:  # type: ignore[reportInvalidTypeForm]
         """Get Redis connection."""
         if self._redis is None:
             self._redis = await redis.from_url(
@@ -344,7 +344,7 @@ class PostgreSQLEventStorage:
     async def _ensure_table(self) -> None:
         """Ensure events table exists."""
         pool = self._pool
-        async with pool.acquire() as conn:
+        async with pool.acquire() as conn:  # type: ignore[reportOptionalMemberAccess]
             await conn.execute(
                 f"""
                 CREATE TABLE IF NOT EXISTS {self.table_name} (

@@ -28,6 +28,10 @@ try:
 
     _MCP_AVAILABLE = True
 except ImportError:
+    ClientSession = None  # type: ignore[assignment,misc]
+    StdioServerParameters = None  # type: ignore[assignment,misc]
+    stdio_client = None  # type: ignore[assignment]
+    sse_client = None  # type: ignore[assignment]
     _MCP_AVAILABLE = False
 
 
@@ -109,19 +113,19 @@ class MCPServerConnection:
                         "stdio transport requires 'command' in connection_config"
                     )
 
-                params = StdioServerParameters(
+                params = StdioServerParameters(  # type: ignore[reportOptionalCall]
                     command=command,
                     args=args,
                     env=env,
                 )
-                read_stream, write_stream = await self._enter_cm(stdio_client(params))
+                read_stream, write_stream = await self._enter_cm(stdio_client(params))  # type: ignore[reportOptionalCall]
             elif transport == "sse":
                 url = self.connection_config.get("url")
                 if not url:
                     raise ValueError(
                         "sse transport requires 'url' in connection_config"
                     )
-                read_stream, write_stream = await self._enter_cm(sse_client(url))
+                read_stream, write_stream = await self._enter_cm(sse_client(url))  # type: ignore[reportOptionalCall]
             else:
                 raise ValueError(f"Unsupported transport: {transport}")
 
@@ -129,7 +133,7 @@ class MCPServerConnection:
             self._write_stream = write_stream
 
             # Create MCP session
-            session = await self._enter_cm(ClientSession(read_stream, write_stream))
+            session = await self._enter_cm(ClientSession(read_stream, write_stream))  # type: ignore[reportOptionalCall]
             self._session = session
 
             # Initialize the session (MCP handshake)
@@ -208,7 +212,10 @@ class MCPServerConnection:
             logger.warning(f"Could not list resources from {self.server_name}: {e}")
 
     async def call_tool(
-        self, tool_name: str, arguments: Dict[str, Any], session_id: str = None
+        self,
+        tool_name: str,
+        arguments: Dict[str, Any],
+        session_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Call an MCP tool on the connected server.
 
@@ -277,7 +284,7 @@ class MCPServerConnection:
             }
 
     async def get_resource(
-        self, resource_uri: str, session_id: str = None
+        self, resource_uri: str, session_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Read an MCP resource via the real resources/read protocol method."""
         if not self.connected or not self._session:
@@ -397,9 +404,9 @@ class MiddlewareMCPClient:
 
     def __init__(
         self,
-        config: MCPClientConfig = None,
-        event_stream: EventStream = None,
-        agent_ui: AgentUIMiddleware = None,
+        config: Optional[MCPClientConfig] = None,
+        event_stream: Optional[EventStream] = None,
+        agent_ui: Optional[AgentUIMiddleware] = None,
     ):
         self.config = config or MCPClientConfig()
         self.event_stream = event_stream
@@ -499,7 +506,7 @@ class MiddlewareMCPClient:
         server_name: str,
         tool_name: str,
         arguments: Dict[str, Any],
-        session_id: str = None,
+        session_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Call tool on specific MCP server."""
 
@@ -514,7 +521,7 @@ class MiddlewareMCPClient:
         return await connection.call_tool(tool_name, arguments, session_id)
 
     async def get_resource(
-        self, server_name: str, resource_uri: str, session_id: str = None
+        self, server_name: str, resource_uri: str, session_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Get resource from specific MCP server."""
 
@@ -529,7 +536,10 @@ class MiddlewareMCPClient:
         return await connection.get_resource(resource_uri, session_id)
 
     async def broadcast_tool_call(
-        self, tool_name: str, arguments: Dict[str, Any], session_id: str = None
+        self,
+        tool_name: str,
+        arguments: Dict[str, Any],
+        session_id: Optional[str] = None,
     ) -> Dict[str, Dict[str, Any]]:
         """Call tool on all servers that support it."""
 
@@ -607,9 +617,9 @@ class MiddlewareMCPClient:
     async def _emit_client_event(self, event_type: str, data: Dict[str, Any]):
         """Emit MCP client event to middleware event stream."""
 
-        from ..events import WorkflowEvent
+        from ..communication.events import WorkflowEvent
 
-        event = WorkflowEvent(
+        event = WorkflowEvent(  # type: ignore[reportCallIssue]
             type=EventType.SYSTEM_STATUS,
             workflow_id="mcp_client",
             data={
@@ -620,7 +630,7 @@ class MiddlewareMCPClient:
             },
         )
 
-        await self.event_stream.emit(event)
+        await self.event_stream.emit(event)  # type: ignore[reportOptionalMemberAccess]
 
     async def disconnect_all(self):
         """Disconnect from all MCP servers."""

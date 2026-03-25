@@ -357,9 +357,9 @@ class BatchProcessorNode(Node):
             last_result = result
 
         # All retries failed
-        last_result["retry_attempts"] = max_retries
-        last_result["final_failure"] = True
-        return last_result
+        last_result["retry_attempts"] = max_retries  # type: ignore[reportOptionalSubscript]
+        last_result["final_failure"] = True  # type: ignore[reportOptionalSubscript]
+        return last_result  # type: ignore[reportReturnType]
 
     def _update_progress(
         self,

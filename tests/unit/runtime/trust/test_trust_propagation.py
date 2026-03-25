@@ -42,6 +42,10 @@ class ConcreteRuntime(BaseRuntime):
         """Minimal execute implementation."""
         return {}, "test-run-id"
 
+    def close(self) -> None:
+        """Minimal close implementation."""
+        pass
+
 
 class MockWorkflow:
     """Mock workflow for testing."""

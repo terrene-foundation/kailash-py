@@ -105,7 +105,7 @@ class RedisPoolManagerNode(AsyncNode):
         self.retry_delay = retry_delay
 
         # Shared pools keyed by (redis_url, database)
-        self._pools: Dict[str, ConnectionPool] = {}
+        self._pools: Dict[str, Any] = {}
         self._pool_metrics: Dict[str, Dict[str, Any]] = {}
         self._pool_health: Dict[str, PoolHealth] = {}
         self._pool_lock = threading.Lock()
@@ -224,7 +224,7 @@ class RedisPoolManagerNode(AsyncNode):
         try:
             if action == "execute_command":
                 result = await self._execute_redis_command(
-                    kwargs.get("command"),
+                    kwargs.get("command") or "",  # type: ignore[arg-type]
                     kwargs.get("args", []),
                     kwargs.get("redis_url", "redis://localhost:6379"),
                     kwargs.get("database", 0),
@@ -254,7 +254,7 @@ class RedisPoolManagerNode(AsyncNode):
 
     async def _get_connection_pool(
         self, redis_url: str, database: int = 0
-    ) -> ConnectionPool:
+    ) -> Any:  # ConnectionPool when redis available
         """Get or create Redis connection pool."""
         pool_key = f"{redis_url}/db{database}"
 
@@ -266,7 +266,7 @@ class RedisPoolManagerNode(AsyncNode):
                     )
 
                 try:
-                    pool = ConnectionPool.from_url(
+                    pool = ConnectionPool.from_url(  # type: ignore[possibly-unbound]
                         redis_url,
                         db=database,
                         max_connections=self.pool_size + self.max_overflow,
@@ -274,7 +274,7 @@ class RedisPoolManagerNode(AsyncNode):
                         socket_connect_timeout=10,
                         health_check_interval=self.health_check_interval,
                         retry_on_timeout=True,
-                        retry_on_error=[redis.ConnectionError, redis.TimeoutError],
+                        retry_on_error=[redis.ConnectionError, redis.TimeoutError],  # type: ignore[possibly-unbound]
                     )
 
                     self._pools[pool_key] = pool
@@ -314,7 +314,7 @@ class RedisPoolManagerNode(AsyncNode):
 
         try:
             # Get connection from pool
-            connection = redis.Redis(connection_pool=pool)
+            connection = redis.Redis(connection_pool=pool)  # type: ignore[possibly-unbound]
 
             # Track active connection
             conn_info = {
@@ -492,8 +492,8 @@ class RedisPoolManagerNode(AsyncNode):
 
         # Get pool connection info
         try:
-            created_connections = pool.created_connections
-            available_connections = pool.available_connections
+            created_connections = pool.created_connections  # type: ignore[attr-defined]
+            available_connections = pool.available_connections  # type: ignore[attr-defined]
             in_use_connections = created_connections - available_connections
         except AttributeError:
             # Fallback for different Redis versions
@@ -528,8 +528,8 @@ class RedisPoolManagerNode(AsyncNode):
 
             try:
                 # Test connection with ping
-                test_connection = redis.Redis(connection_pool=pool)
-                await test_connection.ping()
+                test_connection = redis.Redis(connection_pool=pool)  # type: ignore[possibly-unbound]
+                await test_connection.ping()  # type: ignore[misc]
                 await test_connection.aclose()
 
                 response_time = time.time() - start_time

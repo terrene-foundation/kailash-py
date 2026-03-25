@@ -31,16 +31,15 @@ class ConnectionManagerAdapter:
     - Error handling and logging
     """
 
-    def __init__(self, dataflow_instance, parameter_style: Optional[str] = None):
+    def __init__(self, dataflow_instance, parameter_style: Optional[str] = None, runtime=None):
         """
         Initialize connection manager adapter.
-
-        Automatically detects async context and uses appropriate runtime
-        to prevent deadlocks in FastAPI, pytest async, and other async environments.
 
         Args:
             dataflow_instance: DataFlow instance with connection config
             parameter_style: Database parameter style (auto-detected if not provided)
+            runtime: Optional shared runtime. If provided, the adapter acquires
+                a reference (ref-count increment). If None, creates its own.
         """
         self.dataflow = dataflow_instance
         self._transaction_started = False
@@ -55,23 +54,30 @@ class ConnectionManagerAdapter:
             db_type = ConnectionParser.detect_database_type(db_url)
             self._parameter_style = db_type  # postgresql, mysql, or sqlite
 
-        # ✅ FIX: Detect async context and use appropriate runtime
-        # This prevents deadlocks when DataFlow is used in FastAPI, pytest async, etc.
-        try:
-            asyncio.get_running_loop()
-            # Running in async context - use AsyncLocalRuntime
-            self._runtime = AsyncLocalRuntime()
-            self._is_async = True
+        # Initialize runtime
+        if runtime is not None:
+            self._runtime = runtime.acquire()
+            self._owns_runtime = False
+            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
-                "ConnectionManagerAdapter: Detected async context, using AsyncLocalRuntime"
+                "ConnectionManagerAdapter: Using injected runtime (ref_count=%d)",
+                runtime.ref_count,
             )
-        except RuntimeError:
-            # No event loop - use sync LocalRuntime
-            self._runtime = LocalRuntime()
-            self._is_async = False
-            logger.debug(
-                "ConnectionManagerAdapter: Detected sync context, using LocalRuntime"
-            )
+        else:
+            try:
+                asyncio.get_running_loop()
+                self._runtime = AsyncLocalRuntime()
+                self._is_async = True
+                logger.debug(
+                    "ConnectionManagerAdapter: Detected async context, using AsyncLocalRuntime"
+                )
+            except RuntimeError:
+                self._runtime = LocalRuntime()
+                self._is_async = False
+                logger.debug(
+                    "ConnectionManagerAdapter: Detected sync context, using LocalRuntime"
+                )
+            self._owns_runtime = True
 
         # Get connection details from DataFlow config
         self._connection_string = self.dataflow.config.database.get_connection_url(
@@ -110,17 +116,12 @@ class ConnectionManagerAdapter:
                 },
             )
 
-            # ✅ FIX: Use appropriate execution method based on runtime type
             if self._is_async:
                 results, _ = await self._runtime.execute_workflow_async(
                     workflow.build(), inputs={}
                 )
             else:
-                # ✅ FIX: Use LocalRuntime for connection operations to avoid async context issues
-                from kailash.runtime.local import LocalRuntime
-
-                init_runtime = LocalRuntime()
-                results, _ = init_runtime.execute(workflow.build())
+                results, _ = self._runtime.execute(workflow.build())
 
             if "query_execution" not in results or results["query_execution"].get(
                 "error"
@@ -158,17 +159,12 @@ class ConnectionManagerAdapter:
                 },
             )
 
-            # ✅ FIX: Use appropriate execution method based on runtime type
             if self._is_async:
                 results, _ = await self._runtime.execute_workflow_async(
                     workflow.build(), inputs={}
                 )
             else:
-                # ✅ FIX: Use LocalRuntime for connection operations to avoid async context issues
-                from kailash.runtime.local import LocalRuntime
-
-                init_runtime = LocalRuntime()
-                results, _ = init_runtime.execute(workflow.build())
+                results, _ = self._runtime.execute(workflow.build())
 
             if "begin_transaction" not in results or results["begin_transaction"].get(
                 "error"
@@ -199,17 +195,12 @@ class ConnectionManagerAdapter:
                 },
             )
 
-            # ✅ FIX: Use appropriate execution method based on runtime type
             if self._is_async:
                 results, _ = await self._runtime.execute_workflow_async(
                     workflow.build(), inputs={}
                 )
             else:
-                # ✅ FIX: Use LocalRuntime for connection operations to avoid async context issues
-                from kailash.runtime.local import LocalRuntime
-
-                init_runtime = LocalRuntime()
-                results, _ = init_runtime.execute(workflow.build())
+                results, _ = self._runtime.execute(workflow.build())
 
             if "commit_transaction" not in results or results["commit_transaction"].get(
                 "error"
@@ -240,17 +231,12 @@ class ConnectionManagerAdapter:
                 },
             )
 
-            # ✅ FIX: Use appropriate execution method based on runtime type
             if self._is_async:
                 results, _ = await self._runtime.execute_workflow_async(
                     workflow.build(), inputs={}
                 )
             else:
-                # ✅ FIX: Use LocalRuntime for connection operations to avoid async context issues
-                from kailash.runtime.local import LocalRuntime
-
-                init_runtime = LocalRuntime()
-                results, _ = init_runtime.execute(workflow.build())
+                results, _ = self._runtime.execute(workflow.build())
 
             if "rollback_transaction" not in results or results[
                 "rollback_transaction"
@@ -265,6 +251,30 @@ class ConnectionManagerAdapter:
         except Exception as e:
             logger.error(f"Failed to rollback transaction: {e}")
             raise
+
+    def close(self):
+        """Release the runtime reference.
+
+        Safe to call multiple times -- subsequent calls are no-ops.
+        """
+        if hasattr(self, "_runtime") and self._runtime is not None:
+            self._runtime.release()
+            self._runtime = None
+
+    def __del__(self):
+        """Emit ResourceWarning if close() was not called explicitly."""
+        if getattr(self, "_runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass
 
     def _convert_parameters(
         self, sql: str, params: Optional[List]

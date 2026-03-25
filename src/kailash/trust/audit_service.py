@@ -246,49 +246,49 @@ class AuditQueryService:
                 action_summaries={},
             )
 
-        # Build action summaries
-        action_stats = defaultdict(
-            lambda: {
-                "total": 0,
-                "success": 0,
-                "failure": 0,
-                "denied": 0,
-                "partial": 0,
-                "first": None,
-                "last": None,
-            }
-        )
+        # Build action summaries using typed tracking dataclass
+        @dataclass
+        class _ActionStats:
+            total: int = 0
+            success: int = 0
+            failure: int = 0
+            denied: int = 0
+            partial: int = 0
+            first: Optional[datetime] = None
+            last: Optional[datetime] = None
+
+        action_stats: Dict[str, _ActionStats] = defaultdict(_ActionStats)
 
         for anchor in history:
-            stats = action_stats[anchor.action]
-            stats["total"] += 1
+            st = action_stats[anchor.action]
+            st.total += 1
 
             if anchor.result == ActionResult.SUCCESS:
-                stats["success"] += 1
+                st.success += 1
             elif anchor.result == ActionResult.FAILURE:
-                stats["failure"] += 1
+                st.failure += 1
             elif anchor.result == ActionResult.DENIED:
-                stats["denied"] += 1
+                st.denied += 1
             elif anchor.result == ActionResult.PARTIAL:
-                stats["partial"] += 1
+                st.partial += 1
 
-            if stats["first"] is None or anchor.timestamp < stats["first"]:
-                stats["first"] = anchor.timestamp
-            if stats["last"] is None or anchor.timestamp > stats["last"]:
-                stats["last"] = anchor.timestamp
+            if st.first is None or anchor.timestamp < st.first:
+                st.first = anchor.timestamp
+            if st.last is None or anchor.timestamp > st.last:
+                st.last = anchor.timestamp
 
         # Build action summaries
         action_summaries = {}
-        for action, stats in action_stats.items():
+        for action, st in action_stats.items():
             action_summaries[action] = ActionSummary(
                 action=action,
-                total_count=stats["total"],
-                success_count=stats["success"],
-                failure_count=stats["failure"],
-                denied_count=stats["denied"],
-                partial_count=stats["partial"],
-                first_occurrence=stats["first"],
-                last_occurrence=stats["last"],
+                total_count=st.total,
+                success_count=st.success,
+                failure_count=st.failure,
+                denied_count=st.denied,
+                partial_count=st.partial,
+                first_occurrence=st.first,
+                last_occurrence=st.last,
             )
 
         # Calculate totals
@@ -478,7 +478,7 @@ class AuditQueryService:
         # the common interface: list_records if available, otherwise
         # fall back to iterating via the internal _records list.
         if hasattr(self.audit_store, "list_records"):
-            records = await self.audit_store.list_records(limit=100000)
+            records = await getattr(self.audit_store, "list_records")(limit=100000)
             for record in records:
                 if record.anchor.reasoning_trace is None:
                     missing.append(record.anchor)
@@ -560,15 +560,21 @@ class AuditQueryService:
             current_end = min(current_start + period_delta, end_time)
 
             # Count actions in this period
-            period_anchors = [a for a in history if current_start <= a.timestamp < current_end]
+            period_anchors = [
+                a for a in history if current_start <= a.timestamp < current_end
+            ]
 
             periods.append(
                 {
                     "period_start": current_start.isoformat(),
                     "period_end": current_end.isoformat(),
                     "total_actions": len(period_anchors),
-                    "success_count": sum(1 for a in period_anchors if a.result == ActionResult.SUCCESS),
-                    "failure_count": sum(1 for a in period_anchors if a.result == ActionResult.FAILURE),
+                    "success_count": sum(
+                        1 for a in period_anchors if a.result == ActionResult.SUCCESS
+                    ),
+                    "failure_count": sum(
+                        1 for a in period_anchors if a.result == ActionResult.FAILURE
+                    ),
                 }
             )
 

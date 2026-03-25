@@ -420,6 +420,7 @@ class TestCostTracker:
 
     def test_cost_tracker_with_cost_model(self) -> None:
         """CostTracker should accept an optional CostModel."""
+        pytest.importorskip("kaizen_agents", reason="kaizen-agents not installed")
         from kaizen_agents.governance.cost_model import CostModel
 
         model = CostModel()

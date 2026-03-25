@@ -14,7 +14,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Union
+from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ class BaseEvent:
     target: Optional[str] = None
     session_id: Optional[str] = None
     user_id: Optional[str] = None
-    metadata: Dict[str, Any] = None
+    metadata: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
         if not self.id:
@@ -100,13 +100,13 @@ class BaseEvent:
 class WorkflowEvent(BaseEvent):
     """Events related to workflow execution."""
 
-    workflow_id: str = None
-    workflow_name: str = None
-    execution_id: str = None
-    progress_percent: float = None
-    current_node: str = None
-    data: Dict[str, Any] = None
-    error: str = None
+    workflow_id: Optional[str] = None
+    workflow_name: Optional[str] = None
+    execution_id: Optional[str] = None
+    progress_percent: Optional[float] = None
+    current_node: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -118,14 +118,14 @@ class WorkflowEvent(BaseEvent):
 class NodeEvent(BaseEvent):
     """Events related to individual node execution."""
 
-    workflow_id: str = None
-    node_id: str = None
-    node_type: str = None
-    node_name: str = None
-    inputs: Dict[str, Any] = None
-    outputs: Dict[str, Any] = None
-    execution_time_ms: float = None
-    error: str = None
+    workflow_id: Optional[str] = None
+    node_id: Optional[str] = None
+    node_type: Optional[str] = None
+    node_name: Optional[str] = None
+    inputs: Optional[Dict[str, Any]] = None
+    outputs: Optional[Dict[str, Any]] = None
+    execution_time_ms: Optional[float] = None
+    error: Optional[str] = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -139,13 +139,13 @@ class NodeEvent(BaseEvent):
 class UIEvent(BaseEvent):
     """Events requiring user interface interaction."""
 
-    interaction_type: str = None  # input, approval, choice, confirmation
-    prompt: str = None
-    options: List[Dict[str, Any]] = None
-    form_schema: Dict[str, Any] = None
-    timeout_ms: int = None
+    interaction_type: Optional[str] = None  # input, approval, choice, confirmation
+    prompt: Optional[str] = None
+    options: Optional[List[Dict[str, Any]]] = None
+    form_schema: Optional[Dict[str, Any]] = None
+    timeout_ms: Optional[int] = None
     response_required: bool = True
-    context: Dict[str, Any] = None
+    context: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -162,12 +162,12 @@ class EventFilter:
 
     def __init__(
         self,
-        event_types: List[EventType] = None,
-        priorities: List[EventPriority] = None,
-        source: str = None,
-        target: str = None,
-        session_id: str = None,
-        user_id: str = None,
+        event_types: Optional[List[EventType]] = None,
+        priorities: Optional[List[EventPriority]] = None,
+        source: Optional[str] = None,
+        target: Optional[str] = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ):
         self.event_types = event_types or []
         self.priorities = priorities or []
@@ -283,8 +283,11 @@ class EventStream:
     async def subscribe(
         self,
         subscriber_id: str,
-        callback: Callable[[Union[BaseEvent, EventBatch]], None],
-        event_filter: EventFilter = None,
+        callback: Union[
+            Callable[[Union[BaseEvent, EventBatch]], None],
+            Callable[[Union[BaseEvent, EventBatch]], Awaitable[None]],
+        ],
+        event_filter: Optional[EventFilter] = None,
     ) -> str:
         """Subscribe to event stream with optional filtering."""
         async with self._lock:
@@ -352,9 +355,9 @@ class EventStream:
         self,
         workflow_id: str,
         workflow_name: str,
-        execution_id: str = None,
-        user_id: str = None,
-        session_id: str = None,
+        execution_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        session_id: Optional[str] = None,
     ):
         """Convenience method for workflow started events."""
         event = WorkflowEvent(
@@ -375,8 +378,8 @@ class EventStream:
         workflow_id: str,
         execution_id: str,
         progress_percent: float,
-        current_node: str = None,
-        data: Dict[str, Any] = None,
+        current_node: Optional[str] = None,
+        data: Optional[Dict[str, Any]] = None,
     ):
         """Convenience method for workflow progress events."""
         event = WorkflowEvent(
@@ -397,8 +400,8 @@ class EventStream:
         workflow_id: str,
         node_id: str,
         node_type: str,
-        outputs: Dict[str, Any] = None,
-        execution_time_ms: float = None,
+        outputs: Optional[Dict[str, Any]] = None,
+        execution_time_ms: Optional[float] = None,
     ):
         """Convenience method for node completion events."""
         event = NodeEvent(
@@ -419,7 +422,7 @@ class EventStream:
         prompt: str,
         form_schema: Dict[str, Any],
         session_id: str,
-        user_id: str = None,
+        user_id: Optional[str] = None,
         timeout_ms: int = 30000,
     ):
         """Convenience method for UI input required events."""
@@ -458,7 +461,7 @@ class EventStream:
         }
 
     async def get_recent_events(
-        self, count: int = 100, event_filter: EventFilter = None
+        self, count: int = 100, event_filter: Optional[EventFilter] = None
     ) -> List[BaseEvent]:
         """Get recent events with optional filtering."""
         async with self._lock:

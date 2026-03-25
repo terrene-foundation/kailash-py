@@ -9,7 +9,7 @@ import logging
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, time as dt_time, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from kailash._math_utils import mean, median
@@ -424,7 +424,7 @@ class QueryPatternTracker:
         return predictions
 
     def _analyze_historical_load(
-        self, start_time: datetime.time, end_time: datetime.time, weekday: int
+        self, start_time: dt_time, end_time: dt_time, weekday: int
     ) -> Dict[str, Any]:
         """Analyze historical load for a time period."""
         matching_executions = []

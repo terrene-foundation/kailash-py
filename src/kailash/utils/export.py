@@ -25,11 +25,11 @@ logger = logging.getLogger(__name__)
 class ResourceSpec(BaseModel):
     """Resource specifications for a node."""
 
-    cpu: str = Field("100m", description="CPU request")
-    memory: str = Field("128Mi", description="Memory request")
-    cpu_limit: str | None = Field(None, description="CPU limit")
-    memory_limit: str | None = Field(None, description="Memory limit")
-    gpu: int | None = Field(None, description="Number of GPUs")
+    cpu: str = Field(default="100m", description="CPU request")
+    memory: str = Field(default="128Mi", description="Memory request")
+    cpu_limit: str | None = Field(default=None, description="CPU limit")
+    memory_limit: str | None = Field(default=None, description="Memory limit")
+    gpu: int | None = Field(default=None, description="Number of GPUs")
 
 
 class ContainerMapping(BaseModel):
@@ -43,7 +43,7 @@ class ContainerMapping(BaseModel):
         default_factory=dict, description="Environment variables"
     )
     resources: ResourceSpec = Field(
-        default_factory=ResourceSpec, description="Resource specs"
+        default_factory=lambda: ResourceSpec(), description="Resource specs"
     )
     mount_paths: dict[str, str] = Field(
         default_factory=dict, description="Volume mount paths"
@@ -53,12 +53,16 @@ class ContainerMapping(BaseModel):
 class ExportConfig(BaseModel):
     """Configuration for export process."""
 
-    version: str = Field("1.0", description="Export format version")
-    namespace: str = Field("default", description="Kubernetes namespace")
-    include_metadata: bool = Field(True, description="Include metadata in export")
-    include_resources: bool = Field(True, description="Include resource specifications")
-    validate_output: bool = Field(True, description="Validate exported format")
-    container_registry: str = Field("", description="Container registry URL")
+    version: str = Field(default="1.0", description="Export format version")
+    namespace: str = Field(default="default", description="Kubernetes namespace")
+    include_metadata: bool = Field(
+        default=True, description="Include metadata in export"
+    )
+    include_resources: bool = Field(
+        default=True, description="Include resource specifications"
+    )
+    validate_output: bool = Field(default=True, description="Validate exported format")
+    container_registry: str = Field(default="", description="Container registry URL")
     partial_export: set[str] = Field(default_factory=set, description="Nodes to export")
 
 
@@ -315,21 +319,27 @@ class ManifestGenerator:
             ExportException: If manifest generation fails
         """
         try:
+            meta = workflow.metadata or {}
+            created_at = meta.get("created_at", "")
+            if hasattr(created_at, "isoformat"):
+                created_at = created_at.isoformat()
             manifest = {
                 "apiVersion": "kailash.io/v1",
                 "kind": "Workflow",
                 "metadata": {
-                    "name": self._sanitize_name(workflow.metadata.name),
+                    "name": self._sanitize_name(meta.get("name", workflow.name)),
                     "namespace": self.config.namespace,
                     "labels": {
                         "app": "kailash",
-                        "workflow": self._sanitize_name(workflow.metadata.name),
-                        "version": workflow.metadata.version,
+                        "workflow": self._sanitize_name(
+                            meta.get("name", workflow.name)
+                        ),
+                        "version": meta.get("version", "1.0.0"),
                     },
                     "annotations": {
-                        "description": workflow.metadata.description,
-                        "author": workflow.metadata.author,
-                        "created_at": workflow.metadata.created_at.isoformat(),
+                        "description": meta.get("description", ""),
+                        "author": meta.get("author", ""),
+                        "created_at": str(created_at),
                     },
                 },
                 "spec": {"nodes": [], "edges": []},
@@ -832,39 +842,41 @@ class WorkflowExporter:
                 f"Failed to get template '{template_name}': {e}"
             ) from e
 
-        output_dir = Path(output_dir)
+        out_path = Path(output_dir)
         try:
-            output_dir.mkdir(parents=True, exist_ok=True)
+            out_path.mkdir(parents=True, exist_ok=True)
         except Exception as e:
             raise ExportException(
-                f"Failed to create output directory '{output_dir}': {e}"
+                f"Failed to create output directory '{out_path}': {e}"
             ) from e
 
         exports = {}
+        meta = workflow.metadata or {}
+        wf_name = meta.get("name", workflow.name)
 
         # Generate files based on template
         if template.get("yaml", True):
-            yaml_path = output_dir / f"{workflow.metadata.name}.yaml"
+            yaml_path = out_path / f"{wf_name}.yaml"
             yaml_content = self.to_yaml(workflow, str(yaml_path))
             exports[str(yaml_path)] = yaml_content
 
         if template.get("json", False):
-            json_path = output_dir / f"{workflow.metadata.name}.json"
+            json_path = out_path / f"{wf_name}.json"
             json_content = self.to_json(workflow, str(json_path))
             exports[str(json_path)] = json_content
 
         if template.get("manifest", True):
-            manifest_path = output_dir / f"{workflow.metadata.name}-manifest.yaml"
+            manifest_path = out_path / f"{wf_name}-manifest.yaml"
             manifest_content = self.to_manifest(workflow, str(manifest_path))
             exports[str(manifest_path)] = manifest_content
 
         # Generate additional files from template
         for filename, content_template in template.get("files", {}).items():
-            file_path = output_dir / filename
+            file_path = out_path / filename
             try:
                 content = content_template.format(
-                    workflow_name=workflow.metadata.name,
-                    workflow_version=workflow.metadata.version,
+                    workflow_name=meta.get("name", workflow.name),
+                    workflow_version=meta.get("version", "1.0.0"),
                     namespace=self.config.namespace,
                 )
                 file_path.write_text(content)
@@ -897,7 +909,7 @@ class WorkflowExporter:
         if self.config.include_metadata:
             try:
                 # workflow.metadata is a dict, not a pydantic model
-                data["metadata"] = {
+                meta_dict: dict[str, Any] = {
                     "name": workflow.name,
                     "description": workflow.description,
                     "version": workflow.version,
@@ -905,21 +917,19 @@ class WorkflowExporter:
                 }
                 # Add any additional metadata from the dict
                 if workflow.metadata:
-                    data["metadata"].update(workflow.metadata)
+                    meta_dict.update(workflow.metadata)
 
                 # Convert datetime to string if present
-                if "created_at" in data["metadata"] and hasattr(
-                    data["metadata"]["created_at"], "isoformat"
-                ):
-                    data["metadata"]["created_at"] = data["metadata"][
-                        "created_at"
-                    ].isoformat()
+                created_at_val = meta_dict.get("created_at")
+                if created_at_val is not None and hasattr(created_at_val, "isoformat"):
+                    meta_dict["created_at"] = created_at_val.isoformat()
 
                 # Convert set to list for JSON serialization if present
-                if "tags" in data["metadata"] and isinstance(
-                    data["metadata"]["tags"], set
-                ):
-                    data["metadata"]["tags"] = list(data["metadata"]["tags"])
+                tags_val = meta_dict.get("tags")
+                if isinstance(tags_val, set):
+                    meta_dict["tags"] = list(tags_val)
+
+                data["metadata"] = meta_dict
             except Exception as e:
                 raise ExportException(f"Failed to export metadata: {e}") from e
         else:
@@ -1067,7 +1077,7 @@ def export_workflow(
             return exporter.to_yaml(workflow, output_path)
         elif format == "json":
             return exporter.to_json(workflow, output_path)
-        elif format == "manifest":
+        else:
             return exporter.to_manifest(workflow, output_path)
 
     except Exception as e:

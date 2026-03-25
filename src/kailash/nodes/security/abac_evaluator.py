@@ -546,7 +546,7 @@ class ABACPermissionEvaluatorNode(SecurityMixin, PerformanceMixin, LoggingMixin,
             ),
         }
 
-    def run(
+    def run(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         user_context: Dict[str, Any],
         resource_context: Dict[str, Any],
@@ -596,7 +596,7 @@ class ABACPermissionEvaluatorNode(SecurityMixin, PerformanceMixin, LoggingMixin,
                 user_attributes=user_context,
                 resource_attributes=resource_context,
                 environment_attributes=environment_context,
-                action_attributes=action_context,
+                action_attributes=action_context,  # type: ignore[reportArgumentType]
             )
 
             # Check cache first
@@ -1078,10 +1078,10 @@ class ABACPermissionEvaluatorNode(SecurityMixin, PerformanceMixin, LoggingMixin,
 
         # Update average evaluation time
         if self.evaluation_stats["avg_evaluation_time_ms"] == 0:
-            self.evaluation_stats["avg_evaluation_time_ms"] = processing_time_ms
+            self.evaluation_stats["avg_evaluation_time_ms"] = processing_time_ms  # type: ignore[reportArgumentType]
         else:
             # Simple moving average
-            self.evaluation_stats["avg_evaluation_time_ms"] = (
+            self.evaluation_stats["avg_evaluation_time_ms"] = (  # type: ignore[reportArgumentType]
                 self.evaluation_stats["avg_evaluation_time_ms"] * 0.9
                 + processing_time_ms * 0.1
             )

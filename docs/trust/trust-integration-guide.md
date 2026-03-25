@@ -21,9 +21,9 @@ Existing code works unchanged. Trust is disabled by default:
 ```python
 from kailash.runtime import LocalRuntime
 
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
-# No trust context, no verification, no audit - same as before
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(workflow.build())
+    # No trust context, no verification, no audit - same as before
 ```
 
 ### Permissive Mode (Log Only)
@@ -49,14 +49,13 @@ verifier = TrustVerifier(
     config=TrustVerifierConfig(mode="permissive"),
 )
 
-runtime = LocalRuntime(
+with LocalRuntime(
     trust_context=ctx,
     trust_verifier=verifier,
     trust_verification_mode="permissive",
-)
-
-results, run_id = runtime.execute(workflow.build())
-# Trust context propagated through execution, denied ops logged but allowed
+) as runtime:
+    results, run_id = runtime.execute(workflow.build())
+    # Trust context propagated through execution, denied ops logged but allowed
 ```
 
 ### Enforcing Mode (Block Untrusted)
@@ -64,16 +63,15 @@ results, run_id = runtime.execute(workflow.build())
 Block workflows that fail trust verification:
 
 ```python
-runtime = LocalRuntime(
+with LocalRuntime(
     trust_context=ctx,
     trust_verifier=verifier,
     trust_verification_mode="enforcing",
-)
-
-try:
-    results, run_id = runtime.execute(workflow.build())
-except WorkflowExecutionError:
-    print("Trust verification denied execution")
+) as runtime:
+    try:
+        results, run_id = runtime.execute(workflow.build())
+    except WorkflowExecutionError:
+        print("Trust verification denied execution")
 ```
 
 ## Core Concepts
@@ -305,11 +303,13 @@ runtime = AsyncLocalRuntime(
     trust_verification_mode="enforcing",
     audit_generator=generator,
 )
-
-results, run_id = await runtime.execute_workflow_async(
-    workflow.build(),
-    inputs={},
-)
+try:
+    results, run_id = await runtime.execute_workflow_async(
+        workflow.build(),
+        inputs={},
+    )
+finally:
+    runtime.close()
 ```
 
 ## Kaizen Bridge
@@ -352,17 +352,16 @@ Trust verification is enforced at the individual node level, not just at workflo
 
 ```python
 # Trust denial prevents node execution in ENFORCING mode
-runtime = LocalRuntime(
+with LocalRuntime(
     trust_context=ctx,
     trust_verifier=MockTrustVerifier(denied_nodes=["BashCommand"]),
     trust_verification_mode="enforcing",
-)
-
-try:
-    results, run_id = runtime.execute(workflow_with_bash.build())
-except WorkflowExecutionError as e:
-    # Node was blocked before execution
-    print(f"Blocked: {e}")
+) as runtime:
+    try:
+        results, run_id = runtime.execute(workflow_with_bash.build())
+    except WorkflowExecutionError as e:
+        # Node was blocked before execution
+        print(f"Blocked: {e}")
 ```
 
 ## Architecture
@@ -408,12 +407,11 @@ def test_workflow_with_trust():
         verification_mode=TrustVerificationMode.ENFORCING,
     )
 
-    runtime = LocalRuntime(
+    with LocalRuntime(
         trust_context=ctx,
         trust_verifier=verifier,
         trust_verification_mode="enforcing",
-    )
-
-    results, run_id = runtime.execute(workflow.build())
-    assert results is not None
+    ) as runtime:
+        results, run_id = runtime.execute(workflow.build())
+        assert results is not None
 ```

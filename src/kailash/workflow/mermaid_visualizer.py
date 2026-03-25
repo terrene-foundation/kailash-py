@@ -69,8 +69,9 @@ class MermaidVisualizer:
 
         # Try to get a meaningful name from the node
         node = self.workflow.get_node(node_id)
-        if node and hasattr(node, "name") and node.name:
-            return node.name
+        node_name = getattr(node, "name", None) if node else None
+        if node_name:
+            return node_name
 
         # Otherwise use the node type with ID
         clean_type = self._get_node_type_label(node_type)
@@ -235,11 +236,13 @@ class MermaidVisualizer:
         node = self.workflow.get_node(node_id)
         if node:
             # Use node name if available
-            if hasattr(node, "name") and node.name:
-                return node.name
+            node_name = getattr(node, "name", None)
+            if node_name:
+                return node_name
             # Fall back to node type
-            if hasattr(node, "node_type"):
-                return f"{node_id}<br/>({node.node_type})"
+            node_type_attr = getattr(node, "node_type", None)
+            if node_type_attr:
+                return f"{node_id}<br/>({node_type_attr})"
 
         # Last resort: use node instance from workflow
         node_instance = self.workflow.nodes.get(node_id)
@@ -619,9 +622,9 @@ def add_mermaid_to_workflow():
         visualizer.save_markdown(filepath, title)
 
     # Add methods to Workflow class
-    Workflow.to_mermaid = to_mermaid
-    Workflow.to_mermaid_markdown = to_mermaid_markdown
-    Workflow.save_mermaid_markdown = save_mermaid_markdown
+    setattr(Workflow, "to_mermaid", to_mermaid)
+    setattr(Workflow, "to_mermaid_markdown", to_mermaid_markdown)
+    setattr(Workflow, "save_mermaid_markdown", save_mermaid_markdown)
 
 
 # Call this when module is imported

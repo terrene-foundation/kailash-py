@@ -30,10 +30,9 @@ from kailash.runtime.local import LocalRuntime
 workflow = WorkflowBuilder()
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
 
-# LocalRuntime for synchronous execution
-# Inherits from BaseRuntime with 3 mixins for comprehensive workflow execution
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
+# Context manager ensures proper cleanup (RECOMMENDED)
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(workflow.build())
 ```
 
 ### Asynchronous Execution (Docker/FastAPI)
@@ -46,7 +45,6 @@ workflow = WorkflowBuilder()
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
 
 # AsyncLocalRuntime for async execution (Docker-optimized)
-# NEW (v0.9.31+): Returns tuple (results, run_id)
 runtime = AsyncLocalRuntime()
 results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs={})
 ```
@@ -76,14 +74,14 @@ runtime.reset_validation_metrics()
 
 ```python
 # Override node parameters at runtime
-runtime = LocalRuntime()
-results, run_id = runtime.execute(
-    workflow.build(),
-    parameters={
-        "reader": {"file_path": "custom.csv"},     # Override node config
-        "filter": {"threshold": 100}               # Add runtime parameter
-    }
-)
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(
+        workflow.build(),
+        parameters={
+            "reader": {"file_path": "custom.csv"},     # Override node config
+            "filter": {"threshold": 100}               # Add runtime parameter
+        }
+    )
 ```
 
 ## Runtime Architecture

@@ -490,6 +490,9 @@ class OAuth2Node(Node):
 
         start_time = time.time()
 
+        if not token_url:
+            raise NodeValidationError("token_url is required")
+
         try:
             response = requests.post(token_url, data=data, headers=headers, timeout=30)
 
@@ -610,6 +613,7 @@ class OAuth2Node(Node):
         current_expires_in = max(0, int(self.token_expires_at - current_time))
 
         # Create headers
+        assert self.token_data is not None
         access_token = self.token_data.get("access_token", "")
         token_type = self.token_data.get("token_type", "Bearer")
 
@@ -828,7 +832,7 @@ class APIKeyNode(Node):
             key_value = f"{prefix} {api_key}"
 
         # Create result based on location
-        result = {"auth_type": "api_key"}
+        result: dict[str, Any] = {"auth_type": "api_key"}
 
         if location == "header":
             result["headers"] = {param_name: key_value}

@@ -120,7 +120,7 @@ class QueryBuilder:
         self._parse_query_object(query)
         return self
 
-    def build_select(self, fields: List[str] = None) -> Tuple[str, List[Any]]:
+    def build_select(self, fields: List[str] | None = None) -> Tuple[str, List[Any]]:
         """Build SELECT query.
 
         Args:

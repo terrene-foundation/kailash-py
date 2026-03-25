@@ -160,7 +160,9 @@ class ConstraintValidator:
         # Check time window
         if "time_window" in child_constraints:
             parent_window = parent_constraints.get("time_window")
-            if parent_window and not self._is_time_subset(parent_window, child_constraints["time_window"]):
+            if parent_window and not self._is_time_subset(
+                parent_window, child_constraints["time_window"]
+            ):
                 violations.append(ConstraintViolation.TIME_WINDOW_EXPANDED)
                 details["time_window"] = (
                     f"Child window '{child_constraints['time_window']}' not within parent window '{parent_window}'"
@@ -169,7 +171,9 @@ class ConstraintValidator:
         # Check resources
         if "resources" in child_constraints:
             parent_resources = parent_constraints.get("resources", [])
-            if parent_resources and not self._is_resource_subset(parent_resources, child_constraints["resources"]):
+            if parent_resources and not self._is_resource_subset(
+                parent_resources, child_constraints["resources"]
+            ):
                 violations.append(ConstraintViolation.RESOURCES_EXPANDED)
                 details["resources"] = "Child resources not subset of parent"
 
@@ -189,7 +193,9 @@ class ConstraintValidator:
             if child_geo and not child_geo.issubset(parent_geo):
                 violations.append(ConstraintViolation.GEO_RESTRICTION_REMOVED)
                 added_regions = child_geo - parent_geo
-                details["geo_restrictions"] = f"Child adds regions not in parent: {added_regions}"
+                details["geo_restrictions"] = (
+                    f"Child adds regions not in parent: {added_regions}"
+                )
 
         # Check max delegation depth
         if "max_delegation_depth" in child_constraints:
@@ -197,7 +203,9 @@ class ConstraintValidator:
             child_depth = child_constraints["max_delegation_depth"]
             if child_depth > parent_depth:
                 violations.append(ConstraintViolation.MAX_DELEGATION_DEPTH_INCREASED)
-                details["max_delegation_depth"] = f"Child {child_depth} > Parent {parent_depth}"
+                details["max_delegation_depth"] = (
+                    f"Child {child_depth} > Parent {parent_depth}"
+                )
 
         # Check action restrictions (allowed_actions must be subset)
         if "allowed_actions" in parent_constraints:
@@ -206,7 +214,9 @@ class ConstraintValidator:
             if child_actions and not child_actions.issubset(parent_actions):
                 violations.append(ConstraintViolation.ACTION_RESTRICTION_REMOVED)
                 added_actions = child_actions - parent_actions
-                details["allowed_actions"] = f"Child adds actions not in parent: {added_actions}"
+                details["allowed_actions"] = (
+                    f"Child adds actions not in parent: {added_actions}"
+                )
 
         return ValidationResult(
             valid=len(violations) == 0,
@@ -265,7 +275,9 @@ class ConstraintValidator:
         """
         for child_res in child_resources:
             # Child resource must match at least one parent pattern
-            if not any(self._glob_match(parent, child_res) for parent in parent_resources):
+            if not any(
+                self._glob_match(parent, child_res) for parent in parent_resources
+            ):
                 return False
         return True
 
@@ -413,28 +425,44 @@ class ConstraintValidator:
             return ValidationResult(valid=True, violations=[], details={})
 
         # Validate numeric limits (child must be <= parent)
-        self._validate_numeric_limits(parent_constraints, child_constraints, violations, details)
+        self._validate_numeric_limits(
+            parent_constraints, child_constraints, violations, details
+        )
 
         # Validate allowed actions (child must be subset)
-        self._validate_allowed_actions(parent_constraints, child_constraints, violations, details)
+        self._validate_allowed_actions(
+            parent_constraints, child_constraints, violations, details
+        )
 
         # Validate forbidden actions (parent's must be preserved)
-        self._validate_forbidden_actions(parent_constraints, child_constraints, violations, details)
+        self._validate_forbidden_actions(
+            parent_constraints, child_constraints, violations, details
+        )
 
         # Validate resource scopes (child must be subset)
-        self._validate_resource_scopes(parent_constraints, child_constraints, violations, details)
+        self._validate_resource_scopes(
+            parent_constraints, child_constraints, violations, details
+        )
 
         # Validate time windows (child must be within parent)
-        self._validate_time_windows(parent_constraints, child_constraints, violations, details)
+        self._validate_time_windows(
+            parent_constraints, child_constraints, violations, details
+        )
 
         # Validate data scopes (child must be subset)
-        self._validate_data_scopes(parent_constraints, child_constraints, violations, details)
+        self._validate_data_scopes(
+            parent_constraints, child_constraints, violations, details
+        )
 
         # Validate communication limits (child cannot have more targets)
-        self._validate_communication_limits(parent_constraints, child_constraints, violations, details)
+        self._validate_communication_limits(
+            parent_constraints, child_constraints, violations, details
+        )
 
         # Validate nested constraints recursively
-        self._validate_nested_constraints(parent_constraints, child_constraints, violations, details)
+        self._validate_nested_constraints(
+            parent_constraints, child_constraints, violations, details
+        )
 
         return ValidationResult(
             valid=len(violations) == 0,
@@ -507,6 +535,12 @@ class ConstraintValidator:
             # Non-numeric values: can't validate numerically
             return None
 
+        # NaN/Inf bypass prevention: NaN > X is always False, defeating tightening checks
+        import math
+
+        if not math.isfinite(parent_num) or not math.isfinite(child_num):
+            return f"Non-finite value in constraint: parent={parent_val}, child={child_val}"
+
         if child_num > parent_num:
             return f"Child {child_num} exceeds parent {parent_num}"
 
@@ -536,7 +570,9 @@ class ConstraintValidator:
             added_actions = child_actions - parent_actions
             if added_actions:
                 violations.append(ConstraintViolation.ACTION_RESTRICTION_REMOVED)
-                details["allowed_actions"] = f"Child adds actions not in parent: {added_actions}"
+                details["allowed_actions"] = (
+                    f"Child adds actions not in parent: {added_actions}"
+                )
 
     def _validate_forbidden_actions(
         self,
@@ -561,7 +597,9 @@ class ConstraintValidator:
         removed_forbidden = parent_forbidden - child_forbidden
         if removed_forbidden:
             violations.append(ConstraintViolation.FORBIDDEN_ACTION_REMOVED)
-            details["forbidden_actions"] = f"Parent's forbidden actions removed: {removed_forbidden}"
+            details["forbidden_actions"] = (
+                f"Parent's forbidden actions removed: {removed_forbidden}"
+            )
 
     def _validate_resource_scopes(
         self,
@@ -670,9 +708,13 @@ class ConstraintValidator:
             # Child inherits parent's time window (OK)
             return
 
-        if not self._is_time_window_within(parent_window, child_window):
+        if parent_window is None or not self._is_time_window_within(
+            parent_window, child_window
+        ):
             violations.append(ConstraintViolation.TIME_WINDOW_EXPANDED)
-            details["time_window"] = f"Child window '{child_window}' not within parent window '{parent_window}'"
+            details["time_window"] = (
+                f"Child window '{child_window}' not within parent window '{parent_window}'"
+            )
 
     def _is_time_window_within(
         self,
@@ -724,7 +766,9 @@ class ConstraintValidator:
         if not child_scopes.issubset(parent_scopes):
             added_scopes = child_scopes - parent_scopes
             violations.append(ConstraintViolation.DATA_SCOPE_EXPANDED)
-            details["data_scopes"] = f"Child adds data scopes not in parent: {added_scopes}"
+            details["data_scopes"] = (
+                f"Child adds data scopes not in parent: {added_scopes}"
+            )
 
     def _validate_communication_limits(
         self,
@@ -750,7 +794,9 @@ class ConstraintValidator:
         if not child_targets.issubset(parent_targets):
             added_targets = child_targets - parent_targets
             violations.append(ConstraintViolation.COMMUNICATION_TARGETS_EXPANDED)
-            details["communication_targets"] = f"Child adds communication targets not in parent: {added_targets}"
+            details["communication_targets"] = (
+                f"Child adds communication targets not in parent: {added_targets}"
+            )
 
     def _validate_nested_constraints(
         self,
@@ -802,7 +848,9 @@ class ConstraintValidator:
                 # Type mismatch
                 full_key = f"{prefix}{key}" if prefix else key
                 violations.append(ConstraintViolation.NESTED_CONSTRAINT_WIDENED)
-                details[full_key] = f"Parent has dict constraint but child has {type(child_value).__name__}"
+                details[full_key] = (
+                    f"Parent has dict constraint but child has {type(child_value).__name__}"
+                )
                 continue
 
             # Recursively validate nested dict
@@ -814,7 +862,9 @@ class ConstraintValidator:
                 full_key = f"{nested_prefix}{nested_key}"
 
                 if isinstance(nested_parent_val, (int, float)):
-                    error = self._check_numeric_tightening(nested_parent_val, nested_child_val, full_key)
+                    error = self._check_numeric_tightening(
+                        nested_parent_val, nested_child_val, full_key
+                    )
                     if error:
                         violations.append(ConstraintViolation.NESTED_CONSTRAINT_WIDENED)
                         details[full_key] = error
@@ -855,7 +905,9 @@ class DelegationConstraintValidator:
         Returns:
             ValidationResult indicating if delegation is valid
         """
-        return self._validator.validate_tightening(delegator_constraints, delegatee_constraints)
+        return self._validator.validate_tightening(
+            delegator_constraints, delegatee_constraints
+        )
 
     def can_delegate(
         self,

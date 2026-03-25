@@ -173,7 +173,7 @@ class GraphQLClientNode(Node):
     def _build_graphql_payload(
         self,
         query: str,
-        variables: dict[str, Any] = None,
+        variables: dict[str, Any] | None = None,
         operation_name: str | None = None,
     ) -> dict[str, Any]:
         """Build a GraphQL request payload.
@@ -186,7 +186,7 @@ class GraphQLClientNode(Node):
         Returns:
             Dictionary containing the GraphQL request payload
         """
-        payload = {"query": query}
+        payload: dict[str, Any] = {"query": query}
 
         if variables:
             payload["variables"] = variables
@@ -435,7 +435,7 @@ class AsyncGraphQLClientNode(AsyncNode):
             headers["Content-Type"] = "application/json"
 
         # Build GraphQL payload
-        payload = self.graphql_node._build_graphql_payload(
+        payload = self.graphql_node._build_graphql_payload(  # type: ignore[attr-defined]
             query, variables, operation_name
         )
 
@@ -456,11 +456,11 @@ class AsyncGraphQLClientNode(AsyncNode):
             "retry_backoff": retry_backoff,
         }
 
-        http_result = await self.http_node.async_run(**http_params)
+        http_result = await self.http_node.async_run(**http_params)  # type: ignore[attr-defined]
 
         # Process GraphQL-specific response
         response = http_result["response"]
-        graphql_result = self.graphql_node._process_graphql_response(
+        graphql_result = self.graphql_node._process_graphql_response(  # type: ignore[attr-defined]
             response, flatten_response
         )
 

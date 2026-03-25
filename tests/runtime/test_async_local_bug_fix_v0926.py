@@ -81,10 +81,10 @@ async def test_async_local_runtime_passes_config_parameters_bugfix_v0926(test_db
 
     # Execute with AsyncLocalRuntime
     runtime = AsyncLocalRuntime()
-    result = await runtime.execute_workflow_async(workflow.build(), inputs={})
+    results, _run_id = await runtime.execute_workflow_async(workflow.build(), inputs={})
 
     # CRITICAL ASSERTION: Node MUST have received the 'name' parameter
-    created_record = result["results"]["create_test"]
+    created_record = results["create_test"]
     assert "name" in created_record, (
         "AsyncLocalRuntime MUST pass node.config parameters to async_run(). "
         f"Bug regression detected! Received: {created_record}"
@@ -119,10 +119,10 @@ async def test_async_local_runtime_matches_local_runtime_behavior(test_db):
     )
 
     async_runtime = AsyncLocalRuntime()
-    async_results = await async_runtime.execute_workflow_async(
+    async_results, _ = await async_runtime.execute_workflow_async(
         async_workflow.build(), inputs={}
     )
-    async_record = async_results["results"]["create_async"]
+    async_record = async_results["create_async"]
 
     # Both should successfully create records with configured names
     assert local_record["name"] == "LocalRuntime Test"

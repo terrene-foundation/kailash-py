@@ -34,7 +34,7 @@ class AgentCapability:
     constraints: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        result = {"name": self.name}
+        result: Dict[str, Any] = {"name": self.name}
         if self.description:
             result["description"] = self.description
         if self.constraints:
@@ -59,7 +59,7 @@ class TrustExtensions:
     constraints: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        result = {
+        result: Dict[str, Any] = {
             "trust_chain_hash": self.trust_chain_hash,
             "genesis_authority_id": self.genesis_authority_id,
             "genesis_authority_type": self.genesis_authority_type,

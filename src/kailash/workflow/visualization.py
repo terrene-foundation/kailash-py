@@ -240,6 +240,9 @@ class WorkflowVisualizer:
         for task in tasks:
             node_status[task.node_id] = task.status
 
+        if self.workflow is None:
+            raise ValueError("No workflow provided")
+
         visualizer = MermaidVisualizer(self.workflow)
         mermaid_code = visualizer.generate()
 
@@ -326,7 +329,7 @@ def add_visualization_to_workflow():
         visualizer = WorkflowVisualizer(self)
         return visualizer.visualize(output_path, format=format, **kwargs)
 
-    Workflow.visualize = visualize
+    setattr(Workflow, "visualize", visualize)
 
 
 add_visualization_to_workflow()

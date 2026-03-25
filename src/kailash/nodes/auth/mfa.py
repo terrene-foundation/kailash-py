@@ -338,7 +338,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             ),
         }
 
-    def run(
+    def run(  # type: ignore[override]
         self,
         action: str,
         user_id: str,
@@ -451,7 +451,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     user_id, device_info or {}, trust_token
                 )
             elif action == "set_preference":
-                result = self._set_user_preference(user_id, preferred_method)
+                result = self._set_user_preference(user_id, preferred_method)  # type: ignore[reportArgumentType]
             elif action == "get_methods":
                 result = self._get_user_methods(user_id)
             elif action == "disable":
@@ -1757,9 +1757,9 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             Base64-encoded QR code image
         """
         try:
-            qr = qrcode.QRCode(
+            qr = qrcode.QRCode(  # type: ignore[reportAttributeAccessIssue]
                 version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,  # type: ignore[reportAttributeAccessIssue]
                 box_size=10,
                 border=4,
             )
@@ -1856,7 +1856,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
                 # Create message
                 msg = MIMEMultipart()
-                msg["From"] = self.email_provider.get("username")
+                msg["From"] = self.email_provider.get("username")  # type: ignore[reportArgumentType]
                 msg["To"] = email
                 msg["Subject"] = "MFA Verification Code"
 
@@ -1865,13 +1865,13 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
                 # Send email
                 server = smtplib.SMTP(
-                    self.email_provider.get("smtp_host"),
+                    self.email_provider.get("smtp_host"),  # type: ignore[reportArgumentType]
                     self.email_provider.get("smtp_port", 587),
                 )
                 server.starttls()
                 server.login(
-                    self.email_provider.get("username"),
-                    self.email_provider.get("password"),
+                    self.email_provider.get("username"),  # type: ignore[reportArgumentType]
+                    self.email_provider.get("password"),  # type: ignore[reportArgumentType]
                 )
                 server.send_message(msg)
                 server.quit()
@@ -1916,7 +1916,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         }
 
         try:
-            await self.security_event_node.async_run(**security_event)
+            await self.security_event_node.async_run(**security_event)  # type: ignore[reportAttributeAccessIssue]
         except Exception as e:
             self.log_with_context("WARNING", f"Failed to log security event: {e}")
 
@@ -1946,7 +1946,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         }
 
         try:
-            await self.audit_log_node.async_run(**audit_entry)
+            await self.audit_log_node.async_run(**audit_entry)  # type: ignore[reportAttributeAccessIssue]
         except Exception as e:
             self.log_with_context("WARNING", f"Failed to audit MFA operation: {e}")
 
@@ -2051,37 +2051,37 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
             # Route to appropriate action handler
             if action == "setup":
-                result = self._setup_mfa(user_id, method, user_email, user_phone)
+                result = self._setup_mfa(user_id, method, user_email, user_phone)  # type: ignore[reportArgumentType]
                 self.mfa_stats["total_setups"] += 1
             elif action == "verify":
-                result = await self._verify_mfa_async(user_id, code, method)
+                result = await self._verify_mfa_async(user_id, code, method)  # type: ignore[reportArgumentType]
                 self.mfa_stats["total_verifications"] += 1
                 if result.get("verified", False):
                     self.mfa_stats["successful_verifications"] += 1
                 else:
                     self.mfa_stats["failed_verifications"] += 1
             elif action == "generate_backup_codes":
-                result = self._generate_backup_codes(user_id)
+                result = self._generate_backup_codes(user_id)  # type: ignore[reportArgumentType]
             elif action == "revoke":
-                result = self._revoke_mfa(user_id, method)
+                result = self._revoke_mfa(user_id, method)  # type: ignore[reportArgumentType]
             elif action == "status":
-                result = self._get_mfa_status(user_id)
+                result = self._get_mfa_status(user_id)  # type: ignore[reportArgumentType]
             elif action == "verify_backup":
-                result = self._verify_backup_code(user_id, code)
+                result = self._verify_backup_code(user_id, code)  # type: ignore[reportArgumentType]
             elif action == "trust_device":
                 result = self._trust_device_by_fingerprint(
-                    user_id, kwargs.get("device_fingerprint")
+                    user_id, kwargs.get("device_fingerprint")  # type: ignore[reportArgumentType]
                 )
             elif action == "check_device_trust":
                 result = self._check_device_trust(
-                    user_id,
+                    user_id,  # type: ignore[reportArgumentType]
                     kwargs.get("device_fingerprint") or {},
                     kwargs.get("trust_token"),
                 )
             elif action == "list_methods":
-                result = self._list_methods(user_id)
+                result = self._list_methods(user_id)  # type: ignore[reportArgumentType]
             elif action == "disable":
-                result = self._disable_method(user_id, method)
+                result = self._disable_method(user_id, method)  # type: ignore[reportArgumentType]
             else:
                 result = {"success": False, "error": f"Unknown action: {action}"}
 
@@ -2091,7 +2091,7 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             result["timestamp"] = start_time.isoformat()
 
             # Audit log the operation
-            await self._audit_mfa_operation(user_id, action, method, result)
+            await self._audit_mfa_operation(user_id, action, method, result)  # type: ignore[reportArgumentType]
 
             # self.log_node_execution(
             #     "mfa_operation_complete",

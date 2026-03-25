@@ -386,6 +386,7 @@ class PlatformNode(AsyncNode):
         if not self.platform_integration:
             await self._initialize_platform(**kwargs)
 
+        assert self.platform_integration is not None
         kubeconfig_path = kwargs.get("kubeconfig_path")
         context_name = kwargs.get("context_name")
         namespace = kwargs.get("namespace", "default")
@@ -417,6 +418,7 @@ class PlatformNode(AsyncNode):
         if not self.platform_integration:
             await self._initialize_platform(**kwargs)
 
+        assert self.platform_integration is not None
         docker_host = kwargs.get("docker_host")
         api_version = kwargs.get("api_version", "auto")
         timeout = kwargs.get("timeout", 60)
@@ -487,6 +489,7 @@ class PlatformNode(AsyncNode):
                         "error": "subscription_id and resource_group are required for Azure",
                     }
 
+            assert self.platform_integration is not None
             result = await self.platform_integration.register_cloud_provider(
                 CloudProvider(cloud_provider), config, priority
             )
@@ -521,6 +524,10 @@ class PlatformNode(AsyncNode):
                 "error": "request_id, edge_node, and resource_type are required",
             }
 
+        assert request_id is not None
+        assert edge_node is not None
+        assert resource_type is not None
+        assert self.platform_integration is not None
         try:
             # Create resource request
             platform_preference = None
@@ -570,6 +577,7 @@ class PlatformNode(AsyncNode):
                 "error": "allocation_id is required",
             }
 
+        assert self.platform_integration is not None
         try:
             result = await self.platform_integration.deallocate_resource(allocation_id)
 
@@ -596,6 +604,7 @@ class PlatformNode(AsyncNode):
         if not allocation_id:
             return {"status": "error", "error": "allocation_id is required"}
 
+        assert self.platform_integration is not None
         try:
             result = await self.platform_integration.get_resource_status(allocation_id)
 
@@ -617,6 +626,7 @@ class PlatformNode(AsyncNode):
         if kwargs.get("platform_type"):
             platform_type = PlatformType(kwargs["platform_type"])
 
+        assert self.platform_integration is not None
         try:
             allocations = await self.platform_integration.list_allocations(
                 edge_node=edge_node, platform_type=platform_type
@@ -647,6 +657,7 @@ class PlatformNode(AsyncNode):
         if kwargs.get("scope"):
             scope = ResourceScope(kwargs["scope"])
 
+        assert self.platform_integration is not None
         try:
             result = await self.platform_integration.optimize_resources(scope)
 
@@ -680,6 +691,7 @@ class PlatformNode(AsyncNode):
                 "error": "allocation_id and target_scale are required",
             }
 
+        assert self.platform_integration is not None
         try:
             result = await self.platform_integration.scale_resources(
                 allocation_id, target_scale
@@ -703,6 +715,7 @@ class PlatformNode(AsyncNode):
         if not self.platform_integration:
             await self._initialize_platform(**kwargs)
 
+        assert self.platform_integration is not None
         try:
             result = await self.platform_integration.get_platform_status()
 
@@ -724,6 +737,7 @@ class PlatformNode(AsyncNode):
         if not self.platform_integration:
             await self._initialize_platform(**kwargs)
 
+        assert self.platform_integration is not None
         try:
             result = await self.platform_integration.start_monitoring()
 

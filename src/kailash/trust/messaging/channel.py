@@ -341,7 +341,9 @@ class SecureChannel:
             return reply
 
         except asyncio.TimeoutError:
-            logger.warning(f"Timeout waiting for reply to {request.message_id} after {timeout_seconds}s")
+            logger.warning(
+                f"Timeout waiting for reply to {request.message_id} after {timeout_seconds}s"
+            )
             raise
 
         finally:
@@ -360,7 +362,9 @@ class SecureChannel:
             future = self._pending_replies.get(correlation_id)
             if future and not future.done():
                 future.set_result(envelope)
-                logger.debug(f"Matched reply {envelope.message_id} to request {correlation_id}")
+                logger.debug(
+                    f"Matched reply {envelope.message_id} to request {correlation_id}"
+                )
 
     async def _audit_message(
         self,
@@ -374,7 +378,7 @@ class SecureChannel:
             if result and not result.is_valid():
                 action_result = ActionResult.FAILURE
 
-            metadata = {
+            metadata: Dict[str, Any] = {
                 "message_type": message_type,
                 "message_id": envelope.message_id,
                 "sender": envelope.sender_agent_id,
@@ -395,7 +399,7 @@ class SecureChannel:
                 agent_id=self._agent_id,
                 action=f"message_{message_type}",
                 result=action_result,
-                metadata=metadata,
+                context_data=metadata,
             )
 
         except Exception as e:

@@ -58,8 +58,8 @@ builder.add_node("PythonCodeNode", "greet", {
 })
 wf = builder.build()
 
-runtime = LocalRuntime()
-results, run_id = runtime.execute(wf, parameters={"greet": {"name": "World"}})
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(wf, parameters={"greet": {"name": "World"}})
 ```
 
 ### Step 3: Verify
@@ -143,7 +143,7 @@ from kailash.infrastructure import create_task_queue
 
 async def run_worker(worker_id: str):
     queue = await create_task_queue()  # auto-detects from KAILASH_QUEUE_URL
-    runtime = LocalRuntime()
+    runtime = LocalRuntime()  # Don't forget to call runtime.close() when done
 
     print(f"Worker {worker_id} started, polling for tasks...")
 

@@ -68,7 +68,7 @@ class WorkflowTestResult:
 class AsyncWorkflowTestCase:
     """Base class for async workflow testing."""
 
-    def __init__(self, test_name: str = None):
+    def __init__(self, test_name: Optional[str] = None):
         self.test_name = test_name or self.__class__.__name__
         self.resource_registry = ResourceRegistry()
         self.mock_registry = MockResourceRegistry()
@@ -132,8 +132,8 @@ class AsyncWorkflowTestCase:
         name: str,
         factory: Union[ResourceFactory, Callable],
         mock: bool = False,
-        health_check: Callable = None,
-        cleanup_handler: Callable = None,
+        health_check: Optional[Callable] = None,
+        cleanup_handler: Optional[Callable] = None,
     ) -> Any:
         """Create a test resource with automatic cleanup."""
         if mock:
@@ -143,24 +143,28 @@ class AsyncWorkflowTestCase:
             # Handle callable factories
             if callable(factory) and not hasattr(factory, "create"):
                 # Wrap in a proper factory
-                class CallableFactory:
-                    def __init__(self, func):
+                class CallableFactory(ResourceFactory):
+                    def __init__(self, func: Any):
                         self.func = func
 
-                    async def create(self):
+                    async def create(self) -> Any:
                         if asyncio.iscoroutinefunction(self.func):
                             return await self.func()
                         return self.func()
 
+                    def get_config(self) -> Dict[str, Any]:
+                        return {"type": "callable"}
+
                 factory = CallableFactory(factory)
 
             # Register real resource
-            self.resource_registry.register_factory(
-                name,
-                factory,
-                health_check=health_check,
-                cleanup_handler=cleanup_handler,
-            )
+            if isinstance(factory, ResourceFactory):
+                self.resource_registry.register_factory(
+                    name,
+                    factory,
+                    health_check=health_check,
+                    cleanup_handler=cleanup_handler,
+                )
             resource = await self.resource_registry.get_resource(name)
 
         # Store for later access
@@ -189,7 +193,7 @@ class AsyncWorkflowTestCase:
         self,
         workflow: Workflow,
         inputs: Dict[str, Any],
-        mock_resources: Dict[str, Any] = None,
+        mock_resources: Optional[Dict[str, Any]] = None,
         timeout: float = 30.0,
         capture_logs: bool = True,
     ) -> WorkflowTestResult:
@@ -245,7 +249,9 @@ class AsyncWorkflowTestCase:
                 )
 
         # Create test runtime with test resource registry
-        test_registry = TestResourceRegistry(self.resource_registry, self.mock_registry)
+        test_registry: Any = TestResourceRegistry(
+            self.resource_registry, self.mock_registry
+        )
         runtime = AsyncLocalRuntime(resource_registry=test_registry)
 
         # Execute with timeout
@@ -254,26 +260,35 @@ class AsyncWorkflowTestCase:
 
         try:
             # Execute workflow
-            result = await asyncio.wait_for(
+            raw_result = await asyncio.wait_for(
                 runtime.execute_workflow_async(workflow, inputs), timeout=timeout
             )
+            # execute_workflow_async returns (results_dict, run_id)
+            if isinstance(raw_result, tuple):
+                result_data, _run_id = raw_result
+            else:
+                result_data = raw_result
 
             # Convert to test result
+            result_dict: Dict[str, Any] = (
+                result_data if isinstance(result_data, dict) else {}
+            )
             return WorkflowTestResult(
-                status="success" if not result.get("errors") else "failed",
-                outputs=result.get("results", {}),
+                status="success" if not result_dict.get("errors") else "failed",
+                outputs=result_dict.get("results", {}),
                 errors=[
-                    (node, error) for node, error in result.get("errors", {}).items()
+                    (node, error)
+                    for node, error in result_dict.get("errors", {}).items()
                 ],
                 error=(
-                    list(result.get("errors", {}).values())[0]
-                    if result.get("errors")
+                    list(result_dict.get("errors", {}).values())[0]
+                    if result_dict.get("errors")
                     else None
                 ),
-                execution_time=result.get(
+                execution_time=result_dict.get(
                     "total_duration", asyncio.get_event_loop().time() - start_time
                 ),
-                node_timings=result.get("execution_times", {}),
+                node_timings=result_dict.get("execution_times", {}),
                 logs=logs,
             )
 
@@ -312,7 +327,11 @@ class AsyncWorkflowTestCase:
         assert result.status == "failed", "Workflow did not fail as expected"
 
     def assert_node_output(
-        self, result: WorkflowTestResult, node_id: str, expected: Any, key: str = None
+        self,
+        result: WorkflowTestResult,
+        node_id: str,
+        expected: Any,
+        key: Optional[str] = None,
     ):
         """Assert node output matches expected."""
         self._assertions_made += 1
@@ -325,9 +344,9 @@ class AsyncWorkflowTestCase:
         self,
         resource_name: str,
         method_name: str,
-        times: int = None,
-        with_args: tuple = None,
-        with_kwargs: dict = None,
+        times: Optional[int] = None,
+        with_args: Optional[tuple] = None,
+        with_kwargs: Optional[dict] = None,
     ):
         """Assert a resource method was called."""
         self._assertions_made += 1

@@ -65,12 +65,12 @@ The default runtime for synchronous execution.
    from kailash import Workflow
 
    workflow = Workflow("local_example")
-   runtime = LocalRuntime()
 
    # Add nodes...
 
    # Execute with local runtime
-   results = runtime.execute(workflow)
+   with LocalRuntime() as runtime:
+       results = runtime.execute(workflow)
 
 **Connection Parameter Validation (v0.8.4+)**
 
@@ -114,18 +114,17 @@ Configure connection parameter validation modes for enhanced security:
    from kailash.runtime import LocalRuntime
 
    # Create runtime with validation
-   runtime = LocalRuntime(connection_validation="strict")
+   with LocalRuntime(connection_validation="strict") as runtime:
+       # Execute workflow - validation runs automatically
+       results, run_id = runtime.execute(workflow, parameters=params)
 
-   # Execute workflow - validation runs automatically
-   results, run_id = runtime.execute(workflow, parameters=params)
+       # Access validation metrics
+       metrics = runtime.get_validation_metrics()
+       print(f"Performance: {metrics['performance_summary']}")
+       print(f"Security: {metrics['security_report']}")
 
-   # Access validation metrics
-   metrics = runtime.get_validation_metrics()
-   print(f"Performance: {metrics['performance_summary']}")
-   print(f"Security: {metrics['security_report']}")
-
-   # Reset metrics for next run
-   runtime.reset_validation_metrics()
+       # Reset metrics for next run
+       runtime.reset_validation_metrics()
 
 AsyncLocalRuntime
 =================
@@ -160,8 +159,11 @@ Asynchronous runtime for I/O-bound operations.
 
    # Execute asynchronously
    async def run():
-       results = await runtime.execute_async(workflow)
-       return results
+       try:
+           results = await runtime.execute_async(workflow)
+           return results
+       finally:
+           runtime.close()
 
    results = asyncio.run(run())
 
@@ -607,19 +609,18 @@ Track runtime performance:
    from kailash.runtime import RuntimeMetrics
 
    # Enable metrics collection
-   runtime = LocalRuntime(collect_metrics=True)
+   with LocalRuntime(collect_metrics=True) as runtime:
+       # Execute workflow
+       results = runtime.execute(workflow)
 
-   # Execute workflow
-   results = runtime.execute(workflow)
+       # Access metrics
+       metrics = runtime.get_metrics()
+       print(f"Total execution time: {metrics.total_time}s")
+       print(f"Node execution times: {metrics.node_times}")
+       print(f"Memory usage: {metrics.memory_usage}")
 
-   # Access metrics
-   metrics = runtime.get_metrics()
-   print(f"Total execution time: {metrics.total_time}s")
-   print(f"Node execution times: {metrics.node_times}")
-   print(f"Memory usage: {metrics.memory_usage}")
-
-   # Export metrics
-   metrics.export("runtime_metrics.json")
+       # Export metrics
+       metrics.export("runtime_metrics.json")
 
 See Also
 ========

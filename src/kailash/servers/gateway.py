@@ -35,7 +35,7 @@ def create_gateway(
     secret_manager: Optional[SecretManager] = None,
     # Backward compatibility
     **kwargs,
-) -> EnterpriseWorkflowServer:
+) -> WorkflowServer:
     """Create a production-ready workflow server.
 
     By default, creates an EnterpriseWorkflowServer with all enterprise
@@ -133,7 +133,9 @@ def create_enterprise_gateway(**kwargs) -> EnterpriseWorkflowServer:
     This is an alias for create_gateway(server_type="enterprise") that makes
     it explicit that enterprise features are desired.
     """
-    return create_gateway(server_type="enterprise", **kwargs)
+    server = create_gateway(server_type="enterprise", **kwargs)
+    assert isinstance(server, EnterpriseWorkflowServer)
+    return server
 
 
 def create_durable_gateway(**kwargs) -> DurableWorkflowServer:
@@ -142,7 +144,9 @@ def create_durable_gateway(**kwargs) -> DurableWorkflowServer:
     This creates a server with durability features but without resource
     management and other enterprise capabilities.
     """
-    return create_gateway(server_type="durable", **kwargs)
+    server = create_gateway(server_type="durable", **kwargs)
+    assert isinstance(server, DurableWorkflowServer)
+    return server
 
 
 def create_basic_gateway(**kwargs) -> WorkflowServer:

@@ -21,6 +21,7 @@ Version:
     Part of: Runtime parity remediation (Phase 1)
 """
 
+import logging
 from typing import Any
 
 from kailash.sdk_exceptions import WorkflowValidationError
@@ -28,6 +29,8 @@ from kailash.workflow import Workflow
 
 
 class ValidationMixin:
+    # Declare attributes provided by BaseRuntime (used by mixin methods)
+    logger: logging.Logger
     """
     Validation capabilities for workflow runtimes.
 

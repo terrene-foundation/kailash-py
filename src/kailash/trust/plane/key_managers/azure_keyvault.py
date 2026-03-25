@@ -37,13 +37,17 @@ __all__ = [
 ]
 
 try:
-    from azure.identity import DefaultAzureCredential
-    from azure.keyvault.keys import KeyClient
-    from azure.keyvault.keys.crypto import CryptographyClient, SignatureAlgorithm
+    from azure.identity import DefaultAzureCredential  # type: ignore[import-untyped]
+    from azure.keyvault.keys import KeyClient  # type: ignore[import-untyped]
+    from azure.keyvault.keys.crypto import CryptographyClient, SignatureAlgorithm  # type: ignore[import-untyped]
 
     _AZURE_AVAILABLE = True
 except ImportError:
     _AZURE_AVAILABLE = False
+    DefaultAzureCredential = None  # type: ignore[assignment,misc]
+    KeyClient = None  # type: ignore[assignment,misc]
+    CryptographyClient = None  # type: ignore[assignment,misc]
+    SignatureAlgorithm = None  # type: ignore[assignment,misc]
 
 
 class AzureKeyVaultKeyManager:
@@ -73,8 +77,8 @@ class AzureKeyVaultKeyManager:
         self._vault_url = vault_url
         self._key_name = key_name
 
-        credential = DefaultAzureCredential()
-        self._key_client: Any = KeyClient(vault_url=vault_url, credential=credential)
+        credential = DefaultAzureCredential()  # type: ignore[misc]
+        self._key_client: Any = KeyClient(vault_url=vault_url, credential=credential)  # type: ignore[misc]
 
         try:
             key = self._key_client.get_key(key_name)
@@ -84,7 +88,7 @@ class AzureKeyVaultKeyManager:
                 provider="azure_keyvault",
                 key_id=key_name,
             ) from exc
-        self._crypto_client: Any = CryptographyClient(key, credential=credential)
+        self._crypto_client: Any = CryptographyClient(key, credential=credential)  # type: ignore[misc]
         self._public_key_cache: bytes | None = None
 
         logger.info(
@@ -108,7 +112,7 @@ class AzureKeyVaultKeyManager:
             SigningError: If Azure signing operation fails.
         """
         try:
-            result = self._crypto_client.sign(SignatureAlgorithm.es256, data)
+            result = self._crypto_client.sign(SignatureAlgorithm.es256, data)  # type: ignore[union-attr]
         except Exception as exc:
             raise SigningError(
                 f"Azure Key Vault signing failed: {exc}",
@@ -139,6 +143,7 @@ class AzureKeyVaultKeyManager:
             jwk = key.key
             # Concatenate x and y coordinates for the raw EC public key
             self._public_key_cache = jwk.x + jwk.y
+        assert self._public_key_cache is not None
         return self._public_key_cache
 
     def key_id(self) -> str:

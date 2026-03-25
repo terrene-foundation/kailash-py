@@ -8,7 +8,7 @@ import logging
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +168,7 @@ class PerformanceMonitor:
             return total_time / total_nodes
         return None
 
-    def get_performance_report(self) -> Dict[str, any]:
+    def get_performance_report(self) -> Dict[str, Any]:
         """Generate performance report.
 
         Returns:

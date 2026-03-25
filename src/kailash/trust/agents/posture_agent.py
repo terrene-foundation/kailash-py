@@ -181,7 +181,9 @@ class PostureAwareAgent:
         """
         # Check circuit breaker first if configured
         if self._circuit_breaker is not None and self._circuit_breaker.is_open():
-            logger.warning(f"Circuit breaker open for agent {self._agent_id}, execution blocked")
+            logger.warning(
+                f"Circuit breaker open for agent {self._agent_id}, execution blocked"
+            )
             raise PermissionError(f"Circuit breaker is open for agent {self._agent_id}")
 
         posture = self.posture
@@ -239,7 +241,9 @@ class PostureAwareAgent:
             entry.result = result
             entry.duration_ms = (end_time - start_time).total_seconds() * 1000
 
-            logger.info(f"[AUDIT] Agent {self._agent_id} completed execution in {entry.duration_ms:.2f}ms")
+            logger.info(
+                f"[AUDIT] Agent {self._agent_id} completed execution in {entry.duration_ms:.2f}ms"
+            )
             return result
         except Exception as e:
             end_time = datetime.now(timezone.utc)
@@ -276,7 +280,9 @@ class PostureAwareAgent:
             # Wait for delay or cancel
             cancelled = await self._wait_for_cancel_or_timeout()
             if cancelled:
-                logger.info(f"Agent {self._agent_id} execution cancelled during CONTINUOUS_INSIGHT delay")
+                logger.info(
+                    f"Agent {self._agent_id} execution cancelled during CONTINUOUS_INSIGHT delay"
+                )
                 raise PermissionError(f"Agent {self._agent_id} execution was cancelled")
 
             # Execute with audit
@@ -292,7 +298,7 @@ class PostureAwareAgent:
         """
         try:
             await asyncio.wait_for(
-                self._cancel_event.wait(),
+                self._cancel_event.wait(),  # type: ignore[union-attr]
                 timeout=self._assisted_delay_seconds,
             )
             return True  # Event was set (cancelled)
@@ -313,7 +319,9 @@ class PostureAwareAgent:
     async def _execute_with_approval(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """Execute with human approval requirement."""
         if self._approval_handler is None:
-            raise ValueError(f"Agent {self._agent_id} requires approval_handler for SUPERVISED posture")
+            raise ValueError(
+                f"Agent {self._agent_id} requires approval_handler for SUPERVISED posture"
+            )
 
         logger.info(f"Agent {self._agent_id} requesting approval for execution")
 
@@ -324,8 +332,12 @@ class PostureAwareAgent:
         )
 
         if not approved:
-            logger.warning(f"Agent {self._agent_id} execution denied by approval handler")
-            raise PermissionError(f"Agent {self._agent_id} execution was denied by approver")
+            logger.warning(
+                f"Agent {self._agent_id} execution denied by approval handler"
+            )
+            raise PermissionError(
+                f"Agent {self._agent_id} execution was denied by approver"
+            )
 
         # Execute with audit after approval
         return await self._execute_with_audit(kwargs)

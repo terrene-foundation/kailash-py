@@ -16,14 +16,14 @@ class EnterpriseAuditLoggerNode(Node):
     ensuring compliance with regulations like SOX, HIPAA, and GDPR.
     """
 
-    metadata = NodeMetadata(
+    _node_metadata = NodeMetadata(
         name="EnterpriseAuditLoggerNode",
         description="Generate comprehensive audit logs for enterprise compliance",
         version="1.0.0",
         tags={"enterprise", "audit", "compliance"},
     )
 
-    def __init__(self, name: str = None, **kwargs):
+    def __init__(self, name: str | None = None, **kwargs):
         self.name = name or self.__class__.__name__
         super().__init__(name=self.name, **kwargs)
 
@@ -50,7 +50,7 @@ class EnterpriseAuditLoggerNode(Node):
             ),
         }
 
-    def run(
+    def run(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         execution_results: Dict,
         user_context: Dict,

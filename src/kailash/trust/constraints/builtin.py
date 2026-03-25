@@ -37,6 +37,8 @@ Author: Kaizen Framework Team
 Created: 2026-02-08
 """
 
+from __future__ import annotations
+
 import fnmatch
 import logging
 import math
@@ -47,6 +49,7 @@ from typing import Any, Dict, List, Optional, Set, Union
 from kailash.trust.constraints.dimension import (
     ConstraintCheckResult,
     ConstraintDimension,
+    ConstraintDimensionRegistry,
     ConstraintValue,
 )
 

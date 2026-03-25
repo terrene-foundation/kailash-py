@@ -313,7 +313,12 @@ async def run_quickstart(verbose: bool = False) -> None:
             # Show the delegation-level constraints
             chain2 = await store.get_chain(agent2_id)
             env_constraints = [
-                str(c.value) for c in chain2.constraint_envelope.active_constraints
+                str(c.value)
+                for c in (
+                    chain2.constraint_envelope.active_constraints
+                    if chain2 and chain2.constraint_envelope
+                    else []
+                )
             ]
             if env_constraints:
                 print(_detail(f"Constraints: {', '.join(env_constraints)}"))

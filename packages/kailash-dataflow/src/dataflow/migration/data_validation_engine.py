@@ -107,31 +107,41 @@ class DataValidationEngine:
     potential issues or data loss.
     """
 
-    def __init__(self, connection_string: str):
+    def __init__(self, connection_string: str, runtime=None):
         """
         Initialize the Data Validation Engine.
 
         Args:
             connection_string: PostgreSQL connection string
+            runtime: Optional shared runtime. If provided, the engine acquires
+                a reference (ref-count increment). If None, creates its own.
         """
         self.connection_string = connection_string
 
-        # ✅ FIX: Detect async context and use appropriate runtime
-        try:
-            asyncio.get_running_loop()
-            # Running in async context - use AsyncLocalRuntime
-            self.runtime = AsyncLocalRuntime()
-            self._is_async = True
+        # Initialize runtime
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+            self._is_async = isinstance(runtime, AsyncLocalRuntime)
             logger.debug(
-                "DataValidationEngine: Detected async context, using AsyncLocalRuntime"
+                "DataValidationEngine: Using injected runtime (ref_count=%d)",
+                runtime.ref_count,
             )
-        except RuntimeError:
-            # No event loop - use sync LocalRuntime
-            self.runtime = LocalRuntime()
-            self._is_async = False
-            logger.debug(
-                "DataValidationEngine: Detected sync context, using LocalRuntime"
-            )
+        else:
+            try:
+                asyncio.get_running_loop()
+                self.runtime = AsyncLocalRuntime()
+                self._is_async = True
+                logger.debug(
+                    "DataValidationEngine: Detected async context, using AsyncLocalRuntime"
+                )
+            except RuntimeError:
+                self.runtime = LocalRuntime()
+                self._is_async = False
+                logger.debug(
+                    "DataValidationEngine: Detected sync context, using LocalRuntime"
+                )
+            self._owns_runtime = True
 
         # Detect database type for AsyncSQLDatabaseNode
         from ..adapters.connection_parser import ConnectionParser
@@ -286,9 +296,7 @@ class DataValidationEngine:
                 },
             )
 
-            # ✅ FIX: Use LocalRuntime for validation operations to avoid async context issues
-            init_runtime = LocalRuntime()
-            results, _ = init_runtime.execute(workflow.build())
+            results, _ = self.runtime.execute(workflow.build())
 
             if "count_incompatible" not in results:
                 logger.error("Failed to execute incompatible data count query")
@@ -387,9 +395,7 @@ class DataValidationEngine:
                 },
             )
 
-            # ✅ FIX: Use LocalRuntime for validation operations to avoid async context issues
-            init_runtime = LocalRuntime()
-            results, _ = init_runtime.execute(workflow.build())
+            results, _ = self.runtime.execute(workflow.build())
 
             if "analyze_column" not in results:
                 raise Exception("Failed to execute column analysis query")
@@ -840,3 +846,27 @@ class DataValidationEngine:
         # Simple numeric format validation
         numeric_pattern = r"^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$"
         return bool(re.match(numeric_pattern, value.strip()))
+
+    def close(self):
+        """Release the runtime reference.
+
+        Safe to call multiple times -- subsequent calls are no-ops.
+        """
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        """Emit ResourceWarning if close() was not called explicitly."""
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass

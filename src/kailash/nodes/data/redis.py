@@ -4,11 +4,16 @@ This module provides a Redis node for performing various Redis operations
 including get, set, hget, hset, hgetall, and more.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 from typing import Any, Dict, List, Optional, Union
 
-import redis
+try:
+    import redis as _redis_mod
+except ImportError:
+    _redis_mod = None  # type: ignore[assignment]  # Optional dependency
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.sdk_exceptions import NodeExecutionError
@@ -114,8 +119,7 @@ class RedisNode(Node):
         self.ttl = ttl
         self.decode_responses = decode_responses
 
-    @classmethod
-    def get_parameters(cls) -> Dict[str, NodeParameter]:
+    def get_parameters(self) -> Dict[str, NodeParameter]:
         """Define node parameters."""
         return {
             "host": NodeParameter(
@@ -200,10 +204,10 @@ class RedisNode(Node):
             ),
         }
 
-    def _get_client(self) -> redis.Redis:
+    def _get_client(self) -> _redis_mod.Redis:  # type: ignore[reportInvalidTypeForm]
         """Get or create Redis client."""
         if not self._client:
-            self._client = redis.Redis(
+            self._client = _redis_mod.Redis(  # type: ignore[reportOptionalMemberAccess]
                 host=self.host,
                 port=self.port,
                 db=self.db,
@@ -236,6 +240,8 @@ class RedisNode(Node):
         if not key and self.operation not in ["ping", "info", "flushdb"]:
             raise NodeExecutionError("Key is required for this operation")
 
+        # key is guaranteed non-None for all operations except ping/info/flushdb
+        key = str(key) if key is not None else ""
         try:
             client = self._get_client()
             result = None
@@ -359,7 +365,7 @@ class RedisNode(Node):
 
             return {"result": result}
 
-        except redis.RedisError as e:
+        except _redis_mod.RedisError as e:  # type: ignore[reportOptionalMemberAccess]
             logger.error(f"Redis error: {e}")
             raise NodeExecutionError(f"Redis operation failed: {str(e)}")
         except Exception as e:

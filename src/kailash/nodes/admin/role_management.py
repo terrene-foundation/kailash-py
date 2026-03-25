@@ -375,6 +375,7 @@ class RoleManagementNode(Node):
 
             # Initialize dependencies
             self._init_dependencies(inputs)
+            assert self._db_node is not None
 
             # Route to appropriate operation
             if operation == RoleOperation.CREATE_ROLE:
@@ -440,6 +441,7 @@ class RoleManagementNode(Node):
 
     def _create_role(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new role with hierarchy validation."""
+        assert self._db_node is not None
         role_data = inputs["role_data"]
         tenant_id = inputs.get("tenant_id", "default")
         validate_hierarchy = inputs.get("validate_hierarchy", True)
@@ -544,6 +546,7 @@ class RoleManagementNode(Node):
 
     def _assign_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Assign role to user with validation."""
+        assert self._db_node is not None
         user_id = inputs["user_id"]
         role_id = inputs["role_id"]
         tenant_id = inputs.get("tenant_id", "default")
@@ -729,6 +732,7 @@ class RoleManagementNode(Node):
 
     def _validate_parent_roles_exist(self, parent_roles: Set[str], tenant_id: str):
         """Validate that all parent roles exist."""
+        assert self._db_node is not None
         if not parent_roles:
             return
 
@@ -789,6 +793,7 @@ class RoleManagementNode(Node):
         self, tenant_id: str, exclude_role: Optional[str] = None
     ) -> Dict[str, Dict]:
         """Build complete role hierarchy for tenant."""
+        assert self._db_node is not None
         query = """
         SELECT role_id, name, permissions, parent_roles, child_roles, is_active
         FROM roles
@@ -836,6 +841,7 @@ class RoleManagementNode(Node):
 
     def _get_role_by_id(self, role_id: str, tenant_id: str) -> Optional[Dict[str, Any]]:
         """Get role by ID."""
+        assert self._db_node is not None
         query = """
         SELECT role_id, name, description, role_type, permissions, parent_roles,
                attributes, is_active, created_at, updated_at
@@ -857,6 +863,7 @@ class RoleManagementNode(Node):
         operation: str,
     ):
         """Update child_roles JSONB arrays for parent roles."""
+        assert self._db_node is not None
         # For now, let's just read the current child_roles, modify them in Python, and update
         # This is simpler and more reliable than complex JSONB operations
 
@@ -908,6 +915,7 @@ class RoleManagementNode(Node):
     # Additional operations would follow similar patterns
     def _update_role(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Update role information."""
+        assert self._db_node is not None
         role_id = inputs["role_id"]
         role_data = inputs["role_data"]
         tenant_id = inputs.get("tenant_id", "default")
@@ -1010,6 +1018,7 @@ class RoleManagementNode(Node):
 
     def _delete_role(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Delete role with dependency checking."""
+        assert self._db_node is not None
         role_id = inputs["role_id"]
         tenant_id = inputs.get("tenant_id", "default")
         force = inputs.get("force", False)
@@ -1119,6 +1128,7 @@ class RoleManagementNode(Node):
 
     def _list_roles(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """List roles with filtering and pagination."""
+        assert self._db_node is not None
         tenant_id = inputs.get("tenant_id", "default")
         filters = inputs.get("filters", {})
         search_query = inputs.get("search_query", "")
@@ -1250,6 +1260,7 @@ class RoleManagementNode(Node):
 
     def _get_role(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Get detailed role information."""
+        assert self._db_node is not None
         role_id = inputs["role_id"]
         tenant_id = inputs.get("tenant_id", "default")
         include_inherited = inputs.get("include_inherited", True)
@@ -1340,6 +1351,7 @@ class RoleManagementNode(Node):
 
     def _unassign_user(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Unassign role from user."""
+        assert self._db_node is not None
         user_id = inputs["user_id"]
         role_id = inputs["role_id"]
         tenant_id = inputs.get("tenant_id", "default")
@@ -1406,6 +1418,7 @@ class RoleManagementNode(Node):
 
     def _add_permission(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Add permission to role."""
+        assert self._db_node is not None
         role_id = inputs["role_id"]
         permission = inputs["permission"]
         tenant_id = inputs.get("tenant_id", "default")
@@ -1466,6 +1479,7 @@ class RoleManagementNode(Node):
 
     def _remove_permission(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Remove permission from role."""
+        assert self._db_node is not None
         role_id = inputs["role_id"]
         permission = inputs["permission"]
         tenant_id = inputs.get("tenant_id", "default")
@@ -1582,6 +1596,7 @@ class RoleManagementNode(Node):
 
     def _get_user_roles(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Get all roles for a user."""
+        assert self._db_node is not None
         user_id = inputs["user_id"]
         tenant_id = inputs.get("tenant_id", "default")
         include_inherited = inputs.get("include_inherited", True)
@@ -1672,6 +1687,7 @@ class RoleManagementNode(Node):
 
     def _get_role_users(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Get all users assigned to a role."""
+        assert self._db_node is not None
         role_id = inputs["role_id"]
         tenant_id = inputs.get("tenant_id", "default")
         include_user_details = inputs.get("include_user_details", True)
@@ -1911,6 +1927,7 @@ class RoleManagementNode(Node):
         self, parent_role_id: str, orphaned_child_id: str, tenant_id: str
     ):
         """Remove orphaned child reference from parent role."""
+        assert self._db_node is not None
         update_query = """
         UPDATE roles
         SET child_roles = (
@@ -1939,6 +1956,7 @@ class RoleManagementNode(Node):
         self, parent_role_id: str, child_role_id: str, tenant_id: str
     ):
         """Ensure parent-child relationship is consistent in both directions."""
+        assert self._db_node is not None
         # Add child to parent's child_roles if not present
         add_child_query = """
         UPDATE roles

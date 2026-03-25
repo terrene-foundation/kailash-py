@@ -72,11 +72,13 @@ class ResourceResolver:
             raise ValueError(f"Unknown resource type: {reference.type}")
 
         # Get credentials if needed
-        credentials = None
+        credentials: Optional[Dict[str, Any]] = None
         if reference.credentials_ref:
-            credentials = await self.secret_manager.get_secret(
-                reference.credentials_ref
-            )
+            secret = await self.secret_manager.get_secret(reference.credentials_ref)
+            if isinstance(secret, dict):
+                credentials = secret
+            elif isinstance(secret, str):
+                credentials = {"value": secret}
 
         # Resolve resource
         return await resolver(reference.config, credentials)
@@ -105,17 +107,17 @@ class ResourceResolver:
             factory = DatabasePoolFactory(**connection_config)
 
             # Health check
-            async def health_check(pool):
+            async def health_check(resource: Any) -> bool:
                 try:
-                    async with pool.acquire() as conn:
+                    async with resource.acquire() as conn:
                         await conn.fetchval("SELECT 1")
                     return True
                 except Exception:
                     return False
 
             # Cleanup
-            async def cleanup(pool):
-                await pool.close()
+            async def cleanup(resource: Any) -> None:
+                await resource.close()
 
             self.resource_registry.register_factory(
                 pool_key, factory, health_check=health_check, cleanup_handler=cleanup
@@ -172,18 +174,21 @@ class ResourceResolver:
         except Exception:
             factory = CacheFactory(**config)
 
-            async def health_check(cache):
+            async def cache_health_check(resource: Any) -> bool:
                 try:
-                    await cache.ping()
+                    await resource.ping()
                     return True
                 except Exception:
                     return False
 
-            async def cleanup(cache):
-                await cache.aclose()
+            async def cache_cleanup(resource: Any) -> None:
+                await resource.aclose()
 
             self.resource_registry.register_factory(
-                cache_key, factory, health_check=health_check, cleanup_handler=cleanup
+                cache_key,
+                factory,
+                health_check=cache_health_check,
+                cleanup_handler=cache_cleanup,
             )
             return await self.resource_registry.get_resource(cache_key)
 
@@ -210,11 +215,14 @@ class ResourceResolver:
         except Exception:
             factory = MessageQueueFactory(backend=queue_type, **connection_config)
 
+            mq_health_check: Any = None
+            mq_cleanup: Any = None
+
             if queue_type == "rabbitmq":
 
-                async def health_check(connection):
+                async def _rabbitmq_health(resource: Any) -> bool:
                     try:
-                        channel = await connection.channel()
+                        channel = await resource.channel()
                         await channel.declare_queue(
                             "", exclusive=True, auto_delete=True
                         )
@@ -223,37 +231,46 @@ class ResourceResolver:
                     except Exception:
                         return False
 
-                async def cleanup(connection):
-                    await connection.close()
+                async def _rabbitmq_cleanup(resource: Any) -> None:
+                    await resource.close()
+
+                mq_health_check = _rabbitmq_health
+                mq_cleanup = _rabbitmq_cleanup
 
             elif queue_type == "kafka":
 
-                async def health_check(client):
+                async def _kafka_health(resource: Any) -> bool:
                     try:
-                        await client.producer.partitions_for("__consumer_offsets")
+                        await resource.producer.partitions_for("__consumer_offsets")
                         return True
                     except Exception:
                         return False
 
-                async def cleanup(client):
-                    await client.close()
+                async def _kafka_cleanup(resource: Any) -> None:
+                    await resource.close()
+
+                mq_health_check = _kafka_health
+                mq_cleanup = _kafka_cleanup
 
             else:
 
-                async def health_check(resource):
+                async def _default_health(resource: Any) -> bool:
                     return True
 
-                async def cleanup(resource):
+                async def _default_cleanup(resource: Any) -> None:
                     if hasattr(resource, "close"):
                         await resource.close()
                     elif hasattr(resource, "aclose"):
                         await resource.aclose()
 
+                mq_health_check = _default_health
+                mq_cleanup = _default_cleanup
+
             self.resource_registry.register_factory(
                 mq_key,
                 factory,
-                health_check=health_check,
-                cleanup_handler=cleanup,
+                health_check=mq_health_check,
+                cleanup_handler=mq_cleanup,
             )
             return await self.resource_registry.get_resource(mq_key)
 
@@ -284,27 +301,27 @@ class ResourceResolver:
 
             default_bucket = connection_config.get("default_bucket", "")
 
-            async def health_check(client):
+            async def s3_health_check(resource: Any) -> bool:
                 try:
                     if default_bucket:
-                        await client.head_bucket(Bucket=default_bucket)
+                        await resource.head_bucket(Bucket=default_bucket)
                     else:
-                        await client.list_buckets()
+                        await resource.list_buckets()
                     return True
                 except Exception:
                     return False
 
-            async def cleanup(client):
+            async def s3_cleanup(resource: Any) -> None:
                 # Use the stored context manager for proper aioboto3 cleanup
-                if hasattr(client, "_aioboto3_ctx"):
-                    await client._aioboto3_ctx.__aexit__(None, None, None)
+                if hasattr(resource, "_aioboto3_ctx"):
+                    await resource._aioboto3_ctx.__aexit__(None, None, None)
                 else:
-                    await client.close()
+                    await resource.close()
 
             self.resource_registry.register_factory(
                 s3_key,
                 factory,
-                health_check=health_check,
-                cleanup_handler=cleanup,
+                health_check=s3_health_check,
+                cleanup_handler=s3_cleanup,
             )
             return await self.resource_registry.get_resource(s3_key)

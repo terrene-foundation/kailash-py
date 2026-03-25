@@ -131,7 +131,7 @@ class SecureGovernedNode(SecurityMixin, LoggingMixin, PerformanceMixin, Node, AB
                     issue for issue in issues if issue.severity == IssueSeverity.WARNING
                 ]
                 for warning in warnings:
-                    self.log_security_event(
+                    self.log_security_event(  # type: ignore[reportAttributeAccessIssue]
                         f"Governance warning: {warning.code} - {warning.message}",
                         level="WARNING",
                     )
@@ -145,7 +145,7 @@ class SecureGovernedNode(SecurityMixin, LoggingMixin, PerformanceMixin, Node, AB
                 raise
             # Other exceptions during validation setup are not critical
             if self.audit_enabled and hasattr(self, "log_security_event"):
-                self.log_security_event(
+                self.log_security_event(  # type: ignore[reportAttributeAccessIssue]
                     f"Governance validation setup warning: {e}", level="WARNING"
                 )
 
@@ -164,7 +164,7 @@ class SecureGovernedNode(SecurityMixin, LoggingMixin, PerformanceMixin, Node, AB
             ValueError: If parameter validation fails
         """
         if self.audit_enabled and hasattr(self, "log_security_event"):
-            self.log_security_event("Starting governed execution", level="INFO")
+            self.log_security_event("Starting governed execution", level="INFO")  # type: ignore[reportAttributeAccessIssue]
 
         try:
             # 1. Security validation and sanitization
@@ -212,7 +212,7 @@ class SecureGovernedNode(SecurityMixin, LoggingMixin, PerformanceMixin, Node, AB
                 ]
                 if self.audit_enabled and hasattr(self, "log_security_event"):
                     for warning in warnings:
-                        self.log_security_event(
+                        self.log_security_event(  # type: ignore[reportAttributeAccessIssue]
                             f"Parameter warning: {warning.code} - {warning.message}",
                             level="WARNING",
                         )
@@ -242,7 +242,7 @@ class SecureGovernedNode(SecurityMixin, LoggingMixin, PerformanceMixin, Node, AB
             result = self.run_governed(**validated_inputs)
 
             if self.audit_enabled and hasattr(self, "log_security_event"):
-                self.log_security_event(
+                self.log_security_event(  # type: ignore[reportAttributeAccessIssue]
                     "Governed execution completed successfully", level="INFO"
                 )
 
@@ -284,7 +284,7 @@ class SecureGovernedNode(SecurityMixin, LoggingMixin, PerformanceMixin, Node, AB
             "security_enabled": hasattr(self, "validate_and_sanitize_inputs"),
             "governance_compliant": True,  # If we reach here, compliance passed
             "performance_stats": (
-                self.get_performance_stats()
+                self.get_performance_stats()  # type: ignore[reportAttributeAccessIssue]
                 if hasattr(self, "get_performance_stats")
                 else {}
             ),

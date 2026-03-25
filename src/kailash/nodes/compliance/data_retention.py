@@ -242,7 +242,7 @@ class DataRetentionPolicyNode(SecurityMixin, PerformanceMixin, LoggingMixin, Nod
             ),
         }
 
-    def run(
+    def run(  # type: ignore[override]
         self,
         action: str,
         data_type: Optional[str] = None,
@@ -299,7 +299,7 @@ class DataRetentionPolicyNode(SecurityMixin, PerformanceMixin, LoggingMixin, Nod
                 result = self._apply_retention_policy(data_type, data_records)
 
             elif action == "scan_expired":
-                result = self._scan_for_expired_data(data_types)
+                result = self._scan_for_expired_data(data_types or [])
                 self.retention_stats["total_scans"] += 1
 
             elif action == "archive_data":
@@ -1169,7 +1169,7 @@ class DataRetentionPolicyNode(SecurityMixin, PerformanceMixin, LoggingMixin, Nod
             metadata=record_data.get("metadata", {}),
             classification=classification,
             retention_policy_id=(
-                self.policies.get(data_type, {}).policy_id
+                self.policies[data_type].policy_id  # type: ignore[attr-defined]
                 if data_type in self.policies
                 else None
             ),

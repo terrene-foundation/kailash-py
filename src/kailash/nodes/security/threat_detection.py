@@ -167,7 +167,7 @@ class ThreatDetectionNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             ),
         }
 
-    def run(
+    def run(  # type: ignore[reportIncompatibleMethodOverride]
         self,
         events: List[Dict[str, Any]],
         time_window: int = 3600,
@@ -201,7 +201,7 @@ class ThreatDetectionNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             self.log_node_execution("threat_detection_start", event_count=len(events))
 
             # Run threat detection pipeline
-            results = self._analyze_threats(events, time_window, context)
+            results = self._analyze_threats(events, time_window, context)  # type: ignore[reportArgumentType]
 
             # Update performance stats
             processing_time = (datetime.now(UTC) - start_time).total_seconds() * 1000
@@ -896,7 +896,7 @@ class ThreatDetectionNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "type": threat.event_type,
             "severity": threat.severity,
             "user": threat.user_id,
-            "source_ip": threat.ip_address,
+            "source_ip": threat.ip_address,  # type: ignore[reportAttributeAccessIssue]
         }
 
         return self._execute_response_actions(threat_dict)

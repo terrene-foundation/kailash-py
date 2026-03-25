@@ -470,7 +470,7 @@ class AccessControlManager:
         user: UserContext,
         node_id: str,
         permission: NodePermission,
-        runtime_context: dict[str, Any] = None,
+        runtime_context: dict[str, Any] | None = None,
     ) -> AccessDecision:
         """Check if user has permission on node"""
         # If access control is disabled, allow all access
@@ -535,7 +535,7 @@ class AccessControlManager:
         user: UserContext,
         node_id: str,
         permission: NodePermission,
-        alternatives: dict[str, str] = None,
+        alternatives: dict[str, str] | None = None,
     ) -> str | None:
         """Get alternative route if user doesn't have access to node"""
         # If access control is disabled, allow access to requested node

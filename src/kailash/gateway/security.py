@@ -11,7 +11,7 @@ import logging
 import os
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
 from cryptography.fernet import Fernet
 
@@ -28,12 +28,14 @@ class SecretBackend(ABC):
     """Abstract backend for secret storage."""
 
     @abstractmethod
-    async def get_secret(self, reference: str) -> Dict[str, Any]:
+    async def get_secret(self, reference: str) -> Union[str, Dict[str, Any]]:
         """Get secret by reference."""
         pass
 
     @abstractmethod
-    async def store_secret(self, reference: str, secret: Dict[str, Any]) -> None:
+    async def store_secret(
+        self, reference: str, secret: Union[str, Dict[str, Any]]
+    ) -> None:
         """Store a secret."""
         pass
 
@@ -74,7 +76,7 @@ class SecretManager:
                 key = key.encode()
             self._cipher = Fernet(key)
 
-    async def get_secret(self, reference: str) -> Dict[str, Any]:
+    async def get_secret(self, reference: str) -> Union[str, Dict[str, Any]]:
         """Get secret by reference."""
         async with self._lock:
             # Check cache
@@ -151,7 +153,7 @@ class EnvironmentSecretBackend(SecretBackend):
     def __init__(self, prefix: str = "KAILASH_SECRET_"):
         self.prefix = prefix
 
-    async def get_secret(self, reference: str) -> Dict[str, Any]:
+    async def get_secret(self, reference: str) -> Union[str, Dict[str, Any]]:
         """Get secret from environment."""
         # Convert reference to env var name
         env_var = f"{self.prefix}{reference.upper()}"
@@ -190,7 +192,7 @@ class FileSecretBackend(SecretBackend):
         self.secrets_dir = secrets_dir
         os.makedirs(secrets_dir, exist_ok=True)
 
-    async def get_secret(self, reference: str) -> Dict[str, Any]:
+    async def get_secret(self, reference: str) -> Union[str, Dict[str, Any]]:
         """Get secret from file."""
         file_path = os.path.join(self.secrets_dir, f"{reference}.json")
 

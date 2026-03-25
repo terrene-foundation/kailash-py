@@ -361,8 +361,8 @@ class EnhancedStdioTransport(BaseTransport):
             message_bytes = message_data.encode("utf-8")
 
             # Send to subprocess
-            self.process.stdin.write(message_bytes)
-            await self.process.stdin.drain()
+            self.process.stdin.write(message_bytes)  # type: ignore[reportOptionalMemberAccess]
+            await self.process.stdin.drain()  # type: ignore[reportOptionalMemberAccess]
 
             self._update_metrics("messages_sent")
             self._update_metrics("bytes_sent", len(message_bytes))
@@ -412,7 +412,7 @@ class EnhancedStdioTransport(BaseTransport):
         try:
             while self._connected and self.process:
                 # Read line from stdout
-                line = await self.process.stdout.readline()
+                line = await self.process.stdout.readline()  # type: ignore[reportOptionalMemberAccess]
 
                 if not line:
                     # Process ended
@@ -882,7 +882,7 @@ class StreamableHTTPTransport(BaseTransport):
             for i in range(0, len(message_data), self.chunk_size):
                 yield message_data[i : i + self.chunk_size].encode("utf-8")
 
-        async with self.session.post(
+        async with self.session.post(  # type: ignore[reportOptionalMemberAccess]
             url, data=message_chunks(), headers=headers
         ) as response:
             if response.status not in (200, 201, 202):
@@ -967,12 +967,12 @@ class WebSocketTransport(BaseTransport):
             extra_headers = {}
             if self.auth_provider:
                 # Add authentication headers
-                auth_headers = await self.auth_provider.get_headers()
+                auth_headers = await self.auth_provider.get_headers()  # type: ignore[reportAttributeAccessIssue]
                 extra_headers.update(auth_headers)
 
-            self.websocket = await websockets.connect(
+            self.websocket = await websockets.connect(  # type: ignore[reportAttributeAccessIssue]
                 self.url,
-                subprotocols=self.subprotocols,
+                subprotocols=self.subprotocols,  # type: ignore[reportArgumentType]
                 extra_headers=extra_headers,
                 ping_interval=self.ping_interval,
                 ping_timeout=self.ping_timeout,
@@ -1328,7 +1328,7 @@ class WebSocketServerTransport(BaseTransport):
             if asyncio.iscoroutinefunction(self.message_handler):
                 return await self.message_handler(request, client_id)
             else:
-                return self.message_handler(request, client_id)
+                return self.message_handler(request, client_id)  # type: ignore[reportOptionalCall]
         except Exception as e:
             logger.error(f"Message handler error: {e}")
             return {
@@ -1367,7 +1367,7 @@ class WebSocketServerTransport(BaseTransport):
         Returns:
             List of client information
         """
-        return [self.get_client_info(client_id) for client_id in self._client_sessions]
+        return [self.get_client_info(client_id) for client_id in self._client_sessions]  # type: ignore[reportReturnType]
 
     async def close_client(
         self, client_id: str, code: int = 1000, reason: str = ""

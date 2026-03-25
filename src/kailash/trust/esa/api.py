@@ -13,7 +13,7 @@ Provides ESA integration for REST APIs with features:
 """
 
 import asyncio
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
@@ -58,9 +58,9 @@ class RateLimitConfig:
 class RateLimitTracker:
     """Tracks request counts for rate limiting."""
 
-    second_requests: List[datetime] = field(default_factory=list)
-    minute_requests: List[datetime] = field(default_factory=list)
-    hour_requests: List[datetime] = field(default_factory=list)
+    second_requests: deque = field(default_factory=lambda: deque(maxlen=1000))
+    minute_requests: deque = field(default_factory=lambda: deque(maxlen=10000))
+    hour_requests: deque = field(default_factory=lambda: deque(maxlen=100000))
 
 
 @dataclass
@@ -150,7 +150,7 @@ class APIESA(EnterpriseSystemAgent):
         # Store connection info for parent class
         connection_info = SystemConnectionInfo(
             endpoint=self.base_url,
-            credentials={"auth_headers": auth_headers} if auth_headers else None,
+            credentials={"auth_headers": auth_headers} if auth_headers else None,  # type: ignore[arg-type]
             timeout_seconds=timeout_seconds,
         )
 
@@ -185,8 +185,8 @@ class APIESA(EnterpriseSystemAgent):
         # HTTP client (created on first use)
         self._client: Optional[httpx.AsyncClient] = None
 
-        # Request/response audit log
-        self._request_log: List[Dict[str, Any]] = []
+        # Request/response audit log (bounded to prevent OOM)
+        self._request_log: deque = deque(maxlen=10000)  # type: ignore[assignment]
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -274,7 +274,13 @@ class APIESA(EnterpriseSystemAgent):
         for path, path_spec in paths.items():
             # Convert path to capability name
             # e.g., "/users/{id}" -> "users_id"
-            path_name = path.strip("/").replace("/", "_").replace("{", "").replace("}", "_").replace("-", "_")
+            path_name = (
+                path.strip("/")
+                .replace("/", "_")
+                .replace("{", "")
+                .replace("}", "_")
+                .replace("-", "_")
+            )
             if not path_name:
                 path_name = "root"
 
@@ -301,10 +307,14 @@ class APIESA(EnterpriseSystemAgent):
                     # Create capability metadata
                     self._capability_metadata[capability] = CapabilityMetadata(
                         capability=capability,
-                        description=method_spec.get("summary", f"{method.upper()} {path}"),
+                        description=method_spec.get(
+                            "summary", f"{method.upper()} {path}"
+                        ),
                         capability_type=CapabilityType.ACTION,
                         parameters=parameters,
-                        return_type=method_spec.get("responses", {}).get("200", {}).get("description", ""),
+                        return_type=method_spec.get("responses", {})
+                        .get("200", {})
+                        .get("description", ""),
                         constraints=["rate_limited"],
                         examples=[
                             {
@@ -593,7 +603,9 @@ class APIESA(EnterpriseSystemAgent):
             )
 
             # Calculate duration
-            duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            duration_ms = int(
+                (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+            )
 
             # Parse response
             response_data = None
@@ -609,7 +621,11 @@ class APIESA(EnterpriseSystemAgent):
                 status_code=response.status_code,
                 data=response_data,
                 headers=dict(response.headers),
-                error=(None if response.is_success else f"HTTP {response.status_code}: {response.text}"),
+                error=(
+                    None
+                    if response.is_success
+                    else f"HTTP {response.status_code}: {response.text}"
+                ),
                 duration_ms=duration_ms,
                 metadata={
                     "method": method,
@@ -631,7 +647,9 @@ class APIESA(EnterpriseSystemAgent):
             return result
 
         except httpx.TimeoutException as e:
-            duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            duration_ms = int(
+                (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+            )
             self._log_request(
                 method=method,
                 path=path,
@@ -649,7 +667,9 @@ class APIESA(EnterpriseSystemAgent):
             )
 
         except httpx.RequestError as e:
-            duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            duration_ms = int(
+                (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+            )
             self._log_request(
                 method=method,
                 path=path,
@@ -667,7 +687,9 @@ class APIESA(EnterpriseSystemAgent):
             )
 
         except Exception as e:
-            duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            duration_ms = int(
+                (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+            )
             self._log_request(
                 method=method,
                 path=path,
@@ -716,7 +738,10 @@ class APIESA(EnterpriseSystemAgent):
 
             # Check per-second limit
             if self.rate_limit_config.requests_per_second:
-                if len(self._rate_limiter.second_requests) >= self.rate_limit_config.requests_per_second:
+                if (
+                    len(self._rate_limiter.second_requests)
+                    >= self.rate_limit_config.requests_per_second
+                ):
                     # Calculate wait time
                     oldest = self._rate_limiter.second_requests[0]
                     wait_seconds = 1.0 - (now - oldest).total_seconds()
@@ -727,7 +752,10 @@ class APIESA(EnterpriseSystemAgent):
 
             # Check per-minute limit
             if self.rate_limit_config.requests_per_minute:
-                if len(self._rate_limiter.minute_requests) >= self.rate_limit_config.requests_per_minute:
+                if (
+                    len(self._rate_limiter.minute_requests)
+                    >= self.rate_limit_config.requests_per_minute
+                ):
                     oldest = self._rate_limiter.minute_requests[0]
                     wait_seconds = 60.0 - (now - oldest).total_seconds()
                     if wait_seconds > 0:
@@ -737,7 +765,10 @@ class APIESA(EnterpriseSystemAgent):
 
             # Check per-hour limit
             if self.rate_limit_config.requests_per_hour:
-                if len(self._rate_limiter.hour_requests) >= self.rate_limit_config.requests_per_hour:
+                if (
+                    len(self._rate_limiter.hour_requests)
+                    >= self.rate_limit_config.requests_per_hour
+                ):
                     oldest = self._rate_limiter.hour_requests[0]
                     wait_seconds = 3600.0 - (now - oldest).total_seconds()
                     if wait_seconds > 60:
@@ -765,15 +796,27 @@ class APIESA(EnterpriseSystemAgent):
         """
         # Remove requests older than 1 second
         cutoff_second = now - timedelta(seconds=1)
-        self._rate_limiter.second_requests = [t for t in self._rate_limiter.second_requests if t > cutoff_second]
+        while (
+            self._rate_limiter.second_requests
+            and self._rate_limiter.second_requests[0] <= cutoff_second
+        ):
+            self._rate_limiter.second_requests.popleft()
 
         # Remove requests older than 1 minute
         cutoff_minute = now - timedelta(minutes=1)
-        self._rate_limiter.minute_requests = [t for t in self._rate_limiter.minute_requests if t > cutoff_minute]
+        while (
+            self._rate_limiter.minute_requests
+            and self._rate_limiter.minute_requests[0] <= cutoff_minute
+        ):
+            self._rate_limiter.minute_requests.popleft()
 
         # Remove requests older than 1 hour
         cutoff_hour = now - timedelta(hours=1)
-        self._rate_limiter.hour_requests = [t for t in self._rate_limiter.hour_requests if t > cutoff_hour]
+        while (
+            self._rate_limiter.hour_requests
+            and self._rate_limiter.hour_requests[0] <= cutoff_hour
+        ):
+            self._rate_limiter.hour_requests.popleft()
 
     def get_rate_limit_status(self) -> Dict[str, Any]:
         """
@@ -839,10 +882,6 @@ class APIESA(EnterpriseSystemAgent):
 
         self._request_log.append(log_entry)
 
-        # Keep only last 1000 requests
-        if len(self._request_log) > 1000:
-            self._request_log = self._request_log[-1000:]
-
     def get_request_log(
         self,
         limit: int = 100,
@@ -874,7 +913,7 @@ class APIESA(EnterpriseSystemAgent):
                 filtered_log.append(entry)
 
         # Return most recent entries
-        return filtered_log[-limit:]
+        return list(filtered_log)[-limit:]
 
     def get_request_statistics(self) -> Dict[str, Any]:
         """
@@ -894,7 +933,9 @@ class APIESA(EnterpriseSystemAgent):
             }
 
         total = len(self._request_log)
-        successful = sum(1 for entry in self._request_log if 200 <= entry["status_code"] < 300)
+        successful = sum(
+            1 for entry in self._request_log if 200 <= entry["status_code"] < 300
+        )
         failed = total - successful
 
         # Average duration

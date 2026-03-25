@@ -62,7 +62,7 @@ __all__ = [
 # Control mapping definitions
 # ---------------------------------------------------------------------------
 
-SOC2_CONTROL_MAP: dict[str, dict[str, str]] = {
+SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
     "CC6.1": {
         "control_id": "CC6.1",
         "title": "Logical and Physical Access Controls",
@@ -279,7 +279,7 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str]] = {
     },
 }
 
-ISO27001_CONTROL_MAP: dict[str, dict[str, str]] = {
+ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
     "A.6.1": {
         "control_id": "A.6.1",
         "title": "Organization of Information Security",

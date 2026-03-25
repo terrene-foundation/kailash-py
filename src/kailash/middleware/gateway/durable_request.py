@@ -151,8 +151,18 @@ class DurableRequest:
         request_id: Optional[str] = None,
         metadata: Optional[RequestMetadata] = None,
         checkpoint_manager: Optional["CheckpointManager"] = None,
+        runtime: Optional[LocalRuntime] = None,
     ):
-        """Initialize durable request."""
+        """Initialize durable request.
+
+        Args:
+            request_id: Optional request identifier.
+            metadata: Optional request metadata.
+            checkpoint_manager: Optional checkpoint manager.
+            runtime: Optional shared runtime. If provided, its ref count is
+                incremented via acquire(). If None a new LocalRuntime is
+                created lazily in _execute_workflow().
+        """
         self.id = request_id or f"req_{uuid.uuid4().hex[:12]}"
         self.metadata = metadata or self._create_default_metadata()
         self.state = RequestState.INITIALIZED
@@ -163,9 +173,17 @@ class DurableRequest:
         # Execution state
         self.workflow: Optional[Workflow] = None
         self.workflow_id: Optional[str] = None
-        self.runtime: Optional[LocalRuntime] = None
         self.result: Optional[Dict[str, Any]] = None
         self.error: Optional[Exception] = None
+
+        # Runtime injection
+        if runtime is not None:
+            self._injected_runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self._injected_runtime = None
+            self._owns_runtime = True
+        self.runtime: Optional[LocalRuntime] = None
 
         # Timing
         self.start_time: Optional[float] = None
@@ -355,7 +373,7 @@ class DurableRequest:
                 },
             )
 
-    async def checkpoint(self, name: str, data: Dict[str, Any] = None) -> str:
+    async def checkpoint(self, name: str, data: Dict[str, Any] = None) -> str:  # type: ignore[reportArgumentType]
         """Create a checkpoint."""
         if self._cancel_event.is_set():
             raise asyncio.CancelledError("Request was cancelled")
@@ -540,31 +558,51 @@ class DurableRequest:
             },
         )
 
+    def close(self) -> None:
+        """Release runtime reference acquired during construction."""
+        if hasattr(self, "_injected_runtime") and self._injected_runtime is not None:
+            self._injected_runtime.release()
+            self._injected_runtime = None
+        if hasattr(self, "runtime") and self.runtime is not None:
+            # Only close runtime we created ourselves
+            if self._owns_runtime:
+                self.runtime.close()
+            self.runtime = None
+
     async def _execute_workflow(self) -> Dict[str, Any]:
         """Execute workflow with checkpointing, cancellation, and resume support."""
         self.state = RequestState.EXECUTING
-        self.runtime = LocalRuntime()
+        if self._injected_runtime is not None:
+            self.runtime = self._injected_runtime
+        else:
+            self.runtime = LocalRuntime()
 
-        # Execute workflow with cancellation token and execution tracker.
-        # The tracker enables checkpoint capture and resume-from-checkpoint:
-        # already-completed nodes (from a prior checkpoint) are skipped,
-        # and newly completed nodes are recorded for subsequent checkpoints.
-        result, run_id = await self.runtime.execute_async(
-            self.workflow,
-            cancellation_token=self._cancellation_token,
-            execution_tracker=self._execution_tracker,
-        )
+        try:
+            # Execute workflow with cancellation token and execution tracker.
+            # The tracker enables checkpoint capture and resume-from-checkpoint:
+            # already-completed nodes (from a prior checkpoint) are skipped,
+            # and newly completed nodes are recorded for subsequent checkpoints.
+            result, run_id = await self.runtime.execute_async(
+                self.workflow,  # type: ignore[reportArgumentType]
+                cancellation_token=self._cancellation_token,
+                execution_tracker=self._execution_tracker,
+            )
 
-        # Checkpoint final result
-        await self.checkpoint(
-            "workflow_completed",
-            {
-                "run_id": run_id,
-                "result": result,
-            },
-        )
+            # Checkpoint final result
+            await self.checkpoint(
+                "workflow_completed",
+                {
+                    "run_id": run_id,
+                    "result": result,
+                },
+            )
 
-        return result
+            return result
+        finally:
+            # Close locally-created runtimes to prevent per-request leaks
+            if self._owns_runtime and self.runtime is not None:
+                self.runtime.close()
+                self.runtime = None
 
     async def _capture_workflow_state(self) -> Dict[str, Any]:
         """Capture current workflow state from the execution tracker.

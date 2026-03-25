@@ -432,11 +432,12 @@ class TestAsyncLocalRuntime:
         builder.add_node("PythonCodeNode", "node1", {"code": "result = {'value': 42}"})
         workflow = builder.build()
 
-        # Execute workflow
-        result = await runtime.execute_workflow_async(workflow, {})
+        # Execute workflow — returns (results_dict, run_id) tuple
+        results, run_id = await runtime.execute_workflow_async(workflow, {})
 
-        assert result is not None
-        assert "results" in result or "node1" in result
+        assert results is not None
+        assert run_id is not None
+        assert "node1" in results
 
     @pytest.mark.asyncio
     async def test_execute_workflow_async_with_parameters(self):
@@ -502,14 +503,15 @@ class TestAsyncLocalRuntime:
         """Test cleanup method."""
         runtime = AsyncLocalRuntime()
 
-        # Mock the shutdown method
-        runtime.thread_pool.shutdown = MagicMock()
+        # Mock the shutdown method and keep a reference (cleanup sets thread_pool=None)
+        mock_shutdown = MagicMock()
+        runtime.thread_pool.shutdown = mock_shutdown
 
         # Test cleanup
         await runtime.cleanup()
 
         # Verify thread pool shutdown was called
-        runtime.thread_pool.shutdown.assert_called_once_with(wait=True)
+        mock_shutdown.assert_called_once_with(wait=True)
 
     def test_concurrent_execution_limits(self):
         """Test that concurrent execution limits are respected."""

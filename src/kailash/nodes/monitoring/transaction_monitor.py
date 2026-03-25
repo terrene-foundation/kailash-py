@@ -823,7 +823,7 @@ class TransactionMonitorNode(AsyncNode):
         span_id = str(uuid.uuid4())
 
         # Store transaction info
-        self._active_traces[trace_id] = {
+        self._active_traces[trace_id] = {  # type: ignore[reportArgumentType]
             "transaction_id": transaction_id,
             "transaction_type": transaction_type,
             "start_time": time.time(),
@@ -859,9 +859,9 @@ class TransactionMonitorNode(AsyncNode):
         # Mark the transaction as completed in active traces
         if transaction_id in self._active_traces:
             trace_data = self._active_traces[transaction_id]
-            trace_data["end_time"] = time.time()
-            trace_data["status"] = status
-            trace_data["duration"] = trace_data["end_time"] - trace_data.get(
+            trace_data["end_time"] = time.time()  # type: ignore[reportIndexIssue]
+            trace_data["status"] = status  # type: ignore[reportIndexIssue]
+            trace_data["duration"] = trace_data["end_time"] - trace_data.get(  # type: ignore[reportIndexIssue]
                 "start_time", 0
             )
 
@@ -892,7 +892,7 @@ class TransactionMonitorNode(AsyncNode):
         """Get current monitoring status and metrics."""
         active_traces_count = len(self._active_traces)
         active_spans_count = sum(
-            len(trace_data.get("spans", []))
+            len(trace_data.get("spans", []))  # type: ignore[reportAttributeAccessIssue]
             for trace_data in self._active_traces.values()
         )
 
@@ -901,7 +901,7 @@ class TransactionMonitorNode(AsyncNode):
         recent_traces = [
             trace
             for trace in self._active_traces.values()
-            if current_time - trace.get("start_time", 0) < 300  # Last 5 minutes
+            if current_time - trace.get("start_time", 0) < 300  # Last 5 minutes  # type: ignore[reportAttributeAccessIssue]
         ]
 
         status_info = {
@@ -928,4 +928,4 @@ class TransactionMonitorNode(AsyncNode):
     async def cleanup(self):
         """Cleanup resources when node is destroyed."""
         await self._stop_monitoring()
-        await super().cleanup() if hasattr(super(), "cleanup") else None
+        await super().cleanup() if hasattr(super(), "cleanup") else None  # type: ignore[reportAttributeAccessIssue]

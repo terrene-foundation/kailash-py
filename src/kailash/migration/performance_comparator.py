@@ -280,6 +280,11 @@ except:
 
             for run in range(self.sample_size):
                 # Measure system resources before
+                if psutil is None:
+                    raise ImportError(
+                        "psutil is required for performance benchmarks. "
+                        "Install with: pip install psutil"
+                    )
                 process = psutil.Process()
                 memory_before = process.memory_info().rss / 1024 / 1024  # MB
                 cpu_before = process.cpu_percent()

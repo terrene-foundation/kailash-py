@@ -31,6 +31,12 @@ logger = logging.getLogger(__name__)
 
 
 class CycleExecutionMixin:
+    # Declare attributes provided by BaseRuntime (used by mixin methods)
+    logger: logging.Logger
+    debug: bool
+    enable_cycles: bool
+    cyclic_executor: Any
+
     """
     Cycle execution capabilities for workflow runtimes.
 

@@ -150,6 +150,7 @@ class OrchestrationStateManager:
         enable_caching: bool = True,
         enable_metrics: bool = True,
         migration_enabled: bool = True,  # FIXED: Enable migrations for table creation
+        runtime: "AsyncLocalRuntime | None" = None,
     ):
         """
         Initialize OrchestrationStateManager with DataFlow backend.
@@ -164,6 +165,7 @@ class OrchestrationStateManager:
             enable_caching: Enable query result caching
             enable_metrics: Enable performance metrics
             migration_enabled: Enable DataFlow migration system (default: True)
+            runtime: Optional shared AsyncLocalRuntime (avoids pool leak)
 
         Raises:
             ImportError: If dataflow or kailash not installed
@@ -200,10 +202,15 @@ class OrchestrationStateManager:
         self._validate_connection()
 
         # Initialize AsyncLocalRuntime for async workflow execution
-        self.runtime = AsyncLocalRuntime(
-            debug=False,
-            connection_validation="warn",  # Less strict for production
-        )
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = AsyncLocalRuntime(
+                debug=False,
+                connection_validation="warn",  # Less strict for production
+            )
+            self._owns_runtime = True
 
         # Register models with DataFlow (generates 33 nodes automatically)
         # Tables will be created automatically on first access via auto_migrate=True
@@ -974,3 +981,23 @@ class OrchestrationStateManager:
         except Exception:
             # Default to 1 if query fails
             return 1
+
+    def close(self):
+        """Release runtime reference."""
+        if hasattr(self, "runtime") and self.runtime is not None:
+            self.runtime.release()
+            self.runtime = None
+
+    def __del__(self):
+        if getattr(self, "runtime", None) is not None:
+            import warnings
+
+            warnings.warn(
+                f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
+                ResourceWarning,
+                source=self,
+            )
+            try:
+                self.close()
+            except Exception:
+                pass

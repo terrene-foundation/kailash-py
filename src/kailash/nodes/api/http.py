@@ -531,6 +531,7 @@ class HTTPRequestNode(Node):
             self.logger.info(f"Making {method} request to {url}")
 
         response = None
+        response_time: float = 0.0
 
         for attempt in range(retry_count + 1):
             if attempt > 0:
@@ -579,6 +580,7 @@ class HTTPRequestNode(Node):
                     }
 
         # Parse response based on format
+        assert response is not None
         content_type = response.headers.get("Content-Type", "")
 
         if response_format == ResponseFormat.AUTO:

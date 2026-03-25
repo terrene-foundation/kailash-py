@@ -140,7 +140,7 @@ class BaseErrorEnhancer(ABC):
                 # Fail gracefully if catalog cannot be loaded
                 cls._ERROR_CATALOG = {}
 
-        return cls._ERROR_CATALOG
+        return cls._ERROR_CATALOG or {}
 
     def _get_error_catalog(self) -> Dict:
         """Get error catalog using subclass-provided path.

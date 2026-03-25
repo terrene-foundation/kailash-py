@@ -74,7 +74,7 @@ class ConfigManager:
                 if config_path.suffix.lower() in [".yaml", ".yml"]:
                     if not HAS_YAML:
                         raise ValueError("PyYAML not available for YAML configuration")
-                    self._file_config = yaml.safe_load(f) or {}
+                    self._file_config = yaml.safe_load(f) or {}  # type: ignore[reportPossiblyUnbound]
                 elif config_path.suffix.lower() == ".json":
                     self._file_config = json.load(f) or {}
                 else:
@@ -214,7 +214,7 @@ class ConfigManager:
                 if format.lower() == "yaml":
                     if not HAS_YAML:
                         raise ValueError("PyYAML not available for YAML export")
-                    yaml.dump(config_data, f, default_flow_style=False, indent=2)
+                    yaml.dump(config_data, f, default_flow_style=False, indent=2)  # type: ignore[reportPossiblyUnbound]
                 elif format.lower() == "json":
                     json.dump(config_data, f, indent=2)
                 else:

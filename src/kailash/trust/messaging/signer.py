@@ -78,6 +78,7 @@ class MessageSigner:
             self._private_key = base64.b64encode(private_key).decode("utf-8")
         else:
             self._private_key = private_key
+        del private_key  # Clear raw key material from local scope
         self._trust_ops = trust_operations
 
     @property
@@ -139,12 +140,14 @@ class MessageSigner:
             signing_payload = envelope.get_signing_payload()
 
             # Sign with Ed25519 - returns base64-encoded string
-            signature = sign(signing_payload, self._private_key)
+            signature = sign(signing_payload, self._private_key)  # type: ignore[reportArgumentType]
 
             # Set signature in envelope (already base64-encoded by sign())
             envelope.signature = signature
 
-            logger.debug(f"Signed message {envelope.message_id} from {self._agent_id} to {recipient_agent_id}")
+            logger.debug(
+                f"Signed message {envelope.message_id} from {self._agent_id} to {recipient_agent_id}"
+            )
 
             return envelope
 
@@ -224,4 +227,4 @@ class MessageSigner:
         if not chain:
             raise TrustChainNotFoundError(agent_id=self._agent_id)
 
-        return chain.compute_hash()
+        return chain.hash()

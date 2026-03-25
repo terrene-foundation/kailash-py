@@ -38,7 +38,7 @@ class WorkflowRunner:
         workflow: Workflow,
         parameters: dict[str, dict[str, Any]] | None = None,
         runtime_type: str = "local",
-    ) -> tuple[dict[str, Any], str]:
+    ) -> tuple[dict[str, Any], str | None]:
         """Run a workflow.
 
         Args:

@@ -130,12 +130,12 @@ class APIGateway:
         title: str = "Kailash Middleware Gateway",
         description: str = "Enhanced API gateway for agent-frontend communication",
         version: str = "1.0.0",
-        cors_origins: List[str] = None,
+        cors_origins: Optional[List[str]] = None,
         enable_docs: bool = True,
         max_sessions: int = 1000,
         enable_auth: bool = True,
         auth_manager=None,  # Dependency injection for auth
-        database_url: str = None,
+        database_url: Optional[str] = None,
     ):
         """
         Initialize API Gateway with dependency injection support.
@@ -219,7 +219,7 @@ class APIGateway:
         self.start_time = time.time()
         self.requests_processed = 0
 
-    def _init_sdk_nodes(self, database_url: str = None):
+    def _init_sdk_nodes(self, database_url: Optional[str] = None):
         """Initialize SDK nodes for gateway operations."""
 
         # Data transformer for request/response formatting
@@ -357,7 +357,7 @@ class APIGateway:
                     user_id = current_user.get("user_id", user_id)
 
                 session_id = await self.agent_ui.create_session(
-                    user_id=user_id, metadata=request.metadata
+                    user_id=user_id or "", metadata=request.metadata
                 )
 
                 session = await self.agent_ui.get_session(session_id)
@@ -369,9 +369,9 @@ class APIGateway:
                 # Transform response using SDK node
                 response_data = {
                     "session_id": session_id,
-                    "user_id": session.user_id,
-                    "created_at": session.created_at.isoformat(),
-                    "active": session.active,
+                    "user_id": session.user_id if session else None,
+                    "created_at": session.created_at.isoformat() if session else None,
+                    "active": session.active if session else False,
                 }
 
                 transformed = self.data_transformer.execute(
@@ -812,7 +812,7 @@ class APIGateway:
 
 # Convenience function for quick setup
 def create_gateway(
-    agent_ui_middleware: AgentUIMiddleware = None, auth_manager=None, **kwargs
+    agent_ui_middleware: Optional[AgentUIMiddleware] = None, auth_manager=None, **kwargs
 ) -> APIGateway:
     """
     Create a configured API gateway instance with dependency injection.

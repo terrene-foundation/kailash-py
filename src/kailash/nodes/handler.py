@@ -36,7 +36,7 @@ from kailash.nodes.base import NodeMetadata, NodeParameter
 from kailash.nodes.base_async import AsyncNode
 
 if TYPE_CHECKING:
-    from kailash.workflow.workflow import Workflow
+    from kailash.workflow.workflow import Workflow  # type: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 

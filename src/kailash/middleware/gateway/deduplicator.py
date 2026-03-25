@@ -32,7 +32,7 @@ class CachedResponse:
     headers: Dict[str, str]
     created_at: datetime
     request_count: int = 1
-    last_accessed: datetime = None
+    last_accessed: datetime = None  # type: ignore[reportAssignmentType]
 
     def __post_init__(self):
         if not self.last_accessed:
@@ -126,7 +126,7 @@ class RequestFingerprinter:
             else:
                 return d
 
-        return clean_dict(body)
+        return clean_dict(body)  # type: ignore[reportReturnType]
 
 
 class RequestDeduplicator:
@@ -302,7 +302,7 @@ class RequestDeduplicator:
     async def _check_storage(self, fingerprint: str) -> Optional[CachedResponse]:
         """Check persistent storage for cached response."""
         try:
-            data = await self.storage_backend.get(f"dedup:{fingerprint}")
+            data = await self.storage_backend.get(f"dedup:{fingerprint}")  # type: ignore[reportOptionalMemberAccess]
             if data:
                 return CachedResponse(**data)
         except Exception as e:
@@ -322,7 +322,7 @@ class RequestDeduplicator:
                 "request_count": response.request_count,
                 "last_accessed": response.last_accessed.isoformat(),
             }
-            await self.storage_backend.set(
+            await self.storage_backend.set(  # type: ignore[reportOptionalMemberAccess]
                 f"dedup:{fingerprint}",
                 data,
                 ttl=self.ttl_seconds,

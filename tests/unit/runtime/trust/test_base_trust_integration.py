@@ -30,6 +30,10 @@ class ConcreteRuntime(BaseRuntime):
         """Minimal execute implementation."""
         return {}, "test-run-id"
 
+    def close(self) -> None:
+        """Minimal close implementation."""
+        pass
+
 
 class TestBaseRuntimeTrustParamsOptional:
     """Test that all trust params have defaults and existing code works."""

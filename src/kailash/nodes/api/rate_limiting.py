@@ -457,7 +457,7 @@ class AsyncRateLimitedAPINode(AsyncNode):
         self.wrapped_node = wrapped_node
         self.rate_limiter = create_rate_limiter(rate_limit_config)
         self.config = rate_limit_config
-        self.sync_node = RateLimitedAPINode(wrapped_node, rate_limit_config, **kwargs)
+        self.sync_node = RateLimitedAPINode(wrapped_node, rate_limit_config, **kwargs)  # type: ignore[call-arg]
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.

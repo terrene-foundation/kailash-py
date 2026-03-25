@@ -134,7 +134,11 @@ class DelegationMessage:
     ) -> "DelegationMessage":
         """Create a task result message."""
         return cls(
-            message_type=(DelegationMessageType.TASK_RESULT if success else DelegationMessageType.TASK_ERROR),
+            message_type=(
+                DelegationMessageType.TASK_RESULT
+                if success
+                else DelegationMessageType.TASK_ERROR
+            ),
             task_id=task_id,
             payload={
                 "result": result,
@@ -350,7 +354,10 @@ class SecureOrchestrationChannel:
             elapsed_ms = (time.perf_counter() - start_time) * 1000
             result_data = reply.payload
 
-            if result_data.get("message_type") == DelegationMessageType.TASK_ERROR.value:
+            if (
+                result_data.get("message_type")
+                == DelegationMessageType.TASK_ERROR.value
+            ):
                 return DelegationResult(
                     task_id=delegation_msg.task_id,
                     worker_agent_id=worker_agent_id,
@@ -364,7 +371,9 @@ class SecureOrchestrationChannel:
                 worker_agent_id=worker_agent_id,
                 success=True,
                 result=result_data.get("payload", {}).get("result"),
-                execution_time_ms=result_data.get("metadata", {}).get("execution_time_ms", 0),
+                execution_time_ms=result_data.get("metadata", {}).get(
+                    "execution_time_ms", 0
+                ),
                 delegation_time_ms=elapsed_ms,
             )
 
@@ -411,16 +420,20 @@ class SecureOrchestrationChannel:
         # Verify incoming message
         result = await self._channel.receive(envelope)
         if not result.is_valid():
-            raise OrchestrationTrustError(f"Invalid delegation message: {result.failure_reasons}")
+            raise OrchestrationTrustError(
+                f"Invalid delegation message: {result.errors}"
+            )
 
         # Parse delegation message
         delegation_msg = DelegationMessage.from_dict(envelope.payload)
 
         if delegation_msg.message_type != DelegationMessageType.TASK_DELEGATION:
-            raise OrchestrationTrustError(f"Expected TASK_DELEGATION, got {delegation_msg.message_type}")
+            raise OrchestrationTrustError(
+                f"Expected TASK_DELEGATION, got {delegation_msg.message_type}"
+            )
 
         # Reconstruct execution context
-        context = TrustExecutionContext.from_dict(delegation_msg.context_data)
+        context = TrustExecutionContext.from_dict(delegation_msg.context_data or {})
 
         # Execute task
         try:
@@ -556,7 +569,7 @@ class SecureOrchestrationChannel:
         # Verify message
         result = await self._channel.receive(envelope)
         if not result.is_valid():
-            logger.warning(f"Invalid message rejected: {result.failure_reasons}")
+            logger.warning(f"Invalid message rejected: {result.errors}")
             return None
 
         # Parse delegation message
