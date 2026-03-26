@@ -35,7 +35,7 @@ from .configuration import (
 )
 from .core.config import DataFlowConfig, LoggingConfig, mask_sensitive
 from .core.engine import DataFlow
-from .engine import DataFlowEngine, HealthStatus, QueryEngine
+from .engine import DataFlowEngine, HealthStatus, QueryEngine, ValidationLayer, DataClassificationPolicy
 from .core.logging_config import DEFAULT_SENSITIVE_PATTERNS
 from .core.logging_config import LoggingConfig as AdvancedLoggingConfig
 from .core.logging_config import SensitiveMaskingFilter, mask_sensitive_values
@@ -44,6 +44,32 @@ from .core.models import DataFlowModel
 from .core.tenant_context import TenantContextSwitch, TenantInfo, get_current_tenant_id
 from .core.type_processor import TypeAwareFieldProcessor
 from .core.workflow_binding import DataFlowWorkflowBinder
+# Field-level validation (issue #82)
+from .validation import (
+    FieldValidationError,
+    ValidationResult,
+    email_validator,
+    field_validator,
+    length_validator,
+    pattern_validator,
+    phone_validator,
+    range_validator,
+    url_validator,
+    uuid_validator,
+    validate_model,
+)
+
+# Data classification (issue #83)
+from .classification import (
+    ClassificationPolicy,
+    DataClassification,
+    FieldClassification,
+    MaskingStrategy,
+    RetentionPolicy,
+    classify,
+    get_field_classification,
+)
+
 from .utils.suppress_warnings import (
     configure_dataflow_logging,
     dataflow_logging_context,
@@ -64,6 +90,8 @@ __all__ = [
     "DataFlowEngine",
     "QueryEngine",
     "HealthStatus",
+    "ValidationLayer",
+    "DataClassificationPolicy",
     "DataFlowConfig",
     "DataFlowModel",
     "LoggingConfig",
@@ -95,6 +123,26 @@ __all__ = [
     "TenantContextSwitch",
     "TenantInfo",
     "get_current_tenant_id",
+    # Issue #82: Field-level validation
+    "field_validator",
+    "validate_model",
+    "ValidationResult",
+    "FieldValidationError",
+    "email_validator",
+    "url_validator",
+    "uuid_validator",
+    "length_validator",
+    "range_validator",
+    "pattern_validator",
+    "phone_validator",
+    # Issue #83: Data classification
+    "DataClassification",
+    "RetentionPolicy",
+    "MaskingStrategy",
+    "ClassificationPolicy",
+    "FieldClassification",
+    "classify",
+    "get_field_classification",
 ]
 
 # Backward compatibility note:
