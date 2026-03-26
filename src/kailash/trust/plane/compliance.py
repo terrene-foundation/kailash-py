@@ -80,8 +80,8 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/identity.py",
         ],
         "test_sources": [
-            "tests/integration/test_rbac.py",
-            "tests/integration/test_identity.py",
+            "tests/trust/plane/integration/test_rbac.py",
+            "tests/trust/plane/integration/test_identity.py",
         ],
     },
     "CC6.2": {
@@ -99,7 +99,7 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/models.py",
         ],
         "test_sources": [
-            "tests/integration/test_project.py",
+            "tests/trust/plane/integration/test_project.py",
         ],
     },
     "CC6.3": {
@@ -116,7 +116,7 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/delegation.py",
         ],
         "test_sources": [
-            "tests/integration/test_delegation.py",
+            "tests/trust/plane/integration/test_delegation.py",
         ],
     },
     "CC6.6": {
@@ -138,8 +138,8 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/models.py",
         ],
         "test_sources": [
-            "tests/integration/security/test_security_patterns.py",
-            "tests/integration/security/test_static_checks.py",
+            "tests/trust/plane/integration/security/test_security_patterns.py",
+            "tests/trust/plane/integration/security/test_static_checks.py",
         ],
     },
     "CC6.7": {
@@ -156,8 +156,8 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/project.py",
         ],
         "test_sources": [
-            "tests/unit/test_models.py",
-            "tests/integration/test_project.py",
+            "tests/trust/plane/unit/test_models.py",
+            "tests/trust/plane/integration/test_project.py",
         ],
     },
     "CC6.8": {
@@ -176,7 +176,7 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/proxy.py",
         ],
         "test_sources": [
-            "tests/integration/test_proxy.py",
+            "tests/trust/plane/integration/test_proxy.py",
         ],
     },
     "CC7.1": {
@@ -195,7 +195,7 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/siem.py",
         ],
         "test_sources": [
-            "tests/integration/test_siem.py",
+            "tests/trust/plane/integration/test_siem.py",
         ],
     },
     "CC7.2": {
@@ -213,7 +213,7 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/project.py",
         ],
         "test_sources": [
-            "tests/integration/test_project.py",
+            "tests/trust/plane/integration/test_project.py",
         ],
     },
     "CC7.3": {
@@ -231,7 +231,7 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/project.py",
         ],
         "test_sources": [
-            "tests/integration/test_holds.py",
+            "tests/trust/plane/integration/test_holds.py",
         ],
     },
     "CC7.4": {
@@ -251,7 +251,7 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/siem.py",
         ],
         "test_sources": [
-            "tests/integration/test_siem.py::TestTLSSyslogHandler",
+            "tests/trust/plane/integration/test_siem.py::TestTLSSyslogHandler",
         ],
     },
     "CC8.1": {
@@ -272,9 +272,9 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/store/postgres.py",
         ],
         "test_sources": [
-            "tests/integration/security/test_security_patterns.py::TestPattern3AtomicWrite",
-            "tests/integration/test_archive.py",
-            "tests/e2e/store/test_postgres_store.py",
+            "tests/trust/plane/integration/security/test_security_patterns.py::TestPattern3AtomicWrite",
+            "tests/trust/plane/integration/test_archive.py",
+            "tests/trust/plane/e2e/store/test_postgres_store.py",
         ],
     },
 }
@@ -295,7 +295,7 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/rbac.py",
         ],
         "test_sources": [
-            "tests/integration/test_rbac.py",
+            "tests/trust/plane/integration/test_rbac.py",
         ],
     },
     "A.9.2": {
@@ -313,8 +313,8 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/project.py",
         ],
         "test_sources": [
-            "tests/unit/test_models.py",
-            "tests/integration/test_project.py",
+            "tests/trust/plane/unit/test_models.py",
+            "tests/trust/plane/integration/test_project.py",
         ],
     },
     "A.9.4": {
@@ -335,8 +335,8 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/dashboard.py",
         ],
         "test_sources": [
-            "tests/integration/test_identity.py",
-            "tests/e2e/test_dashboard.py::TestBearerTokenAuth",
+            "tests/trust/plane/integration/test_identity.py",
+            "tests/trust/plane/e2e/test_dashboard.py::TestBearerTokenAuth",
         ],
     },
     "A.10.1": {
@@ -363,10 +363,10 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/delegation.py",
         ],
         "test_sources": [
-            "tests/integration/test_key_managers.py",
-            "tests/integration/test_key_protection.py",
-            "tests/integration/security/test_security_patterns.py::TestPattern8HmacCompareDigest",
-            "tests/integration/security/test_security_patterns.py::TestPattern9KeyZeroization",
+            "tests/trust/plane/integration/test_key_managers.py",
+            "tests/trust/plane/integration/test_key_protection.py",
+            "tests/trust/plane/integration/security/test_security_patterns.py::TestPattern8HmacCompareDigest",
+            "tests/trust/plane/integration/security/test_security_patterns.py::TestPattern9KeyZeroization",
         ],
     },
     "A.12.3": {
@@ -385,7 +385,7 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/archive.py",
         ],
         "test_sources": [
-            "tests/integration/test_archive.py",
+            "tests/trust/plane/integration/test_archive.py",
         ],
     },
     "A.12.4": {
@@ -403,7 +403,7 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/project.py",
         ],
         "test_sources": [
-            "tests/integration/test_project.py",
+            "tests/trust/plane/integration/test_project.py",
         ],
     },
     "A.14.2": {
@@ -430,8 +430,8 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/delegation.py",
         ],
         "test_sources": [
-            "tests/integration/security/test_security_patterns.py",
-            "tests/integration/security/test_static_checks.py",
+            "tests/trust/plane/integration/security/test_security_patterns.py",
+            "tests/trust/plane/integration/security/test_static_checks.py",
         ],
     },
     "A.16.1": {
@@ -449,7 +449,7 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/holds.py",
         ],
         "test_sources": [
-            "tests/integration/test_holds.py",
+            "tests/trust/plane/integration/test_holds.py",
         ],
     },
     "A.18.1": {
@@ -472,9 +472,9 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
             "src/kailash/trust/plane/exceptions.py",
         ],
         "test_sources": [
-            "tests/integration/test_shadow.py::TestShadowStoreCleanup",
-            "tests/e2e/store/test_postgres_store.py::TestExceptionWrapping",
-            "tests/integration/test_key_managers.py::TestKeyManagerErrorHierarchy",
+            "tests/trust/plane/integration/test_shadow.py::TestShadowStoreCleanup",
+            "tests/trust/plane/e2e/store/test_postgres_store.py::TestExceptionWrapping",
+            "tests/trust/plane/integration/test_key_managers.py::TestKeyManagerErrorHierarchy",
         ],
     },
 }
@@ -497,8 +497,8 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
         "soc2_controls": ["CC6.6"],
         "iso27001_controls": ["A.14.2"],
         "tests": [
-            "tests/integration/security/test_security_patterns.py::TestPattern1ValidateId",
-            "tests/integration/security/test_static_checks.py::TestStaticValidateIdUsage",
+            "tests/trust/plane/integration/security/test_security_patterns.py::TestPattern1ValidateId",
+            "tests/trust/plane/integration/security/test_static_checks.py::TestStaticValidateIdUsage",
         ],
     },
     "pattern_2_o_nofollow": {
@@ -512,8 +512,8 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
         "soc2_controls": ["CC6.6"],
         "iso27001_controls": ["A.14.2"],
         "tests": [
-            "tests/integration/security/test_security_patterns.py::TestPattern2ONoFollow",
-            "tests/integration/security/test_static_checks.py::TestStaticONoFollow",
+            "tests/trust/plane/integration/security/test_security_patterns.py::TestPattern2ONoFollow",
+            "tests/trust/plane/integration/security/test_static_checks.py::TestStaticONoFollow",
         ],
     },
     "pattern_3_atomic_write": {
@@ -527,8 +527,8 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
         "soc2_controls": ["CC8.1"],
         "iso27001_controls": ["A.14.2"],
         "tests": [
-            "tests/integration/security/test_security_patterns.py::TestPattern3AtomicWrite",
-            "tests/integration/security/test_static_checks.py::TestStaticAtomicWrite",
+            "tests/trust/plane/integration/security/test_security_patterns.py::TestPattern3AtomicWrite",
+            "tests/trust/plane/integration/security/test_static_checks.py::TestStaticAtomicWrite",
         ],
     },
     "pattern_4_safe_deserialization": {
@@ -542,8 +542,8 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
         "soc2_controls": ["CC6.6"],
         "iso27001_controls": ["A.14.2"],
         "tests": [
-            "tests/integration/security/test_security_patterns.py::TestPattern4SafeDeserialization",
-            "tests/integration/security/test_static_checks.py::TestStaticNoBareOpen",
+            "tests/trust/plane/integration/security/test_security_patterns.py::TestPattern4SafeDeserialization",
+            "tests/trust/plane/integration/security/test_static_checks.py::TestStaticNoBareOpen",
         ],
     },
     "pattern_5_isfinite": {
@@ -558,8 +558,8 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
         "soc2_controls": ["CC6.6"],
         "iso27001_controls": ["A.14.2"],
         "tests": [
-            "tests/integration/security/test_security_patterns.py::TestPattern5IsFinite",
-            "tests/integration/security/test_static_checks.py::TestStaticIsFinite",
+            "tests/trust/plane/integration/security/test_security_patterns.py::TestPattern5IsFinite",
+            "tests/trust/plane/integration/security/test_static_checks.py::TestStaticIsFinite",
         ],
     },
     "pattern_6_bounded_collections": {
@@ -573,7 +573,7 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
         "soc2_controls": ["CC6.8"],
         "iso27001_controls": ["A.14.2"],
         "tests": [
-            "tests/integration/security/test_security_patterns.py::TestPattern6BoundedCollections",
+            "tests/trust/plane/integration/security/test_security_patterns.py::TestPattern6BoundedCollections",
         ],
     },
     "pattern_7_monotonic_escalation": {
@@ -588,7 +588,7 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
         "soc2_controls": ["CC6.7", "CC7.3"],
         "iso27001_controls": ["A.9.2", "A.14.2"],
         "tests": [
-            "tests/integration/security/test_security_patterns.py::TestPattern7MonotonicEscalation",
+            "tests/trust/plane/integration/security/test_security_patterns.py::TestPattern7MonotonicEscalation",
         ],
     },
     "pattern_8_hmac_compare_digest": {
@@ -605,8 +605,8 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
         "soc2_controls": ["CC6.6"],
         "iso27001_controls": ["A.10.1"],
         "tests": [
-            "tests/integration/security/test_security_patterns.py::TestPattern8HmacCompareDigest",
-            "tests/integration/security/test_static_checks.py::TestStaticCompareDigest",
+            "tests/trust/plane/integration/security/test_security_patterns.py::TestPattern8HmacCompareDigest",
+            "tests/trust/plane/integration/security/test_static_checks.py::TestStaticCompareDigest",
         ],
     },
     "pattern_9_key_zeroization": {
@@ -621,8 +621,8 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
         "soc2_controls": ["CC6.7"],
         "iso27001_controls": ["A.10.1"],
         "tests": [
-            "tests/integration/security/test_security_patterns.py::TestPattern9KeyZeroization",
-            "tests/integration/test_key_protection.py",
+            "tests/trust/plane/integration/security/test_security_patterns.py::TestPattern9KeyZeroization",
+            "tests/trust/plane/integration/test_key_protection.py",
         ],
     },
     "pattern_10_frozen_dataclass": {
@@ -636,7 +636,7 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
         "soc2_controls": ["CC6.1"],
         "iso27001_controls": ["A.14.2"],
         "tests": [
-            "tests/integration/security/test_security_patterns.py::TestPattern10FrozenDataclass",
+            "tests/trust/plane/integration/security/test_security_patterns.py::TestPattern10FrozenDataclass",
         ],
     },
     "pattern_11_from_dict_validation": {
@@ -653,8 +653,8 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
         "soc2_controls": ["CC6.6"],
         "iso27001_controls": ["A.14.2"],
         "tests": [
-            "tests/integration/security/test_security_patterns.py::TestPattern11FromDictValidation",
-            "tests/integration/security/test_static_checks.py::TestStaticFromDictValidation",
+            "tests/trust/plane/integration/security/test_security_patterns.py::TestPattern11FromDictValidation",
+            "tests/trust/plane/integration/security/test_static_checks.py::TestStaticFromDictValidation",
         ],
     },
 }
