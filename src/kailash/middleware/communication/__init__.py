@@ -2,7 +2,7 @@
 Communication Layer for Kailash Middleware
 
 Handles all external communication including REST APIs, WebSockets,
-and events.
+events, and domain event buses with pluggable backends.
 
 Note:
     AI chat functionality has been moved to the Kaizen framework.
@@ -11,6 +11,9 @@ Note:
 """
 
 from .api_gateway import APIGateway, create_gateway
+from .backends import InMemoryEventBus
+from .domain_event import DomainEvent
+from .event_bus import EventBus, EventBusError, PublishError, SubscriptionError
 from .events import (
     EventPriority,
     EventStream,
@@ -29,6 +32,13 @@ __all__ = [
     "WorkflowEvent",
     "NodeEvent",
     "UIEvent",
+    # EventBus (pluggable backends)
+    "EventBus",
+    "DomainEvent",
+    "InMemoryEventBus",
+    "EventBusError",
+    "PublishError",
+    "SubscriptionError",
     # Real-time communication
     "RealtimeMiddleware",
     # API Gateway
