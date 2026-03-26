@@ -151,7 +151,6 @@ class JsonRpcHandler:
                 request_id,
                 -32603,
                 "Internal error",
-                {"detail": str(e)},
             )
 
     async def handle_batch(

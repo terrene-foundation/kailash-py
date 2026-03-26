@@ -75,12 +75,12 @@ class MCPWebSocketServer:
                     await websocket.send(json.dumps(response))
 
                 except json.JSONDecodeError as e:
+                    logger.warning(f"JSON parse error from WebSocket client: {e}")
                     error_response = {
                         "jsonrpc": "2.0",
                         "error": {
                             "code": -32700,
                             "message": "Parse error",
-                            "data": str(e),
                         },
                         "id": None,
                     }
@@ -93,7 +93,6 @@ class MCPWebSocketServer:
                         "error": {
                             "code": -32603,
                             "message": "Internal error",
-                            "data": str(e),
                         },
                         "id": request.get("id") if "request" in locals() else None,
                     }

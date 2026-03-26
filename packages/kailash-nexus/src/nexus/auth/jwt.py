@@ -236,9 +236,10 @@ class JWTMiddleware(BaseHTTPMiddleware):
                 },
             )
         except InvalidTokenError as e:
+            logger.warning(f"Invalid token: {e}")
             return JSONResponse(
                 status_code=401,
-                content={"detail": str(e), "error": "invalid_token"},
+                content={"detail": "Invalid token", "error": "invalid_token"},
                 headers={
                     "WWW-Authenticate": 'Bearer realm="api", error="invalid_token"'
                 },

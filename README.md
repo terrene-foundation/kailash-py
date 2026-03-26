@@ -28,7 +28,10 @@
 - **Scale-out ready** -- Distributed circuit breaker (Redis-backed with Lua atomic transitions), multi-worker task queue architecture, resource quotas with semaphore-based concurrency control, coordinated graceful shutdown, Kubernetes deployment manifests.
 - **Progressive infrastructure** -- Start with zero config (SQLite), scale to multi-worker PostgreSQL/MySQL by changing environment variables. Dialect-portable SQL via QueryDialect strategy pattern. SQL task queue with `SKIP LOCKED`, worker heartbeat registry, exactly-once idempotent execution. No code changes between Level 0 (dev) and Level 2 (production).
 - **Infrastructure-agnostic** -- `LocalRuntime` runs entirely in-process. No server cluster, no external database, no message broker. Deploy anywhere: any cloud, any region, on-prem, edge, air-gapped. Zero vendor lock-in.
-- **Foundation for three application frameworks** -- [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen) (AI agents with trust), [Nexus](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus) (multi-channel deploy), and [DataFlow](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) (zero-config database) are all built on this Core SDK.
+- **Unified engine APIs** -- `DataFlowEngine.builder("sqlite:///app.db").build()` and `NexusEngine.builder().preset(Preset.SAAS).build()` provide fluent builder patterns with validation layers, data classification, query monitoring, and enterprise middleware. Cross-SDK parity with kailash-rs.
+- **Field-level validation and data classification** -- Declarative `@field_validator` and `@classify` decorators on DataFlow models. Built-in validators for email, URL, UUID, phone, length, range, pattern. Classification levels (PII, internal, public) with retention policies and masking strategies.
+- **Organizational governance (PACT)** -- D/T/R accountability grammar, operating envelopes with monotonic tightening, knowledge clearance levels, verification gradient, and MCP tool governance. Governs AI agent organizations with fail-closed decisions and anti-self-modification defense.
+- **Foundation for four application frameworks** -- [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen) (AI agents with trust), [Nexus](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus) (multi-channel deploy), [DataFlow](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) (zero-config database), and [PACT](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-pact) (organizational governance) are all built on this Core SDK.
 
 ---
 
@@ -38,12 +41,12 @@
 +------------------------------------------------------------------+
 |                    Application Frameworks                         |
 |                                                                   |
-|   Kaizen v1.2.5          Nexus v1.4.2        DataFlow v1.0.0     |
+|   Kaizen v2.3.0          Nexus v1.5.0        DataFlow v1.2.0     |
 |   AI Agents              Multi-Channel        Zero-Config DB      |
 |   CARE/EATP Trust        API + CLI + MCP      @db.model           |
 |   Multi-Agent Coord.     Auth + RBAC          11 Nodes/Model      |
 +------------------------------------------------------------------+
-|                    Core SDK v1.0.0                                 |
+|                    Core SDK v2.1.0                                 |
 |                                                                   |
 |   140+ Nodes    |  WorkflowBuilder   |  Runtime (Sync + Async)   |
 |   MCP Server    |  Cyclic Workflows  |  CARE Trust Layer          |
@@ -75,6 +78,7 @@ pip install kailash
 pip install kailash-kaizen     # AI agents with trust
 pip install kailash-nexus      # Multi-channel platform (API + CLI + MCP)
 pip install kailash-dataflow   # Zero-config database operations
+pip install kailash-pact       # Organizational governance (D/T/R)
 ```
 
 ### Workflow Orchestration

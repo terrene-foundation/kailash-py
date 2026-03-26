@@ -15,6 +15,7 @@ Phase 1 (Week 3) implements DELEGATE and AUDIT.
 """
 
 import asyncio
+import hmac
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -738,7 +739,9 @@ class TrustOperations:
             if delegation.reasoning_trace is not None:
                 # Verify hash
                 expected_hash = hash_reasoning_trace(delegation.reasoning_trace)
-                if delegation.reasoning_trace_hash != expected_hash:
+                if not hmac.compare_digest(
+                    delegation.reasoning_trace_hash or "", expected_hash
+                ):
                     return VerificationResult(
                         valid=False,
                         reason=(
@@ -791,7 +794,9 @@ class TrustOperations:
             if anchor.reasoning_trace is not None:
                 # Verify hash
                 expected_hash = hash_reasoning_trace(anchor.reasoning_trace)
-                if anchor.reasoning_trace_hash != expected_hash:
+                if not hmac.compare_digest(
+                    anchor.reasoning_trace_hash or "", expected_hash
+                ):
                     return VerificationResult(
                         valid=False,
                         reason=(

@@ -15,6 +15,38 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [2.1.0] - 2026-03-26
+
+**Multi-Package Release** — kailash 2.1.0, kailash-dataflow 1.2.0, kailash-nexus 1.5.0, kailash-kaizen 2.3.0, kaizen-agents 0.3.0
+
+#### Added
+
+- `ImmutableAuditLog` and RBAC matrix export (#80, #81, #100)
+- `EventBus` with pluggable backends (#79)
+- `DataFlowEngine` with builder pattern and enterprise features (#77, #78)
+- `NexusEngine` with builder pattern and middleware presets (#77, #78)
+- Field-level validation (`@field_validator`) and data classification (`@classify`) for DataFlow (#82, #83, #99)
+- kaizen-agents 0.3.0: structural split — governed agent L2 engine
+
+#### Fixed
+
+- Runtime lifecycle management and runtime injection (#71, #72)
+- Docker stage-1 setup.py references (#94, #95)
+
+#### Security
+
+- Replaced `eval()` with safe exception class allowlist in retry config (C1)
+- Removed internal error detail leakage from API/MCP/A2A error responses (C2, C3)
+- All trust hash comparisons now use `hmac.compare_digest()` (H1)
+- ESA database methods validate table names against identifier pattern (H2)
+- Trust-plane verification bundle uses `textContent` instead of `innerHTML` (H5)
+
+#### Changed
+
+- kailash-dataflow dependency updated to `kailash>=2.1.0,<3.0.0`
+- kailash-nexus dependency updated to `kailash>=2.1.0,<3.0.0`
+- All framework dependency pins updated in main SDK extras
+
 ### [2.0.1] - 2026-03-23
 
 #### Fixed

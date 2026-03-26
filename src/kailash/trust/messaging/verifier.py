@@ -15,6 +15,7 @@ Key Features:
 - Capability and constraint verification
 """
 
+import hmac
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -401,7 +402,7 @@ class MessageVerifier:
 
             # Verify chain hash matches
             current_hash = chain.hash()
-            if current_hash != envelope.trust_chain_hash:
+            if not hmac.compare_digest(current_hash, envelope.trust_chain_hash):
                 warnings.append(
                     "Trust chain hash mismatch - chain may have been updated"
                 )

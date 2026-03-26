@@ -317,17 +317,19 @@ async function verifyBundle() {{
         const computed = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
         if (computed === bundle.chain_hash) {{
-            resultDiv.innerHTML = '<span class="valid">VALID</span> — Chain hash matches.';
+            resultDiv.textContent = 'VALID — Chain hash matches.';
             resultDiv.style.background = '#e8f5e9';
+            resultDiv.style.color = '#2e7d32';
         }} else {{
-            resultDiv.innerHTML = '<span class="invalid">INVALID</span> — Chain hash mismatch!<br>'
-                + 'Expected: ' + bundle.chain_hash + '<br>'
-                + 'Computed: ' + computed;
+            resultDiv.textContent = 'INVALID — Chain hash mismatch! Expected: '
+                + bundle.chain_hash + ' Computed: ' + computed;
             resultDiv.style.background = '#ffebee';
+            resultDiv.style.color = '#c62828';
         }}
     }} catch(e) {{
-        resultDiv.innerHTML = '<span class="invalid">ERROR</span>: ' + e.message;
+        resultDiv.textContent = 'ERROR: Verification failed';
         resultDiv.style.background = '#ffebee';
+        resultDiv.style.color = '#c62828';
     }}
 }}
 </script>

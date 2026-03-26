@@ -458,7 +458,7 @@ def verify_merkle_proof(leaf_hash: str, proof: MerkleProof) -> bool:
         return False
 
     # Verify the leaf hash matches
-    if leaf_hash != proof.leaf_hash:
+    if not hmac_mod.compare_digest(leaf_hash, proof.leaf_hash):
         return False
 
     # Recompute root from leaf + proof hashes

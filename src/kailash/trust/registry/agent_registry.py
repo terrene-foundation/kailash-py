@@ -12,6 +12,7 @@ Key Components:
 - DiscoveryQuery: Query builder for complex agent discovery
 """
 
+import hmac
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -578,7 +579,9 @@ class AgentRegistry:
 
             # Verify hash matches (prevents registration with stale chain)
             chain_hash = chain.hash()
-            if request.trust_chain_hash and chain_hash != request.trust_chain_hash:
+            if request.trust_chain_hash and not hmac.compare_digest(
+                chain_hash, request.trust_chain_hash
+            ):
                 raise TrustVerificationError(
                     request.agent_id,
                     reason=(
