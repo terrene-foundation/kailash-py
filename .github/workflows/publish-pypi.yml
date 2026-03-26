@@ -8,6 +8,7 @@ on:
       - "kaizen-v*" # Kaizen: kaizen-v2.0.0
       - "nexus-v*" # Nexus: nexus-v1.4.3
       - "pact-v*" # PACT: pact-v0.2.0
+      - "kaizen-agents-v*" # Kaizen Agents: kaizen-agents-v0.3.0
   workflow_dispatch:
     inputs:
       package:
@@ -20,6 +21,7 @@ on:
           - kailash-kaizen
           - kailash-nexus
           - kailash-pact
+          - kaizen-agents
       publish_to:
         description: "Target registry"
         required: true
@@ -50,6 +52,7 @@ jobs:
               kailash-kaizen)    echo "package_dir=packages/kailash-kaizen" >> $GITHUB_OUTPUT ;;
               kailash-nexus)     echo "package_dir=packages/kailash-nexus" >> $GITHUB_OUTPUT ;;
               kailash-pact)      echo "package_dir=packages/kailash-pact" >> $GITHUB_OUTPUT ;;
+              kaizen-agents)    echo "package_dir=packages/kaizen-agents" >> $GITHUB_OUTPUT ;;
             esac
             echo "package=$PACKAGE" >> $GITHUB_OUTPUT
             echo "version=manual" >> $GITHUB_OUTPUT
@@ -70,6 +73,10 @@ jobs:
             elif [[ "$TAG" =~ ^pact-v(.+)$ ]]; then
               echo "package=kailash-pact" >> $GITHUB_OUTPUT
               echo "package_dir=packages/kailash-pact" >> $GITHUB_OUTPUT
+              VERSION="${BASH_REMATCH[1]}"
+            elif [[ "$TAG" =~ ^kaizen-agents-v(.+)$ ]]; then
+              echo "package=kaizen-agents" >> $GITHUB_OUTPUT
+              echo "package_dir=packages/kaizen-agents" >> $GITHUB_OUTPUT
               VERSION="${BASH_REMATCH[1]}"
             elif [[ "$TAG" =~ ^v(.+)$ ]]; then
               echo "package=kailash" >> $GITHUB_OUTPUT
