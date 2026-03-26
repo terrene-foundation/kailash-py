@@ -356,7 +356,7 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "cryptographic",
         "evidence_sources": [
-            "src/kailash/trust/plane/key_manager.py",
+            "src/kailash/trust/key_manager.py",
             "src/kailash/trust/plane/key_managers/__init__.py",
             "src/kailash/trust/plane/exceptions.py",
             "src/kailash/trust/plane/project.py",
