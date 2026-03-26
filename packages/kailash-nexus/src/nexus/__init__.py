@@ -29,7 +29,7 @@ from .core import MiddlewareInfo, Nexus, NexusPluginProtocol, RouterInfo, create
 from .engine import EnterpriseMiddlewareConfig, NexusEngine, Preset
 from .presets import PRESETS, NexusConfig, PresetConfig, apply_preset, get_preset
 
-__version__ = "1.4.3"
+__version__ = "1.5.0"
 __all__ = [
     # Core
     "Nexus",

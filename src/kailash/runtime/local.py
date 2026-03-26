@@ -93,6 +93,56 @@ from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
 
 logger = logging.getLogger(__name__)
 
+# Allowlist of exception classes that can be referenced by name in retry config.
+# This replaces the unsafe eval() that was previously used to resolve exception names.
+_EXCEPTION_ALLOWLIST: Dict[str, type] = {
+    "ValueError": ValueError,
+    "TypeError": TypeError,
+    "KeyError": KeyError,
+    "IndexError": IndexError,
+    "AttributeError": AttributeError,
+    "RuntimeError": RuntimeError,
+    "IOError": IOError,
+    "OSError": OSError,
+    "TimeoutError": TimeoutError,
+    "ConnectionError": ConnectionError,
+    "FileNotFoundError": FileNotFoundError,
+    "PermissionError": PermissionError,
+    "NotImplementedError": NotImplementedError,
+    "StopIteration": StopIteration,
+    "ArithmeticError": ArithmeticError,
+    "OverflowError": OverflowError,
+    "ZeroDivisionError": ZeroDivisionError,
+    "LookupError": LookupError,
+    "UnicodeError": UnicodeError,
+    "ConnectionResetError": ConnectionResetError,
+    "ConnectionRefusedError": ConnectionRefusedError,
+    "BrokenPipeError": BrokenPipeError,
+}
+
+
+def _resolve_exception_class(exc_name: str) -> type:
+    """Safely resolve an exception class name to its type.
+
+    Only allows exceptions from the built-in allowlist. This prevents
+    arbitrary code execution via eval() on user-controlled config values.
+
+    Args:
+        exc_name: Simple exception class name (e.g., "ValueError").
+
+    Returns:
+        The exception class.
+
+    Raises:
+        ValueError: If the name is not in the allowlist.
+    """
+    if exc_name not in _EXCEPTION_ALLOWLIST:
+        raise ValueError(
+            f"Exception '{exc_name}' is not in the allowed list. "
+            f"Allowed: {sorted(_EXCEPTION_ALLOWLIST.keys())}"
+        )
+    return _EXCEPTION_ALLOWLIST[exc_name]
+
 
 class ContentAwareExecutionError(Exception):
     """Exception raised when content-aware success detection identifies a failure."""
@@ -544,23 +594,21 @@ class LocalRuntime(
                     # Add custom retriable exceptions
                     for exc_name in rules.get("retriable_exceptions", []):
                         try:
-                            exc_class = eval(
-                                exc_name
-                            )  # Note: In production, use a safer approach
+                            exc_class = _resolve_exception_class(exc_name)
                             exception_classifier.add_retriable_exception(exc_class)
-                        except:
+                        except (ValueError, KeyError) as e:
                             logger.warning(
-                                f"Could not add retriable exception: {exc_name}"
+                                f"Could not add retriable exception: {exc_name}: {e}"
                             )
 
                     # Add custom non-retriable exceptions
                     for exc_name in rules.get("non_retriable_exceptions", []):
                         try:
-                            exc_class = eval(exc_name)
+                            exc_class = _resolve_exception_class(exc_name)
                             exception_classifier.add_non_retriable_exception(exc_class)
-                        except:
+                        except (ValueError, KeyError) as e:
                             logger.warning(
-                                f"Could not add non-retriable exception: {exc_name}"
+                                f"Could not add non-retriable exception: {exc_name}: {e}"
                             )
 
                     # Add pattern-based rules
@@ -599,7 +647,7 @@ class LocalRuntime(
                         "exception_strategies"
                     ].items():
                         try:
-                            exc_class = eval(exc_name)
+                            exc_class = _resolve_exception_class(exc_name)
                             strategy_type = strategy_config.get(
                                 "type", "exponential_backoff"
                             )
@@ -2129,12 +2177,13 @@ class LocalRuntime(
         node_outputs = {}
         failed_nodes = []
 
-        # OpenTelemetry tracing (TODO-014): Start workflow-level span.
+        # OpenTelemetry tracing: Start workflow-level span with extended attributes.
         # Zero overhead when opentelemetry is not installed.
         _tracer = get_workflow_tracer()
         _wf_span = _tracer.start_workflow_span(
             workflow_id=getattr(workflow, "workflow_id", "") or "",
             workflow_name=getattr(workflow, "name", "") or "",
+            run_id=run_id or "",
         )
 
         # Make results available to _should_skip_conditional_node for transitive dependency checking
@@ -2276,7 +2325,7 @@ class LocalRuntime(
                         f"Failed to create task for node '{node_id}': {e}"
                     )
 
-            # OpenTelemetry tracing (TODO-014): per-node span
+            # OpenTelemetry tracing: per-node span (DETAILED+ level)
             _node_span = _tracer.start_node_span(
                 node_id=node_id,
                 node_type=node_instance.__class__.__name__,

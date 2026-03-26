@@ -158,8 +158,8 @@ class TestMigrationRunner:
 
         # Patch SCHEMA_VERSION to 3 and MIGRATIONS to our fakes
         with (
-            patch("trustplane.store.sqlite.SCHEMA_VERSION", 3),
-            patch("trustplane.store.sqlite.MIGRATIONS", fake_migrations),
+            patch("kailash.trust.plane.store.sqlite.SCHEMA_VERSION", 3),
+            patch("kailash.trust.plane.store.sqlite.MIGRATIONS", fake_migrations),
         ):
             store.initialize()
 
@@ -201,8 +201,8 @@ class TestMigrationRunner:
         store = SqliteTrustPlaneStore(db_path)
 
         with (
-            patch("trustplane.store.sqlite.SCHEMA_VERSION", 2),
-            patch("trustplane.store.sqlite.MIGRATIONS", fake_migrations),
+            patch("kailash.trust.plane.store.sqlite.SCHEMA_VERSION", 2),
+            patch("kailash.trust.plane.store.sqlite.MIGRATIONS", fake_migrations),
         ):
             with pytest.raises(SchemaMigrationError) as exc_info:
                 store.initialize()
@@ -254,8 +254,8 @@ class TestMigrationRunner:
         store = SqliteTrustPlaneStore(db_path)
 
         with (
-            patch("trustplane.store.sqlite.SCHEMA_VERSION", 3),
-            patch("trustplane.store.sqlite.MIGRATIONS", fake_migrations),
+            patch("kailash.trust.plane.store.sqlite.SCHEMA_VERSION", 3),
+            patch("kailash.trust.plane.store.sqlite.MIGRATIONS", fake_migrations),
         ):
             with pytest.raises(SchemaMigrationError) as exc_info:
                 store.initialize()

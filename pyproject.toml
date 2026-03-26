@@ -118,10 +118,10 @@ otel = [
 ]
 # Sub-packages
 dataflow = [
-    "kailash-dataflow>=1.0.0,<3.0.0",
+    "kailash-dataflow>=1.2.0,<3.0.0",
 ]
 nexus = [
-    "kailash-nexus>=1.4.3",
+    "kailash-nexus>=1.5.0",
 ]
 kaizen = [
     "kailash-kaizen>=2.3.0,<3.0.0",
@@ -185,8 +185,8 @@ docs = [
 # Everything (restores pre-1.0 behavior)
 all = [
     "kailash[server,cli,http,database,postgres,mysql,files,auth,mfa,microsoft,monitoring,distributed,mcp,scheduler,otel,trust,trust-encryption,trust-sso,pact]",
-    "kailash-dataflow>=1.0.0,<3.0.0",
-    "kailash-nexus>=1.4.3",
+    "kailash-dataflow>=1.2.0,<3.0.0",
+    "kailash-nexus>=1.5.0",
     "kailash-kaizen>=2.3.0,<3.0.0",
     "kaizen-agents>=0.3.0",
     "kailash-pact>=0.4.0",

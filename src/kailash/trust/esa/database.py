@@ -554,6 +554,15 @@ class DatabaseESA(EnterpriseSystemAgent):
             ESAOperationError: If insert fails
         """
         try:
+            # Validate table name against identifier pattern
+            _ident_re = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+            if not _ident_re.match(table):
+                raise ESAOperationError(
+                    operation="execute_insert",
+                    system_id=self.system_id,
+                    reason=f"Invalid table name: {table!r}",
+                )
+
             # Validate table is allowed
             if self.allowed_tables and table not in self.allowed_tables:
                 raise ESAOperationError(
@@ -561,9 +570,6 @@ class DatabaseESA(EnterpriseSystemAgent):
                     system_id=self.system_id,
                     reason=f"Table '{table}' not in allowed tables list",
                 )
-
-            # Build INSERT query — validate column names
-            _ident_re = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
             columns = list(data.keys())
             for col in columns:
                 if not _ident_re.match(col):
@@ -641,6 +647,15 @@ class DatabaseESA(EnterpriseSystemAgent):
             ESAOperationError: If update fails
         """
         try:
+            # Validate table name against identifier pattern
+            _ident_re = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+            if not _ident_re.match(table):
+                raise ESAOperationError(
+                    operation="execute_update",
+                    system_id=self.system_id,
+                    reason=f"Invalid table name: {table!r}",
+                )
+
             # Validate table is allowed
             if self.allowed_tables and table not in self.allowed_tables:
                 raise ESAOperationError(
@@ -650,7 +665,6 @@ class DatabaseESA(EnterpriseSystemAgent):
                 )
 
             # Validate column names against injection
-            _ident_re = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
             for col in list(data.keys()) + list(conditions.keys()):
                 if not _ident_re.match(col):
                     raise ESAOperationError(
@@ -730,6 +744,15 @@ class DatabaseESA(EnterpriseSystemAgent):
             ESAOperationError: If delete fails
         """
         try:
+            # Validate table name against identifier pattern
+            _ident_re = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+            if not _ident_re.match(table):
+                raise ESAOperationError(
+                    operation="execute_delete",
+                    system_id=self.system_id,
+                    reason=f"Invalid table name: {table!r}",
+                )
+
             # Validate table is allowed
             if self.allowed_tables and table not in self.allowed_tables:
                 raise ESAOperationError(
@@ -739,7 +762,6 @@ class DatabaseESA(EnterpriseSystemAgent):
                 )
 
             # Validate column names against injection
-            _ident_re = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
             for col in conditions.keys():
                 if not _ident_re.match(col):
                     raise ESAOperationError(

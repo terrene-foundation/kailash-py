@@ -16,8 +16,8 @@ sys.path.insert(0, os.path.abspath("../../src"))
 project = "Kailash Python SDK"
 copyright = "2026, Terrene Foundation"
 author = "Terrene Foundation"
-release = "0.12.5"
-version = "0.12"
+release = "2.1.0"
+version = "2.1"
 
 # General configuration
 extensions = [

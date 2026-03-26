@@ -14,6 +14,7 @@ Defines the core data structures for the Enterprise Agent Trust Protocol:
 """
 
 import hashlib
+import hmac
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -1148,8 +1149,6 @@ class LinkedHashChain:
         Returns:
             The computed linked hash
         """
-        import hashlib
-
         if previous_hash is None:
             # First entry - hash is just the current hash
             data = f"linked:genesis:{current_hash}"
@@ -1263,7 +1262,7 @@ class LinkedHashChain:
         """
         for entry in self._entries:
             if entry.agent_id == agent_id:
-                return entry.hash != stored_hash
+                return not hmac.compare_digest(entry.hash, stored_hash)
         # Agent not found in chain - could indicate tampering or just not added
         return True
 

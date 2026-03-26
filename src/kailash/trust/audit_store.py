@@ -41,7 +41,9 @@ class AuditAnchorNotFoundError(AuditStoreError):
     """Raised when an audit anchor is not found."""
 
     def __init__(self, anchor_id: str):
-        super().__init__(f"Audit anchor not found: {anchor_id}", details={"anchor_id": anchor_id})
+        super().__init__(
+            f"Audit anchor not found: {anchor_id}", details={"anchor_id": anchor_id}
+        )
         self.anchor_id = anchor_id
 
 
@@ -244,7 +246,9 @@ class AppendOnlyAuditStore:
             return record
 
         except Exception as e:
-            raise AuditStoreError(f"Failed to append audit anchor {anchor.id}: {str(e)}") from e
+            raise AuditStoreError(
+                f"Failed to append audit anchor {anchor.id}: {str(e)}"
+            ) from e
 
     async def get(self, record_id: str) -> Optional[AuditRecord]:
         """
@@ -381,7 +385,9 @@ class AppendOnlyAuditStore:
             else:
                 # Subsequent records must link to previous
                 expected_previous = self._records[i - 1].integrity_hash
-                if record.previous_hash != expected_previous:
+                if not hmac_mod.compare_digest(
+                    record.previous_hash or "", expected_previous
+                ):
                     if first_invalid is None:
                         first_invalid = record.sequence_number
                     errors.append(

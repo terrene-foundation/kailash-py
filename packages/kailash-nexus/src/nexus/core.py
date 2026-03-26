@@ -1805,9 +1805,7 @@ Check the documentation or explore available resources.
             raise
         except Exception as e:
             logger.error(f"Workflow execution failed for '{workflow_name}': {e}")
-            raise HTTPException(
-                status_code=500, detail=f"Workflow execution failed: {str(e)}"
-            )
+            raise HTTPException(status_code=500, detail="Workflow execution failed")
 
     def _run_gateway(self):
         """Run gateway in thread with error handling."""

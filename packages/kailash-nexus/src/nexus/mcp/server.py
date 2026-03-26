@@ -117,11 +117,12 @@ class MCPServer:
                     response = await self.handle_request(request)
                     await websocket.send(json.dumps(response))
                 except json.JSONDecodeError as e:
-                    error_response = {"type": "error", "error": f"Invalid JSON: {e}"}
+                    logger.warning(f"Invalid JSON from MCP client: {e}")
+                    error_response = {"type": "error", "error": "Invalid JSON"}
                     await websocket.send(json.dumps(error_response))
                 except Exception as e:
                     logger.error(f"Error handling MCP request: {e}")
-                    error_response = {"type": "error", "error": str(e)}
+                    error_response = {"type": "error", "error": "Internal server error"}
                     await websocket.send(json.dumps(error_response))
 
         except websockets.exceptions.ConnectionClosed:
@@ -257,7 +258,7 @@ class MCPServer:
 
         except Exception as e:
             logger.error(f"Error executing workflow {tool_name}: {e}")
-            result = {"error": str(e), "workflow": tool_name}
+            result = {"error": "Workflow execution failed", "workflow": tool_name}
 
         return {"type": "result", "result": result}
 

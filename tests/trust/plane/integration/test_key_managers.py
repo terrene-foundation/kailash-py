@@ -41,9 +41,9 @@ class TestTrustPlaneKeyManagerProtocol:
         protocol_methods = {
             name for name in dir(TrustPlaneKeyManager) if not name.startswith("_")
         }
-        assert required_methods.issubset(protocol_methods), (
-            f"Missing protocol methods: {required_methods - protocol_methods}"
-        )
+        assert required_methods.issubset(
+            protocol_methods
+        ), f"Missing protocol methods: {required_methods - protocol_methods}"
 
     def test_local_file_key_manager_satisfies_protocol(self, tmp_path: Path) -> None:
         """LocalFileKeyManager must satisfy the TrustPlaneKeyManager protocol."""
@@ -52,39 +52,41 @@ class TestTrustPlaneKeyManagerProtocol:
 
     def test_aws_kms_key_manager_declares_protocol_methods(self) -> None:
         """AwsKmsKeyManager must declare all protocol methods."""
-        from kailash.trust.plane.key_managers.managers.aws_kms import AwsKmsKeyManager
+        from kailash.trust.plane.key_managers.aws_kms import AwsKmsKeyManager
 
         required_methods = {"sign", "get_public_key", "key_id", "algorithm"}
         cls_methods = {
             name for name in dir(AwsKmsKeyManager) if not name.startswith("_")
         }
-        assert required_methods.issubset(cls_methods), (
-            f"Missing methods: {required_methods - cls_methods}"
-        )
+        assert required_methods.issubset(
+            cls_methods
+        ), f"Missing methods: {required_methods - cls_methods}"
 
     def test_azure_key_vault_key_manager_declares_protocol_methods(self) -> None:
         """AzureKeyVaultKeyManager must declare all protocol methods."""
-        from kailash.trust.plane.key_managers.managers.azure_keyvault import AzureKeyVaultKeyManager
+        from kailash.trust.plane.key_managers.azure_keyvault import (
+            AzureKeyVaultKeyManager,
+        )
 
         required_methods = {"sign", "get_public_key", "key_id", "algorithm"}
         cls_methods = {
             name for name in dir(AzureKeyVaultKeyManager) if not name.startswith("_")
         }
-        assert required_methods.issubset(cls_methods), (
-            f"Missing methods: {required_methods - cls_methods}"
-        )
+        assert required_methods.issubset(
+            cls_methods
+        ), f"Missing methods: {required_methods - cls_methods}"
 
     def test_vault_key_manager_declares_protocol_methods(self) -> None:
         """VaultKeyManager must declare all protocol methods."""
-        from kailash.trust.plane.key_managers.managers.vault import VaultKeyManager
+        from kailash.trust.plane.key_managers.vault import VaultKeyManager
 
         required_methods = {"sign", "get_public_key", "key_id", "algorithm"}
         cls_methods = {
             name for name in dir(VaultKeyManager) if not name.startswith("_")
         }
-        assert required_methods.issubset(cls_methods), (
-            f"Missing methods: {required_methods - cls_methods}"
-        )
+        assert required_methods.issubset(
+            cls_methods
+        ), f"Missing methods: {required_methods - cls_methods}"
 
 
 class TestLocalFileKeyManager:
@@ -213,9 +215,9 @@ class TestKeyManagerErrorHierarchy:
         )
 
         for cls in (KeyNotFoundError, KeyExpiredError, SigningError, VerificationError):
-            assert issubclass(cls, KeyManagerError), (
-                f"{cls.__name__} must inherit KeyManagerError"
-            )
+            assert issubclass(
+                cls, KeyManagerError
+            ), f"{cls.__name__} must inherit KeyManagerError"
 
     def test_key_manager_error_includes_provider(self) -> None:
         """KeyManagerError must include the provider name in its message."""
@@ -249,6 +251,6 @@ class TestKeyManagerErrorHierarchy:
         )
 
         for cls in (StoreConnectionError, StoreQueryError, StoreTransactionError):
-            assert issubclass(cls, TrustPlaneStoreError), (
-                f"{cls.__name__} must inherit TrustPlaneStoreError"
-            )
+            assert issubclass(
+                cls, TrustPlaneStoreError
+            ), f"{cls.__name__} must inherit TrustPlaneStoreError"

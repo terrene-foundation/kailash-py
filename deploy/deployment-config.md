@@ -15,13 +15,14 @@
 
 ## Packages
 
-| Package          | Tag Pattern   | Current Version |
-| ---------------- | ------------- | --------------- |
-| kailash (core)   | `v*`          | 2.0.0           |
-| kailash-dataflow | `dataflow-v*` | 1.1.0           |
-| kailash-kaizen   | `kaizen-v*`   | 2.2.0           |
-| kailash-nexus    | `nexus-v*`    | 1.4.3           |
-| kailash-pact     | `pact-v*`     | 0.2.0           |
+| Package          | Tag Pattern        | Current Version |
+| ---------------- | ------------------ | --------------- |
+| kailash (core)   | `v*`               | 2.1.0           |
+| kailash-dataflow | `dataflow-v*`      | 1.2.0           |
+| kailash-kaizen   | `kaizen-v*`        | 2.3.0           |
+| kailash-nexus    | `nexus-v*`         | 1.5.0           |
+| kailash-pact     | `pact-v*`          | 0.4.0           |
+| kaizen-agents    | `kaizen-agents-v*` | 0.3.0           |
 
 ## Release Runbook
 
