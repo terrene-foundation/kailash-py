@@ -76,8 +76,8 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "rbac_identity",
         "evidence_sources": [
-            "src/trustplane/rbac.py",
-            "src/trustplane/identity.py",
+            "src/kailash/trust/plane/rbac.py",
+            "src/kailash/trust/plane/identity.py",
         ],
         "test_sources": [
             "tests/integration/test_rbac.py",
@@ -95,8 +95,8 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "genesis",
         "evidence_sources": [
-            "src/trustplane/project.py",
-            "src/trustplane/models.py",
+            "src/kailash/trust/plane/project.py",
+            "src/kailash/trust/plane/models.py",
         ],
         "test_sources": [
             "tests/integration/test_project.py",
@@ -113,7 +113,7 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "delegation",
         "evidence_sources": [
-            "src/trustplane/delegation.py",
+            "src/kailash/trust/plane/delegation.py",
         ],
         "test_sources": [
             "tests/integration/test_delegation.py",
@@ -134,8 +134,8 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "input_validation",
         "evidence_sources": [
-            "src/trustplane/_locking.py",
-            "src/trustplane/models.py",
+            "src/kailash/trust/_locking.py",
+            "src/kailash/trust/plane/models.py",
         ],
         "test_sources": [
             "tests/integration/security/test_security_patterns.py",
@@ -152,8 +152,8 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "decision",
         "evidence_sources": [
-            "src/trustplane/models.py",
-            "src/trustplane/project.py",
+            "src/kailash/trust/plane/models.py",
+            "src/kailash/trust/plane/project.py",
         ],
         "test_sources": [
             "tests/unit/test_models.py",
@@ -172,8 +172,8 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "execution",
         "evidence_sources": [
-            "src/trustplane/models.py",
-            "src/trustplane/proxy.py",
+            "src/kailash/trust/plane/models.py",
+            "src/kailash/trust/plane/proxy.py",
         ],
         "test_sources": [
             "tests/integration/test_proxy.py",
@@ -192,7 +192,7 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "siem_export",
         "evidence_sources": [
-            "src/trustplane/siem.py",
+            "src/kailash/trust/plane/siem.py",
         ],
         "test_sources": [
             "tests/integration/test_siem.py",
@@ -209,8 +209,8 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "milestone",
         "evidence_sources": [
-            "src/trustplane/models.py",
-            "src/trustplane/project.py",
+            "src/kailash/trust/plane/models.py",
+            "src/kailash/trust/plane/project.py",
         ],
         "test_sources": [
             "tests/integration/test_project.py",
@@ -227,8 +227,8 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "violation",
         "evidence_sources": [
-            "src/trustplane/holds.py",
-            "src/trustplane/project.py",
+            "src/kailash/trust/plane/holds.py",
+            "src/kailash/trust/plane/project.py",
         ],
         "test_sources": [
             "tests/integration/test_holds.py",
@@ -248,7 +248,7 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "tls_syslog",
         "evidence_sources": [
-            "src/trustplane/siem.py",
+            "src/kailash/trust/plane/siem.py",
         ],
         "test_sources": [
             "tests/integration/test_siem.py::TestTLSSyslogHandler",
@@ -267,9 +267,9 @@ SOC2_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "atomic_integrity",
         "evidence_sources": [
-            "src/trustplane/_locking.py",
-            "src/trustplane/archive.py",
-            "src/trustplane/store/postgres.py",
+            "src/kailash/trust/_locking.py",
+            "src/kailash/trust/plane/archive.py",
+            "src/kailash/trust/plane/store/postgres.py",
         ],
         "test_sources": [
             "tests/integration/security/test_security_patterns.py::TestPattern3AtomicWrite",
@@ -292,7 +292,7 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "rbac",
         "evidence_sources": [
-            "src/trustplane/rbac.py",
+            "src/kailash/trust/plane/rbac.py",
         ],
         "test_sources": [
             "tests/integration/test_rbac.py",
@@ -309,8 +309,8 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "decision",
         "evidence_sources": [
-            "src/trustplane/models.py",
-            "src/trustplane/project.py",
+            "src/kailash/trust/plane/models.py",
+            "src/kailash/trust/plane/project.py",
         ],
         "test_sources": [
             "tests/unit/test_models.py",
@@ -331,8 +331,8 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "oidc_bearer",
         "evidence_sources": [
-            "src/trustplane/identity.py",
-            "src/trustplane/dashboard.py",
+            "src/kailash/trust/plane/identity.py",
+            "src/kailash/trust/plane/dashboard.py",
         ],
         "test_sources": [
             "tests/integration/test_identity.py",
@@ -356,11 +356,11 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "cryptographic",
         "evidence_sources": [
-            "src/trustplane/key_manager.py",
-            "src/trustplane/key_managers/__init__.py",
-            "src/trustplane/exceptions.py",
-            "src/trustplane/project.py",
-            "src/trustplane/delegation.py",
+            "src/kailash/trust/plane/key_manager.py",
+            "src/kailash/trust/plane/key_managers/__init__.py",
+            "src/kailash/trust/plane/exceptions.py",
+            "src/kailash/trust/plane/project.py",
+            "src/kailash/trust/plane/delegation.py",
         ],
         "test_sources": [
             "tests/integration/test_key_managers.py",
@@ -382,7 +382,7 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "archive",
         "evidence_sources": [
-            "src/trustplane/archive.py",
+            "src/kailash/trust/plane/archive.py",
         ],
         "test_sources": [
             "tests/integration/test_archive.py",
@@ -399,8 +399,8 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "milestone",
         "evidence_sources": [
-            "src/trustplane/models.py",
-            "src/trustplane/project.py",
+            "src/kailash/trust/plane/models.py",
+            "src/kailash/trust/plane/project.py",
         ],
         "test_sources": [
             "tests/integration/test_project.py",
@@ -423,11 +423,11 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "development_hardening",
         "evidence_sources": [
-            "src/trustplane/rbac.py",
-            "src/trustplane/models.py",
-            "src/trustplane/shadow.py",
-            "src/trustplane/proxy.py",
-            "src/trustplane/delegation.py",
+            "src/kailash/trust/plane/rbac.py",
+            "src/kailash/trust/plane/models.py",
+            "src/kailash/trust/plane/shadow.py",
+            "src/kailash/trust/plane/proxy.py",
+            "src/kailash/trust/plane/delegation.py",
         ],
         "test_sources": [
             "tests/integration/security/test_security_patterns.py",
@@ -446,7 +446,7 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "violation",
         "evidence_sources": [
-            "src/trustplane/holds.py",
+            "src/kailash/trust/plane/holds.py",
         ],
         "test_sources": [
             "tests/integration/test_holds.py",
@@ -467,9 +467,9 @@ ISO27001_CONTROL_MAP: dict[str, dict[str, str | list[str]]] = {
         ),
         "record_type": "retention_compliance",
         "evidence_sources": [
-            "src/trustplane/shadow_store.py",
-            "src/trustplane/store/postgres.py",
-            "src/trustplane/exceptions.py",
+            "src/kailash/trust/plane/shadow_store.py",
+            "src/kailash/trust/plane/store/postgres.py",
+            "src/kailash/trust/plane/exceptions.py",
         ],
         "test_sources": [
             "tests/integration/test_shadow.py::TestShadowStoreCleanup",
@@ -493,7 +493,7 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
             "validate_id() before use in filesystem paths or SQL queries. "
             "The regex ^[a-zA-Z0-9_-]+$ prevents directory traversal."
         ),
-        "implementation": "src/trustplane/_locking.py::validate_id",
+        "implementation": "src/kailash/trust/_locking.py::validate_id",
         "soc2_controls": ["CC6.6"],
         "iso27001_controls": ["A.14.2"],
         "tests": [
@@ -508,7 +508,7 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
             "All file reads use safe_read_json() or safe_read_text() "
             "with O_NOFOLLOW to prevent symlink TOCTOU attacks."
         ),
-        "implementation": "src/trustplane/_locking.py::safe_read_json",
+        "implementation": "src/kailash/trust/_locking.py::safe_read_json",
         "soc2_controls": ["CC6.6"],
         "iso27001_controls": ["A.14.2"],
         "tests": [
@@ -523,7 +523,7 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
             "All record writes use atomic_write() (temp file + fsync + "
             "os.replace) for crash-safe persistence."
         ),
-        "implementation": "src/trustplane/_locking.py::atomic_write",
+        "implementation": "src/kailash/trust/_locking.py::atomic_write",
         "soc2_controls": ["CC8.1"],
         "iso27001_controls": ["A.14.2"],
         "tests": [
@@ -538,7 +538,7 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
             "All JSON file reads use safe_read_json() which combines "
             "O_NOFOLLOW, proper fd lifecycle, and JSON parsing."
         ),
-        "implementation": "src/trustplane/_locking.py::safe_read_json",
+        "implementation": "src/kailash/trust/_locking.py::safe_read_json",
         "soc2_controls": ["CC6.6"],
         "iso27001_controls": ["A.14.2"],
         "tests": [
@@ -554,7 +554,7 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
             "max_cost_per_action, max_session_hours) are validated "
             "with math.isfinite() to reject NaN and Inf."
         ),
-        "implementation": "src/trustplane/models.py",
+        "implementation": "src/kailash/trust/plane/models.py",
         "soc2_controls": ["CC6.6"],
         "iso27001_controls": ["A.14.2"],
         "tests": [
@@ -569,7 +569,7 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
             "Long-lived collections use deque(maxlen=10000) to prevent "
             "memory exhaustion in long-running processes."
         ),
-        "implementation": "src/trustplane/shadow.py, src/trustplane/proxy.py",
+        "implementation": "src/kailash/trust/plane/shadow.py, src/kailash/trust/plane/proxy.py",
         "soc2_controls": ["CC6.8"],
         "iso27001_controls": ["A.14.2"],
         "tests": [
@@ -584,7 +584,7 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
             "HELD -> BLOCKED), never relax. Delegation revocation is "
             "irreversible."
         ),
-        "implementation": "src/trustplane/delegation.py, src/trustplane/models.py",
+        "implementation": "src/kailash/trust/plane/delegation.py, src/kailash/trust/plane/models.py",
         "soc2_controls": ["CC6.7", "CC7.3"],
         "iso27001_controls": ["A.9.2", "A.14.2"],
         "tests": [
@@ -599,8 +599,8 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
             "to prevent timing side-channel attacks."
         ),
         "implementation": (
-            "src/trustplane/delegation.py, src/trustplane/project.py, "
-            "src/trustplane/dashboard.py, src/trustplane/bundle.py"
+            "src/kailash/trust/plane/delegation.py, src/kailash/trust/plane/project.py, "
+            "src/kailash/trust/plane/dashboard.py, src/kailash/trust/plane/bundle.py"
         ),
         "soc2_controls": ["CC6.6"],
         "iso27001_controls": ["A.10.1"],
@@ -617,7 +617,7 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
             "registration. On revocation, key material is overwritten "
             "with empty string tombstones."
         ),
-        "implementation": "src/trustplane/project.py, src/trustplane/migrate.py",
+        "implementation": "src/kailash/trust/plane/project.py, src/kailash/trust/plane/migrate.py",
         "soc2_controls": ["CC6.7"],
         "iso27001_controls": ["A.10.1"],
         "tests": [
@@ -632,7 +632,7 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
             "Security-critical dataclasses (RolePermission) use "
             "frozen=True to prevent post-init field mutation."
         ),
-        "implementation": "src/trustplane/rbac.py",
+        "implementation": "src/kailash/trust/plane/rbac.py",
         "soc2_controls": ["CC6.1"],
         "iso27001_controls": ["A.14.2"],
         "tests": [
@@ -647,8 +647,8 @@ SECURITY_PATTERN_EVIDENCE: dict[str, dict[str, Any]] = {
             "and reject malformed/tampered JSON records loudly."
         ),
         "implementation": (
-            "src/trustplane/models.py, src/trustplane/delegation.py, "
-            "src/trustplane/rbac.py, src/trustplane/shadow.py"
+            "src/kailash/trust/plane/models.py, src/kailash/trust/plane/delegation.py, "
+            "src/kailash/trust/plane/rbac.py, src/kailash/trust/plane/shadow.py"
         ),
         "soc2_controls": ["CC6.6"],
         "iso27001_controls": ["A.14.2"],
