@@ -867,9 +867,9 @@ class TestSecurityPatternEvidence:
 
         for key, entry in SECURITY_PATTERN_EVIDENCE.items():
             for ctrl_id in entry["soc2_controls"]:
-                assert ctrl_id in SOC2_CONTROL_MAP, (
-                    f"Pattern {key} references unknown SOC2 control: {ctrl_id}"
-                )
+                assert (
+                    ctrl_id in SOC2_CONTROL_MAP
+                ), f"Pattern {key} references unknown SOC2 control: {ctrl_id}"
 
     def test_iso27001_control_references_valid(self):
         """All ISO 27001 references in patterns must exist in ISO27001_CONTROL_MAP."""
@@ -877,9 +877,9 @@ class TestSecurityPatternEvidence:
 
         for key, entry in SECURITY_PATTERN_EVIDENCE.items():
             for ctrl_id in entry["iso27001_controls"]:
-                assert ctrl_id in ISO27001_CONTROL_MAP, (
-                    f"Pattern {key} references unknown ISO27001 control: {ctrl_id}"
-                )
+                assert (
+                    ctrl_id in ISO27001_CONTROL_MAP
+                ), f"Pattern {key} references unknown ISO27001 control: {ctrl_id}"
 
 
 # ---------------------------------------------------------------------------
@@ -907,56 +907,59 @@ class TestComplianceMatrixCompleteness:
         from kailash.trust.plane.compliance import SOC2_CONTROL_MAP
 
         for ctrl_id, ctrl in SOC2_CONTROL_MAP.items():
-            assert "evidence_sources" in ctrl, (
-                f"SOC2 control {ctrl_id} missing evidence_sources"
-            )
-            assert len(ctrl["evidence_sources"]) > 0, (
-                f"SOC2 control {ctrl_id} has empty evidence_sources"
-            )
+            assert (
+                "evidence_sources" in ctrl
+            ), f"SOC2 control {ctrl_id} missing evidence_sources"
+            assert (
+                len(ctrl["evidence_sources"]) > 0
+            ), f"SOC2 control {ctrl_id} has empty evidence_sources"
 
     def test_iso27001_controls_have_evidence_sources(self):
         """All ISO 27001 controls must reference evidence source files."""
         from kailash.trust.plane.compliance import ISO27001_CONTROL_MAP
 
         for ctrl_id, ctrl in ISO27001_CONTROL_MAP.items():
-            assert "evidence_sources" in ctrl, (
-                f"ISO27001 control {ctrl_id} missing evidence_sources"
-            )
-            assert len(ctrl["evidence_sources"]) > 0, (
-                f"ISO27001 control {ctrl_id} has empty evidence_sources"
-            )
+            assert (
+                "evidence_sources" in ctrl
+            ), f"ISO27001 control {ctrl_id} missing evidence_sources"
+            assert (
+                len(ctrl["evidence_sources"]) > 0
+            ), f"ISO27001 control {ctrl_id} has empty evidence_sources"
 
     def test_soc2_controls_have_test_sources(self):
         """All SOC2 controls must reference test files."""
         from kailash.trust.plane.compliance import SOC2_CONTROL_MAP
 
         for ctrl_id, ctrl in SOC2_CONTROL_MAP.items():
-            assert "test_sources" in ctrl, (
-                f"SOC2 control {ctrl_id} missing test_sources"
-            )
-            assert len(ctrl["test_sources"]) > 0, (
-                f"SOC2 control {ctrl_id} has empty test_sources"
-            )
+            assert (
+                "test_sources" in ctrl
+            ), f"SOC2 control {ctrl_id} missing test_sources"
+            assert (
+                len(ctrl["test_sources"]) > 0
+            ), f"SOC2 control {ctrl_id} has empty test_sources"
 
     def test_iso27001_controls_have_test_sources(self):
         """All ISO 27001 controls must reference test files."""
         from kailash.trust.plane.compliance import ISO27001_CONTROL_MAP
 
         for ctrl_id, ctrl in ISO27001_CONTROL_MAP.items():
-            assert "test_sources" in ctrl, (
-                f"ISO27001 control {ctrl_id} missing test_sources"
-            )
-            assert len(ctrl["test_sources"]) > 0, (
-                f"ISO27001 control {ctrl_id} has empty test_sources"
-            )
+            assert (
+                "test_sources" in ctrl
+            ), f"ISO27001 control {ctrl_id} missing test_sources"
+            assert (
+                len(ctrl["test_sources"]) > 0
+            ), f"ISO27001 control {ctrl_id} has empty test_sources"
 
     def test_evidence_source_files_exist(self):
         """All evidence_sources must point to real files in the codebase."""
         from pathlib import Path
 
-        from kailash.trust.plane.compliance import ISO27001_CONTROL_MAP, SOC2_CONTROL_MAP
+        from kailash.trust.plane.compliance import (
+            ISO27001_CONTROL_MAP,
+            SOC2_CONTROL_MAP,
+        )
 
-        pkg_root = Path(__file__).resolve().parent.parent.parent
+        pkg_root = Path(__file__).resolve().parent.parent.parent.parent.parent
 
         all_sources: set[str] = set()
         for ctrl in SOC2_CONTROL_MAP.values():
@@ -979,9 +982,12 @@ class TestComplianceMatrixCompleteness:
         """
         from pathlib import Path
 
-        from kailash.trust.plane.compliance import ISO27001_CONTROL_MAP, SOC2_CONTROL_MAP
+        from kailash.trust.plane.compliance import (
+            ISO27001_CONTROL_MAP,
+            SOC2_CONTROL_MAP,
+        )
 
-        pkg_root = Path(__file__).resolve().parent.parent.parent
+        pkg_root = Path(__file__).resolve().parent.parent.parent.parent.parent
 
         all_tests: set[str] = set()
         for ctrl in SOC2_CONTROL_MAP.values():
@@ -1002,7 +1008,7 @@ class TestComplianceMatrixCompleteness:
         """All test references in SECURITY_PATTERN_EVIDENCE must exist."""
         from pathlib import Path
 
-        pkg_root = Path(__file__).resolve().parent.parent.parent
+        pkg_root = Path(__file__).resolve().parent.parent.parent.parent.parent
 
         for key, entry in SECURITY_PATTERN_EVIDENCE.items():
             for test_ref in entry["tests"]:
