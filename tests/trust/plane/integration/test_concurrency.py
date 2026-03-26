@@ -95,7 +95,7 @@ class TestAtomicWriteIntegrity:
             os.unlink(src)
             raise OSError("Simulated crash during replace")
 
-        with patch("trustplane._locking.os.replace", side_effect=failing_replace):
+        with patch("kailash.trust._locking.os.replace", side_effect=failing_replace):
             with pytest.raises(OSError, match="Simulated crash"):
                 atomic_write(target, {"version": 2, "content": "new"})
 
