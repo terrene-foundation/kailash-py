@@ -24,7 +24,11 @@ from typing import Any
 
 from kailash.trust._locking import atomic_write, file_lock, safe_read_json, validate_id
 from kailash.trust.plane.exceptions import RecordNotFoundError
-from kailash.trust.plane.delegation import Delegate, DelegateStatus, ReviewResolution
+from kailash.trust.plane.delegation import (
+    DelegationRecipient,
+    DelegateStatus,
+    ReviewResolution,
+)
 from kailash.trust.plane.holds import HoldRecord
 from kailash.trust.plane.models import DecisionRecord, MilestoneRecord, ProjectManifest
 
@@ -174,36 +178,36 @@ class FileSystemTrustPlaneStore:
     # Delegate Records
     # ------------------------------------------------------------------
 
-    def store_delegate(self, delegate: Delegate) -> None:
+    def store_delegate(self, delegate: DelegationRecipient) -> None:
         validate_id(delegate.delegate_id)
         path = self._dir / "delegates" / f"{delegate.delegate_id}.json"
         atomic_write(path, delegate.to_dict())
 
-    def get_delegate(self, delegate_id: str) -> Delegate:
+    def get_delegate(self, delegate_id: str) -> DelegationRecipient:
         validate_id(delegate_id)
         path = self._dir / "delegates" / f"{delegate_id}.json"
         if not path.exists():
             raise RecordNotFoundError("delegate", delegate_id)
-        return Delegate.from_dict(safe_read_json(path))
+        return DelegationRecipient.from_dict(safe_read_json(path))
 
     def list_delegates(
         self, active_only: bool = True, limit: int = 1000
-    ) -> list[Delegate]:
+    ) -> list[DelegationRecipient]:
         limit = max(0, limit)
         delegates_dir = self._dir / "delegates"
         if not delegates_dir.exists():
             return []
-        records: list[Delegate] = []
+        records: list[DelegationRecipient] = []
         for path in sorted(delegates_dir.glob("*.json")):
             if len(records) >= limit:
                 break
-            d = Delegate.from_dict(safe_read_json(path))
+            d = DelegationRecipient.from_dict(safe_read_json(path))
             if active_only and not d.is_active():
                 continue
             records.append(d)
         return records
 
-    def update_delegate(self, delegate: Delegate) -> None:
+    def update_delegate(self, delegate: DelegationRecipient) -> None:
         # update_delegate delegates to store_delegate — same atomic write
         self.store_delegate(delegate)
 

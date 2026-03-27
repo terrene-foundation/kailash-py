@@ -71,8 +71,8 @@ class DelegateStatus(Enum):
 
 
 @dataclass
-class Delegate:
-    """A delegate authorized to review actions in specific dimensions."""
+class DelegationRecipient:
+    """A delegation recipient authorized to review actions in specific dimensions."""
 
     delegate_id: str
     name: str
@@ -112,7 +112,7 @@ class Delegate:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Delegate:
+    def from_dict(cls, data: dict[str, Any]) -> DelegationRecipient:
         for field_name in (
             "delegate_id",
             "name",
@@ -122,12 +122,12 @@ class Delegate:
         ):
             if field_name not in data:
                 raise ValueError(
-                    f"Delegate.from_dict: missing required field '{field_name}'"
+                    f"DelegationRecipient.from_dict: missing required field '{field_name}'"
                 )
         depth = data.get("depth", 0)
         if not isinstance(depth, int) or depth < 0:
             raise ValueError(
-                f"Delegate.from_dict: 'depth' must be a non-negative integer, got {depth!r}"
+                f"DelegationRecipient.from_dict: 'depth' must be a non-negative integer, got {depth!r}"
             )
         return cls(
             delegate_id=data["delegate_id"],
@@ -230,7 +230,7 @@ class DelegationManager:
         delegated_by: str = "owner",
         expires_at: datetime | None = None,
         parent_delegate_id: str | None = None,
-    ) -> Delegate:
+    ) -> DelegationRecipient:
         """Add a new delegate with specific dimension scope.
 
         Args:
@@ -241,7 +241,7 @@ class DelegationManager:
             parent_delegate_id: If sub-delegating, the parent delegate's ID
 
         Returns:
-            The created Delegate
+            The created DelegationRecipient
 
         Raises:
             ValueError: If dimensions are invalid or depth exceeded
@@ -285,7 +285,7 @@ class DelegationManager:
             content = f"delegate:{name}:{now.isoformat()}:{nonce}"
             delegate_id = f"del-{hashlib.sha256(content.encode()).hexdigest()[:12]}"
 
-            delegate = Delegate(
+            delegate = DelegationRecipient(
                 delegate_id=delegate_id,
                 name=name,
                 dimensions=dimensions,
@@ -303,15 +303,15 @@ class DelegationManager:
         )
         return delegate
 
-    def get_delegate(self, delegate_id: str) -> Delegate:
+    def get_delegate(self, delegate_id: str) -> DelegationRecipient:
         """Get a delegate by ID."""
         return self._store.get_delegate(delegate_id)
 
-    def list_delegates(self, active_only: bool = True) -> list[Delegate]:
+    def list_delegates(self, active_only: bool = True) -> list[DelegationRecipient]:
         """List all delegates."""
         return self._store.list_delegates(active_only=active_only)
 
-    def find_reviewers(self, dimension: str) -> list[Delegate]:
+    def find_reviewers(self, dimension: str) -> list[DelegationRecipient]:
         """Find active delegates who can review a given dimension."""
         return [d for d in self.list_delegates() if d.can_review(dimension)]
 
@@ -585,6 +585,10 @@ class DelegationManager:
         """Get review resolutions, optionally filtered by hold ID."""
         return self._store.list_reviews(hold_id=hold_id)
 
-    def _all_delegates(self) -> list[Delegate]:
+    def _all_delegates(self) -> list[DelegationRecipient]:
         """List all delegates including inactive ones."""
         return self.list_delegates(active_only=False)
+
+
+# Backward compatibility alias (deprecated — use DelegationRecipient)
+Delegate = DelegationRecipient

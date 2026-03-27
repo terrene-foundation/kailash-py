@@ -65,7 +65,7 @@ from __future__ import annotations
 import json
 import logging
 from kailash.trust.plane._locking import validate_id
-from kailash.trust.plane.delegation import Delegate, DelegateStatus, ReviewResolution
+from kailash.trust.plane.delegation import DelegationRecipient, DelegateStatus, ReviewResolution
 from kailash.trust.plane.holds import HoldRecord
 from kailash.trust.plane.models import DecisionRecord, MilestoneRecord, ProjectManifest
 

@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 from kailash.trust._locking import safe_read_json
-from kailash.trust.plane.delegation import Delegate, DelegateStatus, ReviewResolution
+from kailash.trust.plane.delegation import DelegationRecipient, DelegateStatus, ReviewResolution
 from kailash.trust.plane.holds import HoldRecord
 from kailash.trust.plane.migrate import migrate_to_sqlite
 from kailash.trust.plane.models import (
@@ -70,7 +70,7 @@ def _make_hold(**kwargs) -> HoldRecord:
     return HoldRecord(**defaults)
 
 
-def _make_delegate(**kwargs) -> Delegate:
+def _make_delegate(**kwargs) -> DelegationRecipient:
     defaults = dict(
         delegate_id="del-abc123def456",
         name="Alice",
@@ -78,7 +78,7 @@ def _make_delegate(**kwargs) -> Delegate:
         delegated_by="owner",
     )
     defaults.update(kwargs)
-    return Delegate(**defaults)
+    return DelegationRecipient(**defaults)
 
 
 def _make_review(**kwargs) -> ReviewResolution:

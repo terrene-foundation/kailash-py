@@ -587,21 +587,21 @@ class TestPattern11FromDictValidation:
     """
 
     def test_delegate_from_dict_missing_fields(self) -> None:
-        """Delegate.from_dict must raise on missing required fields."""
-        from kailash.trust.plane.delegation import Delegate
+        """DelegationRecipient.from_dict must raise on missing required fields."""
+        from kailash.trust.plane.delegation import DelegationRecipient
 
         with pytest.raises(ValueError, match="missing required field"):
-            Delegate.from_dict({})
+            DelegationRecipient.from_dict({})
 
         with pytest.raises(ValueError, match="missing required field"):
-            Delegate.from_dict({"delegate_id": "del-x"})
+            DelegationRecipient.from_dict({"delegate_id": "del-x"})
 
     def test_delegate_from_dict_invalid_depth(self) -> None:
-        """Delegate.from_dict must reject negative depth values."""
-        from kailash.trust.plane.delegation import Delegate
+        """DelegationRecipient.from_dict must reject negative depth values."""
+        from kailash.trust.plane.delegation import DelegationRecipient
 
         with pytest.raises(ValueError, match="depth"):
-            Delegate.from_dict(
+            DelegationRecipient.from_dict(
                 {
                     "delegate_id": "del-x",
                     "name": "Alice",

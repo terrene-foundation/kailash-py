@@ -14,7 +14,7 @@ import pytest
 from kailash.trust.plane.delegation import (
     DEFAULT_MAX_DELEGATION_DEPTH,
     VALID_DIMENSIONS,
-    Delegate,
+    DelegationRecipient,
     DelegateStatus,
     DelegationManager,
     ReviewResolution,
@@ -41,7 +41,7 @@ def hold_mgr(trust_dir):
 
 class TestDelegateModel:
     def test_create_delegate(self):
-        d = Delegate(
+        d = DelegationRecipient(
             delegate_id="del-abc",
             name="Alice",
             dimensions=["operational", "data_access"],
@@ -53,20 +53,20 @@ class TestDelegateModel:
         assert not d.can_review("financial")
 
     def test_roundtrip(self):
-        d = Delegate(
+        d = DelegationRecipient(
             delegate_id="del-abc",
             name="Alice",
             dimensions=["operational"],
             delegated_by="owner",
         )
         data = d.to_dict()
-        restored = Delegate.from_dict(data)
+        restored = DelegationRecipient.from_dict(data)
         assert restored.delegate_id == d.delegate_id
         assert restored.name == d.name
         assert restored.dimensions == d.dimensions
 
     def test_expired_delegate_not_active(self):
-        d = Delegate(
+        d = DelegationRecipient(
             delegate_id="del-abc",
             name="Bob",
             dimensions=["operational"],
@@ -77,7 +77,7 @@ class TestDelegateModel:
         assert not d.can_review("operational")
 
     def test_revoked_delegate_not_active(self):
-        d = Delegate(
+        d = DelegationRecipient(
             delegate_id="del-abc",
             name="Charlie",
             dimensions=["operational"],
