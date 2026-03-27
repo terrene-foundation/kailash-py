@@ -43,7 +43,7 @@ from kailash.trust.pact.access import AccessDecision, KnowledgeSharePolicy, Pact
 from kailash.trust.pact.clearance import RoleClearance, VettingStatus
 from kailash.trust.pact.compilation import CompiledOrg, OrgNode
 from kailash.trust.pact.engine import GovernanceEngine
-from kailash.trust.pact.envelopes import RoleEnvelope, TaskEnvelope
+from kailash.trust.pact.envelopes import MonotonicTighteningError, RoleEnvelope, TaskEnvelope
 from kailash.trust.pact.knowledge import KnowledgeItem
 from kailash.trust.pact.store import (
     MemoryAccessPolicyStore,
@@ -804,3 +804,140 @@ class TestThreadSafety:
         for v in results:
             assert isinstance(v, GovernanceVerdict)
             assert v.level in ("auto_approved", "flagged", "held", "blocked")
+
+
+# ---------------------------------------------------------------------------
+# Monotonic Tightening Regression Tests (Issue #112)
+# ---------------------------------------------------------------------------
+
+
+class TestMonotonicTighteningEnforcement:
+    """Regression tests for monotonic tightening enforcement on set_role_envelope."""
+
+    def test_set_role_envelope_rejects_wider_than_parent(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
+        """A child envelope with higher max_spend_usd than parent must be rejected.
+
+        Security-critical: without this check, a supervisor could set an
+        envelope for a subordinate that exceeds the supervisor's own limits,
+        defeating the entire governance hierarchy.
+        """
+        # Set parent envelope for the Provost (D1-R1-D1-R1) with max_spend_usd=1000
+        parent_config = ConstraintEnvelopeConfig(
+            id="env-provost-tight",
+            description="Provost tight envelope",
+            financial=FinancialConstraintConfig(max_spend_usd=1000.0),
+            operational=OperationalConstraintConfig(
+                allowed_actions=["read", "write", "approve"],
+            ),
+        )
+        parent_env = RoleEnvelope(
+            id="re-provost-tight",
+            defining_role_address="D1-R1",  # President defines Provost's envelope
+            target_role_address="D1-R1-D1-R1",  # Provost
+            envelope=parent_config,
+        )
+        engine_from_compiled.set_role_envelope(parent_env)
+
+        # Now try to set a child envelope for the Dean (D1-R1-D1-R1-D1-R1)
+        # that exceeds the Provost's max_spend_usd. The defining role is the Provost.
+        child_config = ConstraintEnvelopeConfig(
+            id="env-dean-wider",
+            description="Dean envelope wider than parent",
+            financial=FinancialConstraintConfig(max_spend_usd=5000.0),  # 5x parent!
+            operational=OperationalConstraintConfig(
+                allowed_actions=["read", "write", "approve"],
+            ),
+        )
+        child_env = RoleEnvelope(
+            id="re-dean-wider",
+            defining_role_address="D1-R1-D1-R1",  # Provost defines Dean's envelope
+            target_role_address="D1-R1-D1-R1-D1-R1",  # Dean
+            envelope=child_config,
+        )
+
+        with pytest.raises(MonotonicTighteningError, match="max_spend_usd"):
+            engine_from_compiled.set_role_envelope(child_env)
+
+    def test_set_role_envelope_accepts_tighter_than_parent(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
+        """A child envelope that is tighter than parent should be accepted."""
+        parent_config = ConstraintEnvelopeConfig(
+            id="env-provost-normal",
+            description="Provost normal envelope",
+            financial=FinancialConstraintConfig(max_spend_usd=10000.0),
+            operational=OperationalConstraintConfig(
+                allowed_actions=["read", "write", "approve", "delegate"],
+            ),
+        )
+        parent_env = RoleEnvelope(
+            id="re-provost-normal",
+            defining_role_address="D1-R1",
+            target_role_address="D1-R1-D1-R1",
+            envelope=parent_config,
+        )
+        engine_from_compiled.set_role_envelope(parent_env)
+
+        # Child with tighter constraints -- should succeed
+        child_config = ConstraintEnvelopeConfig(
+            id="env-dean-tighter",
+            description="Dean tighter envelope",
+            financial=FinancialConstraintConfig(max_spend_usd=5000.0),  # Less than parent
+            operational=OperationalConstraintConfig(
+                allowed_actions=["read", "write"],  # Subset of parent
+            ),
+        )
+        child_env = RoleEnvelope(
+            id="re-dean-tighter",
+            defining_role_address="D1-R1-D1-R1",
+            target_role_address="D1-R1-D1-R1-D1-R1",
+            envelope=child_config,
+        )
+
+        # Should not raise
+        engine_from_compiled.set_role_envelope(child_env)
+
+        # Verify the envelope was stored
+        effective = engine_from_compiled.compute_envelope("D1-R1-D1-R1-D1-R1")
+        assert effective is not None
+        assert effective.financial is not None
+        assert effective.financial.max_spend_usd == 5000.0
+
+    def test_multi_level_verify_fail_closed_on_bad_address(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
+        """_multi_level_verify with a malformed address must fail-closed to blocked.
+
+        Security-critical: previously this returned (None, ""), which meant
+        the caller treated it as "no ancestor restriction" -- a fail-open bug.
+        """
+        # Call _multi_level_verify with a malformed address that will fail
+        # Address.parse(). We access the internal method directly for testing.
+        # The address "!!INVALID!!" cannot be parsed by Address.parse().
+        result_level, result_reason = engine_from_compiled._multi_level_verify(
+            role_address="!!INVALID!!",
+            action="read",
+            ctx={},
+        )
+
+        assert result_level == "blocked", (
+            f"Expected 'blocked' for unparseable address, got {result_level!r}"
+        )
+        assert "fail-closed" in result_reason.lower()
+
+    def test_multi_level_verify_fail_closed_propagates_via_verify_action(
+        self, engine_from_compiled: GovernanceEngine
+    ) -> None:
+        """verify_action with a malformed address should return blocked verdict.
+
+        This tests the full path: verify_action -> _multi_level_verify -> fail-closed.
+        """
+        verdict = engine_from_compiled.verify_action(
+            role_address="!!INVALID!!",
+            action="read",
+        )
+        assert isinstance(verdict, GovernanceVerdict)
+        assert verdict.level == "blocked"
+        assert verdict.allowed is False

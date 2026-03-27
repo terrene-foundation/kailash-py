@@ -11,7 +11,6 @@ import hashlib
 import json
 import logging
 import os
-import pickle
 import sqlite3
 import time
 import traceback
@@ -189,13 +188,20 @@ class WarmMemoryTier(MemoryTier):
             )
             await conn.commit()
 
-            # Deserialize value
+            # Deserialize value — JSON only (pickle removed for RCE safety)
             try:
-                value = pickle.loads(value_blob)
-            except Exception as e:
-                # Fallback to JSON (pickle may fail for cross-version data)
-                logger.debug(f"Pickle deserialization failed, trying JSON: {e}")
-                value = json.loads(value_blob.decode("utf-8"))
+                if isinstance(value_blob, bytes):
+                    value = json.loads(value_blob.decode("utf-8"))
+                else:
+                    value = json.loads(value_blob)
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                logger.error(
+                    f"Failed to deserialize value for key '{key}': {e}. "
+                    "Data may have been stored with pickle (now disabled for security). "
+                    "Please re-serialize using JSON."
+                )
+                self._record_miss()
+                return None
 
             self._record_hit()
 
@@ -216,13 +222,8 @@ class WarmMemoryTier(MemoryTier):
     async def put(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """Store data in warm tier"""
         try:
-            # Serialize value
-            try:
-                value_blob = pickle.dumps(value)
-            except Exception as e:
-                # Fallback to JSON (some objects aren't picklable)
-                logger.debug(f"Pickle serialization failed, using JSON: {e}")
-                value_blob = json.dumps(value).encode("utf-8")
+            # Serialize value — JSON only (pickle removed for RCE safety)
+            value_blob = json.dumps(value, default=str).encode("utf-8")
 
             value_size = len(value_blob)
             current_time = time.time()
@@ -230,9 +231,7 @@ class WarmMemoryTier(MemoryTier):
 
             metadata = json.dumps(
                 {
-                    "serialization": (
-                        "pickle" if isinstance(value_blob, bytes) else "json"
-                    ),
+                    "serialization": "json",
                     "compressed": False,
                 }
             )
@@ -532,12 +531,17 @@ class ColdMemoryTier(MemoryTier):
             if compressed:
                 data = gzip.decompress(data)
 
+            # Deserialize — JSON only (pickle removed for RCE safety)
             try:
-                value = pickle.loads(data)
-            except Exception as e:
-                # Fallback to JSON (pickle may fail for cross-version data)
-                logger.debug(f"Pickle deserialization failed, trying JSON: {e}")
                 value = json.loads(data.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                logger.error(
+                    f"Failed to deserialize cold tier data for key '{key}': {e}. "
+                    "Data may have been stored with pickle (now disabled for security). "
+                    "Please re-serialize using JSON."
+                )
+                self._record_miss()
+                return None
 
             # Update access time
             current_time = time.time()
@@ -570,13 +574,8 @@ class ColdMemoryTier(MemoryTier):
     async def put(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
         """Store data in cold tier"""
         try:
-            # Serialize value
-            try:
-                data = pickle.dumps(value)
-            except Exception as e:
-                # Fallback to JSON (some objects aren't picklable)
-                logger.debug(f"Pickle serialization failed, using JSON: {e}")
-                data = json.dumps(value).encode("utf-8")
+            # Serialize value — JSON only (pickle removed for RCE safety)
+            data = json.dumps(value, default=str).encode("utf-8")
 
             # Compress if enabled
             compressed = False

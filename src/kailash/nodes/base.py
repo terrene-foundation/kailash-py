@@ -256,15 +256,20 @@ class Node(ABC):
                 # Core SDK or external code providing NodeMetadata object
                 self._node_metadata = metadata_value
             elif metadata_value is None or not isinstance(metadata_value, dict):
-                # No metadata provided or invalid type → create default NodeMetadata
-                self._node_metadata = NodeMetadata(
-                    id=self._node_id,  # NodeMetadata still uses 'id' internally
-                    name=kwargs.get("name", self.__class__.__name__),
-                    description=kwargs.get("description", self.__doc__ or ""),
-                    version=kwargs.get("version", "1.0.0"),
-                    author=kwargs.get("author", ""),
-                    tags=kwargs.get("tags", set()),
-                )
+                # Check if the class defines _node_metadata (subclass pattern)
+                class_meta = getattr(type(self), "_node_metadata", None)
+                if isinstance(class_meta, NodeMetadata):
+                    self._node_metadata = class_meta
+                else:
+                    # No metadata provided or invalid type → create default NodeMetadata
+                    self._node_metadata = NodeMetadata(
+                        id=self._node_id,  # NodeMetadata still uses 'id' internally
+                        name=kwargs.get("name", self.__class__.__name__),
+                        description=kwargs.get("description", self.__doc__ or ""),
+                        version=kwargs.get("version", "1.0.0"),
+                        author=kwargs.get("author", ""),
+                        tags=kwargs.get("tags", set()),
+                    )
             else:
                 # User provided dict as "metadata" parameter → create default NodeMetadata,
                 # and let the dict flow through to node.config (handled in filtering below)
@@ -718,8 +723,11 @@ class Node(ABC):
                 if not isinstance(value, param_def.type):  # type: ignore[reportArgumentType]
                     try:
                         # Special handling for datetime conversion from ISO strings
-                        if param_def.type.__name__ == "datetime" and isinstance(  # type: ignore[reportOptionalMemberAccess]
-                            value, str
+                        if (
+                            param_def.type.__name__ == "datetime"
+                            and isinstance(  # type: ignore[reportOptionalMemberAccess]
+                                value, str
+                            )
                         ):
                             from datetime import datetime
 

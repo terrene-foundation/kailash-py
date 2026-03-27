@@ -237,7 +237,6 @@ class UserManagementNode(Node):
     """
 
     def __init__(self, **config):
-        assert self._db_node is not None
         super().__init__(**config)
         self._db_node = None
         self._schema_manager = None
@@ -439,7 +438,6 @@ class UserManagementNode(Node):
 
     def _init_dependencies(self, inputs: Dict[str, Any]):
         """Initialize database and schema manager dependencies."""
-        assert self._db_node is not None
         # Skip initialization if already initialized (for testing)
         if hasattr(self, "_db_node") and self._db_node is not None:
             return

@@ -74,6 +74,8 @@ except ImportError:
     redis = None  # type: ignore[assignment]
     ConnectionPool = None  # type: ignore[assignment]
 
+from kailash.utils.redis_validation import validate_redis_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -214,6 +216,8 @@ class ExternalAgentRateLimiter:
                 "redis package required for ExternalAgentRateLimiter. Install with: pip install redis"
             )
 
+        # Validate Redis URL scheme to prevent SSRF (H4)
+        validate_redis_url(redis_url)
         self.redis_url = redis_url
         self.config = config or RateLimitConfig()
         self.redis_client: Any = None

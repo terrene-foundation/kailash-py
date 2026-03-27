@@ -9,6 +9,7 @@ with trust chain verification.
 """
 
 import base64
+import hmac
 import json
 import logging
 import uuid
@@ -178,9 +179,11 @@ class A2AAuthenticator:
                         f"Trust verification failed: {result.reason}",
                     )
 
-                # Verify trust chain hash matches
+                # Verify trust chain hash matches (timing-safe comparison)
                 chain = await self._trust_ops.get_chain(claims.iss)
-                if chain and chain.hash() != claims.trust_chain_hash:
+                if chain and not hmac.compare_digest(
+                    chain.hash(), claims.trust_chain_hash
+                ):
                     raise TrustVerificationError(
                         claims.iss,
                         "Trust chain hash mismatch - chain may have changed",

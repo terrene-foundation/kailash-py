@@ -9,7 +9,7 @@ import asyncio
 import gzip
 import hashlib
 import json
-import pickle
+import logging
 import time
 from datetime import UTC, datetime, timedelta
 from enum import Enum
@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Union
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError
+from kailash.utils.redis_validation import validate_redis_url
 
 try:
     import redis.asyncio as redis
@@ -25,6 +26,19 @@ try:
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
+
+
+class _PickleDeserializationError(Exception):
+    """Raised when legacy pickle data is encountered.
+
+    Pickle deserialization has been removed due to Remote Code Execution (RCE)
+    risk. Data previously stored with pickle serialization must be re-serialized
+    using JSON format.
+    """
+
+    pass
 
 
 class CacheBackend(Enum):
@@ -92,13 +106,13 @@ class CacheNode(AsyncNode):
         ...     limit=100
         ... )
 
-        >>> # Cache with compression and custom serialization
+        >>> # Cache with compression and JSON serialization
         >>> result = await cache.execute(
         ...     operation="set",
         ...     key="large_data",
         ...     value=large_dataset,
         ...     compression=True,
-        ...     serialization="pickle",
+        ...     serialization="json",
         ...     ttl=86400  # 24 hours
         ... )
     """
@@ -352,6 +366,8 @@ class CacheNode(AsyncNode):
 
             # Create fresh Redis client for each operation to avoid event loop issues
             redis_url = kwargs.get("redis_url", "redis://localhost:6379")
+            # Validate Redis URL scheme to prevent SSRF (H4)
+            validate_redis_url(redis_url)
             try:
                 # Create a new client for this operation
                 redis_client = redis.from_url(redis_url, decode_responses=False)  # type: ignore[possibly-unbound]
@@ -978,7 +994,13 @@ class CacheNode(AsyncNode):
                 if serialization == SerializationFormat.JSON:
                     value = json.loads(value.decode())
                 elif serialization == SerializationFormat.PICKLE:
-                    value = pickle.loads(value)
+                    # SECURITY: pickle deserialization removed (RCE risk - H3)
+                    raise _PickleDeserializationError(
+                        "Pickle deserialization is disabled due to RCE risk. "
+                        "Re-serialize your data using JSON format."
+                    )
+            except _PickleDeserializationError:
+                raise
             except Exception:
                 pass  # Use value as-is if decompression fails
 
@@ -1050,7 +1072,11 @@ class CacheNode(AsyncNode):
             if serialization == SerializationFormat.JSON:
                 value = json.loads(raw_value)
             elif serialization == SerializationFormat.PICKLE:
-                value = pickle.loads(raw_value)
+                # SECURITY: pickle deserialization removed (RCE risk - H3)
+                raise _PickleDeserializationError(
+                    "Pickle deserialization is disabled due to RCE risk. "
+                    "Re-serialize your data using JSON format."
+                )
             elif serialization == SerializationFormat.STRING:
                 value = (
                     raw_value.decode() if isinstance(raw_value, bytes) else raw_value
@@ -1060,6 +1086,8 @@ class CacheNode(AsyncNode):
 
             return value, True
 
+        except _PickleDeserializationError:
+            raise
         except Exception as e:
             self.logger.error(f"Redis get failed: {str(e)}")
             return None, False
@@ -1077,7 +1105,12 @@ class CacheNode(AsyncNode):
             if serialization == SerializationFormat.JSON:
                 serialized = json.dumps(value)
             elif serialization == SerializationFormat.PICKLE:
-                serialized = pickle.dumps(value)
+                # SECURITY: pickle serialization replaced with JSON (RCE risk - H3)
+                logger.warning(
+                    "Pickle serialization requested but disabled for security. "
+                    "Using JSON serialization instead."
+                )
+                serialized = json.dumps(value, default=str)
             elif serialization == SerializationFormat.STRING:
                 serialized = str(value)
             else:  # BYTES

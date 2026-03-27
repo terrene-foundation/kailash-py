@@ -377,23 +377,36 @@ class DataTransformer(Node):
         for transform_str in transformations:
             try:
                 # Create a safe globals dictionary with basic functions
+                # Security: __import__ is explicitly excluded to prevent
+                # arbitrary module imports (e.g., __import__('os').system('...'))
                 safe_globals = {
                     "len": len,
+                    "range": range,
                     "sum": sum,
                     "min": min,
                     "max": max,
+                    "abs": abs,
+                    "round": round,
                     "dict": dict,
                     "list": list,
+                    "tuple": tuple,
                     "set": set,
                     "str": str,
                     "int": int,
                     "float": float,
                     "bool": bool,
+                    "enumerate": enumerate,
+                    "zip": zip,
+                    "map": map,
+                    "filter": filter,
                     "sorted": sorted,
-                    "print": print,  # Allow print for debugging
                     "isinstance": isinstance,
                     "type": type,
-                    "__builtins__": {"__import__": __import__},  # Allow imports
+                    "print": print,
+                    "True": True,
+                    "False": False,
+                    "None": None,
+                    "__builtins__": {},
                 }
 
                 # For multi-line code blocks

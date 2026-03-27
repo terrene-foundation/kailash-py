@@ -21,6 +21,8 @@ except ImportError:
     redis: Any = None  # type: ignore[no-redef]
     REDIS_AVAILABLE = False
 
+from kailash.utils.redis_validation import validate_redis_url
+
 from .auth import AuthManager
 from .auth import PermissionError as PermissionDeniedError
 from .protocol import ResourceChange, ResourceChangeType
@@ -1144,6 +1146,8 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
                 "Redis support not available. Install with: pip install redis"
             )
 
+        # Validate Redis URL scheme to prevent SSRF (H4)
+        validate_redis_url(redis_url)
         self.redis_url = redis_url
         self.redis_config = redis_config or {}
         self.server_instance_id = (

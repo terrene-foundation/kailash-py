@@ -25,10 +25,13 @@ Examples:
     >>> token = auth.create_token({"user": "alice", "permissions": ["read", "write"]})
 """
 
+import base64
+import binascii
 import hashlib
 import hmac
 import json
 import logging
+import os
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -36,17 +39,19 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Union
 
-import base64
-import os
-
 try:
     import jwt
+    from cryptography.exceptions import InvalidKey
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+    _CRYPTO_AVAILABLE = True
 except ImportError:
     jwt = None  # type: ignore[assignment]
+    InvalidKey = None  # type: ignore[assignment, misc]
     hashes = None  # type: ignore[assignment]
     PBKDF2HMAC = None  # type: ignore[assignment, misc]
+    _CRYPTO_AVAILABLE = False
     logger = logging.getLogger(__name__)
     logger.warning(
         "JWT dependencies not available. Install with: pip install pyjwt cryptography"
@@ -476,24 +481,41 @@ class BasicAuth(AuthProvider):
         return base64.b64encode(salt + key).decode()
 
     def _verify_password(self, password: str, password_hash: str) -> bool:
-        """Verify a password against its hash."""
-        try:
-            decoded = base64.b64decode(password_hash.encode())
-            salt = decoded[:32]
-            stored_key = decoded[32:]
+        """Verify a password against its hash (PBKDF2 or plaintext).
 
-            kdf = PBKDF2HMAC(  # type: ignore[operator]
-                algorithm=hashes.SHA256(),  # type: ignore[union-attr]
-                length=32,
-                salt=salt,
-                iterations=100000,
-            )
+        Attempts PBKDF2 verification first. If the stored hash is not valid
+        PBKDF2 data (e.g., plaintext from hash_passwords=False), falls back
+        to timing-safe comparison via hmac.compare_digest.
 
-            kdf.verify(password.encode(), stored_key)
-            return True
-        except:
-            # Fallback to plain text comparison (for development)
-            return password == password_hash
+        Security: Uses hmac.compare_digest for ALL comparisons to prevent
+        timing side-channel attacks. Never uses == for password comparison.
+        """
+        # Try PBKDF2 verification first (preferred path)
+        if _CRYPTO_AVAILABLE:
+            try:
+                decoded = base64.b64decode(password_hash.encode())
+                if len(decoded) >= 64:  # salt (32) + key (32)
+                    salt = decoded[:32]
+                    stored_key = decoded[32:]
+
+                    kdf = PBKDF2HMAC(  # type: ignore[operator]
+                        algorithm=hashes.SHA256(),  # type: ignore[union-attr]
+                        length=32,
+                        salt=salt,
+                        iterations=100000,
+                    )
+
+                    kdf.verify(password.encode(), stored_key)
+                    return True
+            except InvalidKey:  # type: ignore[misc]
+                # Password does not match the PBKDF2 hash
+                return False
+            except (binascii.Error, ValueError):
+                # Not valid base64/PBKDF2 — fall through to plaintext comparison
+                pass
+
+        # Timing-safe plaintext comparison (for hash_passwords=False mode)
+        return hmac.compare_digest(password.encode(), password_hash.encode())
 
     def authenticate(self, credentials: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
         """Authenticate basic auth credentials.

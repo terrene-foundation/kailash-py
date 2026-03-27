@@ -555,7 +555,7 @@ class PactConfig(BaseModel):
         return v
 
 
-# Backward-compatible alias (renamed in TODO-0004)
+# Backward-compatible alias (PlatformConfig was renamed to PactConfig)
 PlatformConfig = PactConfig
 
 

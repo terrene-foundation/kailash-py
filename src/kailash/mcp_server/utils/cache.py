@@ -13,6 +13,8 @@ import threading
 import time
 from typing import Any, Awaitable, Callable, Dict, Optional, Tuple, TypeVar
 
+from kailash.utils.redis_validation import validate_redis_url
+
 logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -411,6 +413,8 @@ class CacheManager:
             import redis.asyncio as redis
 
             redis_url = self.config.get("redis_url", "redis://localhost:6379")
+            # Validate Redis URL scheme to prevent SSRF (H4)
+            validate_redis_url(redis_url)
             self._redis = redis.from_url(redis_url, decode_responses=True)
             logger.info(f"Initialized Redis cache backend: {redis_url}")
         except ImportError:

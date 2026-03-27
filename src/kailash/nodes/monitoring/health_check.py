@@ -396,6 +396,9 @@ class HealthCheckNode(AsyncNode):
 
             redis_url = service.get("url", "redis://localhost:6379")
 
+            from kailash.utils.validation import validate_redis_url
+
+            validate_redis_url(redis_url)
             client = redis.from_url(
                 redis_url, socket_connect_timeout=timeout, socket_timeout=timeout
             )
