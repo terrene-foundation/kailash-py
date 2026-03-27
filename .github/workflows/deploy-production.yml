@@ -171,9 +171,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -e .
+          pip install -e ".[server,database,trust,trust-sso,dev]"
           pip install -e "./packages/kailash-kaizen[dev]"
-          pip install pytest pytest-timeout pytest-cov python-dotenv Pillow aiohttp pyjwt cryptography websockets
+          pip install pytest pytest-timeout pytest-cov python-dotenv Pillow
 
       - name: Run unit tests
         working-directory: ./packages/kailash-kaizen
