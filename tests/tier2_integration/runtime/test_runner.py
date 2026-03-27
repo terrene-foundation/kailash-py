@@ -10,8 +10,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-# SQLite task manager causes disk I/O errors on CI runners
-pytestmark = pytest.mark.slow
 
 from kailash.nodes.base import Node, NodeParameter
 from kailash.runtime.runner import WorkflowRunner

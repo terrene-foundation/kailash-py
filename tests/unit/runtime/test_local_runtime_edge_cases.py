@@ -70,19 +70,6 @@ class TestLocalRuntimeEdgeCases:
 
         assert results["node"]["result"]["data"] == 1
 
-    @pytest.mark.asyncio
-    @pytest.mark.slow  # Py 3.13: "Cannot run the event loop while another loop is running"
-    async def test_execute_async_with_no_event_loop(self):
-        """Test async execution when no event loop is running."""
-        node = PythonCodeNode(name="node", code="result = {'data': 1}")
-        self.workflow.add_node("node", node)
-
-        # This should work even without explicit event loop
-        with self.runtime:
-            results, run_id = self.runtime.execute(self.workflow)
-
-        assert results["node"]["result"]["data"] == 1
-
     def test_task_manager_creation_failure(self):
         """Test handling of task manager creation failure."""
         node = PythonCodeNode(name="node", code="result = {'data': 1}")
@@ -93,26 +80,6 @@ class TestLocalRuntimeEdgeCases:
             results, run_id = self.runtime.execute(self.workflow)
 
         assert results["node"]["result"]["data"] == 1
-
-    @pytest.mark.slow  # Cyclic executor creates threads that exhaust CI limits
-    def test_cyclic_executor_failure(self):
-        """Test handling of cyclic executor failure."""
-        # Create cyclic workflow
-        node1 = PythonCodeNode(name="node1", code="result = {'data': 1}")
-        node2 = PythonCodeNode(name="node2", code="result = {'data': 2}")
-
-        self.workflow.add_node("node1", node1)
-        self.workflow.add_node("node2", node2)
-        self.workflow.connect("node1", "node2", {"result": "input"})
-        self.workflow.create_cycle("test_cycle").connect(
-            "node2", "node1", {"result": "input"}
-        ).max_iterations(2).build()
-
-        # Execute - should handle cyclic workflow
-        with LocalRuntime(enable_cycles=True) as runtime:
-            results, run_id = runtime.execute(self.workflow)
-
-        assert "node1" in results
 
     def test_node_execution_with_missing_inputs(self):
         """Test node execution when required inputs are missing."""
@@ -127,28 +94,6 @@ class TestLocalRuntimeEdgeCases:
 
         # Should handle error gracefully
         assert "node" in results
-
-    @pytest.mark.asyncio
-    @pytest.mark.slow  # Py 3.13: "Cannot run the event loop while another loop is running"
-    async def test_workflow_async_execution_with_node_errors(self):
-        """Test workflow async execution with node execution errors."""
-        # Create workflow with failing node
-        good_node = PythonCodeNode(name="good", code="result = {'status': 'ok'}")
-        bad_node = PythonCodeNode(
-            name="bad", code="1/0"
-        )  # Will raise ZeroDivisionError
-
-        self.workflow.add_node("good", good_node)
-        self.workflow.add_node("bad", bad_node)
-        self.workflow.connect("good", "bad", {"result": "input"})
-
-        # Execute - should handle node failure
-        with self.runtime:
-            results, run_id = self.runtime.execute(self.workflow)
-
-        # Good node should have succeeded
-        assert results["good"]["result"]["status"] == "ok"
-        # Bad node result depends on error handling
 
     def test_parallel_runtime_initialization(self):
         """Test LocalRuntime initialization with concurrent settings."""

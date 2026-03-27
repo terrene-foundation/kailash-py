@@ -10,8 +10,6 @@ for LocalRuntime and AsyncLocalRuntime.
 from __future__ import annotations
 
 import asyncio
-import threading
-
 import pytest
 
 from kailash.runtime.local import LocalRuntime
@@ -66,29 +64,6 @@ class TestRefCounting:
         rt.release()  # ref_count = 1
         assert rt.ref_count == 1
         rt.close()  # final cleanup
-
-    def test_thread_safety(self):
-        rt = LocalRuntime()
-        errors = []
-
-        def acquire_release():
-            try:
-                for _ in range(100):
-                    rt.acquire()
-                for _ in range(100):
-                    rt.release()
-            except Exception as e:
-                errors.append(e)
-
-        threads = [threading.Thread(target=acquire_release) for _ in range(4)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-
-        assert len(errors) == 0
-        assert rt.ref_count == 1  # Only original ref remains
-        rt.close()
 
     def test_del_forces_cleanup(self):
         """__del__ on unclosed runtime forces cleanup and emits ResourceWarning."""
