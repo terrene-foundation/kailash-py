@@ -19,10 +19,7 @@ use_real_providers = os.getenv("USE_REAL_PROVIDERS", "").lower() == "true"
 
 if not use_real_providers:
     try:
-        try:
-            import kaizen.nodes.ai.ai_providers as ai_providers_module
-        except ImportError:
-            import kailash.nodes.ai.ai_providers as ai_providers_module
+        import kaizen.nodes.ai.ai_providers as ai_providers_module
 
         from tests.utils.kaizen_mock_provider import KaizenMockProvider
 

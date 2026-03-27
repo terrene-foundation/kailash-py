@@ -1158,7 +1158,7 @@ class LinkedHashChain:
 
         return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
-    def verify_integrity(self, strict: bool = False) -> tuple:
+    def verify_chain(self, strict: bool = False) -> tuple:
         """
         Perform STRUCTURAL integrity verification of the chain.
 
@@ -1219,6 +1219,16 @@ class LinkedHashChain:
                 return (False, i)
 
         return (True, None)
+
+    def verify_integrity(self, *args, **kwargs):
+        import warnings
+
+        warnings.warn(
+            "verify_integrity() is deprecated, use verify_chain()",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.verify_chain(*args, **kwargs)
 
     def verify_chain_linkage(self, original_hashes: List[str]) -> tuple:
         """

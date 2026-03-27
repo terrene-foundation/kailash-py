@@ -481,7 +481,7 @@ class SharePointGraphReader(Node):
                 module = importlib.import_module(module_name)
                 callback_func = getattr(module, func_name)
                 callback_func(flow)
-            except:
+            except Exception:
                 pass
 
         # Wait for user to authenticate

@@ -190,7 +190,7 @@ class TestWorkflowAPIGateway:
         gateway.run()
 
         mock_uvicorn_run.assert_called_once_with(
-            gateway.app, host="0.0.0.0", port=8000, reload=False
+            gateway.app, host="127.0.0.1", port=8000, reload=False
         )
 
     @patch("uvicorn.run")

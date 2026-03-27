@@ -599,7 +599,7 @@ class WorkflowServer:
             f"{base}/docs",
         ]
 
-    def run(self, host: str = "0.0.0.0", port: int = 8000, **kwargs):
+    def run(self, host: str = "127.0.0.1", port: int = 8000, **kwargs):
         """Run the workflow server.
 
         Args:

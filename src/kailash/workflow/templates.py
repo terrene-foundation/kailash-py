@@ -881,7 +881,7 @@ try:
     else:
         # Fallback if no JSON found
         extracted_data = {"raw_response": ai_response}
-except:
+except Exception:
     extracted_data = {"raw_response": ai_response}
 
 # Add metadata
@@ -997,7 +997,7 @@ token_info = token if 'token' in locals() else {}
 if isinstance(response_data, str):
     try:
         response_data = json.loads(response_data)
-    except:
+    except (ValueError, json.JSONDecodeError):
         response_data = {"raw_response": response_data}
 
 # Transform data structure

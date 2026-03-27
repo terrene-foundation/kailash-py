@@ -6,11 +6,14 @@ workflow as a REST API with minimal configuration.
 """
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from enum import Enum
 from typing import Any
 
 import uvicorn
+
+logger = logging.getLogger(__name__)
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -212,7 +215,7 @@ class WorkflowAPI:
                 # Try to parse JSON body
                 json_data = await request.json()
                 workflow_request = WorkflowRequest(**json_data)
-            except:
+            except Exception:
                 # If no JSON or invalid JSON, create empty request
                 workflow_request = WorkflowRequest()
             return await execute_workflow(workflow_request, background_tasks)
@@ -338,7 +341,8 @@ class WorkflowAPI:
             )
 
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            logger.error(f"Workflow execution failed: {e}")
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     async def _execute_async(
         self, request: WorkflowRequest, background_tasks: BackgroundTasks
@@ -376,8 +380,9 @@ class WorkflowAPI:
             )
 
         except Exception as e:
+            logger.error(f"Async workflow execution failed for {execution_id}: {e}")
             self._execution_cache[execution_id].update(
-                {"status": "failed", "error": str(e)}
+                {"status": "failed", "error": "Execution failed"}
             )
 
     async def _execute_stream(self, request: WorkflowRequest):
@@ -444,16 +449,16 @@ class WorkflowAPI:
             # ========================================
             # ERROR EVENT
             # ========================================
+            logger.error(f"Workflow stream execution failed: {e}")
             yield f"id: {event_id}\n"
             yield "event: error\n"
             error_data = {
-                "error": str(e),
-                "error_type": type(e).__name__,
+                "error": "Execution failed",
                 "timestamp": time.time(),
             }
             yield f"data: {json.dumps(error_data)}\n\n"
 
-    def run(self, host: str = "0.0.0.0", port: int = 8000, **kwargs):
+    def run(self, host: str = "127.0.0.1", port: int = 8000, **kwargs):
         """Run the API server."""
         uvicorn.run(self.app, host=host, port=port, **kwargs)
 

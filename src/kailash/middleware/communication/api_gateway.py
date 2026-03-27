@@ -206,7 +206,7 @@ class APIGateway:
         # Add CORS middleware
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=cors_origins or ["*"],
+            allow_origins=cors_origins or [],
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
@@ -340,7 +340,7 @@ class APIGateway:
                     # This would normally use the auth manager's get_current_user_dependency
                     # For now, return None to avoid complex auth setup
                     return None
-                except:
+                except Exception:
                     return None
             return None
 
@@ -785,7 +785,7 @@ class APIGateway:
 
     # Public API methods
     def run(
-        self, host: str = "0.0.0.0", port: int = 8000, reload: bool = False, **kwargs
+        self, host: str = "127.0.0.1", port: int = 8000, reload: bool = False, **kwargs
     ):
         """Run the API gateway server."""
         import uvicorn

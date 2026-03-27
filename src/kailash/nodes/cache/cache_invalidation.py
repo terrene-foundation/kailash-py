@@ -379,11 +379,11 @@ class CacheInvalidationNode(AsyncNode):
                     await asyncio.wait_for(self._redis_client.ping(), timeout=1.0)  # type: ignore[arg-type]
                     # Connection is good, reuse it
                     return
-                except:
+                except Exception:
                     # Connection is bad, close and recreate
                     try:
                         await self._redis_client.aclose()
-                    except:
+                    except Exception:
                         pass  # Ignore errors when closing old client
 
             try:

@@ -10,9 +10,17 @@ Tests that 9 core classes:
 6. Remain backward-compatible when no runtime is provided
 
 These are Tier 1 unit tests -- fast, isolated, no Docker.
+
+Note: These tests are sensitive to module-level state pollution from other test
+files that import WorkflowAPI or AgentUIMiddleware. They pass in isolation but
+may fail in suite runs if a prior test mutates class-level state. The
+requires_isolation marker requests forked execution when available.
 """
 
+import pytest
 import warnings
+
+pytestmark = pytest.mark.requires_isolation
 
 import pytest
 

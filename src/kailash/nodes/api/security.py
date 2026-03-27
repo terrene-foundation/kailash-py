@@ -650,7 +650,7 @@ class SecurityScannerNode(Node):
                             "timestamp": datetime.now(UTC).isoformat() + "Z",
                         }
                     )
-            except:
+            except Exception:
                 continue
 
         return findings
@@ -688,7 +688,7 @@ class SecurityScannerNode(Node):
                         }
                     )
                     break  # Don't continue testing if one is found
-            except:
+            except Exception:
                 continue
 
         return findings
@@ -720,7 +720,7 @@ class SecurityScannerNode(Node):
                                 "timestamp": datetime.now(UTC).isoformat() + "Z",
                             }
                         )
-                except:
+                except Exception:
                     continue
 
         return findings

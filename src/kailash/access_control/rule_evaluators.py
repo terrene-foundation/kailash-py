@@ -78,7 +78,7 @@ class RuleEvaluator(ABC):
     """Abstract base class for rule evaluation strategies."""
 
     @abstractmethod
-    def evaluate_rules(
+    def evaluate(
         self,
         rules: List[PermissionRule],
         user: UserContext,
@@ -102,6 +102,16 @@ class RuleEvaluator(ABC):
         """
         pass
 
+    def evaluate_rules(self, *args, **kwargs):
+        import warnings
+
+        warnings.warn(
+            "evaluate_rules() is deprecated, use evaluate()",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.evaluate(*args, **kwargs)
+
     @abstractmethod
     def supports_conditions(self) -> bool:
         """Return whether this evaluator supports conditional rules."""
@@ -121,7 +131,7 @@ class RBACRuleEvaluator(RuleEvaluator):
         """Initialize RBAC evaluator."""
         self.logger = logging.getLogger(f"{__name__}.RBACRuleEvaluator")
 
-    def evaluate_rules(
+    def evaluate(
         self,
         rules: List[PermissionRule],
         user: UserContext,
@@ -217,7 +227,7 @@ class ABACRuleEvaluator(RuleEvaluator):
 
         self.condition_evaluator = EnhancedConditionEvaluator()
 
-    def evaluate_rules(
+    def evaluate(
         self,
         rules: List[PermissionRule],
         user: UserContext,
@@ -358,7 +368,7 @@ class HybridRuleEvaluator(RuleEvaluator):
         self.abac_evaluator = ABACRuleEvaluator()
         self.logger = logging.getLogger(f"{__name__}.HybridRuleEvaluator")
 
-    def evaluate_rules(
+    def evaluate(
         self,
         rules: List[PermissionRule],
         user: UserContext,
@@ -377,7 +387,7 @@ class HybridRuleEvaluator(RuleEvaluator):
 
         # First evaluate complex ABAC rules (higher precedence)
         if complex_rules:
-            abac_decision = self.abac_evaluator.evaluate_rules(
+            abac_decision = self.abac_evaluator.evaluate(
                 complex_rules,
                 user,
                 resource_type,
@@ -395,7 +405,7 @@ class HybridRuleEvaluator(RuleEvaluator):
 
         # Then evaluate simple RBAC rules
         if simple_rules:
-            rbac_decision = self.rbac_evaluator.evaluate_rules(
+            rbac_decision = self.rbac_evaluator.evaluate(
                 simple_rules,
                 user,
                 resource_type,

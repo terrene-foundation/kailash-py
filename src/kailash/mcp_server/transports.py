@@ -1096,7 +1096,7 @@ class WebSocketServerTransport(BaseTransport):
 
     def __init__(
         self,
-        host: str = "0.0.0.0",
+        host: str = "127.0.0.1",
         port: int = 3001,
         message_handler: Optional[
             Callable[[Dict[str, Any], str], Dict[str, Any]]

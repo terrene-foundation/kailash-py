@@ -1328,7 +1328,7 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                         recommendations.append(
                             f"Delete or anonymize {data_type} data older than {policy}"
                         )
-                except:
+                except (ValueError, TypeError, KeyError):
                     pass
 
         return {

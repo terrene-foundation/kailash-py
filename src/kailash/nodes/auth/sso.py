@@ -1050,7 +1050,7 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
             try:
                 user_info = await self._get_oauth_user_info(provider, token)
                 return {"valid": True, "user_info": user_info, "provider": provider}
-            except:
+            except Exception:
                 return {"valid": False, "reason": "invalid_token"}
 
         return {"valid": False, "reason": "unsupported_provider"}

@@ -350,7 +350,7 @@ class MCPServer:
         config_file: Optional[Union[str, Path]] = None,
         # Transport configuration
         transport: str = "stdio",  # "stdio", "websocket", "http", "sse"
-        websocket_host: str = "0.0.0.0",
+        websocket_host: str = "127.0.0.1",
         websocket_port: int = 3001,
         # Caching configuration
         enable_cache: bool = True,
@@ -1970,10 +1970,8 @@ class MCPServer:
                 }
 
                 # Check for changes and notify subscribers
-                change = (
-                    await self.subscription_manager.resource_monitor.check_for_changes(
-                        uri, resource_data  # type: ignore[reportArgumentType]
-                    )
+                change = await self.subscription_manager.resource_monitor.check_for_changes(
+                    uri, resource_data  # type: ignore[reportArgumentType]
                 )
 
                 if change:

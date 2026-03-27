@@ -216,7 +216,7 @@ class BulkheadPartition:
                     if operation_id in self._active_operations:
                         self._active_operations.remove(operation_id)
                     self.metrics.active_operations = len(self._active_operations)
-                except:
+                except Exception:
                     # Final fallback - ignore cleanup errors during shutdown
                     pass
 

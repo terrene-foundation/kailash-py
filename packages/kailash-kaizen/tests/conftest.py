@@ -29,8 +29,8 @@ if not use_real_providers:
     try:
         try:
             import kaizen.nodes.ai.ai_providers as ai_providers_module
-        except ImportError:
-            import kailash.nodes.ai.ai_providers as ai_providers_module
+        except ImportError as _e:
+            raise ImportError(f"kaizen.nodes.ai not available: {_e}") from _e
 
         from tests.utils.kaizen_mock_provider import KaizenMockProvider
 
@@ -733,10 +733,7 @@ def _patch_core_sdk_mock_provider():
     signature-based JSON formats and returns appropriate structured data.
     """
     try:
-        try:
-            from kaizen.nodes.ai import MockProvider
-        except ImportError:
-            from kailash.nodes.ai import MockProvider
+        from kaizen.nodes.ai import MockProvider
 
         # Store original chat method
 
@@ -785,10 +782,7 @@ def pytest_configure(config):
     else:
         # Register Kaizen mock provider BEFORE any tests import it (unit tests only)
         try:
-            try:
-                import kaizen.nodes.ai as ai_module
-            except ImportError:
-                import kailash.nodes.ai as ai_module
+            import kaizen.nodes.ai as ai_module
             from tests.utils.kaizen_mock_provider import KaizenMockProvider
 
             if hasattr(ai_module, "MockProvider"):

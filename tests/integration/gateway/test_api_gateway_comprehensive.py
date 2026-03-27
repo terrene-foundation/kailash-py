@@ -10,7 +10,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 # Import core nodes to ensure they're registered
-import kailash.nodes.ai
 import kailash.nodes.code
 import kailash.nodes.data
 import kailash.nodes.logic
