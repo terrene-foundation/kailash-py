@@ -173,7 +173,7 @@ jobs:
         working-directory: ./packages/kailash-kaizen
         run: |
           pip install -e ".[dev]"
-          pip install pytest pytest-timeout pytest-cov python-dotenv Pillow
+          pip install pytest pytest-timeout pytest-cov python-dotenv Pillow aiohttp pyjwt cryptography
 
       - name: Run unit tests
         working-directory: ./packages/kailash-kaizen
