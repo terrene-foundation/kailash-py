@@ -24,7 +24,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Callable, Awaitable, TYPE_CHECKING
+from typing import Any, AsyncGenerator, AsyncIterator, Callable, Awaitable, TYPE_CHECKING
 
 from openai import AsyncOpenAI
 
@@ -341,12 +341,12 @@ class AgentLoop:
         """Signal the loop to stop after the current operation."""
         self._interrupted = True
 
-    async def run_turn(self, user_message: str) -> AsyncIterator[str]:
+    async def run_turn(self, user_message: str) -> AsyncGenerator[str, None]:
         """Run one turn of the agent loop.
 
         A "turn" starts with a user message and continues until the model
         produces a text-only response (no tool calls) or max turns is reached.
-        Yields text chunks as they stream from the model.
+        Yields text chunks incrementally as they stream from the model.
 
         Parameters
         ----------
@@ -355,7 +355,9 @@ class AgentLoop:
 
         Yields
         ------
-        Text chunks from the model's response, as they stream.
+        Text delta strings from the model's response, as each token arrives.
+        Callers that join all yielded chunks will get the same final text as
+        the previous buffered implementation.
         """
         self._interrupted = False
         self._conversation.add_user(user_message)
@@ -375,8 +377,24 @@ class AgentLoop:
                 yield "[Budget exhausted — stopping.]"
                 return
 
-            # Stream the LLM response
-            stream_result = await self._stream_completion()
+            # Stream the LLM response incrementally
+            stream_result = StreamResult()
+            has_tool_calls = False
+            content_cursor = 0  # tracks how much text we have already yielded
+
+            async for event_type, stream_result in self._stream_completion():
+                if self._interrupted:
+                    return
+
+                if event_type == "text":
+                    # Yield the new text delta (the portion we haven't yielded yet)
+                    new_text = stream_result.content[content_cursor:]
+                    if new_text:
+                        yield new_text
+                        content_cursor = len(stream_result.content)
+
+                elif event_type == "tool_call_start":
+                    has_tool_calls = True
 
             if self._interrupted:
                 return
@@ -386,16 +404,13 @@ class AgentLoop:
                 self._usage.add(stream_result.usage)
 
             # If no tool calls, this turn is done -- the model chose to respond with text
-            if not stream_result.tool_calls:
-                # Only yield text from text-only responses (not from tool-call turns,
-                # where models like GPT-5 emit "thinking" text alongside tool calls)
-                if stream_result.content:
-                    yield stream_result.content
+            if not has_tool_calls:
                 # Record the assistant message
                 self._conversation.add_assistant(stream_result.content)
                 return
 
-            # Tool calls: record assistant message with tool calls, execute, loop back
+            # Tool-call turn: record assistant message with tool calls, execute, loop back.
+            # Any pre-tool-call text (reasoning/thinking) was already yielded above.
             self._conversation.add_assistant(
                 stream_result.content,
                 tool_calls=stream_result.tool_calls,
@@ -406,10 +421,24 @@ class AgentLoop:
         # Max turns reached -- we ran out of turns without a text-only response
         logger.warning("Max turns (%d) reached in run_turn", self._config.max_turns)
 
-    async def _stream_completion(self) -> StreamResult:
-        """Make a streaming completion request and collect the result.
+    async def _stream_completion(self) -> AsyncGenerator[tuple[str, StreamResult], None]:
+        """Make a streaming completion request and yield events incrementally.
 
-        Returns the fully assembled StreamResult after the stream completes.
+        Yields (event_type, stream_result) tuples as they arrive from the
+        underlying OpenAI stream.  The StreamResult is the SAME mutable object
+        throughout -- it accumulates content, tool_calls, and usage as the
+        stream progresses.
+
+        Event types
+        -----------
+        ``"text"``
+            A text chunk arrived. ``stream_result.content`` has the full text so far.
+        ``"tool_call_start"``
+            A new tool call started being streamed.
+        ``"tool_call_delta"``
+            Tool call arguments are being streamed.
+        ``"done"``
+            The stream completed.  ``stream_result`` is final.
         """
         tools = self._tools.get_openai_tools()
 
@@ -441,12 +470,10 @@ class AgentLoop:
 
         stream = await self._client.chat.completions.create(**kwargs)
 
-        result = StreamResult()
-        async for _event_type, result in process_stream(stream):
+        async for event_type, result in process_stream(stream):
             if self._interrupted:
                 break
-
-        return result
+            yield event_type, result
 
     async def _execute_tool_calls(self, tool_calls: list[dict[str, Any]]) -> None:
         """Execute tool calls from the model's response.
