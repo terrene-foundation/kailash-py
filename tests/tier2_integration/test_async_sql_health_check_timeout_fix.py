@@ -125,8 +125,12 @@ async def test_sqlite_health_check_no_timeout_error():
         command_timeout=60,
     )
 
+    from kailash.nodes.data.async_sql import SQLiteAdapter
+
     pool = EnterpriseConnectionPool(
-        config=config, pool_id="test_sqlite_health_check", enable_health_checks=True
+        pool_id="test_sqlite_health_check",
+        database_config=config,
+        adapter_class=SQLiteAdapter,
     )
 
     try:
@@ -204,8 +208,12 @@ async def test_health_check_performance():
         command_timeout=60,
     )
 
+    from kailash.nodes.data.async_sql import SQLiteAdapter
+
     pool = EnterpriseConnectionPool(
-        config=config, pool_id="test_performance", enable_health_checks=True
+        pool_id="test_performance",
+        database_config=config,
+        adapter_class=SQLiteAdapter,
     )
 
     try:

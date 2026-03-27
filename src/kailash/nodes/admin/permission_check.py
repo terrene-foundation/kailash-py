@@ -820,9 +820,10 @@ class PermissionCheckNode(Node):
         context: Dict[str, Any],
     ) -> bool:
         """Check ABAC permission using attribute-based access."""
-        assert self._access_manager is not None
         # Use the enhanced access control manager for ABAC evaluation
         try:
+            if self._access_manager is None:
+                return False
             # Convert permission string to NodePermission if possible
             node_permission = NodePermission.EXECUTE  # Default
             if permission.lower() in ["read", "view"]:

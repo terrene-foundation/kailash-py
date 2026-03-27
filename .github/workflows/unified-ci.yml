@@ -101,19 +101,15 @@ jobs:
           .venv/bin/pyright src/kailash/ --pythonversion ${{ matrix.python-version }} --level error 2>&1 | tail -5
 
       - name: Test (Tier 1 — unit tests)
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           .venv/bin/python -m pytest \
-            tests/unit/infrastructure/ \
-            tests/unit/core/ \
-            tests/unit/workflow/ \
-            tests/unit/api/ \
-            tests/unit/access_control/ \
-            tests/unit/channels/ \
-            tests/unit/mcp_server/ \
-            tests/unit/edge/ \
-            -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' \
-            --maxfail=5 -q -p no:xdist
+            tests/unit/ \
+            tests/trust/plane/unit/ \
+            tests/trust/pact/unit/ \
+            tests/security/ \
+            -m 'not (slow or integration or e2e or performance or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' \
+            --maxfail=10 -q -p no:xdist
 
   test-pact:
     name: Test PACT (Python 3.11)
