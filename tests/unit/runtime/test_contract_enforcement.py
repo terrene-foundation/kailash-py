@@ -154,11 +154,14 @@ class TestRuntimeContractEnforcement:
 
             # Should complete execution but log contract warnings
             assert results is not None
-            # Should log warning about contract violation
+            # Should log warning about contract violation — check all warning calls
+            # (runtime may log multiple warnings; the contract one may not be last)
             mock_warning.assert_called()
-            warning_msg = str(mock_warning.call_args[0][0])
+            all_warnings = " ".join(
+                str(call[0][0]) for call in mock_warning.call_args_list
+            ).lower()
             assert any(
-                term in warning_msg.lower()
+                term in all_warnings
                 for term in ["contract validation failed", "contract", "violation"]
             )
 

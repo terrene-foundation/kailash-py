@@ -3425,17 +3425,45 @@ class LocalRuntime(
                     node, node_id, inputs, **execution_kwargs
                 )
 
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, run_async())
-                return future.result()
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, run_async())
+                    return future.result()
+            except RuntimeError as thread_err:
+                # Python 3.13: asyncio.run() may fail in worker threads, or
+                # thread pool exhausted — fall back to direct node execution
+                if "cannot be called from a running event loop" in str(
+                    thread_err
+                ) or "can't start new thread" in str(thread_err):
+                    context = inputs.pop("context", None)
+                    if context is not None:
+                        return node.execute(context=context, **inputs)
+                    return node.execute(**inputs)
+                raise
 
         except RuntimeError:
             # No event loop, can run directly
-            return asyncio.run(
-                self.execute_node_with_enterprise_features(
-                    node, node_id, inputs, **execution_kwargs
+            try:
+                return asyncio.run(
+                    self.execute_node_with_enterprise_features(
+                        node, node_id, inputs, **execution_kwargs
+                    )
                 )
-            )
+            except RuntimeError as e:
+                if "cannot be called from a running event loop" in str(e):
+                    # Python 3.13: asyncio.run() may raise even when
+                    # get_running_loop() raised RuntimeError — use new_event_loop
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        return loop.run_until_complete(
+                            self.execute_node_with_enterprise_features(
+                                node, node_id, inputs, **execution_kwargs
+                            )
+                        )
+                    finally:
+                        loop.close()
+                raise
 
     def get_resource_metrics(self) -> dict[str, Any] | None:
         """Get current resource usage metrics from the resource enforcer.
