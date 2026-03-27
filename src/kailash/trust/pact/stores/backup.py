@@ -219,7 +219,7 @@ def restore_governance_store(engine: Any, path: str) -> None:
     except OSError:
         raise
 
-    # Restore clearances
+    # Restore clearances via public API for audit trail
     for clr_data in data.get("clearances", []):
         review_at = None
         if clr_data.get("review_at") is not None:
@@ -234,9 +234,9 @@ def restore_governance_store(engine: Any, path: str) -> None:
             review_at=review_at,
             nda_signed=clr_data.get("nda_signed", False),
         )
-        engine._clearance_store.grant_clearance(clearance)
+        engine.grant_clearance(clr_data["role_address"], clearance)
 
-    # Restore envelopes
+    # Restore envelopes via public API (includes monotonic tightening validation)
     for env_data in data.get("envelopes", []):
         envelope_config = ConstraintEnvelopeConfig.model_validate(env_data["envelope"])
         role_envelope = RoleEnvelope(
@@ -248,9 +248,9 @@ def restore_governance_store(engine: Any, path: str) -> None:
             created_at=datetime.fromisoformat(env_data["created_at"]),
             modified_at=datetime.fromisoformat(env_data["modified_at"]),
         )
-        engine._envelope_store.save_role_envelope(role_envelope)
+        engine.set_role_envelope(role_envelope)
 
-    # Restore KSPs
+    # Restore KSPs via public API for audit trail
     for ksp_data in data.get("ksps", []):
         expires_at = None
         if ksp_data.get("expires_at") is not None:
@@ -266,9 +266,9 @@ def restore_governance_store(engine: Any, path: str) -> None:
             active=ksp_data.get("active", True),
             expires_at=expires_at,
         )
-        engine._access_policy_store.save_ksp(ksp)
+        engine.create_ksp(ksp)
 
-    # Restore bridges
+    # Restore bridges via public API for audit trail
     for bridge_data in data.get("bridges", []):
         expires_at = None
         if bridge_data.get("expires_at") is not None:
@@ -285,7 +285,7 @@ def restore_governance_store(engine: Any, path: str) -> None:
             expires_at=expires_at,
             active=bridge_data.get("active", True),
         )
-        engine._access_policy_store.save_bridge(bridge)
+        engine.create_bridge(bridge)
 
     logger.info(
         "Restored governance state from '%s': "

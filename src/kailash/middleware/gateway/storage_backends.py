@@ -78,8 +78,12 @@ class RedisStorage(StorageBackend):
     async def _get_redis(self) -> redis.Redis:  # type: ignore[reportInvalidTypeForm]
         """Get Redis connection."""
         if self._redis is None:
+            from kailash.utils.validation import validate_redis_url
+
+            url = f"redis://{self.host}:{self.port}"
+            validate_redis_url(url)
             self._redis = await redis.from_url(
-                f"redis://{self.host}:{self.port}",
+                url,
                 db=self.db,
                 password=self.password,
                 decode_responses=False,
@@ -264,8 +268,12 @@ class RedisEventStorage:
     async def _get_redis(self) -> redis.Redis:  # type: ignore[reportInvalidTypeForm]
         """Get Redis connection."""
         if self._redis is None:
+            from kailash.utils.validation import validate_redis_url
+
+            url = f"redis://{self.host}:{self.port}"
+            validate_redis_url(url)
             self._redis = await redis.from_url(
-                f"redis://{self.host}:{self.port}",
+                url,
                 db=self.db,
                 password=self.password,
                 decode_responses=False,

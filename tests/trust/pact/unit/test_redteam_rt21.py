@@ -864,7 +864,14 @@ class TestMultiLevelVerify:
     """Test multi-level VERIFY: ancestor envelopes block leaf-allowed actions."""
 
     def test_action_allowed_at_leaf_blocked_by_ancestor(self) -> None:
-        """An action allowed at the leaf but blocked by an ancestor's envelope must be BLOCKED."""
+        """Setting a child envelope with actions not in parent must raise MonotonicTighteningError.
+
+        Previously this tested runtime multi-level verify. Now the validation
+        happens at set_role_envelope time -- the child envelope with 'deploy'
+        is rejected because the parent only allows ["read", "write"].
+        """
+        from kailash.trust.pact.envelopes import MonotonicTighteningError
+
         engine = _make_engine()
 
         # VP Eng (D1-R1) blocks "deploy"
@@ -880,7 +887,8 @@ class TestMultiLevelVerify:
         )
         engine.set_role_envelope(vp_env)
 
-        # Backend Lead (D1-R1-T1-R1) allows "deploy" -- but ancestor blocks it
+        # Backend Lead (D1-R1-T1-R1) tries to allow "deploy" -- rejected by
+        # monotonic tightening validation since parent doesn't allow "deploy"
         lead_env = RoleEnvelope(
             id="re-lead",
             defining_role_address="D1-R1",
@@ -890,13 +898,8 @@ class TestMultiLevelVerify:
                 allowed_actions=["read", "write", "deploy"],
             ),
         )
-        engine.set_role_envelope(lead_env)
-
-        verdict = engine.verify_action("D1-R1-T1-R1", "deploy")
-        # The effective envelope intersection already handles this case
-        # because intersect_envelopes unions blocked_actions.
-        # Multi-level verify provides an additional safety check.
-        assert verdict.level == "blocked"
+        with pytest.raises(MonotonicTighteningError):
+            engine.set_role_envelope(lead_env)
 
     def test_action_allowed_at_all_levels(self) -> None:
         """An action allowed at all levels must be auto_approved."""
@@ -928,7 +931,14 @@ class TestMultiLevelVerify:
         assert verdict.level == "auto_approved"
 
     def test_ancestor_cost_limit_blocks_expensive_action(self) -> None:
-        """If ancestor has $100 limit but leaf has $1000, action at $500 must be BLOCKED."""
+        """If ancestor has $100 limit, setting a child with $1000 raises MonotonicTighteningError.
+
+        Previously this tested runtime envelope intersection. Now the
+        validation happens at set_role_envelope time -- the child envelope
+        with max_spend=$1000 is rejected because parent has max_spend=$100.
+        """
+        from kailash.trust.pact.envelopes import MonotonicTighteningError
+
         engine = _make_engine()
 
         # VP Eng: max_spend = $100
@@ -944,8 +954,7 @@ class TestMultiLevelVerify:
         )
         engine.set_role_envelope(vp_env)
 
-        # Backend Lead: max_spend = $1000 (but this violates tightening,
-        # and the effective envelope will have min = $100)
+        # Backend Lead: max_spend = $1000 -- now rejected by tightening validation
         lead_env = RoleEnvelope(
             id="re-lead-expensive",
             defining_role_address="D1-R1",
@@ -956,13 +965,27 @@ class TestMultiLevelVerify:
                 allowed_actions=["read", "write", "compute"],
             ),
         )
-        engine.set_role_envelope(lead_env)
+        with pytest.raises(MonotonicTighteningError, match="max_spend_usd"):
+            engine.set_role_envelope(lead_env)
 
-        # $500 action: effective envelope from intersection has max_spend $100
+        # Verify that a properly tightened envelope IS accepted and enforced
+        lead_env_tight = RoleEnvelope(
+            id="re-lead-tight",
+            defining_role_address="D1-R1",
+            target_role_address="D1-R1-T1-R1",
+            envelope=_make_envelope(
+                env_id="lead-tight",
+                max_spend=50.0,  # Within parent's $100 limit
+                allowed_actions=["read", "write", "compute"],
+            ),
+        )
+        engine.set_role_envelope(lead_env_tight)
+
+        # $75 action exceeds the leaf's $50 limit
         verdict = engine.verify_action(
             "D1-R1-T1-R1",
             "compute",
-            {"cost": 500.0},
+            {"cost": 75.0},
         )
         assert verdict.level == "blocked"
         assert "exceeds financial limit" in verdict.reason.lower()

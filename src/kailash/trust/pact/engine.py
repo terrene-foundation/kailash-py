@@ -41,6 +41,7 @@ from kailash.trust.pact.compilation import CompiledOrg, OrgNode, compile_org
 from kailash.trust.pact.context import GovernanceContext
 from kailash.trust.pact.envelopes import (
     EffectiveEnvelopeSnapshot,
+    MonotonicTighteningError,
     RoleEnvelope,
     TaskEnvelope,
     compute_effective_envelope,
@@ -738,10 +739,26 @@ class GovernanceEngine:
     def set_role_envelope(self, envelope: RoleEnvelope) -> None:
         """Set a role envelope. Thread-safe. Emits audit anchor.
 
+        Validates monotonic tightening before persisting: the child envelope
+        cannot be wider than the defining role's effective envelope.
+
         Args:
             envelope: The RoleEnvelope to set.
+
+        Raises:
+            MonotonicTighteningError: If the envelope is wider than the
+                defining role's effective envelope.
         """
         with self._lock:
+            # Validate monotonic tightening: child cannot be wider than parent
+            defining_envelope = self._compute_envelope_locked(
+                envelope.defining_role_address
+            )
+            if defining_envelope is not None:
+                RoleEnvelope.validate_tightening(
+                    parent_envelope=defining_envelope,
+                    child_envelope=envelope.envelope,
+                )
             self._envelope_store.save_role_envelope(envelope)
 
         self._emit_audit(
@@ -758,10 +775,28 @@ class GovernanceEngine:
     def set_task_envelope(self, envelope: TaskEnvelope) -> None:
         """Set a task envelope. Thread-safe. Emits audit anchor.
 
+        Validates monotonic tightening before persisting: the task envelope
+        cannot be wider than the parent role envelope it narrows. The parent
+        is identified by the task envelope's parent_envelope_id.
+
         Args:
             envelope: The TaskEnvelope to set.
+
+        Raises:
+            MonotonicTighteningError: If the task envelope is wider than the
+                parent role envelope.
         """
         with self._lock:
+            # Validate monotonic tightening: task envelope cannot be wider
+            # than the parent role envelope.
+            parent_role_env = self._find_role_envelope_by_id_locked(
+                envelope.parent_envelope_id
+            )
+            if parent_role_env is not None:
+                RoleEnvelope.validate_tightening(
+                    parent_envelope=parent_role_env.envelope,
+                    child_envelope=envelope.envelope,
+                )
             self._envelope_store.save_task_envelope(envelope)
 
         self._emit_audit(
@@ -879,7 +914,11 @@ class GovernanceEngine:
         try:
             addr = Address.parse(role_address)
         except Exception:
-            return (None, "")
+            return (
+                "blocked",
+                f"Unable to parse role address '{role_address}' for ancestor "
+                f"verification -- fail-closed",
+            )
 
         most_restrictive_level: str | None = None
         most_restrictive_reason = ""
@@ -894,7 +933,7 @@ class GovernanceEngine:
             # Compute effective envelope for this ancestor
             ancestor_envelope = self._compute_envelope_locked(ancestor_str)
             if ancestor_envelope is None:
-                continue
+                continue  # Ancestor has no envelope -- not a constraint violation
 
             # Evaluate the action against this ancestor's envelope
             anc_level, anc_reason = self._evaluate_against_envelope(
@@ -919,6 +958,27 @@ class GovernanceEngine:
     # -------------------------------------------------------------------
     # Internal Helpers
     # -------------------------------------------------------------------
+
+    def _find_role_envelope_by_id_locked(
+        self, envelope_id: str
+    ) -> RoleEnvelope | None:
+        """Find a RoleEnvelope by its ID. Caller must hold self._lock.
+
+        Iterates all role addresses in the compiled org and checks if a stored
+        RoleEnvelope matches the given ID. This is used for task envelope
+        validation where parent_envelope_id is a RoleEnvelope ID, not an address.
+
+        Args:
+            envelope_id: The RoleEnvelope.id to search for.
+
+        Returns:
+            The matching RoleEnvelope, or None if not found.
+        """
+        for address in self._compiled_org.nodes:
+            role_env = self._envelope_store.get_role_envelope(address)
+            if role_env is not None and role_env.id == envelope_id:
+                return role_env
+        return None
 
     def _gather_clearances(self) -> dict[str, RoleClearance]:
         """Gather all clearances from the store for the compiled org.

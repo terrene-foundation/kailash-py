@@ -235,9 +235,39 @@ class BatchProcessorNode(Node):
     ) -> Dict[str, Any]:
         """Execute custom processing code on a batch."""
         try:
-            # Create execution context
+            # Create execution context with restricted builtins.
+            # Security: full __builtins__ is NOT exposed — this prevents
+            # arbitrary imports (e.g., __import__('os').system('...'))
+            # and access to sensitive functions like open(), eval(), exec().
             exec_globals = {
-                "__builtins__": __builtins__,
+                "__builtins__": {
+                    "len": len,
+                    "range": range,
+                    "str": str,
+                    "int": int,
+                    "float": float,
+                    "bool": bool,
+                    "list": list,
+                    "dict": dict,
+                    "tuple": tuple,
+                    "set": set,
+                    "enumerate": enumerate,
+                    "zip": zip,
+                    "map": map,
+                    "filter": filter,
+                    "sorted": sorted,
+                    "min": min,
+                    "max": max,
+                    "sum": sum,
+                    "abs": abs,
+                    "round": round,
+                    "isinstance": isinstance,
+                    "type": type,
+                    "print": print,
+                    "True": True,
+                    "False": False,
+                    "None": None,
+                },
                 "batch": batch,
                 "len": len,
                 "range": range,

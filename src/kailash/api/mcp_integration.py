@@ -26,8 +26,10 @@ Example:
     >>> # workflow.add_node("search_data", node)  # doctest: +SKIP
 """
 
+import ast
 import asyncio
 import logging
+import operator
 from collections.abc import Callable
 from typing import Any
 
@@ -36,6 +38,52 @@ from pydantic import BaseModel, Field
 from ..nodes.base_async import AsyncNode
 
 logger = logging.getLogger(__name__)
+
+
+# Safe math operations for the calculate tool — AST node whitelist approach
+# prevents arbitrary code execution via eval()
+_SAFE_MATH_OPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+    ast.USub: operator.neg,
+}
+
+
+def _safe_math_eval(expr: str) -> float:
+    """Safely evaluate a mathematical expression using AST parsing.
+
+    Only allows numeric literals and basic arithmetic operators
+    (+, -, *, /, %, **). No function calls, attribute access,
+    variable references, or imports are permitted.
+
+    Args:
+        expr: Mathematical expression string (e.g., "2 + 3 * 4")
+
+    Returns:
+        Numeric result of the expression
+
+    Raises:
+        ValueError: If the expression contains unsupported operations
+    """
+    tree = ast.parse(expr, mode="eval")
+    return _eval_math_node(tree.body)
+
+
+def _eval_math_node(node: ast.AST) -> float:
+    """Recursively evaluate an AST node for safe math operations."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return node.value
+    elif isinstance(node, ast.BinOp) and type(node.op) in _SAFE_MATH_OPS:
+        left = _eval_math_node(node.left)
+        right = _eval_math_node(node.right)
+        return _SAFE_MATH_OPS[type(node.op)](left, right)
+    elif isinstance(node, ast.UnaryOp) and type(node.op) in _SAFE_MATH_OPS:
+        return _SAFE_MATH_OPS[type(node.op)](_eval_math_node(node.operand))
+    raise ValueError("Unsupported expression")
 
 
 class MCPTool(BaseModel):
@@ -437,31 +485,18 @@ def create_example_mcp_server() -> MCPIntegration:
         },
     )
 
-    # Add calculator tool
+    # Add calculator tool using safe AST-based math evaluation
     def calculate(expression: str, **kwargs):
-        """Evaluate mathematical expression."""
+        """Evaluate mathematical expression safely.
+
+        Uses AST parsing with a node whitelist to evaluate only numeric
+        literals and basic arithmetic operators. No eval() is used.
+        """
         try:
-            # Safe evaluation of mathematical expressions
-            import ast
-            import operator as op
-
-            # Operators would be used for safe eval implementation
-            # Currently using simple eval for the expression
-            _ = {
-                ast.Add: op.add,
-                ast.Sub: op.sub,
-                ast.Mult: op.mul,
-                ast.Div: op.truediv,
-                ast.Pow: op.pow,
-            }
-
-            def eval_expr(expr):
-                return eval(expr, {"__builtins__": {}}, {})
-
-            result = eval_expr(expression)
+            result = _safe_math_eval(expression)
             return {"expression": expression, "result": result}
-        except Exception as e:
-            return {"error": str(e)}
+        except (ValueError, SyntaxError, TypeError, ZeroDivisionError):
+            return {"error": "Invalid expression"}
 
     mcp.add_tool(
         "calculate",

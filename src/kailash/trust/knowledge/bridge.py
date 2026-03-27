@@ -15,9 +15,13 @@ configured, allowing basic knowledge management without full trust
 infrastructure.
 """
 
+import hmac
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 from kailash.trust.knowledge.entry import KnowledgeEntry, KnowledgeType
 from kailash.trust.knowledge.provenance import (
@@ -224,7 +228,9 @@ class TrustKnowledgeBridge:
             knowledge_type = KnowledgeType(content_type)
         except ValueError as e:
             valid_types = [kt.value for kt in KnowledgeType]
-            raise ValueError(f"Invalid content_type '{content_type}'. Must be one of: {valid_types}") from e
+            raise ValueError(
+                f"Invalid content_type '{content_type}'. Must be one of: {valid_types}"
+            ) from e
 
         # Determine trust chain reference and constraint envelope reference
         trust_chain_ref: str
@@ -355,7 +361,9 @@ class TrustKnowledgeBridge:
                 continue
 
             # Check if derived from any of the agent's entries
-            derived_from = prov_record.relations.get(ProvRelation.WAS_DERIVED_FROM.value, [])
+            derived_from = prov_record.relations.get(
+                ProvRelation.WAS_DERIVED_FROM.value, []
+            )
             for source_id in derived_from:
                 if source_id in source_ids:
                     # Get the knowledge entry
@@ -437,7 +445,9 @@ class TrustKnowledgeBridge:
 
         # Verify source agent has valid trust chain
         try:
-            chain = await self._trust_operations.trust_store.get_chain(entry.source_agent_id)
+            chain = await self._trust_operations.trust_store.get_chain(
+                entry.source_agent_id
+            )
 
             # Check chain exists and is not expired
             if chain.is_expired():
@@ -445,9 +455,9 @@ class TrustKnowledgeBridge:
                 result["reason"] = "Agent trust chain is expired"
                 return result
 
-            # Verify trust chain reference matches
+            # Verify trust chain reference matches (timing-safe comparison)
             current_hash = chain.hash()
-            if entry.trust_chain_ref != current_hash:
+            if not hmac.compare_digest(entry.trust_chain_ref, current_hash):
                 result["valid"] = False
                 result["reason"] = (
                     f"Trust chain reference mismatch: entry has "
@@ -462,7 +472,8 @@ class TrustKnowledgeBridge:
 
         except Exception as e:
             result["valid"] = False
-            result["reason"] = f"Trust chain verification failed: {str(e)}"
+            result["reason"] = "Trust chain verification failed"
+            logger.error("Trust chain verification failed: %s", e)
 
         return result
 

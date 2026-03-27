@@ -356,11 +356,13 @@ class CacheFactory(ResourceFactory):
                     "Install with: pip install redis[async] or pip install aioredis"
                 )
 
+        from kailash.utils.validation import validate_redis_url
+
+        url = f"redis://{self.host}:{self.port}"
+        validate_redis_url(url)
         logger.info(f"Creating Redis client: {self.host}:{self.port}")
 
-        return await aioredis.from_url(
-            f"redis://{self.host}:{self.port}", **self.extra_config
-        )
+        return await aioredis.from_url(url, **self.extra_config)
 
     async def _create_memcached_client(self):
         """Create Memcached client."""

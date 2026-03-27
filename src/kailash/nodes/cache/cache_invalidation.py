@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Set, Union
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError
+from kailash.utils.redis_validation import validate_redis_url
 
 try:
     import redis.asyncio as redis
@@ -368,6 +369,8 @@ class CacheInvalidationNode(AsyncNode):
                     return
 
             redis_url = kwargs.get("redis_url", "redis://localhost:6379")
+            # Validate Redis URL scheme to prevent SSRF (H4)
+            validate_redis_url(redis_url)
 
             # Only recreate Redis client if the current one is problematic
             if self._redis_client:

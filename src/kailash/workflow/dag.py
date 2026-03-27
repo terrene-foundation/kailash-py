@@ -119,6 +119,9 @@ class _EdgeView:
     def __len__(self) -> int:
         return len(self._edge_attrs)
 
+    def __getitem__(self, edge: tuple[str, str]) -> dict[str, Any]:
+        return self._edge_attrs[edge]
+
     def __repr__(self) -> str:
         return f"_EdgeView({list(self._edge_attrs.keys())})"
 
@@ -318,6 +321,14 @@ class WorkflowDAG:
         - ``graph.edges(data=True)`` — returns [(src, dst, attrs), ...]
         """
         return _EdgeView(self._edge_attrs)
+
+    def number_of_nodes(self) -> int:
+        """Return the number of nodes in the graph (networkx-compatible)."""
+        return len(self._node_attrs)
+
+    def number_of_edges(self) -> int:
+        """Return the number of edges in the graph (networkx-compatible)."""
+        return len(self._edge_attrs)
 
     def predecessors(self, node: str) -> Iterator[str]:
         """Return an iterator over direct predecessors of a node.

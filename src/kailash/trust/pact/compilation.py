@@ -36,7 +36,7 @@ __all__ = [
 ]
 
 # ---------------------------------------------------------------------------
-# Compilation limits (TODO-7008) -- prevent resource exhaustion attacks
+# Compilation limits -- prevent resource exhaustion attacks
 # ---------------------------------------------------------------------------
 
 MAX_COMPILATION_DEPTH: int = 50
@@ -61,7 +61,7 @@ class CompilationError(PactError):
 
 
 # ---------------------------------------------------------------------------
-# RoleDefinition (TODO-1002) -- dataclass, not Pydantic
+# RoleDefinition -- dataclass, not Pydantic
 # ---------------------------------------------------------------------------
 
 
@@ -72,7 +72,7 @@ class RoleDefinition:
     Roles are the accountability anchors -- positions occupied by people.
     Every Department or Team must have exactly one primary Role (head).
 
-    frozen=True (TODO-7006 security fix): prevents post-construction mutation.
+    frozen=True (security fix): prevents post-construction mutation.
     The address field is set during compilation via object.__setattr__ to
     bypass frozen=True during the build phase. After compilation completes,
     the RoleDefinition is immutable.
@@ -90,7 +90,7 @@ class RoleDefinition:
 
 
 # ---------------------------------------------------------------------------
-# VacancyStatus (TODO-1005)
+# VacancyStatus
 # ---------------------------------------------------------------------------
 
 
@@ -112,7 +112,7 @@ class VacancyStatus:
 
 
 # ---------------------------------------------------------------------------
-# OrgNode (TODO-1003)
+# OrgNode
 # ---------------------------------------------------------------------------
 
 
@@ -143,7 +143,7 @@ class OrgNode:
 
 
 # ---------------------------------------------------------------------------
-# CompiledOrg (TODO-1003, 1004, 1005)
+# CompiledOrg
 # ---------------------------------------------------------------------------
 
 
@@ -158,7 +158,7 @@ class CompiledOrg:
     organizational structure. During compilation, object.__setattr__ is used
     to build the nodes dict; afterward, the CompiledOrg is immutable.
 
-    TODO-7007: After compilation completes, the nodes dict is wrapped in
+    After compilation completes, the nodes dict is wrapped in
     MappingProxyType to prevent post-compilation insertion, deletion, or
     modification of nodes. Read operations (get, iterate, len, contains)
     still work normally.
@@ -207,7 +207,7 @@ class CompiledOrg:
                 return node
         return None
 
-    # ---- Query (TODO-1004) ----
+    # ---- Query ----
 
     def query_by_prefix(self, prefix: str) -> list[OrgNode]:
         """Return all nodes whose address starts with the given prefix.
@@ -258,7 +258,7 @@ class CompiledOrg:
         """
         return [n for n in self.nodes.values() if n.parent_address is None]
 
-    # ---- Vacancy (TODO-1005) ----
+    # ---- Vacancy ----
 
     def get_vacancy_status(self, address: str) -> VacancyStatus:
         """Get the vacancy status for a role at the given address.
@@ -328,7 +328,7 @@ def compile_org(org: OrgDefinition) -> CompiledOrg:
     # Short-circuit for empty orgs
     if not roles and not org.departments and not org.teams:
         empty = CompiledOrg(org_id=org.org_id)
-        # TODO-7007: Wrap empty dict in MappingProxyType for consistency
+        # --- Wrap empty dict in MappingProxyType for consistency ---
         object.__setattr__(empty, "nodes", MappingProxyType(empty.nodes))
         return empty
 
@@ -485,9 +485,8 @@ def compile_org(org: OrgDefinition) -> CompiledOrg:
                 unit_head_map=unit_head_map,
             )
 
-    # TODO-7007: Wrap nodes dict in MappingProxyType to make it read-only
-    # post-compilation. This prevents insertion of malicious nodes after
-    # the compilation phase completes.
+    # --- Wrap nodes dict in MappingProxyType to make it read-only ---
+    # Prevents insertion of malicious nodes after the compilation phase completes.
     object.__setattr__(compiled, "nodes", MappingProxyType(compiled.nodes))
 
     return compiled
@@ -516,7 +515,7 @@ def _assign_children_of_external_root(
     if not children:
         return
 
-    # TODO-7008: Check breadth limit
+    # --- Check breadth limit ---
     if len(children) > MAX_CHILDREN_PER_NODE:
         raise CompilationError(
             f"Role '{parent_role.role_id}' has {len(children)} children, "
@@ -644,7 +643,7 @@ def _assign_children_addresses(
     if not children:
         return
 
-    # TODO-7008: Check depth limit — count segments in the parent address
+    # --- Check depth limit — count segments in the parent address ---
     parent_depth = len(parent_role_addr.split("-"))
     # Children will be at least parent_depth + 1 (for R node) or +2 (for D/T + R)
     if parent_depth >= MAX_COMPILATION_DEPTH:
@@ -654,7 +653,7 @@ def _assign_children_addresses(
             f"This may indicate a circular structure or an excessively deep hierarchy."
         )
 
-    # TODO-7008: Check breadth limit
+    # --- Check breadth limit ---
     if len(children) > MAX_CHILDREN_PER_NODE:
         raise CompilationError(
             f"Role '{parent_role.role_id}' at address '{parent_role_addr}' has "
@@ -662,7 +661,7 @@ def _assign_children_addresses(
             f"This may indicate a structural error or resource exhaustion attack."
         )
 
-    # TODO-7008: Check total nodes limit
+    # --- Check total nodes limit ---
     if len(compiled.nodes) > MAX_TOTAL_NODES:
         raise CompilationError(
             f"Total node count ({len(compiled.nodes)}) exceeds the maximum of "
@@ -790,7 +789,7 @@ def _create_role_node(
 ) -> None:
     """Create an OrgNode for a role and add it to the compiled org."""
     # Set the address on the frozen RoleDefinition via object.__setattr__
-    # (TODO-7006: RoleDefinition is now frozen=True)
+    # (RoleDefinition is frozen=True -- use object.__setattr__ during build phase)
     object.__setattr__(role_def, "address", address)
 
     node = OrgNode(

@@ -107,24 +107,31 @@ class TestDynamicExecutionPlannerEdgeCases:
         workflow = Workflow("test", "Test")
         planner = DynamicExecutionPlanner(workflow)
 
-        # Mock graph nodes to raise error
-        with patch.object(workflow.graph, "nodes", side_effect=Exception("Test error")):
-            merge_nodes = planner._find_merge_nodes_fallback()
-            assert merge_nodes == []
+        # Replace graph with a mock whose nodes property raises an error
+        mock_graph = Mock()
+        mock_graph.nodes = property(
+            lambda self: (_ for _ in ()).throw(Exception("Test error"))
+        )
+        type(mock_graph).nodes = property(
+            lambda self: (_ for _ in ()).throw(Exception("Test error"))
+        )
+        workflow.graph = mock_graph
+        merge_nodes = planner._find_merge_nodes_fallback()
+        assert merge_nodes == []
 
     def test_create_merge_strategy_error(self):
         """Test _create_merge_strategy error handling."""
         workflow = Workflow("test", "Test")
         planner = DynamicExecutionPlanner(workflow)
 
-        # Mock graph predecessors to raise error
-        with patch.object(
-            workflow.graph, "predecessors", side_effect=Exception("Test error")
-        ):
-            strategy = planner._create_merge_strategy("merge", set(), {})
+        # Replace graph with a mock whose predecessors raises an error
+        mock_graph = Mock()
+        mock_graph.predecessors.side_effect = Exception("Test error")
+        workflow.graph = mock_graph
+        strategy = planner._create_merge_strategy("merge", set(), {})
 
-            assert strategy["strategy_type"] == "error"
-            assert len(strategy["recommendations"]) > 0
+        assert strategy["strategy_type"] == "error"
+        assert len(strategy["recommendations"]) > 0
 
     def test_optimize_execution_plan_with_merge_modifications(self):
         """Test optimize_execution_plan with merge node modifications."""
