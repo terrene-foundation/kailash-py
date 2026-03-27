@@ -207,17 +207,20 @@ from .registry_integration import (
 # Enhanced server with production features
 from .server import MCPServer, MCPServerBase, SimpleMCPServer
 
-# Enhanced Transport Layer
-from .transports import (
-    BaseTransport,
-    EnhancedStdioTransport,
-    SSETransport,
-    StreamableHTTPTransport,
-    TransportManager,
-    TransportSecurity,
-    WebSocketTransport,
-    get_transport_manager,
-)
+# Enhanced Transport Layer (requires aiohttp + websockets)
+try:
+    from .transports import (
+        BaseTransport,
+        EnhancedStdioTransport,
+        SSETransport,
+        StreamableHTTPTransport,
+        TransportManager,
+        TransportSecurity,
+        WebSocketTransport,
+        get_transport_manager,
+    )
+except ImportError:
+    pass  # Transports require aiohttp, websockets — optional deps
 
 __all__ = [
     # Core MCP Components
