@@ -26,12 +26,13 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, AsyncIterator, Callable, Awaitable, TYPE_CHECKING
 
-from openai import AsyncOpenAI
-
 if TYPE_CHECKING:
+    from openai import AsyncOpenAI
     from kaizen_agents.delegate.compact import CompactionResult
+    from kaizen_agents.delegate.tools.hydrator import ToolHydrator
 
-from kaizen_agents.delegate.adapters.openai_stream import StreamResult, process_stream
+from kaizen_agents.delegate.adapters.openai_stream import StreamResult
+from kaizen_agents.delegate.adapters.protocol import StreamEvent, StreamingChatAdapter
 from kaizen_agents.delegate.config.loader import KzConfig
 
 logger = logging.getLogger(__name__)
@@ -274,8 +275,10 @@ class AgentLoop:
         tools: ToolRegistry,
         *,
         client: AsyncOpenAI | None = None,
+        adapter: StreamingChatAdapter | None = None,
         system_prompt: str | None = None,
         budget_check: Callable[[], bool] | None = None,
+        hydrator: ToolHydrator | None = None,
     ) -> None:
         """Initialise the agent loop.
 
@@ -286,7 +289,14 @@ class AgentLoop:
         tools:
             Registry of tools available to the agent.
         client:
-            Optional AsyncOpenAI client override (for testing).
+            Optional AsyncOpenAI client override (for testing / backward
+            compat).  When provided, the loop wraps it in a legacy
+            streaming path.  Prefer ``adapter`` for new code.
+        adapter:
+            A :class:`StreamingChatAdapter` instance for multi-provider
+            support.  When provided, ``client`` is ignored.  If neither
+            ``adapter`` nor ``client`` is provided, an adapter is created
+            automatically from ``config.provider``.
         system_prompt:
             Override the default system prompt. If None, uses the built-in
             default. In production, this will be assembled from KZ.md context.
@@ -294,22 +304,111 @@ class AgentLoop:
             Optional callback that returns True if budget is available, False
             if exhausted. When provided, the loop checks budget before each
             LLM call and stops early if exhausted.
+        hydrator:
+            Optional :class:`~kaizen_agents.delegate.tools.hydrator.ToolHydrator`
+            for large tool sets. When provided, the loop delegates tool
+            selection and discovery to the hydrator. When ``None`` and the
+            tool count exceeds the hydrator's default threshold, a hydrator
+            is created automatically.
         """
         self._config = config
         self._tools = tools
-        self._client = client or self._build_client()
+
+        # Resolve the streaming adapter.
+        # Priority: explicit adapter > explicit client (legacy) > auto-detect
+        if adapter is not None:
+            self._adapter: StreamingChatAdapter | None = adapter
+            self._client: Any = None
+        elif client is not None:
+            # Legacy backward-compat path: wrap the raw AsyncOpenAI client
+            self._adapter = None
+            self._client = client
+        else:
+            self._adapter = self._build_adapter()
+            self._client = None
+
         self._conversation = Conversation()
         self._usage = UsageTracker()
         self._interrupted = False
         self._budget_check = budget_check
 
+        # Tool hydration: set up when tool count exceeds threshold
+        self._hydrator = hydrator
+        self._setup_hydration()
+
         # Set system prompt
         prompt = system_prompt if system_prompt is not None else _DEFAULT_SYSTEM_PROMPT
         self._conversation.add_system(prompt)
 
-    def _build_client(self) -> AsyncOpenAI:
-        """Build an AsyncOpenAI client from environment variables.
+    def _setup_hydration(self) -> None:
+        """Initialise tool hydration if the tool count warrants it.
 
+        When a hydrator is provided or the tool count exceeds the default
+        threshold, the hydrator is loaded with the full tool set and the
+        ``search_tools`` meta-tool is injected into the registry.
+        """
+        from kaizen_agents.delegate.tools.hydrator import ToolHydrator
+        from kaizen_agents.delegate.tools.search import (
+            SEARCH_TOOLS_SCHEMA,
+            create_search_tools_executor,
+        )
+
+        tool_count = len(self._tools.tool_names)
+
+        if self._hydrator is None:
+            # Auto-create a hydrator only if the tool count exceeds the threshold
+            default_threshold = ToolHydrator().threshold
+            if tool_count <= default_threshold:
+                return
+            self._hydrator = ToolHydrator()
+
+        # Register the search_tools meta-tool into the ToolRegistry so it
+        # appears in the tool definitions sent to the LLM
+        if not self._tools.has_tool("search_tools"):
+            search_executor = create_search_tools_executor(self._hydrator)
+            func_def = SEARCH_TOOLS_SCHEMA["function"]
+            self._tools.register(
+                name="search_tools",
+                description=func_def["description"],
+                parameters=func_def["parameters"],
+                executor=search_executor,
+            )
+
+        # Load all tool defs and executors into the hydrator
+        all_defs: dict[str, Any] = {}
+        all_executors: dict[str, Any] = {}
+        for tool_def in self._tools._tools.values():
+            openai_fmt = tool_def.to_openai_format()
+            all_defs[tool_def.name] = openai_fmt
+            all_executors[tool_def.name] = self._tools._executors[tool_def.name]
+
+        self._hydrator.load_tools(all_defs, all_executors)
+
+    @property
+    def hydrator(self) -> ToolHydrator | None:
+        """The tool hydrator, if active."""
+        return self._hydrator
+
+    def _build_adapter(self) -> StreamingChatAdapter:
+        """Build a streaming adapter from config.
+
+        Provider selection is configuration branching (permitted deterministic
+        logic), not agent reasoning.
+        """
+        from kaizen_agents.delegate.adapters.registry import get_adapter_for_model
+
+        model = self._config.model or os.environ.get("DEFAULT_LLM_MODEL", "")
+        return get_adapter_for_model(
+            model=model,
+            provider=self._config.provider,
+            temperature=self._config.temperature,
+            max_tokens=self._config.max_tokens,
+        )
+
+    def _build_client(self) -> Any:
+        """Build an AsyncOpenAI client from environment variables (legacy).
+
+        Kept for backward compatibility when ``client`` is passed directly.
         API key comes from .env (single source of truth).
         """
         api_key = os.environ.get("OPENAI_API_KEY")
@@ -317,6 +416,7 @@ class AgentLoop:
             raise ValueError("No OpenAI API key found. Set OPENAI_API_KEY in your .env file.")
 
         import httpx
+        from openai import AsyncOpenAI
 
         base_url = os.environ.get("OPENAI_BASE_URL")
         kwargs: dict[str, Any] = {
@@ -425,9 +525,10 @@ class AgentLoop:
         """Make a streaming completion request and yield events incrementally.
 
         Yields (event_type, stream_result) tuples as they arrive from the
-        underlying OpenAI stream.  The StreamResult is the SAME mutable object
-        throughout -- it accumulates content, tool_calls, and usage as the
-        stream progresses.
+        underlying streaming adapter (or legacy OpenAI client).
+
+        The StreamResult is the SAME mutable object throughout -- it
+        accumulates content, tool_calls, and usage as the stream progresses.
 
         Event types
         -----------
@@ -440,40 +541,77 @@ class AgentLoop:
         ``"done"``
             The stream completed.  ``stream_result`` is final.
         """
-        tools = self._tools.get_openai_tools()
-
-        model = self._config.model or "gpt-5-chat-latest"
-
-        # GPT-5 variants and reasoning models use max_completion_tokens
-        # instead of max_tokens, and do not support custom temperature.
-        _GPT5_AND_REASONING = ("o1", "o3", "gpt-5")
-        is_new_api = any(model.startswith(p) for p in _GPT5_AND_REASONING)
-
-        kwargs: dict[str, Any] = {
-            "model": model,
-            "messages": self._conversation.messages,
-            "stream": True,
-            "stream_options": {"include_usage": True},
-        }
-
-        if not is_new_api:
-            kwargs["temperature"] = self._config.temperature
-
-        if is_new_api:
-            kwargs["max_completion_tokens"] = self._config.max_tokens
+        # Use hydrator for tool selection when active, otherwise all tools
+        if self._hydrator is not None and self._hydrator.is_active:
+            tools = self._hydrator.get_active_tool_defs()
         else:
-            kwargs["max_tokens"] = self._config.max_tokens
+            tools = self._tools.get_openai_tools()
 
-        if tools:
-            kwargs["tools"] = tools
-            kwargs["tool_choice"] = "auto"
+        model = self._config.model or os.environ.get("DEFAULT_LLM_MODEL", "")
 
-        stream = await self._client.chat.completions.create(**kwargs)
+        if self._adapter is not None:
+            # New adapter-based path: provider-agnostic streaming
+            async for event in self._adapter.stream_chat(
+                messages=self._conversation.messages,
+                tools=tools or None,
+                model=model,
+                temperature=self._config.temperature,
+                max_tokens=self._config.max_tokens,
+            ):
+                if self._interrupted:
+                    break
 
-        async for event_type, result in process_stream(stream):
-            if self._interrupted:
-                break
-            yield event_type, result
+                # Convert StreamEvent -> (event_type, StreamResult) for
+                # backward compatibility with the rest of the loop
+                result = StreamResult(
+                    content=event.content,
+                    tool_calls=event.tool_calls,
+                    finish_reason=event.finish_reason,
+                    model=event.model,
+                    usage=event.usage,
+                )
+
+                # Map adapter event types to legacy event types
+                if event.event_type == "text_delta":
+                    yield ("text", result)
+                elif event.event_type == "tool_call_start":
+                    yield ("tool_call_start", result)
+                elif event.event_type == "tool_call_delta":
+                    yield ("tool_call_delta", result)
+                elif event.event_type == "done":
+                    yield ("done", result)
+        else:
+            # Legacy path: direct AsyncOpenAI client (backward compat)
+            from kaizen_agents.delegate.adapters.openai_stream import process_stream
+
+            _GPT5_AND_REASONING = ("o1", "o3", "gpt-5")
+            is_new_api = any(model.startswith(p) for p in _GPT5_AND_REASONING)
+
+            kwargs: dict[str, Any] = {
+                "model": model,
+                "messages": self._conversation.messages,
+                "stream": True,
+                "stream_options": {"include_usage": True},
+            }
+
+            if not is_new_api:
+                kwargs["temperature"] = self._config.temperature
+
+            if is_new_api:
+                kwargs["max_completion_tokens"] = self._config.max_tokens
+            else:
+                kwargs["max_tokens"] = self._config.max_tokens
+
+            if tools:
+                kwargs["tools"] = tools
+                kwargs["tool_choice"] = "auto"
+
+            stream = await self._client.chat.completions.create(**kwargs)
+
+            async for event_type, result in process_stream(stream):
+                if self._interrupted:
+                    break
+                yield event_type, result
 
     async def _execute_tool_calls(self, tool_calls: list[dict[str, Any]]) -> None:
         """Execute tool calls from the model's response.
@@ -503,7 +641,17 @@ class AgentLoop:
                 return tc_id, name, json.dumps({"error": error_msg})
 
             try:
-                result = await self._tools.execute(name, arguments)
+                # When hydration is active, the tool may have been just
+                # hydrated by a search_tools call in this same batch of
+                # tool calls. Use the hydrator's force-lookup which
+                # bypasses the active-set check.
+                if self._hydrator is not None and self._hydrator.is_active:
+                    executor = self._hydrator.get_executor_force(name)
+                    if executor is None:
+                        raise KeyError(f"Unknown tool: {name}")
+                    result = await executor(**arguments)
+                else:
+                    result = await self._tools.execute(name, arguments)
                 return tc_id, name, result
             except KeyError:
                 error_msg = f"Unknown tool: {name}"
