@@ -1,4 +1,4 @@
-"""kz tool system — file operations, search, and shell execution."""
+"""kz tool system — file operations, search, shell execution, and tool hydration."""
 
 from __future__ import annotations
 
@@ -11,6 +11,11 @@ from kaizen_agents.delegate.tools.file_read import FileReadTool
 from kaizen_agents.delegate.tools.file_write import FileWriteTool
 from kaizen_agents.delegate.tools.glob_tool import GlobTool
 from kaizen_agents.delegate.tools.grep_tool import GrepTool
+from kaizen_agents.delegate.tools.hydrator import ToolHydrator
+from kaizen_agents.delegate.tools.search import (
+    SEARCH_TOOLS_SCHEMA,
+    create_search_tools_executor,
+)
 
 
 def create_default_tools(*, permission_gate: Any | None = None) -> ToolRegistry:
@@ -41,8 +46,11 @@ __all__ = [
     "FileWriteTool",
     "GlobTool",
     "GrepTool",
+    "SEARCH_TOOLS_SCHEMA",
     "Tool",
+    "ToolHydrator",
     "ToolRegistry",
     "ToolResult",
     "create_default_tools",
+    "create_search_tools_executor",
 ]
