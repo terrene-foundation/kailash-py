@@ -266,6 +266,9 @@ class RedisPoolManagerNode(AsyncNode):
                     )
 
                 try:
+                    from kailash.utils.validation import validate_redis_url
+
+                    validate_redis_url(redis_url)
                     pool = ConnectionPool.from_url(  # type: ignore[possibly-unbound]
                         redis_url,
                         db=database,

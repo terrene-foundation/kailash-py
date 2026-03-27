@@ -168,7 +168,11 @@ try:
         TokenType,
     )
 except ImportError:
-    pass  # OAuth requires aiohttp, jwt, cryptography — optional deps
+    import logging as _logging
+
+    _logging.getLogger(__name__).debug(
+        "OAuth module not available — install with: pip install kailash[server,trust-sso]"
+    )
 
 # Complete Protocol Implementation
 from .protocol import (
@@ -220,7 +224,11 @@ try:
         get_transport_manager,
     )
 except ImportError:
-    pass  # Transports require aiohttp, websockets — optional deps
+    import logging as _logging
+
+    _logging.getLogger(__name__).debug(
+        "Transport modules not available — install with: pip install kailash[server]"
+    )
 
 __all__ = [
     # Core MCP Components
