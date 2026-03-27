@@ -100,7 +100,7 @@ class WorkflowAPI:
                     for optimal Docker/FastAPI performance. Pass LocalRuntime() for
                     backward compatibility or CLI contexts.
         """
-        if isinstance(workflow, WorkflowBuilder):
+        if isinstance(workflow, WorkflowBuilder) or hasattr(workflow, "build"):
             self.workflow = workflow
             self.workflow_graph = workflow.build()
             self.workflow_id = getattr(workflow, "workflow_id", "unnamed")
@@ -108,8 +108,8 @@ class WorkflowAPI:
         else:  # Workflow instance
             self.workflow = workflow
             self.workflow_graph = workflow
-            self.workflow_id = workflow.workflow_id
-            self.version = workflow.version
+            self.workflow_id = getattr(workflow, "workflow_id", "unnamed")
+            self.version = getattr(workflow, "version", "1.0.0")
 
         # Use AsyncLocalRuntime by default for FastAPI/Docker deployment
         # Users can explicitly pass LocalRuntime() for backward compatibility

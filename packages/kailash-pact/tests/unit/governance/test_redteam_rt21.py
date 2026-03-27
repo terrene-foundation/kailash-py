@@ -47,6 +47,7 @@ from kailash.trust.pact.context import GovernanceContext
 from kailash.trust.pact.engine import GovernanceEngine
 from kailash.trust.pact.envelopes import (
     EffectiveEnvelopeSnapshot,
+    MonotonicTighteningError,
     RoleEnvelope,
     compute_effective_envelope_with_version,
 )
@@ -867,20 +868,21 @@ class TestMultiLevelVerify:
         """An action allowed at the leaf but blocked by an ancestor's envelope must be BLOCKED."""
         engine = _make_engine()
 
-        # VP Eng (D1-R1) blocks "deploy"
+        # VP Eng (D1-R1): allows "deploy" in allowed set but explicitly blocks it
         vp_env = RoleEnvelope(
             id="re-vp",
             defining_role_address="R1",  # Board sets VP envelope
             target_role_address="D1-R1",
             envelope=_make_envelope(
                 env_id="vp-envelope",
-                allowed_actions=["read", "write"],
+                allowed_actions=["read", "write", "deploy"],
                 blocked_actions=["deploy"],
             ),
         )
         engine.set_role_envelope(vp_env)
 
-        # Backend Lead (D1-R1-T1-R1) allows "deploy" -- but ancestor blocks it
+        # Backend Lead (D1-R1-T1-R1) allows "deploy" (subset of parent's allowed)
+        # but ancestor's blocked_actions should still block it
         lead_env = RoleEnvelope(
             id="re-lead",
             defining_role_address="D1-R1",
@@ -893,8 +895,7 @@ class TestMultiLevelVerify:
         engine.set_role_envelope(lead_env)
 
         verdict = engine.verify_action("D1-R1-T1-R1", "deploy")
-        # The effective envelope intersection already handles this case
-        # because intersect_envelopes unions blocked_actions.
+        # The effective envelope intersection unions blocked_actions from ancestors.
         # Multi-level verify provides an additional safety check.
         assert verdict.level == "blocked"
 
@@ -928,7 +929,7 @@ class TestMultiLevelVerify:
         assert verdict.level == "auto_approved"
 
     def test_ancestor_cost_limit_blocks_expensive_action(self) -> None:
-        """If ancestor has $100 limit but leaf has $1000, action at $500 must be BLOCKED."""
+        """Child with valid (tighter) cost limit blocks expensive actions."""
         engine = _make_engine()
 
         # VP Eng: max_spend = $100
@@ -944,8 +945,45 @@ class TestMultiLevelVerify:
         )
         engine.set_role_envelope(vp_env)
 
-        # Backend Lead: max_spend = $1000 (but this violates tightening,
-        # and the effective envelope will have min = $100)
+        # Backend Lead: max_spend = $50 (valid tightening: $50 <= $100)
+        lead_env = RoleEnvelope(
+            id="re-lead-tight",
+            defining_role_address="D1-R1",
+            target_role_address="D1-R1-T1-R1",
+            envelope=_make_envelope(
+                env_id="lead-tight",
+                max_spend=50.0,
+                allowed_actions=["read", "write", "compute"],
+            ),
+        )
+        engine.set_role_envelope(lead_env)
+
+        # $500 action exceeds the effective limit ($50)
+        verdict = engine.verify_action(
+            "D1-R1-T1-R1",
+            "compute",
+            {"cost": 500.0},
+        )
+        assert verdict.level == "blocked"
+        assert "exceeds financial limit" in verdict.reason.lower()
+
+    def test_tightening_rejects_child_exceeding_parent_cost(self) -> None:
+        """Setting a child envelope with max_spend > parent must raise MonotonicTighteningError."""
+        engine = _make_engine()
+
+        vp_env = RoleEnvelope(
+            id="re-vp-cheap2",
+            defining_role_address="R1",
+            target_role_address="D1-R1",
+            envelope=_make_envelope(
+                env_id="vp-cheap2",
+                max_spend=100.0,
+                allowed_actions=["read", "write", "compute"],
+            ),
+        )
+        engine.set_role_envelope(vp_env)
+
+        # Child tries max_spend = $1000 — must be rejected by monotonic tightening
         lead_env = RoleEnvelope(
             id="re-lead-expensive",
             defining_role_address="D1-R1",
@@ -956,16 +994,8 @@ class TestMultiLevelVerify:
                 allowed_actions=["read", "write", "compute"],
             ),
         )
-        engine.set_role_envelope(lead_env)
-
-        # $500 action: effective envelope from intersection has max_spend $100
-        verdict = engine.verify_action(
-            "D1-R1-T1-R1",
-            "compute",
-            {"cost": 500.0},
-        )
-        assert verdict.level == "blocked"
-        assert "exceeds financial limit" in verdict.reason.lower()
+        with pytest.raises(MonotonicTighteningError):
+            engine.set_role_envelope(lead_env)
 
 
 # ===========================================================================
