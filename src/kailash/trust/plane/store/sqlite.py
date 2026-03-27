@@ -32,7 +32,11 @@ from pathlib import Path
 from typing import Any
 
 from kailash.trust._locking import validate_id
-from kailash.trust.plane.delegation import Delegate, DelegateStatus, ReviewResolution
+from kailash.trust.plane.delegation import (
+    DelegationRecipient,
+    DelegateStatus,
+    ReviewResolution,
+)
 from kailash.trust.plane.exceptions import (
     RecordNotFoundError,
     SchemaMigrationError,
@@ -488,7 +492,7 @@ class SqliteTrustPlaneStore:
     # Delegate Records
     # ------------------------------------------------------------------
 
-    def store_delegate(self, delegate: Delegate) -> None:
+    def store_delegate(self, delegate: DelegationRecipient) -> None:
         """Persist a delegate record.
 
         Raises:
@@ -504,7 +508,7 @@ class SqliteTrustPlaneStore:
         )
         conn.commit()
 
-    def get_delegate(self, delegate_id: str) -> Delegate:
+    def get_delegate(self, delegate_id: str) -> DelegationRecipient:
         """Retrieve a delegate by ID.
 
         Raises:
@@ -519,11 +523,11 @@ class SqliteTrustPlaneStore:
         ).fetchone()
         if row is None:
             raise RecordNotFoundError("delegate", delegate_id)
-        return Delegate.from_dict(json.loads(row["data"]))
+        return DelegationRecipient.from_dict(json.loads(row["data"]))
 
     def list_delegates(
         self, active_only: bool = True, limit: int = 1000
-    ) -> list[Delegate]:
+    ) -> list[DelegationRecipient]:
         """List delegates, optionally filtered by active status.
 
         Args:
@@ -540,9 +544,9 @@ class SqliteTrustPlaneStore:
                 "ORDER BY delegate_id LIMIT ?",
                 (DelegateStatus.ACTIVE.value, limit),
             )
-            results: list[Delegate] = []
+            results: list[DelegationRecipient] = []
             for row in cursor.fetchall():
-                d = Delegate.from_dict(json.loads(row["data"]))
+                d = DelegationRecipient.from_dict(json.loads(row["data"]))
                 if d.is_active():
                     results.append(d)
             return results
@@ -552,10 +556,11 @@ class SqliteTrustPlaneStore:
                 (limit,),
             )
             return [
-                Delegate.from_dict(json.loads(row["data"])) for row in cursor.fetchall()
+                DelegationRecipient.from_dict(json.loads(row["data"]))
+                for row in cursor.fetchall()
             ]
 
-    def update_delegate(self, delegate: Delegate) -> None:
+    def update_delegate(self, delegate: DelegationRecipient) -> None:
         """Update an existing delegate record (e.g. after revocation).
 
         Raises:

@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 from typing import Protocol, runtime_checkable
 
-from kailash.trust.plane.delegation import Delegate, ReviewResolution
+from kailash.trust.plane.delegation import DelegationRecipient, ReviewResolution
 from kailash.trust.plane.holds import HoldRecord
 from kailash.trust.plane.models import DecisionRecord, MilestoneRecord, ProjectManifest
 
@@ -151,7 +151,7 @@ class TrustPlaneStore(Protocol):
 
     # --- Delegate Records ---
 
-    def store_delegate(self, delegate: Delegate) -> None:
+    def store_delegate(self, delegate: DelegationRecipient) -> None:
         """Persist a delegate record.
 
         Raises:
@@ -159,7 +159,7 @@ class TrustPlaneStore(Protocol):
         """
         ...
 
-    def get_delegate(self, delegate_id: str) -> Delegate:
+    def get_delegate(self, delegate_id: str) -> DelegationRecipient:
         """Retrieve a delegate by ID.
 
         Raises:
@@ -170,7 +170,7 @@ class TrustPlaneStore(Protocol):
 
     def list_delegates(
         self, active_only: bool = True, limit: int = 1000
-    ) -> list[Delegate]:
+    ) -> list[DelegationRecipient]:
         """List delegates, optionally filtered by active status.
 
         Args:
@@ -179,7 +179,7 @@ class TrustPlaneStore(Protocol):
         """
         ...
 
-    def update_delegate(self, delegate: Delegate) -> None:
+    def update_delegate(self, delegate: DelegationRecipient) -> None:
         """Update an existing delegate record (e.g. after revocation).
 
         Raises:
@@ -275,6 +275,8 @@ from kailash.trust.plane.store.sqlite import SqliteTrustPlaneStore  # noqa: E402
 
 # Conditional import — PostgreSQL backend requires psycopg3.
 try:
-    from kailash.trust.plane.store.postgres import PostgresTrustPlaneStore  # noqa: E402, F401
+    from kailash.trust.plane.store.postgres import (
+        PostgresTrustPlaneStore,
+    )  # noqa: E402, F401
 except ImportError:
     pass  # psycopg not installed — PostgresTrustPlaneStore unavailable

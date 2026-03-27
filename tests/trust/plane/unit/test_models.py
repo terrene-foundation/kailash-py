@@ -370,10 +370,10 @@ class TestFromDictValidation:
             )
 
     def test_delegate_missing_required_field(self):
-        from kailash.trust.plane.delegation import Delegate
+        from kailash.trust.plane.delegation import DelegationRecipient
 
         with pytest.raises(ValueError, match="missing required field 'delegate_id'"):
-            Delegate.from_dict(
+            DelegationRecipient.from_dict(
                 {
                     "name": "x",
                     "dimensions": [],
@@ -383,10 +383,10 @@ class TestFromDictValidation:
             )
 
     def test_delegate_negative_depth(self):
-        from kailash.trust.plane.delegation import Delegate
+        from kailash.trust.plane.delegation import DelegationRecipient
 
         with pytest.raises(ValueError, match="'depth' must be a non-negative integer"):
-            Delegate.from_dict(
+            DelegationRecipient.from_dict(
                 {
                     "delegate_id": "del-test",
                     "name": "x",
@@ -398,10 +398,10 @@ class TestFromDictValidation:
             )
 
     def test_delegate_non_integer_depth(self):
-        from kailash.trust.plane.delegation import Delegate
+        from kailash.trust.plane.delegation import DelegationRecipient
 
         with pytest.raises(ValueError, match="'depth' must be a non-negative integer"):
-            Delegate.from_dict(
+            DelegationRecipient.from_dict(
                 {
                     "delegate_id": "del-test",
                     "name": "x",

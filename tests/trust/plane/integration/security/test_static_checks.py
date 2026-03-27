@@ -189,13 +189,13 @@ class TestStaticFromDictValidation:
 
     def test_key_from_dict_methods_exist(self) -> None:
         """Key data classes must have from_dict() methods that validate."""
-        from kailash.trust.plane.delegation import Delegate
+        from kailash.trust.plane.delegation import DelegationRecipient
         from kailash.trust.plane.models import DecisionRecord, MilestoneRecord
         from kailash.trust.plane.rbac import RolePermission
         from kailash.trust.plane.shadow import ShadowSession, ShadowToolCall
 
         classes_with_from_dict = [
-            Delegate,
+            DelegationRecipient,
             DecisionRecord,
             MilestoneRecord,
             RolePermission,
@@ -225,13 +225,13 @@ class TestStaticFromDictValidation:
         SECURITY: An attacker sending {} should get a clear error, not
         an object with all-default values.
         """
-        from kailash.trust.plane.delegation import Delegate
+        from kailash.trust.plane.delegation import DelegationRecipient
         from kailash.trust.plane.models import DecisionRecord, MilestoneRecord
         from kailash.trust.plane.rbac import RolePermission
         from kailash.trust.plane.shadow import ShadowSession, ShadowToolCall
 
         classes_to_check = [
-            ("Delegate", Delegate),
+            ("DelegationRecipient", DelegationRecipient),
             ("DecisionRecord", DecisionRecord),
             ("MilestoneRecord", MilestoneRecord),
             ("RolePermission", RolePermission),
