@@ -75,13 +75,20 @@ class TestTracingLevel:
         with patch.dict(os.environ, {"KAILASH_TRACING_LEVEL": "turbo"}):
             assert _resolve_tracing_level() is TracingLevel.NONE
 
-    def test_resolve_unset_defaults_to_none(self) -> None:
-        from kailash.runtime.tracing import _resolve_tracing_level, TracingLevel
+    def test_resolve_unset_defaults_based_on_otel(self) -> None:
+        from kailash.runtime.tracing import (
+            _OTEL_AVAILABLE,
+            _resolve_tracing_level,
+            TracingLevel,
+        )
 
         env = os.environ.copy()
         env.pop("KAILASH_TRACING_LEVEL", None)
         with patch.dict(os.environ, env, clear=True):
-            assert _resolve_tracing_level() is TracingLevel.NONE
+            level = _resolve_tracing_level()
+            # Defaults to BASIC when OTel is available (backward compat), NONE otherwise
+            expected = TracingLevel.BASIC if _OTEL_AVAILABLE else TracingLevel.NONE
+            assert level is expected
 
 
 # ---------------------------------------------------------------------------
@@ -159,9 +166,7 @@ class TestWorkflowTracerWithOtel:
         from kailash.runtime.tracing import TracingLevel, WorkflowTracer
 
         tracer = WorkflowTracer(level=TracingLevel.FULL)
-        span = tracer.start_db_span(
-            "SELECT", statement="SELECT 1", db_system="sqlite"
-        )
+        span = tracer.start_db_span("SELECT", statement="SELECT 1", db_system="sqlite")
         assert span is not None
         tracer.end_span(span)
 
@@ -185,9 +190,7 @@ class TestWorkflowTracerWithOtel:
         from kailash.runtime.tracing import TracingLevel, WorkflowTracer
 
         tracer = WorkflowTracer(level=TracingLevel.BASIC)
-        span = tracer.start_workflow_span(
-            "wf", "tenant_test", tenant_id="tenant-42"
-        )
+        span = tracer.start_workflow_span("wf", "tenant_test", tenant_id="tenant-42")
         assert span is not None
         tracer.end_span(span)
 

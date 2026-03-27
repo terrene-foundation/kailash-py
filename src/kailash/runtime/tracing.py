@@ -84,13 +84,12 @@ def _resolve_tracing_level() -> TracingLevel:
 
     Falls back to ``NONE`` if the variable is unset or has an unrecognised value.
     """
-    raw = os.environ.get("KAILASH_TRACING_LEVEL", "none").strip().lower()
+    default = "basic" if _OTEL_AVAILABLE else "none"
+    raw = os.environ.get("KAILASH_TRACING_LEVEL", default).strip().lower()
     for level in TracingLevel:
         if level.value == raw:
             return level
-    logger.warning(
-        "Unrecognised KAILASH_TRACING_LEVEL=%r; defaulting to NONE", raw
-    )
+    logger.warning("Unrecognised KAILASH_TRACING_LEVEL=%r; defaulting to NONE", raw)
     return TracingLevel.NONE
 
 
@@ -113,7 +112,9 @@ class WorkflowTracer:
         level: Optional[TracingLevel] = None,
     ) -> None:
         self._lock = threading.Lock()
-        self._level: TracingLevel = level if level is not None else _resolve_tracing_level()
+        self._level: TracingLevel = (
+            level if level is not None else _resolve_tracing_level()
+        )
         self._service_name = service_name
         self._tracer: Any = None
 
