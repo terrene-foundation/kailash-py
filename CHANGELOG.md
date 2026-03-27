@@ -15,6 +15,45 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [2.2.0] - 2026-03-28
+
+**Multi-Package Release** — kailash 2.2.0, kailash-nexus 1.6.0, kaizen-agents 0.4.0, kailash-kaizen 2.3.1, kailash-dataflow 1.2.1, kailash-pact 0.4.1
+
+#### Added
+
+- **OpenTelemetry Progressive Tracing** (S5): `TracingLevel` enum (NONE/BASIC/DETAILED/FULL), node-level instrumentation, DataFlow/DB instrumentation, Prometheus metrics bridge
+- **Nexus K8s Integration** (S4): K8s probe endpoints (`/healthz`, `/readyz`, `/startup`), OpenAPI 3.0.3 generation, security headers middleware, CSRF middleware, middleware presets (Lightweight/Standard/SaaS/Enterprise)
+- **Delegate Facade** (S9): Unified `Delegate` class with typed events (`TextDelta`, `ToolCallStart`, `ToolCallEnd`, `TurnComplete`), progressive disclosure API, budget tracking with NaN/Inf defense
+- **Multi-Provider LLM Adapters** (S8): `StreamingChatAdapter` protocol with OpenAI, Anthropic, Google (Gemini), and Ollama adapters; auto-detection from model name
+- **Tool Search/Hydration** (S7): BM25 tool search for large tool sets (30+), automatic hydration with `search_tools` meta-tool
+- **Incremental Token Streaming** (S6): `AgentLoop.run_turn()` yields text deltas as they arrive instead of buffering
+
+#### Changed
+
+- Trust-plane `Delegate` renamed to `DelegationRecipient` with backward-compatible alias (S3e-004, #97)
+- `TracingLevel` defaults to BASIC when OpenTelemetry is installed (backward compatible)
+- CI pipeline: per-test timeout (30s), Python 3.13 continue-on-error, thread-heavy tests marked slow
+
+#### Fixed
+
+- 52-file security hardening: bare excepts replaced with specific types, CORS deny-by-default, bind 127.0.0.1, error message disclosure
+- PACT monotonic tightening test compliance
+- Pickle RCE removal from CacheNode and persistent tiers
+- Redis URL SSRF validation
+- eval/exec hardening with bounded power operator
+- 21 missing dependency declarations
+- CI test isolation (test pollution, thread leaks, module identity)
+
+#### Security
+
+- All 42 bare `except:` replaced with specific exception types (E722 re-enabled)
+- CORS default changed from `["*"]` to `[]` (deny-by-default)
+- Server bind default changed from `0.0.0.0` to `127.0.0.1`
+- Error responses no longer leak internal details via `str(e)`
+- Timing-safe HMAC comparison enforced across trust plane
+
+---
+
 ### [2.1.0] - 2026-03-26
 
 **Multi-Package Release** — kailash 2.1.0, kailash-dataflow 1.2.0, kailash-nexus 1.5.0, kailash-kaizen 2.3.0, kaizen-agents 0.3.0

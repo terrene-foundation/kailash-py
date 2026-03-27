@@ -35,7 +35,13 @@ from .configuration import (
 )
 from .core.config import DataFlowConfig, LoggingConfig, mask_sensitive
 from .core.engine import DataFlow
-from .engine import DataFlowEngine, HealthStatus, QueryEngine, ValidationLayer, DataClassificationPolicy
+from .engine import (
+    DataFlowEngine,
+    HealthStatus,
+    QueryEngine,
+    ValidationLayer,
+    DataClassificationPolicy,
+)
 from .core.logging_config import DEFAULT_SENSITIVE_PATTERNS
 from .core.logging_config import LoggingConfig as AdvancedLoggingConfig
 from .core.logging_config import SensitiveMaskingFilter, mask_sensitive_values
@@ -44,6 +50,7 @@ from .core.models import DataFlowModel
 from .core.tenant_context import TenantContextSwitch, TenantInfo, get_current_tenant_id
 from .core.type_processor import TypeAwareFieldProcessor
 from .core.workflow_binding import DataFlowWorkflowBinder
+
 # Field-level validation (issue #82)
 from .validation import (
     FieldValidationError,
@@ -83,7 +90,7 @@ from .utils.suppress_warnings import (
 suppress_core_sdk_warnings()
 
 # Legacy compatibility - maintain the original imports
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 
 __all__ = [
     "DataFlow",

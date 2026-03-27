@@ -31,7 +31,7 @@ from .openapi import OpenApiGenerator, OpenApiInfo
 from .presets import PRESETS, NexusConfig, PresetConfig, apply_preset, get_preset
 from .probes import ProbeManager, ProbeResponse, ProbeState
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 __all__ = [
     # Core
     "Nexus",
