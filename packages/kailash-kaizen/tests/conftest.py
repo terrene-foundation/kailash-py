@@ -14,18 +14,24 @@ import os
 import sys
 
 # Load .env before checking USE_REAL_PROVIDERS
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
 
-load_dotenv()
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed — env vars from shell
 
 # Check if we should use real providers (for E2E/integration tests)
 use_real_providers = os.getenv("USE_REAL_PROVIDERS", "").lower() == "true"
 
 if not use_real_providers:
-    # Only patch for unit tests
+    # Only patch for unit tests — try kaizen.nodes.ai first, fall back to kailash.nodes.ai
     try:
-        # Import and patch BEFORE anything else
-        import kailash.nodes.ai.ai_providers as ai_providers_module
+        try:
+            import kaizen.nodes.ai.ai_providers as ai_providers_module
+        except ImportError:
+            import kailash.nodes.ai.ai_providers as ai_providers_module
+
         from tests.utils.kaizen_mock_provider import KaizenMockProvider
 
         # Store original for potential restore
@@ -37,27 +43,8 @@ if not use_real_providers:
         # Also patch the class itself for direct imports
         ai_providers_module.MockProvider = KaizenMockProvider
 
-        # Update in sys.modules cache
-        if "kailash.nodes.ai.ai_providers" in sys.modules:
-            sys.modules["kailash.nodes.ai.ai_providers"].PROVIDERS[
-                "mock"
-            ] = KaizenMockProvider
-            sys.modules["kailash.nodes.ai.ai_providers"].MockProvider = (
-                KaizenMockProvider
-            )
-
-        print(
-            "✅ Patched Core SDK PROVIDERS['mock'] with KaizenMockProvider at module level"
-        )
-
-        # NOTE: Previously needed to monkey-patch LLMAgentNode._mock_llm_response due to
-        # hardcoded path in Core SDK that bypassed the provider registry.
-        # This has been FIXED in Core SDK (llm_agent.py lines 665 and 724), so the
-        # registry patching above is now sufficient.
-        # All providers (including "mock") now use the provider registry consistently.
-
-    except Exception as e:
-        print(f"⚠️  Failed to patch MockProvider at module level: {e}")
+    except (ImportError, AttributeError) as e:
+        print(f"MockProvider check failed: {e}")
         import traceback
 
         traceback.print_exc()
@@ -746,7 +733,10 @@ def _patch_core_sdk_mock_provider():
     signature-based JSON formats and returns appropriate structured data.
     """
     try:
-        from kailash.nodes.ai import MockProvider
+        try:
+            from kaizen.nodes.ai import MockProvider
+        except ImportError:
+            from kailash.nodes.ai import MockProvider
 
         # Store original chat method
 
@@ -795,21 +785,16 @@ def pytest_configure(config):
     else:
         # Register Kaizen mock provider BEFORE any tests import it (unit tests only)
         try:
-            import kailash.nodes.ai as ai_module
+            try:
+                import kaizen.nodes.ai as ai_module
+            except ImportError:
+                import kailash.nodes.ai as ai_module
             from tests.utils.kaizen_mock_provider import KaizenMockProvider
 
-            # Directly replace MockProvider in the kailash.nodes.ai module
             if hasattr(ai_module, "MockProvider"):
                 ai_module.MockProvider = KaizenMockProvider
-                print("✅ Registered Kaizen MockProvider in pytest_configure")
-            else:
-                print("⚠️  MockProvider not found in kailash.nodes.ai")
-
-        except Exception as e:
-            print(f"⚠️  Could not register Kaizen mock provider: {e}")
-            import traceback
-
-            traceback.print_exc()
+        except (ImportError, AttributeError):
+            pass  # AI provider modules not available
 
     # Configure markers
     config.addinivalue_line(

@@ -69,17 +69,17 @@
           - src/**/*
           - "!tests/**/*"
   - head-branch:
-      - "feat/**"
-      - "feature/**"
-      - "enhance/**"
+      - "^feat/"
+      - "^feature/"
+      - "^enhance/"
 
 "type/bug":
   - head-branch:
-      - "fix/**"
-      - "bugfix/**"
-      - "hotfix/**"
+      - "^fix/"
+      - "^bugfix/"
+      - "^hotfix/"
 
 "type/refactor":
   - head-branch:
-      - "refactor/**"
-      - "cleanup/**"
+      - "^refactor/"
+      - "^cleanup/"
