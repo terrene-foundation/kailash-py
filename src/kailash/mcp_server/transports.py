@@ -63,8 +63,15 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from urllib.parse import urljoin, urlparse
 
-import aiohttp
-import websockets
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None  # type: ignore[assignment]  # Optional: pip install kailash[server]
+
+try:
+    import websockets
+except ImportError:
+    websockets = None  # type: ignore[assignment]  # Optional: pip install kailash[server]
 
 from .auth import AuthProvider
 from .errors import MCPError, MCPErrorCode, TransportError

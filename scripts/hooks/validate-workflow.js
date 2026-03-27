@@ -84,11 +84,20 @@ function validateFile(data) {
     };
   }
 
+  // For Edit operations (old_string → new_string), only validate the NEW
+  // content being introduced — pre-existing violations in untouched lines
+  // must not block unrelated edits.  Write operations still check the full
+  // file because the entire content is new.
+  const isEditOp = Boolean(data.tool_input?.old_string);
   let content;
-  try {
-    content = fs.readFileSync(filePath, "utf8");
-  } catch {
-    return { continue: true, exitCode: 0, messages: ["Could not read file"] };
+  if (isEditOp && data.tool_input?.new_string) {
+    content = data.tool_input.new_string;
+  } else {
+    try {
+      content = fs.readFileSync(filePath, "utf8");
+    } catch {
+      return { continue: true, exitCode: 0, messages: ["Could not read file"] };
+    }
   }
 
   // Load .env once for key-validation
