@@ -168,7 +168,7 @@ class DashboardAPIServer:
         # Add CORS middleware
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],  # Configure appropriately for production
+            allow_origins=[],
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
@@ -580,7 +580,7 @@ class DashboardAPIServer:
                 self.logger.error(f"Metrics broadcast error: {e}")
                 await asyncio.sleep(1.0)
 
-    def start_server(self, host: str = "0.0.0.0", port: int = 8000, **kwargs):
+    def start_server(self, host: str = "127.0.0.1", port: int = 8000, **kwargs):
         """Start the API server.
 
         Args:

@@ -309,7 +309,7 @@ class DockerIntegration:
             try:
                 swarm_info = await asyncio.to_thread(self.docker_client.swarm.attrs)
                 self.swarm_enabled = True
-            except:
+            except Exception:
                 self.swarm_enabled = False
 
         except Exception as e:

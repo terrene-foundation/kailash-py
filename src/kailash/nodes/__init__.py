@@ -19,7 +19,7 @@ _LOADED_MODULES: Dict[str, Optional[Any]] = {}
 
 # Define available node categories for lazy loading
 _NODE_CATEGORIES = [
-    "ai",
+    "admin",
     "alerts",
     "api",
     "auth",
@@ -32,8 +32,8 @@ _NODE_CATEGORIES = [
     "logic",
     "mixins",
     "monitoring",
-    "rag",
     "security",
+    "system",
     "testing",
     "transaction",
     "transform",

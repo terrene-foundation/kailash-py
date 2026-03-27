@@ -736,7 +736,7 @@ class EnterpriseAuditLogNode(Node):
                         log["timestamp"].replace("Z", "+00:00")
                     ).hour
                     stats["hourly_distribution"][hour] += 1
-                except:
+                except (ValueError, TypeError, KeyError):
                     pass
 
         return stats

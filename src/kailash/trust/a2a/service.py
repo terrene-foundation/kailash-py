@@ -35,7 +35,11 @@ from fastapi.responses import JSONResponse
 
 from kailash.trust.a2a.agent_card import AgentCardCache, AgentCardGenerator
 from kailash.trust.a2a.auth import A2AAuthenticator, extract_token_from_header
-from kailash.trust.a2a.exceptions import A2AError, AuthenticationError, JsonRpcParseError
+from kailash.trust.a2a.exceptions import (
+    A2AError,
+    AuthenticationError,
+    JsonRpcParseError,
+)
 from kailash.trust.a2a.jsonrpc import A2AMethodHandlers, JsonRpcHandler
 from kailash.trust.a2a.models import AgentCard, JsonRpcRequest, JsonRpcResponse
 from kailash.trust.operations import TrustOperations
@@ -98,7 +102,7 @@ class A2AService:
         self._capabilities = capabilities or []
         self._description = description
         self._base_url = base_url
-        self._cors_origins = cors_origins or ["*"]
+        self._cors_origins = cors_origins or []
 
         # Initialize components
         self._card_generator = AgentCardGenerator(
@@ -171,7 +175,9 @@ class A2AService:
                 "status": "healthy",
                 "agent_id": self._agent_id,
                 "version": self._agent_version,
-                "started_at": (self._started_at.isoformat() if self._started_at else None),
+                "started_at": (
+                    self._started_at.isoformat() if self._started_at else None
+                ),
             }
 
         @app.get("/.well-known/agent.json")
@@ -239,7 +245,9 @@ class A2AService:
 
             except JsonRpcParseError as e:
                 return JSONResponse(
-                    content=JsonRpcResponse.create_error(None, e.code, e.message, e.data).to_dict(),
+                    content=JsonRpcResponse.create_error(
+                        None, e.code, e.message, e.data
+                    ).to_dict(),
                     status_code=400,
                 )
 
@@ -264,7 +272,9 @@ class A2AService:
 
             except JsonRpcParseError as e:
                 return JSONResponse(
-                    content=JsonRpcResponse.create_error(None, e.code, e.message, e.data).to_dict(),
+                    content=JsonRpcResponse.create_error(
+                        None, e.code, e.message, e.data
+                    ).to_dict(),
                     status_code=400,
                 )
 

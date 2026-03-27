@@ -244,7 +244,7 @@ gc.collect()
 try:
     # Intentional error that gets caught
     x = 1 / 0
-except:
+except Exception:
     result = "error_handled"
 """,
                 "output_key": "error_result",

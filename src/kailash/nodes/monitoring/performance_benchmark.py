@@ -623,7 +623,7 @@ class PerformanceBenchmarkNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             for _ in range(warmup_iterations):
                 try:
                     operation_func()
-                except:
+                except Exception:
                     pass  # Ignore warmup errors
 
             # Actual benchmark iterations
@@ -972,14 +972,14 @@ class PerformanceBenchmarkNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
                 disk_counters = psutil.disk_io_counters()  # type: ignore[reportOptionalMemberAccess]
                 disk_read_bytes = disk_counters.read_bytes if disk_counters else 0
                 disk_write_bytes = disk_counters.write_bytes if disk_counters else 0
-            except:
+            except Exception:
                 disk_read_bytes = disk_write_bytes = 0
 
             try:
                 net_counters = psutil.net_io_counters()  # type: ignore[reportOptionalMemberAccess]
                 net_sent_bytes = net_counters.bytes_sent if net_counters else 0
                 net_recv_bytes = net_counters.bytes_recv if net_counters else 0
-            except:
+            except Exception:
                 net_sent_bytes = net_recv_bytes = 0
 
             # Format for test expectations
@@ -2598,7 +2598,7 @@ class SystemResourceMonitor:
                 ),
                 "timestamp": datetime.now(UTC).isoformat(),
             }
-        except:
+        except Exception:
             return {
                 "cpu_percent": 0,
                 "memory_percent": 0,

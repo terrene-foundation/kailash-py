@@ -143,7 +143,7 @@ class QueryPipelineOptimizer:
                 table1 = q1_upper.split("INSERT INTO")[1].split()[0]
                 table2 = q2_upper.split("INSERT INTO")[1].split()[0]
                 return table1 == table2
-            except:
+            except (IndexError, AttributeError):
                 return False
 
         return False
@@ -552,7 +552,7 @@ class QueryPipelineNode(Node):
                 # Rollback on any error
                 try:
                     await connection.execute("ROLLBACK")
-                except:
+                except Exception:
                     pass
 
                 logger.error(f"Transaction failed: {e}")

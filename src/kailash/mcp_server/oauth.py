@@ -1120,7 +1120,7 @@ class AuthorizationServer:
                     ),
                     scopes=token_data.get("scopes"),
                 )
-        except:
+        except Exception:
             # Fall back to token store
             refresh_token_obj = await self.token_store.get_refresh_token(refresh_token)
             if not refresh_token_obj:

@@ -322,7 +322,7 @@ class TestAgentUIMiddlewareRuntimeInjection:
         mw = self._make_middleware()
         try:
             assert mw.runtime is not None
-            assert isinstance(mw.runtime, LocalRuntime)
+            assert type(mw.runtime).__name__ == "LocalRuntime"
             assert mw._owns_runtime is True
         finally:
             mw.close()

@@ -12,7 +12,6 @@ import pytest_asyncio
 import redis
 
 # Import core nodes to ensure they're registered
-import kailash.nodes.ai
 import kailash.nodes.code
 import kailash.nodes.data
 import kailash.nodes.logic

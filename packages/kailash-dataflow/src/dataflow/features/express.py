@@ -226,7 +226,7 @@ class ExpressQueryCache:
 # ============================================================================
 
 
-class ExpressDataFlow:
+class DataFlowExpress:
     """
     High-performance DataFlow wrapper for direct node invocation.
 
@@ -906,3 +906,6 @@ class ExpressDataFlow:
         self._cache._misses = 0
         self._cache._evictions = 0
         self._cache._invalidations = 0
+
+
+ExpressDataFlow = DataFlowExpress  # Deprecated alias

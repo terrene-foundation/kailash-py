@@ -68,7 +68,7 @@ class APIChannel(Channel):
         )
 
         # CORS configuration
-        cors_origins = self.config.extra_config.get("cors_origins", ["*"])
+        cors_origins = self.config.extra_config.get("cors_origins", [])
 
         return EnterpriseWorkflowServer(
             title=server_title,

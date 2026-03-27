@@ -36,6 +36,8 @@ from tests.performance.load_test_framework import (
 )
 
 
+@pytest.mark.performance
+@pytest.mark.requires_docker
 class TestBaselinePerformanceScenarios:
     """
     Tier 2 Integration Tests - Real Infrastructure Required
@@ -136,6 +138,9 @@ class TestBaselinePerformanceScenarios:
         assert metrics.resource_exhaustion_errors < 50  # Limited resource errors
 
 
+@pytest.mark.performance
+@pytest.mark.requires_docker
+@pytest.mark.requires_postgres
 class TestDatabaseStressScenarios:
     """
     Tier 2 Integration Tests - Database Connection Pool Stress Testing
@@ -227,6 +232,8 @@ class TestDatabaseStressScenarios:
         assert resource_metrics.get("peak_redis_connections", 0) >= 0
 
 
+@pytest.mark.performance
+@pytest.mark.requires_docker
 class TestResourcePressureScenarios:
     """
     Tier 2 Integration Tests - Resource Pressure and Exhaustion Testing
@@ -304,6 +311,8 @@ class TestResourcePressureScenarios:
         assert metrics.peak_cpu_percent > 60  # High CPU usage
 
 
+@pytest.mark.performance
+@pytest.mark.requires_docker
 class TestFailureRecoveryScenarios:
     """
     Tier 2 Integration Tests - Failure Injection and Recovery Testing
@@ -380,6 +389,8 @@ class TestFailureRecoveryScenarios:
         assert metrics.peak_memory_mb < 800  # Should stay within reasonable bounds
 
 
+@pytest.mark.performance
+@pytest.mark.requires_docker
 class TestPerformanceRegressionDetection:
     """
     Tier 2 Integration Tests - Performance Regression Detection and Reporting
@@ -471,6 +482,8 @@ class TestPerformanceRegressionDetection:
                 os.unlink(report_path)
 
 
+@pytest.mark.performance
+@pytest.mark.requires_docker
 class TestEnduranceScenarios:
     """
     Tier 3 End-to-End Tests - Long-running Stability Testing
@@ -542,6 +555,7 @@ class TestEnduranceScenarios:
         assert memory_growth < 0.5  # Less than 50% memory growth (no major leaks)
 
 
+@pytest.mark.performance
 class TestIntegrationWithCICD:
     """
     Tier 2 Integration Tests - CI/CD Integration Testing

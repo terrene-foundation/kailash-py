@@ -877,7 +877,7 @@ class MCPClient:
             try:
                 if hasattr(session, "close"):
                     await session.close()
-            except:
+            except Exception:
                 pass
         self._sessions.clear()
         self.connected = False

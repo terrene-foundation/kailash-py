@@ -590,7 +590,7 @@ class ThreatDetectionNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
                     if time_key not in time_patterns:
                         time_patterns[time_key] = 0
                     time_patterns[time_key] += 1
-                except:
+                except (ValueError, TypeError, KeyError):
                     pass
 
         # Detect anomalies

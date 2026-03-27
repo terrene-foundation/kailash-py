@@ -1127,7 +1127,7 @@ class DataRetentionPolicyNode(SecurityMixin, PerformanceMixin, LoggingMixin, Nod
         if isinstance(created_str, str):
             try:
                 created_at = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
-            except:
+            except (ValueError, TypeError):
                 created_at = datetime.now(UTC) - timedelta(
                     days=365
                 )  # Default to 1 year ago
@@ -1144,7 +1144,7 @@ class DataRetentionPolicyNode(SecurityMixin, PerformanceMixin, LoggingMixin, Nod
                 last_accessed = datetime.fromisoformat(
                     last_accessed_str.replace("Z", "+00:00")
                 )
-            except:
+            except (ValueError, TypeError):
                 pass
 
         # Parse size
@@ -1156,7 +1156,7 @@ class DataRetentionPolicyNode(SecurityMixin, PerformanceMixin, LoggingMixin, Nod
         classification_str = record_data.get("classification", "internal")
         try:
             classification = DataClassification(classification_str)
-        except:
+        except (ValueError, KeyError):
             classification = DataClassification.INTERNAL
 
         return DataRecord(
@@ -1862,7 +1862,7 @@ class DataRetentionPolicyNode(SecurityMixin, PerformanceMixin, LoggingMixin, Nod
                     self._test_hooks_registered = frame.f_locals["hooks_registered"]
                     break
                 frame = frame.f_back
-        except:
+        except Exception:
             pass
 
     def _matches_custom_rule_conditions(

@@ -380,8 +380,11 @@ class WorkflowAPIGateway:
                         result = await result
                     return {"success": True, "result": result}
                 except Exception as exc:
+                    logger.error(
+                        f"MCP tool '{tool_name}' on server '{server_name}' failed: {exc}"
+                    )
                     return Response(
-                        content=f'{{"error": "{exc}"}}',
+                        content='{"error": "Tool execution failed"}',
                         status_code=500,
                         media_type="application/json",
                     )
@@ -512,16 +515,29 @@ class WorkflowAPIGateway:
                     content=body,
                     params=dict(request.query_params),
                 )
+                _ALLOWED_RESPONSE_HEADERS = {
+                    "content-type",
+                    "content-length",
+                    "content-encoding",
+                    "cache-control",
+                    "etag",
+                    "last-modified",
+                }
+                filtered_headers = {
+                    k: v
+                    for k, v in resp.headers.items()
+                    if k.lower() in _ALLOWED_RESPONSE_HEADERS
+                }
                 return Response(
                     content=resp.content,
                     status_code=resp.status_code,
-                    headers=dict(resp.headers),
+                    headers=filtered_headers,
                     media_type=resp.headers.get("content-type"),
                 )
             except httpx.RequestError as exc:
                 logger.error(f"Proxy request to {target_url} failed: {exc}")
                 return Response(
-                    content=f'{{"error": "Backend unreachable: {exc}"}}',
+                    content='{"error": "Backend unreachable"}',
                     status_code=502,
                     media_type="application/json",
                 )
@@ -577,7 +593,7 @@ class WorkflowAPIGateway:
         return base_endpoints
 
     def run(
-        self, host: str = "0.0.0.0", port: int = 8000, reload: bool = False, **kwargs
+        self, host: str = "127.0.0.1", port: int = 8000, reload: bool = False, **kwargs
     ):
         """Run the gateway server.
 

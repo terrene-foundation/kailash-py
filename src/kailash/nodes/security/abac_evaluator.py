@@ -132,7 +132,7 @@ class ABACOperators:
             start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
             end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
             return start <= current <= end
-        except:
+        except (ValueError, TypeError):
             return False
 
     @staticmethod
@@ -142,7 +142,7 @@ class ABACOperators:
             d1 = datetime.fromisoformat(date1.replace("Z", "+00:00"))
             d2 = datetime.fromisoformat(date2.replace("Z", "+00:00"))
             return d1 > d2
-        except:
+        except (ValueError, TypeError):
             return False
 
     @staticmethod
@@ -152,7 +152,7 @@ class ABACOperators:
             d1 = datetime.fromisoformat(date1.replace("Z", "+00:00"))
             d2 = datetime.fromisoformat(date2.replace("Z", "+00:00"))
             return d1 < d2
-        except:
+        except (ValueError, TypeError):
             return False
 
 

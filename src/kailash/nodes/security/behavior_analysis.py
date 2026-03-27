@@ -1083,7 +1083,7 @@ This is an automated security alert from the Behavior Analysis System.
                         activity["timestamp"].replace("Z", "+00:00")
                     )
                     sorted_activity.append((timestamp, activity))
-            except:
+            except (ValueError, TypeError, KeyError):
                 continue
 
         sorted_activity.sort(key=lambda x: x[0])
@@ -1513,7 +1513,7 @@ This is an automated security alert from the Behavior Analysis System.
                     # Keep only recent login times
                     if len(profile.login_times) > 1000:
                         profile.login_times = profile.login_times[-1000:]
-                except:
+                except (ValueError, TypeError):
                     pass
 
             # Update session durations
@@ -1532,7 +1532,7 @@ This is an automated security alert from the Behavior Analysis System.
                     profile.avg_session_duration = statistics.mean(
                         profile.session_durations
                     )
-                except:
+                except (ValueError, TypeError):
                     pass
 
             # Update locations
@@ -1565,7 +1565,7 @@ This is an automated security alert from the Behavior Analysis System.
                         profile.avg_data_volume_mb = (
                             profile.avg_data_volume_mb * 0.95 + volume * 0.05
                         )
-                except:
+                except (ValueError, TypeError):
                     pass
 
             # Update IP addresses
@@ -1833,7 +1833,7 @@ This is an automated security alert from the Behavior Analysis System.
                     if hour not in nearby_hours:
                         risk_score += 0.3
                         anomaly_factors.append("unusual_time")
-            except:
+            except (ValueError, TypeError, KeyError):
                 pass
 
             # Check for high data volume
@@ -2019,7 +2019,7 @@ This is an automated security alert from the Behavior Analysis System.
                     )
                     key = (timestamp.weekday(), timestamp.hour)
                     temporal_patterns[key] += 1
-                except:
+                except (ValueError, TypeError, KeyError):
                     continue
 
             # Find recurring patterns

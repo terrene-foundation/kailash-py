@@ -106,10 +106,9 @@ jobs:
           .venv/bin/python -m pytest \
             tests/unit/ \
             tests/trust/plane/unit/ \
-            tests/trust/pact/unit/ \
             tests/security/ \
             -m 'not (slow or integration or e2e or performance or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' \
-            --maxfail=10 -q -p no:xdist
+            --maxfail=10 -q -p no:xdist --timeout=60
 
   test-pact:
     name: Test PACT (Python 3.11)

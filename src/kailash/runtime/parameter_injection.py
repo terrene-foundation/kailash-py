@@ -407,7 +407,7 @@ class EnterpriseNodeFactory:
                     try:
                         temp_node = self._node_class()
                         return temp_node.get_parameters()
-                    except:
+                    except Exception:
                         return {}
 
             def run(self, **run_kwargs):

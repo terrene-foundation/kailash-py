@@ -224,8 +224,8 @@ class TestConnectionValidation:
         class TypeConsumerNode(Node):
             def get_parameters(self):
                 return {
-                    "number": NodeParameter(type=int, required=True),
-                    "flag": NodeParameter(type=bool, required=True),
+                    "number": NodeParameter(name="number", type=int, required=True),
+                    "flag": NodeParameter(name="flag", type=bool, required=True),
                 }
 
             def run(self, **kwargs):
@@ -283,7 +283,9 @@ class TestConnectionValidation:
 
         class NestedConsumerNode(Node):
             def get_parameters(self):
-                return {"database": NodeParameter(type=dict, required=True)}
+                return {
+                    "database": NodeParameter(name="database", type=dict, required=True)
+                }
 
             def run(self, **kwargs):
                 db_config = kwargs["database"]

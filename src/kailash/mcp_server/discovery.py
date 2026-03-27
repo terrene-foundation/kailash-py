@@ -1128,7 +1128,7 @@ class HealthChecker:
                                     "status": "healthy",
                                     "response_time": response_time,
                                 }
-                    except:
+                    except Exception:
                         pass
 
                     # Fallback to main endpoint
@@ -1145,7 +1145,7 @@ class HealthChecker:
                                     "status": "unhealthy",
                                     "response_time": response_time,
                                 }
-                    except:
+                    except Exception:
                         return {"status": "unhealthy", "response_time": None}
 
             elif server.transport == "stdio":

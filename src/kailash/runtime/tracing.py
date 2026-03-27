@@ -74,24 +74,29 @@ class WorkflowTracer:
         self,
         workflow_id: str,
         workflow_name: str,
+        run_id: str = "",
     ) -> Optional[Any]:
         """Start a span for the entire workflow execution.
 
         Args:
             workflow_id: Unique identifier for this workflow run.
             workflow_name: Human-readable workflow name.
+            run_id: Runtime-assigned execution run ID.
 
         Returns:
             An OpenTelemetry ``Span`` if tracing is enabled, else ``None``.
         """
         if not self._enabled or self._tracer is None:
             return None
+        attrs = {
+            "workflow.id": workflow_id,
+            "workflow.name": workflow_name,
+        }
+        if run_id:
+            attrs["workflow.run_id"] = run_id
         span = self._tracer.start_span(
             f"workflow.{workflow_name}",
-            attributes={
-                "workflow.id": workflow_id,
-                "workflow.name": workflow_name,
-            },
+            attributes=attrs,
         )
         return span
 

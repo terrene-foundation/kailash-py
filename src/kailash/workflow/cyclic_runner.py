@@ -253,7 +253,7 @@ class CyclicWorkflowExecutor:
                 if source_node and source_node.__class__.__name__ in ["SwitchNode"]:
                     has_conditional_inputs = True
                     break
-            except:
+            except Exception:
                 continue
 
         # If no conditional inputs, don't skip

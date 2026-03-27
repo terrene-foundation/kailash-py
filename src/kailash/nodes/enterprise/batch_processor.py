@@ -455,7 +455,7 @@ class BatchProcessorNode(Node):
                                     callback_func(progress_info)
                         except (ImportError, AttributeError):
                             pass
-            except:
+            except Exception:
                 pass  # Ignore callback errors
 
         return progress_info

@@ -731,7 +731,7 @@ class EnterpriseConnectionPool:
                 return self._pool._size  # type: ignore[union-attr]
             else:
                 return 0
-        except:
+        except Exception:
             return 0
 
     async def _health_check_loop(self) -> None:
@@ -4106,7 +4106,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 if result_format == "dataframe":
                     try:
                         row_count = len(formatted_data)
-                    except:
+                    except Exception:
                         # If pandas isn't available, formatted_data is still a list
                         row_count = (
                             len(result)

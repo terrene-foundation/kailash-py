@@ -308,7 +308,7 @@ class CheckpointManager:
             # Try to decompress first
             decompressed = gzip.decompress(data)
             data = decompressed
-        except:
+        except (OSError, EOFError):
             # Not compressed or decompression failed
             pass
 
