@@ -259,7 +259,10 @@ class TestConnectionMappingAsyncLocalRuntime:
 
         # Execute workflow
         runtime = AsyncLocalRuntime()
-        results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
+        try:
+            results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
+        finally:
+            runtime.close()
 
         # Verify result mapping
         assert "target" in results
@@ -293,7 +296,10 @@ class TestConnectionMappingAsyncLocalRuntime:
 
         # Execute workflow
         runtime = AsyncLocalRuntime()
-        results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
+        try:
+            results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
+        finally:
+            runtime.close()
 
         # Verify nested path navigation
         assert "target" in results
@@ -325,7 +331,10 @@ class TestConnectionMappingAsyncLocalRuntime:
 
         # Execute workflow
         runtime = AsyncLocalRuntime()
-        results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
+        try:
+            results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
+        finally:
+            runtime.close()
 
         # Verify result prefix was stripped
         assert "target" in results
@@ -365,7 +374,10 @@ class TestConnectionMappingAsyncLocalRuntime:
 
         # Execute workflow
         runtime = AsyncLocalRuntime()
-        results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
+        try:
+            results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
+        finally:
+            runtime.close()
 
         # Verify both connections worked
         assert "target" in results
@@ -400,7 +412,10 @@ class TestConnectionMappingAsyncLocalRuntime:
 
         # Execute workflow
         runtime = AsyncLocalRuntime()
-        results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
+        try:
+            results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
+        finally:
+            runtime.close()
 
         # Verify execution completes
         assert "target" in results
@@ -433,7 +448,10 @@ class TestConnectionMappingAsyncLocalRuntime:
 
         # Execute workflow
         runtime = AsyncLocalRuntime()
-        results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
+        try:
+            results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
+        finally:
+            runtime.close()
 
         # Verify execution completes
         assert "target" in results
@@ -470,9 +488,12 @@ class TestConnectionMappingParityBothRuntimes:
             import asyncio
 
             runtime = runtime_class()
-            results, run_id = asyncio.run(
-                runtime.execute_workflow_async(workflow, inputs={})
-            )
+            try:
+                results, run_id = asyncio.run(
+                    runtime.execute_workflow_async(workflow, inputs={})
+                )
+            finally:
+                runtime.close()
             # Async returns flat result dict (same as sync after tuple unpacking)
             assert "target" in results
             # Async includes extra "result" wrapper in the mapped value
@@ -511,9 +532,12 @@ class TestConnectionMappingParityBothRuntimes:
             import asyncio
 
             runtime = runtime_class()
-            results, run_id = asyncio.run(
-                runtime.execute_workflow_async(workflow, inputs={})
-            )
+            try:
+                results, run_id = asyncio.run(
+                    runtime.execute_workflow_async(workflow, inputs={})
+                )
+            finally:
+                runtime.close()
             # Async returns flat result dict (same as sync after tuple unpacking)
             assert "target" in results
             assert results["target"]["result"] == 42
@@ -551,9 +575,12 @@ class TestConnectionMappingParityBothRuntimes:
             import asyncio
 
             runtime = runtime_class()
-            results, run_id = asyncio.run(
-                runtime.execute_workflow_async(workflow, inputs={})
-            )
+            try:
+                results, run_id = asyncio.run(
+                    runtime.execute_workflow_async(workflow, inputs={})
+                )
+            finally:
+                runtime.close()
             # Async returns flat result dict (same as sync after tuple unpacking)
             assert "target" in results
             assert results["target"]["result"] == {"value": 99}
