@@ -29,9 +29,7 @@ from typing import Any, Dict, List, Optional, Union
 try:
     from PIL import Image
 except ImportError:
-    raise ImportError(
-        "PIL (Pillow) is required for ImageField. Install it with: pip install Pillow"
-    )
+    Image = None  # Pillow optional — ImageField validates at construction time
 
 try:
     import requests
@@ -103,6 +101,9 @@ class ImageField:
             Self for chaining
 
         Raises:
+            ImportError: If Pillow is not installed
+
+        Raises:
             FileNotFoundError: If file path doesn't exist
             ValueError: If base64 data is invalid or format unsupported
             RuntimeError: If URL loading fails
@@ -113,6 +114,11 @@ class ImageField:
             >>> field.load("https://example.com/image.png")  # From URL
             >>> field.load("data:image/jpeg;base64,...")  # From base64
         """
+        if Image is None:
+            raise ImportError(
+                "PIL (Pillow) is required for ImageField. "
+                "Install it with: pip install Pillow"
+            )
         if isinstance(source, (Path, str)):
             source_str = str(source)
             self._source = source_str  # Store original source
