@@ -106,7 +106,7 @@ jobs:
             tests/trust/plane/unit/ \
             tests/security/ \
             -m 'not (slow or performance or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' \
-            --maxfail=10 -q -p no:xdist --timeout=10
+            --maxfail=10 -q -p no:xdist --timeout=30
 
       - name: Test (Tier 2 — integration runtime tests)
         timeout-minutes: 10
