@@ -190,10 +190,9 @@ class TaskQueue:
         if self._client is None:
             import redis as redis_lib
 
-            if not self._redis_url.startswith(("redis://", "rediss://")):
-                raise ValueError(
-                    f"Invalid Redis URL '{self._redis_url}': must start with redis:// or rediss://"
-                )
+            from kailash.utils.validation import validate_redis_url
+
+            validate_redis_url(self._redis_url)
             self._client = redis_lib.Redis.from_url(
                 self._redis_url,
                 decode_responses=True,
@@ -637,10 +636,9 @@ class Worker:
         if self._redis_client is None:
             import redis as redis_lib
 
-            if not self._redis_url.startswith(("redis://", "rediss://")):
-                raise ValueError(
-                    f"Invalid Redis URL '{self._redis_url}': must start with redis:// or rediss://"
-                )
+            from kailash.utils.validation import validate_redis_url
+
+            validate_redis_url(self._redis_url)
             self._redis_client = redis_lib.Redis.from_url(
                 self._redis_url,
                 decode_responses=True,

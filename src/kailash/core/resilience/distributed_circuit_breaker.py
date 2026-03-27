@@ -129,10 +129,9 @@ class RedisCircuitBreakerBackend:
         if self._client is None:
             import redis as redis_lib
 
-            if not self.redis_url.startswith(("redis://", "rediss://")):
-                raise ValueError(
-                    f"Invalid Redis URL '{self.redis_url}': must start with redis:// or rediss://"
-                )
+            from kailash.utils.validation import validate_redis_url
+
+            validate_redis_url(self.redis_url)
             self._client = redis_lib.Redis.from_url(
                 self.redis_url,
                 decode_responses=True,

@@ -80,7 +80,15 @@ def _eval_math_node(node: ast.AST) -> float:
     elif isinstance(node, ast.BinOp) and type(node.op) in _SAFE_MATH_OPS:
         left = _eval_math_node(node.left)
         right = _eval_math_node(node.right)
-        return _SAFE_MATH_OPS[type(node.op)](left, right)
+        if isinstance(node.op, ast.Pow):
+            if right > 1000:
+                raise ValueError("Exponent too large (max 1000)")
+            if left > 1e15:
+                raise ValueError("Base too large for exponentiation")
+        result = _SAFE_MATH_OPS[type(node.op)](left, right)
+        if isinstance(result, float) and (abs(result) > 1e308 or result != result):
+            raise ValueError("Result out of range")
+        return result
     elif isinstance(node, ast.UnaryOp) and type(node.op) in _SAFE_MATH_OPS:
         return _SAFE_MATH_OPS[type(node.op)](_eval_math_node(node.operand))
     raise ValueError("Unsupported expression")
