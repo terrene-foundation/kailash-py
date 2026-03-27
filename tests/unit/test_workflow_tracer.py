@@ -158,7 +158,7 @@ class TestWithOTel:
 
     def test_start_node_span_without_parent(self):
         mod, mock_tracer, mock_span, _ = self._import_with_mock_otel()
-        tracer = mod.WorkflowTracer()
+        tracer = mod.WorkflowTracer(level=mod.TracingLevel.DETAILED)
         # Reset from the workflow span call in __init__
         mock_tracer.start_span.reset_mock()
 
@@ -175,7 +175,7 @@ class TestWithOTel:
 
     def test_start_node_span_with_parent(self):
         mod, mock_tracer, mock_span, _ = self._import_with_mock_otel()
-        tracer = mod.WorkflowTracer()
+        tracer = mod.WorkflowTracer(level=mod.TracingLevel.DETAILED)
         mock_tracer.start_span.reset_mock()
 
         parent = mock.MagicMock(name="parent_span")
