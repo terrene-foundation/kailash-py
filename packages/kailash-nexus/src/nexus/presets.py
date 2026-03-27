@@ -137,6 +137,43 @@ def _cors_middleware_factory(config: NexusConfig) -> tuple:
     )
 
 
+def _security_headers_middleware_factory(config: NexusConfig) -> Optional[tuple]:
+    """Create security headers middleware configuration."""
+    from nexus.middleware.security_headers import (
+        SecurityHeadersConfig,
+        SecurityHeadersMiddleware,
+    )
+
+    sec_config = SecurityHeadersConfig(
+        exclude_paths=("/healthz", "/readyz", "/startup"),
+    )
+    return (SecurityHeadersMiddleware, {"config": sec_config})
+
+
+def _csrf_middleware_factory(config: NexusConfig) -> Optional[tuple]:
+    """Create CSRF middleware configuration.
+
+    Uses the CORS origins as allowed origins for CSRF validation.
+    Non-browser API clients that omit Origin/Referer are allowed
+    when cors_origins includes the wildcard "*".
+    """
+    from nexus.middleware.csrf import CSRFMiddleware
+
+    # If wildcard origins, allow missing Origin (non-browser clients)
+    allow_missing = "*" in config.cors_origins
+    # Use non-wildcard origins for CSRF validation
+    allowed = [o for o in config.cors_origins if o != "*"]
+
+    return (
+        CSRFMiddleware,
+        {
+            "allowed_origins": allowed,
+            "allow_missing_origin": allow_missing,
+            "exempt_paths": ["/healthz", "/readyz", "/startup", "/openapi.json"],
+        },
+    )
+
+
 # NOTE: Placeholder factories for WS02 auth package.
 # These will be replaced with real implementations when auth package is complete.
 
@@ -246,17 +283,20 @@ PRESETS: Dict[str, PresetConfig] = {
     ),
     "lightweight": PresetConfig(
         name="lightweight",
-        description="CORS only - for development and internal tools",
+        description="CORS + Security Headers - for development and internal tools",
         middleware_factories=[
             _cors_middleware_factory,
+            _security_headers_middleware_factory,
         ],
         plugin_factories=[],
     ),
     "standard": PresetConfig(
         name="standard",
-        description="CORS + Rate Limiting + Error Handling - for public APIs without auth",
+        description="CORS + Security Headers + CSRF + Rate Limiting - for public APIs without auth",
         middleware_factories=[
             _cors_middleware_factory,
+            _security_headers_middleware_factory,
+            _csrf_middleware_factory,
             _rate_limit_middleware_factory,
             _error_handler_middleware_factory,
         ],
@@ -264,9 +304,11 @@ PRESETS: Dict[str, PresetConfig] = {
     ),
     "saas": PresetConfig(
         name="saas",
-        description="Full SaaS stack - CORS, JWT, RBAC, Rate Limiting, Tenant Isolation, Audit",
+        description="Full SaaS stack - CORS, Security Headers, CSRF, JWT, RBAC, Rate Limiting, Tenant Isolation, Audit",
         middleware_factories=[
             _cors_middleware_factory,
+            _security_headers_middleware_factory,
+            _csrf_middleware_factory,
             _rate_limit_middleware_factory,
             _error_handler_middleware_factory,
         ],
@@ -282,6 +324,8 @@ PRESETS: Dict[str, PresetConfig] = {
         description="Enterprise stack - Everything in SaaS + SSO + ABAC + Feature Gates",
         middleware_factories=[
             _cors_middleware_factory,
+            _security_headers_middleware_factory,
+            _csrf_middleware_factory,
             _rate_limit_middleware_factory,
             _error_handler_middleware_factory,
         ],

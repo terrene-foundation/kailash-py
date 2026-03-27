@@ -27,7 +27,9 @@ Usage:
 
 from .core import MiddlewareInfo, Nexus, NexusPluginProtocol, RouterInfo, create_nexus
 from .engine import EnterpriseMiddlewareConfig, NexusEngine, Preset
+from .openapi import OpenApiGenerator, OpenApiInfo
 from .presets import PRESETS, NexusConfig, PresetConfig, apply_preset, get_preset
+from .probes import ProbeManager, ProbeResponse, ProbeState
 
 __version__ = "1.5.0"
 __all__ = [
@@ -48,4 +50,11 @@ __all__ = [
     "PRESETS",
     "get_preset",
     "apply_preset",
+    # Kubernetes Probes
+    "ProbeManager",
+    "ProbeState",
+    "ProbeResponse",
+    # OpenAPI
+    "OpenApiGenerator",
+    "OpenApiInfo",
 ]
