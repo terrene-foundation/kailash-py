@@ -8,6 +8,9 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
+# Cycle tests exhaust CI runner threads
+pytestmark = pytest.mark.slow
+
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor, WorkflowState

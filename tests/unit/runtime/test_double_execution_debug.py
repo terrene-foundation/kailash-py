@@ -10,6 +10,9 @@ import time
 
 import pytest
 
+# Cyclic workflow tests exhaust CI runner threads
+pytestmark = pytest.mark.slow
+
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

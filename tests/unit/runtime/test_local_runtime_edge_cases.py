@@ -94,6 +94,7 @@ class TestLocalRuntimeEdgeCases:
 
         assert results["node"]["result"]["data"] == 1
 
+    @pytest.mark.slow  # Cyclic executor creates threads that exhaust CI limits
     def test_cyclic_executor_failure(self):
         """Test handling of cyclic executor failure."""
         # Create cyclic workflow

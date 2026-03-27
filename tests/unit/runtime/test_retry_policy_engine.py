@@ -20,6 +20,9 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+# Thread-heavy tests exhaust CI runner limits
+pytestmark = pytest.mark.slow
+
 from kailash.runtime.resource_manager import (
     AdaptiveRetryStrategy,
     CircuitBreaker,
