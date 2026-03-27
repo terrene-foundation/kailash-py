@@ -22,6 +22,9 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
+# Thread-heavy tests exhaust CI runner limits
+pytestmark = pytest.mark.slow
+
 # Import will be added once we create the class
 # from kailash.runtime.resource_manager import ResourceLimitEnforcer, EnforcementPolicy
 from kailash.sdk_exceptions import ResourceLimitExceededError
