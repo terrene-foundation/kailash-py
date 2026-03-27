@@ -183,33 +183,33 @@ class TestPresetRegistry:
         assert preset.middleware_factories == []
         assert preset.plugin_factories == []
 
-    def test_lightweight_has_cors_only(self):
-        """'lightweight' preset has CORS middleware only."""
+    def test_lightweight_has_cors_and_security_headers(self):
+        """'lightweight' preset has CORS + Security Headers middleware."""
         preset = get_preset("lightweight")
 
-        assert len(preset.middleware_factories) == 1
+        assert len(preset.middleware_factories) == 2
         assert preset.middleware_factories[0] is _cors_middleware_factory
         assert preset.plugin_factories == []
 
-    def test_standard_has_three_middleware(self):
-        """'standard' preset has CORS + rate limit + error handler."""
+    def test_standard_has_five_middleware(self):
+        """'standard' preset has CORS + security headers + CSRF + rate limit + error handler."""
         preset = get_preset("standard")
 
-        assert len(preset.middleware_factories) == 3
+        assert len(preset.middleware_factories) == 5
         assert preset.plugin_factories == []
 
     def test_saas_has_middleware_and_plugins(self):
         """'saas' preset has middleware and plugin factories."""
         preset = get_preset("saas")
 
-        assert len(preset.middleware_factories) == 3
+        assert len(preset.middleware_factories) == 5
         assert len(preset.plugin_factories) == 4
 
     def test_enterprise_has_most_plugins(self):
         """'enterprise' preset has the most plugin factories."""
         preset = get_preset("enterprise")
 
-        assert len(preset.middleware_factories) == 3
+        assert len(preset.middleware_factories) == 5
         assert len(preset.plugin_factories) == 6
 
 
@@ -319,16 +319,18 @@ class TestApplyPreset:
 
         assert len(app._middleware_stack) == initial_middleware
 
-    def test_apply_lightweight_adds_cors(self):
-        """Applying 'lightweight' adds CORS middleware."""
+    def test_apply_lightweight_adds_cors_and_security_headers(self):
+        """Applying 'lightweight' adds CORS + Security Headers middleware."""
         app = Nexus(enable_durability=False)
         initial_middleware = len(app._middleware_stack)
         config = NexusConfig(cors_origins=["http://test.com"])
 
         apply_preset(app, "lightweight", config)
 
-        assert len(app._middleware_stack) == initial_middleware + 1
-        assert app._middleware_stack[-1].name == "CORSMiddleware"
+        assert len(app._middleware_stack) == initial_middleware + 2
+        names = [m.name for m in app._middleware_stack]
+        assert "CORSMiddleware" in names
+        assert "SecurityHeadersMiddleware" in names
 
     def test_apply_preset_logs_info(self, caplog):
         """apply_preset() logs info messages."""
