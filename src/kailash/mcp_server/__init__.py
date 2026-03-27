@@ -148,24 +148,27 @@ from .errors import (
     ValidationError,
 )
 
-# OAuth 2.1 Authentication
-from .oauth import (
-    AccessToken,
-    AuthorizationCode,
-    AuthorizationServer,
-    ClientStore,
-    ClientType,
-    GrantType,
-    InMemoryClientStore,
-    InMemoryTokenStore,
-    JWTManager,
-    OAuth2Client,
-    OAuthClient,
-    RefreshToken,
-    ResourceServer,
-    TokenStore,
-    TokenType,
-)
+# OAuth 2.1 Authentication (requires aiohttp + jwt + cryptography)
+try:
+    from .oauth import (
+        AccessToken,
+        AuthorizationCode,
+        AuthorizationServer,
+        ClientStore,
+        ClientType,
+        GrantType,
+        InMemoryClientStore,
+        InMemoryTokenStore,
+        JWTManager,
+        OAuth2Client,
+        OAuthClient,
+        RefreshToken,
+        ResourceServer,
+        TokenStore,
+        TokenType,
+    )
+except ImportError:
+    pass  # OAuth requires aiohttp, jwt, cryptography — optional deps
 
 # Complete Protocol Implementation
 from .protocol import (
