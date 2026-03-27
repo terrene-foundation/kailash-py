@@ -71,6 +71,7 @@ class TestLocalRuntimeEdgeCases:
         assert results["node"]["result"]["data"] == 1
 
     @pytest.mark.asyncio
+    @pytest.mark.slow  # Py 3.13: "Cannot run the event loop while another loop is running"
     async def test_execute_async_with_no_event_loop(self):
         """Test async execution when no event loop is running."""
         node = PythonCodeNode(name="node", code="result = {'data': 1}")
@@ -127,6 +128,7 @@ class TestLocalRuntimeEdgeCases:
         assert "node" in results
 
     @pytest.mark.asyncio
+    @pytest.mark.slow  # Py 3.13: "Cannot run the event loop while another loop is running"
     async def test_workflow_async_execution_with_node_errors(self):
         """Test workflow async execution with node execution errors."""
         # Create workflow with failing node

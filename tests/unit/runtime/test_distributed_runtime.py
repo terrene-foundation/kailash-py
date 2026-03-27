@@ -13,6 +13,9 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
+# Distributed runtime tests exhaust CI runner threads
+pytestmark = pytest.mark.slow
+
 from src.kailash.runtime.distributed import (
     DistributedRuntime,
     TaskMessage,

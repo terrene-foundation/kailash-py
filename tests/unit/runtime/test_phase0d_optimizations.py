@@ -9,6 +9,11 @@ Validates that all P0D performance optimizations are in place and functional:
 import inspect
 import time
 
+import pytest
+
+# Performance tests with tight timing assertions fail on CI runners
+pytestmark = pytest.mark.performance
+
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking.metrics_collector import MetricsCollector, MetricsContext
 from kailash.workflow.builder import WorkflowBuilder
