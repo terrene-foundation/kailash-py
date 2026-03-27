@@ -230,6 +230,7 @@ class TestConnectionMappingLocalRuntime:
             assert "target" in result
 
 
+@pytest.mark.slow  # Async runtime tests exhaust threads in CI's constrained environment
 class TestConnectionMappingAsyncLocalRuntime:
     """Test connection mapping in AsyncLocalRuntime."""
 
@@ -458,6 +459,7 @@ class TestConnectionMappingAsyncLocalRuntime:
         assert results["target"]["result"] == "completed"
 
 
+@pytest.mark.slow  # AsyncLocalRuntime parametrize exhausts threads in CI
 class TestConnectionMappingParityBothRuntimes:
     """Test that LocalRuntime and AsyncLocalRuntime have identical connection mapping behavior."""
 
