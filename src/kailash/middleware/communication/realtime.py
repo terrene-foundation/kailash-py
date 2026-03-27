@@ -233,11 +233,10 @@ class ConnectionManager:
 
     async def process_event(self, event: BaseEvent):
         """Process event and broadcast to matching connections."""
+        _evt = getattr(event, "event_type", None) or getattr(event, "type", None)
         message = {
             "type": "event",
-            "event_type": (
-                event.type.value if hasattr(event.type, "value") else str(event.type)
-            ),
+            "event_type": (_evt.value if hasattr(_evt, "value") else str(_evt)),
             "data": getattr(event, "data", {}),
             "timestamp": (
                 event.timestamp.isoformat()

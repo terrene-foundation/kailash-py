@@ -232,7 +232,7 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
 
             try:
                 resource = await self.resource_registry.get_resource(resource_name)
-                health = await self.resource_registry._is_healthy(resource_name)
+                health = await self.resource_registry.check_health(resource_name)
 
                 return {
                     "name": resource_name,

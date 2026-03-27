@@ -20,11 +20,11 @@ class TestAwsKmsKeyManagerImportError:
 
     def test_init_raises_import_error_without_boto3(self) -> None:
         """AwsKmsKeyManager must raise ImportError if boto3 is not installed."""
-        from kailash.trust.plane.key_managers.managers import aws_kms as aws_kms_mod
+        from kailash.trust.plane.key_managers import aws_kms as aws_kms_mod
 
         # Simulate boto3 not being available by patching the availability flag
         with patch.object(aws_kms_mod, "_BOTO3_AVAILABLE", False):
-            from kailash.trust.plane.key_managers.managers.aws_kms import (
+            from kailash.trust.plane.key_managers.aws_kms import (
                 AwsKmsKeyManager,
             )
 
@@ -37,7 +37,7 @@ class TestAwsKmsKeyManagerImportError:
 
     def test_algorithm_returns_ecdsa_p256(self) -> None:
         """AwsKmsKeyManager.algorithm() must return 'ecdsa-p256'."""
-        from kailash.trust.plane.key_managers.managers.aws_kms import AwsKmsKeyManager
+        from kailash.trust.plane.key_managers.aws_kms import AwsKmsKeyManager
 
         assert AwsKmsKeyManager.ALGORITHM == "ecdsa-p256"
 
@@ -47,13 +47,13 @@ class TestAzureKeyVaultKeyManagerImportError:
 
     def test_init_raises_import_error_without_azure(self) -> None:
         """AzureKeyVaultKeyManager must raise ImportError if azure-keyvault-keys is not installed."""
-        from kailash.trust.plane.key_managers.managers import (
+        from kailash.trust.plane.key_managers import (
             azure_keyvault as azure_mod,
         )
 
         # Simulate azure libs not being available by patching the availability flag
         with patch.object(azure_mod, "_AZURE_AVAILABLE", False):
-            from kailash.trust.plane.key_managers.managers.azure_keyvault import (
+            from kailash.trust.plane.key_managers.azure_keyvault import (
                 AzureKeyVaultKeyManager,
             )
 
@@ -67,7 +67,7 @@ class TestAzureKeyVaultKeyManagerImportError:
 
     def test_algorithm_returns_ecdsa_p256(self) -> None:
         """AzureKeyVaultKeyManager.algorithm() must return 'ecdsa-p256'."""
-        from kailash.trust.plane.key_managers.managers.azure_keyvault import (
+        from kailash.trust.plane.key_managers.azure_keyvault import (
             AzureKeyVaultKeyManager,
         )
 
@@ -79,11 +79,11 @@ class TestVaultKeyManagerImportError:
 
     def test_init_raises_import_error_without_hvac(self) -> None:
         """VaultKeyManager must raise ImportError if hvac is not installed."""
-        from kailash.trust.plane.key_managers.managers import vault as vault_mod
+        from kailash.trust.plane.key_managers import vault as vault_mod
 
         # Simulate hvac not being available by patching the availability flag
         with patch.object(vault_mod, "_HVAC_AVAILABLE", False):
-            from kailash.trust.plane.key_managers.managers.vault import VaultKeyManager
+            from kailash.trust.plane.key_managers.vault import VaultKeyManager
 
             with pytest.raises(ImportError, match="pip install kailash\\[vault\\]"):
                 VaultKeyManager(
@@ -93,13 +93,13 @@ class TestVaultKeyManagerImportError:
 
     def test_algorithm_returns_ecdsa_p256(self) -> None:
         """VaultKeyManager.algorithm() must return 'ecdsa-p256'."""
-        from kailash.trust.plane.key_managers.managers.vault import VaultKeyManager
+        from kailash.trust.plane.key_managers.vault import VaultKeyManager
 
         assert VaultKeyManager.ALGORITHM == "ecdsa-p256"
 
     def test_default_mount_point(self) -> None:
         """VaultKeyManager default mount_point must be 'transit'."""
-        from kailash.trust.plane.key_managers.managers.vault import VaultKeyManager
+        from kailash.trust.plane.key_managers.vault import VaultKeyManager
 
         assert VaultKeyManager.DEFAULT_MOUNT_POINT == "transit"
 
@@ -113,7 +113,7 @@ class TestAwsKmsExceptionWrapping:
     def test_sign_wraps_botocore_error(self) -> None:
         """sign() must wrap BotoCoreError in SigningError."""
         from kailash.trust.plane.exceptions import SigningError
-        from kailash.trust.plane.key_managers.managers.aws_kms import AwsKmsKeyManager
+        from kailash.trust.plane.key_managers.aws_kms import AwsKmsKeyManager
 
         manager = AwsKmsKeyManager.__new__(AwsKmsKeyManager)
         manager._key_id = "arn:aws:kms:us-east-1:123:key/test"
@@ -133,7 +133,7 @@ class TestAwsKmsExceptionWrapping:
     def test_get_public_key_wraps_client_error(self) -> None:
         """get_public_key() must wrap ClientError in KeyManagerError."""
         from kailash.trust.plane.exceptions import KeyManagerError
-        from kailash.trust.plane.key_managers.managers.aws_kms import AwsKmsKeyManager
+        from kailash.trust.plane.key_managers.aws_kms import AwsKmsKeyManager
 
         manager = AwsKmsKeyManager.__new__(AwsKmsKeyManager)
         manager._key_id = "arn:aws:kms:us-east-1:123:key/test"
@@ -153,7 +153,7 @@ class TestAwsKmsExceptionWrapping:
     def test_get_public_key_wraps_not_found_as_key_not_found(self) -> None:
         """get_public_key() must raise KeyNotFoundError for NotFoundException."""
         from kailash.trust.plane.exceptions import KeyNotFoundError
-        from kailash.trust.plane.key_managers.managers.aws_kms import AwsKmsKeyManager
+        from kailash.trust.plane.key_managers.aws_kms import AwsKmsKeyManager
 
         manager = AwsKmsKeyManager.__new__(AwsKmsKeyManager)
         manager._key_id = "arn:aws:kms:us-east-1:123:key/test"
@@ -177,7 +177,7 @@ class TestAzureKeyVaultExceptionWrapping:
     def test_sign_wraps_azure_error(self) -> None:
         """sign() must wrap Azure errors in SigningError."""
         from kailash.trust.plane.exceptions import SigningError
-        from kailash.trust.plane.key_managers.managers.azure_keyvault import (
+        from kailash.trust.plane.key_managers.azure_keyvault import (
             AzureKeyVaultKeyManager,
         )
 
@@ -195,7 +195,7 @@ class TestAzureKeyVaultExceptionWrapping:
     def test_get_public_key_wraps_azure_error(self) -> None:
         """get_public_key() must wrap Azure errors in KeyManagerError."""
         from kailash.trust.plane.exceptions import KeyManagerError
-        from kailash.trust.plane.key_managers.managers.azure_keyvault import (
+        from kailash.trust.plane.key_managers.azure_keyvault import (
             AzureKeyVaultKeyManager,
         )
 
@@ -216,7 +216,7 @@ class TestVaultExceptionWrapping:
     def test_sign_wraps_vault_error(self) -> None:
         """sign() must wrap Vault errors in SigningError."""
         from kailash.trust.plane.exceptions import SigningError
-        from kailash.trust.plane.key_managers.managers.vault import VaultKeyManager
+        from kailash.trust.plane.key_managers.vault import VaultKeyManager
 
         manager = VaultKeyManager.__new__(VaultKeyManager)
         manager._key_name = "test-key"
@@ -235,7 +235,7 @@ class TestVaultExceptionWrapping:
     def test_get_public_key_wraps_vault_error(self) -> None:
         """get_public_key() must wrap Vault errors in KeyNotFoundError."""
         from kailash.trust.plane.exceptions import KeyNotFoundError
-        from kailash.trust.plane.key_managers.managers.vault import VaultKeyManager
+        from kailash.trust.plane.key_managers.vault import VaultKeyManager
 
         manager = VaultKeyManager.__new__(VaultKeyManager)
         manager._key_name = "test-key"

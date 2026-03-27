@@ -3,6 +3,9 @@ node_modules/
 
 # Python
 __pycache__/
+
+# Test artifacts (mock objects leaking to filesystem)
+<Mock *
 *.py[cod]
 *$py.class
 *.so

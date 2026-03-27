@@ -322,6 +322,11 @@ class ResourceRegistry:
         """List all registered resource names."""
         return set(self._factories.keys())
 
+    async def check_health(self, name: str) -> Dict[str, Any]:
+        """Check health of a resource and return a status dict."""
+        healthy = await self._is_healthy(name)
+        return {"status": "healthy" if healthy else "unhealthy"}
+
     def get_metrics(self) -> Dict[str, Any]:
         """Get resource usage metrics."""
         if not self._enable_metrics:

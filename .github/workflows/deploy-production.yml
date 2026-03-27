@@ -9,21 +9,21 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Deployment environment'
+        description: "Deployment environment"
         required: true
-        default: 'dev'
+        default: "dev"
         type: choice
         options:
           - dev
           - staging
           - production
       version:
-        description: 'Version/tag to deploy (leave empty for latest)'
+        description: "Version/tag to deploy (leave empty for latest)"
         required: false
-        default: ''
+        default: ""
         type: string
       skip_tests:
-        description: 'Skip validation tests (not recommended for production)'
+        description: "Skip validation tests (not recommended for production)"
         required: false
         default: false
         type: boolean
@@ -37,19 +37,19 @@ on:
     branches:
       - main
     paths:
-      - 'packages/kailash-kaizen/**'
-      - '.github/workflows/deploy-production.yml'
+      - "packages/kailash-kaizen/**"
+      - ".github/workflows/deploy-production.yml"
 
 permissions:
   contents: read
   packages: write
   deployments: write
-  id-token: write  # For OIDC authentication
+  id-token: write # For OIDC authentication
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/kailash-kaizen
-  PYTHON_VERSION: '3.11'
+  PYTHON_VERSION: "3.11"
 
 jobs:
   # Determine deployment environment and version
@@ -144,7 +144,7 @@ jobs:
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ steps.meta.outputs.tags }}
+          image: ghcr.io/${{ github.repository }}/kailash-kaizen:${{ github.sha }}
           format: spdx-json
           output-file: sbom.spdx.json
 
