@@ -18,6 +18,9 @@ __version__ = "0.3.0"
 
 from kaizen_agents.supervisor import GovernedSupervisor, SupervisorResult
 
+# Delegate facade — the primary entry point for autonomous AI execution
+from kaizen_agents.delegate import Delegate
+
 # Canonical async Agent API (moved from kailash-kaizen api/)
 try:
     from kaizen_agents.api.agent import Agent
@@ -33,6 +36,7 @@ except ImportError:
     Pipeline = None  # type: ignore[assignment, misc]
 
 __all__ = [
+    "Delegate",
     "GovernedSupervisor",
     "SupervisorResult",
     "Agent",
