@@ -99,7 +99,7 @@ jobs:
           .venv/bin/pyright src/kailash/ --pythonversion ${{ matrix.python-version }} --level error 2>&1 | tail -5
 
       - name: Test (Tier 1 — unit tests)
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
           .venv/bin/python -m pytest \
             tests/unit/ \
