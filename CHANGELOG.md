@@ -15,6 +15,16 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [2.2.1] - 2026-03-29
+
+**Patch Release** — kailash 2.2.1 (security hardening post-release fix)
+
+#### Fixed
+
+- Trust-plane security hardening from red team round 2: ShadowEnforcer `deque(maxlen=N)`, BudgetTracker callback bounds, `str(exc)` leak in PactEngine + MCP middleware, `EnforcementRecord frozen=True`, ShadowEnforcer `threading.Lock`
+
+---
+
 ### [2.2.0] - 2026-03-28
 
 **Multi-Package Release** — kailash 2.2.0, kailash-nexus 1.6.0, kaizen-agents 0.4.0, kailash-kaizen 2.3.1, kailash-dataflow 1.2.1, kailash-pact 0.4.1
