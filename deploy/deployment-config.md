@@ -22,7 +22,7 @@
 | kailash-kaizen   | `kaizen-v*`        | 2.3.1           |
 | kailash-nexus    | `nexus-v*`         | 1.6.0           |
 | kailash-pact     | `pact-v*`          | 0.4.1           |
-| kaizen-agents    | `kaizen-agents-v*` | 0.4.0           |
+| kaizen-agents    | `kaizen-agents-v*` | 0.5.0           |
 
 ## Release Runbook
 

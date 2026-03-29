@@ -14,7 +14,7 @@ Provides:
 - Governance: accountability, clearance, cascade, vacancy, dereliction, bypass, budget
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from kaizen_agents.supervisor import GovernedSupervisor, SupervisorResult
 
