@@ -56,6 +56,10 @@ jobs:
   setup:
     name: Setup Deployment
     runs-on: ubuntu-latest
+    # Only run for kailash-kaizen releases (kaizen-v* tags), not other packages
+    if: >-
+      github.event_name != 'release' ||
+      startsWith(github.event.release.tag_name, 'kaizen-v')
     outputs:
       environment: ${{ steps.config.outputs.environment }}
       version: ${{ steps.config.outputs.version }}
