@@ -1,0 +1,18 @@
+source_repo: kailash-py
+codify_date: 2026-03-29
+codify_session: "feat(kaizen-agents): Wire ToolCallStart/ToolCallEnd events + error sanitization"
+
+changes:
+  - file: .claude/skills/04-kaizen/kaizen-delegate.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Added event ordering documentation and error reporting patterns for ToolCallStart/ToolCallEnd"
+    diff_lines: "+22 -0"
+
+  - file: .claude/skills/04-kaizen/kaizen-agents-security.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Added error message sanitization section — str(exc) → type(exc).__name__ pattern with enforcement table"
+    diff_lines: "+30 -0"
+
+status: pending_review

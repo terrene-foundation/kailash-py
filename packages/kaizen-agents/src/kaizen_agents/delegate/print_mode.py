@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import sys
 from dataclasses import dataclass, field
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from kaizen_agents.delegate.config.loader import KzConfig
 from kaizen_agents.delegate.loop import AgentLoop, ToolRegistry
@@ -85,9 +88,15 @@ class PrintRunner:
         try:
             full_text = ""
             async for chunk in self._loop.run_turn(prompt):
+                if not isinstance(chunk, str):
+                    continue
                 full_text += chunk
         except Exception as exc:
-            return PrintResult(is_error=True, error_message=str(exc))
+            logger.error("PrintRunner failed: %s", exc, exc_info=True)
+            return PrintResult(
+                is_error=True,
+                error_message=f"Execution failed ({type(exc).__name__})",
+            )
 
         tools_used = self._extract_tools_used()
         usage = self._loop.usage

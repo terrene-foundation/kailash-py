@@ -184,6 +184,34 @@ File tools accept any path the process can access. Use workspace root restrictio
 
 Uses allowlist regex: `re.sub(r"[^a-zA-Z0-9_-]", "_", name)` — not blacklist replacement.
 
+## Error Message Sanitization
+
+Exception messages (`str(exc)`) MUST NOT be exposed in programmatic API surfaces (events, JSON responses, tool results). Raw exception messages can leak file paths, connection strings, and internal implementation details.
+
+```python
+# CORRECT — type name only, details in log
+except Exception as exc:
+    logger.error("Tool %s failed: %s", name, exc, exc_info=True)
+    safe_msg = f"Tool '{name}' failed with {type(exc).__name__}"
+    return json.dumps({"error": safe_msg})
+
+# WRONG — raw str(exc) in API response
+except Exception as exc:
+    return json.dumps({"error": f"Tool error: {exc}"})  # Leaks internals!
+```
+
+### Where sanitization is enforced
+
+| Location                    | Pattern                                   | Since |
+| --------------------------- | ----------------------------------------- | ----- |
+| `_run_single` in `loop.py`  | `type(exc).__name__` in tool result JSON  | S11   |
+| `Delegate.run()` ErrorEvent | `type(exc).__name__` in error field       | S11   |
+| `PrintRunner.run()` error   | `type(exc).__name__` in PrintResult       | S11   |
+| `run_interactive()` display | `type(exc).__name__` in show_error        | S11   |
+| `HookManager._run_hook()`   | `type(exc).__name__` in HookResult.stderr | S11   |
+
+**Source**: Red team R2 findings H1-H3, M4.
+
 ## Behavioral Test Vectors
 
 45+ cross-SDK conformance tests define the canonical security behavior across Python and Rust SDKs. See `workspaces/kaizen-agents/01-analysis/01-research/13-behavioral-test-vectors.md`.

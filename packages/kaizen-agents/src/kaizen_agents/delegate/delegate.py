@@ -308,7 +308,12 @@ class Delegate:
 
         try:
             async for chunk in self._loop.run_turn(prompt):
-                # AgentLoop yields raw text deltas
+                # Tool call events from the loop — yield as-is
+                if isinstance(chunk, DelegateEvent):
+                    yield chunk
+                    continue
+
+                # str chunks — text deltas
                 # Check if this is the budget-exhausted sentinel
                 if chunk == "[Budget exhausted — stopping.]":
                     yield BudgetExhausted(
@@ -323,7 +328,7 @@ class Delegate:
         except Exception as exc:
             logger.error("Delegate run failed: %s", exc, exc_info=True)
             yield ErrorEvent(
-                error=str(exc),
+                error=f"Delegate execution failed ({type(exc).__name__})",
                 details={"exception_type": type(exc).__name__},
             )
             return
@@ -362,6 +367,7 @@ class Delegate:
         RuntimeError:
             If the Delegate has been closed or budget is exhausted.
         """
+
         async def _collect() -> str:
             text_parts: list[str] = []
             async for event in self.run(prompt):

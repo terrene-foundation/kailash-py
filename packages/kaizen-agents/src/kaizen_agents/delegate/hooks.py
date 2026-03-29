@@ -328,5 +328,5 @@ class HookManager:
                 event=event,
                 script=script,
                 exit_code=1,
-                stderr=str(exc),
+                stderr=f"Hook spawn failed ({type(exc).__name__})",
             )
