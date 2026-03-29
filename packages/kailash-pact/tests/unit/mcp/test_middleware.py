@@ -177,7 +177,7 @@ class TestHandlerErrors:
         # Decision was approved, but handler failed
         assert result.decision.level == "auto_approved"
         assert result.executed is False
-        assert result.tool_error == "connection lost"
+        assert result.tool_error == "Tool execution failed"
         assert result.tool_result is None
 
 
@@ -249,9 +249,7 @@ class TestMiddlewareProperties:
         assert handler.calls[0] == ("search", {})
 
     @pytest.mark.asyncio
-    async def test_metadata_passed(
-        self, middleware: McpGovernanceMiddleware
-    ) -> None:
+    async def test_metadata_passed(self, middleware: McpGovernanceMiddleware) -> None:
         """Metadata is passed through to governance context."""
         result = await middleware.invoke(
             "search",
