@@ -53,6 +53,28 @@ async for event in delegate.run("Analyze this dataset"):
 | `BudgetExhausted` | `spent, limit`                 | Budget exceeded          |
 | `ErrorEvent`      | `error, error_type`            | Unrecoverable error      |
 
+### Event Ordering
+
+Tool events follow a deterministic pattern per tool batch:
+
+```
+TextDelta("Let me search...")          # Optional pre-tool text
+ToolCallStart(call_id="c1", name="search")   # All starts before execution
+ToolCallStart(call_id="c2", name="read")
+ToolCallEnd(call_id="c1", name="search", result="...")  # All ends after gather
+ToolCallEnd(call_id="c2", name="read", result="...")
+TextDelta("Based on results...")       # Next turn text
+TurnComplete(text="...", usage={...})
+```
+
+For consecutive tool turns (model calls tools, sees results, calls more tools), each batch emits its own start/end events sequentially.
+
+### Error Reporting in ToolCallEnd
+
+- **Normal tool errors** (exception caught inside executor): Error JSON in `result` field, `error` field empty. The error is sent back to the model as a tool result.
+- **Catastrophic failures** (BaseException escaping asyncio.gather): `error` field populated with `"Tool execution was interrupted"`, `result` field empty.
+- **Error messages are sanitized**: Exception messages use `type(exc).__name__` only — raw `str(exc)` is never exposed in events (prevents internal detail leakage).
+
 ## Synchronous Convenience
 
 ```python

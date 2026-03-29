@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 from kaizen_agents.delegate.adapters.openai_stream import StreamResult
 from kaizen_agents.delegate.adapters.protocol import StreamEvent, StreamingChatAdapter
 from kaizen_agents.delegate.config.loader import KzConfig
+from kaizen_agents.delegate.events import DelegateEvent, ToolCallEnd, ToolCallStart
 
 logger = logging.getLogger(__name__)
 
@@ -441,12 +442,12 @@ class AgentLoop:
         """Signal the loop to stop after the current operation."""
         self._interrupted = True
 
-    async def run_turn(self, user_message: str) -> AsyncGenerator[str, None]:
+    async def run_turn(self, user_message: str) -> AsyncGenerator[str | DelegateEvent, None]:
         """Run one turn of the agent loop.
 
         A "turn" starts with a user message and continues until the model
         produces a text-only response (no tool calls) or max turns is reached.
-        Yields text chunks incrementally as they stream from the model.
+        Yields text chunks and tool call events incrementally.
 
         Parameters
         ----------
@@ -455,9 +456,12 @@ class AgentLoop:
 
         Yields
         ------
-        Text delta strings from the model's response, as each token arrives.
-        Callers that join all yielded chunks will get the same final text as
-        the previous buffered implementation.
+        ``str``
+            Text delta strings from the model's response.
+        :class:`ToolCallStart`
+            Emitted before each tool begins execution.
+        :class:`ToolCallEnd`
+            Emitted after each tool completes (with result or error).
         """
         self._interrupted = False
         self._conversation.add_user(user_message)
@@ -516,7 +520,9 @@ class AgentLoop:
                 tool_calls=stream_result.tool_calls,
             )
 
-            await self._execute_tool_calls(stream_result.tool_calls)
+            tool_events = await self._execute_tool_calls(stream_result.tool_calls)
+            for event in tool_events:
+                yield event
 
         # Max turns reached -- we ran out of turns without a text-only response
         logger.warning("Max turns (%d) reached in run_turn", self._config.max_turns)
@@ -613,19 +619,32 @@ class AgentLoop:
                     break
                 yield event_type, result
 
-    async def _execute_tool_calls(self, tool_calls: list[dict[str, Any]]) -> None:
+    async def _execute_tool_calls(self, tool_calls: list[dict[str, Any]]) -> list[DelegateEvent]:
         """Execute tool calls from the model's response.
 
         Independent tool calls are executed in parallel. Results are
-        appended to the conversation as tool messages.
+        appended to the conversation as tool messages. Returns a list of
+        :class:`ToolCallStart` and :class:`ToolCallEnd` events for each
+        tool call.
 
         Parameters
         ----------
         tool_calls:
             List of tool call dicts in OpenAI format.
+
+        Returns
+        -------
+        List of ``ToolCallStart`` and ``ToolCallEnd`` events in order:
+        all starts first, then all ends (matching ``tool_calls`` list order).
         """
         if not tool_calls:
-            return
+            return []
+
+        events: list[DelegateEvent] = []
+
+        # Emit ToolCallStart for each tool before execution begins
+        for tc in tool_calls:
+            events.append(ToolCallStart(call_id=tc["id"], name=tc["function"]["name"]))
 
         async def _run_single(tc: dict[str, Any]) -> tuple[str, str, str]:
             """Execute a single tool call. Returns (tool_call_id, name, result)."""
@@ -658,9 +677,12 @@ class AgentLoop:
                 logger.warning(error_msg)
                 return tc_id, name, json.dumps({"error": error_msg})
             except Exception as exc:
-                error_msg = f"Tool execution error: {exc}"
+                # Log the full exception for debugging but return a
+                # sanitized message — str(exc) can leak file paths,
+                # connection strings, or other internal details.
                 logger.error("Tool %s failed: %s", name, exc, exc_info=True)
-                return tc_id, name, json.dumps({"error": error_msg})
+                safe_msg = f"Tool '{name}' failed with {type(exc).__name__}"
+                return tc_id, name, json.dumps({"error": safe_msg})
 
         # Execute all tool calls in parallel
         tasks = [_run_single(tc) for tc in tool_calls]
@@ -680,10 +702,20 @@ class AgentLoop:
                     tc_name,
                     json.dumps({"error": "Tool execution was interrupted"}),
                 )
+                events.append(
+                    ToolCallEnd(
+                        call_id=tc_id,
+                        name=tc_name,
+                        error="Tool execution was interrupted",
+                    )
+                )
                 continue
 
             tc_id, name, content = result
             self._conversation.add_tool_result(tc_id, name, content)
+            events.append(ToolCallEnd(call_id=tc_id, name=name, result=content))
+
+        return events
 
     async def run_interactive(
         self,
@@ -728,6 +760,8 @@ class AgentLoop:
                 try:
                     full_text = ""
                     async for chunk in self.run_turn(user_input):
+                        if not isinstance(chunk, str):
+                            continue
                         display.append_text(chunk)
                         full_text += chunk
 
@@ -735,7 +769,7 @@ class AgentLoop:
 
                 except Exception as exc:
                     display.finish_streaming()
-                    display.show_error(str(exc))
+                    display.show_error(f"Turn failed ({type(exc).__name__})")
                     logger.error("Turn failed: %s", exc, exc_info=True)
 
             except KeyboardInterrupt:
@@ -769,5 +803,7 @@ class AgentLoop:
         """
         full_text = ""
         async for chunk in self.run_turn(prompt):
+            if not isinstance(chunk, str):
+                continue
             full_text += chunk
         return full_text

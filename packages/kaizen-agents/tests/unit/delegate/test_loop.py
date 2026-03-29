@@ -403,7 +403,8 @@ class TestAgentLoopTextResponse:
 
         collected: list[str] = []
         async for chunk in loop.run_turn("Hi there"):
-            collected.append(chunk)
+            if isinstance(chunk, str):
+                collected.append(chunk)
 
         full_text = "".join(collected)
         assert full_text == response_text
@@ -487,7 +488,8 @@ class TestAgentLoopToolCalls:
 
         collected: list[str] = []
         async for chunk in loop.run_turn("List files"):
-            collected.append(chunk)
+            if isinstance(chunk, str):
+                collected.append(chunk)
 
         full_text = "".join(collected)
         assert "file1.py" in full_text
@@ -542,7 +544,8 @@ class TestAgentLoopToolCalls:
 
         collected: list[str] = []
         async for chunk in loop.run_turn("Run both"):
-            collected.append(chunk)
+            if isinstance(chunk, str):
+                collected.append(chunk)
 
         # Both tools should have been called (parallel via asyncio.gather)
         assert "a_start" in execution_order
@@ -580,12 +583,14 @@ class TestAgentLoopToolCalls:
 
         collected: list[str] = []
         async for chunk in loop.run_turn("Try the tool"):
-            collected.append(chunk)
+            if isinstance(chunk, str):
+                collected.append(chunk)
 
-        # The error should be in the tool result message
+        # The error should be in the tool result message (sanitized — no raw exc message)
         tool_msg = next(m for m in loop.conversation.messages if m["role"] == "tool")
         assert "error" in tool_msg["content"].lower()
-        assert "Something went wrong" in tool_msg["content"]
+        assert "RuntimeError" in tool_msg["content"]  # exception type is included
+        assert "Something went wrong" not in tool_msg["content"]  # raw message is sanitized
 
     async def test_unknown_tool_handled(self) -> None:
         """Unknown tool names in model responses are handled gracefully."""
@@ -606,7 +611,8 @@ class TestAgentLoopToolCalls:
 
         collected: list[str] = []
         async for chunk in loop.run_turn("Use a fake tool"):
-            collected.append(chunk)
+            if isinstance(chunk, str):
+                collected.append(chunk)
 
         tool_msg = next(m for m in loop.conversation.messages if m["role"] == "tool")
         assert "Unknown tool" in tool_msg["content"]
@@ -670,7 +676,8 @@ class TestAgentLoopToolCalls:
 
         collected: list[str] = []
         async for chunk in loop.run_turn("Bad args"):
-            collected.append(chunk)
+            if isinstance(chunk, str):
+                collected.append(chunk)
 
         # Should have a tool result with an error message
         tool_msg = next(m for m in loop.conversation.messages if m["role"] == "tool")
@@ -717,7 +724,8 @@ class TestAgentLoopMaxTurns:
 
         collected: list[str] = []
         async for chunk in loop.run_turn("Keep going"):
-            collected.append(chunk)
+            if isinstance(chunk, str):
+                collected.append(chunk)
 
         # Should have stopped after max_turns (3) API calls, not all 5
         assert loop.usage.turns <= 3
@@ -733,7 +741,8 @@ class TestAgentLoopMaxTurns:
 
         collected: list[str] = []
         async for chunk in loop.run_turn("One shot"):
-            collected.append(chunk)
+            if isinstance(chunk, str):
+                collected.append(chunk)
 
         assert "".join(collected) == "Single turn response"
         assert loop.usage.turns == 1
@@ -792,14 +801,16 @@ class TestAgentLoopInterrupt:
         # Patch _execute_tool_calls to interrupt after executing
         original_execute = loop._execute_tool_calls
 
-        async def interrupt_after_execute(tc: list[dict[str, Any]]) -> None:
-            await original_execute(tc)
+        async def interrupt_after_execute(tc: list[dict[str, Any]]) -> list:
+            result = await original_execute(tc)
             loop.interrupt()
+            return result
 
         loop._execute_tool_calls = interrupt_after_execute  # type: ignore[assignment]
 
         async for chunk in turn_gen:
-            collected.append(chunk)
+            if isinstance(chunk, str):
+                collected.append(chunk)
 
         # The second API call should have been skipped due to interrupt.
         # The client was called once (tool call response), not twice.
