@@ -162,12 +162,12 @@ class PactEngine:
                 {
                     "objective": objective,
                     "role": role,
-                    "error": str(exc),
+                    "error": "Governance verification failed",
                 },
             )
             return WorkResult(
                 success=False,
-                error=f"Governance error: {exc}",
+                error="Governance verification failed — see server logs for details",
                 events=events_emitted,
             )
 
@@ -258,12 +258,12 @@ class PactEngine:
                 {
                     "objective": objective,
                     "role": role,
-                    "error": str(exc),
+                    "error": "Execution failed",
                 },
             )
             return WorkResult(
                 success=False,
-                error=f"Execution error: {exc}",
+                error="Execution failed — see server logs for details",
                 events=events_emitted,
             )
 
