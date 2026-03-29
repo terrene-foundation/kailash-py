@@ -326,4 +326,4 @@ def reserve(self, microdollars: int) -> bool:
 - **Posture stores**: `eatp-posture-stores.md` — PostureStore where these patterns are applied
 - **Trust-plane security rules**: `.claude/rules/trust-plane-security.md` — Trust-plane-specific MUST/MUST-NOT rules
 - **EATP rules**: `.claude/rules/eatp.md` — SDK conventions (dataclasses, error hierarchy, cryptography)
-- **Source**: `src/kailash/trust/constraints/budget_tracker.py`, `src/kailash/trust/constraints/budget_store.py`, `src/kailash/trust/posture_store.py`
+- **Source**: `kailash/trust/constraints/budget_tracker.py`, `kailash/trust/constraints/budget_store.py`, `kailash/trust/posture_store.py`

@@ -63,4 +63,4 @@ await factory.terminate(root.instance_id, TerminationReason.EXPLICIT_TERMINATION
 ## Reference
 
 - Spec: `workspaces/kaizen-l3/briefs/04-agent-factory.md`
-- Source: `packages/kailash-kaizen/src/kaizen/l3/factory/`
+- Source: `kaizen/l3/factory/`

@@ -691,74 +691,154 @@ function checkStubsAndSimulations(content, filePath, messages) {
  */
 function logFileObservations(content, filePath, cwd, messages) {
   const basename = path.basename(filePath);
+  const ext = path.extname(filePath).toLowerCase();
 
-  // WorkflowBuilder / runtime.execute() → workflow_pattern
-  if (
-    /WorkflowBuilder/.test(content) ||
-    /runtime\s*\.\s*execute/.test(content)
-  ) {
+  // --- Framework detection → framework_selection ---
+  // Detect which Kailash framework is being used in this file
+  const framework = detectFileFramework(content, ext);
+  if (framework) {
+    logLearningObservation(cwd, "framework_selection", {
+      framework,
+      file: basename,
+      project_type: inferProjectType(content, ext),
+    });
+  }
+
+  // --- Workflow patterns → workflow_pattern (enriched) ---
+  // Capture actual structure: node types, connections, runtime choice
+  const nodeMatches = content.match(/add_node\s*\(\s*["'](\w+)["']/g);
+  const nodeTypes = nodeMatches
+    ? [
+        ...new Set(
+          nodeMatches
+            .map((m) => {
+              const match = m.match(/add_node\s*\(\s*["'](\w+)["']/);
+              return match ? match[1] : null;
+            })
+            .filter(Boolean),
+        ),
+      ]
+    : [];
+
+  const connectionMatches = content.match(
+    /connect\s*\(\s*["'](\w+)["']\s*,\s*["'](\w+)["']/g,
+  );
+  const connections = connectionMatches
+    ? connectionMatches
+        .map((m) => {
+          const match = m.match(
+            /connect\s*\(\s*["'](\w+)["']\s*,\s*["'](\w+)["']/,
+          );
+          return match ? { from: match[1], to: match[2] } : null;
+        })
+        .filter(Boolean)
+    : [];
+
+  const hasBuilder = /WorkflowBuilder/.test(content);
+  const hasCycles = /enable_cycles|cyclic/.test(content);
+  const runtimeType = /AsyncLocalRuntime/.test(content)
+    ? "async"
+    : /LocalRuntime/.test(content)
+      ? "sync"
+      : null;
+
+  if (hasBuilder || nodeTypes.length > 0) {
     logLearningObservation(cwd, "workflow_pattern", {
-      pattern_type: /WorkflowBuilder/.test(content)
-        ? "workflow_builder"
-        : "runtime_execute",
+      node_types: nodeTypes,
+      connections,
+      has_cycles: hasCycles,
+      runtime: runtimeType,
+      node_count: nodeTypes.length,
       file: basename,
     });
   }
 
-  // add_node() calls → node_usage
-  const nodeMatches = content.match(/add_node\s*\(\s*["'](\w+)["']/g);
-  if (nodeMatches && nodeMatches.length > 0) {
-    const nodeTypes = [
-      ...new Set(
-        nodeMatches
-          .map((m) => {
-            const match = m.match(/add_node\s*\(\s*["'](\w+)["']/);
-            return match ? match[1] : null;
-          })
-          .filter(Boolean),
-      ),
-    ];
+  // --- Node usage (individual node types for frequency tracking) ---
+  if (nodeTypes.length > 0) {
     logLearningObservation(cwd, "node_usage", {
       node_types: nodeTypes,
       file: basename,
     });
   }
 
-  // @db.model → dataflow_model
-  const modelMatches = content.match(/@db\.model[\s\S]*?class\s+(\w+)/g);
-  if (modelMatches) {
-    for (const m of modelMatches) {
-      const nameMatch = m.match(/class\s+(\w+)/);
-      if (nameMatch) {
-        logLearningObservation(cwd, "dataflow_model", {
-          model_name: nameMatch[1],
-          file: basename,
-        });
-      }
+  // --- DataFlow model detection → dataflow_model ---
+  const modelDefs = content.match(/@db\.model[\s\S]*?class\s+(\w+)/g);
+  if (modelDefs) {
+    const modelNames = modelDefs
+      .map((m) => {
+        const n = m.match(/class\s+(\w+)/);
+        return n ? n[1] : null;
+      })
+      .filter(Boolean);
+    if (modelNames.length > 0) {
+      logLearningObservation(cwd, "dataflow_model", {
+        model_names: modelNames,
+        model_count: modelNames.length,
+        file: basename,
+      });
     }
   }
 
-  // Stubs/TODOs detected → error_occurrence (stub_detected)
-  if (
-    messages.some((m) =>
-      /TODO marker|FIXME marker|STUB marker|todo!\(\)|unimplemented!\(\)/.test(
-        m,
-      ),
-    )
-  ) {
+  // --- Error observations from validation messages ---
+  const blockMessages = messages.filter(
+    (m) => m.startsWith("BLOCKED") || m.startsWith("CRITICAL"),
+  );
+  const warnMessages = messages.filter((m) => m.startsWith("WARNING"));
+
+  if (blockMessages.length > 0) {
     logLearningObservation(cwd, "error_occurrence", {
-      error_type: "stub_detected",
+      error_type: "validation_block",
+      errors: blockMessages,
       file: basename,
     });
   }
 
-  // Hardcoded model name detected → error_occurrence (hardcoded_model)
-  if (messages.some((m) => /Hardcoded model/.test(m))) {
-    logLearningObservation(cwd, "error_occurrence", {
-      error_type: "hardcoded_model",
+  // --- Track error_fix: file was edited and now passes (no blocks) ---
+  if (
+    blockMessages.length === 0 &&
+    warnMessages.length === 0 &&
+    nodeTypes.length > 0
+  ) {
+    // Clean file with actual code patterns = potential fix if prior error existed
+    logLearningObservation(cwd, "error_fix", {
+      fix_type: "clean_validation",
       file: basename,
+      patterns_present: nodeTypes.length,
     });
   }
+}
+
+/**
+ * Detect which Kailash framework a file uses.
+ * Returns: "dataflow" | "nexus" | "kaizen" | "core-sdk" | null
+ */
+function detectFileFramework(content, ext) {
+  if (ext === ".py") {
+    if (/@db\.model/.test(content) || /from dataflow/.test(content))
+      return "dataflow";
+    if (/from nexus/.test(content) || /Nexus\(/.test(content)) return "nexus";
+    if (/from kaizen/.test(content) || /BaseAgent/.test(content))
+      return "kaizen";
+    if (/WorkflowBuilder/.test(content) || /LocalRuntime/.test(content))
+      return "core-sdk";
+  } else if (ext === ".rs") {
+    if (/kailash_dataflow|dataflow::/.test(content)) return "dataflow";
+    if (/kailash_nexus|nexus::/.test(content)) return "nexus";
+    if (/kailash_kaizen|kaizen::/.test(content)) return "kaizen";
+    if (/kailash_core|WorkflowBuilder/.test(content)) return "core-sdk";
+  }
+  return null;
+}
+
+/**
+ * Infer project type from content patterns.
+ */
+function inferProjectType(content, ext) {
+  if (/FastAPI|Nexus\(|axum::Router/.test(content)) return "api";
+  if (/BaseAgent|ReActAgent|Pipeline\.router/.test(content)) return "agent";
+  if (/@db\.model|DataFlow/.test(content)) return "data";
+  if (/WorkflowBuilder/.test(content)) return "workflow";
+  return "general";
 }
 
 // =====================================================================

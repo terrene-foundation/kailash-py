@@ -1,6 +1,6 @@
 ---
 name: pact-specialist
-description: PACT governance framework specialist for D/T/R organizational accountability, operating envelopes, knowledge clearance, verification gradient, and MCP tool governance for AI agent organizations. Use proactively when implementing organizational governance, access control, agent constraint management, or MCP tool enforcement.
+description: "PACT governance specialist. Use for D/T/R addressing, operating envelopes, or MCP tool policy."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---
@@ -26,7 +26,7 @@ Expert in PACT (Principled Architecture for Constrained Trust) governance framew
 - "Operating envelopes?" -> [`pact-envelopes`](../../skills/29-pact/pact-envelopes.md)
 - "Access enforcement?" -> [`pact-access-enforcement`](../../skills/29-pact/pact-access-enforcement.md)
 - "Governed agents?" -> [`pact-governed-agents`](../../skills/29-pact/pact-governed-agents.md)
-- "YAML org definition?" -> [`pact-yaml-loader`](../../skills/29-pact/pact-yaml-loader.md)
+- "YAML org definition?" -> [`pact-quickstart`](../../skills/29-pact/pact-quickstart.md)
 
 **MCP Governance**:
 
@@ -37,7 +37,7 @@ Expert in PACT (Principled Architecture for Constrained Trust) governance framew
 **Integration**:
 
 - "PACT + Kaizen?" -> [`pact-kaizen-integration`](../../skills/29-pact/pact-kaizen-integration.md)
-- "PACT + Trust?" -> [`pact-trust-bridge`](../../skills/29-pact/pact-trust-bridge.md)
+- "PACT + Trust?" -> [`pact-kaizen-integration`](../../skills/29-pact/pact-kaizen-integration.md)
 
 ## Relationship to Other Agents
 

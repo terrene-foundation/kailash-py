@@ -285,7 +285,7 @@ async def create_user():
 
 ### FastAPI Integration
 
-**DataFlow v0.11.0+**: `auto_migrate=True` (default) works correctly in Docker/FastAPI environments via `SyncDDLExecutor`. No special workarounds needed.
+**DataFlow**: `auto_migrate=True` (default) works correctly in Docker/FastAPI environments. No special workarounds needed.
 
 ```python
 from fastapi import FastAPI
@@ -295,7 +295,7 @@ from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 import uuid
 
-# auto_migrate=True (default) works in Docker/FastAPI via SyncDDLExecutor
+# auto_migrate=True (default) works in Docker/FastAPI
 db = DataFlow("postgresql://localhost:5432/mydb")
 
 @db.model
@@ -325,7 +325,7 @@ async def create_user(name: str, email: str):
     return results["create"]
 ```
 
-**Note**: The previous workaround of `auto_migrate=False` + `create_tables_async()` in lifespan is **OBSOLETE** as of v0.10.15+. `SyncDDLExecutor` handles table creation synchronously without event loop conflicts.
+**Note**: The previous workaround of `auto_migrate=False` + `create_tables_async()` in lifespan is **OBSOLETE** as of the current version. Table creation is handled synchronously without event loop conflicts.
 
 ## DataFlow + Nexus Integration
 
@@ -339,10 +339,10 @@ from kailash.workflow.builder import WorkflowBuilder
 # Step 1: Create Nexus FIRST with auto_discovery=False
 app = Nexus(auto_discovery=False)  # CRITICAL: Prevents blocking
 
-# Step 2: Create DataFlow (auto_migrate=True works in Docker/FastAPI as of v0.11.0)
+# Step 2: Create DataFlow (auto_migrate=True works in Docker/FastAPI as of the current version)
 db = DataFlow(
     "postgresql://user:pass@localhost/db",
-    auto_migrate=True,  # DEFAULT - works in Docker/FastAPI via SyncDDLExecutor
+    auto_migrate=True,  # DEFAULT - works in Docker/FastAPI
 )
 
 # Step 3: Define models
@@ -404,6 +404,6 @@ Use `nexus-specialist` when:
 - 💡 **String IDs**: Fully supported - no forced integer conversion
 - 💡 **Existing databases**: Use `auto_migrate=False` for safety
 - 💡 **Nexus integration**: Set `auto_discovery=False` in Nexus to avoid blocking
-- 💡 **Clean logs (v0.10.12+)**: Use `LoggingConfig.production()` for production, `LoggingConfig.development()` for debugging
+- 💡 **Clean logs (current)**: Use `LoggingConfig.production()` for production, `LoggingConfig.development()` for debugging
 
 <!-- Trigger Keywords: DataFlow tutorial, DataFlow quick start, @db.model, DataFlow setup, database framework, how to use DataFlow, DataFlow installation, DataFlow guide, zero-config database, automatic node generation, DataFlow example, start with DataFlow -->

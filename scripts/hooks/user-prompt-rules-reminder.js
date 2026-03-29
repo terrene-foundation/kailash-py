@@ -20,7 +20,10 @@ const {
   buildCompactSummary,
   ensureEnvFile,
 } = require("./lib/env-utils");
-const { buildWorkspaceSummary } = require("./lib/workspace-utils");
+const {
+  buildWorkspaceSummary,
+  findAllSessionNotes,
+} = require("./lib/workspace-utils");
 
 const TIMEOUT_MS = 3000;
 const timeout = setTimeout(() => {
@@ -93,6 +96,28 @@ function buildReminder(data) {
     const wsSummary = buildWorkspaceSummary(cwd);
     if (wsSummary) {
       lines.push(`[WORKSPACE] ${wsSummary}`);
+    }
+  } catch {}
+
+  // ── Session notes (critical for continuity across sessions) ───────
+  try {
+    const allNotes = findAllSessionNotes(cwd);
+    if (allNotes.length === 1) {
+      const note = allNotes[0];
+      const staleTag = note.stale ? " (STALE — verify before acting)" : "";
+      const label = note.workspace ? `[${note.workspace}]` : "[root]";
+      lines.push(
+        `[SESSION-NOTES] ${label} Read ${note.relativePath} before starting work${staleTag} — updated ${note.age}`,
+      );
+    } else if (allNotes.length > 1) {
+      const parts = allNotes.map((note) => {
+        const label = note.workspace || "root";
+        const staleTag = note.stale ? " STALE" : "";
+        return `${label} (${note.age}${staleTag})`;
+      });
+      lines.push(
+        `[SESSION-NOTES] ${allNotes.length} workspaces with notes — pick one to continue: ${parts.join(" | ")}`,
+      );
     }
   } catch {}
 

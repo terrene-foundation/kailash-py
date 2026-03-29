@@ -265,7 +265,7 @@ org:
 - `pact-governance-engine.md` -- GovernanceEngine API
 - `pact-governed-agents.md` -- PactGovernedAgent wrapping pattern
 - `pact-envelopes.md` -- envelope model consumed by adapter
-- Source: `packages/kailash-pact/src/pact/governance/envelope_adapter.py`
-- Source: `packages/kailash-pact/src/pact/governance/audit.py`
-- Source: `packages/kailash-pact/src/pact/governance/gradient.py`
-- Source: `packages/kailash-pact/src/pact/governance/yaml_loader.py`
+- Source: `pact/governance/envelope_adapter.py`
+- Source: `pact/governance/audit.py`
+- Source: `pact/governance/gradient.py`
+- Source: `pact/governance/yaml_loader.py`

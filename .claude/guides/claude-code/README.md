@@ -1,8 +1,8 @@
-# Kailash COC Claude (Python) - Complete User Guide
+# Claude Code Guides — CO & COC Reference
 
 ## Welcome
 
-This documentation is designed for users who are completely new to Claude Code. Whether you've never used an AI-assisted coding tool before, or you're coming from other tools like GitHub Copilot, this guide will take you from zero to productive.
+This documentation serves both the **CO artifact management platform** (this repo) and **COC development repos** (target repos that sync from here). Whether you're managing CO artifacts across stacks or using Claude Code for SDK development, these guides take you from zero to productive.
 
 **What you'll learn:**
 
@@ -53,6 +53,17 @@ Then come back and read the rest when you have time.
 | **[10 - Daily Workflows](10-daily-workflows.md)** | Common patterns for everyday development tasks. Building features, fixing bugs, writing tests, and more. | 25-30 min    |
 | **[11 - Advanced Usage](11-advanced-usage.md)**   | Power user features, customization, extending the setup, and optimizing for your specific workflow.      | 20-25 min    |
 | **[12 - Troubleshooting](12-troubleshooting.md)** | Common issues, error messages, and their solutions. When things go wrong and how to fix them.            | 15-20 min    |
+
+### Part 4: Architect-Level Patterns
+
+Advanced patterns distilled from the Claude Certified Architect curriculum and production experience with agentic systems.
+
+| Guide                                                                       | Description                                                                                                                             | Reading Time |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| **[13 - Agentic Architecture](13-agentic-architecture.md)**                 | Agentic loops, multi-agent orchestration, memory isolation, task decomposition, session management. The foundational architect pattern. | 25-30 min    |
+| **[14 - Tool Design Patterns](14-tool-design-patterns.md)**                 | Tool descriptions as selection mechanism, the 4-5 tool limit, tool_choice modes, structured errors, MCP configuration.                  | 20-25 min    |
+| **[15 - Prompt Engineering & Structured Output](15-prompt-engineering.md)** | Explicit criteria, few-shot examples, JSON schema design, validation-retry loops, batch processing, multi-instance review.              | 25-30 min    |
+| **[16 - Context Management & Reliability](16-context-reliability.md)**      | Progressive summarization trap, lost-in-the-middle effect, escalation triggers, error propagation, information provenance.              | 20-25 min    |
 
 ---
 
@@ -113,16 +124,17 @@ If you're stuck:
 
 ## About This Setup
 
-This is the **Kailash COC Claude (Python)**, a comprehensive configuration for Claude Code optimized for development with the Kailash SDK ecosystem (Core SDK, DataFlow, Nexus, Kaizen).
+This is the **Kailash CO Artifact Management Platform** — the canonical source for CO (Cognitive Orchestration) artifacts that get synced across all Kailash SDK stacks. It includes COC (CO for Codegen) content for target development repos.
 
 The setup includes:
 
-- **28 skill directories** covering all SDK features
-- **30 specialized agents** for different task types
+- **32 skill directories** covering SDK frameworks, standards, and patterns
+- **37 specialized agents** for analysis, implementation, review, and standards
 - **9 automation hooks** for quality enforcement and workspace awareness
-- **20 slash commands** for quick access to knowledge and workspace phases
-- **9 rule files** for behavioral constraints
+- **23 slash commands** for management and knowledge access
+- **26 rule files** for behavioral constraints (12 CO-general, 14 COC-specific)
 - **4 learning scripts** for continuous improvement
+- **4 architect-level guides** covering production agentic patterns
 
 ---
 
@@ -130,7 +142,7 @@ The setup includes:
 
 - **Setup Version**: 1.0.0
 - **Claude Code Compatibility**: 2.1.x
-- **Last Updated**: January 2026
+- **Last Updated**: March 2026
 
 ---
 

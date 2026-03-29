@@ -10,11 +10,11 @@ description: "DataFlow production deployment patterns. Use when asking 'deploy d
 > Priority: `HIGH`
 > SDK Version: `0.10.15+`
 
-## Docker/FastAPI Deployment (v0.10.15+ FIX)
+## Docker/FastAPI Deployment (current version FIX)
 
 ✅ **`auto_migrate=True` NOW WORKS in Docker/FastAPI!**
 
-DataFlow v0.10.15+ uses `SyncDDLExecutor` with synchronous database drivers (psycopg2, sqlite3) for table creation, completely bypassing event loop boundary issues.
+DataFlow uses synchronous database drivers (psycopg2, sqlite3) for table creation, avoiding event loop boundary issues.
 
 ### Zero-Config Pattern (Recommended)
 
@@ -48,7 +48,7 @@ async def list_users(limit: int = 100):
 
 ### How It Works
 
-- `SyncDDLExecutor` uses psycopg2 (PostgreSQL) or sqlite3 (SQLite) - no asyncio
+- Uses psycopg2 (PostgreSQL) or sqlite3 (SQLite) for DDL - no asyncio
 - Tables are created synchronously at model registration time
 - CRUD operations use async drivers (asyncpg, aiosqlite) as before
 - No event loop conflicts because DDL and CRUD use separate connection types

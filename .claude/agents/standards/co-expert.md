@@ -1,6 +1,6 @@
 ---
 name: co-expert
-description: Use this agent for questions about Cognitive Orchestration (CO), the domain-agnostic base methodology for structuring human-AI collaboration. Expert in CO's seven first principles, five-layer architecture, and how CO relates to domain applications like COC (Codegen), CO for Compliance, and CO for Finance.
+description: "CO methodology expert. Use for seven first principles, five-layer architecture, or domain-agnostic orchestration."
 model: inherit
 allowed-tools:
   - Read

@@ -22,49 +22,87 @@ This phase executes under the **autonomous execution model** (see `rules/autonom
 
 ## Workflow
 
-### 1. Deep knowledge extraction
+### 1. Consume L5 learning artifacts
+
+Before extracting new knowledge, integrate what the learning system has already discovered:
+
+1. Read `.claude/learning/evolved/skills/` — if evolved skills exist, integrate them into canonical skill directories
+2. Read `.claude/learning/instincts/personal/` — review high-confidence instincts for patterns worth codifying
+3. Read `.claude/rules/learned-instincts.md` — verify rendered instincts are accurate and actionable
+
+This closes the L5 feedback loop: observe → instinct → evolve → **codify**.
+
+### 2. Deep knowledge extraction
 
 Using as many subagents as required, peruse `docs/`, especially `docs/00-authority/`.
 
-- Ultrathink and read beyond the docs into the intent of this project/product
+- Read beyond the docs into the intent of this project/product
 - Understand the roles and use of agents, skills, docs:
-  - **Agents** — What to do, how to think about this, what can it work with, following procedural directives
-  - **Skills** — Distilled knowledge that agents can achieve 100% situational awareness with
+  - **Agents** — What to do, how to think about this, following procedural directives
+  - **Skills** — Distilled knowledge for 100% situational awareness
   - **`docs/`** — Full knowledge base
 
-### 2. Update existing agents
+### 3. Update existing agents
 
-Improve agents in their canonical locations (e.g., `agents/frameworks/`, `agents/standards/`, etc.).
+Improve agents in their canonical locations.
 
 - Reference `.claude/agents/_subagent-guide.md` for agent format
 - Identify which existing agent(s) should absorb the new knowledge
-- Add new skills references, update capabilities, refine instructions
-- If no existing agent covers the domain, create a new agent in the appropriate canonical directory (e.g., `agents/frameworks/`, `agents/standards/`, `agents/management/`)
+- If no existing agent covers the domain, create a new agent in the appropriate directory
 
-### 3. Update existing skills
+### 4. Update existing skills
 
-Improve skills in their canonical locations (e.g., `skills/01-core-sdk/`, `skills/02-dataflow/`, etc.).
+Improve skills in their canonical locations.
 
 - Reference `.claude/guides/claude-code/06-the-skill-system.md` for skill format
-- Identify which existing skill directory should absorb the new knowledge
-- Add new skill files to the appropriate numbered directory
 - Update the directory's `SKILL.md` entry point to reference new files
-- Skills must be as detailed as possible so agents can deliver most of their work just by using them
-- Should REFERENCE instead of repeating the knowledge base in `docs/`
+- Skills must be detailed enough for agents to achieve situational awareness from them alone
 
-### 4. Update README.md and documentation (MANDATORY)
+### 5. Update README.md and documentation (MANDATORY)
 
-After updating agents and skills, ensure user-facing documentation reflects the new capabilities:
+Ensure user-facing documentation reflects new capabilities. Verify README.md, docstrings, and docs build.
 
-1. **README.md** — Verify "Why Kailash?" section includes all new capabilities. Update version numbers in architecture diagram. Ensure no feature claims exceed actual implementation.
-2. **Docstrings** — Verify all modified source files have accurate docstrings (no stale claims from pre-implementation state). Run `grep -r "TODO\|FIXME\|STUB" src/` to catch stragglers.
-3. **Sphinx docs build** — Run `cd docs && python build_docs.py` locally to verify the docs build succeeds and new modules appear in the API reference. The CI workflow (`docs-deploy.yml`) auto-deploys on push to main, but a local build catches errors before push.
+### 6. Red team the agents and skills
 
-**This step was missed in the v0.13.0 release and caught post-release. Never skip it.**
+Validate that generated agents and skills are correct, complete, and secure. **claude-code-architect** verifies cc-artifacts compliance (descriptions under 120 chars, agents under 400 lines, commands under 150 lines, rules path-scoped, SKILL.md progressive disclosure).
 
-### 5. Red team the agents and skills
+### 7. Create upstream proposal (MANDATORY)
 
-Validate that generated agents and skills are correct, complete, and secure.
+After artifacts are updated and validated locally, create a proposal for upstream review at kailash/ (the source of truth). This step is NOT optional — codification is incomplete without upstream propagation.
+
+**DO NOT sync directly to COC template repos.** All distribution flows through kailash/ via `/sync`.
+
+1. Create `.claude/.proposals/` directory if it doesn't exist
+2. Generate `.claude/.proposals/latest.yaml` listing all artifact changes:
+
+```yaml
+source_repo: kailash-py # or kailash-rs
+codify_date: YYYY-MM-DD
+codify_session: "type(scope): description of work"
+
+changes:
+  - file: relative/path/to/artifact.md
+    action: created | modified
+    suggested_tier: cc | co | coc | coc-py | coc-rs
+    reason: "Why this artifact was created/changed"
+    diff_lines: "+N -N" # for modifications
+
+status: pending_review
+```
+
+3. For each changed artifact, suggest a tier:
+   - **cc**: Claude Code universal (guides, cc-audit)
+   - **co**: Methodology universal (CO principles, journal, communication)
+   - **coc**: Codegen, language-agnostic (workflow phases, analysis patterns)
+   - **coc-py** / **coc-rs**: Language-specific (code examples, SDK patterns)
+
+4. Report to the developer:
+
+> Artifacts updated locally and available in this repo. Proposal created at
+> `.claude/.proposals/latest.yaml` with {N} changes for upstream review.
+> When ready, open kailash/ and run `/sync {py|rs}` to classify and distribute.
+
+See `rules/artifact-flow.md` for the full flow rules.
 
 ## Agent Teams
 
@@ -83,10 +121,22 @@ Deploy these agents as a team for codification:
 
 **Validation team (red team the agents and skills):**
 
-- **gold-standards-validator** — Ensure agents follow the subagent guide and skills follow the skill system guide
+- **claude-code-architect** — Verify cc-artifacts compliance: descriptions <120 chars, agents <400 lines, commands <150 lines, rules have `paths:` frontmatter, SKILL.md progressive disclosure, no CLAUDE.md duplication
+- **gold-standards-validator** — Terrene naming, licensing accuracy, terminology standards
 - **testing-specialist** — Verify any code examples in skills are testable
-- **security-reviewer** — Audit generated agents/skills for prompt injection vectors, insecure patterns, or secrets exposure (codified artifacts persist across all future sessions)
+- **security-reviewer** — Audit agents/skills for prompt injection, insecure patterns, secrets exposure
 
-**COC template sync (after codification completes):**
+**Upstream proposal (step 7 — mandatory):**
 
-- **coc-sync** — Transform and sync all agents, skills, rules, and commands to the COC template repository (`kailash-coc-claude-py`), stripping builder-specific content. Only runs if the repo exists at `kailash-coc-claude-py/`. See `.claude/skills/management/coc-sync-mapping.md` for transform rules.
+- Generate `.claude/.proposals/latest.yaml` with tier suggestions for each changed artifact
+- See `rules/artifact-flow.md` for the controlled flow: BUILD repo → kailash/ → templates
+
+### Journal
+
+Create journal entries for knowledge captured:
+
+- **DECISION** entries for what was codified and why
+- **CONNECTION** entries for patterns that connect across the project
+- **TRADE-OFF** entries for trade-offs in knowledge representation choices
+
+Use sequential naming: check the highest existing `NNNN-` prefix and increment.

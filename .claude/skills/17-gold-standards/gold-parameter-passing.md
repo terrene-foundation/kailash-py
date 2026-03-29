@@ -130,7 +130,7 @@ class CustomNode(Node):
 - **Testing**: Testable parameter contracts
 - **Isolation**: Automatic scoping prevents data leakage
 
-## Parameter Naming (v0.10.3+)
+## Parameter Naming 
 
 ### Using "metadata" as a Parameter Name
 
@@ -145,7 +145,7 @@ class CustomNode(Node):
                 type=dict,
                 required=False,
                 default=None,
-                description="User metadata (v0.10.3+)"
+                description="User metadata "
             )
         }
 
@@ -232,7 +232,6 @@ except ValueError as e:  # Missing required parameters
 ### Primary Sources
 
 ### Internal Implementation
-- `src/kailash/runtime/local.py:1621-1640` - Parameter scoping implementation
 
 ## Quick Tips
 

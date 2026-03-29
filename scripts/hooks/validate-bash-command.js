@@ -111,14 +111,25 @@ function validateBashCommand(data) {
   const isPython = /\bpython\b/.test(command) || /\bpython3\b/.test(command);
 
   if (isPytest || isPython) {
-    // Log test pattern observation
+    // Log enriched test pattern observation
     try {
       const testPathMatch = command.match(
-        /(?:pytest|python3?\s+-m\s+pytest)\s+([^\s]+)/,
+        /(?:pytest|python3?\s+-m\s+pytest)\s+([^\s;|&]+)/,
       );
+      const testPath = testPathMatch ? testPathMatch[1] : null;
+
+      // Determine test tier from path
+      let testTier = "unit";
+      if (testPath) {
+        if (/e2e|playwright|end.to.end/i.test(testPath)) testTier = "e2e";
+        else if (/integrat/i.test(testPath)) testTier = "integration";
+      }
+
       logLearningObservation(cwd, "test_pattern", {
-        test_tier: isPytest ? "pytest" : "python",
-        test_path: testPathMatch ? testPathMatch[1] : null,
+        test_tier: testTier,
+        test_path: testPath,
+        is_pytest: isPytest,
+        command_flags: extractTestFlags(command),
       });
     } catch {}
 
@@ -197,5 +208,41 @@ function validateBashCommand(data) {
     };
   }
 
+  // Log cargo test / cargo clippy observations for Rust repos
+  const isCargoTest = /\bcargo\s+test\b/.test(command);
+  const isCargoClippy = /\bcargo\s+clippy\b/.test(command);
+  const isCargoBuil = /\bcargo\s+build\b/.test(command);
+
+  if (isCargoTest || isCargoClippy || isCargoBuil) {
+    try {
+      const crateMatch = command.match(/-p\s+(\S+)/);
+      logLearningObservation(cwd, "test_pattern", {
+        test_tier: isCargoTest
+          ? "cargo_test"
+          : isCargoClippy
+            ? "clippy"
+            : "cargo_build",
+        test_path: crateMatch ? crateMatch[1] : "workspace",
+        is_rust: true,
+        command_flags: extractTestFlags(command),
+      });
+    } catch {}
+  }
+
   return { continue: true, exitCode: 0, message: "Validated" };
+}
+
+/**
+ * Extract test-relevant flags from command for learning.
+ */
+function extractTestFlags(command) {
+  const flags = [];
+  if (/-x\b/.test(command)) flags.push("fail-fast");
+  if (/--tb=/.test(command)) flags.push("traceback");
+  if (/-v\b|--verbose\b/.test(command)) flags.push("verbose");
+  if (/--cov\b/.test(command)) flags.push("coverage");
+  if (/-k\s/.test(command)) flags.push("keyword-filter");
+  if (/--workspace\b/.test(command)) flags.push("workspace");
+  if (/--release\b/.test(command)) flags.push("release");
+  return flags;
 }

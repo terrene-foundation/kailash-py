@@ -138,7 +138,7 @@ results, run_id = runtime.execute(workflow.build())
 | `$null`   | `IS NULL`      | `{"deleted_at": {"$null": True}}`                        |
 | `$exists` | `IS NOT NULL`  | `{"email": {"$exists": True}}`                           |
 
-### Null Checking Operators (v0.10.6+)
+### Null Checking Operators 
 
 **For soft-delete filtering and nullable field queries:**
 
@@ -153,7 +153,7 @@ workflow.add_node("PatientListNode", "deleted_patients", {
     "filter": {"deleted_at": {"$exists": True}}  # WHERE deleted_at IS NOT NULL
 })
 
-# Alternative: $eq with None also works (v0.10.6+)
+# Alternative: $eq with None also works 
 workflow.add_node("PatientListNode", "active", {
     "filter": {"deleted_at": {"$eq": None}}  # Also generates IS NULL
 })

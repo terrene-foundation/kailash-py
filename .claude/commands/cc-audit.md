@@ -1,46 +1,42 @@
 ---
 name: cc-audit
-description: "Audit CC artifacts for quality, completeness, effectiveness, and token efficiency"
+description: "Audit project artifacts for quality, completeness, effectiveness, and template alignment"
 ---
 
-# CC Artifact Audit
+# CC Artifact Audit (Project)
 
-## What This Does
-
-Systematically reviews all Claude Code artifacts (agents, skills, rules, commands, hooks) for quality across four dimensions: competency, completeness, effectiveness, and token efficiency.
+Reviews your project's artifacts for quality and template alignment. Checks that project-specific artifacts (agents/project/, skills/project/) are well-formed, and that shared artifacts are current with your upstream template.
 
 ## Your Role
 
-Specify scope: audit everything, or target a specific artifact type or file.
+Specify scope: `all`, `fidelity` (quality only), `sync` (template alignment only), or a specific file/type.
 
-## Workflow
+## Phase 1: Fidelity Audit
 
-1. **Scope determination**: If no scope specified, audit all artifact types. Otherwise focus on the requested scope.
+1. **Inventory**: List project-specific artifacts (agents/project/, skills/project/) with line counts.
 
-2. **Inventory**: List all artifacts in scope with file paths and line counts.
+2. **Four-dimension audit** per artifact:
+   - **Competency**: Precise instructions? Knows its domain?
+   - **Completeness**: Edge cases? Missing handoffs?
+   - **Effectiveness**: Reliable behavior? Output format specified?
+   - **Token Efficiency**: Lean? No redundancy?
 
-3. **Audit each artifact** using the claude-code-architect agent's four-dimension framework:
-   - **Competency**: Does it know what it claims? Are instructions precise?
-   - **Completeness**: Are there gaps? Edge cases? Missing handoffs?
-   - **Effectiveness**: Does it produce reliable behavior? Is the output format specified?
-   - **Token Efficiency**: Is it lean? Path-scoped? No redundancy?
+3. **Hard limits** (cc-artifacts rules):
+   - Agent descriptions under 120 chars with trigger phrases
+   - Agents under 400 lines, commands under 150 lines
+   - CLAUDE.md under 200 lines
+   - Rules have DO/DO NOT examples and Why rationale
 
-4. **Cross-reference check**: Verify all referenced artifacts exist. Flag orphans and broken links.
+4. **Cross-reference check**: Every referenced artifact exists on disk.
 
-5. **Token budget analysis**: Calculate baseline per-turn token cost (CLAUDE.md + global rules + agent descriptions).
+## Phase 2: Template Alignment
 
-6. **Report**: Produce findings sorted by severity (CRITICAL → HIGH → NOTE) with specific fix recommendations.
+5. **Freshness**: Check `.coc-sync-marker` — when was the last sync from the upstream template? If stale, recommend running `/sync`.
 
-## Agent Teams
+6. **Shared artifact integrity**: Are shared artifacts (from template) still intact, or have they been locally modified? Local modifications to shared files will be overwritten on next `/sync`.
 
-| Function                     | Agent                    |
-| ---------------------------- | ------------------------ |
-| Audit execution              | claude-code-architect    |
-| Standards compliance         | gold-standards-validator |
-| Cross-reference verification | intermediate-reviewer    |
+7. **Hook integrity**: Every hook in settings.json has a script on disk.
 
-## Completion Evidence
+## Phase 3: Report + Convergence
 
-- Audit report with dimension scores for each artifact
-- Token budget summary
-- Prioritized fix list with CRITICAL/HIGH/NOTE severity
+Report findings as CRITICAL/HIGH/NOTE. Run iteratively until zero CRITICAL and zero HIGH.

@@ -162,9 +162,9 @@ See skill: `production-readiness-patterns` for full code examples.
 
 ### Error Resolution
 
-- **[error-missing-build](../../.claude/skills/15-error-troubleshooting/error-missing-build.md)** - Missing .build() error
-- **[error-parameter-validation](../../.claude/skills/15-error-troubleshooting/error-parameter-validation.md)** - Parameter errors
-- **[error-connection-params](../../.claude/skills/15-error-troubleshooting/error-connection-params.md)** - Connection errors
+- **[error-missing-build](../../.claude/skills/31-error-troubleshooting/error-missing-build.md)** - Missing .build() error
+- **[error-parameter-validation](../../.claude/skills/31-error-troubleshooting/error-parameter-validation.md)** - Parameter errors
+- **[error-connection-params](../../.claude/skills/31-error-troubleshooting/error-connection-params.md)** - Connection errors
 
 ## Related Agents
 

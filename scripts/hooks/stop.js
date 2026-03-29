@@ -23,6 +23,13 @@ const {
 } = require("./lib/learning-utils");
 const { detectActiveWorkspace } = require("./lib/workspace-utils");
 
+// Timeout fallback — prevents hanging the Claude Code session
+const TIMEOUT_MS = 5000;
+const _timeout = setTimeout(() => {
+  console.log(JSON.stringify({ continue: true }));
+  process.exit(0); // Stop hooks always exit 0 to allow shutdown
+}, TIMEOUT_MS);
+
 // Get home directory (cross-platform)
 const HOME = process.env.HOME || process.env.USERPROFILE;
 

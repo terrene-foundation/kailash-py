@@ -43,7 +43,7 @@ This means:
 
 **Practical Impact**: When you ask Claude to work with DataFlow, it doesn't try to figure out database operations from first principles. It uses the `dataflow-specialist` agent and the `02-dataflow` skill which contain proven patterns.
 
-### Philosophy 2: Quality is Non-Negotiable
+### Philosophy 2: Quality is Important
 
 The setup enforces quality at multiple levels:
 
@@ -119,7 +119,7 @@ Think of Claude Code as a **highly capable junior developer** with access to a *
 │  │  1. Use DataFlow (skill 02-dataflow)            │       │
 │  │  2. Consult dataflow-specialist (agent)         │       │
 │  │  3. Generate CRUD nodes                         │       │
-│  │  4. Write tests (NO MOCKING - rule)             │       │
+│  │  4. Write tests (real infrastructure recommended)             │       │
 │  │  5. Deploy via Nexus (skill 03-nexus)           │       │
 │  └─────────────────────────────────────────────────┘       │
 │                                                              │
@@ -196,7 +196,7 @@ Think of Claude Code as a **highly capable junior developer** with access to a *
 │   ├── no-stubs.md     # No stubs/TODOs/placeholders
 │   ├── patterns.md     # Kailash pattern rules
 │   ├── security.md     # Security rules
-│   └── testing.md      # Testing policies (NO MOCKING)
+│   └── testing.md      # Testing policies (real infrastructure recommended)
 │
 ├── skills/              # 28 knowledge directories
 │   ├── 01-core-sdk/    # Core SDK patterns
@@ -266,12 +266,12 @@ User: "Create a User model with DataFlow"
 
 5. CLAUDE WRITES TESTS
    └── RULE APPLIED: testing.md
-   └── NO MOCKING in Tier 2-3 tests
+   └── Real infrastructure recommended in Tier 2-3 tests
    └── Uses real SQLite database
 
 6. CLAUDE OFFERS TO COMMIT
    └── RULE APPLIED: agents.md
-   └── MUST delegate to security-reviewer
+   └── security review recommended
    └── MUST pass security audit before commit
 ```
 
@@ -454,7 +454,7 @@ You don't need to specify which agent to use. Just describe the task:
 ### Anti-Pattern 6: Skipping Security Review
 
 **Don't**: "Commit without security review"
-**Why**: Non-negotiable rule; prevents security vulnerabilities
+**Why**: Strongly recommended; prevents security vulnerabilities
 
 ---
 
@@ -539,7 +539,7 @@ You don't need to specify which agent to use. Just describe the task:
 
 | Rule                          | Enforcement                 | Consequence         |
 | ----------------------------- | --------------------------- | ------------------- |
-| NO MOCKING in Tier 2-3        | `validate-workflow.js` hook | Test marked invalid |
+| Real infrastructure recommended in Tier 2-3        | `validate-workflow.js` hook | Test marked invalid |
 | Security review before commit | `agents.md` rule            | Commit blocked      |
 | Absolute imports only         | `validate-workflow.js` hook | Warning issued      |
 | Use `.build()` before execute | `validate-workflow.js` hook | Warning issued      |

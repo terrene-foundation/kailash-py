@@ -583,7 +583,34 @@ Add to `.claude/settings.json`:
 
 ---
 
-## Part 10: Key Takeaways
+## Part 10: Hooks vs Prompts — The Decision Framework
+
+A key architect-level decision is **when to use hooks (deterministic enforcement) vs prompts (probabilistic guidance)**.
+
+### The Decision Rule
+
+| Enforcement Type           | Mechanism                    | Reliability                   | Use When                                                                            |
+| -------------------------- | ---------------------------- | ----------------------------- | ----------------------------------------------------------------------------------- |
+| **Hooks** (programmatic)   | Code runs before/after tools | 100% — always fires           | Financial, security, compliance. A single failure costs money or creates incidents. |
+| **Prompts** (instructions) | System prompt or CLAUDE.md   | ~95% — works most of the time | Formatting preferences, style guidelines, output structure.                         |
+
+**Example**: "Never process refunds over $500" as a prompt instruction will work 95% of the time. But a PreToolUse hook that blocks the `process_refund` tool when `amount > 500` works 100% of the time. For financial operations, that 5% failure rate is unacceptable.
+
+### In This Setup
+
+| Concern                   | Enforcement                     | Why                                 |
+| ------------------------- | ------------------------------- | ----------------------------------- |
+| Block `rm -rf /`          | Hook (validate-bash-command.js) | Single failure = system destruction |
+| Use absolute imports      | Hook (validate-workflow.js)     | Convention drift across team        |
+| Format code consistently  | Hook (auto-format.js)           | Deterministic formatting            |
+| Code review before commit | Rule (agents.md)                | Recommended, not safety-critical    |
+| Naming conventions        | Rule (CLAUDE.md)                | Style preference                    |
+
+For deep coverage of enforcement patterns, see [Guide 13 - Agentic Architecture](13-agentic-architecture.md), Part 6.
+
+---
+
+## Part 11: Key Takeaways
 
 ### Summary
 

@@ -328,7 +328,7 @@ Ask about testing:
 
 Claude should:
 
-1. Reference the NO MOCKING policy
+1. Reference the Real infrastructure recommended policy
 2. Show real database testing patterns
 3. Use SQLite in-memory for examples
 

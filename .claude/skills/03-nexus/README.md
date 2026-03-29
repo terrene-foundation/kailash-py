@@ -24,7 +24,7 @@ Complete set of 21 Nexus skills covering all aspects from quickstart to advanced
 
 5. **nexus-dataflow-integration** - CRITICAL blocking fix configuration
    - Priority: CRITICAL
-   - auto_discovery=False, auto_migrate=True (v0.11.0 default), performance optimization
+   - auto_discovery=False, auto_migrate=True (default), performance optimization
 
 ### Channel-Specific (6 Skills - HIGH)
 
@@ -110,7 +110,7 @@ Complete set of 21 Nexus skills covering all aspects from quickstart to advanced
 ### 2. DataFlow Blocking Fix (Lines 320-386 from nexus-specialist)
 
 - auto_discovery=False configuration
-- auto_migrate=True (v0.11.0 default, works in Docker/FastAPI)
+- auto_migrate=True (default, works in Docker/FastAPI)
 - Performance comparison (30s → <2s)
 - Trade-off analysis
 

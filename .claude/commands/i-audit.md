@@ -24,44 +24,15 @@ Before auditing, gather:
 3. **Existing design system?** (Check for design tokens, theme files)
 4. **Target audience?** (Enterprise SaaS users vs consumer vs internal tool)
 
-### Step 2: AI Slop Test (CRITICAL — Run First)
+### Step 2: AI Slop Test (CRITICAL -- Run First)
 
-Check for these 2024-2025 AI-generation fingerprints. If 3+ are present, flag as FAIL:
+Check for 2024-2025 AI-generation fingerprints across 5 categories. If 3+ fingerprints found, flag as FAIL:
 
-**Typography Tells**
-
-- Inter, Roboto, or system fonts used without intentional reasoning
-- Generic `font-weight: 600` everywhere (no weight contrast)
-- Missing typographic scale (random sizes instead of modular scale)
-- No line-height optimization (default `1.5` on everything)
-
-**Color Tells**
-
-- Purple-to-blue gradients as primary palette
-- Neon accents on dark backgrounds (cyan, electric blue, hot pink)
-- `#6366F1` / `#8B5CF6` / `#3B82F6` as hero colors (Tailwind defaults)
-- Identical opacity overlays across unrelated elements
-
-**Layout Tells**
-
-- Cards-in-cards-in-cards nesting pattern
-- Perfectly uniform spacing throughout (no rhythm variation)
-- Everything centered, no asymmetry
-- Grid of identical-sized cards as the default layout for all content
-
-**Visual Effect Tells**
-
-- Glassmorphism everywhere (blur + transparency on every surface)
-- `rounded-2xl` on everything (uniform border-radius)
-- `shadow-lg` on every card (no shadow hierarchy)
-- Gratuitous gradient text on headings
-
-**Motion Tells**
-
-- `transition-all` instead of targeted properties
-- Identical 300ms timing on every animation
-- Bounce/elastic easing (dated feel)
-- Animations that don't serve a purpose
+- **Typography**: Inter/Roboto without reasoning, uniform `font-weight: 600`, no typographic scale, default `1.5` line-height everywhere
+- **Color**: Purple-to-blue gradients, neon accents on dark backgrounds, Tailwind default hero colors (`#6366F1` / `#8B5CF6` / `#3B82F6`), identical opacity overlays
+- **Layout**: Cards-in-cards nesting, perfectly uniform spacing (no rhythm), everything centered, identical-card grids as default
+- **Visual Effects**: Glassmorphism everywhere, uniform `rounded-2xl`, `shadow-lg` on every card (no hierarchy), gratuitous gradient text
+- **Motion**: `transition-all` instead of targeted properties, identical 300ms timing, bounce/elastic easing, purposeless animations
 
 **Verdict**: PASS / MARGINAL / FAIL with specific fingerprints listed.
 

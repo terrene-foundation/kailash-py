@@ -66,4 +66,4 @@ router.route(completion)
 ## Reference
 
 - Spec: `workspaces/kaizen-l3/briefs/03-messaging.md`
-- Source: `packages/kailash-kaizen/src/kaizen/l3/messaging/`
+- Source: `kaizen/l3/messaging/`

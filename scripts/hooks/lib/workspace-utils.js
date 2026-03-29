@@ -122,10 +122,70 @@ function getTodoProgress(workspacePath) {
  */
 function getSessionNotes(workspacePath) {
   const notesPath = path.join(workspacePath, ".session-notes");
+  return readSessionNotesFile(notesPath);
+}
+
+/**
+ * Find all .session-notes across repo root and workspaces, sorted newest first.
+ *
+ * Searches:
+ *   1. cwd/.session-notes (repo root)
+ *   2. cwd/workspaces/<dir>/.session-notes (all workspace dirs)
+ *
+ * @param {string} cwd - Project root directory
+ * @returns {Array<{ path: string, relativePath: string, workspace: string|null, content: string, stale: boolean, age: string, mtime: number }>}
+ */
+function findAllSessionNotes(cwd) {
+  const results = [];
+
+  // Check repo root
+  const rootNotes = path.join(cwd, ".session-notes");
+  const rootResult = readSessionNotesFile(rootNotes);
+  if (rootResult) {
+    results.push({
+      ...rootResult,
+      path: rootNotes,
+      relativePath: ".session-notes",
+      workspace: null,
+    });
+  }
+
+  // Check all workspace dirs
+  const wsDir = path.join(cwd, "workspaces");
+  try {
+    const entries = fs.readdirSync(wsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name === "instructions") continue;
+      const notesPath = path.join(wsDir, entry.name, ".session-notes");
+      const result = readSessionNotesFile(notesPath);
+      if (result) {
+        results.push({
+          ...result,
+          path: notesPath,
+          relativePath: `workspaces/${entry.name}/.session-notes`,
+          workspace: entry.name,
+        });
+      }
+    }
+  } catch {}
+
+  // Sort newest first
+  results.sort((a, b) => b.mtime - a.mtime);
+  return results;
+}
+
+/**
+ * Read a single .session-notes file and compute age metadata.
+ *
+ * @param {string} notesPath - Absolute path to .session-notes
+ * @returns {{ content: string, stale: boolean, age: string, mtime: number } | null}
+ */
+function readSessionNotesFile(notesPath) {
   try {
     const content = fs.readFileSync(notesPath, "utf8");
     const stat = fs.statSync(notesPath);
-    const ageMs = Date.now() - stat.mtime.getTime();
+    const mtime = stat.mtime.getTime();
+    const ageMs = Date.now() - mtime;
     const ageHours = Math.round(ageMs / (1000 * 60 * 60));
     const stale = ageMs > 24 * 60 * 60 * 1000;
 
@@ -134,7 +194,7 @@ function getSessionNotes(workspacePath) {
     else if (ageHours < 24) age = `${ageHours}h ago`;
     else age = `${Math.round(ageHours / 24)}d ago`;
 
-    return { content: content.trim(), stale, age };
+    return { content: content.trim(), stale, age, mtime };
   } catch {
     return null;
   }
@@ -185,6 +245,7 @@ module.exports = {
   derivePhase,
   getTodoProgress,
   getSessionNotes,
+  findAllSessionNotes,
   buildWorkspaceSummary,
   dirHasFiles,
   countFiles,

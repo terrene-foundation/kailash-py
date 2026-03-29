@@ -15,12 +15,12 @@ Common misunderstandings and mistakes when using DataFlow, with solutions.
 
 ## Quick Reference
 
-- **✅ Docker/FastAPI (v0.10.15+)**: `auto_migrate=True` now works! Uses sync DDL with psycopg2/sqlite3
+- **✅ Docker/FastAPI (current version)**: `auto_migrate=True` now works! Uses sync DDL with psycopg2/sqlite3
 - **⚠️ In-Memory SQLite**: `:memory:` databases use lazy creation (sync DDL skipped)
 - **🚨 Sync methods in async context (DF-501)**: Use `create_tables_async()` if needed
-- **🚨 Timestamp fields auto-stripped (v0.10.6+)**: `created_at`/`updated_at` auto-removed with warning
-- **🔇 Logging configuration (v0.10.12+)**: Use `LoggingConfig` for clean logs - `db = DataFlow(..., log_config=LoggingConfig.production())`
-- **soft_delete auto-filters (v0.10.6+)**: Use `include_deleted=True` to see deleted records
+- **🚨 Timestamp fields auto-stripped **: `created_at`/`updated_at` auto-removed with warning
+- **🔇 Logging configuration (current)**: Use `LoggingConfig` for clean logs - `db = DataFlow(..., log_config=LoggingConfig.production())`
+- **soft_delete auto-filters **: Use `include_deleted=True` to see deleted records
 - **NOT an ORM**: DataFlow is workflow-native, not like SQLAlchemy
 - **Primary Key MUST be `id`**: NOT `user_id`, `model_id`, or anything else
 - **CreateNode ≠ UpdateNode**: Different parameter patterns (flat vs nested)
@@ -31,16 +31,16 @@ Common misunderstandings and mistakes when using DataFlow, with solutions.
 
 ## Critical Gotchas
 
-### 🚨 #1 MOST COMMON: Auto-Managed Timestamp Fields (DF-104) ✅ FIXED IN v0.10.6
+### 🚨 #1 MOST COMMON: Auto-Managed Timestamp Fields (DF-104) ✅ FIXED
 
 **This WAS the #1 mistake - now auto-handled!**
 
-#### v0.10.6+ Behavior: Auto-Strip with Warning
+#### current version Behavior: Auto-Strip with Warning
 
 DataFlow now **automatically strips** `created_at` and `updated_at` fields and logs a warning:
 
 ```python
-# v0.10.6+: This now WORKS (with warning) instead of failing
+# Current: This now WORKS (with warning) instead of failing
 async def update(self, id: str, data: dict) -> dict:
     now = datetime.now(UTC).isoformat()
     data["updated_at"] = now  # ⚠️ Auto-stripped with warning
@@ -78,7 +78,7 @@ async def update(self, id: str, data: dict) -> dict:
 - `created_at` - Set automatically on record creation (CreateNode)
 - `updated_at` - Set automatically on every modification (UpdateNode)
 
-**v0.10.6+ Impact**: No more DF-104 errors! Fields are auto-stripped with warning. Upgrade for smooth experience.
+**current version Impact**: No more DF-104 errors! Fields are auto-stripped with warning. Upgrade for smooth experience.
 
 ---
 
@@ -110,7 +110,7 @@ async def db_fixture():
     db.close()  # Also fails!
 ```
 
-#### The Fix (v0.10.7+)
+#### The Fix 
 
 ```python
 # ✅ CORRECT - Use async methods in async context
@@ -164,13 +164,13 @@ if __name__ == "__main__":
 
 ---
 
-### ✅ #2.5: Docker/FastAPI Deployment (FIXED in v0.10.15+)
+### ✅ #2.5: Docker/FastAPI Deployment (FIXED in current version)
 
 **`auto_migrate=True` NOW WORKS in Docker/FastAPI!**
 
-DataFlow v0.10.15+ uses `SyncDDLExecutor` with synchronous database drivers (psycopg2, sqlite3) for table creation, completely bypassing event loop boundary issues.
+DataFlow uses synchronous database drivers (psycopg2, sqlite3) for table creation, avoiding event loop boundary issues.
 
-#### Zero-Config Docker Pattern (v0.10.15+)
+#### Zero-Config Docker Pattern (current version)
 
 ```python
 from dataflow import DataFlow
@@ -193,7 +193,7 @@ async def create_user(data: dict):
 
 #### How the Fix Works
 
-- `SyncDDLExecutor` uses psycopg2 (PostgreSQL) or sqlite3 (SQLite) - no asyncio
+- Uses psycopg2 (PostgreSQL) or sqlite3 (SQLite) for DDL - no asyncio
 - Tables are created synchronously at model registration time
 - CRUD operations continue using async drivers (asyncpg, aiosqlite)
 - No event loop conflicts because DDL and CRUD use separate connection types
@@ -212,7 +212,7 @@ db = DataFlow(":memory:", auto_migrate=True)  # Tables created on first access
 
 | Context                 | Pattern                       | Notes                      |
 | ----------------------- | ----------------------------- | -------------------------- |
-| **Docker/FastAPI**      | `auto_migrate=True` (default) | ✅ Works in v0.10.15+      |
+| **Docker/FastAPI**      | `auto_migrate=True` (default) | ✅ Works in current version      |
 | **In-Memory SQLite**    | `auto_migrate=True`           | Uses lazy creation (works) |
 | **CLI Scripts**         | `auto_migrate=True` (default) | Works                      |
 | **pytest (sync/async)** | `auto_migrate=True` (default) | Works via sync DDL         |
@@ -453,10 +453,10 @@ nexus = Nexus(dataflow_config={"integration": db})  # THIS WILL FAIL
 **Fix: Use auto_discovery=False and manual workflow registration**
 
 ```python
-# DataFlow v0.10.15+: auto_migrate=True works in Docker/FastAPI
+# DataFlow current version: auto_migrate=True works in Docker/FastAPI
 db = DataFlow(
     database_url="postgresql://...",
-    auto_migrate=True,  # Works via SyncDDLExecutor
+    auto_migrate=True,  # Works
 )
 
 # Nexus v1.1.3: ALWAYS use auto_discovery=False
@@ -496,9 +496,9 @@ count = results["count"]["count"]  # ✅ CountNode returns "count"
 record = results["read"]  # ✅ ReadNode returns dict directly
 ```
 
-### 4.1 soft_delete Auto-Filters Queries (v0.10.6+) ✅ FIXED
+### 4.1 soft_delete Auto-Filters Queries  ✅ FIXED
 
-**v0.10.6 introduced auto-filtering for soft_delete models!**
+**DataFlow introduced auto-filtering for soft_delete models!**
 
 ```python
 @db.model
@@ -507,7 +507,7 @@ class Patient:
     deleted_at: Optional[str] = None
     __dataflow__ = {"soft_delete": True}
 
-# ✅ v0.10.6+: Auto-filters by default - excludes soft-deleted records
+# ✅ Current: Auto-filters by default - excludes soft-deleted records
 workflow.add_node("PatientListNode", "list", {"filter": {}})
 # Returns ONLY non-deleted patients (deleted_at IS NULL)
 

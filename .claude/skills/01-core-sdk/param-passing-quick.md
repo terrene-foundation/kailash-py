@@ -11,7 +11,7 @@ Three methods to pass parameters to nodes in Kailash SDK workflows.
 > Category: `core-sdk`
 > Priority: `CRITICAL`
 > SDK Version: `0.9.31+`
-> Related Skills: [`workflow-quickstart`](workflow-quickstart.md), [`connection-patterns`](connection-patterns.md), [`error-parameter-validation`](../ 15-error-troubleshooting/error-parameter-validation.md)
+> Related Skills: [`workflow-quickstart`](workflow-quickstart.md), [`connection-patterns`](connection-patterns.md), [`error-parameter-validation`](../ 31-error-troubleshooting/error-parameter-validation.md)
 > Related Subagents: `pattern-expert` (complex parameter patterns)
 
 ## Quick Reference
@@ -163,7 +163,7 @@ runtime.execute(workflow.build(), parameters={
 
 - **For connections**: [`connection-patterns`](connection-patterns.md)
 - **For workflow creation**: [`workflow-quickstart`](workflow-quickstart.md)
-- **For parameter errors**: [`error-parameter-validation`](../15-error-troubleshooting/error-parameter-validation.md)
+- **For parameter errors**: [`error-parameter-validation`](../31-error-troubleshooting/error-parameter-validation.md)
 - **Gold standard**: [`gold-parameter-passing`](../17-gold-standards/gold-parameter-passing.md)
 
 ## When to Escalate to Subagent

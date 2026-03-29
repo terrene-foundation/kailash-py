@@ -56,10 +56,10 @@ app = Nexus(
     auto_discovery=False  # CRITICAL: Prevents blocking
 )
 
-# Step 2: Create DataFlow (v0.11.0 defaults work correctly)
+# Step 2: Create DataFlow (defaults work correctly)
 db = DataFlow(
     "postgresql://user:pass@localhost/db",
-    auto_migrate=True,  # Default - works in Docker/FastAPI via SyncDDLExecutor
+    auto_migrate=True,  # Default - works in Docker/FastAPI
 )
 
 # Step 3: Define models (now instant!)
@@ -90,12 +90,12 @@ app.start()
 
 ## What You Keep
 
-With `auto_discovery=False` + DataFlow v0.11.0 defaults:
+With `auto_discovery=False` + DataFlow defaults:
 
 - All CRUD operations (11 nodes per model)
 - Connection pooling, caching, metrics
 - All Nexus channels (API, CLI, MCP)
-- Automatic schema migration via SyncDDLExecutor
+- Automatic schema migration
 - Fast startup
 
 ## What You Lose
@@ -135,6 +135,6 @@ Use `nexus-specialist` subagent when:
 - 💡 **Critical setting**: `auto_discovery=False` when using DataFlow with Nexus
 - 💡 **Order matters**: Create Nexus FIRST, then DataFlow
 - 💡 **Manual registration**: Register workflows explicitly with `app.register()`
-- 💡 **DataFlow v0.11.0**: `auto_migrate=True` (default) works correctly in Docker/FastAPI
+- 💡 **DataFlow**: `auto_migrate=True` (default) works correctly in Docker/FastAPI
 
 <!-- Trigger Keywords: Nexus blocking, Nexus slow startup, Nexus hangs, DataFlow Nexus integration slow, startup delay, Nexus initialization slow, blocking on startup, slow Nexus, integration blocking -->

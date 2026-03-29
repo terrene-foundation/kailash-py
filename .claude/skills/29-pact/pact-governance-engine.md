@@ -207,5 +207,5 @@ is_valid, error_msg = engine.verify_audit_integrity()
 - `pact-envelopes.md` -- envelope model and intersection algorithm
 - `pact-access-enforcement.md` -- 5-step access algorithm
 - `pact-dtr-addressing.md` -- D/T/R grammar
-- Source: `packages/kailash-pact/src/pact/governance/engine.py`
-- Source: `packages/kailash-pact/src/pact/governance/verdict.py`
+- Source: `pact/governance/engine.py`
+- Source: `pact/governance/verdict.py`

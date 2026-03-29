@@ -20,4 +20,4 @@ class StreamingAgent(BaseAgent):
 ```
 
 ## References
-- **Examples**: `packages/kailash-kaizen/examples/1-single-agent/streaming-chat/`
+- **Examples**: `examples/1-single-agent/streaming-chat/`

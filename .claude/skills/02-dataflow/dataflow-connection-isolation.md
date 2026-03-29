@@ -349,7 +349,7 @@ results, run_id = await runtime.execute_workflow_async(workflow.build())
 ## Documentation References
 
 ### Primary Sources
-- **AsyncLocalRuntime**: [`src/kailash/runtime/async_local.py`](../../../../src/kailash/runtime/async_local.py)
+- **AsyncLocalRuntime**: [`kailash/runtime/async_local.py`](../../../../kailash/runtime/async_local.py)
 
 ### Related Documentation
 - **DataFlow CRUD**: [`dataflow-crud-operations`](dataflow-crud-operations.md)

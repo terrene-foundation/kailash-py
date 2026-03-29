@@ -13,11 +13,11 @@ Configuration patterns for integrating DataFlow with Nexus for multi-channel API
 > Related Skills: [`nexus-quickstart`](#), [`dataflow-models`](#)
 > Related Subagents: `dataflow-specialist`, `nexus-specialist`
 
-> **Version Info**: DataFlow v0.10.15, Nexus v1.1.3
+> **Note**: Ensure compatible versions of DataFlow and Nexus are installed
 
 ## Quick Reference
 
-- **DataFlow v0.10.15**: `auto_migrate=True` (default) works in Docker/FastAPI via SyncDDLExecutor
+- **DataFlow**: `auto_migrate=True` (default) works in Docker/FastAPI
 - **Nexus v1.1.3**: Use `auto_discovery=False` to prevent blocking during startup
 - **Integration**: DataFlow nodes must be manually registered as workflows with Nexus
 
@@ -31,7 +31,7 @@ from kailash.workflow.builder import WorkflowBuilder
 # Step 1: Initialize DataFlow
 db = DataFlow(
     database_url="postgresql://user:pass@localhost/db",
-    auto_migrate=True,  # DEFAULT - works in Docker/FastAPI via SyncDDLExecutor
+    auto_migrate=True,  # DEFAULT - works in Docker/FastAPI
 )
 
 # Step 2: Define models
@@ -85,7 +85,7 @@ app = Nexus(
 - `dataflow_config`
 - `auth_config`
 
-## DataFlow Configuration (v0.10.15)
+## DataFlow Configuration
 
 ```python
 db = DataFlow(
@@ -98,7 +98,7 @@ db = DataFlow(
 )
 ```
 
-**Removed Parameters** (no longer valid in v0.11.0):
+**Removed Parameters** (no longer valid in the current version):
 
 - `existing_schema_mode`, `enable_model_persistence`, `skip_registry`, `skip_migration` - all removed
 - Use `auto_migrate=True` (default) or `auto_migrate=False` instead
@@ -206,7 +206,7 @@ app.start()
 
 ## Quick Tips
 
-- Use `auto_migrate=True` (default) - works in Docker/FastAPI via SyncDDLExecutor
+- Use `auto_migrate=True` (default) - works in Docker/FastAPI
 - ALWAYS use `auto_discovery=False` in Nexus to prevent blocking
 - Register DataFlow workflows manually with `app.register()`
 - Test startup time - should be <2 seconds

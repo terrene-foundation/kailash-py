@@ -25,5 +25,5 @@ result = pattern.execute_task("Analyze this codebase")
 - ✅ Eliminates 40-50% manual selection logic
 
 ## References
-- **Examples**: `packages/kailash-kaizen/examples/2-multi-agent/supervisor-worker/`
+- **Examples**: `examples/2-multi-agent/supervisor-worker/`
 - **Specialist**: `.claude/agents/frameworks/kaizen-specialist.md` lines 115-165

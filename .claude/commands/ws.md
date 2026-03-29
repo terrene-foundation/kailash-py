@@ -19,4 +19,9 @@ Display the current workspace status. Do not modify any files.
    - List the 5 most recently modified files in the workspace
    - If `.session-notes` exists, show its contents and age
 
+### Journal
+- Read the workspace's `journal/` directory
+- Count total entries and entries by type
+- Show the 3 most recent entries (number, type, date, topic)
+
 3. Present as a compact summary.

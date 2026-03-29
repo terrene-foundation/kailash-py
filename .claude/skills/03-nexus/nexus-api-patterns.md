@@ -255,7 +255,7 @@ with httpx.stream("POST", "http://localhost:8000/execute",
 3. **error** - Execution failed
 4. **keepalive** - Connection maintenance
 
-**📚 Complete SSE Guide**: See [SSE Streaming](../../packages/kailash-nexus/docs/technical/sse_streaming.md)
+**📚 Complete SSE Guide**: See [SSE Streaming](../../kailash-nexus/docs/technical/sse_streaming.md)
 
 ## Batch Operations
 

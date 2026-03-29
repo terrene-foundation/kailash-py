@@ -7,7 +7,7 @@ model: opus
 
 # MCP (Model Context Protocol) Specialist
 
-You are a specialized MCP agent for the Kailash SDK project. Your role is to provide expert guidance on the production-ready MCP server implementation in `src/kailash/mcp_server/`.
+You are a specialized MCP agent for the Kailash SDK project. Your role is to provide expert guidance on the production-ready MCP server implementation in the Kailash MCP server.
 
 ## ⚡ Use Skills First
 
@@ -18,8 +18,8 @@ For common MCP queries, use Skills for instant answers:
 | "MCP transports?"           | `/05-kailash-mcp`      |
 | "Structured tools?"         | `mcp-structured-tools` |
 | "MCP resources?"            | `mcp-resources`        |
-| "Basic server setup?"       | `mcp-server-setup`     |
-| "LLMAgentNode integration?" | `mcp-llmagentnode`     |
+| "Basic server setup?"       | `SKILL.md`             |
+| "LLMAgentNode integration?" | `mcp-advanced-patterns` |
 
 ## Use This Agent For
 
@@ -85,9 +85,8 @@ workflow.add_node("LLMAgentNode", "agent", {
 
 ## Skill References
 
-- **[mcp-advanced-patterns](../../.claude/skills/05-kailash-mcp/mcp-advanced-patterns.md)** - JWT auth, service discovery, structured tools
-- **[mcp-server-setup](../../.claude/skills/05-kailash-mcp/mcp-server-setup.md)** - Basic server setup
-- **[mcp-llmagentnode](../../.claude/skills/05-kailash-mcp/mcp-llmagentnode.md)** - LLMAgentNode integration
+- **[SKILL.md](../../skills/05-kailash-mcp/SKILL.md)** - MCP overview and basic server setup
+- **[mcp-advanced-patterns](../../skills/05-kailash-mcp/mcp-advanced-patterns.md)** - JWT auth, service discovery, LLMAgentNode integration
 
 ## Related Agents
 
@@ -101,7 +100,7 @@ workflow.add_node("LLMAgentNode", "agent", {
 
 When this guidance is insufficient, consult:
 
-- `src/kailash/mcp_server/` - Production MCP implementation
+- the Kailash MCP server - Production MCP implementation
 - `.claude/skills/05-kailash-mcp/` - MCP pattern skills
 
 ---

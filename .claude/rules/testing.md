@@ -121,22 +121,23 @@ Integration and E2E tests MUST use real infrastructure.
 
 **Tier 2 (Integration Tests)**:
 
-- NO MOCKING - use real database
+- Real infrastructure recommended - use real database
 - Test component interactions
 - Real API calls (use test server)
 
 **Tier 3 (E2E Tests)**:
 
-- NO MOCKING - real everything
+- Real infrastructure recommended - real everything
 - Test full user journeys
 - Real browser, real database
+- **State persistence verification** — every write operation MUST be verified with a read-back (navigate away, reload, re-query). API 200 is NOT sufficient proof of persistence. See `rules/e2e-god-mode.md` Rule 6.
 
 **Enforced by**: validate-workflow hook
 **Violation**: Test invalid
 
 ## MUST NOT Rules (CRITICAL)
 
-### 1. NO MOCKING in Tier 2-3
+### 1. Real infrastructure recommended in Tier 2-3
 
 MUST NOT use mocking in integration or E2E tests.
 
@@ -188,8 +189,8 @@ Tests MUST be deterministic.
 tests/
 ├── regression/     # Tier 0: Permanent bug reproduction tests
 ├── unit/           # Tier 1: Mocking allowed
-├── integration/    # Tier 2: NO MOCKING
-└── e2e/           # Tier 3: NO MOCKING
+├── integration/    # Tier 2: Real infrastructure recommended
+└── e2e/           # Tier 3: Real infrastructure recommended
 ```
 
 ### Naming Convention
@@ -213,10 +214,35 @@ def db():
     db.close()
 
 def test_user_creation(db):
-    # NO MOCKING - real database operations
+    # Real infrastructure recommended - real database operations
     result = db.execute(CreateUser(name="test"))
     assert result.id is not None
+
+    # STATE PERSISTENCE: Always read back after write
+    # DataFlow silently ignores unknown params — verify the write actually wrote
+    user = db.execute(ReadUser(filter={"id": result.id}))
+    assert user is not None
+    assert user.name == "test"
 ```
+
+### State Persistence Verification (MANDATORY for Tiers 2-3)
+
+Every test that writes data MUST verify persistence with a read-back:
+
+```python
+# ❌ BAD: Only checks API response
+result = api.create_company(name="Acme")
+assert result.status == 200  # DataFlow may have silently ignored params!
+
+# ✅ GOOD: Verifies state persisted
+result = api.create_company(name="Acme")
+assert result.status == 200
+# Read back to verify
+company = api.get_company(result.id)
+assert company.name == "Acme"
+```
+
+**Why**: DataFlow `UpdateNode` silently ignores unknown parameter names (`conditions`/`updates` instead of `filter`/`fields`). The API returns success but zero bytes are written. This is the #1 source of false-positive tests.
 
 ### Workflow Testing
 

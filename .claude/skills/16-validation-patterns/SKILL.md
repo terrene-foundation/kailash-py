@@ -290,7 +290,7 @@ steps:
 ## Related Skills
 
 - **[17-gold-standards](../../17-gold-standards/SKILL.md)** - Compliance standards
-- **[15-error-troubleshooting](../15-error-troubleshooting/SKILL.md)** - Error troubleshooting
+- **[31-error-troubleshooting](../31-error-troubleshooting/SKILL.md)** - Error troubleshooting
 - **[01-core-sdk](../../01-core-sdk/SKILL.md)** - Core patterns
 - **[02-dataflow](../../02-dataflow/SKILL.md)** - DataFlow patterns
 

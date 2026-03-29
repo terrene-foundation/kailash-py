@@ -123,7 +123,7 @@ from dataflow import DataFlow
 
 @pytest.fixture
 def db():
-    # Real database - NO MOCKING
+    # Real database - Real infrastructure recommended
     dataflow = DataFlow("sqlite:///:memory:")
     dataflow.create_tables()
     yield dataflow
@@ -335,7 +335,7 @@ Test organization:
 tests/
 ├── unit/ # Tier 1 - Mocking allowed
 │ └── test_utils.py
-├── integration/ # Tier 2 - NO MOCKING
+├── integration/ # Tier 2 - Real infrastructure recommended
 │ └── test_user.py
 └── e2e/ # Tier 3 - Full system
 └── test_registration_flow.py
@@ -656,7 +656,7 @@ No new components evolved (thresholds not met).
 
 2. **Bugs follow a flow** - Reproduce → Investigate → Fix → Test → Verify
 
-3. **Tests are real** - NO MOCKING in integration and E2E
+3. **Tests are real** - Real infrastructure recommended in integration and E2E
 
 4. **Reviews are automatic** - Claude delegates to reviewers
 

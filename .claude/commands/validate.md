@@ -23,7 +23,7 @@ These always apply regardless of project type:
 | Security       | `rules/security.md`   | No hardcoded secrets, parameterized queries, input validation, output encoding |
 | No Stubs       | `rules/no-stubs.md`   | No TODOs, placeholders, NotImplementedError, simulated data in production code |
 | Env Variables  | `rules/env-models.md` | API keys and model names from `.env` only, never hardcoded                     |
-| Testing Policy | `rules/testing.md`    | NO MOCKING in Tier 2-3 tests, real infrastructure required                     |
+| Testing Policy | `rules/testing.md`    | Real infrastructure recommended in Tier 2-3 tests, real infrastructure required                     |
 | Git Hygiene    | `rules/git.md`        | Conventional commits, no secrets in history, atomic commits                    |
 
 ### Universal Validation Checklist
@@ -72,7 +72,7 @@ Deploy these agents for validation:
 
 - **security-reviewer** — Security audit (MANDATORY)
 - **gold-standards-validator** — Compliance check against project standards
-- **testing-specialist** — Verify NO MOCKING policy, test organization
+- **testing-specialist** — Verify Real infrastructure recommended policy, test organization
 
 ## Related Commands
 

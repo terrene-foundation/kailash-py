@@ -24,7 +24,7 @@ configure_tracing(level=TracingLevel.DETAILED, service_name="my-app")
 ```python
 from kailash.runtime.instrumentation.nodes import NodeInstrumentor
 
-instrumentor = NodeInstrumentor()
+instrumentor = NodeInstrumentor(tracer)
 # Wraps node execution with child spans:
 # - node.id, node.type, node.duration_ms, node.input_size, node.output_size
 ```
@@ -34,7 +34,7 @@ instrumentor = NodeInstrumentor()
 ```python
 from kailash.runtime.instrumentation.database import DatabaseInstrumentor
 
-instrumentor = DatabaseInstrumentor(db_system="postgresql")
+instrumentor = DatabaseInstrumentor(tracer)
 instrumentor.instrument(connection_manager)
 # Instruments execute/fetchone/fetchall with OTel DB semantic conventions:
 # db.system, db.statement (truncated), db.operation, db.row_count

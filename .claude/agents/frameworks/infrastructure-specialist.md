@@ -1,6 +1,6 @@
 ---
 name: infrastructure-specialist
-description: Enterprise infrastructure specialist for Kailash progressive infrastructure model (Level 0/1/2), dialect-portable SQL, store factory, task queues, worker management, and idempotency. Use proactively when implementing database persistence, multi-worker deployments, or exactly-once execution.
+description: "Kailash infrastructure specialist (Level 0/1/2). Use for dialect-portable SQL, task queues, or idempotency."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---

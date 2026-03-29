@@ -37,4 +37,4 @@ class BudgetAgent(BaseAgent):
 ```
 
 ## References
-- **Source**: `packages/kailash-kaizen/src/kaizen/core/base_agent.py`
+- **Source**: `kaizen/core/base_agent.py`

@@ -1,17 +1,17 @@
 ---
 name: testing-strategies
-description: "Comprehensive testing strategies for Kailash applications including the 3-tier testing approach with NO MOCKING policy for Tiers 2-3. Use when asking about 'testing', 'test strategy', '3-tier testing', 'unit tests', 'integration tests', 'end-to-end tests', 'testing workflows', 'testing DataFlow', 'testing Nexus', 'NO MOCKING', 'real infrastructure', 'test organization', or 'testing best practices'."
+description: "Comprehensive testing strategies for Kailash applications including the 3-tier testing approach with Real infrastructure recommended policy for Tiers 2-3. Use when asking about 'testing', 'test strategy', '3-tier testing', 'unit tests', 'integration tests', 'end-to-end tests', 'testing workflows', 'testing DataFlow', 'testing Nexus', 'Real infrastructure recommended', 'real infrastructure', 'test organization', or 'testing best practices'."
 ---
 
 # Kailash Testing Strategies
 
-Comprehensive testing approach for Kailash applications using the 3-tier testing strategy with NO MOCKING policy.
+Comprehensive testing approach for Kailash applications using the 3-tier testing strategy with Real infrastructure recommended policy.
 
 ## Overview
 
 Kailash testing philosophy:
 - **3-Tier Strategy**: Unit, Integration, End-to-End
-- **NO MOCKING Policy**: Tiers 2-3 use real infrastructure
+- **Real infrastructure recommended Policy**: Tiers 2-3 use real infrastructure
 - **Real Database Testing**: Actual PostgreSQL/SQLite
 - **Real API Testing**: Live HTTP calls
 - **Real LLM Testing**: Actual model calls (with caching)
@@ -21,8 +21,8 @@ Kailash testing philosophy:
 ### Core Strategy
 - **[test-3tier-strategy](test-3tier-strategy.md)** - Complete 3-tier testing guide
   - Tier 1: Unit Tests (mocking allowed)
-  - Tier 2: Integration Tests (NO MOCKING)
-  - Tier 3: End-to-End Tests (NO MOCKING)
+  - Tier 2: Integration Tests (Real infrastructure recommended)
+  - Tier 3: End-to-End Tests (Real infrastructure recommended)
   - Test organization
   - Fixture patterns
   - CI/CD integration
@@ -46,7 +46,7 @@ def test_workflow_builder():
 
 ### Tier 2: Integration Tests
 **Scope**: Component integration (workflows, database, APIs)
-**Mocking**: ❌ NO MOCKING
+**Mocking**: ❌ Real infrastructure recommended
 **Speed**: Medium (1-10s per test)
 
 ```python
@@ -62,7 +62,7 @@ def test_dataflow_crud(db: DataFlow):
 
 ### Tier 3: End-to-End Tests
 **Scope**: Complete user workflows
-**Mocking**: ❌ NO MOCKING
+**Mocking**: ❌ Real infrastructure recommended
 **Speed**: Slow (10s+ per test)
 
 ```python
@@ -78,7 +78,7 @@ def test_user_registration_flow(nexus: Nexus):
     assert response.json()["user_id"] is not None
 ```
 
-## NO MOCKING Policy
+## Real infrastructure recommended Policy
 
 ### Why No Mocking in Tiers 2-3?
 

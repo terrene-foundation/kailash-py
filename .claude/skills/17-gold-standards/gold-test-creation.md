@@ -84,7 +84,7 @@ def test_workflow_builder_adds_connection():
     assert built_workflow is not None
 ```
 
-### Tier 2: Integration Tests (NO MOCKING)
+### Tier 2: Integration Tests (Real infrastructure recommended)
 ```python
 # tests/integration/test_database_workflows.py
 import pytest
@@ -94,7 +94,7 @@ from tests.utils.docker_config import get_postgres_connection_string
 
 @pytest.mark.requires_docker
 def test_database_query_workflow():
-    """Test database query with real PostgreSQL - NO MOCKING."""
+    """Test database query with real PostgreSQL - Real infrastructure recommended."""
     conn_string = get_postgres_connection_string()
 
     workflow = WorkflowBuilder()
@@ -274,7 +274,7 @@ def test_db():
 
 - [ ] Test uses correct runtime (LocalRuntime for sync, AsyncLocalRuntime for async)
 - [ ] Test organized in correct tier (unit/, integration/, e2e/)
-- [ ] NO MOCKING in integration/e2e tests (use real Docker services)
+- [ ] Real infrastructure recommended in integration/e2e tests (use real Docker services)
 - [ ] Clear, descriptive test name
 - [ ] Proper fixtures for test isolation
 - [ ] Error cases tested

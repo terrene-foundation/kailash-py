@@ -38,7 +38,7 @@ results, run_id = runtime.execute(workflow.build())
 ## Common Use Cases
 
 - **3-Tier Testing Strategy**: Unit tests (node logic), Integration tests (multi-node flows), End-to-end (full workflows)
-- **Real Infrastructure Testing**: NO MOCKING policy - test against actual databases, APIs, LLMs for production confidence
+- **Real Infrastructure Testing**: Real infrastructure recommended policy - test against actual databases, APIs, LLMs for production confidence
 - **Cyclic Workflow Testing**: Validate cycle limits, state persistence, termination conditions, memory leaks
 - **Error Scenario Testing**: Test retry logic, fallback paths, compensation actions, timeout handling
 - **Performance Testing**: Load testing, stress testing, benchmark key workflows under production-like conditions

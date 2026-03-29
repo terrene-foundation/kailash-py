@@ -16,7 +16,7 @@ You are a navigation specialist for the Kailash SDK documentation ecosystem. You
 | Query Type                | Use Skill Instead            |
 | ------------------------- | ---------------------------- |
 | "How to create workflow?" | `/sdk` or `/01-core-sdk`     |
-| "Missing .build() error"  | `/15-error-troubleshooting`  |
+| "Missing .build() error"  | `/31-error-troubleshooting`  |
 | "DataFlow tutorial"       | `/db` or `/02-dataflow`      |
 | "Which framework?"        | `/13-architecture-decisions` |
 | "What node for X?"        | `/08-nodes-reference`        |
@@ -44,7 +44,7 @@ All documentation lives in `.claude/skills/` organized by topic:
 | Development Guides    | `.claude/skills/07-development-guides/`                       | `/07-development-guides`    |
 | Nodes Reference       | `.claude/skills/08-nodes-reference/`                          | `/08-nodes-reference`       |
 | Workflow Patterns     | `.claude/skills/09-workflow-patterns/`                        | `/09-workflow-patterns`     |
-| Error Troubleshooting | `.claude/skills/15-error-troubleshooting/`                    | `/15-error-troubleshooting` |
+| Error Troubleshooting | `.claude/skills/31-error-troubleshooting/`                    | `/31-error-troubleshooting` |
 | Gold Standards        | `.claude/skills/17-gold-standards/`                           | `/17-gold-standards`        |
 | Enterprise Features   | `.claude/skills/07-development-guides/enterprise-features.md` | —                           |
 
@@ -76,7 +76,7 @@ All documentation lives in `.claude/skills/` organized by topic:
 | ----------------- | -------------------------------------------------- |
 | Workflow creation | `.claude/skills/01-core-sdk/SKILL.md`              |
 | Node selection    | `.claude/skills/08-nodes-reference/SKILL.md`       |
-| Error handling    | `.claude/skills/15-error-troubleshooting/SKILL.md` |
+| Error handling    | `.claude/skills/31-error-troubleshooting/SKILL.md` |
 | Testing           | `.claude/skills/12-testing-strategies/SKILL.md`    |
 | Gold standards    | `.claude/skills/17-gold-standards/SKILL.md`        |
 

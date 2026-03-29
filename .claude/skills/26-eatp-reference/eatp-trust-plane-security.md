@@ -1,8 +1,8 @@
 # Skill: TrustPlane Security Patterns
 
-13 hardened security patterns validated through 16 rounds of red teaming. MANDATORY for `src/kailash/trust/plane/` and `src/kailash/trust/`. Recommended for any security-sensitive Python project.
+13 hardened security patterns validated through 16 rounds of red teaming. MANDATORY for the trust-plane module and the trust module. Recommended for any security-sensitive Python project.
 
-For full code examples with DO/DON'T pairs, see `src/kailash/trust/plane/`.
+For full code examples with DO/DON'T pairs, see the trust-plane module.
 
 ## Quick Checklist
 
@@ -112,6 +112,5 @@ All exceptions accept `details: dict[str, Any]` per EATP convention.
 
 ## See Also
 
-- `src/kailash/trust/plane/` — Full patterns with code examples
 - `.claude/skills/project/store-backend-implementation.md` — Store backend guide
 - `.claude/skills/project/trust-plane-enterprise-features.md` — Enterprise feature reference

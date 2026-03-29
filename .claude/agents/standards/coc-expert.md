@@ -1,6 +1,6 @@
 ---
 name: coc-expert
-description: Use this agent for questions about Cognitive Orchestration for Codegen (COC), the five-layer architecture for AI-assisted development, vibe coding critique, anti-amnesia patterns, institutional knowledge engineering, or Human-on-the-Loop development methodology. Expert in COC as the CARE framework applied to software development.
+description: "COC methodology expert. Use for five-layer architecture, vibe coding critique, or anti-amnesia patterns."
 model: inherit
 allowed-tools:
   - Read

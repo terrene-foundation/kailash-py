@@ -57,7 +57,7 @@ workflow.add_node("OrderListNode", "list", {
 })
 ```
 
-## Auto-Wired Multi-Tenancy (v0.11.0)
+## Auto-Wired Multi-Tenancy 
 
 Multi-tenancy is now auto-wired into the engine via `QueryInterceptor`, which hooks into 8 SQL execution points:
 
@@ -80,7 +80,7 @@ async with TenantContextSwitch(db, tenant_id="tenant_abc"):
 - **Data Partitioning**: Separate data per tenant
 - **Security**: Prevents cross-tenant access
 - **Audit Trails**: Track tenant-specific changes
-- **Auto-Wired Interceptor**: QueryInterceptor at 8 SQL execution points (v0.11.0)
+- **Auto-Wired Interceptor**: QueryInterceptor at 8 SQL execution points 
 
 ## Documentation References
 

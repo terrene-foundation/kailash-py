@@ -20,6 +20,13 @@ const {
 } = require("./lib/learning-utils");
 const { detectActiveWorkspace } = require("./lib/workspace-utils");
 
+// Timeout fallback — prevents hanging the Claude Code session
+const TIMEOUT_MS = 10000;
+const _timeout = setTimeout(() => {
+  console.log(JSON.stringify({ continue: true }));
+  process.exit(1);
+}, TIMEOUT_MS);
+
 let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => (input += chunk));
@@ -120,6 +127,9 @@ function savePreCompactState(data) {
   }
 }
 
+// Permitted exception to cc-artifacts Rule 4 (no semantic analysis in hooks):
+// Framework detection here is structural context preservation for compaction checkpoints,
+// not agent decision-making. See journal/0009 decision D1.
 function detectFramework(cwd) {
   try {
     const files = fs.readdirSync(cwd).filter((f) => f.endsWith(".py"));

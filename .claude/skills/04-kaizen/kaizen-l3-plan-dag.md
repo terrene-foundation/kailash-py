@@ -65,4 +65,4 @@ Batch atomic: `apply_modifications(plan, [mod1, mod2])` — all or nothing.
 ## Reference
 
 - Spec: `workspaces/kaizen-l3/briefs/05-plan-dag.md`
-- Source: `packages/kailash-kaizen/src/kaizen/l3/plan/`
+- Source: `kaizen/l3/plan/`

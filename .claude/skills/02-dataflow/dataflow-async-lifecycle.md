@@ -2,7 +2,7 @@
 
 ## Overview
 
-DataFlow v0.10.7+ provides proper async lifecycle methods for use in async contexts like FastAPI lifespan events, pytest async fixtures, and async main functions.
+DataFlow current version provides proper async lifecycle methods for use in async contexts like FastAPI lifespan events, pytest async fixtures, and async main functions.
 
 ## The Problem (DF-501 Error)
 
@@ -141,7 +141,7 @@ async def lifespan(app: FastAPI):
     db.close()  # May fail silently
 ```
 
-**After (v0.10.7+ Fix):**
+**After (current version Fix):**
 ```python
 # CORRECT - Use async methods in async context
 @asynccontextmanager
@@ -204,5 +204,5 @@ with DataFlow("sqlite:///dev.db") as db:
 
 ## Version Requirements
 
-- DataFlow v0.10.7+ for async lifecycle methods
+- DataFlow current version for async lifecycle methods
 - Python 3.10+

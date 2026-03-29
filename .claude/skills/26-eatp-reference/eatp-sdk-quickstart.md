@@ -2,7 +2,7 @@
 
 The standalone EATP SDK (`pip install kailash[trust]`) provides cryptographic trust chains, delegation, and verification for AI agent systems. Apache 2.0, published by the Terrene Foundation.
 
-**Source**: `src/kailash/trust/`
+**Source**: the trust module
 **Examples**: `examples/trust/quickstart.py`
 
 ## Installation
@@ -290,5 +290,5 @@ For deep coverage, see `.claude/skills/26-eatp-reference/eatp-sdk-reasoning-trac
 - **API Reference**: `.claude/skills/26-eatp-reference/eatp-sdk-api-reference.md`
 - **Patterns & Gotchas**: `.claude/skills/26-eatp-reference/eatp-sdk-patterns.md`
 - **Reasoning Traces**: `.claude/skills/26-eatp-reference/eatp-sdk-reasoning-traces.md`
-- **Full Working Example**: `src/kailash/trust/examples/quickstart.py`
-- **Foundation Demo**: `src/kailash/trust/examples/foundation_deployment.py`
+- **Full Working Example**: `kailash/trust/examples/quickstart.py`
+- **Foundation Demo**: `kailash/trust/examples/foundation_deployment.py`

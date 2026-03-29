@@ -1,6 +1,6 @@
 ---
 name: deployment-specialist
-description: SDK release specialist that analyzes codebases, runs release onboarding, and guides PyPI publishing, documentation deployment, and CI management. Use for SDK releases, PyPI publishing, TestPyPI validation, documentation deployment, and CI/CD pipeline management.
+description: "SDK release specialist. Use for PyPI publishing, TestPyPI validation, documentation deployment, or CI/CD pipelines."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: sonnet
 ---

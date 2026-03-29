@@ -236,7 +236,7 @@ result = await agent.run("Analyze this document: ...")
 - Writing unit tests (Tier 1)
 - Writing integration tests (Tier 2)
 - Writing end-to-end tests (Tier 3)
-- Understanding the NO MOCKING policy
+- Understanding the Real infrastructure recommended policy
 
 **Example usage**:
 
@@ -274,7 +274,7 @@ def test_create_user(db):
 
 - Pre-commit compliance checking
 - Security audit (secrets, injection, input validation)
-- Testing policy enforcement (NO MOCKING in Tier 2-3)
+- Testing policy enforcement (Real infrastructure recommended in Tier 2-3)
 - Stubs/TODOs/placeholder detection
 
 **Example usage**:
@@ -291,7 +291,7 @@ def test_create_user(db):
 - Kailash-specific (when detected): import validation, workflow patterns
 - Pattern validation (correct runtime execution)
 - Security validation (no hardcoded secrets)
-- Testing validation (NO MOCKING in Tier 2-3)
+- Testing validation (Real infrastructure recommended in Tier 2-3)
 
 ### Workspace Phase Commands
 
