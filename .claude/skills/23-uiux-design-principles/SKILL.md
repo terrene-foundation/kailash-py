@@ -46,6 +46,16 @@ This skill provides:
   - `prefers-reduced-motion` accessibility (mandatory)
   - Motion anti-patterns and decision framework
 
+### Production Hardening
+
+- **[production-hardening](production-hardening.md)** - Frontend production hardening checklist
+  - Text & content resilience (overflow, length extremes, dynamic content)
+  - Internationalization (text expansion, formatting, encoding)
+  - Error states & recovery (network, HTTP status, form errors)
+  - Edge cases & boundary conditions (empty, loading, data volume, concurrency)
+  - Accessibility resilience (zoom, keyboard, screen reader, touch)
+  - Performance under stress (lazy loading, virtual scrolling, debouncing)
+
 ### UX Writing & Microcopy
 
 - **[ux-writing](ux-writing.md)** - Interface text patterns for enterprise applications

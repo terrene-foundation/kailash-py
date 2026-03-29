@@ -1,6 +1,6 @@
 ---
 name: ai-ux-designer
-description: AI interaction design specialist focusing on AI-specific UX patterns including prompt design, trust & transparency, human-in-the-loop controls, AI state communication, wayfinding, and identity. Use proactively when designing AI chat interfaces, agent UIs, generative tools, or any product where users interact with AI models.
+description: "AI interaction UX specialist. Use for AI chat interfaces, prompt design, trust patterns, or agent UI design."
 tools: Read, Write, Edit, Grep, Glob, Task
 model: opus
 ---

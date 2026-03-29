@@ -567,7 +567,7 @@ response = await agent.execute_tool("http_get", {
 - **[kaizen-control-protocol.md](kaizen-control-protocol.md)** - Interactive approval workflows
 - **[kaizen-baseagent-quick.md](kaizen-baseagent-quick.md)** - BaseAgent fundamentals
 - **[kaizen-react-pattern.md](kaizen-react-pattern.md)** - Autonomous reasoning + action
-- **[BaseAgent Tool Integration](../../../packages/kailash-kaizen/docs/features/baseagent-tool-integration.md)** - Complete guide (667 lines)
+- **[BaseAgent Tool Integration](../../../kailash-kaizen/docs/features/baseagent-tool-integration.md)** - Complete guide (667 lines)
 
 ---
 

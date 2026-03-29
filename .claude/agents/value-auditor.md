@@ -1,6 +1,6 @@
 ---
 name: value-auditor
-description: Value-critical QA agent that evaluates product demos from a skeptical enterprise client perspective using Playwright MCP. Interrogates every page for value proposition, value flow, narrative coherence, and data credibility — not surface-level element testing.
+description: "Enterprise demo QA auditor. Use for value proposition testing, narrative coherence, or data credibility checks."
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: opus
 ---

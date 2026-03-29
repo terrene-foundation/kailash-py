@@ -96,3 +96,12 @@ For frontend projects, additionally deploy:
 - **ai-ux-designer** — AI interaction patterns (if the project involves AI interfaces)
 
 Red team the analysis with agents until they confirm no gaps remain in research, plans, and user flows.
+
+### Journal
+
+Create journal entries in the workspace's `journal/` directory for insights produced during analysis:
+- **DISCOVERY** entries for key findings, patterns, or domain knowledge uncovered
+- **GAP** entries for missing information, unvalidated assumptions, or areas needing research
+- **CONNECTION** entries for relationships between components, requirements, or findings
+
+Use sequential naming: check the highest existing `NNNN-` prefix and increment.

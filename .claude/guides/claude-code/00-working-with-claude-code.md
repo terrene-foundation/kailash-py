@@ -100,6 +100,20 @@ Fresh sessions with well-documented context are MORE reliable:
 - Input (instruction doc) is inspectable
 - Behavior is reproducible
 
+#### Principle 6: Session Strategy Matrix
+
+Choose the right session strategy for each situation:
+
+| Strategy            | When to Use                                            | Mechanism                                 |
+| ------------------- | ------------------------------------------------------ | ----------------------------------------- |
+| **Resume**          | Continuing the same task, no external changes          | `--resume` flag or session continuation   |
+| **Fork**            | Exploring an alternative approach from shared baseline | Parallel worktrees, `fork_session`        |
+| **Fresh + Summary** | Tool results stale, context degraded, switching focus  | New session with `/wrapup` notes injected |
+
+**The Stale Context Trap**: If you resume a session after modifying files externally (IDE, another terminal), Claude may give contradictory advice based on cached tool results that no longer reflect reality. Either inform Claude about specific changes or start fresh with a summary.
+
+For deep coverage of session management patterns, see [Guide 13 - Agentic Architecture](13-agentic-architecture.md).
+
 ---
 
 ## Part 2: The Phase Pipeline

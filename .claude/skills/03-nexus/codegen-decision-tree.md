@@ -428,7 +428,7 @@ app = Nexus(
 
 db = DataFlow(
     database_url=DATABASE_URL,
-    auto_migrate=True,  # v0.11.0: Works in Docker/FastAPI via SyncDDLExecutor
+    auto_migrate=True,  # default: Works in Docker/FastAPI
 )
 
 runtime = AsyncLocalRuntime()  # Initialize once at module level
@@ -924,7 +924,7 @@ app = Nexus(
 )
 
 db = DataFlow(
-    auto_migrate=True,  # v0.11.0 default: Works in Docker/FastAPI via SyncDDLExecutor
+    auto_migrate=True,  # default: Works in Docker/FastAPI
 )
 
 runtime = AsyncLocalRuntime()  # CRITICAL for async contexts

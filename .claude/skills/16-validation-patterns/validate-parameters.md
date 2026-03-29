@@ -165,7 +165,6 @@ workflow.add_connection("reader", "data", "transformer", "input_data")
 ### Primary Sources
 
 ### Internal Implementation
-- `src/kailash/runtime/mixins/validation.py` - ValidationMixin (523 lines)
 - Provides shared validation logic for LocalRuntime and AsyncLocalRuntime
 
 ## Quick Tips

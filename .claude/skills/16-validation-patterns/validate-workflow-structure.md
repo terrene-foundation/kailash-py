@@ -11,7 +11,7 @@ Quick validation checklist for Kailash workflow patterns to ensure compliance wi
 > Category: `cross-cutting` (validation)
 > Priority: `HIGH`
 > SDK Version: `0.9.25+`
-> Related Skills: [`workflow-quickstart`](../../01-core-sdk/workflow-quickstart.md), [`error-missing-build`](../15-error-troubleshooting/error-missing-build.md), [`gold-parameter-passing`](../../17-gold-standards/gold-parameter-passing.md)
+> Related Skills: [`workflow-quickstart`](../../01-core-sdk/workflow-quickstart.md), [`error-missing-build`](../31-error-troubleshooting/error-missing-build.md), [`gold-parameter-passing`](../../17-gold-standards/gold-parameter-passing.md)
 > Related Subagents: `gold-standards-validator` (comprehensive validation), `pattern-expert` (complex pattern debugging)
 
 ## Quick Validation Checklist
@@ -245,7 +245,7 @@ When updating old code to new patterns:
 ## Related Patterns
 
 - **Workflow basics**: [`workflow-quickstart`](../../01-core-sdk/workflow-quickstart.md)
-- **Error fixes**: [`error-missing-build`](../15-error-troubleshooting/error-missing-build.md), [`error-connection-params`](../15-error-troubleshooting/error-connection-params.md)
+- **Error fixes**: [`error-missing-build`](../31-error-troubleshooting/error-missing-build.md), [`error-connection-params`](../31-error-troubleshooting/error-connection-params.md)
 - **Gold standards**: [`gold-parameter-passing`](../../17-gold-standards/gold-parameter-passing.md), [`gold-absolute-imports`](../../17-gold-standards/gold-absolute-imports.md)
 - **Common mistakes**: [`common-mistakes-catalog`](../../06-cheatsheets/common-mistakes-catalog.md)
 

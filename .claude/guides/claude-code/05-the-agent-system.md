@@ -324,7 +324,7 @@ These agents help write and validate code.
 1. Writes tests first (Red phase)
 2. Implements minimal code to pass (Green phase)
 3. Refactors for quality (Refactor phase)
-4. Ensures NO MOCKING in Tier 2-3
+4. Ensures Real infrastructure recommended in Tier 2-3
 
 **Example request**:
 
@@ -345,8 +345,8 @@ These agents help write and validate code.
 **What it knows**:
 
 - Tier 1: Unit tests (mocking allowed)
-- Tier 2: Integration tests (NO MOCKING)
-- Tier 3: End-to-end tests (NO MOCKING)
+- Tier 2: Integration tests (Real infrastructure recommended)
+- Tier 3: End-to-end tests (Real infrastructure recommended)
 - Real infrastructure patterns
 - Test organization
 
@@ -846,7 +846,52 @@ Claude will invoke each agent in sequence, building on previous results.
 
 ---
 
-## Part 6: Agent Coordination
+## Part 6: Agent Architecture Patterns
+
+### Hub-and-Spoke Topology
+
+Claude Code uses a **hub-and-spoke** orchestration model: Claude acts as the central coordinator, with specialized subagents around the perimeter. All communication flows through the coordinator — subagents never communicate directly with each other.
+
+```
+
+                    ┌─────────────┐
+                    │  Research    │
+                    │  Agent       │
+                    └──────┬──────┘
+                           │
+
+┌─────────────┐ ┌──────┴──────┐ ┌─────────────┐
+│ Analysis │────│ Claude │────│ Synthesis │
+│ Agent │ │ (Hub) │ │ Agent │
+└─────────────┘ └──────┬──────┘ └─────────────┘
+│
+┌──────┴──────┐
+│ Validation │
+│ Agent │
+└─────────────┘
+
+```
+
+The coordinator is responsible for: **task decomposition** (breaking requests into subtasks), **agent selection** (choosing which specialist handles each), **context passing** (providing each agent with needed information), and **result aggregation** (combining outputs into a coherent response).
+
+### Critical Memory Isolation
+
+**Subagents do NOT share memory with the coordinator or each other.** Each subagent:
+
+- Starts with a fresh context window
+- Does not see the coordinator's conversation history
+- Does not see other subagents' inputs or outputs
+- Receives only what the coordinator explicitly passes to it
+
+This means the coordinator must be explicit about what each subagent needs. If you assume shared context, subagents receive insufficient information and produce incomplete results.
+
+### Attention Dilution Warning
+
+When processing **14+ items in a single pass** (e.g., reviewing many files), analysis depth becomes inconsistent — early items get detailed feedback, later items get superficial treatment. The fix is **multi-pass architecture**: analyze each item individually (consistent depth), then synthesize across items in a separate pass.
+
+This is why the **Explore agent** is valuable — it processes files in its own context window, ensuring consistent depth, then returns a summary for integration.
+
+For deep coverage of these patterns, see [Guide 13 - Agentic Architecture](13-agentic-architecture.md).
 
 ### Agents Cannot Call Agents
 

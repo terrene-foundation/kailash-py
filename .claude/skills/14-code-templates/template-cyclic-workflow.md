@@ -184,7 +184,7 @@ results, run_id = runtime.execute(built_workflow, parameters={
 
 - **Cyclic basics**: [`cycle-workflows-basics`](../../06-cheatsheets/cycle-workflows-basics.md)
 - **Cycle debugging**: [`cycle-debugging`](../../06-cheatsheets/cycle-debugging.md)
-- **Cycle errors**: [`error-cycle-convergence`](../15-error-troubleshooting/error-cycle-convergence.md)
+- **Cycle errors**: [`error-cycle-convergence`](../31-error-troubleshooting/error-cycle-convergence.md)
 
 ## When to Escalate
 

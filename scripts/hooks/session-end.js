@@ -19,6 +19,13 @@ const {
   countObservations,
 } = require("./lib/learning-utils");
 
+// Timeout fallback — prevents hanging the Claude Code session
+const TIMEOUT_MS = 15000;
+const _timeout = setTimeout(() => {
+  console.log(JSON.stringify({ continue: true }));
+  process.exit(1);
+}, TIMEOUT_MS);
+
 let input = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (chunk) => (input += chunk));
@@ -201,6 +208,12 @@ function autoProcessLearning(learningDir) {
   if (fp.length > 0) {
     const fpInstincts = processor.generateInstincts(fp);
     processor.saveInstincts(fpInstincts, "framework-selection", learningDir);
+  }
+
+  const dfp = processor.analyzeDataFlowPatterns(obs);
+  if (dfp.length > 0) {
+    const dfpInstincts = processor.generateInstincts(dfp);
+    processor.saveInstincts(dfpInstincts, "dataflow-models", learningDir);
   }
 
   // Auto-evolve: promote high-confidence instincts to skills/commands

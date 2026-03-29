@@ -202,5 +202,5 @@ warnings = check_degenerate_envelope(effective_envelope)
 
 - `pact-governance-engine.md` -- engine.compute_envelope(), engine.set_role_envelope()
 - `pact-access-enforcement.md` -- confidentiality_clearance used in access checks
-- Source: `packages/kailash-pact/src/pact/governance/envelopes.py`
-- Source: `packages/kailash-pact/src/pact/governance/config.py`
+- Source: `pact/governance/envelopes.py`
+- Source: `pact/governance/config.py`

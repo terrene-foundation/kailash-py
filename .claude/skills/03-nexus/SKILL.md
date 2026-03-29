@@ -1,6 +1,6 @@
 ---
 name: nexus
-description: "Kailash Nexus - zero-config multi-channel platform for deploying workflows as API + CLI + MCP simultaneously. Use when asking about 'Nexus', 'multi-channel', 'platform deployment', 'API deployment', 'CLI deployment', 'MCP deployment', 'unified sessions', 'workflow deployment', 'production deployment', 'API gateway', 'FastAPI alternative', 'session management', 'health monitoring', 'enterprise platform', 'plugins', 'event system', or 'workflow registration'."
+description: "Kailash Nexus - zero-config multi-channel platform for deploying workflows as API + CLI + MCP simultaneously. Use when asking about 'Nexus', 'multi-channel', 'platform deployment', 'API deployment', 'CLI deployment', 'MCP deployment', 'unified sessions', 'workflow deployment', 'production deployment', 'API gateway', 'FastAPI alternative', 'session management', 'health monitoring', 'enterprise platform', 'plugins', 'event system', or 'workflow registration'. Also covers K8s integration: 'K8s probes', 'healthz', 'readyz', 'startup probe', 'ProbeManager', 'ProbeState', 'OpenAPI', 'openapi.json', 'OpenApiGenerator', 'security headers', 'CSRF middleware', 'CSRFMiddleware', 'SecurityHeadersMiddleware', 'middleware presets', 'Preset', or 'HSTS'."
 ---
 
 # Kailash Nexus - Multi-Channel Platform Framework

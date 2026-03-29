@@ -72,3 +72,12 @@ For frontend projects, additionally deploy:
 - **flutter-specialist** or **react-specialist** — Framework-specific frontend todos
 
 Red team the todo list with agents until they confirm no gaps remain.
+
+### Journal
+
+Create journal entries for decisions made during planning:
+- **DECISION** entries for scope choices, prioritization rationale, and architectural direction
+- **TRADE-OFF** entries for competing approaches evaluated
+- **RISK** entries for risks identified during planning
+
+Use sequential naming: check the highest existing `NNNN-` prefix and increment.

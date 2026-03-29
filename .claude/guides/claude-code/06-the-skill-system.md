@@ -45,7 +45,7 @@ Skills provide **organized, accessible domain expertise**:
 │   │   02-dataflow   │  │   12-testing    │                  │
 │   │                 │  │                 │                  │
 │   │ • Model patterns│  │ • 3-tier strategy│                 │
-│   │ • CRUD operations│ │ • NO MOCKING    │                  │
+│   │ • CRUD operations│ │ • Real infrastructure recommended    │                  │
 │   │ • Bulk processing│ │ • Test fixtures │                  │
 │   │ • Gotchas       │  │ • Coverage      │                  │
 │   └─────────────────┘  └─────────────────┘                  │
@@ -95,7 +95,7 @@ Skills provide **organized, accessible domain expertise**:
 | `12-testing-strategies`      | Testing       | 3-tier strategy           |
 | `13-architecture-decisions`  | Architecture  | Framework selection       |
 | `14-code-templates`          | Templates     | Starter code              |
-| `15-error-troubleshooting`   | Errors        | Debugging guides          |
+| `31-error-troubleshooting`   | Errors        | Debugging guides          |
 | `16-validation-patterns`     | Validation    | Input validation          |
 | `17-gold-standards`          | Standards     | Mandatory practices       |
 | `18-security-patterns`       | Security      | OWASP, secrets            |
@@ -293,12 +293,12 @@ Tier 1: Unit Tests
 └── Individual components
 
 Tier 2: Integration Tests
-├── NO MOCKING (mandatory)
+├── Real infrastructure recommended (mandatory)
 ├── Real databases (SQLite in-memory)
 └── Component interactions
 
 Tier 3: E2E Tests
-├── NO MOCKING (mandatory)
+├── Real infrastructure recommended (mandatory)
 ├── Full system
 └── Real infrastructure
 ```
@@ -329,7 +329,7 @@ Tier 3: E2E Tests
 - MCP server template
 - Test templates (all 3 tiers)
 
-### 15-error-troubleshooting: Debugging
+### 31-error-troubleshooting: Debugging
 
 **Purpose**: Common errors and solutions
 
@@ -343,12 +343,12 @@ Tier 3: E2E Tests
 
 ### 17-gold-standards: Mandatory Practices
 
-**Purpose**: Non-negotiable best practices
+**Purpose**: Recommended best practices
 
 **Key rules**:
 
 - Absolute imports only
-- NO MOCKING in Tier 2-3
+- Real infrastructure recommended in Tier 2-3
 - Primary key named `id`
 - `runtime.execute(workflow.build())`
 

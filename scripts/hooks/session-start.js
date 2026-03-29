@@ -3,7 +3,8 @@
  * Hook: session-start
  * Event: SessionStart
  * Purpose: Discover env config, validate model-key pairings, create .env if
- *          missing, output model configuration prominently.
+ *          missing, inject session notes into Claude context, output model
+ *          configuration prominently.
  *
  * Framework-agnostic — works with any Kailash project.
  *
@@ -30,8 +31,16 @@ const {
   detectActiveWorkspace,
   derivePhase,
   getTodoProgress,
-  getSessionNotes,
+  findAllSessionNotes,
 } = require("./lib/workspace-utils");
+const { checkVersion } = require("./lib/version-utils");
+
+// Timeout fallback — prevents hanging the Claude Code session
+const TIMEOUT_MS = 10000;
+const _timeout = setTimeout(() => {
+  console.log(JSON.stringify({ continue: true }));
+  process.exit(1);
+}, TIMEOUT_MS);
 
 let input = "";
 process.stdin.setEncoding("utf8");
@@ -39,8 +48,15 @@ process.stdin.on("data", (chunk) => (input += chunk));
 process.stdin.on("end", () => {
   try {
     const data = JSON.parse(input);
-    initializeSession(data);
-    console.log(JSON.stringify({ continue: true }));
+    const result = initializeSession(data);
+    const output = { continue: true };
+    if (result.sessionNotesContext) {
+      output.hookSpecificOutput = {
+        hookEventName: "SessionStart",
+        additionalContext: result.sessionNotesContext,
+      };
+    }
+    console.log(JSON.stringify(output));
     process.exit(0);
   } catch (error) {
     console.error(`[HOOK ERROR] ${error.message}`);
@@ -50,6 +66,7 @@ process.stdin.on("end", () => {
 });
 
 function initializeSession(data) {
+  const result = { sessionNotesContext: null };
   const session_id = (data.session_id || "unknown").replace(
     /[^a-zA-Z0-9_-]/g,
     "_",
@@ -124,14 +141,11 @@ function initializeSession(data) {
     );
   } catch {}
 
-  // ── Load previous session ─────────────────────────────────────────────
+  // ── Version check (human-facing, stderr only) ─────────────────────────
   try {
-    const sessionFile = path.join(sessionDir, `${session_id}.json`);
-    const lastSessionFile = path.join(sessionDir, "last-session.json");
-    if (fs.existsSync(sessionFile)) {
-      /* loaded */
-    } else if (fs.existsSync(lastSessionFile)) {
-      /* loaded */
+    const versionResult = checkVersion(cwd);
+    for (const msg of versionResult.messages) {
+      console.error(msg);
     }
   } catch {}
 
@@ -141,13 +155,37 @@ function initializeSession(data) {
     if (ws) {
       const phase = derivePhase(ws.path, cwd);
       const todos = getTodoProgress(ws.path);
-      const notes = getSessionNotes(ws.path);
       console.error(
         `[WORKSPACE] ${ws.name} | Phase: ${phase} | Todos: ${todos.active} active / ${todos.completed} done`,
       );
-      if (notes) {
-        const staleTag = notes.stale ? " (stale)" : "";
-        console.error(`[WORKSPACE] Session notes${staleTag}: ${notes.age}`);
+    }
+  } catch {}
+
+  // ── Session notes (inject into Claude context + human-facing stderr) ─
+  try {
+    const allNotes = findAllSessionNotes(cwd);
+    if (allNotes.length > 0) {
+      for (const note of allNotes) {
+        const staleTag = note.stale ? " (STALE)" : "";
+        const label = note.workspace ? ` [${note.workspace}]` : " [root]";
+        console.error(
+          `[SESSION-NOTES]${label} ${note.relativePath}${staleTag} — updated ${note.age}`,
+        );
+      }
+
+      // Build context for Claude — include all non-stale notes, or latest if all stale
+      const contextParts = [];
+      for (const note of allNotes) {
+        const label = note.workspace ? `[${note.workspace}]` : "[root]";
+        const staleMark = note.stale ? " (STALE — may be outdated)" : "";
+        contextParts.push(
+          `## Session Notes ${label}${staleMark} — updated ${note.age}\n\n${note.content}`,
+        );
+      }
+      if (contextParts.length > 0) {
+        result.sessionNotesContext =
+          "# Previous Session Notes\n\nRead these to understand where the last session left off.\n\n" +
+          contextParts.join("\n\n---\n\n");
       }
     }
   } catch {}
@@ -187,6 +225,8 @@ function initializeSession(data) {
       "[ENV] No .env file found. API keys and models not configured.",
     );
   }
+
+  return result;
 }
 
 /**

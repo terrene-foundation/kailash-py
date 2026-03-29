@@ -12,11 +12,6 @@ The composition module validates multi-agent pipelines before execution:
 
 **Source modules**:
 
-- `packages/kailash-kaizen/src/kaizen/composition/dag_validator.py` -- `validate_dag()`
-- `packages/kailash-kaizen/src/kaizen/composition/schema_compat.py` -- `check_schema_compatibility()`
-- `packages/kailash-kaizen/src/kaizen/composition/cost_estimator.py` -- `estimate_cost()`
-- `packages/kailash-kaizen/src/kaizen/composition/models.py` -- `ValidationResult`, `CompatibilityResult`, `CostEstimate`
-- `packages/kailash-kaizen/src/kaizen/composition/errors.py` -- `CompositionError`, `CycleDetectedError`, `SchemaIncompatibleError`
 
 ---
 
@@ -384,8 +379,8 @@ CostEstimate.from_dict(cost_dict)
 
 ## References
 
-- **Source**: `packages/kailash-kaizen/src/kaizen/composition/dag_validator.py`
-- **Source**: `packages/kailash-kaizen/src/kaizen/composition/schema_compat.py`
-- **Source**: `packages/kailash-kaizen/src/kaizen/composition/cost_estimator.py`
-- **Source**: `packages/kailash-kaizen/src/kaizen/composition/models.py`
-- **Source**: `packages/kailash-kaizen/src/kaizen/composition/errors.py`
+- **Source**: `kaizen/composition/dag_validator.py`
+- **Source**: `kaizen/composition/schema_compat.py`
+- **Source**: `kaizen/composition/cost_estimator.py`
+- **Source**: `kaizen/composition/models.py`
+- **Source**: `kaizen/composition/errors.py`

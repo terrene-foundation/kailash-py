@@ -83,6 +83,16 @@ function summarizePattern(pattern, category) {
   if (!pattern) return "Unknown pattern";
 
   if (category === "workflow-patterns") {
+    const nodes = pattern.node_types;
+    if (Array.isArray(nodes) && nodes.length > 0) {
+      const nodeStr = nodes.slice(0, 4).join(" + ");
+      const suffix = nodes.length > 4 ? ` (+${nodes.length - 4} more)` : "";
+      const cyclic = pattern.has_cycles ? " (cyclic)" : "";
+      const runtime = pattern.runtimes?.length
+        ? ` [${pattern.runtimes.join("/")}]`
+        : "";
+      return `Workflow: ${nodeStr}${suffix}${cyclic}${runtime}`;
+    }
     if (pattern.pattern_type) return `Use ${pattern.pattern_type} pattern`;
     return `Workflow pattern: ${JSON.stringify(pattern).substring(0, 60)}`;
   }
@@ -108,8 +118,12 @@ function summarizePattern(pattern, category) {
   }
 
   if (category === "dataflow-models") {
-    const model = pattern.model_name || pattern.model;
-    if (model) return `DataFlow model: ${model}`;
+    const model =
+      pattern.model_name || pattern.model_names?.[0] || pattern.model;
+    const files = pattern.files;
+    const fileHint =
+      Array.isArray(files) && files.length > 0 ? ` in ${files[0]}` : "";
+    if (model) return `DataFlow model: ${model}${fileHint}`;
     return `DataFlow pattern: ${JSON.stringify(pattern).substring(0, 60)}`;
   }
 

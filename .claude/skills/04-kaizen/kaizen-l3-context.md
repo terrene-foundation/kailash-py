@@ -61,4 +61,4 @@ merge_result = root.merge_child_results(child)
 ## Reference
 
 - Spec: `workspaces/kaizen-l3/briefs/02-scoped-context.md`
-- Source: `packages/kailash-kaizen/src/kaizen/l3/context/`
+- Source: `kaizen/l3/context/`

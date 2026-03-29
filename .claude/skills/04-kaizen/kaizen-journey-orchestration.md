@@ -279,7 +279,7 @@ async def track_transition(context):
 Complete reference implementation:
 
 ```
-packages/kailash-kaizen/examples/journey/healthcare_referral/
+examples/journey/healthcare_referral/
 ├── journey.py          # 5 pathways, 3 transitions
 ├── signatures/         # 5 signatures with __intent__, __guidelines__
 ├── agents/             # 5 agents (intake, booking, faq, persuasion, confirmation)
@@ -289,7 +289,7 @@ packages/kailash-kaizen/examples/journey/healthcare_referral/
 
 Run the demo:
 ```bash
-cd packages/kailash-kaizen
+cd kailash-kaizen
 python -m examples.journey.healthcare_referral.main --mode demo
 ```
 

@@ -87,5 +87,5 @@ if verdict.zone in ("auto_approved", "flagged"):
 ## Reference
 
 - Spec: `workspaces/kaizen-l3/briefs/01-envelope-extensions.md`
-- Source: `packages/kailash-kaizen/src/kaizen/l3/envelope/`
-- Tests: `packages/kailash-kaizen/tests/unit/l3/envelope/`
+- Source: `kaizen/l3/envelope/`
+- Tests: `tests/unit/l3/envelope/`

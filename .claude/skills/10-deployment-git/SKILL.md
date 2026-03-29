@@ -28,6 +28,12 @@ SDK release and development infrastructure patterns for:
   - Research current PyPI/CI best practices
   - Create deployment-config.md
 
+- **[release-runbook](release-runbook.md)** - SDK release runbook (detailed procedures)
+  - Version locations for all packages (pyproject.toml + __init__.py)
+  - SDK dependency pin rules
+  - Version consistency verification commands
+  - Pre-release, build, publish, post-release step-by-step procedures
+
 - **[deployment-packages](deployment-packages.md)** - Package release workflow
   - PyPI and GitHub release process
   - Multi-package coordination and publish order

@@ -6,12 +6,12 @@ When adding a new `TrustPlaneStore` backend (e.g., PostgreSQL, DynamoDB, or any 
 
 ## Prerequisites
 
-- `TrustPlaneStore` protocol: `src/kailash/trust/plane/store/__init__.py`
+- `TrustPlaneStore` protocol: `kailash/trust/plane/store/__init__.py`
 - Conformance test suite: `tests/trust/plane/store/test_store_conformance.py`
 - Existing reference implementations:
-  - SQLite: `src/kailash/trust/plane/store/sqlite.py` (698 LOC, default backend)
-  - Filesystem: `src/kailash/trust/plane/store/filesystem.py` (305 LOC)
-  - PostgreSQL: `src/kailash/trust/plane/store/postgres.py` (production backend)
+  - SQLite: `kailash/trust/plane/store/sqlite.py` (698 LOC, default backend)
+  - Filesystem: `kailash/trust/plane/store/filesystem.py` (305 LOC)
+  - PostgreSQL: `kailash/trust/plane/store/postgres.py` (production backend)
 - Python 3.11+
 
 ## Store Security Contract (Mandatory Checklist)
@@ -49,7 +49,7 @@ Every backend MUST satisfy ALL six requirements. A missing requirement is a secu
 ### Step 1: Create the backend module
 
 ```
-src/kailash/trust/plane/store/<backend_name>.py
+kailash/trust/plane/store/<backend_name>.py
 ```
 
 Required header:
@@ -65,7 +65,7 @@ from __future__ import annotations
 import json
 import logging
 from kailash.trust.plane._locking import validate_id
-from kailash.trust.plane.delegation import DelegationRecipient, DelegateStatus, ReviewResolution
+from kailash.trust.plane.delegation import Delegate, DelegateStatus, ReviewResolution
 from kailash.trust.plane.holds import HoldRecord
 from kailash.trust.plane.models import DecisionRecord, MilestoneRecord, ProjectManifest
 
@@ -322,7 +322,6 @@ def _safe_connection(self):
 
 ## See Also
 
-- `src/kailash/trust/plane/CLAUDE.md` — Store Architecture section, Store Security Contract
 - `workspaces/trust-plane/04-validate/09-R13-store-red-team.md` — R13 findings that informed this skill
 - `workspaces/trust-plane/04-validate/R14-validation-report.md` — R14 findings (PostgreSQL PoolTimeout, exception wrapping)
 - TODO-24: PostgreSQL backend — first real application of this codified pattern

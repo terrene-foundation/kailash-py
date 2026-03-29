@@ -2,7 +2,7 @@
 
 Thread-safe, fail-closed budget accounting with integer microdollars, two-phase reserve/record semantics, threshold callbacks, and crash-safe SQLite persistence.
 
-**Source**: `src/kailash/trust/constraints/budget_tracker.py`, `src/kailash/trust/constraints/budget_store.py`
+**Source**: `kailash/trust/constraints/budget_tracker.py`, `kailash/trust/constraints/budget_store.py`
 
 ## Core Concepts
 
@@ -320,4 +320,4 @@ store.close()
 - **Agent**: `eatp-expert` — Full EATP framework knowledge
 - **Security patterns**: `eatp-security-patterns.md` — Lock ordering, integer arithmetic, symlink rejection
 - **Posture stores**: `eatp-posture-stores.md` — Related persistence pattern for postures
-- **Source**: `src/kailash/trust/constraints/budget_tracker.py`, `src/kailash/trust/constraints/budget_store.py`
+- **Source**: `kailash/trust/constraints/budget_tracker.py`, `kailash/trust/constraints/budget_store.py`

@@ -41,6 +41,7 @@ python -m venv /tmp/verify --clear
 All packages in the SDK MUST have consistent, compatible versions before release.
 
 **Check**:
+
 - `pyproject.toml` version field in each package
 - `__version__` in `__init__.py` files
 - Cross-package dependency version pins
@@ -48,6 +49,7 @@ All packages in the SDK MUST have consistent, compatible versions before release
 ### 4. CHANGELOG.md Updated for Every Release
 
 Every release MUST have a corresponding entry in `CHANGELOG.md` with:
+
 - Version number and date
 - Added, Changed, Fixed, Removed sections as applicable
 - Breaking changes clearly marked
@@ -57,6 +59,7 @@ Every release MUST have a corresponding entry in `CHANGELOG.md` with:
 Security review by **security-reviewer** is MANDATORY before any PyPI publish.
 
 **Check for**:
+
 - No hardcoded secrets in package source
 - No sensitive data in wheel contents
 - Dependencies are pinned and audited
@@ -101,11 +104,13 @@ MUST NOT skip TestPyPI validation for major (X.0.0) or minor (X.Y.0) releases. T
 MUST NOT commit PyPI tokens or credentials to source control.
 
 **Correct**:
+
 - `~/.pypirc` (local, gitignored)
 - CI secrets (GitHub Actions secrets)
 - Trusted publisher (OIDC — no tokens needed)
 
 **Incorrect**:
+
 ```
 ❌ TWINE_PASSWORD=pypi-... in .env
 ❌ TWINE_PASSWORD=pypi-... in CI config files

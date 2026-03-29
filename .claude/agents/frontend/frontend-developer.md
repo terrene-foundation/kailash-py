@@ -1,6 +1,6 @@
 ---
 name: frontend-developer
-description: React frontend specialist for responsive UI components with @tanstack/react-query API integration and Shadcn. Use proactively when creating pages, converting mockups, or implementing React features following modular architecture patterns.
+description: "React frontend specialist. Use for responsive UI components, React Query integration, or Shadcn patterns."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---
@@ -157,15 +157,7 @@ Always ensure the UI is intuitive, responsive, and follows the established archi
 ## Reference Documentation
 
 ### Essential Guides (Start Here)
-- `.claude/guides/enterprise-ai-hub-uiux-design.md` - Overall UX/UI design principles
-- `.claude/guides/interactive-widget-implementation-guide.md` - Interactive widget patterns
-- `.claude/guides/widget-system-overview.md` - Widget architecture and organization
-- `.claude/guides/widget-response-technical-spec.md` - Widget technical specifications
-- `.claude/guides/multi-conversation-ux-lark-style.md` - Conversation UI patterns
 - `.claude/skills/23-uiux-design-principles/SKILL.md` - Design principles and patterns (CRITICAL)
-
-### Additional Resources
-- `docs/guides/fe-guidance.md` - Complete frontend development guidelines (if exists)
 
 ## Related Agents
 
@@ -178,5 +170,5 @@ Always ensure the UI is intuitive, responsive, and follows the established archi
 ## Full Documentation
 
 When this guidance is insufficient, consult:
-- `.claude/guides/enterprise-ai-hub-uiux-design.md` - Design principles
+- `.claude/skills/23-uiux-design-principles/` - Design principles and patterns
 - React docs: https://react.dev/

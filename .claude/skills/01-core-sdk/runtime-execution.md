@@ -246,11 +246,6 @@ See `STATE_OWNERSHIP_CONVENTION.md` for mixin development guidelines.
 
 ### Advanced References
 
-- `src/kailash/runtime/base.py` - BaseRuntime implementation (699 lines)
-- `src/kailash/runtime/mixins/validation.py` - ValidationMixin (519 lines, 5 methods)
-- `src/kailash/runtime/mixins/parameters.py` - ParameterHandlingMixin (650 lines, 9 methods)
-- `src/kailash/runtime/mixins/conditional_execution.py` - ConditionalExecutionMixin (1,107 lines, 12 methods)
-- `src/kailash/runtime/mixins/cycle_execution.py` - CycleExecutionMixin (178 lines, 1 method)
 
 ## Performance Configuration
 

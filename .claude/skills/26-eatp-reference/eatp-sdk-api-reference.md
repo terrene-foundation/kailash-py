@@ -2,7 +2,7 @@
 
 Complete API surface for the standalone EATP Python SDK.
 
-**Package**: `src/kailash/trust/`
+**Package**: the trust module
 **Install**: `pip install kailash[trust]`
 **License**: Apache 2.0 (Terrene Foundation)
 **Python**: >=3.11

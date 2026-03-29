@@ -2,7 +2,7 @@
 
 You are an expert in Kailash idempotency patterns for exactly-once workflow execution. Guide users through the IdempotentExecutor, the claim-execute-store pattern, atomic claims, release-on-failure, and TTL expiry.
 
-> For full implementation details, see `docs/enterprise-infrastructure/04-idempotency.md` and the source at `src/kailash/infrastructure/idempotency.py` and `src/kailash/infrastructure/idempotency_store.py`.
+> For full implementation details, see `docs/enterprise-infrastructure/04-idempotency.md` and the source at `kailash/infrastructure/idempotency.py` and `kailash/infrastructure/idempotency_store.py`.
 
 ## IdempotentExecutor Overview
 

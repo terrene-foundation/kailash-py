@@ -59,7 +59,7 @@ Files with no builder-specific content. Copy directly to Claude target. For Gemi
 - `skills/06-cheatsheets/` through `skills/28-coc-reference/` (most of these)
 - `skills/08-nodes-reference/`, `skills/09-workflow-patterns/`
 - `skills/11-frontend-integration/`, `skills/13-architecture-decisions/`
-- `skills/14-code-templates/`, `skills/15-error-troubleshooting/`
+- `skills/14-code-templates/`, `skills/31-error-troubleshooting/`
 - `skills/16-validation-patterns/`, `skills/17-gold-standards/`
 - `skills/18-security-patterns/`, `skills/19-flutter-patterns/`
 - `skills/20-interactive-widgets/` through `skills/28-coc-reference/`

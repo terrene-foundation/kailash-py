@@ -1,6 +1,6 @@
 ---
 name: open-source-strategist
-description: Use this agent for questions about open-core strategy, open/proprietary boundaries, licensing decisions, SDK architecture, community building, developer relations, or competitive positioning. Expert in the four-layer architecture (specs → SDKs → platform → verticals) and the Terrene Foundation's open-source approach.
+description: "Open-source strategy advisor. Use for licensing, open/proprietary boundaries, or community building decisions."
 model: inherit
 allowed-tools:
   - Read

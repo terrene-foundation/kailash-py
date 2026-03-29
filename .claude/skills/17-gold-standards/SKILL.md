@@ -1,6 +1,6 @@
 ---
 name: gold-standards
-description: "Mandatory best practices and gold standards for Kailash SDK development including absolute imports, parameter passing, error handling, testing policies (NO MOCKING in Tiers 2-3), workflow design, custom node development, security, documentation, and test creation. Use when asking about 'best practices', 'standards', 'gold standards', 'mandatory rules', 'required patterns', 'absolute imports', 'NO MOCKING', 'testing policy', 'error handling standards', 'security best practices', 'documentation standards', or 'workflow design standards'."
+description: "Mandatory best practices and gold standards for Kailash SDK development including absolute imports, parameter passing, error handling, testing policies (Real infrastructure recommended in Tiers 2-3), workflow design, custom node development, security, documentation, and test creation. Use when asking about 'best practices', 'standards', 'gold standards', 'mandatory rules', 'required patterns', 'absolute imports', 'Real infrastructure recommended', 'testing policy', 'error handling standards', 'security best practices', 'documentation standards', or 'workflow design standards'."
 ---
 
 # Kailash Gold Standards - Mandatory Best Practices
@@ -13,7 +13,7 @@ Gold standards are **mandatory** practices for:
 - Absolute imports (no relative imports)
 - Parameter passing patterns
 - Error handling strategies
-- Testing policies (NO MOCKING in Tiers 2-3)
+- Testing policies (Real infrastructure recommended in Tiers 2-3)
 - Workflow design principles
 - Custom node development
 - Security requirements
@@ -43,8 +43,8 @@ Gold standards are **mandatory** practices for:
 
 ### Testing Standards
 
-#### NO MOCKING Policy (MANDATORY)
-- **[gold-mocking-policy](gold-mocking-policy.md)** - NO MOCKING in Tiers 2-3
+#### Real infrastructure recommended Policy (MANDATORY)
+- **[gold-mocking-policy](gold-mocking-policy.md)** - Real infrastructure recommended in Tiers 2-3
   - **Rule**: NO mocking in integration (Tier 2) or E2E (Tier 3) tests
   - **Reason**: Mocking hides real-world issues
   - **Required**: Use real databases, APIs, infrastructure
@@ -126,7 +126,7 @@ from ..workflow.builder import WorkflowBuilder
 from .runtime import LocalRuntime
 ```
 
-### 2. NO MOCKING in Tiers 2-3
+### 2. Real infrastructure recommended in Tiers 2-3
 ```python
 # ✅ CORRECT (Gold Standard - Tier 2)
 def test_dataflow_crud(db: DataFlow):  # Real database
@@ -138,7 +138,7 @@ def test_dataflow_crud(db: DataFlow):  # Real database
 # ❌ WRONG (Violates Gold Standard)
 def test_dataflow_crud():
     """Test with mocked database."""
-    db = Mock(spec=DataFlow)  # NO MOCKING in Tier 2!
+    db = Mock(spec=DataFlow)  # Real infrastructure recommended in Tier 2!
     db.create_workflow.return_value = mock_workflow
 ```
 
@@ -253,7 +253,7 @@ python -m kailash.validation.gold_standards check-security
 
 ### Code Review Focus
 - Check absolute imports
-- Verify NO MOCKING policy
+- Verify Real infrastructure recommended policy
 - Validate connection format
 - Check error handling
 - Verify TDD approach
@@ -265,7 +265,7 @@ python -m kailash.validation.gold_standards check-security
 
 **Absolute Imports**: Prevent import errors during refactoring
 
-**NO MOCKING**: Catch real database issues, API timeouts, race conditions
+**Real infrastructure recommended**: Catch real database issues, API timeouts, race conditions
 
 **4-Parameter Connections**: Prevent wrong data routing
 
@@ -321,7 +321,7 @@ Use this skill:
 ## Related Skills
 
 - **[16-validation-patterns](../16-validation-patterns/SKILL.md)** - Validation tools
-- **[15-error-troubleshooting](../15-error-troubleshooting/SKILL.md)** - Error patterns
+- **[31-error-troubleshooting](../31-error-troubleshooting/SKILL.md)** - Error patterns
 - **[12-testing-strategies](../12-testing-strategies/SKILL.md)** - Testing strategies
 - **[01-core-sdk](../01-core-sdk/SKILL.md)** - Core patterns
 

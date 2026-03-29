@@ -5,6 +5,7 @@
 This guide covers **power user features** for those who want deeper control over the setup. These techniques go beyond daily workflows into customization, optimization, and expert-level usage.
 
 By the end of this guide, you will know how to:
+
 - Explicitly control agent delegation
 - Chain multiple agents for complex tasks
 - Customize hooks and rules
@@ -69,7 +70,58 @@ Note: Bypassing agents removes safety checks.
 
 ---
 
-## Part 2: Advanced Context Management
+## Part 2: Plan Mode vs Direct Execution
+
+### The Decision Framework
+
+| Mode                 | Use When                                                               | Example                                                            |
+| -------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| **Plan mode**        | Multiple valid approaches, architectural decisions, multi-file changes | "Redesign the auth system"                                         |
+| **Direct execution** | Clear scope, known approach, single-file changes                       | "Fix this null pointer at line 42"                                 |
+| **Hybrid**           | Investigate first, then execute                                        | "Debug the performance issue" → plan explores, direct executes fix |
+
+### The Explore Subagent
+
+For broad codebase exploration, use the Explore agent. It runs in its own context window:
+
+1. **Discovery noise is isolated** — verbose file contents, search results, and dead ends stay in the subagent's context
+2. **Only the summary returns** — your main context stays clean
+3. **Prevents context budget exhaustion** — exploration doesn't consume the tokens you need for implementation
+
+Use Explore for: broad searches, multi-file analysis, understanding unfamiliar codebases.
+Use Grep/Glob directly for: targeted lookups, specific file searches.
+
+### CLAUDE.md Hierarchy
+
+Claude Code loads instructions from three levels, in order:
+
+| Level               | Location                        | Shared?                  | Use For                             |
+| ------------------- | ------------------------------- | ------------------------ | ----------------------------------- |
+| **User-level**      | `~/.claude/CLAUDE.md`           | No (your machine only)   | Personal preferences, shortcuts     |
+| **Project-level**   | `.claude/CLAUDE.md`             | Yes (version-controlled) | Team standards, project conventions |
+| **Directory-level** | `CLAUDE.md` in any subdirectory | Yes                      | Subdirectory-specific rules         |
+
+**The new-team-member trap**: Developer A has perfect conventions (user-level CLAUDE.md). Developer B joins, gets inconsistent output. Root cause: instructions live on A's machine. Fix: Move to project-level `.claude/CLAUDE.md`.
+
+### Path-Specific Rules
+
+For rules that apply only to certain file types, use `.claude/rules/` with YAML frontmatter:
+
+```markdown
+# .claude/rules/testing.md
+
+---
+
+## paths: ["**/*.test.tsx"]
+
+All test files must use describe/it blocks with specific assertion messages.
+```
+
+**Advantage over directory-level CLAUDE.md**: Glob patterns match across the entire codebase. Rules load only for matching files, keeping irrelevant context out of the token budget.
+
+---
+
+## Part 3: Advanced Context Management
 
 ### Selective Skill Loading
 
@@ -117,7 +169,7 @@ For simple tasks, avoid loading heavy context:
 
 ---
 
-## Part 3: Hook Customization
+## Part 4: Hook Customization
 
 ### Adding a Custom Hook
 
@@ -187,18 +239,19 @@ Check stderr for debug output.
 
 ---
 
-## Part 4: Rule Customization
+## Part 5: Rule Customization
 
 ### Adding Project-Specific Rules
 
 Create a new rule file:
 
-```markdown
+````markdown
 # .claude/rules/project-specific.md
 
 ## MUST Rules
 
 ### Always Use Project Logger
+
 All logging MUST use the project's custom logger:
 
 ```python
@@ -210,7 +263,9 @@ log.info("Message")
 print("Message")  # NO
 import logging    # Use project logger instead
 ```
-```
+````
+
+````
 
 ### Rule Priority Override
 
@@ -219,7 +274,7 @@ When rules conflict, specify priority in the rule file:
 ```markdown
 ## Priority
 This rule takes precedence over patterns.md for logging concerns.
-```
+````
 
 ### Temporary Rule Exceptions
 
@@ -231,7 +286,7 @@ Document exceptions in your request:
 
 ---
 
-## Part 5: Custom Skills
+## Part 6: Custom Skills
 
 ### Creating a New Skill
 
@@ -270,6 +325,7 @@ description: "Custom patterns for [your domain]. Use when [trigger conditions]."
 ## Support
 
 For help, invoke:
+
 - `pattern-expert` - General patterns
 ```
 
@@ -281,8 +337,10 @@ Create a command:
 # .claude/commands/mycmd.md
 
 ---
+
 name: mycmd
 description: "Load my custom patterns"
+
 ---
 
 # My Custom Quick Reference
@@ -294,16 +352,17 @@ Load the 99-my-custom-skill skill for [domain] patterns.
 [Subset of patterns]
 
 ## Usage Examples
-
 ```
+
 /mycmd
+
 ```
 Then ask about [domain] features.
 ```
 
 ---
 
-## Part 6: Custom Agents
+## Part 7: Custom Agents
 
 ### Creating a Specialist Agent
 
@@ -311,10 +370,12 @@ Then ask about [domain] features.
 # .claude/agents/my-specialist.md
 
 ---
+
 name: my-specialist
 description: Short description under 120 chars. Use for [trigger].
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: opus
+
 ---
 
 # My Specialist
@@ -356,17 +417,19 @@ After creating, use:
 
 ---
 
-## Part 7: Optimization Techniques
+## Part 8: Optimization Techniques
 
 ### Reduce Token Usage
 
 **Do:**
+
 ```
 > /db
 > Create user model
 ```
 
 **Don't:**
+
 ```
 > I want to create a database model for users with all the DataFlow patterns
 > and I want to make sure it follows all the best practices...
@@ -376,11 +439,13 @@ After creating, use:
 ### Batch Operations
 
 **Do:**
+
 ```
 > Fix all the lint errors in src/
 ```
 
 **Don't:**
+
 ```
 > Fix the lint error in src/file1.py
 > Fix the lint error in src/file2.py
@@ -391,6 +456,7 @@ After creating, use:
 ### Parallel Reads
 
 **Do:**
+
 ```
 > Read src/models/user.py, src/models/product.py, and src/models/order.py
 ```
@@ -413,7 +479,7 @@ After reading a file once, Claude remembers it for the session:
 
 ---
 
-## Part 8: Multi-Project Setup
+## Part 9: Multi-Project Setup
 
 ### Project-Specific Overrides
 
@@ -446,15 +512,15 @@ The session-start hook detects frameworks:
 
 ```javascript
 // scripts/hooks/session-start.js
-const hasDataFlow = fs.existsSync('dataflow.py') || hasImport('dataflow');
-const hasNexus = fs.existsSync('nexus.py') || hasImport('nexus');
+const hasDataFlow = fs.existsSync("dataflow.py") || hasImport("dataflow");
+const hasNexus = fs.existsSync("nexus.py") || hasImport("nexus");
 ```
 
 Customize for your projects.
 
 ---
 
-## Part 9: Advanced Learning
+## Part 10: Advanced Learning
 
 ### Manual Instinct Creation
 
@@ -497,7 +563,7 @@ node scripts/learning/instinct-evolver.js --skill-threshold 0.80 --command-thres
 
 ---
 
-## Part 10: Integration with External Tools
+## Part 11: Integration with External Tools
 
 ### IDE Integration
 
@@ -510,14 +576,25 @@ claude
 
 ### CI/CD Integration
 
-Use Claude Code in CI for code review:
+Key flags for CI/CD:
+
+- **`-p`**: Non-interactive mode. Essential for CI — without it, the job hangs waiting for input.
+- **`--output-format json`**: Machine-parseable output for PR comments and automated processing.
+- **`--json-schema`**: Enforce specific output structure (e.g., review findings schema).
+
+**Critical pattern: Independent review instances**. The session that generated code is less effective at reviewing its own changes — it retains reasoning context making it less likely to question its own decisions. Use a separate Claude Code invocation for review:
 
 ```yaml
 # .github/workflows/review.yml
-- name: Claude Review
-  run: |
-    echo "Review the changes in this PR" | claude --non-interactive
+steps:
+  - name: Claude Review
+    run: |
+      claude -p "Review the changes in this PR for security and correctness" \
+        --output-format json \
+        --json-schema review_schema.json
 ```
+
+For deep coverage of multi-instance review, see [Guide 15 - Prompt Engineering](15-prompt-engineering.md), Part 6.
 
 ### Pre-Commit Hooks
 
@@ -536,7 +613,7 @@ repos:
 
 ---
 
-## Part 11: Key Takeaways
+## Part 12: Key Takeaways
 
 ### Summary
 

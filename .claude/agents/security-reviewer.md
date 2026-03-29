@@ -103,7 +103,7 @@ You MUST be invoked:
 
 ### 8. TrustPlane / EATP Security Patterns
 
-These checks are MANDATORY for any code touching `src/kailash/trust/plane/` or `src/kailash/trust/`.
+These checks are MANDATORY for any code touching trust-plane code or trust code.
 
 - [ ] **P1 — validate_id() on external IDs**: Every record ID used in a filesystem path or SQL query MUST pass `validate_id()` first. **Violation**: bare `f"{record_id}.json"` without prior validation.
 - [ ] **P2 — O_NOFOLLOW via safe_read_json()/safe_read_text()**: All trust-sensitive file reads MUST use safe helpers. **Violation**: `open(path)` or `path.read_text()` on trust store files.
@@ -117,11 +117,11 @@ These checks are MANDATORY for any code touching `src/kailash/trust/plane/` or `
 - [ ] **P10 — frozen=True on security-critical dataclasses**: **Violation**: mutable dataclass where mutation bypasses validation.
 - [ ] **P11 — from_dict() validates all fields**: **Violation**: `data.get("field", "")` — silent defaults on security fields.
 
-> These 11 patterns were hardened through 14 rounds of red teaming. See `src/kailash/trust/plane/CLAUDE.md` for full details with code examples.
+> These 11 patterns were hardened through 14 rounds of red teaming. See the trust-plane security documentation for full details with code examples.
 
 ### 9. Production Readiness Security Patterns
 
-These checks apply to ALL code in `src/kailash/`, especially new features touching runtime, transactions, persistence, or HTTP clients. Hardened through 3 red team rounds and 67 findings.
+These checks apply to ALL code in the SDK codebase, especially new features touching runtime, transactions, persistence, or HTTP clients. Hardened through 3 red team rounds and 67 findings.
 
 - [ ] **PR1 — Bounded collections**: Every long-lived list MUST be `deque(maxlen=N)`. Dicts with per-key growth need periodic cleanup. **Violation**: unbounded `List[Dict]` in monitoring, metrics, or history tracking.
 - [ ] **PR2 — SSRF prevention**: HTTP clients making requests to user-configurable URLs MUST validate against private IP ranges AND resolve DNS hostnames. **Violation**: `aiohttp.post(user_url)` without `_validate_url()`.
@@ -168,7 +168,7 @@ Provide findings as:
 
 ## PACT Governance Security Checks
 
-When reviewing `packages/kailash-pact/**`, additionally check:
+When reviewing PACT governance code, additionally check:
 
 1. **Anti-self-modification**: Agents receive `GovernanceContext(frozen=True)`, NEVER `GovernanceEngine`. Check that no code path exposes the engine to agent code.
 2. **Monotonic tightening**: Verify `intersect_envelopes()` and `set_task_envelope()` only tighten, never widen constraints.

@@ -87,7 +87,7 @@ Deploy these agents as a red team for validation:
 
 **Core red team (always):**
 
-- **testing-specialist** — Verify 3-tier test coverage, NO MOCKING compliance
+- **testing-specialist** — Verify 3-tier test coverage, Real infrastructure recommended compliance
 - **e2e-runner** — Generate and run Playwright E2E tests (web) or Marionette tests (Flutter)
 - **value-auditor** — Evaluate every page/flow from skeptical enterprise buyer perspective
 - **security-reviewer** — Full security audit across the codebase
@@ -105,3 +105,12 @@ Deploy these agents as a red team for validation:
 - **ai-ux-designer** — Audit AI interaction patterns (if AI-facing UI)
 
 Run multiple red team rounds. Converge when all agents find no remaining gaps.
+
+### Journal
+
+Create journal entries for validation findings:
+- **RISK** entries for vulnerabilities, weaknesses, or failure modes discovered
+- **GAP** entries for missing tests, documentation, or edge cases
+- **CONNECTION** entries for unexpected dependencies or interactions found
+
+Use sequential naming: check the highest existing `NNNN-` prefix and increment.

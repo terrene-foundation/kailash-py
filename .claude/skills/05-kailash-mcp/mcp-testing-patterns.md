@@ -16,7 +16,7 @@ Test MCP integrations with real servers and mock strategies.
 
 ## Quick Reference
 
-- **NO MOCKING Policy**: Test with real MCP servers (Tier 2/3)
+- **Real infrastructure recommended Policy**: Test with real MCP servers (Tier 2/3)
 - **Mock Provider**: Use "mock" provider for Tier 1 unit tests only
 - **Integration**: Tier 2 tests with real MCP servers
 - **E2E**: Tier 3 tests with full production-like setup
@@ -231,7 +231,7 @@ def test_mcp_server_failure_handling():
 
 ## Best Practices
 
-1. **NO MOCKING in Tier 2/3** - Always use real MCP servers
+1. **Real infrastructure recommended in Tier 2/3** - Always use real MCP servers
 2. **Use mock provider only in Tier 1** - For structure testing
 3. **Test real tool execution** - Verify actual MCP protocol
 4. **Test error scenarios** - Server failures, timeouts, invalid tools

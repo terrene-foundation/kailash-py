@@ -50,51 +50,15 @@ Always involve tdd-implementer, testing-specialists, value auditor, ai ui ux spe
 
 ### 4. Testing requirements
 
-**Test-once protocol**: Tests run ONCE per code change, not once per phase.
+Follow the **test-once protocol** from `rules/testing.md`:
 
-**Before implementing (baseline):**
+1. **Baseline**: Run `pytest tests/ -x --tb=short -q` ONCE before implementing. Record pass/fail counts.
+2. **TDD cycle**: tdd-implementer runs affected tests during red-green-refactor (the ONE authoritative run).
+3. **Regression check**: Run full suite ONCE when todo is complete. Compare against baseline -- any new failures = regression, STOP and fix.
+4. **Write `.test-results`** to `workspaces/<project>/.test-results` (commit hash, pass/fail counts, regression count).
+5. **Bug fixes** MUST include regression test in `tests/regression/` marked `@pytest.mark.regression`.
 
-1. Run the full test suite ONCE to establish baseline: `pytest tests/ -x --tb=short -q`
-2. Record the result: pass count, fail count, commit hash
-3. If there are pre-existing failures, note them — they are NOT your regressions
-
-**During implementation (TDD cycle):**
-
-- tdd-implementer runs tests as part of red-green-refactor — this is the ONE authoritative test run
-- Run only affected tests during development for speed: `pytest tests/unit/path_to_affected/ -x`
-- Run the full suite ONCE when the todo is complete (not after every small change)
-
-**After implementing (regression check):**
-
-1. Run full suite: `pytest tests/ -x --tb=short -q`
-2. Compare against baseline: if any test that passed before now fails, you introduced a regression — STOP and fix
-3. Write `.test-results` artifact in workspace: `workspaces/<project>/.test-results`
-
-**`.test-results` format:**
-
-```
-commit: <git hash>
-timestamp: <ISO 8601>
-baseline_pass: <N>
-baseline_fail: <N>
-final_pass: <N>
-final_fail: <N>
-new_tests: <N>
-regressions: <N> (must be 0)
-command: pytest tests/ -x --tb=short -q
-```
-
-**Bug fixes MUST include regression tests:**
-
-- Every bug fix adds a test to `tests/regression/` marked with `@pytest.mark.regression`
-- The test MUST reproduce the bug (fail before fix, pass after)
-- Regression tests are NEVER deleted — they are permanent guards
-
-**What NOT to do:**
-
-- Do NOT run the full suite multiple times per todo
-- Do NOT let testing-specialist re-run tests that tdd-implementer already ran
-- Do NOT re-run tests just to "verify" — read the results from the last run
+Do NOT run the full suite multiple times per todo. Do NOT re-run tests that tdd-implementer already ran.
 
 ### 5. LLM usage
 
@@ -128,7 +92,7 @@ Deploy these agents as a team for each implementation cycle:
 **Core team (always):**
 
 - **tdd-implementer** — Test-first development, red-green-refactor
-- **testing-specialist** — 3-tier test strategy, NO MOCKING in Tier 2-3
+- **testing-specialist** — 3-tier test strategy, Real infrastructure recommended in Tier 2-3
 - **intermediate-reviewer** — Code review after every file change (MANDATORY)
 - **todo-manager** — Track progress, update todo status, verify completion with evidence
 
@@ -155,3 +119,12 @@ Deploy these agents as a team for each implementation cycle:
 
 - **value-auditor** — Evaluate from user/buyer perspective, not just technical assertions
 - **security-reviewer** — Security audit before any commit (MANDATORY)
+
+### Journal
+
+After completing each task, create journal entries for insights produced:
+- **DECISION** entries for implementation choices (architecture, library selection, design patterns)
+- **DISCOVERY** entries for technical findings during development
+- **RISK** entries for potential issues discovered during implementation
+
+Use sequential naming: check the highest existing `NNNN-` prefix and increment.

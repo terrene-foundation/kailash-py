@@ -1,6 +1,6 @@
 ---
 name: git-release-specialist
-description: Git release and CI specialist for pre-commit validation, PR workflows, version management, and release procedures. Use before commits or when preparing releases.
+description: "Git release and CI specialist. Use for pre-commit validation, PR workflows, or version management."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: sonnet
 ---

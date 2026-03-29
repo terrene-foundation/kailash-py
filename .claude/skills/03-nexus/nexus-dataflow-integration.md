@@ -9,7 +9,7 @@ tags: [nexus, dataflow, integration, blocking-fix, performance]
 
 CRITICAL: Proper configuration to prevent blocking on startup.
 
-> **DataFlow v0.11.0**: The parameters `enable_model_persistence`, `skip_migration`, and `existing_schema_mode` have been **removed**. The only critical Nexus-side setting is `auto_discovery=False`. DataFlow's `auto_migrate=True` (default) now works correctly in Docker/FastAPI via SyncDDLExecutor.
+> **DataFlow**: The parameters `enable_model_persistence`, `skip_migration`, and `existing_schema_mode` have been **removed**. The only critical Nexus-side setting is `auto_discovery=False`. DataFlow's `auto_migrate=True` (default) now works correctly in Docker/FastAPI.
 
 ## The Problem
 
@@ -30,10 +30,10 @@ app = Nexus(
     auto_discovery=False  # CRITICAL: Prevents blocking
 )
 
-# Step 2: Create DataFlow (defaults work fine in v0.11.0)
+# Step 2: Create DataFlow (defaults work fine in the current version)
 db = DataFlow(
     database_url="postgresql://user:pass@host:port/db",
-    auto_migrate=True,  # Default - works in Docker/FastAPI via SyncDDLExecutor
+    auto_migrate=True,  # Default - works in Docker/FastAPI
 )
 
 # Step 3: Register models
@@ -61,9 +61,9 @@ app.start()
 - Eliminates infinite blocking issue
 - **When to use**: Always when integrating with DataFlow
 
-### `auto_migrate=True` (DataFlow v0.11.0 Default)
+### `auto_migrate=True` (DataFlow Default)
 
-- Uses SyncDDLExecutor for synchronous DDL operations
+- Uses synchronous DDL operations for table creation
 - No event loop issues in Docker/FastAPI
 - Automatic schema creation and updates
 - **This is the default** -- no special configuration needed
@@ -127,7 +127,7 @@ With `auto_discovery=False` + DataFlow defaults:
 - All CRUD operations (11 nodes per model)
 - Connection pooling, caching, metrics
 - All Nexus channels (API, CLI, MCP)
-- Automatic schema migration via SyncDDLExecutor
+- Automatic schema migration
 - Fast startup
 
 ## What You Lose
@@ -226,7 +226,7 @@ app.register("workflow-name", workflow.build())
 ### Schema Not Created
 
 ```python
-# Ensure auto_migrate=True (default in v0.11.0)
+# Ensure auto_migrate=True (default in the current version)
 db = DataFlow(
     database_url="postgresql://...",
     auto_migrate=True,  # This is the default
@@ -263,7 +263,7 @@ def test_nexus_dataflow_integration():
 ## Key Takeaways
 
 - **CRITICAL**: Use `auto_discovery=False` with DataFlow
-- DataFlow v0.11.0: `auto_migrate=True` (default) works everywhere including Docker/FastAPI
+- DataFlow default: `auto_migrate=True` (default) works everywhere including Docker/FastAPI
 - The parameters `enable_model_persistence`, `skip_migration`, and `existing_schema_mode` have been removed
 - All CRUD operations work with default DataFlow config
 - Manual workflow registration required with `auto_discovery=False`

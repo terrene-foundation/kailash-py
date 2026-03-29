@@ -58,7 +58,7 @@ print(list(app.workflows.keys()))
 # Disable auto_discovery when using DataFlow
 app = Nexus(auto_discovery=False)
 
-# DataFlow v0.11.0: auto_migrate=True (default) works in Docker/FastAPI
+# DataFlow default: auto_migrate=True (default) works in Docker/FastAPI
 db = DataFlow("postgresql://...")
 ```
 
@@ -139,7 +139,7 @@ if not app.session_manager.exists(session_id):
 app = Nexus(auto_discovery=False)
 db = DataFlow(
     "postgresql://...",
-    auto_migrate=True,  # v0.11.0 default: Works in Docker/FastAPI via SyncDDLExecutor
+    auto_migrate=True,  # default: Works in Docker/FastAPI
 )
 
 # Should now start in <2 seconds

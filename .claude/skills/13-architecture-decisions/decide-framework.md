@@ -205,7 +205,7 @@ from kailash.workflow.builder import WorkflowBuilder
 # Step 1: Create Nexus with auto_discovery=False
 app = Nexus(auto_discovery=False)
 
-# Step 2: Create DataFlow (v0.11.0 defaults work correctly)
+# Step 2: Create DataFlow (defaults work correctly)
 db = DataFlow("postgresql://localhost/db")
 
 @db.model

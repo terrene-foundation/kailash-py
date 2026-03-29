@@ -92,7 +92,8 @@ function loadObservations(learningDir) {
 }
 
 /**
- * Analyze observations for workflow patterns
+ * Analyze observations for workflow patterns.
+ * Keys on sorted node_types array for stable identity across sessions.
  */
 function analyzeWorkflowPatterns(observations) {
   const patterns = {};
@@ -100,21 +101,43 @@ function analyzeWorkflowPatterns(observations) {
   observations
     .filter((o) => o.type === "workflow_pattern" || o.type === "node_usage")
     .forEach((obs) => {
-      const key = JSON.stringify(obs.data);
+      // Stable key: sorted node types (not full data blob)
+      const nodeTypes = obs.data.node_types || [];
+      const sortedTypes = [...nodeTypes].sort();
+      const key =
+        sortedTypes.length > 0
+          ? sortedTypes.join("+")
+          : obs.data.pattern_type || "unknown";
+      const file = obs.data.file || "unknown";
+
       if (!patterns[key]) {
-        patterns[key] = { data: obs.data, count: 0, contexts: [] };
+        patterns[key] = {
+          node_types: sortedTypes,
+          files: new Set(),
+          has_cycles: false,
+          runtimes: new Set(),
+          count: 0,
+        };
       }
       patterns[key].count++;
-      patterns[key].contexts.push(obs.context);
+      patterns[key].files.add(file);
+      if (obs.data.has_cycles) patterns[key].has_cycles = true;
+      if (obs.data.runtime) patterns[key].runtimes.add(obs.data.runtime);
     });
 
   return Object.values(patterns)
-    .filter((p) => p.count >= 3) // Minimum 3 occurrences
+    .filter((p) => p.count >= 3)
     .map((p) => ({
       type: "workflow_pattern",
-      pattern: p.data,
+      pattern: {
+        node_types: p.node_types,
+        has_cycles: p.has_cycles,
+        runtimes: [...p.runtimes],
+        files: [...p.files].slice(0, 5),
+      },
       occurrences: p.count,
-      confidence: Math.min(0.9, 0.3 + p.count * 0.1),
+      unique_files: p.files.size,
+      confidence: calculateConfidence(p.count, p.files.size),
     }));
 }
 
@@ -173,43 +196,97 @@ function analyzeFrameworkPatterns(observations) {
   observations
     .filter((o) => o.type === "framework_selection")
     .forEach((obs) => {
-      const key = `${obs.data.project_type}:${obs.data.framework}`;
+      const framework = obs.data.framework || "unknown";
+      const projectType = obs.data.project_type || "general";
+      const key = `${projectType}:${framework}`;
+
       if (!selections[key]) {
         selections[key] = {
-          project_type: obs.data.project_type,
-          framework: obs.data.framework,
+          project_type: projectType,
+          framework,
+          files: new Set(),
           count: 0,
         };
       }
       selections[key].count++;
+      if (obs.data.file) selections[key].files.add(obs.data.file);
     });
 
   return Object.values(selections)
     .filter((s) => s.count >= 2)
     .map((s) => ({
       type: "framework_selection",
-      pattern: { project_type: s.project_type, framework: s.framework },
+      pattern: {
+        project_type: s.project_type,
+        framework: s.framework,
+        files: [...s.files].slice(0, 5),
+      },
       occurrences: s.count,
-      confidence: Math.min(0.9, 0.4 + s.count * 0.1),
+      unique_files: s.files.size,
+      confidence: calculateConfidence(s.count, s.files.size),
     }));
+}
+
+/**
+ * Analyze observations for DataFlow model patterns
+ */
+function analyzeDataFlowPatterns(observations) {
+  const models = {};
+
+  observations
+    .filter((o) => o.type === "dataflow_model")
+    .forEach((obs) => {
+      const names =
+        obs.data.model_names || [obs.data.model_name].filter(Boolean);
+      for (const name of names) {
+        if (!models[name]) {
+          models[name] = { model_name: name, files: new Set(), count: 0 };
+        }
+        models[name].count++;
+        if (obs.data.file) models[name].files.add(obs.data.file);
+      }
+    });
+
+  return Object.values(models)
+    .filter((m) => m.count >= 2)
+    .map((m) => ({
+      type: "dataflow_model",
+      pattern: {
+        model_name: m.model_name,
+        files: [...m.files].slice(0, 5),
+      },
+      occurrences: m.count,
+      unique_files: m.files.size,
+      confidence: calculateConfidence(m.count, m.files.size),
+    }));
+}
+
+/**
+ * Calculate confidence based on observation count and file diversity.
+ * More diverse file usage = higher confidence (not just repetition in one file).
+ */
+function calculateConfidence(observationCount, uniqueFileCount) {
+  // Base: 0.3 for meeting minimum threshold
+  // +0.05 per observation (up to +0.3)
+  // +0.1 per unique file (up to +0.3)
+  // Cap at 0.9
+  const obsBonus = Math.min(0.3, observationCount * 0.05);
+  const fileBonus = Math.min(0.3, (uniqueFileCount || 1) * 0.1);
+  return Math.min(0.9, 0.3 + obsBonus + fileBonus);
 }
 
 /**
  * Generate instincts from analyzed patterns
  */
 function generateInstincts(patterns) {
-  const instincts = [];
-
-  patterns.forEach((pattern) => {
-    const instinct = createInstinct(pattern.pattern, pattern.confidence, {
+  return patterns.map((pattern) =>
+    createInstinct(pattern.pattern, pattern.confidence, {
       type: pattern.type,
       occurrences: pattern.occurrences,
+      unique_files: pattern.unique_files || 0,
       generated_at: new Date().toISOString(),
-    });
-    instincts.push(instinct);
-  });
-
-  return instincts;
+    }),
+  );
 }
 
 /**
@@ -238,14 +315,15 @@ function saveInstincts(instincts, category, learningDir) {
     );
 
     if (existingIndex >= 0) {
-      // Update existing instinct
-      existing[existingIndex].confidence = Math.max(
-        existing[existingIndex].confidence,
-        newInstinct.confidence,
-      );
+      // Update existing instinct — take latest analysis values, don't inflate
+      existing[existingIndex].confidence = newInstinct.confidence;
       existing[existingIndex].updated_at = new Date().toISOString();
-      existing[existingIndex].source.occurrences +=
-        newInstinct.source.occurrences;
+      existing[existingIndex].source.occurrences = Math.max(
+        existing[existingIndex].source.occurrences,
+        newInstinct.source.occurrences,
+      );
+      existing[existingIndex].source.unique_files =
+        newInstinct.source.unique_files || 0;
     } else {
       // Add new instinct
       existing.push(newInstinct);
@@ -379,8 +457,10 @@ module.exports = {
   analyzeWorkflowPatterns,
   analyzeErrorFixPatterns,
   analyzeFrameworkPatterns,
+  analyzeDataFlowPatterns,
   generateInstincts,
   saveInstincts,
   listInstincts,
   createInstinct,
+  calculateConfidence,
 };

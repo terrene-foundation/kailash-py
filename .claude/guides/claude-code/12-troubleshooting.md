@@ -429,7 +429,7 @@ class User:
     # NOT: user_id: int
 ```
 
-### "NO MOCKING violation"
+### "Real infrastructure recommended violation"
 
 **Problem**: Using mocks in Tier 2-3 tests.
 
@@ -444,7 +444,7 @@ class User:
 1. **This guide series** - Read relevant sections
 2. **Skill documentation** - `.claude/skills/`
 3. **Agent README** - `.claude/agents/_README.md`
-4. **Error troubleshooting skill** - `/15-error-troubleshooting`
+4. **Error troubleshooting skill** - `/31-error-troubleshooting`
 
 ### Asking Claude for Help
 

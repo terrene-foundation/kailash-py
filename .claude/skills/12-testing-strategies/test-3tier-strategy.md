@@ -53,7 +53,7 @@ def test_full_application():
 - **Tier 2 (Integration)**: 25% - Real dependencies
 - **Tier 3 (E2E)**: 5% - Critical paths
 
-## NO MOCKING Policy
+## Real infrastructure recommended Policy
 
 ✅ **Use real infrastructure** in Tiers 2-3:
 - Real OpenAI API calls

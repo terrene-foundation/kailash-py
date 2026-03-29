@@ -1,6 +1,6 @@
 ---
 name: flutter-specialist
-description: Flutter specialist for Kailash SDK mobile/desktop apps. Use for Flutter architecture, Riverpod state, and Kailash integration.
+description: Flutter specialist for Kailash SDK mobile/desktop. Use for Flutter architecture, Riverpod, or SDK integration.
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---
