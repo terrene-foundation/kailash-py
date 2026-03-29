@@ -11,7 +11,9 @@ rollout: deploy in shadow mode, review verdicts, then switch to strict.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+import threading
+from collections import deque
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -98,12 +100,12 @@ class ShadowEnforcer:
 
         Args:
             flag_threshold: Violation count that would trigger HELD in strict mode
-            maxlen: Maximum number of records to retain (oldest 10% trimmed on overflow)
+            maxlen: Maximum number of records to retain (bounded deque)
         """
         self._classifier = StrictEnforcer(flag_threshold=flag_threshold)
         self._metrics = ShadowMetrics()
-        self._records: List[EnforcementRecord] = []
-        self._max_records = maxlen
+        self._records: deque[EnforcementRecord] = deque(maxlen=maxlen)
+        self._lock = threading.Lock()
 
     def check(
         self,
@@ -127,10 +129,6 @@ class ShadowEnforcer:
             The verdict that WOULD have been enforced
         """
         now = datetime.now(timezone.utc)
-        self._metrics.total_checks += 1
-        if self._metrics.first_check is None:
-            self._metrics.first_check = now
-        self._metrics.last_check = now
 
         try:
             verdict = self._classifier.classify(result)
@@ -148,40 +146,57 @@ class ShadowEnforcer:
             timestamp=now,
             metadata=metadata or {},
         )
-        self._records.append(record)
 
-        # Bounded memory: trim oldest 10% when exceeding maxlen
-        if len(self._records) > self._max_records:
-            trim_count = self._max_records // 10
-            self._records = self._records[trim_count:]
+        with self._lock:
+            self._metrics.total_checks += 1
+            if self._metrics.first_check is None:
+                self._metrics.first_check = now
+            self._metrics.last_check = now
 
-        # Track verdict changes
-        verdict_value = verdict.value
-        if self._metrics.last_verdict is not None and verdict_value != self._metrics.last_verdict:
-            self._metrics.verdict_changes += 1
-        self._metrics.last_verdict = verdict_value
+            # deque(maxlen=N) auto-evicts oldest on overflow
+            self._records.append(record)
 
-        if verdict == Verdict.AUTO_APPROVED:
-            self._metrics.auto_approved_count += 1
-        elif verdict == Verdict.FLAGGED:
-            self._metrics.flagged_count += 1
-            logger.info(f"[SHADOW] WOULD FLAG: agent={agent_id} action={action} violations={len(result.violations)}")
+            # Track verdict changes
+            verdict_value = verdict.value
+            if (
+                self._metrics.last_verdict is not None
+                and verdict_value != self._metrics.last_verdict
+            ):
+                self._metrics.verdict_changes += 1
+            self._metrics.last_verdict = verdict_value
+
+            if verdict == Verdict.AUTO_APPROVED:
+                self._metrics.auto_approved_count += 1
+            elif verdict == Verdict.FLAGGED:
+                self._metrics.flagged_count += 1
+            elif verdict == Verdict.HELD:
+                self._metrics.held_count += 1
+            elif verdict == Verdict.BLOCKED:
+                self._metrics.blocked_count += 1
+
+            # Track reasoning trace metrics (only when explicitly set, not None)
+            if result.reasoning_present is True:
+                self._metrics.reasoning_present_count += 1
+            elif result.reasoning_present is False:
+                self._metrics.reasoning_absent_count += 1
+            # None means legacy result — do not count
+
+            if result.reasoning_verified is False:
+                self._metrics.reasoning_verification_failed_count += 1
+
+        # Log outside lock to avoid holding it during I/O
+        if verdict == Verdict.FLAGGED:
+            logger.info(
+                f"[SHADOW] WOULD FLAG: agent={agent_id} action={action} violations={len(result.violations)}"
+            )
         elif verdict == Verdict.HELD:
-            self._metrics.held_count += 1
-            logger.warning(f"[SHADOW] WOULD HOLD: agent={agent_id} action={action} violations={len(result.violations)}")
+            logger.warning(
+                f"[SHADOW] WOULD HOLD: agent={agent_id} action={action} violations={len(result.violations)}"
+            )
         elif verdict == Verdict.BLOCKED:
-            self._metrics.blocked_count += 1
-            logger.warning(f"[SHADOW] WOULD BLOCK: agent={agent_id} action={action} reason={result.reason}")
-
-        # Track reasoning trace metrics (only when explicitly set, not None)
-        if result.reasoning_present is True:
-            self._metrics.reasoning_present_count += 1
-        elif result.reasoning_present is False:
-            self._metrics.reasoning_absent_count += 1
-        # None means legacy result — do not count
-
-        if result.reasoning_verified is False:
-            self._metrics.reasoning_verification_failed_count += 1
+            logger.warning(
+                f"[SHADOW] WOULD BLOCK: agent={agent_id} action={action} reason={result.reason}"
+            )
 
         return verdict
 
@@ -192,8 +207,9 @@ class ShadowEnforcer:
 
     @property
     def records(self) -> List[EnforcementRecord]:
-        """Get all shadow enforcement records."""
-        return list(self._records)
+        """Get all shadow enforcement records (snapshot)."""
+        with self._lock:
+            return list(self._records)
 
     def report(self) -> str:
         """Generate a human-readable shadow enforcement report.
@@ -201,49 +217,57 @@ class ShadowEnforcer:
         Returns:
             Formatted report string
         """
-        m = self._metrics
-        lines = [
-            "EATP Shadow Enforcement Report",
-            "=" * 40,
-            f"Total checks:     {m.total_checks}",
-            f"Auto-approved:    {m.auto_approved_count} ({m.pass_rate:.1f}% pass rate)",
-            f"Flagged:          {m.flagged_count}",
-            f"Would hold:       {m.held_count} ({m.hold_rate:.1f}%)",
-            f"Would block:      {m.blocked_count} ({m.block_rate:.1f}%)",
-        ]
+        with self._lock:
+            m = self._metrics
+            lines = [
+                "EATP Shadow Enforcement Report",
+                "=" * 40,
+                f"Total checks:     {m.total_checks}",
+                f"Auto-approved:    {m.auto_approved_count} ({m.pass_rate:.1f}% pass rate)",
+                f"Flagged:          {m.flagged_count}",
+                f"Would hold:       {m.held_count} ({m.hold_rate:.1f}%)",
+                f"Would block:      {m.blocked_count} ({m.block_rate:.1f}%)",
+            ]
 
-        if m.first_check and m.last_check:
-            duration = m.last_check - m.first_check
-            lines.append(f"Observation period: {duration}")
+            if m.first_check and m.last_check:
+                duration = m.last_check - m.first_check
+                lines.append(f"Observation period: {duration}")
 
-        # Top blocked agents
-        blocked_agents: Dict[str, int] = {}
-        for record in self._records:
-            if record.verdict == Verdict.BLOCKED:
-                blocked_agents[record.agent_id] = blocked_agents.get(record.agent_id, 0) + 1
+            # Top blocked agents
+            blocked_agents: Dict[str, int] = {}
+            for record in self._records:
+                if record.verdict == Verdict.BLOCKED:
+                    blocked_agents[record.agent_id] = (
+                        blocked_agents.get(record.agent_id, 0) + 1
+                    )
 
-        if blocked_agents:
-            lines.append("")
-            lines.append("Top blocked agents:")
-            for agent_id, count in sorted(blocked_agents.items(), key=lambda x: x[1], reverse=True)[:5]:
-                lines.append(f"  {agent_id}: {count} blocks")
+            if blocked_agents:
+                lines.append("")
+                lines.append("Top blocked agents:")
+                for agent_id, count in sorted(
+                    blocked_agents.items(), key=lambda x: x[1], reverse=True
+                )[:5]:
+                    lines.append(f"  {agent_id}: {count} blocks")
 
-        # Reasoning trace metrics
-        reasoning_total = m.reasoning_present_count + m.reasoning_absent_count
-        if reasoning_total > 0:
-            lines.append("")
-            lines.append("Reasoning trace metrics:")
-            lines.append(f"  Reasoning present:  {m.reasoning_present_count}")
-            lines.append(f"  Reasoning absent:   {m.reasoning_absent_count}")
-            if m.reasoning_verification_failed_count > 0:
-                lines.append(f"  Reasoning verification failures: {m.reasoning_verification_failed_count}")
+            # Reasoning trace metrics
+            reasoning_total = m.reasoning_present_count + m.reasoning_absent_count
+            if reasoning_total > 0:
+                lines.append("")
+                lines.append("Reasoning trace metrics:")
+                lines.append(f"  Reasoning present:  {m.reasoning_present_count}")
+                lines.append(f"  Reasoning absent:   {m.reasoning_absent_count}")
+                if m.reasoning_verification_failed_count > 0:
+                    lines.append(
+                        f"  Reasoning verification failures: {m.reasoning_verification_failed_count}"
+                    )
 
         return "\n".join(lines)
 
     def reset(self) -> None:
         """Reset metrics and records."""
-        self._metrics = ShadowMetrics()
-        self._records.clear()
+        with self._lock:
+            self._metrics = ShadowMetrics()
+            self._records.clear()
 
 
 __all__ = [

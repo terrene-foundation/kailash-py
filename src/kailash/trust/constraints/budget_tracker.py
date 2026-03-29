@@ -321,6 +321,7 @@ class BudgetTracker:
         )
         self._threshold_callbacks: List[Callable[[BudgetEvent], None]] = []
         self._record_callbacks: List[Callable[[], None]] = []
+        self._max_callbacks: int = 100
         self._store = store
         self._tracker_id = tracker_id
 
@@ -615,7 +616,16 @@ class BudgetTracker:
 
         Args:
             callback: Function accepting a BudgetEvent.
+
+        Raises:
+            BudgetTrackerError: If the maximum number of callbacks (100)
+                has been reached.
         """
+        if len(self._threshold_callbacks) >= self._max_callbacks:
+            raise BudgetTrackerError(
+                f"Maximum callback limit ({self._max_callbacks}) reached",
+                details={"callback_type": "threshold", "limit": self._max_callbacks},
+            )
         self._threshold_callbacks.append(callback)
 
     def on_record(self, callback: Callable[[], None]) -> None:
@@ -632,7 +642,16 @@ class BudgetTracker:
 
         Args:
             callback: Zero-argument callable invoked after each record().
+
+        Raises:
+            BudgetTrackerError: If the maximum number of callbacks (100)
+                has been reached.
         """
+        if len(self._record_callbacks) >= self._max_callbacks:
+            raise BudgetTrackerError(
+                f"Maximum callback limit ({self._max_callbacks}) reached",
+                details={"callback_type": "record", "limit": self._max_callbacks},
+            )
         self._record_callbacks.append(callback)
 
     # ------------------------------------------------------------------

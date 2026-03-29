@@ -116,7 +116,7 @@ class McpGovernanceMiddleware:
                     tool_name,
                     exc,
                 )
-                tool_error = str(exc)
+                tool_error = "Tool execution failed"
 
         return McpInvocationResult(
             decision=decision,
