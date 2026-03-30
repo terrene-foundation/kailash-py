@@ -15,6 +15,20 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [kailash-pact 0.5.0] - 2026-03-30
+
+#### Added
+
+- **Bridge LCA Approval** (#168): `create_bridge()` requires lowest common ancestor approval with 24h expiry
+- **Vacancy Enforcement** (#169): `verify_action()` checks vacancy status before envelope checks — vacant roles auto-suspended
+- **Dimension-Scoped Delegation** (#170): `DelegationRecord.dimension_scope` for delegations scoped to specific constraint dimensions
+
+#### Fixed
+
+- **internal_only Enforcement** (#179): `is_external` context field no longer blocks actions when unspecified — only explicitly external actions are blocked for internal-only agents. Fixes 11 test failures from overly strict `is_external is not False` check
+
+---
+
 ### [2.3.0] - 2026-03-30
 
 **Multi-Package Release** — kailash 2.3.0, kailash-dataflow 1.3.0, kaizen-agents 0.6.0, kailash-kaizen 2.3.2
