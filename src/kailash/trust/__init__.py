@@ -56,6 +56,8 @@ from kailash import __version__  # noqa: F401
 
 # Chain data structures
 from kailash.trust.chain import (
+    ALL_DIMENSIONS,
+    VALID_DIMENSION_NAMES,
     AuthorityType,
     CapabilityType,
     ActionResult,
@@ -258,6 +260,9 @@ def __getattr__(name: str):  # noqa: C901
 # ---------------------------------------------------------------------------
 
 __all__ = [
+    # --- Chain constants ---
+    "ALL_DIMENSIONS",
+    "VALID_DIMENSION_NAMES",
     # --- Chain data structures ---
     "AuthorityType",
     "CapabilityType",

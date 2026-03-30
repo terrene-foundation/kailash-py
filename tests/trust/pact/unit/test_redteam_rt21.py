@@ -1018,9 +1018,15 @@ class TestAuditChainIntegrity:
         bridge = PactBridge(
             id="audit-bridge",
             role_a_address="D1-R1",
-            role_b_address="D2-R1",
+            role_b_address="D1-R1-T1-R1",
             bridge_type="standing",
             max_classification=ConfidentialityLevel.CONFIDENTIAL,
+        )
+        # LCA of D1-R1 and D1-R1-T1-R1 is D1-R1
+        engine.approve_bridge(
+            source_address="D1-R1",
+            target_address="D1-R1-T1-R1",
+            approver_address="D1-R1",
         )
         engine.create_bridge(bridge)
 

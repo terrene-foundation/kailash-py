@@ -95,7 +95,7 @@ class PrintRunner:
             logger.error("PrintRunner failed: %s", exc, exc_info=True)
             return PrintResult(
                 is_error=True,
-                error_message=f"Execution failed ({type(exc).__name__})",
+                error_message=str(exc),
             )
 
         tools_used = self._extract_tools_used()

@@ -53,9 +53,12 @@ class PactAuditAction(str, Enum):
     BARRIER_ENFORCED = "barrier_enforced"
     KSP_CREATED = "ksp_created"
     KSP_REVOKED = "ksp_revoked"
+    BRIDGE_APPROVED = "bridge_approved"
     BRIDGE_ESTABLISHED = "bridge_established"
     BRIDGE_REVOKED = "bridge_revoked"
     ADDRESS_COMPUTED = "address_computed"
+    VACANCY_DESIGNATED = "vacancy_designated"
+    VACANCY_SUSPENDED = "vacancy_suspended"
 
 
 def create_pact_audit_details(

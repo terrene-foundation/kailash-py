@@ -43,7 +43,11 @@ from kailash.trust.pact.access import AccessDecision, KnowledgeSharePolicy, Pact
 from kailash.trust.pact.clearance import RoleClearance, VettingStatus
 from kailash.trust.pact.compilation import CompiledOrg, OrgNode
 from kailash.trust.pact.engine import GovernanceEngine
-from kailash.trust.pact.envelopes import MonotonicTighteningError, RoleEnvelope, TaskEnvelope
+from kailash.trust.pact.envelopes import (
+    MonotonicTighteningError,
+    RoleEnvelope,
+    TaskEnvelope,
+)
 from kailash.trust.pact.knowledge import KnowledgeItem
 from kailash.trust.pact.store import (
     MemoryAccessPolicyStore,
@@ -608,6 +612,12 @@ class TestStateMutation:
         assert decision_before.allowed is False
 
         # Create a bridge between VP Student Affairs and Provost
+        # LCA of D1-R1-D3-R1 and D1-R1-D1-R1 is D1-R1 (President)
+        engine_from_compiled.approve_bridge(
+            source_address="D1-R1-D3-R1",
+            target_address="D1-R1-D1-R1",
+            approver_address="D1-R1",
+        )
         bridge = PactBridge(
             id="bridge-student-affairs-acad",
             role_a_address="D1-R1-D3-R1",  # VP Student Affairs
@@ -884,7 +894,9 @@ class TestMonotonicTighteningEnforcement:
         child_config = ConstraintEnvelopeConfig(
             id="env-dean-tighter",
             description="Dean tighter envelope",
-            financial=FinancialConstraintConfig(max_spend_usd=5000.0),  # Less than parent
+            financial=FinancialConstraintConfig(
+                max_spend_usd=5000.0
+            ),  # Less than parent
             operational=OperationalConstraintConfig(
                 allowed_actions=["read", "write"],  # Subset of parent
             ),
@@ -922,9 +934,9 @@ class TestMonotonicTighteningEnforcement:
             ctx={},
         )
 
-        assert result_level == "blocked", (
-            f"Expected 'blocked' for unparseable address, got {result_level!r}"
-        )
+        assert (
+            result_level == "blocked"
+        ), f"Expected 'blocked' for unparseable address, got {result_level!r}"
         assert "fail-closed" in result_reason.lower()
 
     def test_multi_level_verify_fail_closed_propagates_via_verify_action(

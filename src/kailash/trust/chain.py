@@ -27,6 +27,16 @@ from kailash.trust.signing.crypto import (
     serialize_for_signing,
 )
 
+# Canonical CARE constraint dimension names for dimension_scope validation.
+# Matches kailash.trust.plane.delegation.VALID_DIMENSIONS and
+# kailash.trust.pact.config.ConstraintDimension enum values.
+VALID_DIMENSION_NAMES: frozenset[str] = frozenset(
+    {"financial", "operational", "temporal", "data_access", "communication"}
+)
+
+# Default dimension scope: all five dimensions (no scoping restriction).
+ALL_DIMENSIONS: frozenset[str] = VALID_DIMENSION_NAMES
+
 if TYPE_CHECKING:
     from kailash.trust.execution_context import HumanOrigin
     from kailash.trust.reasoning.traces import ReasoningTrace
@@ -256,6 +266,29 @@ class DelegationRecord:
     reasoning_trace_hash: Optional[str] = None  # SHA-256 of reasoning trace
     reasoning_signature: Optional[str] = None  # Separate signature over reasoning
 
+    # EATP Dimension Scope Extension (#170)
+    # Limits delegation to specific CARE constraint dimensions.
+    # Default = ALL_DIMENSIONS (all five), meaning no scoping restriction.
+    # When scoped, only the specified dimensions are intersected during
+    # envelope computation; unscoped dimensions inherit from the parent unchanged.
+    dimension_scope: frozenset[str] = field(default_factory=lambda: ALL_DIMENSIONS)
+
+    def __post_init__(self) -> None:
+        """Validate dimension_scope values are from the canonical set."""
+        if not isinstance(self.dimension_scope, frozenset):
+            object.__setattr__(self, "dimension_scope", frozenset(self.dimension_scope))
+        invalid = self.dimension_scope - VALID_DIMENSION_NAMES
+        if invalid:
+            raise ValueError(
+                f"Invalid dimension_scope values: {sorted(invalid)}. "
+                f"Valid dimensions: {sorted(VALID_DIMENSION_NAMES)}"
+            )
+        if not self.dimension_scope:
+            raise ValueError(
+                "dimension_scope must contain at least one dimension. "
+                f"Valid dimensions: {sorted(VALID_DIMENSION_NAMES)}"
+            )
+
     def is_expired(self) -> bool:
         """Check if this delegation has expired."""
         if self.expires_at is None:
@@ -270,6 +303,10 @@ class DelegationRecord:
         signature, preventing same-signer substitution attacks.  The full
         ``reasoning_trace`` and ``reasoning_signature`` are still excluded — they
         have their own separate cryptographic verification.
+
+        ``dimension_scope`` is included as a sorted list for deterministic
+        signing. This binds the dimension scoping to the delegation signature,
+        preventing post-hoc scope widening attacks.
         """
         return {
             "id": self.id,
@@ -279,6 +316,7 @@ class DelegationRecord:
             "capabilities_delegated": sorted(self.capabilities_delegated),
             "constraint_subset": sorted(self.constraint_subset),
             "delegated_at": self.delegated_at.isoformat(),
+            "dimension_scope": sorted(self.dimension_scope),
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "parent_delegation_id": self.parent_delegation_id,
             "reasoning_trace_hash": self.reasoning_trace_hash,
@@ -299,6 +337,7 @@ class DelegationRecord:
             "capabilities_delegated": self.capabilities_delegated,
             "constraint_subset": self.constraint_subset,
             "delegated_at": self.delegated_at.isoformat(),
+            "dimension_scope": sorted(self.dimension_scope),
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "signature": self.signature,
             "parent_delegation_id": self.parent_delegation_id,
@@ -342,6 +381,13 @@ class DelegationRecord:
         if data.get("reasoning_trace"):
             reasoning_trace = ReasoningTrace.from_dict(data["reasoning_trace"])
 
+        # Dimension scope: backward-compatible -- missing key = all dimensions.
+        raw_scope = data.get("dimension_scope")
+        if raw_scope is not None:
+            dimension_scope = frozenset(raw_scope)
+        else:
+            dimension_scope = ALL_DIMENSIONS
+
         return cls(
             id=data["id"],
             delegator_id=data["delegator_id"],
@@ -365,6 +411,8 @@ class DelegationRecord:
             reasoning_trace=reasoning_trace,
             reasoning_trace_hash=data.get("reasoning_trace_hash"),
             reasoning_signature=data.get("reasoning_signature"),
+            # Dimension scope extension (#170)
+            dimension_scope=dimension_scope,
         )
 
 
@@ -1362,6 +1410,9 @@ class LinkedHashChain:
 
 
 __all__ = [
+    # Constants
+    "ALL_DIMENSIONS",
+    "VALID_DIMENSION_NAMES",
     # Enums
     "AuthorityType",
     "CapabilityType",

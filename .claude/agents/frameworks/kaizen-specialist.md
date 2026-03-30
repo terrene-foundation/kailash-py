@@ -131,7 +131,6 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **[Kaizen Skills](../../skills/04-kaizen/SKILL.md)** - Quick reference
 - **[Agent Patterns](../../skills/04-kaizen/kaizen-agent-patterns.md)** - Agent architecture patterns
 - **[Advanced Patterns](../../skills/04-kaizen/kaizen-advanced-patterns.md)** - Control protocol, meta-controller, journeys
-- **[Example Gallery](../../../packages/kailash-kaizen/examples/autonomy/EXAMPLE_GALLERY.md)** - 15 autonomy examples
 
 ### By Use Case
 
@@ -155,6 +154,21 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 ### Framework Positioning
 
 **Built on Kailash Core SDK** - Uses WorkflowBuilder and LocalRuntime underneath
+
+### Layer Preference (Engine-First)
+
+When recommending Kaizen patterns, prefer the highest abstraction layer:
+
+| Need                        | Layer     | API                                        | Package        |
+| --------------------------- | --------- | ------------------------------------------ | -------------- |
+| Autonomous agent with tools | Engine    | `Delegate`                                 | kaizen-agents  |
+| Governed multi-agent team   | Engine    | `GovernedSupervisor`                       | kaizen-agents  |
+| Multi-agent coordination    | Engine    | `Pipeline.router()`, `Pipeline.ensemble()` | kaizen-agents  |
+| Custom agent logic          | Primitive | `BaseAgent` + `Signature`                  | kailash-kaizen |
+
+**Default to Delegate** for autonomous agents. BaseAgent is for custom extension logic where Delegate's TAOD loop doesn't fit.
+
+**Agent API is deprecated** since v0.5.0 — route users to Delegate instead.
 
 - **When to use Kaizen**: AI agents, multi-agent systems, signature-based programming, LLM workflows
 - **When NOT to use**: Simple workflows (Core SDK), database apps (DataFlow), multi-channel platforms (Nexus)

@@ -449,86 +449,20 @@ class DataFlow:
 
         self._tenant_context_switch = TenantContextSwitch(self)
 
-        # Connection pool configuration (pool managed by individual adapters via AsyncSQLitePool)
-        # Pool size and max_overflow are resolved via DatabaseConfig.get_pool_size()
-        # and DatabaseConfig.get_max_overflow() — the single source of truth.
+        # Issue #171: Lazy connection — defer all DB-touching initialization
+        # to _ensure_connected(), which is called on first query/operation.
+        # __init__() stores config only — no pool probe, no migration, no connection.
+        self._connected = False
+        self._connect_lock = threading.Lock()
+        self._enable_connection_pooling = enable_connection_pooling
+        self._enable_model_persistence = enable_model_persistence
+
+        # Connection pool state (initialized lazily in _ensure_connected)
         self._pool_manager = None
         self._pool_monitor = None
         self._lightweight_pool = None
-        if enable_connection_pooling:
-            resolved_pool_size = self.config.database.get_pool_size(
-                self.config.environment
-            )
-            resolved_max_overflow = self.config.database.get_max_overflow(
-                self.config.environment
-            )
-            logger.debug(
-                "Connection pooling enabled: pool_size=%d, max_overflow=%d",
-                resolved_pool_size,
-                resolved_max_overflow,
-            )
 
-            # PY-4: Startup validation — catch misconfigurations before first query
-            startup_validation = kwargs.get("startup_validation", True)
-            env_validation = os.environ.get(
-                "DATAFLOW_STARTUP_VALIDATION", "true"
-            ).lower()
-            if startup_validation and env_validation != "false":
-                try:
-                    from dataflow.core.pool_validator import validate_pool_config
-
-                    validate_pool_config(
-                        database_url=self.config.database.url
-                        or self.config.database.database_url,
-                        pool_size=resolved_pool_size,
-                        max_overflow=resolved_max_overflow,
-                    )
-                except Exception:
-                    logger.debug(
-                        "Pool startup validation failed (non-fatal)",
-                        exc_info=True,
-                    )
-
-            # PY-2/PY-5: Pool utilization monitor + leak detection
-            if self.config.monitoring.connection_metrics:
-                try:
-                    from dataflow.core.pool_monitor import PoolMonitor
-
-                    self._pool_monitor = PoolMonitor(
-                        stats_provider=self._make_pool_stats_provider(
-                            resolved_pool_size, resolved_max_overflow
-                        ),
-                        interval_secs=float(
-                            self.config.monitoring.pool_monitor_interval_secs
-                        ),
-                        alert_on_exhaustion=(
-                            self.config.monitoring.alert_on_connection_exhaustion
-                        ),
-                        leak_detection_enabled=True,
-                        leak_threshold_secs=float(
-                            self.config.monitoring.leak_detection_threshold_secs
-                        ),
-                    )
-                    self._pool_monitor.start()
-                except Exception:
-                    logger.debug(
-                        "Pool monitor initialization failed (non-fatal)",
-                        exc_info=True,
-                    )
-
-            # RS-6: Lightweight pool for health checks (separate from main pool)
-            db_url = self.config.database.url or self.config.database.database_url
-            if db_url:
-                try:
-                    from dataflow.core.pool_lightweight import LightweightPool
-
-                    self._lightweight_pool = LightweightPool(db_url)
-                except Exception:
-                    logger.debug(
-                        "Lightweight pool creation failed (non-fatal)",
-                        exc_info=True,
-                    )
-
+        # Multi-tenant manager (lightweight — no DB connection)
         if self.config.security.multi_tenant:
             self._multi_tenant_manager = MultiTenantManager(self)
         else:
@@ -538,28 +472,15 @@ class DataFlow:
         from .model_registry import ModelRegistry
 
         self._model_registry = ModelRegistry(self, runtime=self.runtime)
-        self._enable_model_persistence = enable_model_persistence
 
-        # Initialize cache integration if enabled
+        # Cache integration (initialized lazily in _ensure_connected)
         self._cache_integration = None
-        if self.config.enable_query_cache:
-            self._initialize_cache_integration()
 
-        # Initialize migration system if enabled
+        # Migration system (initialized lazily in _ensure_connected)
         self._migration_system = None
         self._schema_state_manager = None
-        # Skip migration system initialization if using existing schema without auto-migration
-        # existing_schema_mode=True means "use the existing database schema as-is"
-        # We only skip if BOTH existing_schema_mode=True AND auto_migrate=False
-        if (
-            migration_enabled
-            and not (self._existing_schema_mode and not self._auto_migrate)
-            and not os.environ.get("DATAFLOW_DISABLE_MIGRATIONS", "").lower() == "true"
-        ):
-            self._initialize_migration_system()
-            self._initialize_schema_state_manager()
 
-        # Initialize schema cache (ADR-001)
+        # Schema cache (pure in-memory, no DB connection needed)
         # Only enable cache if auto_migrate is enabled (no benefit otherwise)
         # CRITICAL: Respect explicit schema_cache_enabled=False from kwargs
         schema_cache_enabled = (
@@ -581,11 +502,156 @@ class DataFlow:
             f"max_size={self.config.migration.schema_cache_max_size}"
         )
 
-        self._initialize_database()
+        # Track models that need table creation (deferred until _ensure_connected)
+        self._pending_table_creations: list = []
 
-        # Sync models from registry if persistence is enabled
-        if self._enable_model_persistence and hasattr(self, "_model_registry"):
-            self._sync_models_from_registry()
+    def _ensure_connected(self) -> None:
+        """Lazily initialize all DB-touching resources on first use.
+
+        Issue #171: DataFlow.__init__() no longer connects to the database.
+        This method is called on first query, execute, or express operation.
+        It is idempotent and thread-safe.
+
+        Deferred work (from __init__):
+        - Connection pool validation (pool probe via psycopg2)
+        - Pool utilization monitor + leak detection
+        - Lightweight health-check pool
+        - Migration system initialization
+        - Schema state manager initialization
+        - Database connection pool initialization
+        - Cache integration
+        - Model registry sync
+        - Pending table creations from @db.model decorators
+        """
+        if self._connected:
+            return
+
+        with self._connect_lock:
+            # Double-check after acquiring lock
+            if self._connected:
+                return
+
+            logger.debug("DataFlow: Lazy connection — initializing database resources")
+
+            # 1. Connection pool validation (was in __init__)
+            if self._enable_connection_pooling:
+                resolved_pool_size = self.config.database.get_pool_size(
+                    self.config.environment
+                )
+                resolved_max_overflow = self.config.database.get_max_overflow(
+                    self.config.environment
+                )
+                logger.debug(
+                    "Connection pooling enabled: pool_size=%d, max_overflow=%d",
+                    resolved_pool_size,
+                    resolved_max_overflow,
+                )
+
+                # PY-4: Startup validation — catch misconfigurations before first query
+                startup_validation = self._init_kwargs.get("startup_validation", True)
+                env_validation = os.environ.get(
+                    "DATAFLOW_STARTUP_VALIDATION", "true"
+                ).lower()
+                if startup_validation and env_validation != "false":
+                    try:
+                        from dataflow.core.pool_validator import validate_pool_config
+
+                        validate_pool_config(
+                            database_url=self.config.database.url
+                            or self.config.database.database_url,
+                            pool_size=resolved_pool_size,
+                            max_overflow=resolved_max_overflow,
+                        )
+                    except Exception:
+                        logger.debug(
+                            "Pool startup validation failed (non-fatal)",
+                            exc_info=True,
+                        )
+
+                # PY-2/PY-5: Pool utilization monitor + leak detection
+                if self.config.monitoring.connection_metrics:
+                    try:
+                        from dataflow.core.pool_monitor import PoolMonitor
+
+                        self._pool_monitor = PoolMonitor(
+                            stats_provider=self._make_pool_stats_provider(
+                                resolved_pool_size, resolved_max_overflow
+                            ),
+                            interval_secs=float(
+                                self.config.monitoring.pool_monitor_interval_secs
+                            ),
+                            alert_on_exhaustion=(
+                                self.config.monitoring.alert_on_connection_exhaustion
+                            ),
+                            leak_detection_enabled=True,
+                            leak_threshold_secs=float(
+                                self.config.monitoring.leak_detection_threshold_secs
+                            ),
+                        )
+                        self._pool_monitor.start()
+                    except Exception:
+                        logger.debug(
+                            "Pool monitor initialization failed (non-fatal)",
+                            exc_info=True,
+                        )
+
+                # RS-6: Lightweight pool for health checks (separate from main pool)
+                db_url = self.config.database.url or self.config.database.database_url
+                if db_url:
+                    try:
+                        from dataflow.core.pool_lightweight import LightweightPool
+
+                        self._lightweight_pool = LightweightPool(db_url)
+                    except Exception:
+                        logger.debug(
+                            "Lightweight pool creation failed (non-fatal)",
+                            exc_info=True,
+                        )
+
+            # 2. Cache integration
+            if self.config.enable_query_cache:
+                self._initialize_cache_integration()
+
+            # 3. Migration system
+            if (
+                self._migration_enabled
+                and not (self._existing_schema_mode and not self._auto_migrate)
+                and not os.environ.get("DATAFLOW_DISABLE_MIGRATIONS", "").lower()
+                == "true"
+            ):
+                self._initialize_migration_system()
+                self._initialize_schema_state_manager()
+
+            # 4. Database connection pool initialization
+            self._initialize_database()
+
+            # 5. Model registry sync
+            if self._enable_model_persistence and hasattr(self, "_model_registry"):
+                self._sync_models_from_registry()
+
+            # Mark as connected BEFORE processing pending table creations
+            # to avoid re-entrance from _create_table_sync -> _ensure_connected
+            self._connected = True
+
+            # 6. Process pending table creations from @db.model decorators
+            if self._pending_table_creations:
+                for model_name in self._pending_table_creations:
+                    if self._auto_migrate and not self._existing_schema_mode:
+                        sync_success = self._create_table_sync(model_name)
+                        if sync_success:
+                            logger.debug(
+                                f"Deferred table creation for '{model_name}' succeeded"
+                            )
+                        else:
+                            logger.debug(
+                                f"Deferred table creation for '{model_name}' failed, "
+                                f"table will be created lazily on first access"
+                            )
+                self._pending_table_creations.clear()
+
+            logger.debug(
+                "DataFlow: Lazy connection complete — database resources initialized"
+            )
 
     async def initialize(self) -> bool:
         """Initialize DataFlow asynchronously.
@@ -596,6 +662,9 @@ class DataFlow:
         Returns:
             bool: True if initialization successful, False otherwise
         """
+        # Issue #171: Ensure sync connection resources are initialized first
+        self._ensure_connected()
+
         try:
             # Validate database connectivity
             if not await self._validate_database_connection():
@@ -1052,26 +1121,33 @@ class DataFlow:
         # Bind the method as a classmethod
         cls.query_builder = classmethod(query_builder)
 
-        # CRITICAL FIX: Use sync DDL for immediate table creation when auto_migrate=True
-        # This works in ALL contexts including Docker/FastAPI without event loop issues
-        # Uses SyncDDLExecutor with psycopg2/sqlite3 (purely synchronous, no asyncio)
-        if self._auto_migrate and not self._existing_schema_mode:
-            # Create table immediately using sync DDL
-            sync_success = self._create_table_sync(model_name)
-            if sync_success:
-                logger.debug(
-                    f"Model '{model_name}' registered - table created via sync DDL"
-                )
+        # Issue #171: Defer table creation until first DB operation (_ensure_connected).
+        # @db.model is now metadata-only — it registers the schema and generates nodes
+        # but does NOT connect to the database. This allows importing DataFlow models
+        # without requiring a live database.
+        if self._connected:
+            # Already connected — create table immediately (hot-path for models
+            # registered after the first query has already triggered connection)
+            if self._auto_migrate and not self._existing_schema_mode:
+                sync_success = self._create_table_sync(model_name)
+                if sync_success:
+                    logger.debug(
+                        f"Model '{model_name}' registered - table created via sync DDL"
+                    )
+                else:
+                    logger.debug(
+                        f"Model '{model_name}' registered - sync DDL failed, "
+                        f"table will be created lazily on first access"
+                    )
             else:
-                # Fallback: table will be created lazily on first access
                 logger.debug(
-                    f"Model '{model_name}' registered - sync DDL failed, "
-                    f"table will be created lazily on first access"
+                    f"Model '{model_name}' registered - table will be created lazily on first access"
                 )
         else:
-            # Tables will be created lazily when first accessed via node operations
+            # Not yet connected — queue for deferred creation in _ensure_connected()
+            self._pending_table_creations.append(model_name)
             logger.debug(
-                f"Model '{model_name}' registered - table will be created lazily on first access"
+                f"Model '{model_name}' registered - table creation deferred until first query"
             )
 
         return cls
@@ -1094,6 +1170,7 @@ class DataFlow:
         Returns:
             bool: True if table exists or was created successfully
         """
+        self._ensure_connected()
         # ADR-001: Check schema cache first
         database_url = self.config.database.url or ":memory:"
 
@@ -2261,6 +2338,7 @@ class DataFlow:
         Returns:
             ExpressDataFlow: High-performance CRUD interface
         """
+        self._ensure_connected()
         return self._express_dataflow
 
     @property
@@ -5896,6 +5974,7 @@ class DataFlow:
 
     def health_check(self) -> Dict[str, Any]:
         """Check DataFlow health status."""
+        self._ensure_connected()
         # Check if connection manager has a health_check method or simulate it
         try:
             connection_health = self._check_database_connection()
@@ -6341,6 +6420,7 @@ class DataFlow:
         Returns:
             bool: True if all tables were created successfully
         """
+        self._ensure_connected()
         try:
             from ..migrations.sync_ddl_executor import SyncDDLExecutor
 
@@ -7448,6 +7528,7 @@ class DataFlow:
         Returns:
             Dictionary with health status information
         """
+        self._ensure_connected()
         from datetime import datetime
 
         health_status = {
@@ -7682,6 +7763,7 @@ class DataFlow:
             RuntimeError: If lightweight pool is not configured.
             ValueError: If the SQL query is not in the allowlist.
         """
+        self._ensure_connected()
         if self._lightweight_pool is None:
             raise RuntimeError(
                 "Lightweight pool not configured. "
@@ -8175,11 +8257,15 @@ class DataFlow:
         Returns:
             Tuple of (results_dict, run_id)
 
+        Note:
+            This triggers lazy database connection if not already connected (Issue #171).
+
         Example:
             results, run_id = db.execute_workflow(workflow, {
                 "user_id": "user-123"
             })
         """
+        self._ensure_connected()
         return self._workflow_binder.execute(workflow, inputs, runtime)
 
     def get_available_nodes(self, model_name: str = None) -> Dict[str, list]:

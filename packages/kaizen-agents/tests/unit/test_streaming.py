@@ -143,9 +143,7 @@ def _tool_call_chunks(
     if text_before:
         for i in range(0, len(text_before), 5):
             chunk_text = text_before[i : i + 5]
-            chunks.append(
-                FakeChunk(choices=[FakeChoice(delta=FakeDelta(content=chunk_text))])
-            )
+            chunks.append(FakeChunk(choices=[FakeChoice(delta=FakeDelta(content=chunk_text))]))
 
     # Tool call deltas
     for idx, tc in enumerate(tool_calls):
@@ -249,9 +247,7 @@ class TestIncrementalStreaming:
             collected.append(chunk)
 
         # Multiple chunks were yielded (not a single blob)
-        assert len(collected) > 1, (
-            f"Expected multiple chunks, got {len(collected)}: {collected}"
-        )
+        assert len(collected) > 1, f"Expected multiple chunks, got {len(collected)}: {collected}"
 
         # Each chunk should be small (at most chunk_size characters)
         for chunk in collected:
@@ -453,9 +449,7 @@ class TestToolCallStreaming:
         full_text = "".join(collected)
 
         # The pre-tool-call thinking text should be in the output
-        assert thinking_text in full_text, (
-            f"Pre-tool-call text not found in output: {full_text!r}"
-        )
+        assert thinking_text in full_text, f"Pre-tool-call text not found in output: {full_text!r}"
         # The final text response should also be there
         assert final_text in full_text
 
@@ -470,21 +464,25 @@ class TestToolCallStreaming:
             return f"result_b({y})"
 
         tools.register(
-            "tool_a", "Tool A",
+            "tool_a",
+            "Tool A",
             {"type": "object", "properties": {"x": {"type": "string"}}},
             tool_a,
         )
         tools.register(
-            "tool_b", "Tool B",
+            "tool_b",
+            "Tool B",
             {"type": "object", "properties": {"y": {"type": "string"}}},
             tool_b,
         )
 
         # Model requests both tools in one response
-        parallel_chunks = _tool_call_chunks([
-            {"id": "call_a", "name": "tool_a", "arguments": '{"x": "hello"}'},
-            {"id": "call_b", "name": "tool_b", "arguments": '{"y": "world"}'},
-        ])
+        parallel_chunks = _tool_call_chunks(
+            [
+                {"id": "call_a", "name": "tool_a", "arguments": '{"x": "hello"}'},
+                {"id": "call_b", "name": "tool_b", "arguments": '{"y": "world"}'},
+            ]
+        )
 
         final_text = "Both tools completed successfully."
         final_chunks = _text_chunks(final_text, chunk_size=8)
@@ -513,14 +511,13 @@ class TestToolCallStreaming:
             raise RuntimeError("Tool broke")
 
         tools.register(
-            "failing", "A failing tool",
+            "failing",
+            "A failing tool",
             {"type": "object", "properties": {}},
             failing_tool,
         )
 
-        tool_chunks = _tool_call_chunks(
-            [{"id": "call_fail", "name": "failing", "arguments": "{}"}]
-        )
+        tool_chunks = _tool_call_chunks([{"id": "call_fail", "name": "failing", "arguments": "{}"}])
         final_chunks = _text_chunks("The tool encountered an error.", chunk_size=10)
 
         client = _make_fake_client(tool_chunks, final_chunks)
@@ -532,10 +529,10 @@ class TestToolCallStreaming:
         async for chunk in loop.run_turn("Try the tool"):
             collected.append(chunk)
 
-        # Error is in conversation
+        # Error is in conversation (sanitized — type name only, no raw exc message)
         tool_msg = next(m for m in loop.conversation.messages if m["role"] == "tool")
         assert "error" in tool_msg["content"].lower()
-        assert "Tool broke" in tool_msg["content"]
+        assert "RuntimeError" in tool_msg["content"]
 
         # Final text still arrives
         assert "".join(collected) == "The tool encountered an error."
@@ -580,7 +577,8 @@ class TestStreamingEdgeCases:
             return f"echo: {text}"
 
         tools.register(
-            "echo", "Echo",
+            "echo",
+            "Echo",
             {"type": "object", "properties": {"text": {"type": "string"}}},
             echo,
         )

@@ -21,9 +21,12 @@ from __future__ import annotations
 import logging
 import math
 import threading
-from datetime import UTC, datetime
+from collections import OrderedDict
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
+from kailash.trust.pact.addressing import Address
 from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,
     TrustPostureLevel,
@@ -37,7 +40,12 @@ from kailash.trust.pact.access import (
 )
 from kailash.trust.pact.audit import PactAuditAction, create_pact_audit_details
 from kailash.trust.pact.clearance import RoleClearance, effective_clearance
-from kailash.trust.pact.compilation import CompiledOrg, OrgNode, compile_org
+from kailash.trust.pact.compilation import (
+    CompiledOrg,
+    OrgNode,
+    VacancyDesignation,
+    compile_org,
+)
 from kailash.trust.pact.context import GovernanceContext
 from kailash.trust.pact.envelopes import (
     EffectiveEnvelopeSnapshot,
@@ -47,6 +55,7 @@ from kailash.trust.pact.envelopes import (
     compute_effective_envelope,
     compute_effective_envelope_with_version,
 )
+from kailash.trust.pact.exceptions import PactError
 from kailash.trust.pact.knowledge import KnowledgeItem
 from kailash.trust.pact.store import (
     AccessPolicyStore,
@@ -62,7 +71,74 @@ from kailash.trust.pact.verdict import GovernanceVerdict
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["GovernanceEngine"]
+__all__ = ["BridgeApproval", "GovernanceEngine"]
+
+# ---------------------------------------------------------------------------
+# Bridge approval -- LCA must approve cross-functional bridges (Section 4.4)
+# ---------------------------------------------------------------------------
+
+_MAX_BRIDGE_APPROVALS: int = 10_000
+"""Maximum number of bridge approvals stored in memory (bounded collection)."""
+
+_BRIDGE_APPROVAL_TTL: timedelta = timedelta(hours=24)
+"""Default time-to-live for bridge approvals."""
+
+
+@dataclass(frozen=True)
+class BridgeApproval:
+    """A pre-approval for a cross-functional bridge by the LCA of source and target.
+
+    Per PACT Section 4.4, before creating a cross-functional bridge, the
+    lowest common ancestor (LCA) of the two roles in the D/T/R tree must
+    approve the bridge. This dataclass records that approval.
+
+    frozen=True: prevents post-construction mutation (security invariant).
+
+    Attributes:
+        source_address: D/T/R address of one side of the bridge.
+        target_address: D/T/R address of the other side of the bridge.
+        approved_by: D/T/R address of the LCA that approved the bridge.
+        approved_at: When the approval was granted.
+        expires_at: When the approval expires (default: 24h after approved_at).
+    """
+
+    source_address: str
+    target_address: str
+    approved_by: str
+    approved_at: datetime
+    expires_at: datetime
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a dictionary.
+
+        Returns:
+            Dict with all fields. Datetimes are serialized as ISO 8601 strings.
+        """
+        return {
+            "source_address": self.source_address,
+            "target_address": self.target_address,
+            "approved_by": self.approved_by,
+            "approved_at": self.approved_at.isoformat(),
+            "expires_at": self.expires_at.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> BridgeApproval:
+        """Deserialize from a dictionary.
+
+        Args:
+            data: Dict with serialized BridgeApproval fields.
+
+        Returns:
+            A BridgeApproval instance.
+        """
+        return cls(
+            source_address=data["source_address"],
+            target_address=data["target_address"],
+            approved_by=data["approved_by"],
+            approved_at=datetime.fromisoformat(data["approved_at"]),
+            expires_at=datetime.fromisoformat(data["expires_at"]),
+        )
 
 
 class GovernanceEngine:
@@ -159,6 +235,15 @@ class GovernanceEngine:
             self._org_store = org_store if org_store is not None else MemoryOrgStore()
         self._audit_chain = audit_chain
 
+        # Vacancy designations -- bounded in-memory store (Section 5.5)
+        # Key: vacant_role_address -> VacancyDesignation
+        self._vacancy_designations: dict[str, VacancyDesignation] = {}
+        self._max_vacancy_designations: int = 10_000
+
+        # Bridge approvals -- bounded in-memory store (Section 4.4 LCA approval)
+        # Key: "source_address|target_address" -> BridgeApproval
+        self._bridge_approvals: OrderedDict[str, BridgeApproval] = OrderedDict()
+
         # Compile if OrgDefinition, or use directly if CompiledOrg
         if isinstance(org, CompiledOrg):
             self._compiled_org = org
@@ -242,11 +327,13 @@ class GovernanceEngine:
         action: str,
         context: dict[str, Any] | None = None,
     ) -> GovernanceVerdict:
-        """The primary decision API. Combines envelope + gradient + access.
+        """The primary decision API. Combines vacancy + envelope + gradient + access.
 
         Fail-closed: any error returns BLOCKED verdict.
 
         Logic:
+        0. Vacancy check (Section 5.5): if role or ancestor is vacant without
+           a valid acting occupant designation, BLOCK immediately.
         1. Compute effective envelope for role_address.
         2. If envelope exists, evaluate action against envelope dimensions.
         3. Classify result into gradient zones.
@@ -319,6 +406,36 @@ class GovernanceEngine:
         Returns:
             A GovernanceVerdict with the decision.
         """
+        # Step 0: Vacancy check (PACT Section 5.5) -- BEFORE envelope checks.
+        # If the role or any ancestor is vacant without a valid acting occupant
+        # designation, all actions are blocked (auto-suspended).
+        vacancy_error = self._check_vacancy(role_address)
+        if vacancy_error is not None:
+            self._emit_audit_unlocked(
+                PactAuditAction.VACANCY_SUSPENDED.value,
+                {
+                    "role_address": role_address,
+                    "action": action,
+                    "level": "blocked",
+                    "reason": vacancy_error,
+                },
+            )
+            return GovernanceVerdict(
+                level="blocked",
+                reason=vacancy_error,
+                role_address=role_address,
+                action=action,
+                effective_envelope_snapshot=None,
+                audit_details={
+                    "role_address": role_address,
+                    "action": action,
+                    "level": "blocked",
+                    "vacancy_suspended": True,
+                },
+                access_decision=None,
+                timestamp=now,
+            )
+
         # Step 1: Compute effective envelope with version hash (TOCTOU defense)
         task_id = ctx.get("task_id")
         snapshot = self._compute_envelope_with_version_locked(
@@ -488,6 +605,137 @@ class GovernanceEngine:
                     f"Action cost (${cost_float:.2f}) is within 20% of financial "
                     f"limit (${max_spend:.2f})",
                 )
+
+        # --- Temporal: check active hours and blackout periods ---
+        if envelope.temporal is not None:
+            from datetime import datetime as _dt, timezone as _tz
+
+            _tz_name = envelope.temporal.timezone or "UTC"
+            try:
+                import zoneinfo as _zi
+
+                _tzinfo = _zi.ZoneInfo(_tz_name)
+            except Exception:
+                _tzinfo = _tz.utc
+            _now = _dt.now(_tzinfo)
+            _current_time = _now.strftime("%H:%M")
+
+            # Check blackout periods (supports overnight ranges like 22:00-06:00)
+            import re as _re
+
+            _BP_RE = _re.compile(r"^(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$")
+            for bp in envelope.temporal.blackout_periods or []:
+                if isinstance(bp, str):
+                    _m = _BP_RE.match(bp)
+                    if _m:
+                        _bp_start, _bp_end = _m.group(1), _m.group(2)
+                        if _bp_start <= _bp_end:
+                            in_blackout = _bp_start <= _current_time <= _bp_end
+                        else:
+                            in_blackout = (
+                                _current_time >= _bp_start or _current_time <= _bp_end
+                            )
+                        if in_blackout:
+                            return (
+                                "blocked",
+                                f"Action blocked during blackout period ({bp})",
+                            )
+
+            # Check active hours window
+            _start = envelope.temporal.active_hours_start
+            _end = envelope.temporal.active_hours_end
+            if _start is not None and _end is not None:
+                if _start <= _end:
+                    # Normal range (e.g., 09:00-17:00)
+                    if not (_start <= _current_time <= _end):
+                        return (
+                            "blocked",
+                            f"Action outside active hours ({_start}-{_end}, current: {_current_time})",
+                        )
+                else:
+                    # Overnight range (e.g., 22:00-06:00)
+                    if _end < _current_time < _start:
+                        return (
+                            "blocked",
+                            f"Action outside active hours ({_start}-{_end}, current: {_current_time})",
+                        )
+
+        # --- Data Access: check read/write paths ---
+        if envelope.data_access is not None:
+            resource_path = ctx.get("resource_path")
+            access_type = ctx.get("access_type")  # "read" or "write"
+            if resource_path is not None and access_type is not None:
+                import posixpath as _posixpath
+
+                _rp = _posixpath.normpath(str(resource_path))
+                # Reject path traversal attempts
+                if ".." in _rp.split("/"):
+                    return (
+                        "blocked",
+                        f"Path traversal detected in resource_path: {_rp!r}",
+                    )
+
+                # Check blocked data types first
+                _data_type = ctx.get("data_type")
+                if _data_type and envelope.data_access.blocked_data_types:
+                    if str(_data_type) in envelope.data_access.blocked_data_types:
+                        return (
+                            "blocked",
+                            f"Data type '{_data_type}' is blocked by data access constraint",
+                        )
+
+                # Check allowed read paths
+                if access_type == "read" and envelope.data_access.read_paths:
+                    if not any(
+                        _rp == p or _rp.startswith(p + "/")
+                        for p in envelope.data_access.read_paths
+                    ):
+                        return (
+                            "blocked",
+                            f"Read access to '{_rp}' not in allowed read paths",
+                        )
+                # Check allowed write paths
+                elif access_type == "write" and envelope.data_access.write_paths:
+                    if not any(
+                        _rp == p or _rp.startswith(p + "/")
+                        for p in envelope.data_access.write_paths
+                    ):
+                        return (
+                            "blocked",
+                            f"Write access to '{_rp}' not in allowed write paths",
+                        )
+
+        # --- Communication: check channel and external constraints ---
+        if envelope.communication is not None:
+            channel = ctx.get("channel")
+            is_external = ctx.get("is_external")
+
+            # internal_only: block unless is_external is explicitly False
+            if envelope.communication.internal_only and is_external is not False:
+                return (
+                    "blocked",
+                    "External communication blocked — agent is internal-only",
+                )
+
+            # external_requires_approval: HELD for external actions
+            if (
+                envelope.communication.external_requires_approval
+                and is_external
+                and not envelope.communication.internal_only
+            ):
+                return (
+                    "held",
+                    "External communication requires human approval",
+                )
+
+            # Check allowed channels
+            allowed_channels = envelope.communication.allowed_channels
+            if channel is not None and allowed_channels:
+                if str(channel) not in allowed_channels:
+                    return (
+                        "blocked",
+                        f"Channel '{channel}' not in allowed channels: {sorted(allowed_channels)}",
+                    )
 
         # --- All checks passed ---
         return (
@@ -694,13 +942,210 @@ class GovernanceEngine:
             ),
         )
 
+    def approve_bridge(
+        self,
+        source_address: str,
+        target_address: str,
+        approver_address: str,
+    ) -> BridgeApproval:
+        """Pre-approve a bridge between two roles. Thread-safe. Emits audit anchor.
+
+        Per PACT Section 4.4, the LCA of the source and target roles must
+        approve a bridge before it can be created. This method records that
+        approval with a 24-hour TTL.
+
+        The approver_address MUST be the LCA of source_address and
+        target_address. If it is not, a PactError is raised (fail-closed).
+
+        Args:
+            source_address: D/T/R address of one side of the bridge.
+            target_address: D/T/R address of the other side of the bridge.
+            approver_address: D/T/R address of the role approving the bridge.
+                Must be the LCA of source and target.
+
+        Returns:
+            The BridgeApproval record.
+
+        Raises:
+            PactError: If the approver is not the LCA of source and target,
+                if addresses cannot be parsed, or if no common ancestor exists.
+        """
+        with self._lock:
+            # Parse addresses -- fail-closed on parse errors
+            try:
+                source_addr = Address.parse(source_address)
+                target_addr = Address.parse(target_address)
+            except Exception as exc:
+                raise PactError(
+                    f"Cannot parse bridge addresses: {exc}",
+                    details={
+                        "source_address": source_address,
+                        "target_address": target_address,
+                    },
+                ) from exc
+
+            # Compute LCA
+            lca = Address.lowest_common_ancestor(source_addr, target_addr)
+            if lca is None:
+                raise PactError(
+                    "Cannot approve bridge: addresses have no common ancestor",
+                    details={
+                        "source_address": source_address,
+                        "target_address": target_address,
+                    },
+                )
+
+            # Verify the approver IS the LCA
+            if approver_address != str(lca):
+                raise PactError(
+                    f"Bridge approval must come from the LCA ({lca}), "
+                    f"not {approver_address}",
+                    details={
+                        "source_address": source_address,
+                        "target_address": target_address,
+                        "approver_address": approver_address,
+                        "required_lca": str(lca),
+                    },
+                )
+
+            now = datetime.now(UTC)
+            approval = BridgeApproval(
+                source_address=source_address,
+                target_address=target_address,
+                approved_by=approver_address,
+                approved_at=now,
+                expires_at=now + _BRIDGE_APPROVAL_TTL,
+            )
+
+            # Store with bounded eviction
+            approval_key = f"{source_address}|{target_address}"
+            self._bridge_approvals[approval_key] = approval
+            # Evict oldest when at capacity (bounded collection)
+            while len(self._bridge_approvals) > _MAX_BRIDGE_APPROVALS:
+                self._bridge_approvals.popitem(last=False)
+
+        self._emit_audit(
+            PactAuditAction.BRIDGE_APPROVED.value,
+            create_pact_audit_details(
+                PactAuditAction.BRIDGE_APPROVED,
+                role_address=approver_address,
+                target_address=target_address,
+                reason=(
+                    f"Bridge between '{source_address}' and '{target_address}' "
+                    f"approved by LCA '{approver_address}'"
+                ),
+                source_address=source_address,
+                lca_address=approver_address,
+            ),
+        )
+
+        return approval
+
+    def _check_bridge_approval(
+        self,
+        source_address: str,
+        target_address: str,
+    ) -> BridgeApproval | None:
+        """Check if a valid (non-expired) bridge approval exists.
+
+        Caller must hold self._lock.
+
+        Checks both orderings (source|target and target|source) since a bridge
+        approval for A->B should also satisfy B->A.
+
+        Args:
+            source_address: D/T/R address of one side of the bridge.
+            target_address: D/T/R address of the other side of the bridge.
+
+        Returns:
+            The BridgeApproval if one exists and has not expired, else None.
+        """
+        now = datetime.now(UTC)
+        # Check both orderings
+        for key in (
+            f"{source_address}|{target_address}",
+            f"{target_address}|{source_address}",
+        ):
+            approval = self._bridge_approvals.get(key)
+            if approval is not None:
+                if now < approval.expires_at:
+                    return approval
+                # Expired -- clean up
+                del self._bridge_approvals[key]
+        return None
+
     def create_bridge(self, bridge: PactBridge) -> None:
         """Create a Cross-Functional Bridge. Thread-safe. Emits audit anchor.
 
+        Per PACT Section 4.4, the lowest common ancestor (LCA) of the source
+        and target roles must have approved the bridge via approve_bridge()
+        before it can be created. If no valid (non-expired) approval exists,
+        creation is blocked (fail-closed).
+
         Args:
             bridge: The PactBridge to create.
+
+        Raises:
+            PactError: If no valid LCA approval exists, if addresses cannot
+                be parsed, or if no common ancestor exists.
         """
         with self._lock:
+            # Parse addresses for LCA computation
+            try:
+                source_addr = Address.parse(bridge.role_a_address)
+                target_addr = Address.parse(bridge.role_b_address)
+            except Exception as exc:
+                raise PactError(
+                    f"Cannot parse bridge addresses: {exc}",
+                    details={
+                        "role_a_address": bridge.role_a_address,
+                        "role_b_address": bridge.role_b_address,
+                        "bridge_id": bridge.id,
+                    },
+                ) from exc
+
+            # Compute LCA
+            lca = Address.lowest_common_ancestor(source_addr, target_addr)
+            if lca is None:
+                raise PactError(
+                    "Cannot create bridge: addresses have no common ancestor",
+                    details={
+                        "role_a_address": bridge.role_a_address,
+                        "role_b_address": bridge.role_b_address,
+                        "bridge_id": bridge.id,
+                    },
+                )
+
+            # Check for valid approval from the LCA
+            approval = self._check_bridge_approval(
+                bridge.role_a_address, bridge.role_b_address
+            )
+            if approval is None:
+                raise PactError(
+                    f"Bridge requires approval from LCA: {lca}",
+                    details={
+                        "role_a_address": bridge.role_a_address,
+                        "role_b_address": bridge.role_b_address,
+                        "bridge_id": bridge.id,
+                        "required_lca": str(lca),
+                    },
+                )
+
+            # Verify the approval came from the actual LCA
+            if approval.approved_by != str(lca):
+                raise PactError(
+                    f"Bridge approval must come from LCA ({lca}), "
+                    f"not {approval.approved_by}",
+                    details={
+                        "role_a_address": bridge.role_a_address,
+                        "role_b_address": bridge.role_b_address,
+                        "bridge_id": bridge.id,
+                        "approved_by": approval.approved_by,
+                        "required_lca": str(lca),
+                    },
+                )
+
+            # All checks passed -- persist the bridge
             self._access_policy_store.save_bridge(bridge)
 
         self._emit_audit(
@@ -712,6 +1157,7 @@ class GovernanceEngine:
                 reason=f"Bridge '{bridge.id}' ({bridge.bridge_type}) established",
                 bridge_id=bridge.id,
                 bridge_type=bridge.bridge_type,
+                lca_approver=approval.approved_by,
             ),
         )
 
@@ -812,6 +1258,181 @@ class GovernanceEngine:
                 parent_envelope_id=envelope.parent_envelope_id,
             ),
         )
+
+    # -------------------------------------------------------------------
+    # Vacancy Designation API (Section 5.5)
+    # -------------------------------------------------------------------
+
+    def designate_acting_occupant(
+        self,
+        vacant_role: str,
+        acting_role: str,
+        designated_by: str,
+    ) -> VacancyDesignation:
+        """Designate an acting occupant for a vacant role. Thread-safe.
+
+        The parent role of a vacant position must designate an acting occupant
+        within 24 hours. The designation expires after 24 hours and must be
+        renewed if the vacancy persists.
+
+        The acting occupant inherits the vacant role's envelope (constraints)
+        but does NOT receive clearance upgrades from the vacant role.
+
+        Args:
+            vacant_role: The D/T/R address of the vacant role.
+            acting_role: The D/T/R address of the acting occupant.
+            designated_by: The D/T/R address of the parent role making
+                the designation.
+
+        Returns:
+            The VacancyDesignation record.
+
+        Raises:
+            PactError: If the vacant role is not actually vacant, if the
+                designating role is not found, or if the store is at capacity.
+        """
+        from kailash.trust.pact.exceptions import PactError
+
+        with self._lock:
+            # Validate the vacant role exists and is actually vacant
+            node = self._compiled_org.nodes.get(vacant_role)
+            if node is None:
+                raise PactError(
+                    f"Vacant role address '{vacant_role}' not found in org",
+                    details={"vacant_role": vacant_role},
+                )
+            if not node.is_vacant:
+                raise PactError(
+                    f"Role at '{vacant_role}' is not vacant",
+                    details={"vacant_role": vacant_role, "is_vacant": False},
+                )
+
+            # Validate the acting role exists
+            acting_node = self._compiled_org.nodes.get(acting_role)
+            if acting_node is None:
+                raise PactError(
+                    f"Acting role address '{acting_role}' not found in org",
+                    details={"acting_role": acting_role},
+                )
+
+            # Validate the designating role exists
+            designator_node = self._compiled_org.nodes.get(designated_by)
+            if designator_node is None:
+                raise PactError(
+                    f"Designating role address '{designated_by}' not found in org",
+                    details={"designated_by": designated_by},
+                )
+
+            # Enforce bounded collection
+            if len(self._vacancy_designations) >= self._max_vacancy_designations:
+                raise PactError(
+                    f"Vacancy designation store at capacity "
+                    f"({self._max_vacancy_designations})",
+                    details={"capacity": self._max_vacancy_designations},
+                )
+
+            now = datetime.now(timezone.utc)
+            expires = now + timedelta(hours=24)
+
+            designation = VacancyDesignation(
+                vacant_role_address=vacant_role,
+                acting_role_address=acting_role,
+                designated_by=designated_by,
+                designated_at=now.isoformat(),
+                expires_at=expires.isoformat(),
+            )
+
+            self._vacancy_designations[vacant_role] = designation
+
+        # Emit audit outside lock (audit chain has its own lock)
+        self._emit_audit(
+            PactAuditAction.VACANCY_DESIGNATED.value,
+            create_pact_audit_details(
+                PactAuditAction.VACANCY_DESIGNATED,
+                role_address=designated_by,
+                target_address=vacant_role,
+                reason=(
+                    f"Acting occupant '{acting_role}' designated for "
+                    f"vacant role '{vacant_role}' by '{designated_by}'"
+                ),
+                acting_role=acting_role,
+            ),
+        )
+
+        return designation
+
+    def get_vacancy_designation(
+        self,
+        role_address: str,
+    ) -> VacancyDesignation | None:
+        """Get the vacancy designation for a role, if one exists. Thread-safe.
+
+        Args:
+            role_address: The D/T/R address of the (potentially vacant) role.
+
+        Returns:
+            The VacancyDesignation if one exists, or None.
+        """
+        with self._lock:
+            return self._vacancy_designations.get(role_address)
+
+    def _check_vacancy(self, address: str) -> str | None:
+        """Check vacancy status for an address. Caller must hold self._lock.
+
+        Implements PACT Section 5.5 vacancy enforcement:
+        1. If the role at the address is not vacant, return None (OK).
+        2. If the role is vacant and has a valid (non-expired) designation,
+           return None (OK -- acting occupant covers it).
+        3. If the role is vacant with no designation or an expired designation,
+           return an error message (BLOCKED).
+        4. Also checks all ancestor roles: if ANY ancestor is vacant without
+           a valid designation, the downstream role is auto-suspended.
+
+        Args:
+            address: The D/T/R address to check.
+
+        Returns:
+            None if the role is cleared to act, or an error message string
+            if the action should be blocked due to vacancy.
+        """
+        from kailash.trust.pact.addressing import Address
+
+        try:
+            parsed = Address.parse(address)
+        except Exception:
+            return (
+                f"Unable to parse address '{address}' for vacancy check -- fail-closed"
+            )
+
+        # Check the target role itself and all ancestors in the accountability chain
+        addresses_to_check = [str(a) for a in parsed.accountability_chain]
+
+        for check_addr in addresses_to_check:
+            node = self._compiled_org.nodes.get(check_addr)
+            if node is None:
+                continue  # Node not in org -- not a vacancy issue
+
+            if not node.is_vacant:
+                continue  # Not vacant -- OK
+
+            # Role is vacant -- check for a valid designation
+            designation = self._vacancy_designations.get(check_addr)
+
+            if designation is None:
+                return (
+                    f"Role at '{check_addr}' is vacant with no acting occupant "
+                    f"designation -- all downstream actions are suspended "
+                    f"(PACT Section 5.5)"
+                )
+
+            if designation.is_expired():
+                return (
+                    f"Acting occupant designation for vacant role '{check_addr}' "
+                    f"has expired (expired at {designation.expires_at}) -- "
+                    f"all downstream actions are suspended (PACT Section 5.5)"
+                )
+
+        return None
 
     # -------------------------------------------------------------------
     # Audit API
@@ -959,9 +1580,7 @@ class GovernanceEngine:
     # Internal Helpers
     # -------------------------------------------------------------------
 
-    def _find_role_envelope_by_id_locked(
-        self, envelope_id: str
-    ) -> RoleEnvelope | None:
+    def _find_role_envelope_by_id_locked(self, envelope_id: str) -> RoleEnvelope | None:
         """Find a RoleEnvelope by its ID. Caller must hold self._lock.
 
         Iterates all role addresses in the compiled org and checks if a stored

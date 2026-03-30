@@ -7,6 +7,7 @@ and recovery from the latest checkpoint via :class:`DurableRequest`.
 """
 
 import asyncio
+import json
 import logging
 from datetime import UTC, datetime
 from typing import Any, Callable, Dict, List, Optional
@@ -132,7 +133,30 @@ class DurableWorkflowServer(WorkflowServer):
                 # Pass through without durability
                 return await call_next(request)
 
-            # Extract request metadata
+            # Extract request metadata.
+            # Extract body BEFORE creating metadata so dedup fingerprinting
+            # includes the actual request body content.
+            # See: https://github.com/terrene-foundation/kailash-py/issues/175
+            body_content = None
+            if request.method in ["POST", "PUT", "PATCH"]:
+                try:
+                    raw_body = await request.body()
+                    if raw_body:
+                        # Try JSON parse first for structured fingerprinting
+                        try:
+                            body_content = json.loads(raw_body)
+                        except (json.JSONDecodeError, ValueError):
+                            # Non-JSON body: use raw string for fingerprinting
+                            body_content = raw_body.decode("utf-8", errors="replace")
+                except Exception:
+                    logger.warning(
+                        "Failed to extract request body for dedup fingerprint "
+                        "on %s %s -- dedup will use path-only fingerprint for "
+                        "this request",
+                        request.method,
+                        str(request.url.path),
+                    )
+
             request_id = (
                 request.headers.get("X-Request-ID")
                 or f"req_{datetime.now(UTC).timestamp()}"
@@ -144,7 +168,7 @@ class DurableWorkflowServer(WorkflowServer):
                 path=str(request.url.path),
                 headers=dict(request.headers),
                 query_params=dict(request.query_params),
-                body=None,  # Will be set later if needed
+                body=body_content,
                 client_ip=request.client.host if request.client else "unknown",
                 user_id=None,  # Will be set from auth if available
                 tenant_id=None,  # Will be set from auth if available

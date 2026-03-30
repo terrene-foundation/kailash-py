@@ -38,8 +38,7 @@ import asyncio
 import logging
 import math
 import os
-import time
-from typing import Any, AsyncGenerator, Callable, Awaitable, TYPE_CHECKING
+from typing import AsyncGenerator, Callable, TYPE_CHECKING
 
 from kaizen_agents.delegate.config.loader import KzConfig
 from kaizen_agents.delegate.events import (
@@ -47,8 +46,6 @@ from kaizen_agents.delegate.events import (
     DelegateEvent,
     ErrorEvent,
     TextDelta,
-    ToolCallEnd,
-    ToolCallStart,
     TurnComplete,
 )
 from kaizen_agents.delegate.loop import AgentLoop, ToolRegistry
@@ -306,14 +303,20 @@ class Delegate:
 
         accumulated_text = ""
 
+        # Buffer for tool-call lifecycle events.  The loop invokes our
+        # callback synchronously inside ``_execute_tool_calls``; we drain
+        # the buffer after each text chunk so events appear at the correct
+        # point in the stream (between tool execution and the next LLM turn).
+        _pending_events: list[DelegateEvent] = []
+        self._loop._event_callback = _pending_events.append
+
         try:
             async for chunk in self._loop.run_turn(prompt):
-                # Tool call events from the loop — yield as-is
-                if isinstance(chunk, DelegateEvent):
-                    yield chunk
-                    continue
+                # Drain any tool-call events that accumulated before this
+                # text chunk (they were pushed by _execute_tool_calls).
+                while _pending_events:
+                    yield _pending_events.pop(0)
 
-                # str chunks — text deltas
                 # Check if this is the budget-exhausted sentinel
                 if chunk == "[Budget exhausted — stopping.]":
                     yield BudgetExhausted(
@@ -325,6 +328,11 @@ class Delegate:
                 accumulated_text += chunk
                 yield TextDelta(text=chunk)
 
+            # Drain any remaining events (e.g. from the last tool-call turn
+            # when there was no subsequent text chunk).
+            while _pending_events:
+                yield _pending_events.pop(0)
+
         except Exception as exc:
             logger.error("Delegate run failed: %s", exc, exc_info=True)
             yield ErrorEvent(
@@ -332,6 +340,8 @@ class Delegate:
                 details={"exception_type": type(exc).__name__},
             )
             return
+        finally:
+            self._loop._event_callback = None
 
         # Record usage from the loop's tracker
         usage = self._loop.usage

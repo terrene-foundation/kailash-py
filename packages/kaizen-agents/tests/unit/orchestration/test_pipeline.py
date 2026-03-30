@@ -11,12 +11,10 @@ from kaizen_agents.patterns.pipeline import Pipeline, SequentialPipeline
 class TestPipelineBasics:
     """Test basic Pipeline functionality."""
 
-    def test_pipeline_requires_run_implementation(self):
-        """Test that Pipeline requires run() to be implemented."""
-        pipeline = Pipeline()
-
-        with pytest.raises(NotImplementedError):
-            pipeline.run()
+    def test_pipeline_cannot_be_instantiated_directly(self):
+        """Test that Pipeline is an ABC and cannot be instantiated directly."""
+        with pytest.raises(TypeError):
+            Pipeline()
 
     def test_custom_pipeline_can_execute(self):
         """Test that custom pipeline can execute."""

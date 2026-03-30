@@ -244,6 +244,8 @@ def serialize_for_signing(obj: Any) -> str:
             return convert(asdict(item))
         elif isinstance(item, dict):
             return {k: convert(v) for k, v in sorted(item.items())}
+        elif isinstance(item, (frozenset, set)):
+            return [convert(i) for i in sorted(item)]
         elif isinstance(item, (list, tuple)):
             return [convert(i) for i in item]
         elif isinstance(item, datetime):
