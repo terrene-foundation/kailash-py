@@ -15,6 +15,16 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [2.3.1] - 2026-03-30
+
+**Patch Release** — kailash 2.3.1
+
+#### Fixed
+
+- **PACT internal_only enforcement** (#179): Actions without explicit `is_external` context no longer blocked for internal-only agents. Only explicitly external actions are denied.
+
+---
+
 ### [kailash-pact 0.5.0] - 2026-03-30
 
 #### Added
