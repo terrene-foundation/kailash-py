@@ -7,6 +7,7 @@ to handle WebSocket connections and route them to the MCP protocol handler.
 import asyncio
 import json
 import logging
+import warnings
 from typing import Any, Dict, Optional, Set
 
 import websockets
@@ -333,11 +334,9 @@ class MCPWebSocketServer:
             self.runtime.release()
             self.runtime = None
 
-    def __del__(self):
+    def __del__(self, _warnings=warnings):
         if getattr(self, "runtime", None) is not None:
-            import warnings
-
-            warnings.warn(
+            _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
                 source=self,

@@ -18,6 +18,7 @@ import asyncio
 import logging
 import os
 import time
+import warnings
 import weakref
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -1559,12 +1560,10 @@ class AsyncLocalRuntime(LocalRuntime):
         self._workflow_signals.clear()
         self._cleanup_event_loop()
 
-    def __del__(self) -> None:
+    def __del__(self, _warnings=warnings) -> None:
         """Emit ResourceWarning if runtime was not properly closed."""
         if getattr(self, "_ref_count", 0) > 0:
-            import warnings
-
-            warnings.warn(
+            _warnings.warn(
                 f"Unclosed {self.__class__.__name__} (ref_count={self._ref_count}). "
                 f"Use 'async with {self.__class__.__name__}() as runtime:' or call runtime.close().",
                 ResourceWarning,

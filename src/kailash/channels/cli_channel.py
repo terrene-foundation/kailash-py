@@ -5,6 +5,7 @@ import json
 import logging
 import sys
 import time
+import warnings
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, TextIO
 
@@ -797,11 +798,9 @@ class CLIChannel(Channel):
             self.runtime.release()
             self.runtime = None
 
-    def __del__(self):
+    def __del__(self, _warnings=warnings):
         if getattr(self, "runtime", None) is not None:
-            import warnings
-
-            warnings.warn(
+            _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() or stop() explicitly.",
                 ResourceWarning,
                 source=self,

@@ -39,6 +39,7 @@ import hashlib
 import json
 import logging
 import threading
+import warnings
 import time
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -1450,12 +1451,10 @@ class LocalRuntime(
         """Current reference count (for debugging/testing)."""
         return self._ref_count
 
-    def __del__(self) -> None:
+    def __del__(self, _warnings=warnings) -> None:
         """Emit ResourceWarning if runtime was not properly closed."""
         if getattr(self, "_ref_count", 0) > 0:
-            import warnings
-
-            warnings.warn(
+            _warnings.warn(
                 f"Unclosed {self.__class__.__name__} (ref_count={self._ref_count}). "
                 f"Use 'with {self.__class__.__name__}() as runtime:' or call runtime.close().",
                 ResourceWarning,

@@ -15,6 +15,7 @@ Key Features:
 import asyncio
 import logging
 import re
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -686,12 +687,10 @@ class QueryImpactAnalyzer:
             self.runtime.release()
             self.runtime = None
 
-    def __del__(self):
+    def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly."""
         if getattr(self, "runtime", None) is not None:
-            import warnings
-
-            warnings.warn(
+            _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
                 source=self,
@@ -753,13 +752,19 @@ class SafeTypeConverter:
             except RuntimeError:
                 self.runtime = LocalRuntime()
                 self._is_async = False
-                logger.debug("SafeTypeConverter: Detected sync context, using LocalRuntime")
+                logger.debug(
+                    "SafeTypeConverter: Detected sync context, using LocalRuntime"
+                )
             self._owns_runtime = True
 
         # Initialize components (pass shared runtime to sub-components)
-        self.data_validator = DataValidationEngine(connection_string, runtime=self.runtime)
+        self.data_validator = DataValidationEngine(
+            connection_string, runtime=self.runtime
+        )
         self.compatibility_matrix = TypeCompatibilityMatrix()
-        self.query_analyzer = QueryImpactAnalyzer(connection_string, runtime=self.runtime)
+        self.query_analyzer = QueryImpactAnalyzer(
+            connection_string, runtime=self.runtime
+        )
 
         logger.info("Safe Type Converter initialized")
 
@@ -1194,12 +1199,10 @@ class SafeTypeConverter:
             self.runtime.release()
             self.runtime = None
 
-    def __del__(self):
+    def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly."""
         if getattr(self, "runtime", None) is not None:
-            import warnings
-
-            warnings.warn(
+            _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
                 source=self,

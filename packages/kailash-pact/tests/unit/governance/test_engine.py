@@ -607,6 +607,9 @@ class TestStateMutation:
         )
         assert decision_before.allowed is False
 
+        # Approve bridge via LCA (D1-R1 is the common ancestor)
+        engine_from_compiled.approve_bridge("D1-R1-D3-R1", "D1-R1-D1-R1", "D1-R1")
+
         # Create a bridge between VP Student Affairs and Provost
         bridge = PactBridge(
             id="bridge-student-affairs-acad",

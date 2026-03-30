@@ -49,6 +49,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -381,6 +382,34 @@ class DataFlowExpress:
             # Invalidate cache for this model
             if self._cache_enabled:
                 self._cache.invalidate_model(model)
+
+            # Issue #184 fix: SQLite INSERT doesn't return auto-generated fields
+            # (created_at, updated_at, id). If the result is missing timestamps
+            # that exist in the model, do a read-back to fetch the complete record.
+            if (
+                result
+                and isinstance(result, dict)
+                and result.get("success") is not False
+            ):
+                model_fields = self._db.get_model_fields(model)
+                has_timestamps = (
+                    "created_at" in model_fields or "updated_at" in model_fields
+                )
+                missing_timestamps = has_timestamps and (
+                    "created_at" not in result or "updated_at" not in result
+                )
+                if missing_timestamps:
+                    record_id = result.get("id") or data.get("id")
+                    try:
+                        if record_id is not None:
+                            readback = await self.read(model, str(record_id))
+                        else:
+                            # No id available — find most recently created matching record
+                            readback = await self.find_one(model, data)
+                        if readback and isinstance(readback, dict):
+                            result = {**result, **readback}
+                    except Exception:
+                        pass  # Best-effort read-back; original result still valid
 
             return result
 
@@ -909,3 +938,245 @@ class DataFlowExpress:
 
 
 ExpressDataFlow = DataFlowExpress  # Deprecated alias
+
+
+# ============================================================================
+# SyncExpress — Synchronous Wrapper (Issue #187)
+# ============================================================================
+
+
+class SyncExpress:
+    """Synchronous wrapper around DataFlowExpress for non-async contexts.
+
+    Provides sync equivalents of all Express CRUD methods for use in CLI scripts,
+    synchronous FastAPI handlers, pytest without asyncio, and other non-async code.
+
+    Internally maintains a single persistent event loop in a background thread so
+    that database connections (which are bound to an event loop) survive across
+    multiple sync calls.
+
+    Usage:
+        from dataflow import DataFlow
+
+        db = DataFlow("sqlite:///app.db")
+
+        @db.model
+        class User:
+            id: str
+            name: str
+
+        # Synchronous CRUD via db.express_sync
+        user = db.express_sync.create("User", {"id": "u1", "name": "Alice"})
+        user = db.express_sync.read("User", "u1")
+        users = db.express_sync.list("User", filter={"name": "Alice"})
+        count = db.express_sync.count("User")
+        db.express_sync.delete("User", "u1")
+    """
+
+    def __init__(self, express: DataFlowExpress):
+        self._express = express
+        # Persistent event loop in a background daemon thread.
+        # All async operations are submitted to this loop so database connections
+        # (bound to one event loop) remain valid across calls.
+        self._loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(target=self._loop.run_forever, daemon=True)
+        self._thread.start()
+
+    def _run_sync(self, coro):
+        """Run an async coroutine synchronously on the persistent event loop.
+
+        Submits the coroutine to the background loop and blocks until it completes.
+        This ensures all async operations share the same event loop, which is
+        critical for database drivers like aiosqlite that bind connections to
+        the loop they were created on.
+        """
+        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        return future.result()
+
+    # ========================================================================
+    # CRUD Operations
+    # ========================================================================
+
+    def create(self, model: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a single record (sync).
+
+        Args:
+            model: Model name (e.g., "User")
+            data: Record data including 'id' field
+
+        Returns:
+            Created record
+        """
+        return self._run_sync(self._express.create(model, data))
+
+    def read(
+        self, model: str, id: str, cache_ttl: Optional[int] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Read a single record by ID (sync).
+
+        Args:
+            model: Model name (e.g., "User")
+            id: Record ID
+            cache_ttl: Optional cache TTL override
+
+        Returns:
+            Record or None if not found
+        """
+        return self._run_sync(self._express.read(model, id, cache_ttl))
+
+    def update(self, model: str, id: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+        """Update a single record (sync).
+
+        Args:
+            model: Model name (e.g., "User")
+            id: Record ID
+            fields: Fields to update
+
+        Returns:
+            Updated record
+        """
+        return self._run_sync(self._express.update(model, id, fields))
+
+    def delete(self, model: str, id: str) -> bool:
+        """Delete a single record (sync).
+
+        Args:
+            model: Model name (e.g., "User")
+            id: Record ID
+
+        Returns:
+            True if deleted, False if not found
+        """
+        return self._run_sync(self._express.delete(model, id))
+
+    def list(
+        self,
+        model: str,
+        filter: Optional[Dict[str, Any]] = None,
+        limit: int = 100,
+        offset: int = 0,
+        cache_ttl: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """List records with optional filtering (sync).
+
+        Args:
+            model: Model name (e.g., "User")
+            filter: Optional MongoDB-style filter criteria
+            limit: Maximum records to return (default: 100)
+            offset: Skip first N records (default: 0)
+            cache_ttl: Optional cache TTL override
+
+        Returns:
+            List of records
+        """
+        return self._run_sync(
+            self._express.list(model, filter, limit, offset, cache_ttl)
+        )
+
+    def find_one(
+        self,
+        model: str,
+        filter: Dict[str, Any],
+        cache_ttl: Optional[int] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Find a single record by filter criteria (sync).
+
+        Args:
+            model: Model name (e.g., "User")
+            filter: MongoDB-style filter criteria (required, must not be empty)
+            cache_ttl: Optional cache TTL override
+
+        Returns:
+            Single record dict or None if not found
+        """
+        return self._run_sync(self._express.find_one(model, filter, cache_ttl))
+
+    def count(
+        self,
+        model: str,
+        filter: Optional[Dict[str, Any]] = None,
+        cache_ttl: Optional[int] = None,
+    ) -> int:
+        """Count records with optional filtering (sync).
+
+        Args:
+            model: Model name (e.g., "User")
+            filter: Optional MongoDB-style filter criteria
+            cache_ttl: Optional cache TTL override
+
+        Returns:
+            Number of matching records
+        """
+        return self._run_sync(self._express.count(model, filter, cache_ttl))
+
+    def upsert(
+        self,
+        model: str,
+        data: Dict[str, Any],
+        conflict_on: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Upsert (insert or update) a record (sync).
+
+        Args:
+            model: Model name (e.g., "User")
+            data: Record data including 'id' field
+            conflict_on: Fields for conflict detection (default: ["id"])
+
+        Returns:
+            The upserted record
+        """
+        return self._run_sync(self._express.upsert(model, data, conflict_on))
+
+    def upsert_advanced(
+        self,
+        model: str,
+        where: Dict[str, Any],
+        create: Dict[str, Any],
+        update: Optional[Dict[str, Any]] = None,
+        conflict_on: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Advanced upsert with separate where/create/update parameters (sync).
+
+        Args:
+            model: Model name (e.g., "User")
+            where: Fields to identify the record
+            create: Fields to create if record doesn't exist
+            update: Fields to update if record exists (default: same as create)
+            conflict_on: Fields for conflict detection (default: where keys)
+
+        Returns:
+            Dict with 'created' (bool), 'action' (str), 'record' (dict)
+        """
+        return self._run_sync(
+            self._express.upsert_advanced(model, where, create, update, conflict_on)
+        )
+
+    # ========================================================================
+    # Bulk Operations
+    # ========================================================================
+
+    def bulk_create(
+        self, model: str, records: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Create multiple records in bulk (sync).
+
+        Args:
+            model: Model name (e.g., "User")
+            records: List of record data dicts
+
+        Returns:
+            List of created records
+        """
+        return self._run_sync(self._express.bulk_create(model, records))
+
+    def bulk_delete(self, model: str, ids: List[str]) -> bool:
+        """Delete multiple records by their IDs (sync).
+
+        Args:
+            model: Model name (e.g., "User")
+            ids: List of record IDs to delete
+
+        Returns:
+            True if all deletions succeeded
+        """
+        return self._run_sync(self._express.bulk_delete(model, ids))

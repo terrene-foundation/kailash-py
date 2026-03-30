@@ -10,6 +10,7 @@ Uses DataFlow's WorkflowBuilder pattern for actual query execution.
 
 import asyncio
 import logging
+import warnings
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from kailash.runtime import AsyncLocalRuntime
@@ -31,7 +32,9 @@ class ConnectionManagerAdapter:
     - Error handling and logging
     """
 
-    def __init__(self, dataflow_instance, parameter_style: Optional[str] = None, runtime=None):
+    def __init__(
+        self, dataflow_instance, parameter_style: Optional[str] = None, runtime=None
+    ):
         """
         Initialize connection manager adapter.
 
@@ -261,12 +264,10 @@ class ConnectionManagerAdapter:
             self._runtime.release()
             self._runtime = None
 
-    def __del__(self):
+    def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly."""
         if getattr(self, "_runtime", None) is not None:
-            import warnings
-
-            warnings.warn(
+            _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
                 source=self,

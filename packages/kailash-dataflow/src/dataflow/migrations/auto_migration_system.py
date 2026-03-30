@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import time
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -78,9 +79,7 @@ def _execute_workflow_safe(workflow: WorkflowBuilder) -> Tuple[Dict[str, Any], s
         query = params.get("query", "")
 
         if not connection_string or not query:
-            logger.warning(
-                f"Node {node_id} missing connection_string or query, skipping"
-            )
+            logger.debug(f"Node {node_id} missing connection_string or query, skipping")
             results[node_id] = {"result": [], "error": "Missing parameters"}
             continue
 
@@ -430,7 +429,7 @@ class PostgreSQLSchemaInspector:
                     index_info = {"name": row[0], "columns": row[1], "unique": row[2]}
                     table_def.indexes.append(index_info)
         except Exception as e:
-            logger.warning(f"Failed to get indexes for table {table_name}: {e}")
+            logger.debug(f"Failed to get indexes for table {table_name}: {e}")
             # Don't fail the whole schema discovery for index issues
 
     # PostgreSQL-optimized implementation
@@ -572,12 +571,10 @@ class PostgreSQLSchemaInspector:
             self.runtime.release()
             self.runtime = None
 
-    def __del__(self):
+    def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly."""
         if getattr(self, "runtime", None) is not None:
-            import warnings
-
-            warnings.warn(
+            _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
                 source=self,
@@ -1202,7 +1199,7 @@ class SQLiteSchemaInspector:
                     table_def.indexes.append(index_info)
 
         except Exception as e:
-            logger.warning(f"Failed to get indexes for table {table_name}: {e}")
+            logger.debug(f"Failed to get indexes for table {table_name}: {e}")
 
     def compare_schemas(
         self,
@@ -1238,12 +1235,10 @@ class SQLiteSchemaInspector:
             self.runtime.release()
             self.runtime = None
 
-    def __del__(self):
+    def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly."""
         if getattr(self, "runtime", None) is not None:
-            import warnings
-
-            warnings.warn(
+            _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
                 source=self,
@@ -1564,7 +1559,7 @@ class AutoMigrationSystem:
 
         # Support SQLite and PostgreSQL - no restrictions
         if self.dialect not in ["postgresql", "sqlite"]:
-            logger.warning(
+            logger.debug(
                 f"DataFlow currently supports PostgreSQL and SQLite. Detected dialect '{self.dialect}' may need additional support."
             )
             # Don't default to PostgreSQL - use detected type
@@ -1711,7 +1706,7 @@ class AutoMigrationSystem:
 
             # Handle case where schema comparison fails
             if not diff:
-                logger.warning("Schema comparison returned None - no changes detected")
+                logger.debug("Schema comparison returned None - no changes detected")
                 return True, []
 
             # Generate migration to get checksum (even if no changes)
@@ -2036,11 +2031,11 @@ class AutoMigrationSystem:
             # Defensive error checking - handle both dict and other result formats
             validate_result = results.get("validate_table")
             if not validate_result:
-                logger.warning("Failed to validate migration table: No result returned")
+                logger.debug("Failed to validate migration table: No result returned")
                 columns = {}
             elif isinstance(validate_result, dict) and validate_result.get("error"):
                 error_msg = validate_result.get("error", "Unknown error")
-                logger.warning(f"Failed to validate migration table: {error_msg}")
+                logger.debug(f"Failed to validate migration table: {error_msg}")
                 columns = {}
             else:
                 rows = results["validate_table"].get("result", [])
@@ -2114,11 +2109,11 @@ class AutoMigrationSystem:
             # Defensive error checking - handle both dict and other result formats
             history_result = results.get("load_history")
             if not history_result:
-                logger.warning("Failed to load migration history: No result returned")
+                logger.debug("Failed to load migration history: No result returned")
                 rows = []
             elif isinstance(history_result, dict) and history_result.get("error"):
                 error_msg = history_result.get("error", "Unknown error")
-                logger.warning(f"Failed to load migration history: {error_msg}")
+                logger.debug(f"Failed to load migration history: {error_msg}")
                 rows = []
             else:
                 rows = results["load_history"].get("result", [])
@@ -2185,7 +2180,7 @@ class AutoMigrationSystem:
             # For safety, treat missing/corrupted history as empty
             # This prevents accidental re-application but logs the issue
             self.applied_migrations = []
-            logger.warning(
+            logger.debug(
                 "Migration history could not be loaded. "
                 "Treating as empty history to prevent data loss."
             )
@@ -2637,7 +2632,7 @@ class AutoMigrationSystem:
         )
 
         if not lock_acquired:
-            logger.warning("Another migration is in progress, waiting...")
+            logger.debug("Another migration is in progress, waiting...")
             # Wait for lock
             workflow = WorkflowBuilder()
             workflow.add_node(
@@ -2858,12 +2853,10 @@ class AutoMigrationSystem:
             self.runtime.release()
             self.runtime = None
 
-    def __del__(self):
+    def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly."""
         if getattr(self, "runtime", None) is not None:
-            import warnings
-
-            warnings.warn(
+            _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
                 source=self,

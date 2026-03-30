@@ -8,6 +8,7 @@ and migration system for all database operations.
 
 import asyncio
 import logging
+import warnings
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -57,7 +58,9 @@ class DataFlowTestUtils:
             except RuntimeError:
                 self.runtime = LocalRuntime()
                 self._is_async = False
-                logger.debug("DataFlowTestUtils: Detected sync context, using LocalRuntime")
+                logger.debug(
+                    "DataFlowTestUtils: Detected sync context, using LocalRuntime"
+                )
             self._owns_runtime = True
 
     def drop_all_tables(self) -> None:
@@ -278,12 +281,10 @@ class DataFlowTestUtils:
             self.runtime.release()
             self.runtime = None
 
-    def __del__(self):
+    def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly."""
         if getattr(self, "runtime", None) is not None:
-            import warnings
-
-            warnings.warn(
+            _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
                 source=self,

@@ -1656,39 +1656,47 @@ class SQLiteAdapter(DatabaseAdapter):
                 db = transaction
             cursor = await db.execute(query, params or [])
 
-            # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
-            query_type = query.strip().upper().split()[0] if query.strip() else ""
+            try:
+                # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
+                query_type = query.strip().upper().split()[0] if query.strip() else ""
 
-            if query_type in ("DELETE", "UPDATE", "INSERT"):
-                # Capture rowcount for DML operations
-                rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
-                # Use list format to match PostgreSQL/MySQL adapters
-                return [{"rows_affected": rowcount}]
+                if query_type in ("DELETE", "UPDATE", "INSERT"):
+                    # Capture rowcount for DML operations
+                    rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+                    # Use list format to match PostgreSQL/MySQL adapters
+                    return [{"rows_affected": rowcount}]
 
-            if fetch_mode == FetchMode.ONE:
-                row = await cursor.fetchone()
-                result = self._convert_row(dict(row)) if row else None
-            elif fetch_mode == FetchMode.ALL:
-                rows = await cursor.fetchall()
-                result = [self._convert_row(dict(row)) for row in rows]
-            elif fetch_mode == FetchMode.MANY:
-                if not fetch_size:
-                    raise ValueError("fetch_size required for MANY mode")
-                rows = await cursor.fetchmany(fetch_size)
-                result = [self._convert_row(dict(row)) for row in rows]
-            else:
-                result = []
+                if fetch_mode == FetchMode.ONE:
+                    row = await cursor.fetchone()
+                    result = self._convert_row(dict(row)) if row else None
+                elif fetch_mode == FetchMode.ALL:
+                    rows = await cursor.fetchall()
+                    result = [self._convert_row(dict(row)) for row in rows]
+                elif fetch_mode == FetchMode.MANY:
+                    if not fetch_size:
+                        raise ValueError("fetch_size required for MANY mode")
+                    rows = await cursor.fetchmany(fetch_size)
+                    result = [self._convert_row(dict(row)) for row in rows]
+                else:
+                    result = []
 
-            # Check if this was an INSERT and capture lastrowid for SQLite
-            if query_type == "INSERT" and (
-                not result or result == [] or result is None
-            ):
-                # For INSERT without RETURNING, capture lastrowid
-                lastrowid = cursor.lastrowid if hasattr(cursor, "lastrowid") else None
-                if lastrowid is not None:
-                    return {"lastrowid": lastrowid}
+                # Check if this was an INSERT and capture lastrowid for SQLite
+                if query_type == "INSERT" and (
+                    not result or result == [] or result is None
+                ):
+                    # For INSERT without RETURNING, capture lastrowid
+                    lastrowid = (
+                        cursor.lastrowid if hasattr(cursor, "lastrowid") else None
+                    )
+                    if lastrowid is not None:
+                        return {"lastrowid": lastrowid}
 
-            return result
+                return result
+            finally:
+                # Close cursor to release the underlying SQLite statement.
+                # Without this, subsequent commits fail with
+                # "cannot commit transaction - SQL statements in progress".
+                await cursor.close()
         else:
             # Use pool for connection management (handles both memory and file DBs)
             if self._pool is not None:

@@ -11,6 +11,7 @@ import json
 import logging
 import threading
 import uuid
+import warnings
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -66,9 +67,7 @@ class ModelRegistry:
             except RuntimeError:
                 self.runtime = LocalRuntime()
                 self._is_async = False
-                logger.debug(
-                    "ModelRegistry: Detected sync context, using LocalRuntime"
-                )
+                logger.debug("ModelRegistry: Detected sync context, using LocalRuntime")
             self._owns_runtime = True
 
         self.migration_system = migration_system
@@ -1485,12 +1484,10 @@ class ModelRegistry:
             self.runtime.release()
             self.runtime = None
 
-    def __del__(self):
+    def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly."""
         if getattr(self, "runtime", None) is not None:
-            import warnings
-
-            warnings.warn(
+            _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
                 source=self,
