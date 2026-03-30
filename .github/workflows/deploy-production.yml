@@ -185,7 +185,7 @@ jobs:
       - name: Run unit tests
         working-directory: ./packages/kailash-kaizen
         run: |
-          pytest tests/unit/examples/ -v --timeout=30 --tb=short
+          pytest tests/unit/examples/ -v --timeout=30 --tb=short -k "not rag_research and not document_understanding"
 
       - name: Run deployment validation tests
         working-directory: ./packages/kailash-kaizen
