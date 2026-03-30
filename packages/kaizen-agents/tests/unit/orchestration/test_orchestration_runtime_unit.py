@@ -102,9 +102,7 @@ def runtime(runtime_config):
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(
-    not A2A_AVAILABLE, reason="A2A module required for capability registration"
-)
+@pytest.mark.skipif(not A2A_AVAILABLE, reason="A2A module required for capability registration")
 async def test_agent_registration_basic(runtime, mock_agent):
     """Test basic agent registration."""
     # Register agent
@@ -174,9 +172,7 @@ async def test_agent_health_check_failure(runtime, mock_agent):
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(
-    not A2A_AVAILABLE, reason="A2A module required for semantic routing"
-)
+@pytest.mark.skipif(not A2A_AVAILABLE, reason="A2A module required for semantic routing")
 async def test_semantic_routing_capability_match(runtime):
     """Test semantic routing selects agent with matching capability."""
     # Create agents with different capabilities
@@ -327,9 +323,7 @@ async def test_concurrent_agent_limit_enforcement(runtime):
 
     with patch.object(runtime, "_execute_agent_task", side_effect=slow_task):
         # Submit 3 tasks (more than max_concurrent_agents)
-        tasks = [
-            runtime.execute_task(f"agent_{i}", {"task": f"task_{i}"}) for i in range(3)
-        ]
+        tasks = [runtime.execute_task(f"agent_{i}", {"task": f"task_{i}"}) for i in range(3)]
 
         # Wait for all to complete
         results = await asyncio.gather(*tasks)
@@ -596,9 +590,7 @@ async def test_workflow_tracking_records_execution(runtime, mock_agent):
     await runtime.register_agent(mock_agent)
 
     # Execute task
-    result = await runtime.execute_task(
-        mock_agent.agent_id, {"task": "test workflow tracking"}
-    )
+    result = await runtime.execute_task(mock_agent.agent_id, {"task": "test workflow tracking"})
 
     # Verify execution tracked
     assert len(runtime._execution_history) > 0
@@ -646,6 +638,30 @@ async def test_workflow_history_provides_task_details(runtime, mock_agent):
 
 
 # ============================================================================
+# Bounded Execution History Tests (TODO-2)
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_execution_history_is_bounded_deque():
+    """Test that _execution_history uses a bounded deque(maxlen=10000)."""
+    from collections import deque
+
+    runtime = OrchestrationRuntime(
+        config=OrchestrationRuntimeConfig(
+            max_concurrent_agents=5,
+            enable_progress_tracking=True,
+        )
+    )
+    await runtime.start()
+
+    assert isinstance(runtime._execution_history, deque)
+    assert runtime._execution_history.maxlen == 10000
+
+    await runtime.shutdown()
+
+
+# ============================================================================
 # Graceful Shutdown Tests (2 tests)
 # ============================================================================
 
@@ -663,9 +679,7 @@ async def test_graceful_shutdown_waits_for_tasks(runtime, mock_agent):
     mock_agent.run = AsyncMock(side_effect=long_task)
 
     # Start task
-    task = asyncio.create_task(
-        runtime.execute_task(mock_agent.agent_id, {"task": "long"})
-    )
+    task = asyncio.create_task(runtime.execute_task(mock_agent.agent_id, {"task": "long"}))
     runtime._active_tasks["long_task"] = task
 
     # Initiate graceful shutdown
@@ -698,9 +712,7 @@ async def test_immediate_shutdown_cancels_tasks(runtime, mock_agent):
     mock_agent.run = AsyncMock(side_effect=long_task)
 
     # Start task
-    task = asyncio.create_task(
-        runtime.execute_task(mock_agent.agent_id, {"task": "long"})
-    )
+    task = asyncio.create_task(runtime.execute_task(mock_agent.agent_id, {"task": "long"}))
     runtime._active_tasks["long_task"] = task
 
     # Wait a bit to ensure task is running

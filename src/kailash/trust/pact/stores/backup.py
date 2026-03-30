@@ -268,7 +268,10 @@ def restore_governance_store(engine: Any, path: str) -> None:
         )
         engine.create_ksp(ksp)
 
-    # Restore bridges via public API for audit trail
+    # Restore bridges directly to store -- bypass LCA approval check.
+    # Restored bridges were already approved when originally created;
+    # requiring re-approval during restore would be circular and block
+    # legitimate backup recovery. This is a privileged admin operation.
     for bridge_data in data.get("bridges", []):
         expires_at = None
         if bridge_data.get("expires_at") is not None:
@@ -285,7 +288,7 @@ def restore_governance_store(engine: Any, path: str) -> None:
             expires_at=expires_at,
             active=bridge_data.get("active", True),
         )
-        engine.create_bridge(bridge)
+        engine._access_policy_store.save_bridge(bridge)
 
     logger.info(
         "Restored governance state from '%s': "

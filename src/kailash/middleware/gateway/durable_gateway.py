@@ -8,6 +8,7 @@ This module provides:
 """
 
 import asyncio
+import json
 import logging
 from datetime import UTC, datetime
 from typing import Any, Callable, Dict, List, Optional
@@ -166,13 +167,31 @@ class DurableAPIGateway(WorkflowAPIGateway):
 
     async def _extract_metadata(self, request: Request) -> RequestMetadata:
         """Extract metadata from HTTP request."""
-        # Get body if present
+        # Get body if present.
+        # Use request.body() (raw bytes, cached by Starlette) rather than
+        # request.json() which consumes the stream and fails silently for
+        # non-JSON content types. This ensures the body is always available
+        # for downstream handlers AND for dedup fingerprinting.
+        # See: https://github.com/terrene-foundation/kailash-py/issues/175
         body = None
         if request.method in ["POST", "PUT", "PATCH"]:
             try:
-                body = await request.json()
+                raw_body = await request.body()
+                if raw_body:
+                    # Try JSON parse first for structured fingerprinting
+                    try:
+                        body = json.loads(raw_body)
+                    except (json.JSONDecodeError, ValueError):
+                        # Non-JSON body: use raw string for fingerprinting
+                        body = raw_body.decode("utf-8", errors="replace")
             except Exception:
-                pass
+                logger.warning(
+                    "Failed to extract request body for dedup fingerprint "
+                    "on %s %s -- dedup will use path-only fingerprint for "
+                    "this request",
+                    request.method,
+                    request.url.path,
+                )
 
         # Extract user/tenant from headers or auth
         user_id = request.headers.get("X-User-ID")

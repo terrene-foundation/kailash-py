@@ -259,6 +259,12 @@ class TestBackupRestore:
             store_url=":memory:",
         )
         bridge = _make_bridge("bridge-backup", role_a="D1-R1", role_b="D1-R1-T1-R1")
+        # LCA of D1-R1 and D1-R1-T1-R1 is D1-R1
+        engine1.approve_bridge(
+            source_address="D1-R1",
+            target_address="D1-R1-T1-R1",
+            approver_address="D1-R1",
+        )
         engine1.create_bridge(bridge)
 
         backup_path = tmp_path / "backup.json"

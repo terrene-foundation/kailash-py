@@ -146,14 +146,14 @@ session = app.create_session()
 ### Kaizen
 
 ```python
-# Use signature-based patterns
+# Delegate (recommended for autonomous agents)
 import os
-from kaizen.api import Agent
+from kaizen_agents import Delegate
+delegate = Delegate(model=os.environ["OPENAI_PROD_MODEL"])
+# async for event in delegate.run("task"): ...
 
-agent = Agent(
-    model=os.environ["OPENAI_PROD_MODEL"],  # NEVER hardcode model names
-    execution_mode="autonomous"
-)
+# BaseAgent (for custom logic only)
+from kaizen.core import BaseAgent, Signature, InputField, OutputField
 
 # Register agents in AgentRegistry for scale
 from kaizen.core.registry import AgentRegistry

@@ -15,6 +15,7 @@ from kailash.trust.pact.compilation import (
     CompiledOrg,
     OrgNode,
     RoleDefinition,
+    VacancyDesignation,
     VacancyStatus,
     compile_org,
 )
@@ -99,6 +100,7 @@ __all__ = [
     "CompiledOrg",
     "OrgNode",
     "RoleDefinition",
+    "VacancyDesignation",
     "VacancyStatus",
     "compile_org",
     # Clearance (Ref-2001)

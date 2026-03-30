@@ -176,6 +176,33 @@ class Address:
             result.append(Address(segments=self.segments[:i]))
         return result
 
+    @staticmethod
+    def lowest_common_ancestor(addr_a: Address, addr_b: Address) -> Address | None:
+        """Find the lowest common ancestor of two addresses in the D/T/R tree.
+
+        Walks both accountability chains (role positions only) and finds the
+        deepest shared ancestor. Returns None if the addresses share no common
+        role ancestor (e.g., entirely disjoint trees).
+
+        The accountability chain is used rather than raw segment prefixes because
+        governance authority flows through roles, not through structural D/T nodes.
+
+        Args:
+            addr_a: First address.
+            addr_b: Second address.
+
+        Returns:
+            The deepest Address that appears in both accountability chains,
+            or None if no common ancestor exists.
+        """
+        # Build a set of string representations for addr_a's accountability chain
+        ancestors_a = set(str(a) for a in addr_a.accountability_chain)
+        # Walk addr_b's accountability chain from deepest to shallowest
+        for ancestor in reversed(addr_b.accountability_chain):
+            if str(ancestor) in ancestors_a:
+                return ancestor
+        return None
+
     @classmethod
     def parse(cls, s: str) -> Address:
         """Parse an address string like 'D1-R1-D3-R1-T1-R1'.

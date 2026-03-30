@@ -70,6 +70,7 @@ Reference: Based on kaizen-specialist analysis and existing coordination pattern
 import asyncio
 import time
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
@@ -168,12 +169,8 @@ class OrchestrationRuntimeConfig:
 
     # Error handling and retry
     default_retry_policy: Optional[RetryPolicy] = None  # Default retry policy
-    retry_policy: Optional[RetryPolicy] = (
-        None  # Alias for default_retry_policy (test compat)
-    )
-    error_handling: ErrorHandlingMode = (
-        ErrorHandlingMode.GRACEFUL
-    )  # Error handling mode
+    retry_policy: Optional[RetryPolicy] = None  # Alias for default_retry_policy (test compat)
+    error_handling: ErrorHandlingMode = ErrorHandlingMode.GRACEFUL  # Error handling mode
     enable_circuit_breaker: bool = True  # Enable circuit breaker pattern
     circuit_breaker_threshold: float = 0.5  # Error rate threshold (0.0-1.0)
     circuit_breaker_failure_threshold: int = 5  # Number of failures to trip breaker
@@ -214,9 +211,7 @@ class AgentMetadata:
 
     # Status and tracking
     status: AgentStatus = AgentStatus.ACTIVE  # Current health status
-    last_heartbeat: datetime = field(
-        default_factory=datetime.now
-    )  # Last heartbeat timestamp
+    last_heartbeat: datetime = field(default_factory=datetime.now)  # Last heartbeat timestamp
     active_tasks: int = 0  # Current active task count
     completed_tasks: int = 0  # Total completed tasks
     failed_tasks: int = 0  # Total failed tasks
@@ -328,8 +323,8 @@ class OrchestrationRuntime:
         # Budget tracking for cost enforcement
         self._total_budget_spent: float = 0.0
 
-        # Execution history for audit trail
-        self._execution_history: List[Dict[str, Any]] = []
+        # Execution history for audit trail (bounded to prevent OOM in long-running processes)
+        self._execution_history: deque = deque(maxlen=10000)
 
         # Total tasks executed counter
         self._total_tasks_executed: int = 0
@@ -338,15 +333,9 @@ class OrchestrationRuntime:
         self._async_runtime: Optional[AsyncLocalRuntime] = None
 
         # Retry policy - use retry_policy if set, otherwise default_retry_policy
-        if (
-            self.config.retry_policy is None
-            and self.config.default_retry_policy is None
-        ):
+        if self.config.retry_policy is None and self.config.default_retry_policy is None:
             self.config.default_retry_policy = RetryPolicy()
-        elif (
-            self.config.retry_policy is not None
-            and self.config.default_retry_policy is None
-        ):
+        elif self.config.retry_policy is not None and self.config.default_retry_policy is None:
             self.config.default_retry_policy = self.config.retry_policy
 
     # ========================================================================
@@ -418,9 +407,7 @@ class OrchestrationRuntime:
 
         # Start health monitoring if not already running
         if self.config.enable_health_monitoring and not self._health_monitor_task:
-            self._health_monitor_task = asyncio.create_task(
-                self._monitor_agent_health()
-            )
+            self._health_monitor_task = asyncio.create_task(self._monitor_agent_health())
 
         return agent_id
 
@@ -494,9 +481,7 @@ class OrchestrationRuntime:
 
             for agent_id, metadata in list(self.agents.items()):
                 # Check heartbeat staleness
-                time_since_heartbeat = (
-                    datetime.now() - metadata.last_heartbeat
-                ).total_seconds()
+                time_since_heartbeat = (datetime.now() - metadata.last_heartbeat).total_seconds()
                 if time_since_heartbeat > self.config.heartbeat_timeout:
                     metadata.status = AgentStatus.UNHEALTHY
 
@@ -566,9 +551,7 @@ class OrchestrationRuntime:
         else:  # ROUND_ROBIN
             return await self._route_round_robin(healthy_agents)
 
-    async def _route_semantic(
-        self, task: str, agents: List[tuple]
-    ) -> Optional[BaseAgent]:
+    async def _route_semantic(self, task: str, agents: List[tuple]) -> Optional[BaseAgent]:
         """Route using A2A capability matching (best-fit selection)."""
         best_agent = None
         best_score = 0.0
@@ -793,9 +776,7 @@ class OrchestrationRuntime:
         workflow_id = f"workflow_{uuid.uuid4().hex[:8]}"
 
         # Create workflow status
-        workflow_status = WorkflowStatus(
-            workflow_id=workflow_id, total_tasks=len(tasks)
-        )
+        workflow_status = WorkflowStatus(workflow_id=workflow_id, total_tasks=len(tasks))
         self.workflows[workflow_id] = workflow_status
 
         # Route tasks to agents
@@ -803,9 +784,7 @@ class OrchestrationRuntime:
         for task in tasks:
             agent = await self.route_task(
                 task,
-                strategy=(
-                    RoutingStrategy(routing_strategy) if routing_strategy else None
-                ),
+                strategy=(RoutingStrategy(routing_strategy) if routing_strategy else None),
             )
 
             if agent is None:
@@ -820,9 +799,7 @@ class OrchestrationRuntime:
         # Build workflow from agents (enables level-based parallelism)
         if selected_agents:
             # Filter tasks to only those with assigned agents
-            assigned_tasks = [
-                task for i, task in enumerate(tasks) if i < len(selected_agents)
-            ]
+            assigned_tasks = [task for i, task in enumerate(tasks) if i < len(selected_agents)]
 
             workflow = self._build_workflow_from_agents(
                 selected_agents,
@@ -932,10 +909,7 @@ class OrchestrationRuntime:
 
                     # Check budget
                     if self.config.enable_budget_enforcement:
-                        if (
-                            agent_metadata.budget_spent_usd
-                            >= agent_metadata.budget_limit_usd
-                        ):
+                        if agent_metadata.budget_spent_usd >= agent_metadata.budget_limit_usd:
                             return {
                                 "task": task,
                                 "status": "failed",
@@ -965,8 +939,7 @@ class OrchestrationRuntime:
                     agent_metadata.last_heartbeat = datetime.now()
                     agent_metadata.total_execution_time += execution_time
                     agent_metadata.avg_execution_time = (
-                        agent_metadata.total_execution_time
-                        / agent_metadata.completed_tasks
+                        agent_metadata.total_execution_time / agent_metadata.completed_tasks
                     )
 
                     # Track budget if available
@@ -978,9 +951,7 @@ class OrchestrationRuntime:
                     "status": "completed",
                     "result": result,
                     "execution_time": execution_time,
-                    "agent_id": (
-                        agent_metadata.agent_id if agent_metadata else "unknown"
-                    ),
+                    "agent_id": (agent_metadata.agent_id if agent_metadata else "unknown"),
                     "attempts": attempt + 1,
                 }
 
@@ -993,8 +964,7 @@ class OrchestrationRuntime:
                 if attempt < retry_policy.max_retries - 1:
                     # Calculate backoff delay using backoff_factor (exponential backoff)
                     delay = min(
-                        retry_policy.initial_delay
-                        * (retry_policy.backoff_factor**attempt),
+                        retry_policy.initial_delay * (retry_policy.backoff_factor**attempt),
                         retry_policy.max_delay,
                     )
 
@@ -1008,9 +978,7 @@ class OrchestrationRuntime:
                         "task": task,
                         "status": "failed",
                         "error": str(e),
-                        "agent_id": (
-                            agent_metadata.agent_id if agent_metadata else "unknown"
-                        ),
+                        "agent_id": (agent_metadata.agent_id if agent_metadata else "unknown"),
                         "attempts": retry_policy.max_retries,
                     }
 
@@ -1052,9 +1020,7 @@ class OrchestrationRuntime:
         if status.completed_tasks > 0:
             elapsed = (datetime.now() - status.start_time).total_seconds()
             avg_time_per_task = elapsed / status.completed_tasks
-            remaining_tasks = (
-                status.total_tasks - status.completed_tasks - status.failed_tasks
-            )
+            remaining_tasks = status.total_tasks - status.completed_tasks - status.failed_tasks
             eta_seconds = avg_time_per_task * remaining_tasks
             estimated_completion = datetime.now() + timedelta(seconds=eta_seconds)
         else:
@@ -1080,15 +1046,9 @@ class OrchestrationRuntime:
             Metrics dictionary with runtime statistics
         """
         total_agents = len(self.agents)
-        active_agents = sum(
-            1 for m in self.agents.values() if m.status == AgentStatus.ACTIVE
-        )
-        degraded_agents = sum(
-            1 for m in self.agents.values() if m.status == AgentStatus.DEGRADED
-        )
-        unhealthy_agents = sum(
-            1 for m in self.agents.values() if m.status == AgentStatus.UNHEALTHY
-        )
+        active_agents = sum(1 for m in self.agents.values() if m.status == AgentStatus.ACTIVE)
+        degraded_agents = sum(1 for m in self.agents.values() if m.status == AgentStatus.DEGRADED)
+        unhealthy_agents = sum(1 for m in self.agents.values() if m.status == AgentStatus.UNHEALTHY)
 
         total_completed = sum(m.completed_tasks for m in self.agents.values())
         total_failed = sum(m.failed_tasks for m in self.agents.values())
@@ -1096,9 +1056,7 @@ class OrchestrationRuntime:
 
         # Calculate average execution time
         total_execution_time = sum(m.total_execution_time for m in self.agents.values())
-        avg_execution_time = (
-            total_execution_time / total_completed if total_completed > 0 else 0.0
-        )
+        avg_execution_time = total_execution_time / total_completed if total_completed > 0 else 0.0
 
         return {
             "total_agents": total_agents,
@@ -1134,9 +1092,7 @@ class OrchestrationRuntime:
 
         # Start health monitoring
         if self.config.enable_health_monitoring:
-            self._health_monitor_task = asyncio.create_task(
-                self._monitor_agent_health()
-            )
+            self._health_monitor_task = asyncio.create_task(self._monitor_agent_health())
 
     async def shutdown(self, graceful: bool = True, timeout: float = 30.0):
         """
@@ -1187,9 +1143,7 @@ class OrchestrationRuntime:
     # Additional Helper Methods (for testing compatibility)
     # ========================================================================
 
-    async def execute_task(
-        self, agent_id: str, inputs: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def execute_task(self, agent_id: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute a single task on a specific agent.
 
@@ -1325,8 +1279,7 @@ class OrchestrationRuntime:
 
                     # Calculate backoff delay for retry
                     delay = min(
-                        retry_policy.initial_delay
-                        * (retry_policy.backoff_factor**attempt),
+                        retry_policy.initial_delay * (retry_policy.backoff_factor**attempt),
                         retry_policy.max_delay,
                     )
                     await asyncio.sleep(delay)
@@ -1366,9 +1319,7 @@ class OrchestrationRuntime:
             agent_metadata.error_count += 1  # Use error_count consistently
             return False
 
-    async def _route_task(
-        self, task: str, available_agents: List[str]
-    ) -> Optional[str]:
+    async def _route_task(self, task: str, available_agents: List[str]) -> Optional[str]:
         """
         Internal routing helper for tests.
 
@@ -1386,8 +1337,7 @@ class OrchestrationRuntime:
         active_agents = [
             agent_id
             for agent_id in available_agents
-            if agent_id in self.agents
-            and self.agents[agent_id].status == AgentStatus.ACTIVE
+            if agent_id in self.agents and self.agents[agent_id].status == AgentStatus.ACTIVE
         ]
 
         if not active_agents:
@@ -1424,9 +1374,7 @@ class OrchestrationRuntime:
                         capabilities = capabilities.get("capabilities", [])
                     for cap in capabilities:
                         if isinstance(cap, str):
-                            score = self._simple_text_similarity(
-                                task.lower(), cap.lower()
-                            )
+                            score = self._simple_text_similarity(task.lower(), cap.lower())
                             if score > best_score:
                                 best_score = score
                                 best_agent = agent_id
@@ -1437,9 +1385,7 @@ class OrchestrationRuntime:
             self._round_robin_index = (self._round_robin_index + 1) % len(active_agents)
             return selected
 
-    async def _execute_agent_task(
-        self, agent, inputs: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    async def _execute_agent_task(self, agent, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
         Internal execution helper for tests.
 
@@ -1475,9 +1421,7 @@ class OrchestrationRuntime:
 
         return base_cost + size_cost
 
-    def get_execution_history(
-        self, limit: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+    def get_execution_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Get execution history.
 
@@ -1487,7 +1431,7 @@ class OrchestrationRuntime:
         Returns:
             List of execution records
         """
-        history = self._execution_history
+        history = list(self._execution_history)
         if limit:
             history = history[-limit:]
         return history
@@ -1536,14 +1480,10 @@ class OrchestrationRuntime:
                     "agent": agent,
                     "task": task,
                     "provider": (
-                        agent.config.provider
-                        if hasattr(agent.config, "provider")
-                        else "openai"
+                        agent.config.provider if hasattr(agent.config, "provider") else "openai"
                     ),
                     "model": (
-                        agent.config.model
-                        if hasattr(agent.config, "model")
-                        else "gpt-4o-mini"
+                        agent.config.model if hasattr(agent.config, "model") else "gpt-4o-mini"
                     ),
                 },
             )

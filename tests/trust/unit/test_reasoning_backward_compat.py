@@ -139,7 +139,9 @@ def constraint_envelope():
 
 
 @pytest.fixture
-def trust_chain(genesis_record, capability_attestation, delegation_record, constraint_envelope):
+def trust_chain(
+    genesis_record, capability_attestation, delegation_record, constraint_envelope
+):
     """A complete TrustLineageChain for round-trip testing."""
     return TrustLineageChain(
         genesis=genesis_record,
@@ -162,6 +164,13 @@ FROZEN_DELEGATION_SIGNING_PAYLOAD = {
     "capabilities_delegated": ["read_data", "write_reports"],
     "constraint_subset": ["max_rows:1000", "region:us-east"],
     "delegated_at": "2026-03-01T12:00:00+00:00",
+    "dimension_scope": [
+        "communication",
+        "data_access",
+        "financial",
+        "operational",
+        "temporal",
+    ],
     "expires_at": "2027-03-01T12:00:00+00:00",
     "parent_delegation_id": "del-000",
     "reasoning_trace_hash": None,
@@ -214,6 +223,7 @@ class TestSigningPayloadStability:
             "capabilities_delegated",
             "constraint_subset",
             "delegated_at",
+            "dimension_scope",
             "expires_at",
             "parent_delegation_id",
             "reasoning_trace_hash",
@@ -237,7 +247,9 @@ class TestSigningPayloadStability:
         }
         assert set(payload.keys()) == expected_keys
 
-    def test_delegation_signing_payload_no_full_reasoning_fields(self, delegation_record):
+    def test_delegation_signing_payload_no_full_reasoning_fields(
+        self, delegation_record
+    ):
         """DelegationRecord signing payload must NOT contain full reasoning objects.
 
         Note: reasoning_trace_hash IS included (v2.2 spec) to bind the reasoning
@@ -250,9 +262,9 @@ class TestSigningPayloadStability:
             "reasoning_trace",
             "reasoning_signature",
         }
-        assert excluded_fields.isdisjoint(set(payload.keys())), (
-            f"Signing payload contains full reasoning fields: {excluded_fields & set(payload.keys())}"
-        )
+        assert excluded_fields.isdisjoint(
+            set(payload.keys())
+        ), f"Signing payload contains full reasoning fields: {excluded_fields & set(payload.keys())}"
         # reasoning_trace_hash MUST be present (as None when no trace)
         assert "reasoning_trace_hash" in payload
 
@@ -269,9 +281,9 @@ class TestSigningPayloadStability:
             "reasoning_trace",
             "reasoning_signature",
         }
-        assert excluded_fields.isdisjoint(set(payload.keys())), (
-            f"Signing payload contains full reasoning fields: {excluded_fields & set(payload.keys())}"
-        )
+        assert excluded_fields.isdisjoint(
+            set(payload.keys())
+        ), f"Signing payload contains full reasoning fields: {excluded_fields & set(payload.keys())}"
         # reasoning_trace_hash MUST be present (as None when no trace)
         assert "reasoning_trace_hash" in payload
 
@@ -500,11 +512,16 @@ class TestSerializationRoundTrip:
         assert deserialized.delegator_id == delegation_record.delegator_id
         assert deserialized.delegatee_id == delegation_record.delegatee_id
         assert deserialized.task_id == delegation_record.task_id
-        assert deserialized.capabilities_delegated == delegation_record.capabilities_delegated
+        assert (
+            deserialized.capabilities_delegated
+            == delegation_record.capabilities_delegated
+        )
         assert deserialized.constraint_subset == delegation_record.constraint_subset
         assert deserialized.delegated_at == delegation_record.delegated_at
         assert deserialized.expires_at == delegation_record.expires_at
-        assert deserialized.parent_delegation_id == delegation_record.parent_delegation_id
+        assert (
+            deserialized.parent_delegation_id == delegation_record.parent_delegation_id
+        )
 
     def test_audit_anchor_round_trip(self, audit_anchor):
         """AuditAnchor survives to_dict/from_dict round-trip."""
@@ -815,7 +832,9 @@ class TestSerializeForSigningRegression:
         dataclass serialization includes extra fields that would break cross-version
         signature verification.
         """
-        payload_serialized = serialize_for_signing(delegation_record.to_signing_payload())
+        payload_serialized = serialize_for_signing(
+            delegation_record.to_signing_payload()
+        )
         # The dataclass includes human_origin, delegation_chain, delegation_depth
         # which are NOT in the signing payload
         dataclass_serialized = serialize_for_signing(delegation_record)

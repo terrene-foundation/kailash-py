@@ -1,29 +1,28 @@
 """
-Unified Agent API
+Unified Agent API (DEPRECATED)
 
-This module provides the primary Agent class - the unified entry point
-for all Kaizen agent interactions. It supports progressive configuration
-from simple 2-line usage to full expert control.
+.. deprecated:: 0.5.0
+    Use :class:`kaizen_agents.Delegate` instead. The Agent class has known
+    issues with tool wiring and will be removed in a future version.
 
-Quick Start:
+Migration::
+
+    # Old (deprecated):
     from kaizen_agents.api import Agent
-
-    # Simple usage (2 lines)
     agent = Agent(model="gpt-4")
-    result = agent.run("What is IRP?")
+    result = await agent.run("question")
 
-    # With configuration
-    agent = Agent(
-        model="gpt-4",
-        execution_mode="autonomous",
-        memory="session",
-        tool_access="constrained",
-    )
-    result = agent.run("Implement a REST API endpoint")
+    # New (recommended):
+    from kaizen_agents import Delegate
+    delegate = Delegate(model="gpt-4")
+    async for event in delegate.run("question"):
+        if hasattr(event, 'text'):
+            print(event.text, end="")
 """
 
 import asyncio
 import uuid
+import warnings
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
@@ -139,6 +138,13 @@ class Agent:
         Raises:
             ConfigurationError: If configuration is invalid
         """
+        warnings.warn(
+            "Agent is deprecated since kaizen-agents 0.5.0. "
+            "Use Delegate instead: from kaizen_agents import Delegate",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         # Handle expert config
         if config is not None:
             self._init_from_config(config)
@@ -278,9 +284,7 @@ class Agent:
         self._runtime = None
 
         # LLM routing
-        self._llm_routing = (
-            config.llm_routing.task_model_mapping if config.llm_routing else None
-        )
+        self._llm_routing = config.llm_routing.task_model_mapping if config.llm_routing else None
         self._routing_strategy = config.routing_strategy
 
         # Capabilities
@@ -405,7 +409,7 @@ class Agent:
         except asyncio.TimeoutError:
             return AgentResult.timeout(session_id=self._session_id)
         except Exception as e:
-            return AgentResult.error(
+            return AgentResult.from_error(
                 error_message=str(e),
                 error_type=type(e).__name__,
                 session_id=self._session_id,
@@ -433,9 +437,17 @@ class Agent:
         Returns:
             AgentResult
         """
-        return asyncio.get_event_loop().run_until_complete(
-            self.run(task, context=context, **kwargs)
-        )
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop and loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(asyncio.run, self.run(task, context=context, **kwargs)).result()
+        else:
+            return asyncio.run(self.run(task, context=context, **kwargs))
 
     async def stream(
         self,
@@ -658,10 +670,9 @@ class Agent:
                 run_id=str(uuid.uuid4()),
             )
         except Exception as e:
-            # Fallback for simpler runtimes
-            return AgentResult.success(
-                text=f"Executed task: {context['task']}",
-                model_used=self._model,
+            return AgentResult.from_error(
+                error_message=str(e),
+                error_type=type(e).__name__,
                 session_id=self._session_id,
             )
 
@@ -743,7 +754,7 @@ class Agent:
                 cycles=result.cycles if hasattr(result, "cycles") else 0,
             )
         except Exception as e:
-            return AgentResult.error(
+            return AgentResult.from_error(
                 error_message=str(e),
                 error_type=type(e).__name__,
                 session_id=self._session_id,

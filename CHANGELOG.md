@@ -15,6 +15,33 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [2.3.0] - 2026-03-30
+
+**Multi-Package Release** — kailash 2.3.0, kailash-dataflow 1.3.0, kaizen-agents 0.6.0, kailash-kaizen 2.3.2
+
+#### Added
+
+- **PACT Vacancy Enforcement** (#169): `verify_action()` now checks vacancy status before envelope checks — vacant roles without acting occupant designation are auto-suspended. `designate_acting_occupant()` API with 24h expiry
+- **PACT LCA Bridge Approval** (#168): `create_bridge()` now requires lowest common ancestor (LCA) approval. `approve_bridge()` API with 24h expiry, `Address.lowest_common_ancestor()` utility
+- **PACT Dimension-Scoped Delegation** (#170): `DelegationRecord.dimension_scope` field allows delegations scoped to specific constraint dimensions (e.g., Financial + Temporal only). `intersect_envelopes()` respects dimension scope
+- **DataFlow Lazy Connection** (#171): `DataFlow.__init__()` no longer connects eagerly — pool creation, validation probe, and auto-migration deferred to first query via `_ensure_connected()`. Fixes import-time failures in unit tests
+
+#### Fixed
+
+- **DurableWorkflowServer Dedup** (#175): POST request bodies now correctly included in dedup fingerprints. Previously all POSTs to the same endpoint produced identical fingerprints, returning stale cached responses
+- **Agent API Bugs** (#172, #173, #174): `AgentResult.error()` → `from_error()` (crash fix), silent success fabrication removed, Agent class deprecated in favor of Delegate
+- **Agent `run_sync()` Deprecation** (BUG-4): Replaced deprecated `asyncio.get_event_loop()` with modern `asyncio.run()` pattern
+- **OrchestrationRuntime Memory Leak** (BUG-5): `_execution_history` bounded with `deque(maxlen=10000)`
+- **Pipeline ABC** (BUG-6): `Pipeline` now uses `abc.ABC` + `@abstractmethod` instead of `raise NotImplementedError`
+- **60+ Pre-Existing Test Failures**: Missing proxy modules (`kaizen.agents`, `kaizen.journey`, `kaizen.orchestration`), MemoryAgent error handling, tool event callback refactor, registry imports
+
+#### Changed
+
+- **Agent API Deprecated**: `kaizen_agents.api.Agent` emits `DeprecationWarning` — use `kaizen_agents.Delegate` instead
+- **COC Three-Layer Model**: New `rules/framework-first.md` establishing engine-first principle across all frameworks
+
+---
+
 ### [2.2.1] - 2026-03-29
 
 **Patch Release** — kailash 2.2.1 (security hardening post-release fix)

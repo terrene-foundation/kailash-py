@@ -22,9 +22,8 @@ import asyncio
 import json
 import logging
 import os
-import time
 from dataclasses import dataclass, field
-from typing import Any, AsyncGenerator, AsyncIterator, Callable, Awaitable, TYPE_CHECKING
+from typing import Any, AsyncGenerator, Callable, Awaitable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI
@@ -333,6 +332,12 @@ class AgentLoop:
         self._interrupted = False
         self._budget_check = budget_check
 
+        # Optional callback for tool-call lifecycle events.
+        # When set, ToolCallStart/ToolCallEnd events are pushed to this
+        # callback as they occur instead of only being stored on
+        # ``_last_tool_events``.  Used by Delegate to yield events inline.
+        self._event_callback: Callable[[DelegateEvent], None] | None = None
+
         # Tool hydration: set up when tool count exceeds threshold
         self._hydrator = hydrator
         self._setup_hydration()
@@ -442,12 +447,14 @@ class AgentLoop:
         """Signal the loop to stop after the current operation."""
         self._interrupted = True
 
-    async def run_turn(self, user_message: str) -> AsyncGenerator[str | DelegateEvent, None]:
+    async def run_turn(self, user_message: str) -> AsyncGenerator[str, None]:
         """Run one turn of the agent loop.
 
         A "turn" starts with a user message and continues until the model
         produces a text-only response (no tool calls) or max turns is reached.
-        Yields text chunks and tool call events incrementally.
+        Yields text chunks incrementally.  Tool-call lifecycle events are
+        stored on :attr:`last_tool_events` so higher-level wrappers (e.g.
+        :class:`Delegate`) can forward them without polluting the text stream.
 
         Parameters
         ----------
@@ -458,12 +465,9 @@ class AgentLoop:
         ------
         ``str``
             Text delta strings from the model's response.
-        :class:`ToolCallStart`
-            Emitted before each tool begins execution.
-        :class:`ToolCallEnd`
-            Emitted after each tool completes (with result or error).
         """
         self._interrupted = False
+        self._last_tool_events: list[DelegateEvent] = []
         self._conversation.add_user(user_message)
 
         inner_turns = 0
@@ -521,11 +525,22 @@ class AgentLoop:
             )
 
             tool_events = await self._execute_tool_calls(stream_result.tool_calls)
-            for event in tool_events:
-                yield event
+            self._last_tool_events.extend(tool_events)
+            if self._event_callback is not None:
+                for event in tool_events:
+                    self._event_callback(event)
 
         # Max turns reached -- we ran out of turns without a text-only response
         logger.warning("Max turns (%d) reached in run_turn", self._config.max_turns)
+
+    @property
+    def last_tool_events(self) -> list[DelegateEvent]:
+        """Tool-call lifecycle events from the most recent :meth:`run_turn`.
+
+        Returns a list of :class:`ToolCallStart` and :class:`ToolCallEnd`
+        events.  The list is cleared at the start of each ``run_turn`` call.
+        """
+        return getattr(self, "_last_tool_events", [])
 
     async def _stream_completion(self) -> AsyncGenerator[tuple[str, StreamResult], None]:
         """Make a streaming completion request and yield events incrementally.
@@ -677,9 +692,6 @@ class AgentLoop:
                 logger.warning(error_msg)
                 return tc_id, name, json.dumps({"error": error_msg})
             except Exception as exc:
-                # Log the full exception for debugging but return a
-                # sanitized message — str(exc) can leak file paths,
-                # connection strings, or other internal details.
                 logger.error("Tool %s failed: %s", name, exc, exc_info=True)
                 safe_msg = f"Tool '{name}' failed with {type(exc).__name__}"
                 return tc_id, name, json.dumps({"error": safe_msg})

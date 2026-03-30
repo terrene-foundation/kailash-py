@@ -312,7 +312,10 @@ def _intersect_communication(
 
 
 def intersect_envelopes(
-    a: ConstraintEnvelopeConfig, b: ConstraintEnvelopeConfig
+    a: ConstraintEnvelopeConfig,
+    b: ConstraintEnvelopeConfig,
+    *,
+    dimension_scope: frozenset[str] | None = None,
 ) -> ConstraintEnvelopeConfig:
     """Intersect two constraint envelopes -- result is the most restrictive of both.
 
@@ -327,24 +330,58 @@ def intersect_envelopes(
     Absent dimensions (None) are treated as maximally permissive.
     When composed allowed and blocked sets overlap for Operational, blocked takes precedence.
 
+    When ``dimension_scope`` is provided, only the specified dimensions are
+    intersected from envelope ``b``; unscoped dimensions are taken from ``a``
+    unchanged. This supports EATP dimension-scoped delegations (#170) where a
+    delegation restricts only specific constraint dimensions while inheriting the
+    parent's constraints on unscoped dimensions.
+
     Args:
-        a: First constraint envelope.
-        b: Second constraint envelope.
+        a: First constraint envelope (parent/base).
+        b: Second constraint envelope (child/delegation).
+        dimension_scope: Optional set of dimension names to intersect. When
+            None, all dimensions are intersected (default behavior). Valid
+            values: ``{"financial", "operational", "temporal", "data_access",
+            "communication"}``.
 
     Returns:
         A new ConstraintEnvelopeConfig representing the intersection.
     """
+    # Determine which dimensions to intersect from b vs inherit from a.
+    scope_all = dimension_scope is None
+    scoped = dimension_scope or frozenset()
+
     return ConstraintEnvelopeConfig(
         id=f"ix-{uuid.uuid4().hex[:12]}",
         description=f"Intersection of [{a.id}] and [{b.id}]",
         confidentiality_clearance=_min_confidentiality(
             a.confidentiality_clearance, b.confidentiality_clearance
         ),
-        financial=_intersect_financial(a.financial, b.financial),
-        operational=_intersect_operational(a.operational, b.operational),
-        temporal=_intersect_temporal(a.temporal, b.temporal),
-        data_access=_intersect_data_access(a.data_access, b.data_access),
-        communication=_intersect_communication(a.communication, b.communication),
+        financial=(
+            _intersect_financial(a.financial, b.financial)
+            if scope_all or "financial" in scoped
+            else a.financial
+        ),
+        operational=(
+            _intersect_operational(a.operational, b.operational)
+            if scope_all or "operational" in scoped
+            else a.operational
+        ),
+        temporal=(
+            _intersect_temporal(a.temporal, b.temporal)
+            if scope_all or "temporal" in scoped
+            else a.temporal
+        ),
+        data_access=(
+            _intersect_data_access(a.data_access, b.data_access)
+            if scope_all or "data_access" in scoped
+            else a.data_access
+        ),
+        communication=(
+            _intersect_communication(a.communication, b.communication)
+            if scope_all or "communication" in scoped
+            else a.communication
+        ),
         max_delegation_depth=_min_optional_int(
             a.max_delegation_depth, b.max_delegation_depth
         ),

@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
@@ -31,6 +32,7 @@ __all__ = [
     "MAX_TOTAL_NODES",
     "OrgNode",
     "RoleDefinition",
+    "VacancyDesignation",
     "VacancyStatus",
     "compile_org",
 ]
@@ -109,6 +111,85 @@ class VacancyStatus:
     role_id: str
     is_vacant: bool
     is_external: bool = False
+
+
+# ---------------------------------------------------------------------------
+# VacancyDesignation
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class VacancyDesignation:
+    """Acting occupant designation for a vacant role (PACT Section 5.5).
+
+    When a role is vacant, the parent role must designate an acting occupant
+    within 24 hours. If no designation is made, all downstream agents of the
+    vacant role are auto-suspended.
+
+    The acting occupant inherits the vacant role's envelope (constraints) but
+    does NOT receive clearance upgrades from the vacant role.
+
+    Attributes:
+        vacant_role_address: The D/T/R address of the vacant role.
+        acting_role_address: The D/T/R address of the acting occupant.
+        designated_by: The D/T/R address of the parent role that made the designation.
+        designated_at: ISO 8601 timestamp of when the designation was made.
+        expires_at: ISO 8601 timestamp of when the designation expires (24h from designated_at).
+    """
+
+    vacant_role_address: str
+    acting_role_address: str
+    designated_by: str
+    designated_at: str
+    expires_at: str
+
+    def is_expired(self) -> bool:
+        """Check if this designation has expired.
+
+        Returns:
+            True if the current time is past expires_at.
+        """
+        return datetime.now(timezone.utc) > datetime.fromisoformat(self.expires_at)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a plain dict suitable for JSON encoding.
+
+        Returns:
+            A dict representation with all fields.
+        """
+        return {
+            "vacant_role_address": self.vacant_role_address,
+            "acting_role_address": self.acting_role_address,
+            "designated_by": self.designated_by,
+            "designated_at": self.designated_at,
+            "expires_at": self.expires_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> VacancyDesignation:
+        """Deserialize from a plain dict.
+
+        Args:
+            data: A dict with the VacancyDesignation fields.
+
+        Returns:
+            A VacancyDesignation instance.
+
+        Raises:
+            KeyError: If required fields are missing.
+            ValueError: If timestamps are malformed.
+        """
+        # Validate timestamps parse correctly
+        datetime.fromisoformat(data["designated_at"])
+        datetime.fromisoformat(data["expires_at"])
+
+        return cls(
+            vacant_role_address=data["vacant_role_address"],
+            acting_role_address=data["acting_role_address"],
+            designated_by=data["designated_by"],
+            designated_at=data["designated_at"],
+            expires_at=data["expires_at"],
+        )
 
 
 # ---------------------------------------------------------------------------

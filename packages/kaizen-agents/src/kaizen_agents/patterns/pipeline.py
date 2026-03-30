@@ -34,6 +34,7 @@ Usage:
     )
 """
 
+from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional
 
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
@@ -41,9 +42,9 @@ from kaizen.memory.shared_memory import SharedMemoryPool
 from kaizen.signatures import InputField, OutputField, Signature
 
 
-class Pipeline:
+class Pipeline(ABC):
     """
-    Base class for composable pipelines.
+    Abstract base class for composable pipelines.
 
     Pipelines provide a way to define multi-step workflows that can be:
     1. Executed directly via .run()
@@ -78,6 +79,7 @@ class Pipeline:
         result = agent.run(data="raw data...")
     """
 
+    @abstractmethod
     def run(self, **inputs) -> Dict[str, Any]:
         """
         Execute the pipeline.
@@ -87,13 +89,8 @@ class Pipeline:
 
         Returns:
             Dict[str, Any]: Pipeline results
-
-        Raises:
-            NotImplementedError: If not overridden by subclass
         """
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement run() method"
-        )
+        ...
 
     def to_agent(
         self,
@@ -165,12 +162,8 @@ class Pipeline:
                 class PipelineSignature(Signature):
                     """Generic pipeline signature."""
 
-                    inputs: Dict[str, Any] = InputField(
-                        description="Pipeline inputs (dict)"
-                    )
-                    outputs: Dict[str, Any] = OutputField(
-                        description="Pipeline outputs (dict)"
-                    )
+                    inputs: Dict[str, Any] = InputField(description="Pipeline inputs (dict)")
+                    outputs: Dict[str, Any] = OutputField(description="Pipeline outputs (dict)")
 
                 return PipelineSignature()
 
@@ -738,9 +731,7 @@ class SequentialPipeline(Pipeline):
             result = agent.run(**current_inputs)
 
             # Store result
-            results.append(
-                {"agent": agent.__class__.__name__, "step": i + 1, "output": result}
-            )
+            results.append({"agent": agent.__class__.__name__, "step": i + 1, "output": result})
 
             # Use output as input for next agent
             current_inputs = result
