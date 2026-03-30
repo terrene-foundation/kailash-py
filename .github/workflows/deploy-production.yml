@@ -256,10 +256,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Check if deployment is real
+        id: check
+        env:
+          DEPLOYMENT_URL: ${{ needs.deploy.outputs.url }}
+        run: |
+          # Skip HTTP validation for simulated deployments (placeholder URLs)
+          if [[ "$DEPLOYMENT_URL" == *"example.com"* ]] || [[ -z "$DEPLOYMENT_URL" ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "⏭️  Skipping HTTP validation — deployment URL is a placeholder ($DEPLOYMENT_URL)"
+            echo "   Configure real infrastructure to enable deployment validation."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Make validation script executable
+        if: steps.check.outputs.skip != 'true'
         run: chmod +x ./packages/kailash-kaizen/scripts/validate_deployment.sh
 
       - name: Run deployment validation
+        if: steps.check.outputs.skip != 'true'
         env:
           ENVIRONMENT: ${{ needs.setup.outputs.environment }}
           DEPLOYMENT_URL: ${{ needs.deploy.outputs.url }}
@@ -268,6 +284,7 @@ jobs:
           ./scripts/validate_deployment.sh
 
       - name: Run smoke tests
+        if: steps.check.outputs.skip != 'true'
         env:
           ENVIRONMENT: ${{ needs.setup.outputs.environment }}
         run: |

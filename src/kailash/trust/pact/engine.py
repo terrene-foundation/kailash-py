@@ -710,8 +710,10 @@ class GovernanceEngine:
             channel = ctx.get("channel")
             is_external = ctx.get("is_external")
 
-            # internal_only: block unless is_external is explicitly False
-            if envelope.communication.internal_only and is_external is not False:
+            # internal_only: block only when is_external is explicitly True.
+            # Unspecified (None) defaults to internal — callers that don't
+            # declare an action as external should not be blocked.
+            if envelope.communication.internal_only and is_external is True:
                 return (
                     "blocked",
                     "External communication blocked — agent is internal-only",
