@@ -41,7 +41,7 @@ on:
       - ".github/workflows/deploy-production.yml"
 
 permissions:
-  contents: read
+  contents: write
   packages: write
   deployments: write
   id-token: write # For OIDC authentication
