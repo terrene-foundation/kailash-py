@@ -71,3 +71,12 @@ jobs:
           docker pull terrenefoundation/kailash:${{ steps.meta.outputs.version }}
           docker run --rm terrenefoundation/kailash:${{ steps.meta.outputs.version }} \
             python -c "import kailash; print(f'kailash {kailash.__version__}')"
+
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: terrenefoundation/kailash
+          readme-filepath: docker/README.md
+          short-description: "Kailash Python SDK — workflow orchestration, AI agents, database ops, trust governance"
