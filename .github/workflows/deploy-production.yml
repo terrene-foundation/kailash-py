@@ -178,8 +178,8 @@ jobs:
           pip install -e ".[server,database,trust,trust-sso,trust-encryption,dev]"
           pip install -e "./packages/kailash-dataflow[dev,semantic,performance]"
           pip install -e "./packages/kailash-nexus[dev]"
-          pip install -e "./packages/kaizen-agents[dev]"
           pip install -e "./packages/kailash-kaizen[dev,server,database,rag,observability,security]"
+          pip install -e "./packages/kaizen-agents[dev]"
           pip install pytest pytest-timeout pytest-cov python-dotenv
 
       - name: Run unit tests
