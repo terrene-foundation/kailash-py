@@ -4,12 +4,22 @@ Tests for examples/8-multi-modal/document-understanding example.
 Tests the complete multi-modal pipeline example using standardized fixtures.
 """
 
+import os
 from pathlib import Path
 
 import pytest
 
 # Import helper
 from example_import_helper import import_example_module
+
+_has_multimodal = bool(os.environ.get("OPENAI_API_KEY")) or bool(
+    os.environ.get("OLLAMA_HOST")
+)
+
+pytestmark = pytest.mark.skipif(
+    not _has_multimodal,
+    reason="No multi-modal adapter available (needs OPENAI_API_KEY or OLLAMA_HOST)",
+)
 
 
 @pytest.fixture

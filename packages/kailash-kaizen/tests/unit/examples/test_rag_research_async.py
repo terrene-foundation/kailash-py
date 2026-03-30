@@ -11,16 +11,33 @@ import time
 
 import pytest
 
+try:
+    import sentence_transformers  # noqa: F401
+
+    _has_sentence_transformers = True
+except ImportError:
+    _has_sentence_transformers = False
+
+pytestmark = pytest.mark.skipif(
+    not _has_sentence_transformers,
+    reason="sentence-transformers not installed",
+)
+
 # Standardized example loading
 from example_import_helper import import_example_module
 
-# Load rag-research example
-_rag_module = import_example_module("examples/1-single-agent/rag-research")
-RAGResearchAgent = _rag_module.RAGResearchAgent
-RAGConfig = _rag_module.RAGConfig
-RAGSignature = _rag_module.RAGSignature
+# Load rag-research example (guarded by skipif above)
+_rag_module = (
+    import_example_module("examples/1-single-agent/rag-research")
+    if _has_sentence_transformers
+    else None
+)
+RAGResearchAgent = _rag_module.RAGResearchAgent if _rag_module else None
+RAGConfig = _rag_module.RAGConfig if _rag_module else None
+RAGSignature = _rag_module.RAGSignature if _rag_module else None
 
-from kaizen.strategies.async_single_shot import AsyncSingleShotStrategy
+if _has_sentence_transformers:
+    from kaizen.strategies.async_single_shot import AsyncSingleShotStrategy
 
 
 class TestRAGResearchAsyncMigration:
@@ -38,9 +55,9 @@ class TestRAGResearchAsyncMigration:
         agent = RAGResearchAgent(config=config)
 
         # Should use async strategy after migration
-        assert isinstance(agent.strategy, AsyncSingleShotStrategy), (
-            f"Expected AsyncSingleShotStrategy, got {type(agent.strategy).__name__}"
-        )
+        assert isinstance(
+            agent.strategy, AsyncSingleShotStrategy
+        ), f"Expected AsyncSingleShotStrategy, got {type(agent.strategy).__name__}"
 
     def test_rag_no_explicit_strategy_override(self):
         """
@@ -153,9 +170,9 @@ class TestRAGResearchRetrievalConsistency:
         if "error" not in result:
             # RAG signature specifies answer, sources, confidence, relevant_excerpts
             # At least answer should be present
-            assert "answer" in result, (
-                f"Missing answer field. Got: {list(result.keys())}"
-            )
+            assert (
+                "answer" in result
+            ), f"Missing answer field. Got: {list(result.keys())}"
 
     def test_rag_vector_search_quality(self):
         """
