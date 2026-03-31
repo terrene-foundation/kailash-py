@@ -1575,6 +1575,7 @@ class AsyncLocalRuntime(LocalRuntime):
                 self.close()
             except Exception:
                 pass
+        super().__del__(_warnings=_warnings)
 
     async def __aenter__(self) -> "AsyncLocalRuntime":
         """Async context manager entry.
