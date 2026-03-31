@@ -26,43 +26,43 @@ Zero-config database framework built on Core SDK with automatic node generation 
 
 ## 30-Second Quick Start
 
+### Express API (default for most operations — 23x faster)
+
 ```python
 from dataflow import DataFlow
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime import LocalRuntime
 
-# 1. Zero-config initialization
 db = DataFlow()  # Auto-detects: SQLite (dev) or PostgreSQL (prod via DATABASE_URL)
 
-# 2. Define model - automatically generates 11 node types
 @db.model
 class User:
     name: str
     email: str
     active: bool = True
 
-# 3. Use generated nodes immediately
+# Express API — direct CRUD, no workflow overhead
+result = await db.express.create("User", {"name": "Alice", "email": "alice@example.com"})
+users = await db.express.list("User", {"active": True}, limit=10)
+user = await db.express.read("User", str(result["id"]))
+await db.express.update("User", str(result["id"]), {"name": "Bob"})
+count = await db.express.count("User")
+
+# Sync variant (CLI scripts, non-async contexts):
+result = db.express_sync.create("User", {"name": "Alice", "email": "alice@example.com"})
+```
+
+### Workflow API (for multi-step operations)
+
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime import LocalRuntime
+
+# Use workflows when you need multi-node pipelines, conditional branching, or transactions
 workflow = WorkflowBuilder()
+workflow.add_node("UserCreateNode", "create", {"name": "Alice", "email": "alice@example.com"})
+workflow.add_node("UserListNode", "list", {"filter": {"active": True}, "limit": 10})
 
-# UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode, UserListNode,
-# UserUpsertNode, UserCountNode,
-# UserBulkCreateNode, UserBulkUpdateNode, UserBulkDeleteNode, UserBulkUpsertNode
-# All created automatically!
-
-workflow.add_node("UserCreateNode", "create", {
-    "name": "Alice",
-    "email": "alice@example.com"
-})
-
-workflow.add_node("UserListNode", "list", {
-    "filter": {"active": True},
-    "limit": 10
-})
-
-# 4. Execute
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
-print(f"Created user ID: {results['create']['id']}")
 ```
 
 ## What is DataFlow?
@@ -389,12 +389,9 @@ Use `nexus-specialist` when:
 
 ### Primary Sources
 
-
 ### Related Documentation
 
-
 ### Examples
-
 
 ## Quick Tips
 

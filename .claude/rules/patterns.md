@@ -103,6 +103,29 @@ workflow.add_node(
 
 ## Framework-Specific Rules
 
+### DataFlow Express (Default for CRUD)
+
+Use `db.express.*` for all single-record CRUD. Only use WorkflowBuilder for multi-step operations.
+
+```python
+# DO: Express API for simple CRUD (23x faster)
+result = await db.express.create("User", {"name": "Alice"})
+user = await db.express.read("User", "u1")
+users = await db.express.list("User", {"active": True}, limit=10)
+await db.express.update("User", "u1", {"name": "Bob"})
+await db.express.delete("User", "u1")
+count = await db.express.count("User", {"active": True})
+
+# Sync variant for non-async contexts:
+result = db.express_sync.create("User", {"name": "Alice"})
+
+# DO NOT: Workflow for single-record CRUD
+workflow = WorkflowBuilder()
+workflow.add_node("UserCreateNode", "create", {"name": "Alice"})
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+```
+
 ### DataFlow
 
 ```python
