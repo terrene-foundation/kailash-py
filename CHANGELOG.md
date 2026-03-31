@@ -15,6 +15,18 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [2.3.4] - 2026-03-31
+
+**Patch Release** — kailash 2.3.4
+
+#### Fixed
+
+- **PACT default constraint envelope** (#195): Relaxed two overly restrictive defaults on `ConstraintEnvelopeConfig`:
+  - `financial`: Changed from `FinancialConstraintConfig(max_spend_usd=0.0)` to `None` — financial dimension is now skipped during evaluation when not explicitly configured, matching the M23/2301 design intent
+  - `CommunicationConstraintConfig.internal_only`: Changed from `True` to `False` — agents are no longer restricted to internal-only communication by default. Predefined postures already set explicit values per trust level.
+
+---
+
 ### [2.3.3] - 2026-03-31
 
 **Patch Release** — kailash 2.3.3
