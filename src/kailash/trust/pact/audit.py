@@ -59,6 +59,7 @@ class PactAuditAction(str, Enum):
     ADDRESS_COMPUTED = "address_computed"
     VACANCY_DESIGNATED = "vacancy_designated"
     VACANCY_SUSPENDED = "vacancy_suspended"
+    BRIDGE_CONSENT = "bridge_consent"
 
 
 def create_pact_audit_details(

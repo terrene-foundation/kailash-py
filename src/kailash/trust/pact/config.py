@@ -24,7 +24,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from kailash.trust import ConfidentialityLevel, TrustPosture
 
@@ -321,6 +321,64 @@ class VerificationGradientConfig(BaseModel):
     default_level: VerificationLevel = Field(
         default=VerificationLevel.HELD, description="Default level when no rule matches"
     )
+
+
+# ---------------------------------------------------------------------------
+# Per-Dimension Gradient Thresholds (Section 5.6)
+# ---------------------------------------------------------------------------
+
+
+class DimensionThresholds(BaseModel):
+    """Per-dimension numeric thresholds for gradient classification (Section 5.6).
+
+    auto_approve_threshold <= flag_threshold <= hold_threshold.
+    Values represent the upper bound for each classification level:
+    - Below auto_approve_threshold -> AUTO_APPROVED
+    - Between auto_approve and flag -> FLAGGED
+    - Between flag and hold -> HELD
+    - Above hold -> BLOCKED
+
+    All threshold values must be finite (NaN/Inf rejected per
+    trust-plane-security.md rule 3).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    auto_approve_threshold: float
+    flag_threshold: float
+    hold_threshold: float
+
+    @field_validator("auto_approve_threshold", "flag_threshold", "hold_threshold")
+    @classmethod
+    def must_be_finite(cls, v: float) -> float:
+        """Reject NaN and Inf -- they bypass numeric comparisons."""
+        if not math.isfinite(v):
+            raise ValueError(f"Threshold must be finite, got {v!r}")
+        return v
+
+    @model_validator(mode="after")
+    def ordered(self) -> "DimensionThresholds":
+        """Enforce auto_approve <= flag <= hold ordering."""
+        if not (
+            self.auto_approve_threshold <= self.flag_threshold <= self.hold_threshold
+        ):
+            raise ValueError(
+                f"Thresholds must be ordered: auto_approve ({self.auto_approve_threshold}) "
+                f"<= flag ({self.flag_threshold}) <= hold ({self.hold_threshold})"
+            )
+        return self
+
+
+class GradientThresholdsConfig(BaseModel):
+    """Per-dimension threshold configuration for a role envelope.
+
+    Carries optional per-dimension thresholds that override the gradient
+    engine's default behavior for specific dimensions.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    financial: DimensionThresholds | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1457,6 +1515,9 @@ __all__ = [
     # Verification gradient
     "GradientRuleConfig",
     "VerificationGradientConfig",
+    # Per-dimension gradient thresholds
+    "DimensionThresholds",
+    "GradientThresholdsConfig",
     # Agent / workspace / team / department
     "AgentConfig",
     "WorkspaceConfig",
