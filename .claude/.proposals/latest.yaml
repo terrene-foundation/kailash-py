@@ -1,90 +1,27 @@
 source_repo: kailash-py
-codify_date: 2026-03-30
-codify_session: "feat: engine-layer deficiency resolution — Agent deprecation, three-layer COC model, PACT governance features"
+codify_date: 2026-03-31
+codify_session: "fix(pact,dataflow,nexus): resolve 5 CI failures + 4 open issues (#184-#187)"
 
 changes:
-  # COC Rule (already at kailash/)
-  - file: .claude/rules/framework-first.md
-    action: created
-    suggested_tier: coc
-    reason: "Three-layer model (Raw → Primitives → Engine) establishing engine-first as default. Language-agnostic principle."
-    diff_lines: "+95 -0"
+  # Skill: DataFlow Express — added SyncExpress docs and SQLite timestamp behavior
+  - file: .claude/skills/02-dataflow/dataflow-express.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Added SyncExpress API (db.express_sync) docs, SQLite timestamp read-back behavior. Python-specific feature."
+    diff_lines: "+35 -3"
 
-  # COC Rule update (already at kailash/)
+  # Skill: PACT Governance Engine — added approve_bridge() requirement
+  - file: .claude/skills/29-pact/pact-governance-engine.md
+    action: modified
+    suggested_tier: coc
+    reason: "Bridge creation requires LCA approval via approve_bridge() first. Language-agnostic governance pattern."
+    diff_lines: "+2 -0"
+
+  # Rule: Patterns — added super().__del__() and import warnings prohibition
   - file: .claude/rules/patterns.md
     action: modified
-    suggested_tier: coc
-    reason: "Kaizen section updated: deprecated Agent import replaced with Delegate + BaseAgent examples"
-    diff_lines: "+8 -6"
-
-  # Kaizen specialist (already at kailash/)
-  - file: .claude/agents/frameworks/kaizen-specialist.md
-    action: modified
-    suggested_tier: coc
-    reason: "Added Layer Preference (Engine-First) section with Delegate > GovernedSupervisor > Pipeline > BaseAgent table"
-    diff_lines: "+14 -0"
-
-  # DataFlow specialist (already at kailash/)
-  - file: .claude/agents/frameworks/dataflow-specialist.md
-    action: modified
-    suggested_tier: coc
-    reason: "Added Layer Preference section: db.express for CRUD, DataFlowEngine for enterprise, WorkflowBuilder for complex"
-    diff_lines: "+12 -0"
-
-  # Nexus specialist (already at kailash/)
-  - file: .claude/agents/frameworks/nexus-specialist.md
-    action: modified
-    suggested_tier: coc
-    reason: "Added Layer Preference section: Nexus() zero-config, NexusEngine for enterprise, primitives rarely needed"
-    diff_lines: "+10 -0"
-
-  # Framework advisor (already at kailash/)
-  - file: .claude/agents/framework-advisor.md
-    action: modified
-    suggested_tier: coc
-    reason: "Added Step 2b Layer Selection in Implementation Decision Process"
-    diff_lines: "+15 -0"
-
-  # New decision guide skill (already at kailash/)
-  - file: .claude/skills/04-kaizen/kaizen-delegate-vs-baseagent.md
-    action: created
-    suggested_tier: coc
-    reason: "Decision guide: when to use Delegate vs BaseAgent vs GovernedSupervisor with migration example"
-    diff_lines: "+55 -0"
-
-  # Kaizen SKILL.md (already at kailash/)
-  - file: .claude/skills/04-kaizen/SKILL.md
-    action: modified
-    suggested_tier: coc
-    reason: "Reordered Quick Start: Delegate first (2 lines), then GovernedSupervisor, then BaseAgent. Agent deprecation note."
-    diff_lines: "+20 -2"
-
-  # DataFlow SKILL.md (already at kailash/)
-  - file: .claude/skills/02-dataflow/SKILL.md
-    action: modified
-    suggested_tier: coc
-    reason: "Added Express API section before WorkflowBuilder in Quick Start"
-    diff_lines: "+15 -0"
-
-  # decide-framework skill (already at kailash/)
-  - file: .claude/skills/13-architecture-decisions/decide-framework.md
-    action: modified
-    suggested_tier: coc
-    reason: "Added Within-Framework Layer Selection section with per-framework engine vs primitives guidance"
-    diff_lines: "+18 -0"
-
-  # sync-manifest (at kailash/ only)
-  - file: .claude/sync-manifest.yaml
-    action: modified
-    suggested_tier: source-only
-    reason: "Added framework-first.md to COC tier for sync to both py and rs BUILD repos"
-    diff_lines: "+1 -0"
+    suggested_tier: coc-py
+    reason: "Child __del__ must call super().__del__(), import warnings inside __del__ is prohibited. Python-specific."
+    diff_lines: "+2 -0"
 
 status: pending_review
-notes: |
-  All 11 COC artifacts were already created/updated at kailash/ (the source of truth)
-  during this session. The local kailash-py copies were also updated for immediate use.
-  Running /sync py at kailash/ will verify consistency and distribute to the USE template.
-
-  Code changes (Agent deprecation, PACT features, DataFlow lazy connection, dedup fix)
-  are kailash-py only — not COC artifacts.

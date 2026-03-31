@@ -183,6 +183,9 @@ engine.create_ksp(KnowledgeSharePolicy(
     created_by_role_address="D1-R1",
 ))
 
+# Bridge creation requires LCA approval first (PACT Section 4.4)
+engine.approve_bridge("D1-R1-D2-R1", "D1-R1-D3-R1", "D1-R1")  # LCA approves
+
 engine.create_bridge(PactBridge(
     id="bridge-1",
     role_a_address="D1-R1-D2-R1",

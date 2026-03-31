@@ -207,6 +207,7 @@ results, run_id = runtime.execute(workflow.build())
 
 - All async resource classes (transactions, connections, pools) implement `__del__` with `ResourceWarning`
 - Use `def __del__(self, _warnings=warnings)` signature (survives interpreter shutdown)
+- Child classes overriding `__del__` MUST call `super().__del__(_warnings=_warnings)` — CodeQL enforces this
 - Set class-level defaults for `__del__` safety (`_committed = False`, `_rolled_back = False`, `connection = None`)
 - Capture `_source_traceback` at creation in debug mode for leak diagnostics
 
@@ -214,6 +215,7 @@ results, run_id = runtime.execute(workflow.build())
 
 - Use `asyncio` in `__del__` — async cleanup in finalizers is unreliable
 - Swallow resource leaks silently — always warn via `ResourceWarning`
+- Use `import warnings` inside `__del__` — module may be torn down during shutdown
 
 ## Exceptions
 

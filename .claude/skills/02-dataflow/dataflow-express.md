@@ -15,9 +15,10 @@ High-performance wrapper providing ~23x faster execution by bypassing workflow o
 
 ## Quick Reference
 
-- **Access**: `db.express.<operation>()` after `await db.create_tables_async()`
+- **Async**: `db.express.<operation>()` after `await db.initialize()`
+- **Sync**: `db.express_sync.<operation>()` — for CLI scripts, sync handlers, non-async contexts
 - **Performance**: ~23x faster than workflow-based operations
-- **Operations**: create, read, find_one, update, delete, list, count, bulk_create, bulk_update, bulk_delete, bulk_upsert
+- **Operations**: create, read, find_one, update, delete, list, count, upsert, bulk_create, bulk_delete
 - **Best For**: Simple CRUD operations, high-throughput scenarios, API endpoints
 - **NOT For**: Multi-node workflows, conditional execution, transactions
 
@@ -46,3 +47,29 @@ High-performance wrapper providing ~23x faster execution by bypassing workflow o
 - Conditional execution or branching logic
 - Transaction management across operations
 - Error recovery and retry logic
+
+## Sync Express API (`db.express_sync`)
+
+For non-async contexts (CLI scripts, sync FastAPI handlers, pytest without asyncio):
+
+```python
+from dataflow import DataFlow
+
+db = DataFlow("sqlite:///app.db", auto_migrate=True)
+
+# Sync CRUD — same API as async Express, no await needed
+result = db.express_sync.create("User", {"name": "Alice", "email": "alice@example.com"})
+user = db.express_sync.read("User", str(result["id"]))
+users = db.express_sync.list("User", {"active": True})
+count = db.express_sync.count("User")
+db.express_sync.update("User", str(result["id"]), {"name": "Bob"})
+db.express_sync.delete("User", str(result["id"]))
+```
+
+**How it works**: `SyncExpress` maintains a persistent event loop in a daemon thread. Coroutines are submitted via `asyncio.run_coroutine_threadsafe()`, preserving database connections across calls.
+
+**When to use**: CLI tools, migration scripts, sync test fixtures, any context where `async/await` is not available.
+
+## SQLite Timestamp Behavior
+
+`create()` on SQLite automatically reads back auto-generated fields (`created_at`, `updated_at`) via a follow-up query. This matches PostgreSQL behavior where `RETURNING` clause provides these fields directly.
