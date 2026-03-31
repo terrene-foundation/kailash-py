@@ -28,12 +28,14 @@ from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,
     DataAccessConstraintConfig,
     FinancialConstraintConfig,
+    GradientThresholdsConfig,
     OperationalConstraintConfig,
     TemporalConstraintConfig,
     TrustPostureLevel,
 )
 from kailash.trust.pact.addressing import Address
 from kailash.trust.pact.exceptions import PactError
+from kailash.trust.pathutils import normalize_resource_path
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +45,8 @@ __all__ = [
     "RoleEnvelope",
     "TaskEnvelope",
     "check_degenerate_envelope",
+    "check_gradient_dereliction",
+    "check_passthrough_envelope",
     "compute_effective_envelope",
     "compute_effective_envelope_with_version",
     "default_envelope_for_posture",
@@ -407,6 +411,7 @@ class RoleEnvelope:
     defining_role_address: str  # supervisor
     target_role_address: str  # direct report
     envelope: ConstraintEnvelopeConfig
+    gradient_thresholds: GradientThresholdsConfig | None = None
     version: int = 1
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     modified_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -416,14 +421,19 @@ class RoleEnvelope:
         *,
         parent_envelope: ConstraintEnvelopeConfig,
         child_envelope: ConstraintEnvelopeConfig,
+        parent_gradient_thresholds: GradientThresholdsConfig | None = None,
+        child_gradient_thresholds: GradientThresholdsConfig | None = None,
     ) -> None:
         """Validate that child_envelope is at most as permissive as parent_envelope.
 
-        Checks each dimension for monotonic tightening violations.
+        Checks each dimension for monotonic tightening violations, including
+        gradient thresholds when both parent and child have them.
 
         Args:
             parent_envelope: The supervisor's (defining role's) envelope.
             child_envelope: The proposed envelope for the direct report.
+            parent_gradient_thresholds: Optional gradient thresholds from parent.
+            child_gradient_thresholds: Optional gradient thresholds from child.
 
         Raises:
             MonotonicTighteningError: If child_envelope is looser on any dimension.
@@ -537,6 +547,115 @@ class RoleEnvelope:
                 f"({child_envelope.max_delegation_depth}) exceeds parent "
                 f"({parent_envelope.max_delegation_depth})"
             )
+
+        # Temporal: child active hours must be within parent's window;
+        # child blackout_periods must be a superset of parent's.
+        p_temporal = parent_envelope.temporal
+        c_temporal = child_envelope.temporal
+        if p_temporal.active_hours_start is not None:
+            # Parent restricts active hours -- child must also restrict them
+            if c_temporal.active_hours_start is None:
+                violations.append(
+                    "Temporal: parent restricts active_hours "
+                    f"({p_temporal.active_hours_start}-{p_temporal.active_hours_end}) "
+                    "but child has no active hours restriction (wider)"
+                )
+            else:
+                # Child has active hours -- must start same or later
+                if c_temporal.active_hours_start < p_temporal.active_hours_start:
+                    violations.append(
+                        f"Temporal: child active_hours_start "
+                        f"({c_temporal.active_hours_start}) is earlier than parent "
+                        f"({p_temporal.active_hours_start})"
+                    )
+                # Child must end same or earlier
+                c_end = c_temporal.active_hours_end or "23:59"
+                p_end = p_temporal.active_hours_end or "23:59"
+                if c_end > p_end:
+                    violations.append(
+                        f"Temporal: child active_hours_end "
+                        f"({c_end}) is later than parent "
+                        f"({p_end})"
+                    )
+        # Blackout periods: child must include all parent blackouts (superset)
+        if p_temporal.blackout_periods:
+            parent_blackouts = set(p_temporal.blackout_periods)
+            child_blackouts = set(c_temporal.blackout_periods)
+            missing = parent_blackouts - child_blackouts
+            if missing:
+                violations.append(
+                    f"Temporal: child blackout_periods missing parent periods {missing}"
+                )
+
+        # Data access: child read_paths and write_paths must be subsets of parent's.
+        # Normalize paths per trust-plane-security.md rule 8 before comparison.
+        p_data = parent_envelope.data_access
+        c_data = child_envelope.data_access
+        parent_reads = {normalize_resource_path(p) for p in p_data.read_paths}
+        child_reads = {normalize_resource_path(p) for p in c_data.read_paths}
+        if child_reads and not child_reads.issubset(parent_reads):
+            extra = child_reads - parent_reads
+            violations.append(
+                f"Data access: child read_paths {extra} not in parent read set"
+            )
+        parent_writes = {normalize_resource_path(p) for p in p_data.write_paths}
+        child_writes = {normalize_resource_path(p) for p in c_data.write_paths}
+        if child_writes and not child_writes.issubset(parent_writes):
+            extra = child_writes - parent_writes
+            violations.append(
+                f"Data access: child write_paths {extra} not in parent write set"
+            )
+
+        # Communication: child allowed_channels must be subset of parent's;
+        # if parent is internal_only=True, child must also be True.
+        p_comm = parent_envelope.communication
+        c_comm = child_envelope.communication
+        if p_comm.internal_only and not c_comm.internal_only:
+            violations.append(
+                "Communication: parent is internal_only=True but child is "
+                "internal_only=False (wider)"
+            )
+        parent_channels = set(p_comm.allowed_channels)
+        child_channels = set(c_comm.allowed_channels)
+        if child_channels and not child_channels.issubset(parent_channels):
+            extra = child_channels - parent_channels
+            violations.append(
+                f"Communication: child allowed_channels {extra} not in parent channel set"
+            )
+
+        # Gradient thresholds: child thresholds must be <= parent thresholds.
+        # Only check when both parent and child have gradient thresholds for
+        # a given dimension. If parent has thresholds but child doesn't, that's
+        # OK (child uses defaults which are more restrictive). If child has
+        # thresholds but parent doesn't, we cannot verify so we skip.
+        if (
+            parent_gradient_thresholds is not None
+            and child_gradient_thresholds is not None
+        ):
+            p_fin_thresh = parent_gradient_thresholds.financial
+            c_fin_thresh = child_gradient_thresholds.financial
+            if p_fin_thresh is not None and c_fin_thresh is not None:
+                if (
+                    c_fin_thresh.auto_approve_threshold
+                    > p_fin_thresh.auto_approve_threshold
+                ):
+                    violations.append(
+                        f"Gradient: child financial auto_approve_threshold "
+                        f"({c_fin_thresh.auto_approve_threshold}) exceeds parent "
+                        f"({p_fin_thresh.auto_approve_threshold})"
+                    )
+                if c_fin_thresh.flag_threshold > p_fin_thresh.flag_threshold:
+                    violations.append(
+                        f"Gradient: child financial flag_threshold "
+                        f"({c_fin_thresh.flag_threshold}) exceeds parent "
+                        f"({p_fin_thresh.flag_threshold})"
+                    )
+                if c_fin_thresh.hold_threshold > p_fin_thresh.hold_threshold:
+                    violations.append(
+                        f"Gradient: child financial hold_threshold "
+                        f"({c_fin_thresh.hold_threshold}) exceeds parent "
+                        f"({p_fin_thresh.hold_threshold})"
+                    )
 
         if violations:
             msg = "Monotonic tightening violation(s): " + "; ".join(violations)
@@ -864,6 +983,64 @@ def default_envelope_for_posture(
 
 
 # ---------------------------------------------------------------------------
+# Pass-through Envelope Detection
+# ---------------------------------------------------------------------------
+
+
+def check_passthrough_envelope(
+    child: ConstraintEnvelopeConfig,
+    parent: ConstraintEnvelopeConfig,
+) -> bool:
+    """Check if child envelope is identical to parent (pass-through).
+
+    A pass-through means the role adds no additional constraints -- the governance
+    hierarchy is doing nothing at that level. Returns True if pass-through detected.
+
+    Compares the 5 constraint dimensions field-by-field, plus
+    confidentiality_clearance and max_delegation_depth. The ``id`` and
+    ``description`` fields are excluded since they differ even when constraints
+    are identical. ``expires_at`` is also excluded (config-level metadata).
+
+    Args:
+        child: The child (target role) envelope config.
+        parent: The parent (defining role) envelope config.
+
+    Returns:
+        True if the child envelope is identical to the parent across all
+        constraint dimensions (pass-through detected). False otherwise.
+    """
+    # Compare confidentiality clearance
+    if child.confidentiality_clearance != parent.confidentiality_clearance:
+        return False
+
+    # Compare max_delegation_depth
+    if child.max_delegation_depth != parent.max_delegation_depth:
+        return False
+
+    # Compare financial dimension
+    if child.financial != parent.financial:
+        return False
+
+    # Compare operational dimension
+    if child.operational != parent.operational:
+        return False
+
+    # Compare temporal dimension
+    if child.temporal != parent.temporal:
+        return False
+
+    # Compare data_access dimension
+    if child.data_access != parent.data_access:
+        return False
+
+    # Compare communication dimension
+    if child.communication != parent.communication:
+        return False
+
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Degenerate Envelope Detection
 # ---------------------------------------------------------------------------
 
@@ -933,5 +1110,54 @@ def check_degenerate_envelope(
         # Only warn if there are also no other capabilities
         # (empty paths might be intentional for non-data agents)
         pass
+
+    return warnings
+
+
+# ---------------------------------------------------------------------------
+# Gradient Dereliction Detection
+# ---------------------------------------------------------------------------
+
+
+def check_gradient_dereliction(
+    role_envelope: RoleEnvelope,
+    effective_envelope: ConstraintEnvelopeConfig,
+) -> list[str]:
+    """Detect overly-permissive gradient configuration (rubber-stamping).
+
+    When the auto_approve_threshold is set at or above 90% of the effective
+    envelope's limit for a dimension, it means almost all actions are auto-approved
+    without human oversight -- defeating the purpose of the gradient.
+
+    Only checks numeric dimensions (financial) where threshold comparison
+    is meaningful.
+
+    Args:
+        role_envelope: The RoleEnvelope containing gradient_thresholds.
+        effective_envelope: The effective ConstraintEnvelopeConfig.
+
+    Returns:
+        A list of warning strings (empty if no dereliction detected).
+    """
+    warnings: list[str] = []
+
+    # No gradient thresholds configured -- nothing to check
+    if role_envelope.gradient_thresholds is None:
+        return warnings
+
+    gt = role_envelope.gradient_thresholds
+
+    # Financial dimension dereliction check
+    if gt.financial is not None and effective_envelope.financial is not None:
+        max_spend = effective_envelope.financial.max_spend_usd
+        if max_spend > 0:
+            auto_approve = gt.financial.auto_approve_threshold
+            if auto_approve >= 0.9 * max_spend:
+                warnings.append(
+                    f"Gradient dereliction (financial): auto_approve_threshold "
+                    f"({auto_approve}) is >= 90% of max_spend_usd ({max_spend}). "
+                    f"This is overly permissive -- nearly all spend is auto-approved "
+                    f"without oversight."
+                )
 
     return warnings

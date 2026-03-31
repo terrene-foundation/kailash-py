@@ -58,8 +58,8 @@ class TestPactAuditAction:
         assert PactAuditAction.ADDRESS_COMPUTED.value == "address_computed"
 
     def test_all_audit_actions_exist(self) -> None:
-        """All action types per thesis Section 5.7 normative mapping + LCA bridge approval + vacancy."""
-        assert len(PactAuditAction) == 13
+        """All action types per thesis Section 5.7 normative mapping + LCA bridge approval + vacancy + bilateral consent."""
+        assert len(PactAuditAction) == 14
 
 
 # ===========================================================================

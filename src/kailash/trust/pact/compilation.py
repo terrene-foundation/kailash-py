@@ -429,6 +429,68 @@ def compile_org(org: OrgDefinition) -> CompiledOrg:
         if r.is_primary_for_unit:
             unit_head_map[r.is_primary_for_unit] = r
 
+    # --- Phase 2b: Auto-create vacant head roles for headless units ---
+    # PACT Section 4.2: "When a D or T is created without an R, the system
+    # auto-creates a vacant head role."
+    for dept in org.departments:
+        if dept.department_id not in unit_head_map:
+            synth_role_id = f"{dept.department_id}-head-vacant"
+            # Security: check for collision with user-defined role IDs.
+            # Synthesized roles are added AFTER _validate_roles(), so the
+            # duplicate-ID check in validation does not catch collisions.
+            # A collision would silently overwrite a user-defined role.
+            if synth_role_id in role_index:
+                raise CompilationError(
+                    f"Cannot auto-create vacant head role '{synth_role_id}' for "
+                    f"department '{dept.department_id}': a user-defined role with "
+                    f"this ID already exists. Rename the existing role to avoid "
+                    f"collision with auto-generated vacancy IDs."
+                )
+            vacant_role = RoleDefinition(
+                role_id=synth_role_id,
+                name=f"{dept.name} Head (Vacant)",
+                is_primary_for_unit=dept.department_id,
+                is_vacant=True,
+                reports_to_role_id=None,
+            )
+            unit_head_map[dept.department_id] = vacant_role
+            role_index[vacant_role.role_id] = vacant_role
+            roles.append(vacant_role)
+            logger.warning(
+                "Department '%s' (%s) has no head role -- auto-created vacant head '%s'",
+                dept.name,
+                dept.department_id,
+                vacant_role.role_id,
+            )
+
+    for team in org.teams:
+        if team.id not in unit_head_map:
+            synth_role_id = f"{team.id}-head-vacant"
+            # Security: check for collision with user-defined role IDs.
+            if synth_role_id in role_index:
+                raise CompilationError(
+                    f"Cannot auto-create vacant head role '{synth_role_id}' for "
+                    f"team '{team.id}': a user-defined role with this ID already "
+                    f"exists. Rename the existing role to avoid collision with "
+                    f"auto-generated vacancy IDs."
+                )
+            vacant_role = RoleDefinition(
+                role_id=synth_role_id,
+                name=f"{team.name} Head (Vacant)",
+                is_primary_for_unit=team.id,
+                is_vacant=True,
+                reports_to_role_id=None,
+            )
+            unit_head_map[team.id] = vacant_role
+            role_index[vacant_role.role_id] = vacant_role
+            roles.append(vacant_role)
+            logger.warning(
+                "Team '%s' (%s) has no head role -- auto-created vacant head '%s'",
+                team.name,
+                team.id,
+                vacant_role.role_id,
+            )
+
     # Build parent -> children role mapping
     children_of: dict[str | None, list[RoleDefinition]] = defaultdict(list)
     for r in roles:
@@ -724,7 +786,7 @@ def _assign_children_addresses(
     if not children:
         return
 
-    # --- Check depth limit — count segments in the parent address ---
+    # --- Check depth limit -- count segments in the parent address ---
     parent_depth = len(parent_role_addr.split("-"))
     # Children will be at least parent_depth + 1 (for R node) or +2 (for D/T + R)
     if parent_depth >= MAX_COMPILATION_DEPTH:

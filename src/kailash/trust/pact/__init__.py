@@ -36,6 +36,8 @@ from kailash.trust.pact.envelopes import (
     RoleEnvelope,
     TaskEnvelope,
     check_degenerate_envelope,
+    check_gradient_dereliction,
+    check_passthrough_envelope,
     compute_effective_envelope,
     default_envelope_for_posture,
     intersect_envelopes,
@@ -66,6 +68,7 @@ from kailash.trust.pact.store import (
     OrgStore,
 )
 from kailash.trust.pact.engine import GovernanceEngine
+from kailash.trust.pact.eatp_emitter import InMemoryPactEmitter, PactEatpEmitter
 from kailash.trust.pact.envelope_adapter import (
     EnvelopeAdapterError,
     GovernanceEnvelopeAdapter,
@@ -124,6 +127,8 @@ __all__ = [
     "RoleEnvelope",
     "TaskEnvelope",
     "check_degenerate_envelope",
+    "check_gradient_dereliction",
+    "check_passthrough_envelope",
     "compute_effective_envelope",
     "default_envelope_for_posture",
     "intersect_envelopes",
@@ -142,6 +147,9 @@ __all__ = [
     "OrgStore",
     # Engine (Ref-7010, 7012, 7014, 7015)
     "GovernanceEngine",
+    # EATP Emitter (Section 5.7)
+    "InMemoryPactEmitter",
+    "PactEatpEmitter",
     # Envelope Adapter (Ref-7020)
     "EnvelopeAdapterError",
     "GovernanceEnvelopeAdapter",

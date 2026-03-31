@@ -28,6 +28,7 @@ from typing import Any
 
 from kailash.trust.pact.addressing import Address
 from kailash.trust.pact.config import (
+    ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     TrustPostureLevel,
     VerificationLevel,
@@ -52,8 +53,10 @@ from kailash.trust.pact.envelopes import (
     MonotonicTighteningError,
     RoleEnvelope,
     TaskEnvelope,
+    check_passthrough_envelope,
     compute_effective_envelope,
     compute_effective_envelope_with_version,
+    intersect_envelopes,
 )
 from kailash.trust.pact.exceptions import PactError
 from kailash.trust.pact.knowledge import KnowledgeItem
@@ -141,6 +144,15 @@ class BridgeApproval:
         )
 
 
+@dataclass(frozen=True)
+class _VacancyCheckResult:
+    """Internal result of vacancy check (Section 5.5). Not exported."""
+
+    status: str  # "ok", "interim", "blocked"
+    message: str | None = None
+    interim_envelope: ConstraintEnvelopeConfig | None = None
+
+
 class GovernanceEngine:
     """Single entry point for PACT governance decisions.
 
@@ -174,6 +186,9 @@ class GovernanceEngine:
         audit_chain: Any | None = None,  # AuditChain (lazy import to avoid cycles)
         store_backend: str = "memory",  # "memory" or "sqlite"
         store_url: str | None = None,  # Path for sqlite backend
+        eatp_emitter: Any | None = None,  # PactEatpEmitter (Section 5.7)
+        vacancy_deadline_hours: int = 24,  # Section 5.5 configurable deadline
+        require_bilateral_consent: bool = False,  # Section 4.4 bilateral consent
     ) -> None:
         self._lock = threading.Lock()
 
@@ -235,14 +250,34 @@ class GovernanceEngine:
             self._org_store = org_store if org_store is not None else MemoryOrgStore()
         self._audit_chain = audit_chain
 
+        # EATP record emitter -- optional synchronous emission (Section 5.7)
+        self._eatp_emitter = eatp_emitter
+
+        # Vacancy deadline -- configurable (Section 5.5, default 24h)
+        if vacancy_deadline_hours <= 0:
+            raise ValueError(
+                f"vacancy_deadline_hours must be > 0, got {vacancy_deadline_hours}"
+            )
+        self._vacancy_deadline = timedelta(hours=vacancy_deadline_hours)
+
         # Vacancy designations -- bounded in-memory store (Section 5.5)
         # Key: vacant_role_address -> VacancyDesignation
         self._vacancy_designations: dict[str, VacancyDesignation] = {}
         self._max_vacancy_designations: int = 10_000
 
+        # Vacancy start times -- tracks when each vacancy began (Section 5.5)
+        self._vacancy_start_times: dict[str, datetime] = {}
+
         # Bridge approvals -- bounded in-memory store (Section 4.4 LCA approval)
         # Key: "source_address|target_address" -> BridgeApproval
         self._bridge_approvals: OrderedDict[str, BridgeApproval] = OrderedDict()
+
+        # Bridge consents -- bilateral consent for bridge creation (Section 4.4)
+        self._bridge_consents: OrderedDict[tuple[str, str], datetime] = OrderedDict()
+        self._require_bilateral_consent: bool = require_bilateral_consent
+
+        # Compliance role -- alternative bridge approver (Section 4.4)
+        self._compliance_role: str | None = None
 
         # Compile if OrgDefinition, or use directly if CompiledOrg
         if isinstance(org, CompiledOrg):
@@ -255,6 +290,32 @@ class GovernanceEngine:
 
         # Save compiled org in the org store
         self._org_store.save_org(self._compiled_org)
+
+        # Initialize vacancy start times for roles that are vacant at compilation
+        init_time = datetime.now(UTC)
+        for addr, node in self._compiled_org.nodes.items():
+            if node.is_vacant:
+                self._vacancy_start_times[addr] = init_time
+
+        # Emit GenesisRecord (PACT Section 5.7 normative mapping)
+        if self._eatp_emitter is not None:
+            try:
+                from kailash.trust.chain import AuthorityType, GenesisRecord
+
+                genesis = GenesisRecord(
+                    id=f"pact-genesis-{self._compiled_org.org_id}",
+                    agent_id=f"pact-engine-{self._compiled_org.org_id}",
+                    authority_id=self._compiled_org.org_id,
+                    authority_type=AuthorityType.ORGANIZATION,
+                    created_at=datetime.now(UTC),
+                    signature="UNSIGNED",
+                )
+                self._eatp_emitter.emit_genesis(genesis)
+            except Exception:
+                logger.exception(
+                    "Failed to emit GenesisRecord for org '%s'",
+                    self._compiled_org.org_id,
+                )
 
         logger.info(
             "GovernanceEngine initialized for org '%s' with %d nodes",
@@ -301,6 +362,18 @@ class GovernanceEngine:
                     ksps=ksps,
                     bridges=bridges,
                 )
+
+                if not decision.allowed:
+                    self._emit_audit_unlocked(
+                        "access_denied",
+                        {
+                            "role_address": role_address,
+                            "item_id": knowledge_item.item_id,
+                            "reason": decision.reason,
+                            "step_failed": decision.step_failed,
+                            "barrier_enforced": True,
+                        },
+                    )
 
                 return decision
 
@@ -409,20 +482,20 @@ class GovernanceEngine:
         # Step 0: Vacancy check (PACT Section 5.5) -- BEFORE envelope checks.
         # If the role or any ancestor is vacant without a valid acting occupant
         # designation, all actions are blocked (auto-suspended).
-        vacancy_error = self._check_vacancy(role_address)
-        if vacancy_error is not None:
+        vacancy_result = self._check_vacancy(role_address)
+        if vacancy_result.status == "blocked":
             self._emit_audit_unlocked(
                 PactAuditAction.VACANCY_SUSPENDED.value,
                 {
                     "role_address": role_address,
                     "action": action,
                     "level": "blocked",
-                    "reason": vacancy_error,
+                    "reason": vacancy_result.message,
                 },
             )
             return GovernanceVerdict(
                 level="blocked",
-                reason=vacancy_error,
+                reason=vacancy_result.message or "Vacancy enforcement -- blocked",
                 role_address=role_address,
                 action=action,
                 effective_envelope_snapshot=None,
@@ -443,6 +516,18 @@ class GovernanceEngine:
         )
         effective = snapshot.envelope
         envelope_version = snapshot.version_hash
+
+        # If vacancy check returned "interim", intersect with interim envelope
+        if (
+            vacancy_result.status == "interim"
+            and vacancy_result.interim_envelope is not None
+        ):
+            if effective is not None:
+                effective = intersect_envelopes(
+                    effective, vacancy_result.interim_envelope
+                )
+            else:
+                effective = vacancy_result.interim_envelope
 
         # Step 2+3: Evaluate action against envelope
         level = "auto_approved"
@@ -504,6 +589,14 @@ class GovernanceEngine:
             "has_envelope": effective is not None,
             "envelope_version": envelope_version,
         }
+        if effective is not None:
+            audit_details["effective_envelope_snapshot"] = {
+                "financial_max_spend": (
+                    effective.financial.max_spend_usd if effective.financial else None
+                ),
+                "confidentiality": effective.confidentiality_clearance.value,
+                "allowed_actions_count": len(effective.operational.allowed_actions),
+            }
 
         verdict = GovernanceVerdict(
             level=level,
@@ -926,6 +1019,33 @@ class GovernanceEngine:
             ),
         )
 
+        # Emit CapabilityAttestation via EATP (Section 5.7)
+        if self._eatp_emitter is not None:
+            try:
+                from uuid import uuid4
+
+                from kailash.trust.chain import CapabilityAttestation, CapabilityType
+
+                constraints = [
+                    f"vetting:{clearance.vetting_status.value}",
+                ]
+                for compartment in sorted(clearance.compartments):
+                    constraints.append(f"compartment:{compartment}")
+                attestation = CapabilityAttestation(
+                    id=f"pact-capability-{uuid4().hex[:8]}",
+                    capability=f"clearance:{clearance.max_clearance.value}",
+                    capability_type=CapabilityType.ACCESS,
+                    constraints=constraints,
+                    attester_id=role_address,
+                    attested_at=datetime.now(UTC),
+                    signature="UNSIGNED",
+                )
+                self._eatp_emitter.emit_capability(attestation)
+            except Exception:
+                logger.exception(
+                    "Failed to emit CapabilityAttestation for grant_clearance"
+                )
+
     def revoke_clearance(self, role_address: str) -> None:
         """Revoke clearance for a role. Thread-safe. Emits audit anchor.
 
@@ -942,6 +1062,51 @@ class GovernanceEngine:
                 role_address=role_address,
                 reason="Clearance revoked",
             ),
+        )
+
+    def consent_bridge(self, role_address: str, bridge_id: str) -> None:
+        """Register a role's consent to participate in a bridge (Section 4.4).
+
+        When require_bilateral_consent is True, both roles involved in a bridge
+        must consent before create_bridge() can proceed.
+        Consents expire after 24 hours.
+        """
+        with self._lock:
+            # RED TEAM FIX R2: validate address exists in org
+            if role_address not in self._compiled_org.nodes:
+                raise PactError(
+                    f"Cannot register bridge consent: address '{role_address}' "
+                    f"does not exist in the compiled organization",
+                    details={"role_address": role_address, "bridge_id": bridge_id},
+                )
+            # Bounded: evict oldest if at capacity
+            while len(self._bridge_consents) >= _MAX_BRIDGE_APPROVALS:
+                self._bridge_consents.popitem(last=False)
+            self._bridge_consents[(role_address, bridge_id)] = datetime.now(UTC)
+
+        self._emit_audit(
+            PactAuditAction.BRIDGE_CONSENT.value,
+            create_pact_audit_details(
+                PactAuditAction.BRIDGE_CONSENT,
+                role_address=role_address,
+                reason=f"Bridge consent registered for bridge '{bridge_id}'",
+            ),
+        )
+
+    def register_compliance_role(self, role_address: str) -> None:
+        """Register a role as the designated compliance approver for bridges."""
+        with self._lock:
+            # RED TEAM FIX R2: validate address exists in org
+            if role_address not in self._compiled_org.nodes:
+                raise PactError(
+                    f"Cannot register compliance role: address '{role_address}' "
+                    f"does not exist in the compiled organization",
+                    details={"role_address": role_address},
+                )
+            self._compliance_role = role_address
+        self._emit_audit(
+            "compliance_role_registered",
+            {"role_address": role_address},
         )
 
     def approve_bridge(
@@ -997,18 +1162,28 @@ class GovernanceEngine:
                     },
                 )
 
-            # Verify the approver IS the LCA
-            if approver_address != str(lca):
+            # Verify the approver IS the LCA or the compliance role
+            lca_str = str(lca)
+            is_lca = approver_address == lca_str
+            is_compliance = (
+                self._compliance_role is not None
+                and approver_address == self._compliance_role
+            )
+            if not is_lca and not is_compliance:
                 raise PactError(
-                    f"Bridge approval must come from the LCA ({lca}), "
+                    f"Bridge approval must come from the LCA ({lca}) "
+                    f"or the compliance role ({self._compliance_role}), "
                     f"not {approver_address}",
                     details={
                         "source_address": source_address,
                         "target_address": target_address,
                         "approver_address": approver_address,
-                        "required_lca": str(lca),
+                        "required_lca": lca_str,
+                        "compliance_role": self._compliance_role,
                     },
                 )
+
+            approver_type = "compliance" if is_compliance else "lca"
 
             now = datetime.now(UTC)
             approval = BridgeApproval(
@@ -1034,10 +1209,11 @@ class GovernanceEngine:
                 target_address=target_address,
                 reason=(
                     f"Bridge between '{source_address}' and '{target_address}' "
-                    f"approved by LCA '{approver_address}'"
+                    f"approved by {approver_type} '{approver_address}'"
                 ),
                 source_address=source_address,
                 lca_address=approver_address,
+                approver_type=approver_type,
             ),
         )
 
@@ -1133,19 +1309,49 @@ class GovernanceEngine:
                     },
                 )
 
-            # Verify the approval came from the actual LCA
-            if approval.approved_by != str(lca):
+            # Verify the approval came from the actual LCA or compliance role
+            lca_str = str(lca)
+            is_lca_approval = approval.approved_by == lca_str
+            is_compliance_approval = (
+                self._compliance_role is not None
+                and approval.approved_by == self._compliance_role
+            )
+            if not is_lca_approval and not is_compliance_approval:
                 raise PactError(
-                    f"Bridge approval must come from LCA ({lca}), "
+                    f"Bridge approval must come from LCA ({lca}) "
+                    f"or compliance role ({self._compliance_role}), "
                     f"not {approval.approved_by}",
                     details={
                         "role_a_address": bridge.role_a_address,
                         "role_b_address": bridge.role_b_address,
                         "bridge_id": bridge.id,
                         "approved_by": approval.approved_by,
-                        "required_lca": str(lca),
+                        "required_lca": lca_str,
+                        "compliance_role": self._compliance_role,
                     },
                 )
+
+            # Bilateral consent check (Section 4.4)
+            source_address = bridge.role_a_address
+            target_address = bridge.role_b_address
+            if self._require_bilateral_consent:
+                now_check = datetime.now(UTC)
+                for role_addr in (source_address, target_address):
+                    key = (role_addr, bridge.id)
+                    consent_time = self._bridge_consents.get(key)
+                    if consent_time is None:
+                        raise PactError(
+                            f"Bridge bilateral consent missing from '{role_addr}'",
+                            details={"role": role_addr},
+                        )
+                    if now_check - consent_time > _BRIDGE_APPROVAL_TTL:
+                        raise PactError(
+                            f"Bridge consent from '{role_addr}' has expired",
+                            details={"role": role_addr},
+                        )
+
+            # Validate bridge scope against endpoint envelopes
+            self._validate_bridge_scope_locked(bridge)
 
             # All checks passed -- persist the bridge
             self._access_policy_store.save_bridge(bridge)
@@ -1162,6 +1368,94 @@ class GovernanceEngine:
                 lca_approver=approval.approved_by,
             ),
         )
+
+        # Emit bilateral DelegationRecord via EATP (Section 5.7)
+        if self._eatp_emitter is not None:
+            try:
+                from uuid import uuid4
+
+                from kailash.trust.chain import DelegationRecord
+
+                # Bilateral: emit A->B and B->A
+                for delegator, delegatee in [
+                    (source_address, target_address),
+                    (target_address, source_address),
+                ]:
+                    delegation = DelegationRecord(
+                        id=f"pact-deleg-{uuid4().hex[:8]}",
+                        delegator_id=delegator,
+                        delegatee_id=delegatee,
+                        task_id="",
+                        capabilities_delegated=[],
+                        constraint_subset=[],
+                        delegated_at=datetime.now(UTC),
+                        signature="UNSIGNED",
+                    )
+                    self._eatp_emitter.emit_delegation(delegation)
+            except Exception:
+                logger.exception("Failed to emit DelegationRecord for create_bridge")
+
+    def _validate_bridge_scope_locked(self, bridge: PactBridge) -> None:
+        """Validate bridge scope against both endpoint envelopes. Caller holds lock."""
+        has_classification = (
+            hasattr(bridge, "max_classification")
+            and bridge.max_classification != ConfidentialityLevel.PUBLIC
+        )
+        has_ops_scope = (
+            hasattr(bridge, "operational_scope") and bridge.operational_scope
+        )
+
+        if not has_classification and not has_ops_scope:
+            return  # No scope to validate
+
+        source_addr = bridge.role_a_address
+        target_addr = bridge.role_b_address
+
+        for role_addr in (source_addr, target_addr):
+            if role_addr is None:
+                continue
+            envelope = self._compute_envelope_locked(role_addr)
+            if envelope is None:
+                # No envelope for this role -- skip scope validation.
+                # Scope checks only apply when an envelope constrains the role.
+                continue
+
+            if has_classification:
+                from kailash.trust.pact.config import CONFIDENTIALITY_ORDER
+
+                # Only enforce classification when the role has an explicit
+                # (non-default) clearance. PUBLIC is the default "no restriction"
+                # level -- enforcing against it would block all non-PUBLIC
+                # bridges on roles that never configured classification.
+                role_clearance = envelope.confidentiality_clearance
+                if role_clearance != ConfidentialityLevel.PUBLIC:
+                    bridge_order = CONFIDENTIALITY_ORDER.get(
+                        bridge.max_classification, 0
+                    )
+                    role_order = CONFIDENTIALITY_ORDER.get(role_clearance, 0)
+                    if bridge_order > role_order:
+                        raise PactError(
+                            f"Bridge max_classification '{bridge.max_classification.value}' exceeds "
+                            f"role '{role_addr}' clearance '{role_clearance.value}'",
+                            details={
+                                "bridge_classification": bridge.max_classification.value,
+                                "role_clearance": role_clearance.value,
+                            },
+                        )
+
+            if has_ops_scope:
+                allowed = set(envelope.operational.allowed_actions)
+                requested = set(bridge.operational_scope)
+                if allowed and not requested.issubset(allowed):
+                    extra = requested - allowed
+                    raise PactError(
+                        f"Bridge operational_scope {sorted(extra)} not in "
+                        f"role '{role_addr}' allowed actions {sorted(allowed)}",
+                        details={
+                            "role_address": role_addr,
+                            "extra_ops": sorted(extra),
+                        },
+                    )
 
     def create_ksp(self, ksp: KnowledgeSharePolicy) -> None:
         """Create a Knowledge Share Policy. Thread-safe. Emits audit anchor.
@@ -1198,6 +1492,12 @@ class GovernanceEngine:
                 defining role's effective envelope.
         """
         with self._lock:
+            # Check if this is a new or modified envelope
+            is_new = (
+                self._envelope_store.get_role_envelope(envelope.target_role_address)
+                is None
+            )
+
             # Validate monotonic tightening: child cannot be wider than parent
             defining_envelope = self._compute_envelope_locked(
                 envelope.defining_role_address
@@ -1207,18 +1507,66 @@ class GovernanceEngine:
                     parent_envelope=defining_envelope,
                     child_envelope=envelope.envelope,
                 )
+
+            # Detect pass-through envelope
+            is_passthrough = False
+            if defining_envelope is not None:
+                is_passthrough = check_passthrough_envelope(
+                    defining_envelope, envelope.envelope
+                )
+                if is_passthrough:
+                    logger.warning(
+                        "Pass-through envelope detected: envelope '%s' for "
+                        "role '%s' is identical to the defining role's "
+                        "effective envelope (no additional tightening). "
+                        "Consider whether this delegation adds value.",
+                        envelope.id,
+                        envelope.target_role_address,
+                    )
+
             self._envelope_store.save_role_envelope(envelope)
 
+        audit_action = (
+            PactAuditAction.ENVELOPE_CREATED
+            if is_new
+            else PactAuditAction.ENVELOPE_MODIFIED
+        )
         self._emit_audit(
-            PactAuditAction.ENVELOPE_CREATED.value,
+            audit_action.value,
             create_pact_audit_details(
-                PactAuditAction.ENVELOPE_CREATED,
+                audit_action,
                 role_address=envelope.defining_role_address,
                 target_address=envelope.target_role_address,
-                reason=f"Role envelope '{envelope.id}' set for '{envelope.target_role_address}'",
+                reason=f"Role envelope '{envelope.id}' {'created' if is_new else 'modified'} for '{envelope.target_role_address}'",
                 envelope_id=envelope.id,
+                is_passthrough=is_passthrough,
             ),
         )
+
+        # Emit DelegationRecord via EATP (Section 5.7)
+        if self._eatp_emitter is not None:
+            try:
+                from uuid import uuid4
+
+                from kailash.trust.chain import DelegationRecord
+
+                delegation = DelegationRecord(
+                    id=f"pact-deleg-{uuid4().hex[:8]}",
+                    delegator_id=envelope.defining_role_address,
+                    delegatee_id=envelope.target_role_address,
+                    task_id="",
+                    capabilities_delegated=list(
+                        envelope.envelope.operational.allowed_actions
+                    ),
+                    constraint_subset=[],
+                    delegated_at=datetime.now(UTC),
+                    signature="UNSIGNED",
+                )
+                self._eatp_emitter.emit_delegation(delegation)
+            except Exception:
+                logger.exception(
+                    "Failed to emit DelegationRecord for set_role_envelope"
+                )
 
     def set_task_envelope(self, envelope: TaskEnvelope) -> None:
         """Set a task envelope. Thread-safe. Emits audit anchor.
@@ -1260,6 +1608,31 @@ class GovernanceEngine:
                 parent_envelope_id=envelope.parent_envelope_id,
             ),
         )
+
+        # Emit DelegationRecord via EATP (Section 5.7)
+        if self._eatp_emitter is not None:
+            try:
+                from uuid import uuid4
+
+                from kailash.trust.chain import DelegationRecord
+
+                delegation = DelegationRecord(
+                    id=f"pact-deleg-task-{uuid4().hex[:8]}",
+                    delegator_id=envelope.parent_envelope_id,
+                    delegatee_id=envelope.task_id,
+                    task_id=envelope.task_id,
+                    capabilities_delegated=list(
+                        envelope.envelope.operational.allowed_actions
+                    ),
+                    constraint_subset=[],
+                    delegated_at=datetime.now(UTC),
+                    signature="UNSIGNED",
+                )
+                self._eatp_emitter.emit_delegation(delegation)
+            except Exception:
+                logger.exception(
+                    "Failed to emit DelegationRecord for set_task_envelope"
+                )
 
     # -------------------------------------------------------------------
     # Vacancy Designation API (Section 5.5)
@@ -1334,7 +1707,7 @@ class GovernanceEngine:
                 )
 
             now = datetime.now(timezone.utc)
-            expires = now + timedelta(hours=24)
+            expires = now + self._vacancy_deadline
 
             designation = VacancyDesignation(
                 vacant_role_address=vacant_role,
@@ -1378,63 +1751,112 @@ class GovernanceEngine:
         with self._lock:
             return self._vacancy_designations.get(role_address)
 
-    def _check_vacancy(self, address: str) -> str | None:
-        """Check vacancy status for an address. Caller must hold self._lock.
+    def _check_vacancy(self, address: str) -> _VacancyCheckResult:
+        """Check vacancy status with interim envelope support (Section 5.5).
 
-        Implements PACT Section 5.5 vacancy enforcement:
-        1. If the role at the address is not vacant, return None (OK).
+        Implements PACT Section 5.5 vacancy enforcement with interim envelopes:
+        1. If the role at the address is not vacant, return ok.
         2. If the role is vacant and has a valid (non-expired) designation,
-           return None (OK -- acting occupant covers it).
-        3. If the role is vacant with no designation or an expired designation,
-           return an error message (BLOCKED).
-        4. Also checks all ancestor roles: if ANY ancestor is vacant without
-           a valid designation, the downstream role is auto-suspended.
+           return ok (acting occupant covers it).
+        3. If the role is vacant, no designation, but within the vacancy deadline,
+           return interim (with a tightened envelope).
+        4. If the role is vacant past the vacancy deadline, return blocked.
+        5. Also checks all ancestor roles: multiple vacant ancestors produce
+           intersected interim envelopes (RED TEAM FIX R1).
 
         Args:
             address: The D/T/R address to check.
 
         Returns:
-            None if the role is cleared to act, or an error message string
-            if the action should be blocked due to vacancy.
+            A _VacancyCheckResult with status, message, and optional interim_envelope.
         """
         from kailash.trust.pact.addressing import Address
 
         try:
             parsed = Address.parse(address)
         except Exception:
-            return (
-                f"Unable to parse address '{address}' for vacancy check -- fail-closed"
+            return _VacancyCheckResult(
+                status="blocked",
+                message=f"Unable to parse address '{address}' for vacancy check -- fail-closed",
             )
 
-        # Check the target role itself and all ancestors in the accountability chain
+        now = datetime.now(UTC)
         addresses_to_check = [str(a) for a in parsed.accountability_chain]
+        worst_result = _VacancyCheckResult(status="ok")
 
         for check_addr in addresses_to_check:
             node = self._compiled_org.nodes.get(check_addr)
             if node is None:
-                continue  # Node not in org -- not a vacancy issue
-
+                continue
             if not node.is_vacant:
-                continue  # Not vacant -- OK
+                continue
 
-            # Role is vacant -- check for a valid designation
             designation = self._vacancy_designations.get(check_addr)
+            if designation is not None and not designation.is_expired():
+                continue
 
-            if designation is None:
-                return (
-                    f"Role at '{check_addr}' is vacant with no acting occupant "
-                    f"designation -- all downstream actions are suspended "
-                    f"(PACT Section 5.5)"
+            vacancy_start = self._vacancy_start_times.get(check_addr)
+            if vacancy_start is None:
+                vacancy_start = now
+                self._vacancy_start_times[check_addr] = vacancy_start
+
+            elapsed = now - vacancy_start
+            if elapsed >= self._vacancy_deadline:
+                return _VacancyCheckResult(
+                    status="blocked",
+                    message=(
+                        f"Role at '{check_addr}' is vacant with no acting occupant "
+                        f"designation and has exceeded the vacancy deadline "
+                        f"({self._vacancy_deadline}) -- all downstream actions "
+                        f"are suspended (PACT Section 5.5)"
+                    ),
                 )
 
-            if designation.is_expired():
-                return (
-                    f"Acting occupant designation for vacant role '{check_addr}' "
-                    f"has expired (expired at {designation.expires_at}) -- "
-                    f"all downstream actions are suspended (PACT Section 5.5)"
+            # Within deadline -- compute interim envelope
+            interim_env = self._compute_interim_envelope_locked(address, check_addr)
+
+            # RED TEAM FIX R1: intersect multiple interim envelopes
+            if worst_result.status == "ok":
+                worst_result = _VacancyCheckResult(
+                    status="interim",
+                    message=(
+                        f"Role at '{check_addr}' is vacant -- operating under "
+                        f"interim envelope (deadline in {self._vacancy_deadline - elapsed})"
+                    ),
+                    interim_envelope=interim_env,
+                )
+            elif worst_result.status == "interim":
+                combined_env = worst_result.interim_envelope
+                if combined_env is not None and interim_env is not None:
+                    combined_env = intersect_envelopes(combined_env, interim_env)
+                elif interim_env is not None:
+                    combined_env = interim_env
+                worst_result = _VacancyCheckResult(
+                    status="interim",
+                    message=(
+                        f"Multiple vacant ancestors (latest: '{check_addr}') -- "
+                        f"operating under intersected interim envelope"
+                    ),
+                    interim_envelope=combined_env,
                 )
 
-        return None
+        return worst_result
+
+    def _compute_interim_envelope_locked(
+        self,
+        role_address: str,
+        vacant_ancestor_address: str,
+    ) -> ConstraintEnvelopeConfig | None:
+        """Compute interim envelope during vacancy deadline window. Caller holds lock."""
+        own_envelope = self._compute_envelope_locked(role_address)
+        parent_envelope = self._compute_envelope_locked(vacant_ancestor_address)
+        if own_envelope is None and parent_envelope is None:
+            return None
+        if own_envelope is None:
+            return parent_envelope
+        if parent_envelope is None:
+            return own_envelope
+        return intersect_envelopes(own_envelope, parent_envelope)
 
     # -------------------------------------------------------------------
     # Audit API

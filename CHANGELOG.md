@@ -15,6 +15,17 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [Unreleased] — PACT Spec-Conformance
+
+#### Added
+
+- **PACT write-time tightening for all 5 CARE dimensions** (#200): `validate_tightening()` now checks Temporal, Data Access, and Communication dimensions in addition to Financial, Confidentiality, Operational, and Delegation. Per-dimension gradient thresholds (`DimensionThresholds`, `GradientThresholdsConfig`) allow configurable auto-approve/flag/hold/block ranges. Gradient dereliction and pass-through envelope detection added.
+- **PACT auto-create vacant head roles** (#201): `compile_org()` auto-synthesizes vacant head roles for headless departments and teams per spec Section 4.2. Bridge bilateral consent protocol (`consent_bridge()`) and scope validation against endpoint envelopes added. Compliance role as alternative bridge approver.
+- **PACT vacancy interim envelope** (#202): Vacant roles within the configurable deadline window now operate under an interim envelope (intersection of own + parent's envelope) instead of being fully blocked. `vacancy_deadline_hours` parameter on `GovernanceEngine`.
+- **PACT EATP record emission** (#199): `GovernanceEngine` emits `GenesisRecord`, `DelegationRecord`, and `CapabilityAttestation` via the new `PactEatpEmitter` protocol (Section 5.7 normative mapping). `InMemoryPactEmitter` default implementation. Access denials include `barrier_enforced` audit flag.
+
+---
+
 ### [2.3.4] - 2026-03-31
 
 **Patch Release** — kailash 2.3.4
