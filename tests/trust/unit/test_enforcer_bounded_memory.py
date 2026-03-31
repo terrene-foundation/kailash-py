@@ -74,12 +74,12 @@ class TestShadowEnforcerBoundedMemory:
     def test_default_maxlen_is_10000(self):
         """Default maxlen should be 10,000."""
         shadow = ShadowEnforcer()
-        assert shadow._max_records == 10_000
+        assert shadow._records.maxlen == 10_000
 
     def test_custom_maxlen(self):
         """maxlen should be configurable."""
         shadow = ShadowEnforcer(maxlen=500)
-        assert shadow._max_records == 500
+        assert shadow._records.maxlen == 500
 
     def test_records_trimmed_at_maxlen(self):
         """When records exceed maxlen, oldest 10% are trimmed."""
@@ -133,7 +133,9 @@ class TestShadowEnforcerBoundedMemory:
         for i in range(40):
             shadow.check(agent_id=f"agent-{i}", action="read", result=valid_result)
         for i in range(20):
-            shadow.check(agent_id=f"agent-bad-{i}", action="read", result=invalid_result)
+            shadow.check(
+                agent_id=f"agent-bad-{i}", action="read", result=invalid_result
+            )
 
         # Metrics track totals, not just in-record counts
         assert shadow.metrics.total_checks == 60
