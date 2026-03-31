@@ -755,7 +755,7 @@ class NodeGenerator:
                                 name="id",
                                 type=id_type if id_type else int,
                                 required=False,  # Optional - DB can auto-generate if not provided
-                                description=f"Primary key for the record (user-provided {id_type.__name__ if id_type else 'int'})",
+                                description=f"Primary key for the record (user-provided {getattr(id_type, '__name__', str(id_type)) if id_type else 'int'})",
                             )
                         elif field_name not in ["created_at", "updated_at"]:
                             # Normalize complex type annotations to simple types
@@ -1485,7 +1485,44 @@ class NodeGenerator:
                                 logger.debug(
                                     f"SQLite lastrowid found directly: {row['lastrowid']}"
                                 )
-                                created_record = {"id": row["lastrowid"], **kwargs}
+                                record_id = row["lastrowid"]
+                                # Use user-provided id if available, otherwise lastrowid
+                                if "id" in kwargs:
+                                    record_id = kwargs["id"]
+                                created_record = {"id": record_id, **kwargs}
+
+                                # Read-back SELECT to fetch auto-generated fields (created_at, updated_at)
+                                has_timestamps = (
+                                    "created_at" in model_fields
+                                    or "updated_at" in model_fields
+                                )
+                                if has_timestamps:
+                                    readback_query = (
+                                        f"SELECT * FROM {table_name} WHERE id = ?"
+                                    )
+                                    readback_result = await sql_node.async_run(
+                                        query=readback_query,
+                                        params=[record_id],
+                                        fetch_mode="one",
+                                        validate_queries=False,
+                                    )
+                                    if (
+                                        readback_result
+                                        and "result" in readback_result
+                                        and "data" in readback_result["result"]
+                                    ):
+                                        readback_row = readback_result["result"]["data"]
+                                        if (
+                                            isinstance(readback_row, list)
+                                            and len(readback_row) > 0
+                                        ):
+                                            readback_row = readback_row[0]
+                                        if isinstance(readback_row, dict):
+                                            created_record = {
+                                                **created_record,
+                                                **readback_row,
+                                            }
+
                                 # Invalidate cache after successful create
                                 cache_integration = getattr(
                                     self.dataflow_instance, "_cache_integration", None

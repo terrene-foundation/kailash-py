@@ -557,6 +557,15 @@ class TestCreateBridge:
         lead_dev_addr = _find_address_by_name(test_engine, "Lead Developer")
         lead_des_addr = _find_address_by_name(test_engine, "Lead Designer")
 
+        # LCA approval required before bridge creation
+        from kailash.trust.pact.addressing import Address
+
+        lca = Address.lowest_common_ancestor(
+            Address.parse(lead_dev_addr), Address.parse(lead_des_addr)
+        )
+        assert lca is not None
+        test_engine.approve_bridge(lead_dev_addr, lead_des_addr, str(lca))
+
         resp = await client.post(
             "/api/v1/governance/bridges",
             json={

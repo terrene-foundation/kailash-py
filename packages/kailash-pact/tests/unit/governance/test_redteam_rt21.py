@@ -1022,13 +1022,15 @@ class TestAuditChainIntegrity:
         )
         engine.grant_clearance("D1-R1", clr)
 
+        # Use same-department addresses so LCA exists (D1-R1 is LCA)
         bridge = PactBridge(
             id="audit-bridge",
             role_a_address="D1-R1",
-            role_b_address="D2-R1",
+            role_b_address="D1-R1-T1-R1",
             bridge_type="standing",
             max_classification=ConfidentialityLevel.CONFIDENTIAL,
         )
+        engine.approve_bridge("D1-R1", "D1-R1-T1-R1", "D1-R1")
         engine.create_bridge(bridge)
 
         # Verify integrity

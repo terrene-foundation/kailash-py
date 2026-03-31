@@ -6,6 +6,7 @@ using the Kailash SDK's enterprise gateway patterns.
 
 import asyncio
 import logging
+import warnings
 from typing import Any, Dict, List, Optional, Union
 
 from nexus import Nexus, create_nexus
@@ -110,7 +111,9 @@ class DataFlowGateway:
             except RuntimeError:
                 self.runtime = LocalRuntime()
                 self._is_async = False
-                logger.debug("DataFlowGateway: Detected sync context, using LocalRuntime")
+                logger.debug(
+                    "DataFlowGateway: Detected sync context, using LocalRuntime"
+                )
             self._owns_runtime = True
 
         # Pre-configured workflows
@@ -701,12 +704,10 @@ class DataFlowGateway:
             self.runtime.release()
             self.runtime = None
 
-    def __del__(self):
+    def __del__(self, _warnings=warnings):
         """Emit ResourceWarning if close() was not called explicitly."""
         if getattr(self, "runtime", None) is not None:
-            import warnings
-
-            warnings.warn(
+            _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
                 source=self,

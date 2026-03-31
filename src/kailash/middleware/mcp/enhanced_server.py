@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import uuid
+import warnings
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
@@ -551,11 +552,9 @@ result = {'execution_result': execution_result}
             self.runtime.release()
             self.runtime = None
 
-    def __del__(self):
+    def __del__(self, _warnings=warnings):
         if getattr(self, "runtime", None) is not None:
-            import warnings
-
-            warnings.warn(
+            _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() or stop() explicitly.",
                 ResourceWarning,
                 source=self,

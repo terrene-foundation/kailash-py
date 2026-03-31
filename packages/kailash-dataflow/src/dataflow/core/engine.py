@@ -20,7 +20,7 @@ from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
 from ..features.bulk import BulkOperations
-from ..features.express import ExpressDataFlow
+from ..features.express import ExpressDataFlow, SyncExpress
 from ..features.multi_tenant import MultiTenantManager
 from ..features.transactions import TransactionManager
 from ..migrations.auto_migration_system import AutoMigrationSystem
@@ -679,7 +679,7 @@ class DataFlow:
                         await self._migration_system._ensure_migration_table()
                         logger.debug("Migration table verification completed")
                     except Exception as e:
-                        logger.warning(f"Migration table setup encountered issue: {e}")
+                        logger.debug(f"Migration table setup encountered issue: {e}")
                         # Don't fail initialization for migration table issues in existing_schema_mode
                         if not self._existing_schema_mode:
                             return False
@@ -691,7 +691,7 @@ class DataFlow:
                     # In existing_schema_mode, this should be very fast
                     logger.debug("Schema state manager verified")
                 except Exception as e:
-                    logger.warning(f"Schema state manager issue: {e}")
+                    logger.debug(f"Schema state manager issue: {e}")
                     # Don't fail initialization for schema state issues in existing_schema_mode
                     if not self._existing_schema_mode:
                         return False
@@ -2340,6 +2340,28 @@ class DataFlow:
         """
         self._ensure_connected()
         return self._express_dataflow
+
+    @property
+    def express_sync(self) -> SyncExpress:
+        """Access SyncExpress for synchronous CRUD operations.
+
+        SyncExpress wraps the async ExpressDataFlow methods with synchronous
+        equivalents for use in CLI scripts, synchronous handlers, and pytest
+        without asyncio.
+
+        Example:
+            user = db.express_sync.create("User", {"id": "u1", "name": "Alice"})
+            user = db.express_sync.read("User", "u1")
+            users = db.express_sync.list("User", filter={"active": True})
+            count = db.express_sync.count("User")
+
+        Returns:
+            SyncExpress: Synchronous CRUD interface
+        """
+        self._ensure_connected()
+        if not hasattr(self, "_express_sync") or self._express_sync is None:
+            self._express_sync = SyncExpress(self._express_dataflow)
+        return self._express_sync
 
     @property
     def schema_state_manager(self):
@@ -5392,7 +5414,7 @@ class DataFlow:
             results, _ = runtime.execute(workflow.build())
 
             if results.get("create_table", {}).get("status") != "completed":
-                logger.warning("Failed to create dataflow_migrations table")
+                logger.debug("Failed to create dataflow_migrations table")
                 return
 
             # Create database-specific indexes
@@ -5521,7 +5543,7 @@ class DataFlow:
             )
 
             if results.get("create_table", {}).get("status") != "completed":
-                logger.warning("Failed to create dataflow_migrations table (async)")
+                logger.debug("Failed to create dataflow_migrations table (async)")
                 return
 
             # Create database-specific indexes

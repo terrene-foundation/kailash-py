@@ -35,6 +35,7 @@ from .configuration import (
 )
 from .core.config import DataFlowConfig, LoggingConfig, mask_sensitive
 from .core.engine import DataFlow
+from .features.express import SyncExpress
 from .engine import (
     DataFlowEngine,
     HealthStatus,
@@ -94,6 +95,7 @@ __version__ = "1.3.0"
 
 __all__ = [
     "DataFlow",
+    "SyncExpress",
     "DataFlowEngine",
     "QueryEngine",
     "HealthStatus",

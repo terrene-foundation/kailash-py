@@ -1,6 +1,7 @@
 """Enhanced parallel runtime with cyclic workflow support."""
 
 import logging
+import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from typing import Any
@@ -539,11 +540,9 @@ class ParallelCyclicRuntime:
             self.local_runtime.release()
             self.local_runtime = None
 
-    def __del__(self):
+    def __del__(self, _warnings=warnings):
         if getattr(self, "local_runtime", None) is not None:
-            import warnings
-
-            warnings.warn(
+            _warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
                 source=self,
