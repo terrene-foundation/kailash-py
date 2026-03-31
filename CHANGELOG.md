@@ -15,6 +15,49 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [kailash-dataflow 1.4.0] - 2026-03-31
+
+#### Added
+
+- **Sync Express API** (#187): New `SyncExpress` class available via `db.express_sync` — wraps all 11 async Express methods for non-async contexts (CLI scripts, sync handlers, pytest without asyncio). Uses persistent daemon thread event loop.
+
+#### Fixed
+
+- **SQLite timestamp read-back** (#184): `express.create()` on SQLite now returns `created_at`/`updated_at` via follow-up query, matching PostgreSQL RETURNING behavior
+- **Migration log noise** (#185): 16 WARNING-level messages for expected/idempotent operations reduced to DEBUG
+- **`__del__` finalizer safety** (#186): 12 DataFlow classes hardened with `_warnings=warnings` guard
+- **`id_type.__name__` AttributeError**: Fixed crash when model defines `id` as `str` type in generated CreateNode parameters
+
+---
+
+### [2.3.2] - 2026-03-31
+
+**Patch Release** — kailash 2.3.2
+
+#### Fixed
+
+- **`__del__` finalizer safety** (#186): 6 core classes (3 runtimes, 2 channels, 1 middleware) hardened with `_warnings=warnings` guard for interpreter shutdown safety
+- **SQLite cursor leak**: Fixed unclosed cursor in `SQLiteAdapter.execute()` causing "cannot commit — SQL statements in progress" errors
+- **CodeQL compliance**: `AsyncLocalRuntime.__del__` now calls `super().__del__()` so `LocalRuntime` finalizer runs
+
+---
+
+### [kailash-nexus 1.6.1] - 2026-03-31
+
+#### Fixed
+
+- **`__del__` finalizer safety** (#186): 3 Nexus classes (NexusWorkflow, MCPServer, MCPWebsocketServer) hardened with `_warnings=warnings` guard
+
+---
+
+### [kailash-kaizen 2.3.3] - 2026-03-31
+
+#### Fixed
+
+- **`__del__` finalizer safety** (#186): 5 Kaizen classes (trust stores, governance storage, nexus storage) hardened with `_warnings=warnings` guard
+
+---
+
 ### [2.3.1] - 2026-03-30
 
 **Patch Release** — kailash 2.3.1
