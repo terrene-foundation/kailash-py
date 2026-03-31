@@ -15,6 +15,18 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [2.3.3] - 2026-03-31
+
+**Patch Release** — kailash 2.3.3
+
+#### Fixed
+
+- **TrustPosture pseudo alias** (#191): `TrustPosture("pseudo")` now resolves correctly via `_missing_` classmethod instead of raising `ValueError`
+- **ShadowEnforcer test attribute** (#193): Corrected `bounded_memory` test to use `_call_log` attribute (renamed from `call_log` during red team hardening)
+- **Hardcoded version assertions**: Removed 2 fragile hardcoded version checks in trust CLI and coverage tests
+
+---
+
 ### [kailash-dataflow 1.4.0] - 2026-03-31
 
 #### Added
