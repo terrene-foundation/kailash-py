@@ -222,7 +222,7 @@ class CommunicationConstraintConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     internal_only: bool = Field(
-        default=True, description="Agent restricted to internal channels"
+        default=False, description="Agent restricted to internal channels"
     )
     allowed_channels: list[str] = Field(
         default_factory=list, description="Channels agent may communicate through"
@@ -263,7 +263,7 @@ class ConstraintEnvelopeConfig(BaseModel):
         ),
     )
     financial: FinancialConstraintConfig | None = Field(
-        default_factory=FinancialConstraintConfig,
+        default=None,
         description=(
             "Financial constraint config. None means the agent has no financial "
             "capability -- the financial dimension is skipped during evaluation."
