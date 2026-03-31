@@ -35,6 +35,20 @@ class TrustPosture(str, Enum):
     SUPERVISED = "supervised"
     PSEUDO_AGENT = "pseudo_agent"
 
+    @classmethod
+    def _missing_(cls, value: object) -> TrustPosture | None:
+        """Accept 'pseudo' as alias for 'pseudo_agent' (CARE spec L1 name)."""
+        if isinstance(value, str):
+            lowered = value.lower().strip()
+            if lowered in ("pseudo", "pseudoagent"):
+                return cls.PSEUDO_AGENT
+            # Try matching with underscores replaced
+            normalized = lowered.replace("-", "_").replace(" ", "_")
+            for member in cls:
+                if member.value == normalized:
+                    return member
+        return None
+
     @property
     def autonomy_level(self) -> int:
         """Return the autonomy level for this posture (5=highest, 1=lowest)."""
