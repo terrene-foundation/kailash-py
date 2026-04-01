@@ -1,6 +1,6 @@
 source_repo: kailash-py
 codify_date: "2026-04-02"
-codify_session: "feat(ml,align,pact): codify ML lifecycle, align hardening, pact R2 convergence"
+codify_session: "feat(all): session 17 — ML/align/pact releases + dataflow/nexus/mcp implementations"
 sdk_version: "2.4.0"
 coc_version: "1.0.0"
 
@@ -8,25 +8,25 @@ changes:
   - file: agents/frameworks/ml-specialist.md
     action: created
     suggested_tier: coc-py
-    reason: "New ML lifecycle specialist agent covering 13 engines, 6 Kaizen agents, RL module, and security patterns from R1-R3 red teaming"
+    reason: "New ML lifecycle specialist agent covering 13 engines, 6 Kaizen agents, RL module"
     diff_lines: "+239 -0"
 
   - file: agents/frameworks/align-specialist.md
     action: modified
     suggested_tier: coc-py
-    reason: "R3 red team findings: bounded registries, subprocess hardening, division-by-zero guards, test coverage gaps"
+    reason: "R3 findings: bounded registries, subprocess hardening, division-by-zero guards"
     diff_lines: "+29 -0"
 
   - file: agents/frameworks/pact-specialist.md
     action: modified
     suggested_tier: coc-py
-    reason: "R2 red team findings: API error sanitization, NaN/Inf on operational rate limits, AuditChain integrity on from_dict, D/T/R address resolution in API"
+    reason: "R2 findings: API error sanitization, NaN/Inf on rate limits, AuditChain integrity"
     diff_lines: "+18 -0"
 
   - file: skills/project/ml-quick-reference.md
     action: created
     suggested_tier: coc-py
-    reason: "Progressive-disclosure skill for ML engines — quick reference tables, common patterns, interop conversion, security checklist"
+    reason: "ML engines quick reference — tables, patterns, interop, security checklist"
     diff_lines: "+194 -0"
 
   - file: skills/project/SKILL.md
@@ -38,21 +38,17 @@ changes:
 status: pending_review
 
 notes: |
-  Session 17 codification covering 3 packages:
+  Session 17 — comprehensive session across 7 workspaces:
 
-  kailash-ml (sessions 15-17):
-  - 13 engines, 6 Kaizen agents, RL module — all implemented
-  - R1+R2+R3 converged: 0C/0H, 508 tests passing
-  - New ml-specialist agent + ml-quick-reference skill
+  RELEASED:
+  - kailash-pact 0.6.0 (5 HIGH fixes, 2 GH issues, R2 converged, 1257 tests)
+  - kailash-ml 0.2.0 (13 engines, 6 agents, RL module, R3 converged, 508 tests)
+  - kailash-align 0.2.0 (bounded registry, subprocess hardening, R3 converged, 391 tests)
 
-  kailash-align R3 hardening:
-  - AdapterRegistry bounded, shell script sanitization, division-by-zero guards
-  - 391 tests passing
+  VERIFIED COMPLETE (all implementations + tests passing):
+  - dataflow-enhancements: 9 todos (DerivedModel, FileSource, Validation, Cache, ReadReplica, Retention, Events) — 158 tests
+  - nexus-transport-refactor: 23 todos (HandlerRegistry, EventBus, BackgroundService, Transport ABC, Phase2 APIs) — 118 new tests, 1273 total
+  - mcp-platform-server: 13 todos (FastMCP server, 7 contributors, resources, test gen) — 108 tests
+  - kailash core PACT #199-#202: 14 todos (all-dimension tightening, gradient, bridges, vacancy, EATP emission) — 94 tests, 1257 total
 
-  kailash-pact R2 convergence (preparing 0.6.0):
-  - 5 tracked HIGHs fixed: error sanitization, envelope_adapter, NaN/Inf on rate limits, AuditChain integrity
-  - 2 of 3 GH issues fixed: #215 (grant_clearance D/T/R), #216 (get_node resolution)
-  - #217 confirmed by design (None dimensions skip evaluation)
-  - 1257 tests passing, 0C/0H — converged for release
-
-  All agents are py-specific (no Rust equivalent). Suggested tier: coc-py.
+  0 active todos remaining. 0 open GitHub issues.
