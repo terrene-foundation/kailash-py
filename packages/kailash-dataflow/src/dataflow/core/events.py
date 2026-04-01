@@ -55,9 +55,11 @@ class DataFlowEventMixin:
 
     def _init_events(self) -> None:
         """Initialize the event bus.  Called once in ``DataFlow.__init__``."""
-        from kailash.middleware.communication.backends.memory import InMemoryEventBus
-
-        self._event_bus = InMemoryEventBus()
+        try:
+            from kailash.middleware.communication.backends.memory import InMemoryEventBus
+            self._event_bus = InMemoryEventBus()
+        except ImportError:
+            self._event_bus = None
 
     # ------------------------------------------------------------------
     # Emission
