@@ -1,0 +1,429 @@
+# Spec Coverage Report -- kailash-ml
+# Generated: 2026-04-01
+# Commit: c8c7f897 (main)
+# Sources: workspaces/kailash-ml/01-analysis/architecture.md
+#          workspaces/kailash-ml/02-plans/implementation-plan.md
+
+# =========================================================================
+# Phase 1: Bootstrap
+# =========================================================================
+
+## TSG-300: Package skeleton
+
+- pyproject.toml: IMPLEMENTED
+  Has all tier extras (dl, dl-gpu, rl, agents, xgb, catboost, stats, full, full-gpu, dev).
+  kailash-nexus dependency present. Version 0.1.0 (spec says 1.0.0 -- acceptable for alpha).
+  onnxruntime in base deps (spec has it in [dl] only -- minor divergence).
+
+- kailash_ml/__init__.py lazy imports: IMPLEMENTED
+  All 9 engines + OnnxBridge, MlflowFormatReader/Writer, MLDashboard, ExperimentalWarning.
+  NOTE: ExperimentTracker is NOT in __init__.py lazy loader (implemented but unwired).
+
+- kailash_ml/_version.py: IMPLEMENTED (__version__ = "0.1.0")
+
+- kailash-ml-protocols package: IMPLEMENTED
+  - protocols.py: MLToolProtocol, AgentInfusionProtocol -- IMPLEMENTED
+  - schemas.py: FeatureField, FeatureSchema, ModelSignature, MetricSpec -- IMPLEMENTED
+  - Tests: test_protocols.py, test_schemas.py -- IMPLEMENTED
+
+- kailash-ml-gpu-setup CLI: IMPLEMENTED
+  Entry point registered in pyproject.toml as kailash_ml._gpu_setup:main.
+  detect_cuda_version(), _best_cuda_tag(), main() all implemented with real logic.
+  Test: tests/unit/test_gpu_setup.py -- IMPLEMENTED
+
+## TSG-312: polars interop module
+
+- to_sklearn_input(): IMPLEMENTED (categorical handling, null handling, column_info)
+- from_sklearn_output(): IMPLEMENTED (column name restoration)
+- to_lgb_dataset(): IMPLEMENTED (categorical support via pandas, numpy fast path)
+- to_hf_dataset(): IMPLEMENTED (Arrow zero-copy path, conditional import)
+- polars_to_arrow(): IMPLEMENTED (schema validation option)
+- to_pandas(): IMPLEMENTED
+- from_pandas(): IMPLEMENTED
+- polars_to_dict_records(): IMPLEMENTED (max_rows guard)
+- from_arrow(): MISSING (spec lists it in architecture 5.2; not in interop.py __all__)
+- dict_records_to_polars(): MISSING (spec lists in implementation plan; not in source)
+- Benchmark harness (100K rows x 50 cols): MISSING (tests/bench/__init__.py is empty, no test_interop_bench.py)
+- CONVERSION_OVERHEAD_NOTE.md: MISSING
+- Test: tests/unit/test_interop.py -- IMPLEMENTED
+
+# =========================================================================
+# Phase 2: Data Layer
+# =========================================================================
+
+## TSG-301: FeatureStore
+
+- FeatureStore class: IMPLEMENTED (P0 production)
+- register_features(): IMPLEMENTED (idempotent, schema hash drift detection)
+- compute(): IMPLEMENTED (validation + projection, nullable checking)
+- get_features(): IMPLEMENTED (with point-in-time correctness via as_of)
+- get_training_set(): IMPLEMENTED (time-windowed retrieval)
+- get_features_lazy(): IMPLEMENTED (returns LazyFrame wrapper)
+- store(): IMPLEMENTED (bulk write path with chunked inserts for >10K rows)
+- list_schemas(): IMPLEMENTED (not in spec but useful)
+- _feature_sql module: IMPLEMENTED (all SQL encapsulated, _validate_identifier on all identifiers)
+- _feature_metadata DataFlow model: IMPLEMENTED (via _kml_feature_metadata SQL table)
+- Bulk write path (Arrow, not to_dicts for >10K rows): PARTIAL
+  Uses chunked to_dicts() for both paths; no true Arrow bulk insert path.
+  The >10K path still calls to_dicts(), just chunked differently.
+- Integration tests: tests/integration/test_feature_store.py -- IMPLEMENTED
+- Unit tests: None specific (covered by integration)
+
+## TSG-302: ModelRegistry
+
+- ModelRegistry class: IMPLEMENTED (P0 production)
+- register_model(): IMPLEMENTED (named register_model, not register per spec)
+- promote_model(): IMPLEMENTED (named promote_model, not promote; full stage transition validation)
+- get_model(): IMPLEMENTED (covers load-by-name, version, or stage)
+- compare(): MISSING (spec lists ModelRegistry.compare() -- not implemented)
+- list_models(): IMPLEMENTED (named list_models, not list)
+- load_artifact(): IMPLEMENTED (loads raw bytes from ArtifactStore)
+- export_mlflow(): IMPLEMENTED (writes MLmodel YAML + artifact + metadata)
+- import_mlflow(): IMPLEMENTED (reads MLmodel YAML, registers model)
+- ModelSerializer (standalone module): MISSING
+  Architecture spec Section 6.5 defines serialization.py with ModelSerializer class
+  (save, load, validate_onnx methods). File does not exist. ONNX export logic
+  is inline in model_registry.py (_attempt_onnx_export) and bridge/onnx_bridge.py.
+- model_metadata.json: IMPLEMENTED (written alongside every artifact during register)
+- onnx_status field: IMPLEMENTED ("pending"/"success"/"failed"/"not_applicable")
+- ArtifactStore protocol: IMPLEMENTED
+- LocalFileArtifactStore: IMPLEMENTED (with path traversal protection)
+- DataFlow models: IMPLEMENTED as SQL tables (_kml_models, _kml_model_versions, _kml_model_transitions)
+- ONNX pre-flight check: IMPLEMENTED (in bridge/onnx_bridge.py OnnxBridge.check_compatibility)
+- Integration tests: tests/integration/test_model_registry.py -- IMPLEMENTED
+
+# =========================================================================
+# Phase 3: Training + Inference
+# =========================================================================
+
+## TSG-303: TrainingPipeline
+
+- TrainingPipeline class: IMPLEMENTED (P0 production)
+- train(): IMPLEMENTED (full pipeline: features -> train -> evaluate -> register)
+- evaluate(): IMPLEMENTED (standalone evaluation)
+- retrain(): IMPLEMENTED (retrain with registered feature_schema)
+- ModelSpec dataclass: IMPLEMENTED
+- EvalSpec dataclass: IMPLEMENTED (with split_strategy field)
+- TrainingResult dataclass: IMPLEMENTED
+- sklearn path (to_sklearn_input at boundary): IMPLEMENTED
+- lightgbm path (to_lgb_dataset at boundary): IMPLEMENTED
+- Walk-forward CV: IMPLEMENTED (_walk_forward_split method)
+- Lightning DL path: NOT VERIFIED (spec says conditional on [dl])
+- Auto-register on success: IMPLEMENTED (registers at "staging")
+- Nexus integration (POST /api/pipelines/{name}/train): MISSING (no Nexus endpoint registration in training_pipeline.py)
+- AgentInfusionProtocol injection point: IMPLEMENTED (agent parameter accepted)
+- Integration tests: tests/integration/test_training_pipeline.py -- IMPLEMENTED
+
+## TSG-304: InferenceServer
+
+- InferenceServer class: IMPLEMENTED (P0 production)
+- predict(): IMPLEMENTED (single-record, ONNX or native path)
+- predict_batch(): IMPLEMENTED (batch prediction via numpy)
+- warm_cache(): IMPLEMENTED
+- LRU model cache: IMPLEMENTED (_ModelCache with configurable size, eviction)
+- ONNX path preference: IMPLEMENTED (loads onnxruntime.InferenceSession when onnx_status=success)
+- Native Python fallback: IMPLEMENTED (not an error)
+- PredictionResult.inference_path: IMPLEMENTED ("onnx" or "native")
+- Input validation from model_metadata.json: PARTIAL
+  Validates feature names from signature but does not load/check model_metadata.json schema directly.
+- register_endpoints() Nexus integration: IMPLEMENTED (POST /api/predict/{model_name}, batch, health)
+- MLToolProtocol implementation: IMPLEMENTED (predict, get_metrics, get_model_info)
+- Integration tests: tests/integration/test_inference_server.py -- IMPLEMENTED
+
+# =========================================================================
+# Phase 4: Monitoring + Agents
+# =========================================================================
+
+## TSG-305: DriftMonitor
+
+- DriftMonitor class: IMPLEMENTED (P1 production with caveats)
+- PSI implementation: IMPLEMENTED
+- KS test implementation: IMPLEMENTED (scipy.stats.ks_2samp)
+- set_reference(): IMPLEMENTED (stores per-feature statistics in DB)
+- check_drift(): IMPLEMENTED (PSI/KS against reference)
+- check_performance(): IMPLEMENTED (compares predictions vs actuals)
+- schedule_monitoring(): IMPLEMENTED (asyncio background task)
+- get_drift_history(): IMPLEMENTED
+- DriftReport dataclass: IMPLEMENTED
+- PerformanceDegradationReport dataclass: IMPLEMENTED
+- DriftSpec dataclass: IMPLEMENTED
+- MLDriftReport/MLDriftReference DataFlow models: IMPLEMENTED (via SQL tables)
+- Integration tests: tests/integration/test_drift_monitor.py -- IMPLEMENTED
+- Unit tests: tests/unit/test_drift_schedule.py -- IMPLEMENTED
+
+## TSG-306: AutoML engine
+
+- AutoMLEngine class: IMPLEMENTED
+- run() method: IMPLEMENTED (orchestrates candidates + search)
+- AutoMLConfig: IMPLEMENTED (with guardrail fields)
+- CandidateResult: IMPLEMENTED
+- LLMCostTracker: IMPLEMENTED (via GuardrailConfig/CostTracker in _guardrails.py)
+- LLMBudgetExceededError: IMPLEMENTED
+- Pure algorithmic mode: IMPLEMENTED
+- Agent-augmented mode: IMPLEMENTED (double opt-in)
+- 5 guardrails:
+  - G1 confidence scores: IMPLEMENTED
+  - G2 cost budget (max_llm_cost_usd): IMPLEMENTED
+  - G3 auto_approve=False: IMPLEMENTED
+  - G4 baseline comparison: IMPLEMENTED
+  - G5 audit trail: IMPLEMENTED (via AgentGuardrailMixin)
+- Unit tests: tests/unit/test_automl_engine.py -- IMPLEMENTED
+
+## TSG-307: DataExplorer
+
+- DataExplorer class: IMPLEMENTED (@experimental decorator)
+- profile(): IMPLEMENTED (per-column stats, correlations)
+  NOTE: synchronous, not async as spec suggests. Spec shows async def profile().
+- compare(): MISSING (spec Section 3.7 defines compare(data_a, data_b) -> ComparisonProfile)
+- 3 depth modes (quick/standard/deep): MISSING
+  Only one mode -- all stats computed unconditionally.
+  No ExplorerSpec parameter for depth control.
+- plotly visualizations: PARTIAL
+  visualize() method exists. No separate histogram/heatmap generators per spec.
+  ComparisonProfile type not defined.
+- Agent narrative: NOT VERIFIED (no AgentInfusionProtocol in DataExplorer constructor)
+- Unit tests: tests/unit/test_data_explorer.py -- IMPLEMENTED
+
+## TSG-308: HyperparameterSearch
+
+- HyperparameterSearch class: IMPLEMENTED (P1)
+- search() method: IMPLEMENTED
+- 4 strategies:
+  - grid: IMPLEMENTED
+  - random: IMPLEMENTED
+  - bayesian: IMPLEMENTED (uses optuna, not scipy GP+EI as spec says)
+  - halving (successive_halving): PARTIAL (delegates to random search -- not true successive halving)
+- SearchSpace: IMPLEMENTED (with ParamDistribution types)
+- IntRange/FloatRange/Categorical/LogUniform: IMPLEMENTED as ParamDistribution types
+  (named differently: type="int_uniform", "uniform", "categorical", "log_uniform")
+- SearchResult with convergence_curve: PARTIAL
+  SearchResult exists but convergence_curve field is missing (spec says pl.DataFrame).
+- Integration tests: tests/integration/test_hyperparameter_search.py -- IMPLEMENTED
+- Unit tests: tests/unit/test_hyperparameter_search.py -- IMPLEMENTED
+
+## TSG-309: FeatureEngineer
+
+- FeatureEngineer class: IMPLEMENTED (@experimental)
+- generate(): IMPLEMENTED (interactions, polynomial, binning, temporal)
+- select(): IMPLEMENTED (importance, mutual_info, correlation methods)
+- GeneratedColumn, GeneratedFeatures, SelectedFeatures: IMPLEMENTED
+- Algorithmic transforms check:
+  - rolling_mean, rolling_std: NOT VERIFIED (need deeper check)
+  - lag, diff: NOT VERIFIED
+  - poly, log, sqrt: NOT VERIFIED
+  - interaction, datetime_parts: NOT VERIFIED
+- register_to_feature_store() convenience method: MISSING (not found in source)
+- 5 guardrails via AgentGuardrailMixin: NOT VERIFIED (no evidence of mixin inheritance)
+- Unit tests: tests/unit/test_feature_engineer.py -- IMPLEMENTED
+
+## TSG-310: Kaizen agents
+
+- agents/__init__.py with lazy imports: IMPLEMENTED (all 6 agents)
+- DataScientistAgent + DataScientistSignature: IMPLEMENTED
+- FeatureEngineerAgent + FeatureEngineerSignature: IMPLEMENTED
+- ModelSelectorAgent + ModelSelectorSignature: IMPLEMENTED
+- ExperimentInterpreterAgent + ExperimentInterpreterSignature: IMPLEMENTED
+- DriftAnalystAgent + DriftAnalystSignature: IMPLEMENTED
+- RetrainingDecisionAgent + RetrainingDecisionSignature: IMPLEMENTED
+- agents/tools.py: IMPLEMENTED (16 tool functions, all dumb data endpoints)
+- confidence output field on every Signature: IMPLEMENTED (verified 6/6 signatures)
+- Import guard (raises ImportError without kailash-kaizen): IMPLEMENTED (lazy import in __init__.py)
+- Unit tests: tests/unit/test_agents.py -- IMPLEMENTED
+
+## AgentGuardrailMixin
+
+- _guardrails.py: IMPLEMENTED
+- GuardrailConfig: IMPLEMENTED (with math.isfinite validation on financial fields)
+- CostTracker: IMPLEMENTED
+- AuditEntry: IMPLEMENTED
+- ApprovalRequest / ApprovalResult: IMPLEMENTED
+- GuardrailBudgetExceededError: IMPLEMENTED
+- 5 guardrails shared across engines: IMPLEMENTED
+- Unit tests: tests/unit/test_guardrails.py -- IMPLEMENTED
+
+# =========================================================================
+# Phase 5: Classical RL
+# =========================================================================
+
+## TSG-311: RL module
+
+- RLTrainer: IMPLEMENTED (SB3 wrapper with PPO, SAC, DQN, A2C, TD3, DDPG)
+- RLTrainingConfig: IMPLEMENTED
+- RLTrainingResult: IMPLEMENTED
+- EnvironmentRegistry: IMPLEMENTED (register + make Gymnasium environments)
+- EnvironmentSpec: IMPLEMENTED
+- PolicyRegistry: IMPLEMENTED
+- PolicySpec, PolicyVersion: IMPLEMENTED
+- onnx_status = "not_applicable" for RL policies: MISSING (no explicit onnx_status handling in RL module)
+- Import guards (try/except with install message): IMPLEMENTED
+- Unit tests: tests/unit/test_rl.py -- IMPLEMENTED (PolicySpec, PolicyVersion, PolicyRegistry)
+
+# =========================================================================
+# Cross-cutting
+# =========================================================================
+
+## kailash-nexus dependency
+
+- pyproject.toml: IMPLEMENTED ("kailash-nexus>=1.0")
+
+## ExperimentTracker
+
+- engines/experiment_tracker.py: IMPLEMENTED
+  Full experiment lifecycle: create experiment, start/end runs, log params/metrics/artifacts.
+  SQL-backed via ConnectionManager. ExperimentNotFoundError, RunNotFoundError.
+- __init__.py lazy loader: MISSING (ExperimentTracker not wired into kailash_ml.__init__.py)
+- Unit tests: tests/unit/test_experiment_tracker.py -- IMPLEMENTED
+
+## EnsembleEngine
+
+- engines/ensemble.py: IMPLEMENTED
+  BlendResult, StackResult, BagResult, BoostResult types.
+  Model class allowlist for security.
+- __init__.py lazy loader: IMPLEMENTED
+- Unit tests: tests/unit/test_ensemble.py -- IMPLEMENTED
+
+## PreprocessingPipeline
+
+- engines/preprocessing.py: IMPLEMENTED
+  SetupResult dataclass. Auto-detect task type, encode categoricals, scale numerics, impute, split.
+- __init__.py lazy loader: IMPLEMENTED
+- Unit tests: tests/unit/test_preprocessing.py -- IMPLEMENTED
+
+## ModelVisualizer
+
+- engines/model_visualizer.py: IMPLEMENTED (@experimental)
+  Confusion matrix, ROC, PR curve, feature importance, learning curves, residual plots,
+  calibration curves, metric comparison, training history. All return plotly Figures.
+- __init__.py lazy loader: IMPLEMENTED
+- Unit tests: tests/unit/test_model_visualizer.py -- IMPLEMENTED
+
+## MLDashboard
+
+- dashboard/__init__.py: IMPLEMENTED (MLDashboard class with serve/serve_async)
+- dashboard/server.py: IMPLEMENTED (DashboardApp)
+- dashboard/templates/index.html: IMPLEMENTED
+- CLI entry point (kailash-ml-dashboard): IMPLEMENTED in pyproject.toml
+- __init__.py lazy loader: IMPLEMENTED
+- Unit tests: tests/unit/test_dashboard.py -- IMPLEMENTED
+
+## OnnxBridge
+
+- bridge/onnx_bridge.py: IMPLEMENTED
+  OnnxBridge, OnnxCompatibility, OnnxExportResult, OnnxValidationResult.
+  Pre-flight compatibility matrix. Export + validation logic.
+- __init__.py lazy loader: IMPLEMENTED
+- Unit tests: tests/unit/test_onnx_bridge.py -- IMPLEMENTED
+
+## MlflowFormatReader/Writer
+
+- compat/mlflow_format.py: IMPLEMENTED
+  MlflowFormatWriter (write MLmodel YAML + artifact + requirements.txt).
+  MlflowFormatReader (read MLmodel YAML + extract metadata).
+- __init__.py lazy loader: IMPLEMENTED
+- No dedicated tests (functionality tested through ModelRegistry integration tests)
+
+## ModelSerializer (standalone module)
+
+- serialization.py: MISSING
+  Architecture spec Section 1.1 lists serialization.py with ModelSerializer class.
+  Architecture spec Section 6.5 defines: save(), load(), validate_onnx().
+  Not implemented as a standalone module. ONNX export logic is split between
+  model_registry.py (_attempt_onnx_export) and bridge/onnx_bridge.py.
+  This is a design divergence, not necessarily a gap -- the functionality exists
+  but is distributed across two modules rather than centralized.
+
+# =========================================================================
+# SUMMARY
+# =========================================================================
+
+## By Status
+
+- IMPLEMENTED: 71
+- PARTIAL: 6
+- MISSING: 10
+- UNWIRED: 1
+
+## IMPLEMENTED (71)
+
+pyproject.toml, __init__.py lazy imports, _version.py, kailash-ml-protocols (protocols.py, schemas.py, tests),
+gpu_setup CLI, to_sklearn_input, from_sklearn_output, to_lgb_dataset, to_hf_dataset, polars_to_arrow,
+to_pandas, from_pandas, polars_to_dict_records, FeatureStore (class, register_features, compute,
+get_features, get_training_set, get_features_lazy, store, _feature_sql, _feature_metadata),
+ModelRegistry (class, register_model, promote_model, get_model, list_models, load_artifact, export_mlflow,
+import_mlflow, ArtifactStore, LocalFileArtifactStore, model_metadata.json, onnx_status, DataFlow tables,
+ONNX pre-flight), TrainingPipeline (class, train, evaluate, retrain, ModelSpec, EvalSpec, TrainingResult,
+sklearn path, lightgbm path, walk-forward CV, auto-register, agent injection), InferenceServer (class,
+predict, predict_batch, warm_cache, LRU cache, ONNX path, native fallback, inference_path, Nexus endpoints,
+MLToolProtocol), DriftMonitor (class, PSI, KS, set_reference, check_drift, check_performance,
+schedule_monitoring, get_drift_history, DriftReport, DriftSpec, SQL tables), AutoMLEngine (class, run,
+config, LLMCostTracker, 5 guardrails), HyperparameterSearch (class, search, grid, random, bayesian,
+SearchSpace), FeatureEngineer (class, generate, select), 6 Kaizen agents (all signatures + confidence),
+agents/tools.py, AgentGuardrailMixin, RLTrainer, EnvironmentRegistry, PolicyRegistry,
+kailash-nexus dependency, ExperimentTracker, EnsembleEngine, PreprocessingPipeline, ModelVisualizer,
+MLDashboard, OnnxBridge, MlflowFormatReader/Writer
+
+## PARTIAL (6)
+
+1. FeatureStore bulk write path: Uses chunked to_dicts() not Arrow bulk insert
+2. InferenceServer input validation: Validates from signature, not model_metadata.json schema
+3. HyperparameterSearch successive_halving: Delegates to random search (not true halving)
+4. HyperparameterSearch SearchResult.convergence_curve: Field missing (spec says pl.DataFrame)
+5. DataExplorer depth modes: Only one mode, no quick/standard/deep ExplorerSpec
+6. DataExplorer plotly visualizations: Basic visualize() exists but not full histogram/heatmap suite
+
+## MISSING (10)
+
+1. interop.from_arrow(): Listed in architecture spec Section 5.2 -- not implemented
+2. interop.dict_records_to_polars(): Listed in implementation plan -- not implemented
+3. Benchmark harness (test_interop_bench.py): Empty bench/ directory, no benchmark
+4. CONVERSION_OVERHEAD_NOTE.md: Not created
+5. ModelRegistry.compare(): Spec Section 3.3 defines compare(name, version_a, version_b) -- not implemented
+6. DataExplorer.compare(): Spec Section 3.7 defines compare(data_a, data_b) -- not implemented
+7. ModelSerializer (serialization.py): Standalone module from architecture spec -- not created
+8. FeatureEngineer.register_to_feature_store(): Convenience method from plan -- not implemented
+9. TrainingPipeline Nexus endpoints: POST /api/pipelines/{name}/train not wired
+10. RL onnx_status="not_applicable": Not explicitly set for RL policy artifacts
+
+## UNWIRED (1)
+
+1. ExperimentTracker: Fully implemented in engines/experiment_tracker.py but NOT in
+   kailash_ml.__init__.py lazy loader. Cannot be imported via `from kailash_ml import ExperimentTracker`.
+
+# =========================================================================
+# Risk Assessment
+# =========================================================================
+
+## Critical Gaps (block release)
+
+1. ModelRegistry.compare() -- P0 engine missing a spec method. Users cannot
+   compare two model versions programmatically.
+
+2. ExperimentTracker unwired -- Engine is implemented but inaccessible from
+   the public API. One-line fix in __init__.py.
+
+## Significant Gaps (should fix before release)
+
+3. DataExplorer.compare() -- spec method missing. Cannot compare two datasets.
+
+4. interop.from_arrow() and dict_records_to_polars() -- listed in spec but
+   absent. Breaks round-trip interop story.
+
+5. Benchmark harness -- no evidence that the <15% overhead criterion has
+   been validated. Success criterion from the plan cannot be verified.
+
+6. HyperparameterSearch successive_halving -- advertised as a strategy but
+   delegates to random search. Misleading API.
+
+## Minor Gaps (can ship with known limitations)
+
+7. ModelSerializer not centralized -- functionality exists across two modules.
+   Not user-facing but diverges from architecture spec.
+
+8. CONVERSION_OVERHEAD_NOTE.md -- documentation gap only.
+
+9. RL onnx_status -- minor metadata inconsistency.
+
+10. FeatureEngineer.register_to_feature_store() -- convenience method, not core.
+
+11. TrainingPipeline Nexus endpoints -- InferenceServer has them, TrainingPipeline does not.
+    Users can still trigger training programmatically.

@@ -25,6 +25,18 @@ from kailash.db.dialect import _validate_identifier
 
 logger = logging.getLogger(__name__)
 
+# Allowlist of valid SQL column types to prevent SQL injection via type names
+_ALLOWED_SQL_TYPES = frozenset({"INTEGER", "REAL", "TEXT", "BLOB", "NUMERIC"})
+
+
+def _validate_sql_type(sql_type: str) -> None:
+    """Validate a SQL column type against the allowlist."""
+    if sql_type.upper() not in _ALLOWED_SQL_TYPES:
+        raise ValueError(
+            f"Invalid SQL type '{sql_type}': must be one of {sorted(_ALLOWED_SQL_TYPES)}"
+        )
+
+
 __all__ = [
     "create_feature_table",
     "create_metadata_table",
@@ -61,8 +73,9 @@ async def create_feature_table(
     _validate_identifier(entity_id_column)
     if timestamp_column is not None:
         _validate_identifier(timestamp_column)
-    for col_name, _ in feature_columns:
+    for col_name, sql_type in feature_columns:
         _validate_identifier(col_name)
+        _validate_sql_type(sql_type)
 
     col_defs = [f"{entity_id_column} TEXT NOT NULL"]
     if timestamp_column is not None:

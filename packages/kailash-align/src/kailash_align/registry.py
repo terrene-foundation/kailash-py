@@ -47,6 +47,10 @@ class AdapterVersion:
     created_at: str
 
 
+_MAX_ADAPTERS = 10_000
+_MAX_VERSIONS_PER_ADAPTER = 1_000
+
+
 class AdapterRegistry:
     """Registry for LoRA/QLoRA adapters. Tracks adapters through their lifecycle:
     training -> evaluation -> merge -> GGUF export -> deployment.
@@ -59,10 +63,19 @@ class AdapterRegistry:
 
     Args:
         model_registry: Optional ModelRegistry instance for cross-registry lookups.
+        max_adapters: Maximum number of adapters (default 10,000). Prevents OOM.
+        max_versions_per_adapter: Maximum versions per adapter (default 1,000).
     """
 
-    def __init__(self, model_registry: Any = None) -> None:
+    def __init__(
+        self,
+        model_registry: Any = None,
+        max_adapters: int = _MAX_ADAPTERS,
+        max_versions_per_adapter: int = _MAX_VERSIONS_PER_ADAPTER,
+    ) -> None:
         self._model_registry = model_registry
+        self._max_adapters = max_adapters
+        self._max_versions_per_adapter = max_versions_per_adapter
         self._adapters: dict[str, dict[str, Any]] = {}  # name -> adapter record
         self._versions: dict[str, list[dict[str, Any]]] = (
             {}
@@ -97,8 +110,16 @@ class AdapterRegistry:
         adapter = self._ensure_adapter(name, signature, training_data_ref, tags)
         adapter_id = adapter["id"]
 
-        # Compute next version number
+        # Enforce version bounds
         existing_versions = self._versions.get(adapter_id, [])
+        if len(existing_versions) >= self._max_versions_per_adapter:
+            raise AlignmentError(
+                f"Adapter '{name}' has reached the maximum of "
+                f"{self._max_versions_per_adapter} versions. "
+                f"Delete old versions before registering new ones."
+            )
+
+        # Compute next version number
         if existing_versions:
             max_ver = max(int(v["version"]) for v in existing_versions)
             next_version = str(max_ver + 1)
@@ -408,6 +429,14 @@ class AdapterRegistry:
         """Get or create the AlignAdapter record."""
         if name in self._adapters:
             return self._adapters[name]
+
+        # Enforce adapter count bounds (prevents OOM in long-running processes)
+        if len(self._adapters) >= self._max_adapters:
+            raise AlignmentError(
+                f"AdapterRegistry has reached the maximum of "
+                f"{self._max_adapters} adapters. "
+                f"Delete unused adapters before registering new ones."
+            )
 
         lora_config = {
             "r": signature.rank,

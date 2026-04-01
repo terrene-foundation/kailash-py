@@ -538,12 +538,14 @@ class Nexus:
         self._session_manager = None  # Cross-channel session sync
         self._execution_contexts = {}  # Workflow execution tracking
 
-        # Performance tracking for revolutionary targets
+        # Performance tracking for revolutionary targets (bounded to prevent OOM)
+        from collections import deque
+
         self._performance_metrics = {
-            "workflow_registration_time": [],
-            "cross_channel_sync_time": [],
-            "failure_recovery_time": [],
-            "session_sync_latency": [],
+            "workflow_registration_time": deque(maxlen=10000),
+            "cross_channel_sync_time": deque(maxlen=10000),
+            "failure_recovery_time": deque(maxlen=10000),
+            "session_sync_latency": deque(maxlen=10000),
         }
 
         # Multi-channel orchestration state

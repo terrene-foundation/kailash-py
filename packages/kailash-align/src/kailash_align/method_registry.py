@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import importlib
 import logging
-import math
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
@@ -181,8 +180,7 @@ def get_method(name: str) -> MethodConfig:
     if name not in METHOD_REGISTRY:
         available = sorted(METHOD_REGISTRY.keys())
         raise AlignmentError(
-            f"Unknown training method '{name}'. "
-            f"Available methods: {available}"
+            f"Unknown training method '{name}'. " f"Available methods: {available}"
         )
     return METHOD_REGISTRY[name]
 
@@ -201,96 +199,189 @@ def validate_method_name(name: str) -> None:
 
 # Register built-in methods
 
-register_method(MethodConfig(
-    name="sft",
-    trainer_module="trl",
-    trainer_class_name="SFTTrainer",
-    config_module="trl",
-    config_class_name="SFTConfig",
-    dataset_validator=_validate_sft_columns,
-    dataset_required_columns=frozenset({"text"}),
-    metrics_extractor=_extract_standard_metrics,
-    requires_preference_data=False,
-    category="offline",
-))
+register_method(
+    MethodConfig(
+        name="sft",
+        trainer_module="trl",
+        trainer_class_name="SFTTrainer",
+        config_module="trl",
+        config_class_name="SFTConfig",
+        dataset_validator=_validate_sft_columns,
+        dataset_required_columns=frozenset({"text"}),
+        metrics_extractor=_extract_standard_metrics,
+        requires_preference_data=False,
+        category="offline",
+    )
+)
 
-register_method(MethodConfig(
-    name="dpo",
-    trainer_module="trl",
-    trainer_class_name="DPOTrainer",
-    config_module="trl",
-    config_class_name="DPOConfig",
-    dataset_validator=_validate_preference_columns,
-    dataset_required_columns=frozenset({"prompt", "chosen", "rejected"}),
-    metrics_extractor=_extract_dpo_metrics,
-    requires_preference_data=True,
-    supports_loss_type=True,
-    category="offline",
-))
+register_method(
+    MethodConfig(
+        name="dpo",
+        trainer_module="trl",
+        trainer_class_name="DPOTrainer",
+        config_module="trl",
+        config_class_name="DPOConfig",
+        dataset_validator=_validate_preference_columns,
+        dataset_required_columns=frozenset({"prompt", "chosen", "rejected"}),
+        metrics_extractor=_extract_dpo_metrics,
+        requires_preference_data=True,
+        supports_loss_type=True,
+        category="offline",
+    )
+)
 
-register_method(MethodConfig(
-    name="kto",
-    trainer_module="trl",
-    trainer_class_name="KTOTrainer",
-    config_module="trl",
-    config_class_name="KTOConfig",
-    dataset_validator=_validate_unpaired_columns,
-    dataset_required_columns=frozenset({"prompt", "completion", "label"}),
-    metrics_extractor=_extract_dpo_metrics,
-    requires_preference_data=False,
-    category="unpaired",
-))
+register_method(
+    MethodConfig(
+        name="kto",
+        trainer_module="trl",
+        trainer_class_name="KTOTrainer",
+        config_module="trl",
+        config_class_name="KTOConfig",
+        dataset_validator=_validate_unpaired_columns,
+        dataset_required_columns=frozenset({"prompt", "completion", "label"}),
+        metrics_extractor=_extract_dpo_metrics,
+        requires_preference_data=False,
+        category="unpaired",
+    )
+)
 
-register_method(MethodConfig(
-    name="orpo",
-    trainer_module="trl",
-    trainer_class_name="ORPOTrainer",
-    config_module="trl",
-    config_class_name="ORPOConfig",
-    dataset_validator=_validate_preference_columns,
-    dataset_required_columns=frozenset({"prompt", "chosen", "rejected"}),
-    metrics_extractor=_extract_standard_metrics,
-    requires_preference_data=True,
-    category="monolithic",
-))
+register_method(
+    MethodConfig(
+        name="orpo",
+        trainer_module="trl",
+        trainer_class_name="ORPOTrainer",
+        config_module="trl",
+        config_class_name="ORPOConfig",
+        dataset_validator=_validate_preference_columns,
+        dataset_required_columns=frozenset({"prompt", "chosen", "rejected"}),
+        metrics_extractor=_extract_standard_metrics,
+        requires_preference_data=True,
+        category="monolithic",
+    )
+)
 
-register_method(MethodConfig(
-    name="grpo",
-    trainer_module="trl",
-    trainer_class_name="GRPOTrainer",
-    config_module="trl",
-    config_class_name="GRPOConfig",
-    dataset_validator=_validate_prompt_only,
-    dataset_required_columns=frozenset({"prompt"}),
-    metrics_extractor=_extract_grpo_metrics,
-    requires_reward_func=True,
-    requires_generation_backend=True,
-    category="online",
-))
+register_method(
+    MethodConfig(
+        name="grpo",
+        trainer_module="trl",
+        trainer_class_name="GRPOTrainer",
+        config_module="trl",
+        config_class_name="GRPOConfig",
+        dataset_validator=_validate_prompt_only,
+        dataset_required_columns=frozenset({"prompt"}),
+        metrics_extractor=_extract_grpo_metrics,
+        requires_reward_func=True,
+        requires_generation_backend=True,
+        category="online",
+    )
+)
 
-register_method(MethodConfig(
-    name="rloo",
-    trainer_module="trl",
-    trainer_class_name="RLOOTrainer",
-    config_module="trl",
-    config_class_name="RLOOConfig",
-    dataset_validator=_validate_prompt_only,
-    dataset_required_columns=frozenset({"prompt"}),
-    metrics_extractor=_extract_grpo_metrics,
-    requires_reward_func=True,
-    requires_generation_backend=True,
-    category="online",
-))
+register_method(
+    MethodConfig(
+        name="rloo",
+        trainer_module="trl",
+        trainer_class_name="RLOOTrainer",
+        config_module="trl",
+        config_class_name="RLOOConfig",
+        dataset_validator=_validate_prompt_only,
+        dataset_required_columns=frozenset({"prompt"}),
+        metrics_extractor=_extract_grpo_metrics,
+        requires_reward_func=True,
+        requires_generation_backend=True,
+        category="online",
+    )
+)
 
-register_method(MethodConfig(
-    name="online_dpo",
-    trainer_module="trl",
-    trainer_class_name="OnlineDPOTrainer",
-    config_module="trl",
-    config_class_name="OnlineDPOConfig",
-    dataset_validator=_validate_prompt_only,
-    dataset_required_columns=frozenset({"prompt"}),
-    metrics_extractor=_extract_dpo_metrics,
-    requires_generation_backend=True,
-    category="online",
-))
+register_method(
+    MethodConfig(
+        name="online_dpo",
+        trainer_module="trl",
+        trainer_class_name="OnlineDPOTrainer",
+        config_module="trl",
+        config_class_name="OnlineDPOConfig",
+        dataset_validator=_validate_prompt_only,
+        dataset_required_columns=frozenset({"prompt"}),
+        metrics_extractor=_extract_dpo_metrics,
+        requires_generation_backend=True,
+        category="online",
+    )
+)
+
+# --- Experimental trainers (ALN-215) ---
+
+register_method(
+    MethodConfig(
+        name="xpo",
+        trainer_module="trl",
+        trainer_class_name="XPOTrainer",
+        config_module="trl",
+        config_class_name="XPOConfig",
+        dataset_validator=_validate_prompt_only,
+        dataset_required_columns=frozenset({"prompt"}),
+        metrics_extractor=_extract_standard_metrics,
+        requires_reward_func=True,
+        requires_generation_backend=True,
+        category="online",
+    )
+)
+
+register_method(
+    MethodConfig(
+        name="nash_md",
+        trainer_module="trl",
+        trainer_class_name="NashMDTrainer",
+        config_module="trl",
+        config_class_name="NashMDConfig",
+        dataset_validator=_validate_prompt_only,
+        dataset_required_columns=frozenset({"prompt"}),
+        metrics_extractor=_extract_standard_metrics,
+        requires_reward_func=True,
+        requires_generation_backend=True,
+        category="online",
+    )
+)
+
+register_method(
+    MethodConfig(
+        name="cpo",
+        trainer_module="trl",
+        trainer_class_name="CPOTrainer",
+        config_module="trl",
+        config_class_name="CPOConfig",
+        dataset_validator=_validate_preference_columns,
+        dataset_required_columns=frozenset({"prompt", "chosen", "rejected"}),
+        metrics_extractor=_extract_standard_metrics,
+        requires_preference_data=True,
+        category="offline",
+    )
+)
+
+register_method(
+    MethodConfig(
+        name="bco",
+        trainer_module="trl",
+        trainer_class_name="BCOTrainer",
+        config_module="trl",
+        config_class_name="BCOConfig",
+        dataset_validator=_validate_unpaired_columns,
+        dataset_required_columns=frozenset({"prompt", "completion", "label"}),
+        metrics_extractor=_extract_standard_metrics,
+        category="unpaired",
+    )
+)
+
+register_method(
+    MethodConfig(
+        name="ppo",
+        trainer_module="trl",
+        trainer_class_name="PPOTrainer",
+        config_module="trl",
+        config_class_name="PPOConfig",
+        dataset_validator=_validate_prompt_only,
+        dataset_required_columns=frozenset({"prompt"}),
+        metrics_extractor=_extract_grpo_metrics,
+        requires_reward_func=True,
+        requires_generation_backend=True,
+        category="online",
+    )
+)

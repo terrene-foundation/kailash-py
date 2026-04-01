@@ -45,6 +45,27 @@ class PredictionResult:
     inference_time_ms: float
     inference_path: str  # "onnx" | "native"
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "prediction": self.prediction,
+            "probabilities": self.probabilities,
+            "model_name": self.model_name,
+            "model_version": self.model_version,
+            "inference_time_ms": self.inference_time_ms,
+            "inference_path": self.inference_path,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> PredictionResult:
+        return cls(
+            prediction=data["prediction"],
+            probabilities=data.get("probabilities"),
+            model_name=data["model_name"],
+            model_version=data["model_version"],
+            inference_time_ms=data["inference_time_ms"],
+            inference_path=data["inference_path"],
+        )
+
 
 # ---------------------------------------------------------------------------
 # Cached model entry

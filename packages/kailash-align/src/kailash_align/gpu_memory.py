@@ -169,7 +169,7 @@ def estimate_training_memory(
 
     # 2. LoRA adapter memory
     # Each LoRA module adds 2 * hidden_dim * rank parameters
-    hidden_dim_estimate = int(math.sqrt(num_params / 12))  # rough estimate
+    hidden_dim_estimate = max(1, int(math.sqrt(num_params / 12)))  # rough estimate
     lora_params = 2 * hidden_dim_estimate * lora_rank * lora_target_modules
     adapter_memory_gb = (lora_params * 2.0) / (1024**3)  # Always fp16 for LoRA
 
@@ -211,7 +211,11 @@ def estimate_training_memory(
     if available_gpu_memory_gb is None:
         available_gpu_memory_gb = _detect_gpu_memory()
 
-    fits = total_estimate_gb <= available_gpu_memory_gb if available_gpu_memory_gb else True
+    fits = (
+        total_estimate_gb <= available_gpu_memory_gb
+        if available_gpu_memory_gb
+        else True
+    )
 
     # Recommend batch size
     if available_gpu_memory_gb and not fits:

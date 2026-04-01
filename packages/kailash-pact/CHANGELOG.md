@@ -1,5 +1,21 @@
 # PACT Changelog
 
+## [0.6.0] - 2026-04-02
+
+### Fixed
+
+- **API error sanitization** (P-H6): All mutation endpoints now hide internal exception details
+- **Envelope adapter error handling** (P-H7): PactError vs generic Exception handled separately with sanitized messages
+- **NaN/Inf on operational rate limits** (P-H8/P-H9): `max_actions_per_day` and `max_actions_per_hour` validated via `math.isfinite()`
+- **AuditChain integrity on deserialization** (P-H10): `from_dict()` verifies hash chain after reconstruction
+- **grant_clearance D/T/R resolution** (#215): Endpoint resolves D/T/R addresses via `engine.get_node()` before granting
+- **get_node non-head role resolution** (#216): Endpoint supports suffix-based address resolution
+
+### Security
+
+- R2 red team converged: 0 CRITICAL, 0 HIGH findings
+- 1,257 tests passing, 0 regressions
+
 ## [0.5.0] - 2026-03-30
 
 ### Added

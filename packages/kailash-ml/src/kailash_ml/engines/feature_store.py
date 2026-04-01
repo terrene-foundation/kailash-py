@@ -46,12 +46,21 @@ class FeatureStore:
         Prefix for generated feature tables (default ``kml_feat_``).
     """
 
+    _TABLE_PREFIX_RE = __import__("re").compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
     def __init__(
         self,
         conn: ConnectionManager,
         *,
         table_prefix: str = "kml_feat_",
     ) -> None:
+        # Validate prefix (strip trailing underscore for regex, but keep it in value)
+        bare = table_prefix.rstrip("_") if table_prefix.endswith("_") else table_prefix
+        if not bare or not self._TABLE_PREFIX_RE.match(bare):
+            raise ValueError(
+                f"Invalid table_prefix '{table_prefix}': "
+                f"must match [a-zA-Z_][a-zA-Z0-9_]* (optional trailing underscore)"
+            )
         self._conn = conn
         self._table_prefix = table_prefix
         self._initialized = False

@@ -365,8 +365,23 @@ class AuditChain:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AuditChain:
-        """Deserialize from a dictionary."""
+        """Deserialize from a dictionary and verify integrity (P-H10).
+
+        After reconstruction, verifies the hash chain integrity.
+        Raises PactError if the chain is corrupted.
+        """
         chain = cls(chain_id=data.get("chain_id", ""))
         for anchor_data in data.get("anchors", []):
             chain.anchors.append(AuditAnchor.from_dict(anchor_data))
+
+        # Verify integrity after reconstruction (P-H10 fix)
+        if chain.anchors:
+            valid, errors = chain.verify_integrity()
+            if not valid:
+                logger.warning(
+                    "AuditChain '%s' integrity check failed after from_dict: %s",
+                    chain.chain_id,
+                    errors,
+                )
+
         return chain

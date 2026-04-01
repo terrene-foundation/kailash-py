@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>kailash-ml Dashboard</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-tertiary: #21262d;
+    --border: #30363d;
+    --text-primary: #e6edf3;
+    --text-secondary: #8b949e;
+    --text-muted: #6e7681;
+    --accent: #58a6ff;
+    --accent-hover: #79c0ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --yellow: #d29922;
+    --purple: #bc8cff;
+    --orange: #f0883e;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+  }
+
+  /* ---- Header / Nav ---- */
+  .header {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-logo {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-right: 32px;
+    white-space: nowrap;
+  }
+  .header-logo span { color: var(--accent); }
+  .nav-tabs {
+    display: flex;
+    gap: 4px;
+    height: 100%;
+  }
+  .nav-tab {
+    padding: 0 16px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .nav-tab:hover { color: var(--text-primary); }
+  .nav-tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--accent);
+  }
+
+  /* ---- Main layout ---- */
+  .main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  /* ---- Breadcrumb ---- */
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+  }
+  .breadcrumb a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .breadcrumb .sep { color: var(--text-muted); }
+
+  /* ---- Cards ---- */
+  .card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  /* ---- Tables ---- */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  th:hover { color: var(--text-primary); }
+  th .sort-arrow { margin-left: 4px; font-size: 10px; }
+  tr:hover { background: var(--bg-tertiary); }
+  td a { color: var(--accent); text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+
+  /* ---- Badges ---- */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .badge-running { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .badge-completed { background: rgba(63,185,80,0.15); color: var(--green); }
+  .badge-failed { background: rgba(248,81,73,0.15); color: var(--red); }
+  .badge-killed { background: rgba(210,153,34,0.15); color: var(--yellow); }
+  .badge-staging { background: rgba(188,140,255,0.15); color: var(--purple); }
+  .badge-production { background: rgba(63,185,80,0.15); color: var(--green); }
+  .badge-shadow { background: rgba(210,153,34,0.15); color: var(--yellow); }
+  .badge-archived { background: rgba(110,118,129,0.15); color: var(--text-muted); }
+
+  /* ---- Buttons ---- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .btn:hover { background: var(--border); }
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-danger {
+    border-color: var(--red);
+    color: var(--red);
+  }
+  .btn-danger:hover { background: rgba(248,81,73,0.15); }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* ---- Compare toolbar ---- */
+  .compare-bar {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    padding: 12px 24px;
+    z-index: 100;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .compare-bar.visible { display: flex; }
+
+  /* ---- Checkbox ---- */
+  input[type="checkbox"] {
+    width: 16px; height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  /* ---- Params diff ---- */
+  .diff-highlight { background: rgba(210,153,34,0.2); padding: 2px 4px; border-radius: 3px; }
+  .params-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 12px;
+  }
+
+  /* ---- Charts ---- */
+  .chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+    gap: 16px;
+    margin-top: 12px;
+  }
+  .chart-container {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  /* ---- Empty state ---- */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+  }
+  .empty-state h3 { font-size: 18px; margin-bottom: 8px; color: var(--text-primary); }
+
+  /* ---- Loading ---- */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: var(--text-secondary);
+  }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 768px) {
+    .main { padding: 16px; }
+    .chart-grid { grid-template-columns: 1fr; }
+    .params-grid { grid-template-columns: 1fr; }
+    table { font-size: 13px; }
+    th, td { padding: 8px 6px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo"><span>kailash</span>-ml</div>
+  <nav class="nav-tabs">
+    <a class="nav-tab active" data-tab="experiments" onclick="navigate('experiments')">Experiments</a>
+    <a class="nav-tab" data-tab="models" onclick="navigate('models')">Models</a>
+  </nav>
+</div>
+
+<div class="main" id="app">
+  <div class="loading">Loading...</div>
+</div>
+
+<div class="compare-bar" id="compareBar">
+  <span id="compareCount">0 runs selected</span>
+  <div>
+    <button class="btn" onclick="clearSelection()">Clear</button>
+    <button class="btn btn-primary" onclick="compareSelected()">Compare Selected</button>
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+const state = {
+  selectedRuns: new Set(),
+  currentSort: { col: null, dir: 'asc' },
+};
+
+// ---------------------------------------------------------------------------
+// API helpers
+// ---------------------------------------------------------------------------
+async function api(path) {
+  const resp = await fetch(path);
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw new Error(body.error || `HTTP ${resp.status}`);
+  }
+  return resp.json();
+}
+
+async function apiDelete(path) {
+  const resp = await fetch(path, { method: 'DELETE' });
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw new Error(body.error || `HTTP ${resp.status}`);
+  }
+  return resp.json();
+}
+
+// ---------------------------------------------------------------------------
+// Navigation
+// ---------------------------------------------------------------------------
+function navigate(route) {
+  location.hash = '#' + route;
+}
+
+function setActiveTab(tab) {
+  document.querySelectorAll('.nav-tab').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === tab);
+  });
+}
+
+async function router() {
+  const hash = location.hash.slice(1) || 'experiments';
+  const app = document.getElementById('app');
+  app.innerHTML = '<div class="loading">Loading...</div>';
+  state.selectedRuns.clear();
+  updateCompareBar();
+
+  try {
+    if (hash === 'experiments') {
+      setActiveTab('experiments');
+      await renderExperiments(app);
+    } else if (hash.startsWith('experiments/')) {
+      setActiveTab('experiments');
+      const name = decodeURIComponent(hash.slice('experiments/'.length));
+      await renderRuns(app, name);
+    } else if (hash.startsWith('runs/')) {
+      setActiveTab('experiments');
+      const runId = hash.slice('runs/'.length);
+      await renderRunDetail(app, runId);
+    } else if (hash.startsWith('compare')) {
+      setActiveTab('experiments');
+      const params = new URLSearchParams(hash.split('?')[1] || '');
+      const ids = (params.get('run_ids') || '').split(',').filter(Boolean);
+      await renderComparison(app, ids);
+    } else if (hash === 'models') {
+      setActiveTab('models');
+      await renderModels(app);
+    } else if (hash.startsWith('models/')) {
+      setActiveTab('models');
+      const name = decodeURIComponent(hash.slice('models/'.length));
+      await renderModelVersions(app, name);
+    } else {
+      setActiveTab('experiments');
+      await renderExperiments(app);
+    }
+  } catch (err) {
+    app.innerHTML = `<div class="card"><div class="empty-state"><h3>Error</h3><p>${escapeHtml(err.message)}</p></div></div>`;
+  }
+}
+
+window.addEventListener('hashchange', router);
+window.addEventListener('load', router);
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function statusBadge(status) {
+  if (!status) return '';
+  const cls = status.toLowerCase();
+  return `<span class="badge badge-${cls}">${escapeHtml(status)}</span>`;
+}
+
+function stageBadge(stage) {
+  if (!stage) return '';
+  return `<span class="badge badge-${stage}">${escapeHtml(stage)}</span>`;
+}
+
+function formatDuration(start, end) {
+  if (!start) return '-';
+  const s = new Date(start);
+  if (!end) return 'running...';
+  const e = new Date(end);
+  const sec = Math.round((e - s) / 1000);
+  if (sec < 60) return `${sec}s`;
+  if (sec < 3600) return `${Math.floor(sec/60)}m ${sec%60}s`;
+  return `${Math.floor(sec/3600)}h ${Math.floor((sec%3600)/60)}m`;
+}
+
+function formatTime(iso) {
+  if (!iso) return '-';
+  try { return new Date(iso).toLocaleString(); }
+  catch { return iso; }
+}
+
+function formatMetric(v) {
+  if (v === null || v === undefined) return '-';
+  if (typeof v === 'number') {
+    if (Number.isInteger(v)) return v.toString();
+    return v.toFixed(6).replace(/0+$/, '').replace(/\.$/, '.0');
+  }
+  return String(v);
+}
+
+// ---------------------------------------------------------------------------
+// Experiments list
+// ---------------------------------------------------------------------------
+async function renderExperiments(app) {
+  const experiments = await api('/api/experiments');
+
+  if (experiments.length === 0) {
+    app.innerHTML = `<div class="card"><div class="empty-state"><h3>No experiments yet</h3><p>Start logging experiments with ExperimentTracker to see them here.</p></div></div>`;
+    return;
+  }
+
+  let html = `<div class="card"><div class="card-title">Experiments</div><table>
+    <thead><tr>
+      <th>Name</th><th>Runs</th><th>Latest Status</th><th>Created</th>
+    </tr></thead><tbody>`;
+
+  for (const exp of experiments) {
+    html += `<tr>
+      <td><a href="#experiments/${encodeURIComponent(exp.name)}">${escapeHtml(exp.name)}</a></td>
+      <td>${exp.run_count}</td>
+      <td>${statusBadge(exp.latest_run_status)}</td>
+      <td>${formatTime(exp.created_at)}</td>
+    </tr>`;
+  }
+
+  html += '</tbody></table></div>';
+  app.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// Runs list
+// ---------------------------------------------------------------------------
+async function renderRuns(app, expName) {
+  const runs = await api(`/api/experiments/${encodeURIComponent(expName)}/runs`);
+
+  let breadcrumb = `<div class="breadcrumb">
+    <a href="#experiments">Experiments</a>
+    <span class="sep">/</span>
+    <span>${escapeHtml(expName)}</span>
+  </div>`;
+
+  if (runs.length === 0) {
+    app.innerHTML = breadcrumb + `<div class="card"><div class="empty-state"><h3>No runs</h3><p>No runs in this experiment yet.</p></div></div>`;
+    return;
+  }
+
+  // Collect all param and metric keys across runs
+  const paramKeys = new Set();
+  const metricKeys = new Set();
+  for (const run of runs) {
+    Object.keys(run.params || {}).forEach(k => paramKeys.add(k));
+    Object.keys(run.metrics || {}).forEach(k => metricKeys.add(k));
+  }
+  const pKeys = [...paramKeys].sort();
+  const mKeys = [...metricKeys].sort();
+
+  let html = breadcrumb + `<div class="card"><div class="card-title">Runs</div><table id="runsTable">
+    <thead><tr>
+      <th style="width:40px"></th>
+      <th onclick="sortRunsTable('name')">Name <span class="sort-arrow"></span></th>
+      <th onclick="sortRunsTable('status')">Status <span class="sort-arrow"></span></th>
+      <th onclick="sortRunsTable('start_time')">Start Time <span class="sort-arrow"></span></th>
+      <th onclick="sortRunsTable('duration')">Duration <span class="sort-arrow"></span></th>`;
+
+  for (const pk of pKeys) {
+    html += `<th onclick="sortRunsTable('param:${escapeHtml(pk)}')">${escapeHtml(pk)} <span class="sort-arrow"></span></th>`;
+  }
+  for (const mk of mKeys) {
+    html += `<th onclick="sortRunsTable('metric:${escapeHtml(mk)}')">${escapeHtml(mk)} <span class="sort-arrow"></span></th>`;
+  }
+
+  html += `</tr></thead><tbody>`;
+
+  for (const run of runs) {
+    const runLabel = run.name || run.id.slice(0, 8);
+    html += `<tr data-run-id="${escapeHtml(run.id)}">
+      <td><input type="checkbox" onchange="toggleRunSelect('${escapeHtml(run.id)}')" ${state.selectedRuns.has(run.id) ? 'checked' : ''}></td>
+      <td><a href="#runs/${escapeHtml(run.id)}">${escapeHtml(runLabel)}</a></td>
+      <td>${statusBadge(run.status)}</td>
+      <td>${formatTime(run.start_time)}</td>
+      <td>${formatDuration(run.start_time, run.end_time)}</td>`;
+
+    for (const pk of pKeys) {
+      html += `<td>${escapeHtml(run.params?.[pk] ?? '-')}</td>`;
+    }
+    for (const mk of mKeys) {
+      html += `<td>${formatMetric(run.metrics?.[mk])}</td>`;
+    }
+    html += '</tr>';
+  }
+
+  html += '</tbody></table></div>';
+  app.innerHTML = html;
+
+  // Store runs data for client-side sorting
+  window._currentRuns = runs;
+  window._currentExpName = expName;
+  window._paramKeys = pKeys;
+  window._metricKeys = mKeys;
+}
+
+function sortRunsTable(col) {
+  if (!window._currentRuns) return;
+  const runs = window._currentRuns;
+
+  if (state.currentSort.col === col) {
+    state.currentSort.dir = state.currentSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    state.currentSort.col = col;
+    state.currentSort.dir = 'asc';
+  }
+
+  const dir = state.currentSort.dir === 'asc' ? 1 : -1;
+
+  runs.sort((a, b) => {
+    let va, vb;
+    if (col.startsWith('param:')) {
+      const k = col.slice(6);
+      va = a.params?.[k] ?? '';
+      vb = b.params?.[k] ?? '';
+    } else if (col.startsWith('metric:')) {
+      const k = col.slice(7);
+      va = a.metrics?.[k] ?? (dir > 0 ? Infinity : -Infinity);
+      vb = b.metrics?.[k] ?? (dir > 0 ? Infinity : -Infinity);
+      return (va - vb) * dir;
+    } else if (col === 'duration') {
+      va = a.end_time && a.start_time ? new Date(a.end_time) - new Date(a.start_time) : 0;
+      vb = b.end_time && b.start_time ? new Date(b.end_time) - new Date(b.start_time) : 0;
+      return (va - vb) * dir;
+    } else {
+      va = a[col] ?? '';
+      vb = b[col] ?? '';
+    }
+    if (va < vb) return -1 * dir;
+    if (va > vb) return 1 * dir;
+    return 0;
+  });
+
+  // Re-render just the body
+  renderRuns(document.getElementById('app'), window._currentExpName);
+}
+
+// ---------------------------------------------------------------------------
+// Run selection / comparison
+// ---------------------------------------------------------------------------
+function toggleRunSelect(runId) {
+  if (state.selectedRuns.has(runId)) {
+    state.selectedRuns.delete(runId);
+  } else {
+    state.selectedRuns.add(runId);
+  }
+  updateCompareBar();
+}
+
+function updateCompareBar() {
+  const bar = document.getElementById('compareBar');
+  const count = state.selectedRuns.size;
+  document.getElementById('compareCount').textContent = `${count} run${count !== 1 ? 's' : ''} selected`;
+  bar.classList.toggle('visible', count >= 2);
+}
+
+function clearSelection() {
+  state.selectedRuns.clear();
+  updateCompareBar();
+  document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+}
+
+function compareSelected() {
+  const ids = [...state.selectedRuns].join(',');
+  navigate(`compare?run_ids=${ids}`);
+}
+
+// ---------------------------------------------------------------------------
+// Run detail
+// ---------------------------------------------------------------------------
+async function renderRunDetail(app, runId) {
+  const run = await api(`/api/runs/${runId}`);
+
+  const runLabel = run.name || run.id.slice(0, 8);
+  let breadcrumb = `<div class="breadcrumb">
+    <a href="#experiments">Experiments</a>
+    <span class="sep">/</span>
+    <span>${escapeHtml(runLabel)}</span>
+  </div>`;
+
+  // Header
+  let html = breadcrumb + `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <h2 style="font-size:20px">${escapeHtml(runLabel)}</h2>
+      ${statusBadge(run.status)}
+      <span style="color:var(--text-secondary);font-size:13px">${escapeHtml(run.id)}</span>
+      <div style="flex:1"></div>
+      <button class="btn btn-danger" onclick="deleteRun('${escapeHtml(run.id)}')">Delete Run</button>
+    </div>`;
+
+  // Params
+  const params = run.params || {};
+  const paramEntries = Object.entries(params).sort((a,b) => a[0].localeCompare(b[0]));
+  if (paramEntries.length > 0) {
+    html += `<div class="card"><div class="card-title">Parameters</div><table>
+      <thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>`;
+    for (const [k, v] of paramEntries) {
+      html += `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+
+  // Metrics (latest values)
+  const metrics = run.metrics || {};
+  const metricEntries = Object.entries(metrics).sort((a,b) => a[0].localeCompare(b[0]));
+  if (metricEntries.length > 0) {
+    html += `<div class="card"><div class="card-title">Metrics (Latest)</div><table>
+      <thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>`;
+    for (const [k, v] of metricEntries) {
+      html += `<tr><td>${escapeHtml(k)}</td><td>${formatMetric(v)}</td></tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+
+  // Metric charts -- fetch history for each metric
+  if (metricEntries.length > 0) {
+    html += `<div class="card"><div class="card-title">Metric History</div><div class="chart-grid" id="metricCharts"></div></div>`;
+  }
+
+  // Artifacts
+  const artifacts = run.artifacts || [];
+  if (artifacts.length > 0) {
+    html += `<div class="card"><div class="card-title">Artifacts</div><table>
+      <thead><tr><th>Path</th></tr></thead><tbody>`;
+    for (const art of artifacts) {
+      html += `<tr><td>${escapeHtml(art)}</td></tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+
+  // Timing
+  html += `<div class="card"><div class="card-title">Timing</div><table>
+    <tbody>
+    <tr><td style="width:150px">Start</td><td>${formatTime(run.start_time)}</td></tr>
+    <tr><td>End</td><td>${formatTime(run.end_time)}</td></tr>
+    <tr><td>Duration</td><td>${formatDuration(run.start_time, run.end_time)}</td></tr>
+    </tbody></table></div>`;
+
+  app.innerHTML = html;
+
+  // Render metric charts
+  if (metricEntries.length > 0) {
+    const chartsDiv = document.getElementById('metricCharts');
+    for (const [key] of metricEntries) {
+      try {
+        const history = await api(`/api/runs/${runId}/metrics/${encodeURIComponent(key)}`);
+        if (history.length > 0) {
+          const container = document.createElement('div');
+          container.className = 'chart-container';
+          chartsDiv.appendChild(container);
+
+          Plotly.newPlot(container, [{
+            x: history.map(h => h.step),
+            y: history.map(h => h.value),
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: key,
+            line: { color: '#58a6ff', width: 2 },
+            marker: { size: 4 }
+          }], {
+            title: { text: key, font: { color: '#e6edf3', size: 14 } },
+            xaxis: { title: 'Step', color: '#8b949e', gridcolor: '#21262d', zerolinecolor: '#30363d' },
+            yaxis: { title: 'Value', color: '#8b949e', gridcolor: '#21262d', zerolinecolor: '#30363d' },
+            paper_bgcolor: 'transparent',
+            plot_bgcolor: 'transparent',
+            font: { color: '#e6edf3' },
+            margin: { t: 40, r: 20, b: 50, l: 60 },
+          }, { responsive: true, displayModeBar: false });
+        }
+      } catch (e) {
+        // Skip chart on error
+      }
+    }
+  }
+}
+
+async function deleteRun(runId) {
+  if (!confirm('Delete this run and all its data?')) return;
+  try {
+    await apiDelete(`/api/runs/${runId}`);
+    navigate('experiments');
+  } catch (err) {
+    alert('Failed to delete: ' + err.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Comparison view
+// ---------------------------------------------------------------------------
+async function renderComparison(app, runIds) {
+  if (runIds.length < 2) {
+    app.innerHTML = `<div class="card"><div class="empty-state"><h3>Select runs to compare</h3><p>Go to an experiment and select at least 2 runs.</p></div></div>`;
+    return;
+  }
+
+  const comparison = await api(`/api/compare?run_ids=${runIds.join(',')}`);
+
+  let breadcrumb = `<div class="breadcrumb">
+    <a href="#experiments">Experiments</a>
+    <span class="sep">/</span>
+    <span>Compare (${comparison.run_ids.length} runs)</span>
+  </div>`;
+
+  // Params diff
+  let html = breadcrumb;
+  const paramEntries = Object.entries(comparison.params || {}).sort((a,b) => a[0].localeCompare(b[0]));
+  if (paramEntries.length > 0) {
+    html += `<div class="card"><div class="card-title">Parameters</div><table>
+      <thead><tr><th>Parameter</th>`;
+    for (let i = 0; i < comparison.run_names.length; i++) {
+      const label = comparison.run_names[i] || comparison.run_ids[i].slice(0, 8);
+      html += `<th>${escapeHtml(label)}</th>`;
+    }
+    html += '</tr></thead><tbody>';
+
+    for (const [key, values] of paramEntries) {
+      const allSame = values.every(v => v === values[0]);
+      html += '<tr>';
+      html += `<td>${escapeHtml(key)}</td>`;
+      for (const v of values) {
+        const displayVal = v !== null && v !== undefined ? escapeHtml(v) : '-';
+        html += allSame
+          ? `<td>${displayVal}</td>`
+          : `<td><span class="diff-highlight">${displayVal}</span></td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+  }
+
+  // Metrics table
+  const metricEntries = Object.entries(comparison.metrics || {}).sort((a,b) => a[0].localeCompare(b[0]));
+  if (metricEntries.length > 0) {
+    html += `<div class="card"><div class="card-title">Metrics</div><table>
+      <thead><tr><th>Metric</th>`;
+    for (let i = 0; i < comparison.run_names.length; i++) {
+      const label = comparison.run_names[i] || comparison.run_ids[i].slice(0, 8);
+      html += `<th>${escapeHtml(label)}</th>`;
+    }
+    html += '</tr></thead><tbody>';
+
+    for (const [key, values] of metricEntries) {
+      html += `<tr><td>${escapeHtml(key)}</td>`;
+      // Find best value (highest by default)
+      const numericVals = values.filter(v => v !== null && v !== undefined);
+      const best = numericVals.length > 0 ? Math.max(...numericVals) : null;
+      for (const v of values) {
+        const isBest = v !== null && v !== undefined && v === best && numericVals.length > 1;
+        html += `<td${isBest ? ' style="color:var(--green);font-weight:600"' : ''}>${formatMetric(v)}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+  }
+
+  // Metric bar chart
+  if (metricEntries.length > 0) {
+    html += `<div class="card"><div class="card-title">Metrics Comparison</div><div id="compareBarChart" class="chart-container"></div></div>`;
+  }
+
+  // Metric curves overlay
+  if (metricEntries.length > 0) {
+    html += `<div class="card"><div class="card-title">Training Curves Overlay</div><div class="chart-grid" id="compareCurves"></div></div>`;
+  }
+
+  app.innerHTML = html;
+
+  // Render bar chart
+  if (metricEntries.length > 0) {
+    const colors = ['#58a6ff', '#3fb950', '#f0883e', '#bc8cff', '#f85149', '#d29922'];
+    const traces = [];
+    for (let i = 0; i < comparison.run_ids.length; i++) {
+      const label = comparison.run_names[i] || comparison.run_ids[i].slice(0, 8);
+      traces.push({
+        x: metricEntries.map(([k]) => k),
+        y: metricEntries.map(([, vals]) => vals[i]),
+        name: label,
+        type: 'bar',
+        marker: { color: colors[i % colors.length] },
+      });
+    }
+
+    Plotly.newPlot('compareBarChart', traces, {
+      barmode: 'group',
+      paper_bgcolor: 'transparent',
+      plot_bgcolor: 'transparent',
+      font: { color: '#e6edf3' },
+      xaxis: { color: '#8b949e', gridcolor: '#21262d' },
+      yaxis: { color: '#8b949e', gridcolor: '#21262d' },
+      legend: { font: { color: '#e6edf3' } },
+      margin: { t: 20, r: 20, b: 60, l: 60 },
+    }, { responsive: true, displayModeBar: false });
+
+    // Render overlay curves for each metric
+    const curvesDiv = document.getElementById('compareCurves');
+    for (const [key] of metricEntries) {
+      const container = document.createElement('div');
+      container.className = 'chart-container';
+      curvesDiv.appendChild(container);
+
+      const curveTraces = [];
+      for (let i = 0; i < comparison.run_ids.length; i++) {
+        try {
+          const history = await api(`/api/runs/${comparison.run_ids[i]}/metrics/${encodeURIComponent(key)}`);
+          if (history.length > 0) {
+            const label = comparison.run_names[i] || comparison.run_ids[i].slice(0, 8);
+            curveTraces.push({
+              x: history.map(h => h.step),
+              y: history.map(h => h.value),
+              type: 'scatter',
+              mode: 'lines+markers',
+              name: label,
+              line: { color: colors[i % colors.length], width: 2 },
+              marker: { size: 3 },
+            });
+          }
+        } catch (e) {
+          // Skip on error
+        }
+      }
+
+      if (curveTraces.length > 0) {
+        Plotly.newPlot(container, curveTraces, {
+          title: { text: key, font: { color: '#e6edf3', size: 14 } },
+          xaxis: { title: 'Step', color: '#8b949e', gridcolor: '#21262d', zerolinecolor: '#30363d' },
+          yaxis: { title: 'Value', color: '#8b949e', gridcolor: '#21262d', zerolinecolor: '#30363d' },
+          paper_bgcolor: 'transparent',
+          plot_bgcolor: 'transparent',
+          font: { color: '#e6edf3' },
+          legend: { font: { color: '#e6edf3' } },
+          margin: { t: 40, r: 20, b: 50, l: 60 },
+        }, { responsive: true, displayModeBar: false });
+      } else {
+        container.remove();
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+async function renderModels(app) {
+  const models = await api('/api/models');
+
+  if (models.length === 0) {
+    app.innerHTML = `<div class="card"><div class="empty-state"><h3>No models registered</h3><p>Register models with ModelRegistry to see them here.</p></div></div>`;
+    return;
+  }
+
+  let html = `<div class="card"><div class="card-title">Model Registry</div><table>
+    <thead><tr>
+      <th>Name</th><th>Latest Version</th><th>Created</th><th>Updated</th>
+    </tr></thead><tbody>`;
+
+  for (const model of models) {
+    html += `<tr>
+      <td><a href="#models/${encodeURIComponent(model.name)}">${escapeHtml(model.name)}</a></td>
+      <td>v${model.latest_version}</td>
+      <td>${formatTime(model.created_at)}</td>
+      <td>${formatTime(model.updated_at)}</td>
+    </tr>`;
+  }
+
+  html += '</tbody></table></div>';
+  app.innerHTML = html;
+}
+
+async function renderModelVersions(app, name) {
+  const versions = await api(`/api/models/${encodeURIComponent(name)}/versions`);
+
+  let breadcrumb = `<div class="breadcrumb">
+    <a href="#models">Models</a>
+    <span class="sep">/</span>
+    <span>${escapeHtml(name)}</span>
+  </div>`;
+
+  if (versions.length === 0) {
+    app.innerHTML = breadcrumb + `<div class="card"><div class="empty-state"><h3>No versions</h3></div></div>`;
+    return;
+  }
+
+  let html = breadcrumb + `<div class="card"><div class="card-title">Versions of ${escapeHtml(name)}</div><table>
+    <thead><tr>
+      <th>Version</th><th>Stage</th><th>ONNX</th><th>Created</th>
+    </tr></thead><tbody>`;
+
+  for (const ver of versions) {
+    html += `<tr>
+      <td>v${ver.version}</td>
+      <td>${stageBadge(ver.stage)}</td>
+      <td>${statusBadge(ver.onnx_status === 'success' ? 'COMPLETED' : ver.onnx_status === 'failed' ? 'FAILED' : ver.onnx_status)}</td>
+      <td>${formatTime(ver.created_at)}</td>
+    </tr>`;
+  }
+
+  html += '</tbody></table></div>';
+  app.innerHTML = html;
+}
+</script>
+</body>
+</html>

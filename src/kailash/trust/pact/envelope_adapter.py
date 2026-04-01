@@ -91,6 +91,23 @@ def _validate_finite_fields(config: ConstraintEnvelopeConfig) -> None:
             ]
         )
 
+    # Operational rate limits (P-H9)
+    if config.operational is not None:
+        if config.operational.max_actions_per_day is not None:
+            fields_to_check.append(
+                (
+                    "operational.max_actions_per_day",
+                    float(config.operational.max_actions_per_day),
+                )
+            )
+        if config.operational.max_actions_per_hour is not None:
+            fields_to_check.append(
+                (
+                    "operational.max_actions_per_hour",
+                    float(config.operational.max_actions_per_hour),
+                )
+            )
+
     if config.max_delegation_depth is not None:
         fields_to_check.append(
             ("max_delegation_depth", float(config.max_delegation_depth))
@@ -259,9 +276,21 @@ class GovernanceEnvelopeAdapter:
 
         except EnvelopeAdapterError:
             raise
-        except Exception as exc:
+        except PactError as exc:
+            # Known governance errors — safe to include message
             raise EnvelopeAdapterError(
                 f"Envelope conversion failed for role_address='{role_address}'"
                 + (f", task_id='{task_id}'" if task_id else "")
                 + f": {exc}"
+            ) from exc
+        except Exception as exc:
+            # Unknown errors — log details, sanitize message (P-H7)
+            logger.exception(
+                "Unexpected error in envelope conversion for role_address=%s",
+                role_address,
+            )
+            raise EnvelopeAdapterError(
+                f"Envelope conversion failed for role_address='{role_address}'"
+                + (f", task_id='{task_id}'" if task_id else "")
+                + " — see server logs for details"
             ) from exc

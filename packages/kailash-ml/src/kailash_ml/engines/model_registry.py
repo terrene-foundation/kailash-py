@@ -491,10 +491,8 @@ class ModelRegistry:
                     name,
                 )
 
-            # Compute artifact path (store saves happen after transaction)
-            artifact_path_str = str(
-                self._artifact_store._root / name / str(version) / "model.pkl"
-            )
+            # Use logical artifact path (protocol-agnostic, no private access)
+            artifact_path_str = f"{name}/v{version}/model.pkl"
 
             # Insert version row
             metrics_json = json.dumps([m.to_dict() for m in metrics])
@@ -719,6 +717,55 @@ class ModelRegistry:
             name,
         )
         return [_row_to_model_version(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # compare
+    # ------------------------------------------------------------------
+
+    async def compare(
+        self,
+        name: str,
+        version_a: int,
+        version_b: int,
+    ) -> dict[str, Any]:
+        """Compare two model versions on their stored metrics.
+
+        Returns a dict with metrics for each version and the deltas.
+
+        Raises
+        ------
+        ValueError
+            If either version does not exist.
+        """
+        await self._ensure_tables()
+
+        mv_a = await self.get_model(name, version_a)
+        mv_b = await self.get_model(name, version_b)
+
+        if mv_a is None:
+            raise ValueError(f"Model '{name}' version {version_a} not found")
+        if mv_b is None:
+            raise ValueError(f"Model '{name}' version {version_b} not found")
+
+        metrics_a = {m.name: m.value for m in mv_a.metrics}
+        metrics_b = {m.name: m.value for m in mv_b.metrics}
+
+        all_metric_names = sorted(set(metrics_a) | set(metrics_b))
+        deltas: dict[str, float] = {}
+        for m in all_metric_names:
+            val_a = metrics_a.get(m, 0.0)
+            val_b = metrics_b.get(m, 0.0)
+            deltas[m] = val_b - val_a
+
+        return {
+            "name": name,
+            "version_a": version_a,
+            "version_b": version_b,
+            "metrics_a": metrics_a,
+            "metrics_b": metrics_b,
+            "deltas": deltas,
+            "better_version": (version_b if sum(deltas.values()) > 0 else version_a),
+        }
 
     # ------------------------------------------------------------------
     # load_artifact

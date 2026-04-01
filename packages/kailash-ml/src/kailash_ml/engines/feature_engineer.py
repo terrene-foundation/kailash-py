@@ -42,6 +42,23 @@ class GeneratedColumn:
     strategy: str  # "interaction", "polynomial", "binning", "temporal"
     dtype: str
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "source_columns": list(self.source_columns),
+            "strategy": self.strategy,
+            "dtype": self.dtype,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> GeneratedColumn:
+        return cls(
+            name=data["name"],
+            source_columns=data["source_columns"],
+            strategy=data["strategy"],
+            dtype=data["dtype"],
+        )
+
 
 @dataclass
 class GeneratedFeatures:
@@ -52,6 +69,25 @@ class GeneratedFeatures:
     total_candidates: int
     data: pl.DataFrame
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "original_columns": list(self.original_columns),
+            "generated_columns": [g.to_dict() for g in self.generated_columns],
+            "total_candidates": self.total_candidates,
+            "data": None,  # polars DataFrame is not JSON-serializable
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> GeneratedFeatures:
+        return cls(
+            original_columns=data["original_columns"],
+            generated_columns=[
+                GeneratedColumn.from_dict(g) for g in data["generated_columns"]
+            ],
+            total_candidates=data["total_candidates"],
+            data=pl.DataFrame(),  # DataFrame cannot be restored from serialized form
+        )
+
 
 @dataclass
 class FeatureRank:
@@ -61,6 +97,23 @@ class FeatureRank:
     score: float
     rank: int
     source: str  # "original" or "generated"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "column_name": self.column_name,
+            "score": self.score,
+            "rank": self.rank,
+            "source": self.source,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> FeatureRank:
+        return cls(
+            column_name=data["column_name"],
+            score=data["score"],
+            rank=data["rank"],
+            source=data["source"],
+        )
 
 
 @dataclass
@@ -75,23 +128,35 @@ class SelectedFeatures:
     n_generated: int
     n_selected: int
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "selected_columns": list(self.selected_columns),
+            "rankings": [r.to_dict() for r in self.rankings],
+            "dropped_columns": list(self.dropped_columns),
+            "method": self.method,
+            "n_original": self.n_original,
+            "n_generated": self.n_generated,
+            "n_selected": self.n_selected,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SelectedFeatures:
+        return cls(
+            selected_columns=data["selected_columns"],
+            rankings=[FeatureRank.from_dict(r) for r in data["rankings"]],
+            dropped_columns=data["dropped_columns"],
+            method=data["method"],
+            n_original=data["n_original"],
+            n_generated=data["n_generated"],
+            n_selected=data["n_selected"],
+        )
+
 
 # ---------------------------------------------------------------------------
 # Numeric dtype helpers
 # ---------------------------------------------------------------------------
 
-_NUMERIC_DTYPES = (
-    pl.Float64,
-    pl.Float32,
-    pl.Int64,
-    pl.Int32,
-    pl.Int16,
-    pl.Int8,
-    pl.UInt64,
-    pl.UInt32,
-    pl.UInt16,
-    pl.UInt8,
-)
+from kailash_ml.engines._shared import NUMERIC_DTYPES as _NUMERIC_DTYPES
 
 
 # ---------------------------------------------------------------------------

@@ -1,41 +1,58 @@
-# Codification proposal from fix/nexus-connection-stampede
-# Created: 2026-04-01
-# Source: PR #213 (fixes #211, #212)
+source_repo: kailash-py
+codify_date: "2026-04-02"
+codify_session: "feat(ml,align,pact): codify ML lifecycle, align hardening, pact R2 convergence"
+sdk_version: "2.4.0"
+coc_version: "1.0.0"
 
-artifacts:
-  - type: rule
-    action: update
-    target: rules/dataflow-pool.md
-    classification: global  # applies to both py and rs
-    change: |
-      Add Rule 7: Batch DDL Operations
-      When creating tables for multiple models, MUST batch all DDL into a single
-      database connection. Per-model open/execute/close cycles create connection
-      churn that overwhelms Docker Desktop's vpnkit proxy.
-      Pattern: Use execute_ddl_batch() not execute_ddl() in loops.
+changes:
+  - file: agents/frameworks/ml-specialist.md
+    action: created
+    suggested_tier: coc-py
+    reason: "New ML lifecycle specialist agent covering 13 engines, 6 Kaizen agents, RL module, and security patterns from R1-R3 red teaming"
+    diff_lines: "+239 -0"
 
-  - type: rule
-    action: update
-    target: rules/connection-pool.md
-    classification: variant/py  # py-specific (rs uses Preset enum)
-    change: |
-      Add Rule 7: Nexus Gateway Auto-Detect Workers
-      MUST NOT hardcode max_workers in gateway creation. Use auto-detect
-      (min(4, cpu_count)) or explicit env var (NEXUS_MAX_WORKERS).
-      MUST share Nexus runtime with gateway — no orphan runtimes.
+  - file: agents/frameworks/align-specialist.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "R3 red team findings: bounded registries, subprocess hardening, division-by-zero guards, test coverage gaps"
+    diff_lines: "+29 -0"
 
-  - type: skill
-    action: create
-    target: skills/project/nexus-connection-safety.md
-    classification: variant/py
-    change: |
-      New skill documenting Nexus connection safety patterns:
-      - server_type/max_workers configuration
-      - NEXUS_SERVER_TYPE/NEXUS_MAX_WORKERS env vars
-      - Runtime sharing between Nexus and gateway
-      - Batch DDL for auto_migrate
+  - file: agents/frameworks/pact-specialist.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "R2 red team findings: API error sanitization, NaN/Inf on operational rate limits, AuditChain integrity on from_dict, D/T/R address resolution in API"
+    diff_lines: "+18 -0"
 
-red_team_findings:
-  deferred:
-    - C1: SQL injection in _generate_indexes_sql — pre-existing, needs _validate_identifier() calls
-    - H4: Unbounded _performance_metrics lists in Nexus core — needs deque(maxlen=10000)
+  - file: skills/project/ml-quick-reference.md
+    action: created
+    suggested_tier: coc-py
+    reason: "Progressive-disclosure skill for ML engines — quick reference tables, common patterns, interop conversion, security checklist"
+    diff_lines: "+194 -0"
+
+  - file: skills/project/SKILL.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Updated to reference new ml-quick-reference.md"
+    diff_lines: "+7 -3"
+
+status: pending_review
+
+notes: |
+  Session 17 codification covering 3 packages:
+
+  kailash-ml (sessions 15-17):
+  - 13 engines, 6 Kaizen agents, RL module — all implemented
+  - R1+R2+R3 converged: 0C/0H, 508 tests passing
+  - New ml-specialist agent + ml-quick-reference skill
+
+  kailash-align R3 hardening:
+  - AdapterRegistry bounded, shell script sanitization, division-by-zero guards
+  - 391 tests passing
+
+  kailash-pact R2 convergence (preparing 0.6.0):
+  - 5 tracked HIGHs fixed: error sanitization, envelope_adapter, NaN/Inf on rate limits, AuditChain integrity
+  - 2 of 3 GH issues fixed: #215 (grant_clearance D/T/R), #216 (get_node resolution)
+  - #217 confirmed by design (None dimensions skip evaluation)
+  - 1257 tests passing, 0C/0H — converged for release
+
+  All agents are py-specific (no Rust equivalent). Suggested tier: coc-py.

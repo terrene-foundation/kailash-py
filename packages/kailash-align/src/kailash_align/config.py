@@ -12,6 +12,11 @@ __all__ = [
     "LoRAConfig",
     "SFTConfig",
     "DPOConfig",
+    "KTOConfig",
+    "ORPOConfig",
+    "GRPOConfig",
+    "RLOOConfig",
+    "OnlineDPOConfig",
     "AdapterSignature",
     "ServingConfig",
     "EvalConfig",
@@ -214,6 +219,419 @@ class DPOConfig:
 
 
 @dataclass(frozen=True)
+class KTOConfig:
+    """Kahneman-Tversky Optimization configuration (unpaired binary feedback).
+
+    KTO works with unpaired binary feedback (prompt, completion, label) instead of
+    pairwise preferences. Dramatically lowers the data barrier compared to DPO.
+
+    Args:
+        num_train_epochs: Number of training epochs.
+        per_device_train_batch_size: Batch size per device.
+        gradient_accumulation_steps: Steps before gradient update.
+        learning_rate: Peak learning rate (KTO paper recommends 5e-7).
+        warmup_ratio: Fraction of steps for warmup.
+        beta: KTO beta parameter controlling loss scaling.
+        desirable_weight: Weight for desirable (True) examples.
+        undesirable_weight: Weight for undesirable (False) examples.
+        max_length: Maximum total sequence length.
+        max_prompt_length: Maximum prompt length.
+        logging_steps: Log metrics every N steps.
+        save_steps: Save checkpoint every N steps.
+        gradient_checkpointing: Trade compute for memory.
+        bf16: Use bfloat16 mixed precision.
+        fp16: Use float16 mixed precision.
+    """
+
+    num_train_epochs: int = 1
+    per_device_train_batch_size: int = 4
+    gradient_accumulation_steps: int = 4
+    learning_rate: float = 5e-7
+    warmup_ratio: float = 0.1
+    beta: float = 0.1
+    desirable_weight: float = 1.0
+    undesirable_weight: float = 1.0
+    max_length: int = 1024
+    max_prompt_length: int = 512
+    logging_steps: int = 10
+    save_steps: int = 100
+    gradient_checkpointing: bool = True
+    bf16: bool = True
+    fp16: bool = False
+
+    def __post_init__(self) -> None:
+        _validate_positive(self.learning_rate, "learning_rate")
+        _validate_positive(self.beta, "beta")
+        _validate_positive(self.desirable_weight, "desirable_weight")
+        _validate_positive(self.undesirable_weight, "undesirable_weight")
+        _validate_finite(self.warmup_ratio, "warmup_ratio")
+        if self.warmup_ratio < 0 or self.warmup_ratio >= 1:
+            raise ValueError(f"warmup_ratio must be in [0, 1), got {self.warmup_ratio}")
+        if self.bf16 and self.fp16:
+            raise ValueError("Cannot enable both bf16 and fp16")
+
+    def to_trl_config(self, output_dir: str):
+        """Convert to trl.KTOConfig."""
+        from trl import KTOConfig as TRLKTOConfig
+
+        return TRLKTOConfig(
+            output_dir=output_dir,
+            num_train_epochs=self.num_train_epochs,
+            per_device_train_batch_size=self.per_device_train_batch_size,
+            gradient_accumulation_steps=self.gradient_accumulation_steps,
+            learning_rate=self.learning_rate,
+            warmup_ratio=self.warmup_ratio,
+            beta=self.beta,
+            desirable_weight=self.desirable_weight,
+            undesirable_weight=self.undesirable_weight,
+            max_length=self.max_length,
+            max_prompt_length=self.max_prompt_length,
+            logging_steps=self.logging_steps,
+            save_steps=self.save_steps,
+            gradient_checkpointing=self.gradient_checkpointing,
+            bf16=self.bf16,
+            fp16=self.fp16,
+        )
+
+
+@dataclass(frozen=True)
+class ORPOConfig:
+    """Odds Ratio Preference Optimization configuration (monolithic SFT+preference).
+
+    ORPO combines SFT and preference alignment in a single training pass,
+    eliminating the need for the sft_then_dpo two-stage pipeline.
+
+    Args:
+        num_train_epochs: Number of training epochs.
+        per_device_train_batch_size: Batch size per device.
+        gradient_accumulation_steps: Steps before gradient update.
+        learning_rate: Peak learning rate (ORPO paper recommends 8e-6).
+        warmup_ratio: Fraction of steps for warmup.
+        beta: Odds ratio weight parameter.
+        max_length: Maximum total sequence length.
+        max_prompt_length: Maximum prompt length.
+        logging_steps: Log metrics every N steps.
+        save_steps: Save checkpoint every N steps.
+        gradient_checkpointing: Trade compute for memory.
+        bf16: Use bfloat16 mixed precision.
+        fp16: Use float16 mixed precision.
+    """
+
+    num_train_epochs: int = 1
+    per_device_train_batch_size: int = 4
+    gradient_accumulation_steps: int = 4
+    learning_rate: float = 8e-6
+    warmup_ratio: float = 0.1
+    beta: float = 0.1
+    max_length: int = 1024
+    max_prompt_length: int = 512
+    logging_steps: int = 10
+    save_steps: int = 100
+    gradient_checkpointing: bool = True
+    bf16: bool = True
+    fp16: bool = False
+
+    def __post_init__(self) -> None:
+        _validate_positive(self.learning_rate, "learning_rate")
+        _validate_positive(self.beta, "beta")
+        _validate_finite(self.warmup_ratio, "warmup_ratio")
+        if self.warmup_ratio < 0 or self.warmup_ratio >= 1:
+            raise ValueError(f"warmup_ratio must be in [0, 1), got {self.warmup_ratio}")
+        if self.bf16 and self.fp16:
+            raise ValueError("Cannot enable both bf16 and fp16")
+
+    def to_trl_config(self, output_dir: str):
+        """Convert to trl.ORPOConfig."""
+        from trl import ORPOConfig as TRLORPOConfig
+
+        return TRLORPOConfig(
+            output_dir=output_dir,
+            num_train_epochs=self.num_train_epochs,
+            per_device_train_batch_size=self.per_device_train_batch_size,
+            gradient_accumulation_steps=self.gradient_accumulation_steps,
+            learning_rate=self.learning_rate,
+            warmup_ratio=self.warmup_ratio,
+            beta=self.beta,
+            max_length=self.max_length,
+            max_prompt_length=self.max_prompt_length,
+            logging_steps=self.logging_steps,
+            save_steps=self.save_steps,
+            gradient_checkpointing=self.gradient_checkpointing,
+            bf16=self.bf16,
+            fp16=self.fp16,
+        )
+
+
+@dataclass(frozen=True)
+class GRPOConfig:
+    """Group Relative Policy Optimization configuration (online RL).
+
+    GRPO generates completions online and scores them with reward functions.
+    This is the method behind DeepSeek-R1. Requires reward functions from
+    RewardRegistry and optionally vLLM for fast generation.
+
+    Args:
+        num_generations: Completions per prompt (DeepSeek used 16; 4 fits single GPU).
+        temperature: Sampling temperature for generation diversity.
+        max_completion_length: Maximum tokens per generated completion.
+        num_train_epochs: Number of training epochs.
+        per_device_train_batch_size: Batch size per device.
+        gradient_accumulation_steps: Steps before gradient update.
+        learning_rate: Peak learning rate.
+        warmup_ratio: Fraction of steps for warmup.
+        kl_coef: KL divergence penalty coefficient.
+        use_vllm: Use vLLM for fast generation (requires CUDA).
+        vllm_gpu_utilization: GPU memory fraction for vLLM (0.0-1.0).
+        logging_steps: Log metrics every N steps.
+        save_steps: Save checkpoint every N steps.
+        gradient_checkpointing: Trade compute for memory.
+        bf16: Use bfloat16 mixed precision.
+        fp16: Use float16 mixed precision.
+    """
+
+    num_generations: int = 4
+    temperature: float = 0.7
+    max_completion_length: int = 2048
+    num_train_epochs: int = 1
+    per_device_train_batch_size: int = 2
+    gradient_accumulation_steps: int = 4
+    learning_rate: float = 1e-5
+    warmup_ratio: float = 0.1
+    kl_coef: float = 0.001
+    use_vllm: bool = False
+    vllm_gpu_utilization: float = 0.5
+    logging_steps: int = 10
+    save_steps: int = 100
+    gradient_checkpointing: bool = True
+    bf16: bool = True
+    fp16: bool = False
+
+    def __post_init__(self) -> None:
+        _validate_positive(self.learning_rate, "learning_rate")
+        _validate_finite(self.kl_coef, "kl_coef")
+        if self.kl_coef < 0:
+            raise ValueError(f"kl_coef must be >= 0, got {self.kl_coef}")
+        _validate_finite(self.temperature, "temperature")
+        if self.temperature <= 0:
+            raise ValueError(f"temperature must be > 0, got {self.temperature}")
+        _validate_finite(self.warmup_ratio, "warmup_ratio")
+        if self.warmup_ratio < 0 or self.warmup_ratio >= 1:
+            raise ValueError(f"warmup_ratio must be in [0, 1), got {self.warmup_ratio}")
+        if self.num_generations < 1:
+            raise ValueError(
+                f"num_generations must be >= 1, got {self.num_generations}"
+            )
+        if not 0.0 < self.vllm_gpu_utilization <= 1.0:
+            raise ValueError(
+                f"vllm_gpu_utilization must be in (0, 1], got {self.vllm_gpu_utilization}"
+            )
+        if self.bf16 and self.fp16:
+            raise ValueError("Cannot enable both bf16 and fp16")
+
+    def to_trl_config(self, output_dir: str):
+        """Convert to trl.GRPOConfig."""
+        from trl import GRPOConfig as TRLGRPOConfig
+
+        kwargs = dict(
+            output_dir=output_dir,
+            num_train_epochs=self.num_train_epochs,
+            per_device_train_batch_size=self.per_device_train_batch_size,
+            gradient_accumulation_steps=self.gradient_accumulation_steps,
+            learning_rate=self.learning_rate,
+            warmup_ratio=self.warmup_ratio,
+            num_generations=self.num_generations,
+            temperature=self.temperature,
+            max_completion_length=self.max_completion_length,
+            kl_coef=self.kl_coef,
+            logging_steps=self.logging_steps,
+            save_steps=self.save_steps,
+            gradient_checkpointing=self.gradient_checkpointing,
+            bf16=self.bf16,
+            fp16=self.fp16,
+        )
+        if self.use_vllm:
+            kwargs["use_vllm"] = True
+            kwargs["vllm_gpu_utilization"] = self.vllm_gpu_utilization
+        return TRLGRPOConfig(**kwargs)
+
+
+@dataclass(frozen=True)
+class RLOOConfig:
+    """REINFORCE Leave-One-Out configuration (online RL).
+
+    RLOO generates multiple completions per prompt and uses a leave-one-out
+    baseline for variance reduction. Same infrastructure as GRPO (reward
+    functions + optional vLLM) but different optimization technique.
+
+    Args:
+        num_generations: Completions per prompt for LOO baseline.
+        temperature: Sampling temperature for generation diversity.
+        max_completion_length: Maximum tokens per generated completion.
+        num_train_epochs: Number of training epochs.
+        per_device_train_batch_size: Batch size per device.
+        gradient_accumulation_steps: Steps before gradient update.
+        learning_rate: Peak learning rate.
+        warmup_ratio: Fraction of steps for warmup.
+        kl_coef: KL divergence penalty coefficient.
+        use_vllm: Use vLLM for fast generation (requires CUDA).
+        vllm_gpu_utilization: GPU memory fraction for vLLM (0.0-1.0).
+        logging_steps: Log metrics every N steps.
+        save_steps: Save checkpoint every N steps.
+        gradient_checkpointing: Trade compute for memory.
+        bf16: Use bfloat16 mixed precision.
+        fp16: Use float16 mixed precision.
+    """
+
+    num_generations: int = 4
+    temperature: float = 0.7
+    max_completion_length: int = 2048
+    num_train_epochs: int = 1
+    per_device_train_batch_size: int = 2
+    gradient_accumulation_steps: int = 4
+    learning_rate: float = 1e-5
+    warmup_ratio: float = 0.1
+    kl_coef: float = 0.001
+    use_vllm: bool = False
+    vllm_gpu_utilization: float = 0.5
+    logging_steps: int = 10
+    save_steps: int = 100
+    gradient_checkpointing: bool = True
+    bf16: bool = True
+    fp16: bool = False
+
+    def __post_init__(self) -> None:
+        _validate_positive(self.learning_rate, "learning_rate")
+        _validate_finite(self.kl_coef, "kl_coef")
+        if self.kl_coef < 0:
+            raise ValueError(f"kl_coef must be >= 0, got {self.kl_coef}")
+        _validate_finite(self.temperature, "temperature")
+        if self.temperature <= 0:
+            raise ValueError(f"temperature must be > 0, got {self.temperature}")
+        _validate_finite(self.warmup_ratio, "warmup_ratio")
+        if self.warmup_ratio < 0 or self.warmup_ratio >= 1:
+            raise ValueError(f"warmup_ratio must be in [0, 1), got {self.warmup_ratio}")
+        if self.num_generations < 1:
+            raise ValueError(
+                f"num_generations must be >= 1, got {self.num_generations}"
+            )
+        if not 0.0 < self.vllm_gpu_utilization <= 1.0:
+            raise ValueError(
+                f"vllm_gpu_utilization must be in (0, 1], got {self.vllm_gpu_utilization}"
+            )
+        if self.bf16 and self.fp16:
+            raise ValueError("Cannot enable both bf16 and fp16")
+
+    def to_trl_config(self, output_dir: str):
+        """Convert to trl.RLOOConfig."""
+        from trl import RLOOConfig as TRLRLOOConfig
+
+        kwargs = dict(
+            output_dir=output_dir,
+            num_train_epochs=self.num_train_epochs,
+            per_device_train_batch_size=self.per_device_train_batch_size,
+            gradient_accumulation_steps=self.gradient_accumulation_steps,
+            learning_rate=self.learning_rate,
+            warmup_ratio=self.warmup_ratio,
+            num_generations=self.num_generations,
+            temperature=self.temperature,
+            max_completion_length=self.max_completion_length,
+            kl_coef=self.kl_coef,
+            logging_steps=self.logging_steps,
+            save_steps=self.save_steps,
+            gradient_checkpointing=self.gradient_checkpointing,
+            bf16=self.bf16,
+            fp16=self.fp16,
+        )
+        if self.use_vllm:
+            kwargs["use_vllm"] = True
+            kwargs["vllm_gpu_utilization"] = self.vllm_gpu_utilization
+        return TRLRLOOConfig(**kwargs)
+
+
+@dataclass(frozen=True)
+class OnlineDPOConfig:
+    """Online DPO configuration (DPO with online generation).
+
+    Online DPO generates completions online and uses a reward model to score
+    pairs, then applies DPO loss. Requires generation backend.
+
+    Args:
+        num_train_epochs: Number of training epochs.
+        per_device_train_batch_size: Batch size per device.
+        gradient_accumulation_steps: Steps before gradient update.
+        learning_rate: Peak learning rate.
+        warmup_ratio: Fraction of steps for warmup.
+        beta: DPO beta parameter.
+        max_length: Maximum total sequence length.
+        max_prompt_length: Maximum prompt length.
+        max_completion_length: Maximum completion length for generation.
+        logging_steps: Log metrics every N steps.
+        save_steps: Save checkpoint every N steps.
+        gradient_checkpointing: Trade compute for memory.
+        bf16: Use bfloat16 mixed precision.
+        fp16: Use float16 mixed precision.
+        use_vllm: Use vLLM for fast generation (requires CUDA).
+        vllm_gpu_utilization: GPU memory fraction for vLLM (0.0-1.0).
+    """
+
+    num_train_epochs: int = 1
+    per_device_train_batch_size: int = 4
+    gradient_accumulation_steps: int = 4
+    learning_rate: float = 5e-5
+    warmup_ratio: float = 0.1
+    beta: float = 0.1
+    max_length: int = 2048
+    max_prompt_length: int = 512
+    max_completion_length: int = 512
+    logging_steps: int = 10
+    save_steps: int = 100
+    gradient_checkpointing: bool = True
+    bf16: bool = True
+    fp16: bool = False
+    use_vllm: bool = False
+    vllm_gpu_utilization: float = 0.5
+
+    def __post_init__(self) -> None:
+        _validate_positive(self.learning_rate, "learning_rate")
+        _validate_positive(self.beta, "beta")
+        _validate_finite(self.warmup_ratio, "warmup_ratio")
+        if self.warmup_ratio < 0 or self.warmup_ratio >= 1:
+            raise ValueError(f"warmup_ratio must be in [0, 1), got {self.warmup_ratio}")
+        if not 0.0 < self.vllm_gpu_utilization <= 1.0:
+            raise ValueError(
+                f"vllm_gpu_utilization must be in (0, 1], got {self.vllm_gpu_utilization}"
+            )
+        if self.bf16 and self.fp16:
+            raise ValueError("Cannot enable both bf16 and fp16")
+
+    def to_trl_config(self, output_dir: str):
+        """Convert to trl.OnlineDPOConfig."""
+        from trl import OnlineDPOConfig as TRLOnlineDPOConfig
+
+        kwargs = dict(
+            output_dir=output_dir,
+            num_train_epochs=self.num_train_epochs,
+            per_device_train_batch_size=self.per_device_train_batch_size,
+            gradient_accumulation_steps=self.gradient_accumulation_steps,
+            learning_rate=self.learning_rate,
+            warmup_ratio=self.warmup_ratio,
+            beta=self.beta,
+            max_length=self.max_length,
+            max_prompt_length=self.max_prompt_length,
+            max_completion_length=self.max_completion_length,
+            logging_steps=self.logging_steps,
+            save_steps=self.save_steps,
+            gradient_checkpointing=self.gradient_checkpointing,
+            bf16=self.bf16,
+            fp16=self.fp16,
+        )
+        if self.use_vllm:
+            kwargs["use_vllm"] = True
+            kwargs["vllm_gpu_utilization"] = self.vllm_gpu_utilization
+        return TRLOnlineDPOConfig(**kwargs)
+
+
+@dataclass(frozen=True)
 class AdapterSignature:
     """Describes a LoRA adapter's characteristics. Separate from ModelSignature (R2).
 
@@ -224,7 +642,7 @@ class AdapterSignature:
         alpha: LoRA alpha scaling factor.
         target_modules: Model modules with LoRA applied.
         task_type: PEFT task type.
-        training_method: Training method used -- 'sft', 'dpo', or 'sft_then_dpo'.
+        training_method: Any method in METHOD_REGISTRY or 'sft_then_dpo'.
     """
 
     base_model_id: str
@@ -248,23 +666,33 @@ class AdapterSignature:
             raise ValueError(
                 f"adapter_type must be 'lora' or 'qlora', got {self.adapter_type!r}"
             )
-        if self.training_method not in ("sft", "dpo", "sft_then_dpo"):
-            raise ValueError(
-                f"training_method must be 'sft', 'dpo', or 'sft_then_dpo', "
-                f"got {self.training_method!r}"
-            )
+        from kailash_align.method_registry import validate_method_name
+
+        validate_method_name(self.training_method)
 
 
 @dataclass
 class AlignmentConfig:
     """Top-level configuration for AlignmentPipeline.
 
+    Supports all training methods registered in MethodRegistry:
+    - Offline: sft, dpo, sft_then_dpo, orpo, cpo
+    - Unpaired: kto, bco
+    - Online: grpo, rloo, online_dpo, xpo, nash_md
+
     Args:
-        method: Training method -- 'sft', 'dpo', or 'sft_then_dpo'.
+        method: Training method -- any key in METHOD_REGISTRY or 'sft_then_dpo'.
         base_model_id: HuggingFace model ID (e.g., 'meta-llama/Llama-3.1-8B').
         lora: LoRA configuration.
-        sft: SFT-specific configuration (used when method is 'sft' or 'sft_then_dpo').
-        dpo: DPO-specific configuration (used when method is 'dpo' or 'sft_then_dpo').
+        sft: SFT-specific configuration.
+        dpo: DPO-specific configuration.
+        kto: KTO-specific configuration (unpaired binary feedback).
+        orpo: ORPO-specific configuration (monolithic SFT+preference).
+        grpo: GRPO-specific configuration (online RL with reward functions).
+        rloo: RLOO-specific configuration (online RL with LOO baseline).
+        online_dpo: Online DPO-specific configuration.
+        loss_type: DPO loss variant (e.g., 'ipo', 'simpo'). Only for DPO-family methods.
+        reward_funcs: Reward function names from RewardRegistry (for online methods).
         use_qlora: Enable 4-bit QLoRA via bitsandbytes. Requires [rlhf] extra.
         experiment_dir: Directory for checkpoints and output.
         local_files_only: If True, do not download from HuggingFace Hub. For air-gap.
@@ -276,16 +704,22 @@ class AlignmentConfig:
     lora: LoRAConfig = field(default_factory=LoRAConfig)
     sft: SFTConfig = field(default_factory=SFTConfig)
     dpo: DPOConfig = field(default_factory=DPOConfig)
+    kto: Optional[KTOConfig] = None
+    orpo: Optional[ORPOConfig] = None
+    grpo: Optional[GRPOConfig] = None
+    rloo: Optional[RLOOConfig] = None
+    online_dpo: Optional[OnlineDPOConfig] = None
+    loss_type: Optional[str] = None
+    reward_funcs: list[str] = field(default_factory=list)
     use_qlora: bool = False
     experiment_dir: str = "./align-experiments"
     local_files_only: bool = False
     base_model_revision: Optional[str] = None
 
     def __post_init__(self) -> None:
-        if self.method not in ("sft", "dpo", "sft_then_dpo"):
-            raise ValueError(
-                f"method must be 'sft', 'dpo', or 'sft_then_dpo', got {self.method!r}"
-            )
+        from kailash_align.method_registry import validate_method_name
+
+        validate_method_name(self.method)
         if not self.base_model_id:
             raise ValueError("base_model_id is required")
         if self.use_qlora:
@@ -296,6 +730,39 @@ class AlignmentConfig:
                     "QLoRA requires bitsandbytes. "
                     "Install with: pip install kailash-align[rlhf]"
                 ) from exc
+        # Auto-create method-specific configs with defaults if not provided
+        if self.method == "kto" and self.kto is None:
+            self.kto = KTOConfig()
+        if self.method == "orpo" and self.orpo is None:
+            self.orpo = ORPOConfig()
+        if self.method == "grpo" and self.grpo is None:
+            self.grpo = GRPOConfig()
+        if self.method == "rloo" and self.rloo is None:
+            self.rloo = RLOOConfig()
+        if self.method == "online_dpo" and self.online_dpo is None:
+            self.online_dpo = OnlineDPOConfig()
+
+    def get_method_config(self, method_name: str):
+        """Get the method-specific config for TRL config generation.
+
+        Returns the dedicated config if set, or falls back to SFT config
+        for experimental methods without dedicated configs.
+        """
+        config_map = {
+            "sft": self.sft,
+            "dpo": self.dpo,
+            "kto": self.kto,
+            "orpo": self.orpo,
+            "grpo": self.grpo,
+            "rloo": self.rloo,
+            "online_dpo": self.online_dpo,
+        }
+        config = config_map.get(method_name)
+        if config is not None:
+            return config
+        # For experimental methods (cpo, bco, xpo, nash_md) without dedicated config,
+        # fall back to sft config as base training arguments
+        return self.sft
 
     def validate(self) -> list[str]:
         """Run full validation, return list of warnings (empty = valid)."""
@@ -304,6 +771,15 @@ class AlignmentConfig:
             warnings.append("SFT config missing for SFT-based method")
         if self.method in ("dpo", "sft_then_dpo") and not self.dpo:
             warnings.append("DPO config missing for DPO-based method")
+        # Check online methods have reward functions configured
+        from kailash_align.method_registry import METHOD_REGISTRY
+
+        if self.method in METHOD_REGISTRY:
+            method_meta = METHOD_REGISTRY[self.method]
+            if method_meta.requires_reward_func and not self.reward_funcs:
+                warnings.append(
+                    f"Method '{self.method}' requires reward_funcs but none configured"
+                )
         return warnings
 
 
