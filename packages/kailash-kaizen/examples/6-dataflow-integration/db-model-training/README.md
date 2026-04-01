@@ -19,20 +19,24 @@ Database → Feature Analysis (AI) → Model Training → Metadata Storage → I
 ```
 
 ### Step 1: Data Extraction
+
 - Fetch training data from database table
 - AI analyzes table schema and data samples
 
 ### Step 2: Feature Engineering
+
 - LLM recommends optimal feature columns
 - Identifies target variable
 - Suggests preprocessing steps
 
 ### Step 3: Model Training
+
 - Extract features and target from data
 - Train model (simplified in example)
 - Store model metadata in database
 
 ### Step 4: Real-Time Inference
+
 - Fetch model metadata from database
 - Enrich input with historical context
 - Generate predictions with explanations
@@ -114,14 +118,13 @@ print(f"Metrics: {result['metrics']}")
 ## Requirements
 
 ```bash
-pip install kailash[dataflow]
-# or
 pip install kailash-dataflow
 ```
 
 ## Configuration
 
 Set environment variables:
+
 ```bash
 export DATABASE_URL="postgresql://user:pass@localhost/db"
 export OPENAI_API_KEY="your-key-here"
@@ -130,6 +133,7 @@ export OPENAI_API_KEY="your-key-here"
 ## Database Schema
 
 The example creates these tables:
+
 - `Customer` - Training data
 - `model_metadata` - Model versioning and tracking
 - `inference_results` - Inference history and auditing
@@ -138,26 +142,33 @@ The example creates these tables:
 ## Key Concepts
 
 ### Database-Driven AI
+
 Unlike traditional ML pipelines that extract data to files, this approach:
+
 - Keeps data in database (no export/import)
 - Uses database as single source of truth
 - Stores model metadata alongside data
 - Enables real-time inference with context
 
 ### AI-Powered Feature Engineering
+
 The LLM analyzes:
+
 - Table schema (column names and types)
 - Sample data (first 100 rows)
 - Model objective (business goal)
 
 And recommends:
+
 - Which columns to use as features
 - Target variable to predict
 - Required preprocessing steps
 - Optimal model configuration
 
 ### Context-Enriched Inference
+
 Each prediction is enriched with:
+
 - Historical data from database
 - Related entity information
 - User behavior patterns

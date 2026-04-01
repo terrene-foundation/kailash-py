@@ -285,6 +285,19 @@ Use framework specialists when you've chosen:
 - **Nexus** → `nexus-specialist` for deployment
 - **Kaizen** → `kaizen-specialist` for AI patterns
 
+## Within-Framework Layer Selection
+
+After choosing your framework, choose your abstraction layer. See `rules/framework-first.md`.
+
+**Rule of thumb**: Start with the Engine layer. Drop to Primitives only when the Engine can't express your need.
+
+| Framework | Start here (Engine) | Drop to this (Primitives) when... |
+|-----------|--------------------|------------------------------------|
+| DataFlow | `db.express.*` | Multi-step workflows, custom transactions |
+| Nexus | `Nexus()` | Custom protocols, non-standard channels |
+| Kaizen | `Delegate` | Custom execution loops, non-TAOD agents |
+| PACT | `GovernanceEngine` | Custom envelope patterns |
+
 ## Documentation References
 
 ### Framework Documentation

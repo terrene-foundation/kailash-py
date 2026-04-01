@@ -12,7 +12,7 @@ counters and histograms:
 - ``kailash_node_execution_duration_seconds`` -- Histogram of per-node durations.
 
 All instruments degrade gracefully when ``opentelemetry-api`` is not installed.
-Install with: ``pip install kailash[otel]``
+Included in the base install (``pip install kailash``).
 """
 
 from __future__ import annotations

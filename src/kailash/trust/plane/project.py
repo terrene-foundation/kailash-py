@@ -148,7 +148,7 @@ def set_private_file_permissions(path: Path) -> None:
         except ImportError:
             logger.warning(
                 "Private file %s is not access-controlled on this platform. "
-                "Install pywin32 for key protection: pip install kailash[trust]",
+                "Install pywin32 for key protection: pip install kailash",
                 path,
             )
     else:

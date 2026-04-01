@@ -171,7 +171,7 @@ except ImportError:
     import logging as _logging
 
     _logging.getLogger(__name__).debug(
-        "OAuth module not available — install with: pip install kailash[server,trust-sso]"
+        "OAuth module not available — install with: pip install kailash"
     )
 
 # Complete Protocol Implementation
@@ -227,7 +227,7 @@ except ImportError:
     import logging as _logging
 
     _logging.getLogger(__name__).debug(
-        "Transport modules not available — install with: pip install kailash[server]"
+        "Transport modules not available — install with: pip install kailash"
     )
 
 __all__ = [

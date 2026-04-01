@@ -1,5 +1,31 @@
 # DataFlow Changelog
 
+## [1.5.0] - 2026-04-01
+
+### Added
+
+- **DerivedModel**: Computed models that auto-update when source models change. Declarative derivation rules with dependency tracking.
+- **FileSource node**: Import data from CSV, JSON, and Parquet files directly into DataFlow models with schema inference and validation.
+- **Validation DSL**: Declarative field validation rules (`required`, `min`/`max`, `pattern`, `unique`, custom validators) applied at model level before database writes.
+- **Express cache wiring**: Transparent caching layer for `db.express` reads with configurable TTL and invalidation on writes.
+- **ReadReplica support**: Route read queries to replica databases automatically. Configurable read/write splitting with lag-aware routing.
+- **Retention engine**: Time-based and count-based data retention policies. Automatic cleanup of expired records with configurable schedules.
+- **EventMixin**: `on_source_change` callback system for reactive data pipelines. Models can subscribe to changes in other models.
+
+### Test Results
+
+- 3,690 tests passed, 0 failures
+
+## [1.4.0] - 2026-03-31
+
+### Added
+
+- **Sync Express API**: `SyncExpress` class via `db.express_sync` — wraps all 11 async Express methods for non-async contexts.
+
+### Fixed
+
+- SQLite timestamp read-back, migration log noise, `__del__` finalizer safety, `id_type.__name__` AttributeError.
+
 ## [1.1.0] - 2026-03-21
 
 ### Added

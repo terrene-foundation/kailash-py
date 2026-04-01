@@ -1,6 +1,6 @@
 # Trust-Plane CLI Reference
 
-Entry point: `attest` (installed via `pip install kailash[trust]`).
+Entry point: `attest` (installed via `pip install kailash`).
 
 ## Global Options
 

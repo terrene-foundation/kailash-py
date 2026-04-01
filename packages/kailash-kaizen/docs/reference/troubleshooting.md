@@ -7,6 +7,7 @@ Common errors and solutions when using Kaizen.
 ### Error: No API Key Provided
 
 **Error Message:**
+
 ```
 AuthenticationError: No API key provided
 openai.AuthenticationError: No API key provided
@@ -17,6 +18,7 @@ openai.AuthenticationError: No API key provided
 **Solution:**
 
 1. Create `.env` file in project root:
+
 ```bash
 # .env
 OPENAI_API_KEY=sk-...
@@ -24,6 +26,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 2. Load environment before creating agent:
+
 ```python
 from dotenv import load_dotenv
 load_dotenv()  # MUST be called before creating agent
@@ -36,6 +39,7 @@ agent = SimpleQAAgent(config)
 ### Error: Invalid API Key
 
 **Error Message:**
+
 ```
 AuthenticationError: Invalid API key
 ```
@@ -55,6 +59,7 @@ AuthenticationError: Invalid API key
 ### Error: Agent does not have tool calling support enabled
 
 **Error Message:**
+
 ```
 ValueError: Agent does not have tool calling support enabled
 ```
@@ -62,6 +67,7 @@ ValueError: Agent does not have tool calling support enabled
 **Cause:** Forgot to enable tools during initialization.
 
 **Solution:**
+
 ```python
 # ❌ WRONG - Tools not enabled
 agent = BaseAgent(config=config, signature=signature)
@@ -90,6 +96,7 @@ agent = BaseAgent(
 ### Error: Tool execution timed out waiting for approval
 
 **Error Message:**
+
 ```
 TimeoutError: Tool execution timed out waiting for approval
 ```
@@ -97,6 +104,7 @@ TimeoutError: Tool execution timed out waiting for approval
 **Cause:** No approval responder is running, or control protocol not started.
 
 **Solution:**
+
 ```python
 from kaizen.core.autonomy.control import ControlProtocol
 from kaizen.core.autonomy.control.transports import MemoryTransport
@@ -125,6 +133,7 @@ async with anyio.create_task_group() as tg:
 ### Error: Required parameter missing
 
 **Error Message:**
+
 ```
 ValueError: Required parameter 'path' missing
 ```
@@ -132,6 +141,7 @@ ValueError: Required parameter 'path' missing
 **Cause:** Missing required parameters in tool call.
 
 **Solution:**
+
 ```python
 # ❌ WRONG - Missing required parameter
 result = await agent.execute_tool("read_file", {})
@@ -153,6 +163,7 @@ for param in tool.parameters:
 ### Error: Tool not found
 
 **Error Message:**
+
 ```
 ValueError: Tool 'invalid_tool' not found in registry
 ```
@@ -160,6 +171,7 @@ ValueError: Tool 'invalid_tool' not found in registry
 **Cause:** Tool name is incorrect or not registered.
 
 **Solution:**
+
 ```python
 # List available tools
 tools = await agent.discover_tools()
@@ -176,6 +188,7 @@ result = await agent.execute_tool("read_file", {"path": "..."})  # Correct
 ### Error: Wrong Vision API Parameters
 
 **Error Message:**
+
 ```
 TypeError: analyze() got an unexpected keyword argument 'prompt'
 ```
@@ -195,6 +208,7 @@ answer = result['answer']
 ```
 
 **Remember:**
+
 - Use `question` parameter (NOT `prompt`)
 - Use `answer` key (NOT `response`)
 - Use file path (NOT base64 string)
@@ -202,6 +216,7 @@ answer = result['answer']
 ### Error: Ollama Connection Failed
 
 **Error Message:**
+
 ```
 ConnectionError: Could not connect to Ollama at http://localhost:11434
 ```
@@ -211,6 +226,7 @@ ConnectionError: Could not connect to Ollama at http://localhost:11434
 **Solution:**
 
 1. Install Ollama:
+
 ```bash
 # macOS/Linux
 curl -fsSL https://ollama.com/install.sh | sh
@@ -219,16 +235,19 @@ curl -fsSL https://ollama.com/install.sh | sh
 ```
 
 2. Start Ollama service:
+
 ```bash
 ollama serve
 ```
 
 3. Pull vision model:
+
 ```bash
 ollama pull bakllava
 ```
 
 4. Verify Ollama is running:
+
 ```bash
 curl http://localhost:11434
 # Should return: "Ollama is running"
@@ -237,6 +256,7 @@ curl http://localhost:11434
 ### Error: Vision Model Not Found
 
 **Error Message:**
+
 ```
 ModelNotFoundError: Model 'bakllava' not found
 ```
@@ -259,6 +279,7 @@ ollama list
 ### Error: Image File Not Found
 
 **Error Message:**
+
 ```
 FileNotFoundError: [Errno 2] No such file or directory: '/path/to/image.png'
 ```
@@ -285,6 +306,7 @@ result = agent.analyze(image=image_path, question="...")
 ### Error: Audio Format Not Supported
 
 **Error Message:**
+
 ```
 ValueError: Unsupported audio format: .avi
 ```
@@ -311,6 +333,7 @@ result = agent.transcribe(audio_path="/path/to/audio.mp3")
 ### Error: Cannot Import Agent
 
 **Error Message:**
+
 ```
 ImportError: cannot import name 'SimpleQAAgent' from 'kaizen'
 ```
@@ -332,6 +355,7 @@ from kaizen.agents.simple_qa import SimpleQAAgent  # Wrong path
 ### Error: Module Not Found
 
 **Error Message:**
+
 ```
 ModuleNotFoundError: No module named 'kaizen'
 ```
@@ -344,9 +368,6 @@ ModuleNotFoundError: No module named 'kaizen'
 # Install Kaizen
 pip install kailash-kaizen
 
-# Or install with Kailash SDK
-pip install kailash[kaizen]
-
 # Verify installation
 python -c "import kaizen; print(kaizen.__version__)"
 ```
@@ -356,6 +377,7 @@ python -c "import kaizen; print(kaizen.__version__)"
 ### Error: Invalid Configuration
 
 **Error Message:**
+
 ```
 TypeError: __init__() got an unexpected keyword argument 'invalid_param'
 ```
@@ -393,6 +415,7 @@ config = QAConfig(invalid_param="value")  # Error!
 ### Error: Using BaseAgentConfig Directly
 
 **Error Message:**
+
 ```
 TypeError: Domain config cannot be converted to BaseAgentConfig
 ```
@@ -441,6 +464,7 @@ result2 = agent.ask("What's my name?", session_id="user123")  # MUST use same ID
 ### Error: Connection Timeout
 
 **Error Message:**
+
 ```
 requests.exceptions.Timeout: Request timed out
 ```
@@ -462,6 +486,7 @@ agent = SimpleQAAgent(config)
 ### Error: Rate Limit Exceeded
 
 **Error Message:**
+
 ```
 RateLimitError: Rate limit reached for model gpt-4
 ```
@@ -471,6 +496,7 @@ RateLimitError: Rate limit reached for model gpt-4
 **Solution:**
 
 1. Add delays between requests:
+
 ```python
 import time
 
@@ -480,6 +506,7 @@ for question in questions:
 ```
 
 2. Use cheaper/faster model:
+
 ```python
 config = QAConfig(
     model="gpt-3.5-turbo"  # Faster, cheaper, higher rate limit
@@ -566,6 +593,7 @@ nexus.register("qa_agent", agent_workflow.build())
 **Solutions:**
 
 1. Use faster model:
+
 ```python
 config = QAConfig(
     model="gpt-3.5-turbo"  # Much faster than gpt-4
@@ -573,6 +601,7 @@ config = QAConfig(
 ```
 
 2. Reduce max_tokens:
+
 ```python
 config = QAConfig(
     max_tokens=300  # Shorter responses = faster
@@ -580,6 +609,7 @@ config = QAConfig(
 ```
 
 3. Use local Ollama for development:
+
 ```python
 config = QAConfig(
     llm_provider="ollama",
@@ -594,6 +624,7 @@ config = QAConfig(
 **Solutions:**
 
 1. Limit memory buffer:
+
 ```python
 config = QAConfig(
     max_turns=10  # Limit conversation history
@@ -601,6 +632,7 @@ config = QAConfig(
 ```
 
 2. Clear memory periodically:
+
 ```python
 # If using custom BaseAgent extension
 agent.memory.clear()  # Clear memory buffer
@@ -638,6 +670,7 @@ def test_simple_qa():
 #### Error: Hook Registration Failed
 
 **Error Message:**
+
 ```
 ValueError: Hook must implement handle() method
 ```
@@ -674,6 +707,7 @@ hook_manager.register_hook(MyHook(), priority=HookPriority.NORMAL)
 #### Error: Hook Execution Timeout
 
 **Error Message:**
+
 ```
 TimeoutError: Hook execution timed out after 5 seconds
 ```
@@ -742,6 +776,7 @@ hook_manager.register(
 #### Error: Checkpoint Save Failed
 
 **Error Message:**
+
 ```
 IOError: Permission denied: ./checkpoints/
 ```
@@ -771,6 +806,7 @@ state_manager = StateManager(storage=storage)
 #### Error: Checkpoint Load Failed
 
 **Error Message:**
+
 ```
 ValueError: Checkpoint not found: agent_123_step_10_20231025_120000
 ```
@@ -799,6 +835,7 @@ except ValueError as e:
 #### Error: Database Storage Backend Unavailable
 
 **Error Message:**
+
 ```
 ConnectionError: Could not connect to database
 ```
@@ -857,6 +894,7 @@ await state_manager.cleanup_old_checkpoints(
 #### Error: Graceful Shutdown Timeout
 
 **Error Message:**
+
 ```
 TimeoutError: Graceful shutdown exceeded timeout of 5.0 seconds
 ```
@@ -918,6 +956,7 @@ except InterruptedError as e:
 #### Error: Interrupt Handler Error
 
 **Error Message:**
+
 ```
 RuntimeError: Interrupt handler check_interrupt() failed
 ```
@@ -979,6 +1018,7 @@ except KeyboardInterrupt:
 #### Error: Memory Backend Connection Failed
 
 **Error Message:**
+
 ```
 ConnectionError: Could not connect to memory database
 ```
@@ -1078,6 +1118,7 @@ backend.load_turns(
 #### Error: Plan Validation Failed
 
 **Error Message:**
+
 ```
 ValidationError: Plan validation failed: Invalid step 3
 ```
@@ -1148,6 +1189,7 @@ for refinement in result['refinements']:
 #### Error: No Agent Selected
 
 **Error Message:**
+
 ```
 ValueError: No suitable agent found for task
 ```
@@ -1216,6 +1258,7 @@ print(f"All scores: {result['agent_scores']}")  # See all agent scores
 #### Error: Agent Pipeline Execution Failed
 
 **Error Message:**
+
 ```
 RuntimeError: Agent execution failed: Agent 'code_agent' raised exception
 ```

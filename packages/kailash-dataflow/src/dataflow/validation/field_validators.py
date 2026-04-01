@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid as _uuid_mod
-from typing import Callable, Optional, Union
+from typing import Any, Callable, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ __all__ = [
     "range_validator",
     "pattern_validator",
     "phone_validator",
+    "one_of_validator",
 ]
 
 # ---------------------------------------------------------------------------
@@ -123,9 +124,7 @@ def length_validator(
         A callable ``(value) -> bool``.
     """
     if min_len is not None and max_len is not None and min_len > max_len:
-        raise ValueError(
-            f"min_len ({min_len}) must not exceed max_len ({max_len})"
-        )
+        raise ValueError(f"min_len ({min_len}) must not exceed max_len ({max_len})")
 
     def _check(value: object) -> bool:
         if not hasattr(value, "__len__"):
@@ -160,14 +159,8 @@ def range_validator(
         raise ValueError(f"min_val must be finite, got {min_val}")
     if max_val is not None and not math.isfinite(max_val):
         raise ValueError(f"max_val must be finite, got {max_val}")
-    if (
-        min_val is not None
-        and max_val is not None
-        and min_val > max_val
-    ):
-        raise ValueError(
-            f"min_val ({min_val}) must not exceed max_val ({max_val})"
-        )
+    if min_val is not None and max_val is not None and min_val > max_val:
+        raise ValueError(f"min_val ({min_val}) must not exceed max_val ({max_val})")
 
     def _check(value: object) -> bool:
         if not isinstance(value, (int, float)):
@@ -207,4 +200,22 @@ def pattern_validator(regex: str) -> Callable[[object], bool]:
         return compiled.fullmatch(value) is not None
 
     _check.__qualname__ = f"pattern_validator({regex!r})"
+    return _check
+
+
+def one_of_validator(allowed: List[Any]) -> Callable[[object], bool]:
+    """Return a validator that checks value membership in *allowed*.
+
+    Args:
+        allowed: List of acceptable values.
+
+    Returns:
+        A callable ``(value) -> bool``.
+    """
+    allowed_set = set(allowed)
+
+    def _check(value: object) -> bool:
+        return value in allowed_set
+
+    _check.__qualname__ = f"one_of_validator({allowed!r})"
     return _check

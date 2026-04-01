@@ -101,6 +101,52 @@ Per `.claude/rules/pact-governance.md`:
 5. **NaN/Inf validation** -- `math.isfinite()` on all numeric constraints
 6. **Thread safety** -- All engine methods acquire `self._lock`
 
+## New Features (v2.0)
+
+### GovernanceEngine Pure Python Implementation
+
+The `GovernanceEngine` is now a pure Python implementation (no external dependencies beyond the core SDK). Key methods:
+
+- `compile_org(org_definition)` -- Compiles YAML org definitions into navigable `CompiledOrg` with `MAX_COMPILATION_DEPTH=50`, `MAX_CHILDREN_PER_NODE=500`, `MAX_TOTAL_NODES=100_000`
+- `verify_action(role_address, action, context)` -- Primary decision method combining envelope evaluation, multi-level verification, and access checks
+- `check_access(role_address, knowledge_item, posture)` -- 5-step access enforcement
+- `get_context(role_address, posture)` -- Returns frozen `GovernanceContext` (anti-self-modification defense)
+- SQLite or memory backend via `store_backend="sqlite"|"memory"`
+- EATP record emission via `eatp_emitter` parameter
+- Bilateral consent for bridges via `require_bilateral_consent=True`
+
+### ShadowEnforcer Persistent Storage
+
+`ShadowStore` protocol with two implementations for enforcement record persistence:
+
+- `MemoryShadowStore` -- In-memory bounded deque (default, zero dependencies)
+- `SqliteShadowStore` -- SQLite persistence with time-windowed metrics, 0o600 file permissions, parameterized SQL
+
+```python
+from kailash.trust.enforce.shadow import ShadowEnforcer
+from kailash.trust.enforce.shadow_store import SqliteShadowStore
+
+store = SqliteShadowStore("shadow.db")
+shadow = ShadowEnforcer(store=store)
+# Records persist across restarts; metrics queryable by time window
+```
+
+### ConstraintEnvelope Ed25519 Signing
+
+`SignedEnvelope` wraps a `ConstraintEnvelopeConfig` with Ed25519 cryptographic signature and 90-day expiry:
+
+```python
+from kailash.trust.pact.envelopes import SignedEnvelope
+
+signed = sign_envelope(envelope, private_key, signed_by="D1-R1")
+valid = signed.verify(public_key)  # Checks signature + expiry, fail-closed
+```
+
+- `frozen=True` immutability (security invariant)
+- Uses `kailash.trust.signing.crypto` for Ed25519 operations
+- Fail-closed: any error during verification returns `False`
+- 90-day default expiry (`_SIGNED_ENVELOPE_EXPIRY_DAYS`)
+
 ## When NOT to Use This Agent
 
 - For EATP protocol questions (trust chains, delegation, signing) -> use **eatp-expert**

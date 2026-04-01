@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 try:
     import psutil
 except ImportError:
-    psutil = None  # Optional: pip install kailash[monitoring]
+    psutil = None  # Included in base install
 
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow

@@ -1,27 +1,29 @@
-# Test Results — Sprint S11 (post red team R2)
-# Date: 2026-03-29
-# Base commit: 904bbb7c
+# Test Results — Sprint S12 PACT Spec-Conformance
+# Date: 2026-03-31
+# Base commit: 30d708a6 (uncommitted changes)
 
-## Baseline (pre-implementation)
-- delegate tests: 412 passed, 0 failed
-- core unit tests: 3072 passed, 3 skipped, 0 failed
+## PACT Unit Tests
+- Baseline: 1139 passed, 10 skipped
+- Final: 1240 passed, 10 skipped (post red team)
+- New tests: +101
+- Regressions: 0
+- Failures: 0
 
-## Post red team R2
-- delegate tests: 420 passed, 0 failed (+8 new)
-- core unit tests: 3072 passed, 3 skipped, 0 failed
+## New Test Files (7 files, 94 tests)
+- test_tightening_all_dimensions.py (22 tests) — TODO-01
+- test_vacant_head_synthesis.py (11 tests) — TODO-05
+- test_eatp_emitter.py (10 tests) — TODO-10, TODO-11
+- test_eatp_emission_engine.py (10 tests) — TODO-06, TODO-12, TODO-13
+- test_phase_d_features.py (13 tests) — TODO-04, TODO-07, TODO-08
+- test_gradient_thresholds.py (22 tests) — TODO-02, TODO-03
+- test_vacancy_interim.py (6 tests) — TODO-09
 
-## New tests added (8)
-1. test_single_tool_call_emits_start_and_end
-2. test_parallel_tool_calls_emit_multiple_events
-3. test_tool_error_populates_error_field (with sanitization assertions)
-4. test_event_ordering_starts_before_ends
-5. test_text_only_response_has_no_tool_events
-6. test_run_sync_ignores_tool_events
-7. test_multi_turn_event_sequence
-8. test_consecutive_tool_turns_emit_events_for_each_batch
+## Source Files Modified (5)
+- src/kailash/trust/pact/engine.py — EATP emitter, vacancy interim, bridge consent, compliance role, scope validation
+- src/kailash/trust/pact/envelopes.py — 3 new tightening dimensions, gradient dereliction, passthrough detection
+- src/kailash/trust/pact/compilation.py — vacant head auto-synthesis
+- src/kailash/trust/pact/config.py — DimensionThresholds, GradientThresholdsConfig
+- src/kailash/trust/pact/audit.py — BRIDGE_CONSENT enum value
 
-## Existing tests updated
-- test_exception_during_run_yields_error_event (sanitization assertion)
-- test_tool_execution_error_handled (sanitization assertion)
-
-## Regressions: 0
+## Source Files Created (1)
+- src/kailash/trust/pact/eatp_emitter.py — PactEatpEmitter protocol + InMemoryPactEmitter

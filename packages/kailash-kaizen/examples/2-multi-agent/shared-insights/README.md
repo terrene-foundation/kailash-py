@@ -5,6 +5,7 @@
 This example demonstrates multi-agent collaboration using **SharedMemoryPool** from Phase 2 (Week 3). Three specialized agents collaborate on a research task, sharing insights through a shared memory pool.
 
 **Collaboration Flow:**
+
 ```
 ResearcherAgent → Findings → SharedMemoryPool
                                     ↓
@@ -30,41 +31,50 @@ ResearcherAgent → Findings → SharedMemoryPool
 ### Agent Roles
 
 #### 1. ResearcherAgent
+
 **Responsibility**: Conduct research and document findings
 
 **Behavior**:
+
 - Research a given topic
 - Extract key findings and points
 - Write findings to shared memory
 
 **Shared Memory**:
+
 - Tags: `["research", topic]`
 - Importance: `0.8`
 - Segment: `"findings"`
 
 #### 2. AnalystAgent
+
 **Responsibility**: Analyze research findings and generate insights
 
 **Behavior**:
+
 - Read research findings from shared memory
 - Perform deep analysis
 - Write analysis insights to shared memory
 
 **Shared Memory**:
+
 - Reads: Tags `["research", topic]`, exclude_own=True
 - Writes: Tags `["analysis", topic]`
 - Importance: `0.9`
 - Segment: `"analysis"`
 
 #### 3. SynthesizerAgent
+
 **Responsibility**: Synthesize all insights into final report
 
 **Behavior**:
+
 - Read ALL insights from shared memory
 - Create comprehensive synthesis
 - Generate final report with conclusions
 
 **Shared Memory**:
+
 - Reads: Tags `[topic]`, exclude_own=False (includes all agents)
 - Does NOT write (final step)
 
@@ -161,6 +171,7 @@ insights = shared_memory.read_relevant(
 ### Attention Filtering Examples
 
 #### Filter by Tags
+
 ```python
 # Get insights about Python
 python_insights = pool.read_relevant(
@@ -171,6 +182,7 @@ python_insights = pool.read_relevant(
 ```
 
 #### Filter by Importance
+
 ```python
 # Get high-importance insights only
 high_priority = pool.read_relevant(
@@ -181,6 +193,7 @@ high_priority = pool.read_relevant(
 ```
 
 #### Filter by Segment
+
 ```python
 # Get only analysis insights
 analysis_insights = pool.read_relevant(
@@ -191,6 +204,7 @@ analysis_insights = pool.read_relevant(
 ```
 
 #### Filter by Age
+
 ```python
 # Get insights from last 5 minutes
 recent_insights = pool.read_relevant(
@@ -201,6 +215,7 @@ recent_insights = pool.read_relevant(
 ```
 
 #### Combined Filtering
+
 ```python
 # Get recent, high-importance Python analysis insights
 filtered = pool.read_relevant(
@@ -219,8 +234,8 @@ filtered = pool.read_relevant(
 ### Installation
 
 ```bash
-# Install Kaizen with dependencies
-pip install kailash[kaizen]
+# Install Kaizen
+pip install kailash-kaizen
 ```
 
 ### Basic Usage
@@ -307,26 +322,31 @@ insights = pool.read_relevant(
 ## Use Cases
 
 ### 1. Research Team Collaboration
+
 - **Researchers** gather information from multiple sources
 - **Analysts** analyze aggregated research
 - **Writers** synthesize into reports
 
 ### 2. Customer Service Pipeline
+
 - **Classifier** analyzes customer request
 - **Specialist** handles specific domain
 - **Responder** formulates final response
 
 ### 3. Content Generation
+
 - **Researcher** gathers facts and context
 - **Writer** creates draft content
 - **Editor** refines and finalizes
 
 ### 4. Software Development
+
 - **Analyzer** examines requirements
 - **Architect** designs solution
 - **Implementer** writes code based on insights
 
 ### 5. Data Processing Pipeline
+
 - **Collector** gathers data from sources
 - **Processor** transforms and analyzes
 - **Reporter** generates insights report
@@ -437,7 +457,7 @@ This ensures safe concurrent access by multiple agents.
 
 ### Filtering Performance
 
-- Tag filtering: O(n * m) where n=insights, m=tags
+- Tag filtering: O(n \* m) where n=insights, m=tags
 - Sorting: O(n log n)
 - Limit: O(k) where k=limit
 
@@ -509,6 +529,7 @@ for segment, count in segments.items():
 ## Support
 
 For issues or questions:
+
 - GitHub Issues: [kailash-sdk/issues](https://github.com/kailash-sdk/issues)
 - Documentation: `docs/memory/shared-memory.md`
 - Examples: `examples/2-multi-agent/`

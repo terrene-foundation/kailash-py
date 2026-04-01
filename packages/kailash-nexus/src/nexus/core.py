@@ -4,6 +4,7 @@ This module provides the main Nexus class for workflow orchestration
 that implements true zero-configuration workflow orchestration.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -26,6 +27,13 @@ from kailash.runtime import AsyncLocalRuntime
 from kailash.servers.gateway import create_gateway
 from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
+
+from nexus.background import BackgroundService
+from nexus.events import EventBus, NexusEvent, NexusEventType
+from nexus.registry import HandlerDef, HandlerParam, HandlerRegistry
+from nexus.transports.base import Transport
+from nexus.transports.http import HTTPTransport
+from nexus.transports.mcp import MCPTransport
 
 # Import from SDK - remove path manipulation since we're a separate package
 
@@ -222,17 +230,18 @@ class Nexus:
         else:
             logger.info(f"🛡️  Rate limiting: {rate_limit} requests/minute")
 
-        # Internal state
-        self._workflows: Dict[str, Workflow] = {}
-        self._handler_registry: Dict[str, Dict[str, Any]] = {}
-        self._gateway = None
+        # Internal state — EventBus + HandlerRegistry centralize event/handler storage
+        self._event_bus = EventBus(capacity=256)
+        self._registry = HandlerRegistry(event_bus=self._event_bus)
+        self._background_services: List[BackgroundService] = []
+        self._transports: List[Transport] = []
         self._running = False
 
-        # Middleware management
+        # Middleware management (introspection-only — actual apply delegates to HTTPTransport)
         self._middleware_queue: List[Tuple[type, Dict[str, Any]]] = []
         self._middleware_stack: List[MiddlewareInfo] = []
 
-        # Router management
+        # Router management (introspection-only — actual apply delegates to HTTPTransport)
         self._router_queue: List[Tuple[Any, Dict[str, Any]]] = []
         self._routers: List[RouterInfo] = []
 
@@ -271,7 +280,23 @@ class Nexus:
         if enable_monitoring:
             self._monitoring_enabled = True
 
-        # Create gateway with configuration
+        # Create HTTPTransport (wraps the enterprise gateway)
+        self._http_transport = HTTPTransport(
+            port=api_port,
+            cors_origins=cors_origins,
+            cors_allow_methods=cors_allow_methods,
+            cors_allow_headers=cors_allow_headers,
+            cors_allow_credentials=cors_allow_credentials,
+            cors_expose_headers=cors_expose_headers,
+            cors_max_age=cors_max_age,
+            enable_auth=self._enable_auth,
+            enable_monitoring=enable_monitoring,
+            enable_durability=enable_durability,
+            rate_limit=rate_limit,
+        )
+        self._transports.append(self._http_transport)
+
+        # Create gateway eagerly (existing behavior — needed before start())
         self._initialize_gateway()
 
         # Apply preset if specified (after gateway, so middleware/plugins can be applied)
@@ -304,32 +329,144 @@ class Nexus:
 
         logger.info("Nexus initialized with revolutionary workflow-native architecture")
 
+    # ------------------------------------------------------------------
+    # Backward-compatible properties — delegate to HandlerRegistry
+    # ------------------------------------------------------------------
+
+    @property
+    def _workflows(self) -> Dict[str, Any]:
+        """Backward-compatible access to workflows dict."""
+        return self._registry._workflows
+
+    @_workflows.setter
+    def _workflows(self, value: Dict[str, Any]) -> None:
+        """Backward-compatible setter for workflows dict (used by tests)."""
+        self._registry._workflows = value
+
+    @property
+    def _handler_registry(self) -> Dict[str, Dict[str, Any]]:
+        """Backward-compatible access to handler registry dict."""
+        return self._registry._handler_funcs
+
+    @_handler_registry.setter
+    def _handler_registry(self, value: Dict[str, Dict[str, Any]]) -> None:
+        """Backward-compatible setter for handler registry dict (used by tests)."""
+        self._registry._handler_funcs = value
+
+    @property
+    def _gateway(self):
+        """Backward-compatible access to the enterprise gateway.
+
+        .. deprecated::
+            Use ``app.fastapi_app`` for the FastAPI app or
+            ``app._http_transport`` for the HTTPTransport instance.
+        """
+        warnings.warn(
+            "Nexus._gateway is deprecated. Use app.fastapi_app for the FastAPI app, "
+            "or app._http_transport for the HTTPTransport instance.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if hasattr(self, "_http_transport"):
+            return self._http_transport.gateway
+        return None
+
+    @_gateway.setter
+    def _gateway(self, value):
+        """Backward-compatible setter for the enterprise gateway.
+
+        .. deprecated::
+            Assign to ``app._http_transport._gateway`` instead.
+        """
+        if hasattr(self, "_http_transport"):
+            self._http_transport._gateway = value
+        # If no _http_transport yet (e.g., __new__ without __init__),
+        # just silently drop the set — the real gateway lives on HTTPTransport.
+
+    @property
+    def fastapi_app(self):
+        """The underlying FastAPI app (replaces _gateway.app access).
+
+        Returns None if the gateway hasn't been created yet.
+        """
+        return self._http_transport.app
+
+    # ------------------------------------------------------------------
+    # Transport management
+    # ------------------------------------------------------------------
+
+    def add_transport(self, transport: Transport) -> "Nexus":
+        """Register a transport for lifecycle management.
+
+        The transport will be started with the HandlerRegistry when
+        Nexus.start() is called, and stopped when Nexus.stop() is called.
+
+        Args:
+            transport: A Transport implementation.
+
+        Returns:
+            self (for chaining).
+        """
+        self._transports.append(transport)
+        logger.info(f"Transport registered: {transport.name}")
+        return self
+
+    # ------------------------------------------------------------------
+    # Background service management
+    # ------------------------------------------------------------------
+
+    def add_background_service(self, service: BackgroundService) -> "Nexus":
+        """Register a background service for lifecycle management.
+
+        The service will be started when Nexus.start() is called and
+        stopped when Nexus.stop() is called.
+
+        Args:
+            service: A BackgroundService implementation.
+
+        Returns:
+            self (for chaining).
+        """
+        self._background_services.append(service)
+        logger.info(f"Background service registered: {service.name}")
+        return self
+
     def _initialize_gateway(self):
-        """Initialize the underlying SDK enterprise gateway."""
+        """Initialize the underlying SDK enterprise gateway via HTTPTransport."""
+        # Ensure HTTPTransport exists (for Nexus.__new__() without __init__)
+        if not hasattr(self, "_http_transport"):
+            self._http_transport = HTTPTransport(
+                port=getattr(self, "_api_port", 8000),
+                enable_durability=getattr(self, "_enable_durability", True),
+            )
+            if not hasattr(self, "_transports"):
+                self._transports = []
+            self._transports.append(self._http_transport)
+
         # Build CORS configuration from constructor params + environment defaults
         cors_config = self._build_cors_config()
 
         try:
-            # CRITICAL: Pass cors_origins=None to gateway to prevent double CORS
-            # middleware. Nexus handles CORS natively via add_middleware() below
-            # with full configuration (methods, headers, credentials, etc.).
-            self._gateway = create_gateway(
+            # Create gateway using module-level create_gateway (patchable by tests)
+            gateway = create_gateway(
                 title="Kailash Nexus - Zero-Config Workflow Platform",
                 server_type="enterprise",
-                enable_durability=self._enable_durability,  # Configurable for testing
+                enable_durability=self._enable_durability,
                 enable_resource_management=True,
                 enable_async_execution=True,
                 enable_health_checks=True,
                 cors_origins=None,  # Nexus handles CORS natively
-                max_workers=20,  # Enterprise default
+                max_workers=20,
             )
+            # Store in HTTPTransport
+            self._http_transport._gateway = gateway
             logger.info("Enterprise gateway initialized successfully")
 
             # Apply full CORS middleware with all options
-            if cors_config["allow_origins"]:  # Only add if origins configured
+            if cors_config["allow_origins"]:
                 from starlette.middleware.cors import CORSMiddleware
 
-                self._gateway.app.add_middleware(
+                self._http_transport.add_middleware(
                     CORSMiddleware,
                     allow_origins=cors_config["allow_origins"],
                     allow_methods=cors_config["allow_methods"],
@@ -341,17 +478,14 @@ class Nexus:
                 self._cors_middleware_applied = True
 
             # Apply any middleware that was queued before gateway was ready.
-            # Starlette's add_middleware() uses LIFO internally (last added =
-            # outermost), so we do NOT reverse - middleware is applied in the
-            # order the user added them.
             for middleware_class, kwargs in self._middleware_queue:
-                self._gateway.app.add_middleware(middleware_class, **kwargs)
+                self._http_transport.add_middleware(middleware_class, **kwargs)
                 logger.info(f"Applied queued middleware: {middleware_class.__name__}")
             self._middleware_queue.clear()
 
             # Apply any routers that were queued before gateway was ready.
             for router, router_kwargs in self._router_queue:
-                self._gateway.app.include_router(router, **router_kwargs)
+                self._http_transport.include_router(router, **router_kwargs)
                 prefix = router_kwargs.get("prefix", "/")
                 logger.info(f"Applied queued router: {prefix}")
             self._router_queue.clear()
@@ -364,8 +498,6 @@ class Nexus:
         """Initialize revolutionary capabilities that differentiate Nexus from traditional frameworks."""
         # Initialize essential capability components
         self._session_manager = None  # Cross-channel session sync
-        self._event_stream = None  # Real-time event communication
-        self._durability_manager = None  # Request-level durability
         self._execution_contexts = {}  # Workflow execution tracking
 
         # Performance tracking for revolutionary targets
@@ -388,24 +520,17 @@ class Nexus:
     def _initialize_mcp_server(self):
         """Initialize MCP server for AI agent integration.
 
-        Phase 1: Replace simple server with Core SDK's production-ready MCPServer
+        Uses the Core SDK's MCPServer + MCPChannel for full protocol support.
+        The old Nexus-specific MCP server has been removed in favour of the
+        unified ``kailash-platform`` MCP server (``kailash.mcp.platform_server``).
         """
-        # When HTTP transport is disabled, use simple MCP server for WebSocket-only mode
-        # Core SDK's MCPServer + MCPChannel work best with HTTP transport
         if not self._enable_http_transport:
-            # Use simple MCP server for WebSocket-only mode
-            from nexus.mcp import MCPServer
-
-            self._mcp_server = MCPServer(
-                host="0.0.0.0",
-                port=self._mcp_port,
-                runtime=self.runtime.acquire(),
-            )
+            # Without HTTP transport, MCP is not available
+            self._mcp_server = None
             self._mcp_channel = None
-            # Register default Nexus resources (system, docs, config, help)
-            self._register_default_mcp_resources()
             logger.info(
-                f"WebSocket-only MCP server initialized on port {self._mcp_port}"
+                "HTTP transport disabled; MCP server not started. "
+                "Use kailash-mcp for MCP access."
             )
             return
 
@@ -420,26 +545,18 @@ class Nexus:
 
             # Create MCP channel for workflow management
             self._mcp_channel = self._setup_mcp_channel()
-            logger.info(
-                "✅ Full MCP protocol support enabled (tools, resources, prompts)"
-            )
+            logger.info("Full MCP protocol support enabled (tools, resources, prompts)")
 
             logger.info(f"Production MCP server initialized on port {self._mcp_port}")
 
         except ImportError as e:
-            # Fallback to simple implementation if Core SDK not available
+            # Core SDK MCP not available -- direct users to kailash-mcp
             logger.warning(
-                f"Core SDK MCP not available ({e}), falling back to simple MCP server"
+                "Core SDK MCP not available (%s). " "Use kailash-mcp for MCP access.",
+                e,
             )
-            from nexus.mcp import MCPServer
-
-            self._mcp_server = MCPServer(
-                host="0.0.0.0",
-                port=self._mcp_port,
-                runtime=self.runtime.acquire(),
-            )
+            self._mcp_server = None
             self._mcp_channel = None
-            logger.info(f"Simple MCP server initialized on port {self._mcp_port}")
 
     def _register_default_mcp_resources(self):
         """Register default MCP resources (system, docs, config, help)."""
@@ -769,16 +886,16 @@ Check the documentation or explore available resources.
         if hasattr(workflow, "build"):
             workflow = workflow.build()
 
-        # Store internally for Nexus-specific features
-        self._workflows[name] = workflow
+        # Store internally via HandlerRegistry
+        self._registry.register_workflow(name, workflow)
 
         # Validate PythonCodeNode sandbox issues at registration time
         self._validate_workflow_sandbox(name, workflow)
 
         # Register with enterprise gateway - this automatically exposes on all channels
-        if self._gateway:
+        if self._http_transport.gateway:
             try:
-                self._gateway.register_workflow(name, workflow)
+                self._http_transport.register_workflow(name, workflow)
                 logger.info(f"Workflow '{name}' registered with enterprise gateway")
             except Exception as e:
                 logger.error(f"Failed to register workflow '{name}': {e}")
@@ -867,7 +984,7 @@ Check the documentation or explore available resources.
 
         def decorator(func):
             # Validate gateway initialized
-            if self._gateway is None:
+            if self._http_transport.gateway is None:
                 raise RuntimeError(
                     "Gateway not initialized. Cannot register endpoints before gateway is ready."
                 )
@@ -939,8 +1056,8 @@ Check the documentation or explore available resources.
             # Use rate-limited wrapper
             wrapped_func = rate_limited_func
 
-            # Get FastAPI app from gateway
-            fastapi_app = self._gateway.app
+            # Get FastAPI app from HTTPTransport
+            fastapi_app = self._http_transport.app
 
             # Register route for each method
             for method in methods:
@@ -1036,14 +1153,22 @@ Check the documentation or explore available resources.
         )
         self._middleware_stack.append(info)
 
-        # Apply or queue
-        if self._gateway is not None:
-            self._gateway.app.add_middleware(middleware_class, **kwargs)
-            logger.info(f"Added middleware: {middleware_class.__name__}")
+        # Apply or queue via HTTPTransport
+        if hasattr(self, "_http_transport"):
+            self._http_transport.add_middleware(middleware_class, **kwargs)
+            if self._http_transport.gateway is not None:
+                logger.info(f"Added middleware: {middleware_class.__name__}")
+            else:
+                # Also maintain Nexus-level queue for backward compatibility
+                self._middleware_queue.append((middleware_class, kwargs))
+                logger.debug(
+                    f"Queued middleware: {middleware_class.__name__} (gateway not ready)"
+                )
         else:
+            # Fallback for __new__-constructed instances (no __init__)
             self._middleware_queue.append((middleware_class, kwargs))
             logger.debug(
-                f"Queued middleware: {middleware_class.__name__} (gateway not ready)"
+                f"Queued middleware: {middleware_class.__name__} (transport not ready)"
             )
 
         return self  # Enable chaining
@@ -1130,13 +1255,17 @@ Check the documentation or explore available resources.
         )
         self._routers.append(info)
 
-        # Apply or queue
-        if self._gateway is not None:
-            self._gateway.app.include_router(router, **router_kwargs)
-            logger.info(f"Included router with prefix: {prefix or '/'}")
+        # Apply or queue via HTTPTransport
+        if hasattr(self, "_http_transport"):
+            self._http_transport.include_router(router, **router_kwargs)
+            if self._http_transport.gateway is not None:
+                logger.info(f"Included router with prefix: {prefix or '/'}")
+            else:
+                self._router_queue.append((router, router_kwargs))
+                logger.debug(f"Queued router: {prefix or '/'} (gateway not ready)")
         else:
             self._router_queue.append((router, router_kwargs))
-            logger.debug(f"Queued router: {prefix or '/'} (gateway not ready)")
+            logger.debug(f"Queued router: {prefix or '/'} (transport not ready)")
 
         return self  # Enable chaining
 
@@ -1153,8 +1282,8 @@ Check the documentation or explore available resources.
             if router_info.prefix == prefix:
                 return True
 
-        if self._gateway is not None:
-            for route in self._gateway.app.routes:
+        if hasattr(self, "_http_transport") and self._http_transport.app is not None:
+            for route in self._http_transport.app.routes:
                 if hasattr(route, "path") and route.path.startswith(prefix):
                     return True
 
@@ -1413,8 +1542,8 @@ Check the documentation or explore available resources.
                 "For best results, configure CORS before calling start()."
             )
 
-        # Add CORS middleware
-        self._gateway.app.add_middleware(
+        # Add CORS middleware via HTTPTransport
+        self._http_transport.add_middleware(
             CORSMiddleware,
             allow_origins=cors_config["allow_origins"],
             allow_methods=cors_config["allow_methods"],
@@ -1477,7 +1606,7 @@ Check the documentation or explore available resources.
         self._validate_cors_security(self._build_cors_config())
 
         # Apply if gateway already initialized
-        if self._gateway is not None:
+        if self._http_transport.gateway is not None:
             self._apply_cors_middleware()
 
         logger.info(f"CORS configured: origins={self._cors_origins}")
@@ -1627,25 +1756,20 @@ Check the documentation or explore available resources.
 
         validate_workflow_name(name)
 
-        if name in self._handler_registry:
-            raise ValueError(
-                f"Handler '{name}' is already registered. "
-                f"Use a different name or unregister the existing handler first."
-            )
-
         from kailash.nodes.handler import make_handler_workflow
 
         workflow = make_handler_workflow(
             handler_func, node_id="handler", input_mapping=input_mapping
         )
 
-        # Store in handler registry for introspection
-        self._handler_registry[name] = {
-            "handler": handler_func,
-            "description": description or getattr(handler_func, "__doc__", "") or "",
-            "tags": tags or [],
-            "workflow": workflow,
-        }
+        # Delegate handler storage to HandlerRegistry (includes duplicate check)
+        self._registry.register_handler(
+            name,
+            handler_func,
+            description=description or getattr(handler_func, "__doc__", "") or "",
+            tags=tags,
+            workflow=workflow,
+        )
 
         # Delegate to register() for multi-channel exposure
         self.register(name, workflow)
@@ -1743,6 +1867,181 @@ Check the documentation or explore available resources.
                         f"Consider using @app.handler() to bypass the sandbox."
                     )
 
+    # ------------------------------------------------------------------
+    # NTR-020: DataFlow integration
+    # ------------------------------------------------------------------
+
+    def integrate_dataflow(self, db) -> "Nexus":
+        """Connect DataFlow events to the Nexus EventBus.
+
+        After calling this, DataFlow model writes (create, update, delete,
+        upsert, and their bulk variants) automatically emit events to the
+        Nexus EventBus.  Use ``@app.on_event()`` to handle them.
+
+        The bridge subscribes to the Core SDK ``InMemoryEventBus`` for
+        each registered model and translates ``DomainEvent`` instances
+        into ``NexusEvent`` instances.  Two separate event systems are
+        connected -- they are NOT merged.
+
+        Args:
+            db: A DataFlow instance with registered models.
+
+        Returns:
+            self (for chaining).
+
+        Example::
+
+            app = Nexus()
+            db = DataFlow("sqlite:///app.db")
+
+            @db.model
+            class User:
+                id: int
+                name: str
+
+            app.integrate_dataflow(db)
+
+            @app.on_event("dataflow.User.create")
+            async def on_user_created(event):
+                print(f"New user: {event.data['payload']}")
+        """
+        from nexus.bridges.dataflow import DataFlowEventBridge
+
+        bridge = DataFlowEventBridge()
+        bridge.install(self._event_bus, db)
+        return self
+
+    # ------------------------------------------------------------------
+    # Phase 2 Feature APIs — event, scheduled, emit, run_in_background
+    # ------------------------------------------------------------------
+
+    def on_event(self, event_type: str):
+        """Decorator to register an event-driven handler.
+
+        The handler is invoked when an event matching event_type is
+        published to the EventBus. Supports exact match and wildcard
+        patterns (e.g., "dataflow.*").
+
+        Args:
+            event_type: Event type string to listen for.
+
+        Example:
+            @app.on_event("user.created")
+            async def on_user_created(event):
+                print(f"User created: {event.data}")
+        """
+
+        def decorator(func):
+            self._registry.register_handler(
+                name=f"event_{event_type}_{func.__name__}",
+                func=func,
+                description=f"Event handler for {event_type}",
+                metadata={"event_type": event_type, "channel": "event"},
+            )
+            return func
+
+        return decorator
+
+    def scheduled(self, interval: str, *, cron: Optional[str] = None):
+        """Decorator to register a scheduled handler.
+
+        The handler runs periodically at the specified interval or cron
+        expression. Uses asyncio.create_task (not FastAPI BackgroundTasks).
+
+        Args:
+            interval: Human-readable interval ("30s", "5m", "2h", "1d").
+            cron: Optional cron expression (requires croniter).
+
+        Example:
+            @app.scheduled("5m")
+            async def cleanup():
+                await remove_expired_sessions()
+        """
+
+        def decorator(func):
+            self._registry.register_handler(
+                name=f"scheduled_{func.__name__}",
+                func=func,
+                description=f"Scheduled handler ({interval})",
+                metadata={
+                    "interval": interval,
+                    "cron": cron,
+                    "channel": "scheduler",
+                    "interval_seconds": self._parse_interval(interval),
+                },
+            )
+            return func
+
+        return decorator
+
+    def emit(self, event_type: str, data: dict = None) -> None:
+        """Emit a custom event to the EventBus.
+
+        Non-blocking. The event is delivered to all subscribers
+        including @app.on_event() handlers (once the EventTransport
+        is implemented).
+
+        Args:
+            event_type: Event type string.
+            data: Optional event data dict.
+        """
+        event = NexusEvent(
+            event_type=NexusEventType.CUSTOM,
+            data={"type": event_type, **(data or {})},
+        )
+        self._event_bus.publish(event)
+
+    def run_in_background(self, coro) -> asyncio.Task:
+        """Run a coroutine as a background task.
+
+        Uses asyncio.create_task() -- truly concurrent and decoupled from
+        any HTTP request lifecycle. Task errors are logged, not propagated.
+
+        Args:
+            coro: An awaitable coroutine.
+
+        Returns:
+            The asyncio.Task (can be cancelled via task.cancel()).
+        """
+
+        async def _safe_wrapper():
+            try:
+                await coro
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"Background task failed: {e}", exc_info=True)
+
+        task = asyncio.create_task(_safe_wrapper())
+        return task
+
+    @staticmethod
+    def _parse_interval(interval: str) -> int:
+        """Parse interval string to seconds.
+
+        Args:
+            interval: Human-readable interval ("30s", "5m", "2h", "1d").
+
+        Returns:
+            Interval in seconds.
+
+        Raises:
+            ValueError: If interval format is invalid.
+        """
+        units = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+        if not interval:
+            raise ValueError("Empty interval string")
+        unit = interval[-1].lower()
+        if unit not in units:
+            raise ValueError(f"Invalid interval unit '{unit}'. Use s, m, h, or d.")
+        try:
+            value = int(interval[:-1])
+        except ValueError:
+            raise ValueError(f"Invalid interval value: {interval}")
+        if value <= 0:
+            raise ValueError(f"Interval must be positive: {interval}")
+        return value * units[unit]
+
     async def _execute_workflow(
         self, workflow_name: str, inputs: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -1811,8 +2110,7 @@ Check the documentation or explore available resources.
     def _run_gateway(self):
         """Run gateway in thread with error handling."""
         try:
-            # Gateway uses 'run' method, not 'start'
-            self._gateway.run(host="0.0.0.0", port=self._api_port)
+            self._http_transport.run_blocking(host="0.0.0.0")
         except Exception as e:
             logger.warning(
                 f"Gateway channel error: {e}. Continuing with other channels."
@@ -1823,37 +2121,21 @@ Check the documentation or explore available resources.
         try:
             import asyncio
 
-            from .mcp_websocket_server import MCPWebSocketServer
-
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
             # Use MCP channel if available (full protocol support)
             if hasattr(self, "_mcp_channel") and self._mcp_channel:
                 loop.run_until_complete(self._mcp_channel.start())
-            else:
-                # Create WebSocket server wrapper for MCP
-                if hasattr(self, "_mcp_server") and self._mcp_server:
-                    logger.info(
-                        f"Creating WebSocket server wrapper on port {self._mcp_port}"
-                    )
-                    # Wrap the MCP server with WebSocket server
-                    self._ws_server = MCPWebSocketServer(
-                        self._mcp_server, host="0.0.0.0", port=self._mcp_port
-                    )
-                    # Store the task so we can clean it up later
-                    self._ws_server_task = loop.create_task(self._ws_server.start())
-
-                    # NOTE: Don't call self._mcp_server.run() here!
-                    # The WebSocket wrapper handles the MCP protocol directly.
-                    # Calling run() would start STDIO transport which conflicts with WebSocket.
+            elif hasattr(self, "_mcp_server") and self._mcp_server:
+                # Core SDK MCPServer -- start if it has start()
+                if hasattr(self._mcp_server, "start"):
+                    loop.run_until_complete(self._mcp_server.start())
                 else:
-                    # Simple server fallback
-                    logger.warning("No MCP server found, skipping WebSocket setup")
-                    if hasattr(self, "_mcp_server") and hasattr(
-                        self._mcp_server, "start"
-                    ):
-                        loop.run_until_complete(self._mcp_server.start())
+                    logger.warning("MCP server has no start() method, skipping")
+            else:
+                logger.info("No MCP server configured. Use kailash-mcp for MCP access.")
+                return
 
             loop.run_forever()
         except Exception as e:
@@ -1871,7 +2153,7 @@ Check the documentation or explore available resources.
             logger.warning("Nexus is already running")
             return
 
-        if not self._gateway:
+        if not self._http_transport.gateway:
             raise RuntimeError("Enterprise gateway not initialized")
 
         logger.info("🚀 Starting Kailash Nexus - Zero-Config Workflow Platform")
@@ -1896,11 +2178,10 @@ Check the documentation or explore available resources.
         # Log successful startup
         self._log_startup_success()
 
-        # Run gateway in main thread (blocking)
+        # Run gateway in main thread (blocking) via HTTPTransport
         logger.info("Press Ctrl+C to stop the server")
         try:
-            # Run gateway directly - this blocks until stopped
-            self._gateway.run(host="0.0.0.0", port=self._api_port)
+            self._http_transport.run_blocking(host="0.0.0.0")
         except KeyboardInterrupt:
             logger.info("\n⏹️  Shutting down Nexus...")
             self.stop()
@@ -1925,86 +2206,6 @@ Check the documentation or explore available resources.
         logger.info(f"   API Port: {self._api_port}")
         logger.info("   Server Type: Enterprise (production-ready)")
         logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-    def _initialize_runtime_capabilities(self):
-        """Initialize runtime revolutionary capabilities.
-
-        NOTE: This method is currently unused but reserved for v1.1 features.
-        Event broadcasting uses _event_log (see broadcast_event() method).
-        Session management uses lazy initialization (see create_session() method).
-        """
-        # TODO v1.1: Initialize session manager for cross-channel sync
-        if not self._session_manager:
-            from .channels import create_session_manager
-
-            self._session_manager = create_session_manager()
-            logger.info("Cross-channel session manager initialized")
-
-        # TODO v1.1: Initialize event stream for real-time communication
-        # Currently, events are logged to _event_log without real-time broadcasting
-        # Real-time event streaming (WebSocket/SSE) will be added in v1.1
-        if not self._event_stream:
-            logger.debug(
-                "Event stream initialization deferred to v1.1 (using _event_log for now)"
-            )
-
-        # TODO v1.1: Initialize durability manager for request-level persistence
-        # Enterprise gateway already provides durability - this is for additional features
-        if not self._durability_manager:
-            logger.debug(
-                "Durability manager initialization deferred to v1.1 (gateway provides base durability)"
-            )
-
-    def _activate_multi_channel_orchestration(self):
-        """Activate revolutionary multi-channel orchestration."""
-        total_workflows = len(self._workflows)
-
-        logger.info(
-            f"🌉 Activating multi-channel orchestration for {total_workflows} workflows..."
-        )
-
-        # Update channel status
-        for channel in self._channel_registry:
-            self._channel_registry[channel]["status"] = "initializing"
-
-        logger.info("✅ Multi-channel orchestration ready")
-
-        # Log revolutionary capabilities
-        logger.info("🔥 Revolutionary capabilities active:")
-        logger.info(
-            "   • Durable-First Design: Every request resumable from checkpoints"
-        )
-        logger.info("   • Multi-Channel Native: Single workflow → API, CLI, MCP access")
-        logger.info("   • Enterprise-Default: Production features enabled by default")
-        logger.info("   • Cross-Channel Sync: Sessions persist across all interfaces")
-
-    def _log_revolutionary_startup(self):
-        """Log revolutionary startup success with competitive advantages."""
-        logger.info("🎯 Kailash Nexus Platform Started Successfully!")
-        logger.info(
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        )
-        logger.info("🏗️  REVOLUTIONARY ARCHITECTURE ACTIVE:")
-        logger.info("   📡 API Server: REST + WebSocket + OpenAPI docs")
-        logger.info("   💻 CLI Interface: Interactive commands + auto-completion")
-        logger.info("   🤖 MCP Protocol: AI agent tools + real execution")
-        logger.info("   🔄 Cross-Channel: Unified sessions + real-time sync")
-        logger.info("")
-        logger.info("🎯 COMPETITIVE ADVANTAGES:")
-        logger.info("   vs Django/FastAPI: Workflow-native vs request-response")
-        logger.info("   vs Temporal: Zero infrastructure vs external engine")
-        logger.info("   vs Serverless: Stateful workflows vs timeout limits")
-        logger.info("   vs API Gateways: Business logic vs simple proxying")
-        logger.info("")
-        logger.info("📊 PLATFORM STATUS:")
-        logger.info(f"   Workflows: {len(self._workflows)} registered")
-        logger.info(
-            f"   Channels: {len([c for c in self._channel_registry.values() if c['status'] == 'active'])} active"
-        )
-        logger.info("   Server Type: Enterprise (production-ready by default)")
-        logger.info(
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        )
 
     def close(self):
         """Release MCP servers and the shared runtime.
@@ -2059,7 +2260,7 @@ Check the documentation or explore available resources.
         # Gateway cleanup is handled automatically by FastAPI's lifespan context manager
         # The lifespan shuts down the executor when uvicorn stops
         # No explicit .stop() method exists on EnterpriseWorkflowServer
-        if self._gateway:
+        if self._http_transport.gateway:
             logger.debug("Gateway shutdown handled by FastAPI lifespan")
 
         # Stop MCP channel/server if running
@@ -2142,12 +2343,26 @@ Check the documentation or explore available resources.
         }
 
         # Add enterprise gateway health if available
-        if self._gateway and hasattr(self._gateway, "health_check"):
+        gw = self._http_transport.gateway
+        if gw and hasattr(gw, "health_check"):
             try:
-                gateway_health = self._gateway.health_check()
+                gateway_health = gw.health_check()
                 base_status["gateway_health"] = gateway_health
             except Exception as e:
                 base_status["gateway_health"] = {"status": "error", "error": str(e)}
+
+        # Add HTTP transport health
+        base_status["http_transport"] = self._http_transport.health_check()
+
+        # Add background service health if any are registered
+        if self._background_services:
+            background_health = {}
+            for svc in self._background_services:
+                try:
+                    background_health[svc.name] = svc.is_healthy()
+                except Exception:
+                    background_health[svc.name] = False
+            base_status["background_services"] = background_health
 
         return base_status
 
@@ -2155,9 +2370,10 @@ Check the documentation or explore available resources.
 
     def enable_auth(self):
         """Enable authentication using SDK's enterprise auth capabilities."""
-        if self._gateway and hasattr(self._gateway, "enable_auth"):
+        gw = self._http_transport.gateway
+        if gw and hasattr(gw, "enable_auth"):
             try:
-                self._gateway.enable_auth()
+                gw.enable_auth()
                 logger.info("Authentication enabled via enterprise gateway")
             except Exception as e:
                 logger.error(f"Failed to enable authentication: {e}")
@@ -2165,9 +2381,10 @@ Check the documentation or explore available resources.
 
     def enable_monitoring(self):
         """Enable monitoring using SDK's enterprise monitoring capabilities."""
-        if self._gateway and hasattr(self._gateway, "enable_monitoring"):
+        gw = self._http_transport.gateway
+        if gw and hasattr(gw, "enable_monitoring"):
             try:
-                self._gateway.enable_monitoring()
+                gw.enable_monitoring()
                 logger.info("Monitoring enabled via enterprise gateway")
             except Exception as e:
                 logger.error(f"Failed to enable monitoring: {e}")
@@ -2252,11 +2469,10 @@ Check the documentation or explore available resources.
             return {"error": "Session not found"}
 
     def broadcast_event(self, event_type: str, data: dict, session_id: str = None):
-        """Log events for future broadcasting (v1.1 feature).
+        """Broadcast an event via the EventBus.
 
-        NOTE: This method currently creates and logs events but does NOT broadcast
-        them in real-time. Real-time event broadcasting will be added in v1.1 when
-        WebSocket/SSE infrastructure is implemented.
+        Events are stored in a bounded history (256 most recent) and
+        dispatched to any active subscribers.
 
         Args:
             event_type: Type of event (WORKFLOW_STARTED, COMPLETED, etc.)
@@ -2264,48 +2480,37 @@ Check the documentation or explore available resources.
             session_id: Optional session to associate event with
 
         Returns:
-            Event object (logged but not broadcast in v1.0)
-
-        Planned for v1.1:
-            - WebSocket broadcasting to connected clients
-            - SSE (Server-Sent Events) streaming for browser clients
-            - MCP notifications for AI agents
-            - Cross-channel event synchronization
+            Event dict (legacy format for backward compatibility)
 
         Example:
             >>> event = app.broadcast_event("WORKFLOW_STARTED", {
             ...     "workflow": "data_pipeline",
             ...     "execution_id": "run_123"
             ... })
-            >>> # In v1.0: Event is logged only
-            >>> # In v1.1: Event will be broadcast to WebSocket/SSE clients
         """
-        from datetime import datetime
+        if session_id:
+            data = {**data, "session_id": session_id}
+        event = NexusEvent(
+            event_type=NexusEventType.CUSTOM,
+            data={"type": event_type, **data, "session_id": session_id},
+        )
+        self._event_bus.publish(event)
 
-        event = {
-            "id": f"evt_{int(datetime.now().timestamp() * 1000)}",
+        # Return legacy dict format for backward compatibility
+        return {
+            "id": f"evt_{int(event.timestamp.timestamp() * 1000)}",
             "type": event_type,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": event.timestamp.isoformat(),
             "data": data,
             "session_id": session_id,
         }
 
-        # Store event for future retrieval (v1.0 behavior)
-        if not hasattr(self, "_event_log"):
-            self._event_log = []
-        self._event_log.append(event)
-
-        # Log at debug level (not info - this isn't a real broadcast)
-        logger.debug(
-            f"Event logged (broadcast in v1.1): {event_type} (id: {event['id']})"
-        )
-
-        return event
-
     def get_events(
         self, session_id: str = None, event_type: str = None, limit: int = None
     ) -> List[dict]:
-        """Retrieve logged events (helper for v1.0).
+        """Retrieve recent events from the EventBus history.
+
+        Returns at most the 256 most recent events (bounded buffer).
 
         Args:
             session_id: Filter by session ID
@@ -2328,25 +2533,9 @@ Check the documentation or explore available resources.
             >>> # Get last 10 events
             >>> recent_events = app.get_events(limit=10)
         """
-        if not hasattr(self, "_event_log"):
-            return []
-
-        events = self._event_log
-
-        # Filter by session ID
-        if session_id:
-            events = [e for e in events if e.get("session_id") == session_id]
-
-        # Filter by event type
-        if event_type:
-            events = [e for e in events if e.get("type") == event_type]
-
-        # Apply limit (most recent first)
-        if limit:
-            events = list(reversed(events))[:limit]
-            events = list(reversed(events))  # Restore chronological order
-
-        return events
+        return self._event_bus.get_history(
+            session_id=session_id, event_type=event_type, limit=limit
+        )
 
     def get_performance_metrics(self) -> dict:
         """Get revolutionary performance metrics for validation.

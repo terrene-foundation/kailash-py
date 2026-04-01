@@ -10,7 +10,7 @@
 pip install kailash-kaizen
 
 # Kaizen + DataFlow (database-enabled agents)
-pip install kailash-kaizen kailash[dataflow]
+pip install kailash-kaizen kailash-dataflow
 ```
 
 ## Quick Start
@@ -313,6 +313,7 @@ def test_with_or_without_dataflow():
 ## Phase 2 Preview (Coming Soon)
 
 Phase 2 will add:
+
 - Full workflow integration with DataFlow nodes
 - Memory persistence via DataFlow models
 - Advanced multi-agent coordination patterns
@@ -328,6 +329,7 @@ Phase 2 will add:
 ## Questions?
 
 Check DATAFLOW_AVAILABLE:
+
 ```python
 from kaizen.integrations.dataflow import DATAFLOW_AVAILABLE
 print(f"DataFlow integration: {DATAFLOW_AVAILABLE}")

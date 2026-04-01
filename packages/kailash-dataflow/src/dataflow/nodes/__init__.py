@@ -22,6 +22,7 @@ from .transaction_nodes import (
     TransactionScopeNode,
 )
 from .vector_nodes import CreateVectorIndexNode, HybridSearchNode, VectorSearchNode
+from .file_source import FileSourceNode
 from .workflow_connection_manager import (
     DataFlowConnectionManager,
     SmartNodeConnectionMixin,
@@ -52,4 +53,6 @@ __all__ = [
     "BulkDocumentInsertNode",
     "MongoCreateIndexNode",
     "DocumentCountNode",
+    # File ingestion
+    "FileSourceNode",
 ]

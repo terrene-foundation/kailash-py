@@ -62,11 +62,8 @@ Missing Optional Dependencies
 
 .. code-block:: bash
 
-    # For visualization features
-    pip install "kailash[viz]"
-
-    # For all optional dependencies
-    pip install "kailash[all]"
+    # Base install includes all standard dependencies
+    pip install kailash
 
     # Individual optional packages
     pip install pygraphviz  # Advanced visualization

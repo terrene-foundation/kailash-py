@@ -1,0 +1,53 @@
+# Session Notes — 2026-04-01 (session 12)
+
+### Read These Files First (in order)
+
+1. `workspaces/kailash/04-validate/04-convergence-report.md` — full red team convergence report, test counts, security fixes
+2. `workspaces/kailash/01-analysis/06-cross-workspace-synthesis.md` — cross-workspace dependencies and sequencing
+3. `.claude/.proposals/latest.yaml` — codification proposal with 16+ artifact changes for upstream `/sync`
+4. `packages/kailash-ml/README.md` — kailash-ml documentation (expanded this session)
+5. `packages/kailash-align/pyproject.toml` — kailash-align deps and extras ([rlhf], [eval], [serve], [full])
+6. `CLAUDE.md` — updated framework table now includes kailash-ml and kailash-align
+
+## Accomplished
+
+- **5 workspaces: full pipeline** (/analyze → /todos → /implement → /redteam → /codify) in one session
+- **dataflow-enhancements**: 8 features (DerivedModel, FileSource, Validation DSL, Cache wiring, ReadReplica, Retention, EventMixin, on_source_change) — 3690 tests pass
+- **nexus-transport-refactor**: B0a (HandlerRegistry, EventBus, BackgroundService) + B0b (Transport ABC, HTTPTransport, MCPTransport, Phase 2 APIs) — 1153 tests pass
+- **mcp-platform-server**: Unified FastMCP server, 7 AST contributors, security tiers, MCP resources, old MCP cleanup — 20 tests pass
+- **kailash-ml**: NEW package — protocols, interop (8 converters), 9 engines (FeatureStore through FeatureEngineer), MLflow v1 compat, ONNX bridge — 163 tests pass
+- **kailash-align**: NEW package — AdapterRegistry, AlignmentConfig, SFT/DPO pipeline, Evaluator, Serving (GGUF), Bridge, OnPrem — 211 tests pass
+- **GH issues**: #204 (cache bug), #205 (GovernanceEngine), #206 (ShadowStore), #207 (SignedEnvelope) — all closed
+- **Security**: 11 findings fixed (4C + 7H), 0 open CRITICAL/HIGH
+- **Codification**: 3 agents updated, 13 new skills created, upstream proposal at `.claude/.proposals/latest.yaml`
+- **Total**: ~80 new files, ~730 new tests, 5292 passing, 0 regressions
+
+## Outstanding
+
+- [ ] All changes are UNCOMMITTED — create branch `feat/five-workspace-sprint-s12` and PR
+- [ ] `/sync py` at loom/ to distribute 16 codified artifacts to USE template
+- [ ] `/release` for new packages: kailash-ml 0.1.0, kailash-align 0.1.0, kailash-ml-protocols 0.1.0
+- [ ] Version bumps needed: kailash-dataflow (new features), kailash-nexus (transport refactor)
+- [ ] CHANGELOG entries for all 5 workspaces + trust/PACT features
+- [ ] 22 pre-existing test failures (DataFlow PG auth, knowledge_base; Nexus channel init, MCP server check)
+- [ ] ML-400 (6 Kaizen agents) skipped — needs LLM API keys for integration testing
+- [ ] ML-500 (integration tests) needs full engine-to-engine E2E with real training
+
+## Oversight — Verify Before Starting
+
+- [ ] `git log --oneline -1` — should still be `c9dcc8bf` (no commits this session)
+- [ ] `uv run pytest packages/kailash-ml/tests/ -q --timeout=60` — 163 passed, 1 skipped
+- [ ] `uv run pytest packages/kailash-align/tests/ -q --timeout=60` — 211 passed, 1 skipped
+- [ ] `gh issue list --state open` — should return 0 open issues
+
+## Oversight — Verify After Completing
+
+- [ ] Branch pushed, PR created with all changes
+- [ ] `pip install -e packages/kailash-ml` works
+- [ ] `pip install -e packages/kailash-align` works
+- [ ] `pip install -e packages/kailash-ml-protocols` works
+- [ ] `/sync py` completed at loom/ with proposal classified
+
+## Blockers
+
+- None — all changes ready for commit/PR/release

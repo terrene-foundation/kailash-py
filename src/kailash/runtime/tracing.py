@@ -4,7 +4,7 @@
 """Optional OpenTelemetry tracing for workflow execution.
 
 Graceful degradation: if opentelemetry is not installed, all operations are no-ops.
-Install with: pip install kailash[otel]
+Included in the base install (pip install kailash).
 
 This module provides lightweight OpenTelemetry integration for the core SDK runtime.
 It is independent of Kaizen's TracingManager (which targets Jaeger + HookContext).

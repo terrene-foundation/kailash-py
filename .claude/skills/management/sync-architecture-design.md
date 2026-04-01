@@ -483,7 +483,7 @@ Strategy:
 
 **Edge case**: The template's `pyproject.toml` has a `# TODO: Replace with your project name` template. The sync command MUST NOT replace this. It only touches lines matching `kailash*>=`.
 
-**Edge case**: The user has added `kailash[trust,pact]>=2.1.0` with extras. The sync must preserve the extras brackets and only update the version number.
+**Edge case**: All standard extras (`trust`, `pact`, `postgres`, `database`, `mysql`, `server`, `http`, `monitoring`, `trust-encryption`, `trust-sso`) are now included in the base `pip install kailash`. The sync should normalize any extras-bracket dependency using only standard extras (e.g., `kailash[trust,pact]>=2.1.0`) to `kailash>=2.1.0`. The extras-bracket handling is still needed for vendor-specific backends (`kailash[vault]`, `kailash[aws-secrets]`, `kailash[azure-secrets]`, `kailash[trust-windows]`) which remain genuine optional extras.
 
 ---
 

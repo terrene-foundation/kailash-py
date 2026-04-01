@@ -1,0 +1,112 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kailash-ml"
+version = "0.1.0"
+description = "Machine learning lifecycle for the Kailash ecosystem"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [
+    { name = "Terrene Foundation" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+readme = "README.md"
+keywords = ["ml", "machine-learning", "kailash", "automl", "feature-store", "model-registry"]
+dependencies = [
+    "kailash>=1.0",
+    "kailash-dataflow>=1.0",
+    "kailash-ml-protocols>=0.1.0",
+    "polars>=1.0",
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "scikit-learn>=1.4",
+    "lightgbm>=4.0",
+    "plotly>=5.18",
+    "skl2onnx>=1.16",
+    "onnxmltools>=1.12",
+    "onnxruntime>=1.17",
+]
+
+[project.optional-dependencies]
+dl = [
+    "torch>=2.2",
+    "lightning>=2.2",
+    "torchvision>=0.17",
+    "torchaudio>=2.2",
+    "timm>=1.0",
+    "transformers>=4.40",
+]
+dl-gpu = [
+    "torch>=2.2",
+    "lightning>=2.2",
+    "torchvision>=0.17",
+    "torchaudio>=2.2",
+    "timm>=1.0",
+    "transformers>=4.40",
+    "onnxruntime-gpu>=1.17",
+]
+rl = [
+    "kailash-ml[dl]",
+    "stable-baselines3>=2.3",
+    "gymnasium>=0.29",
+]
+agents = [
+    "kailash-kaizen>=1.0",
+]
+xgb = ["xgboost>=2.0"]
+catboost = ["catboost>=1.2"]
+stats = ["statsmodels>=0.14"]
+full = ["kailash-ml[dl,xgb,catboost,stats,rl,agents]"]
+full-gpu = ["kailash-ml[dl-gpu,xgb,catboost,stats,rl,agents]"]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-timeout>=2.0",
+    "hypothesis>=6.98",
+    "mypy>=1.8",
+    "ruff>=0.3",
+]
+
+[project.scripts]
+kailash-ml-gpu-setup = "kailash_ml._gpu_setup:main"
+
+[project.urls]
+Documentation = "https://docs.terrene.foundation/kailash-ml"
+Repository = "https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-ml"
+Issues = "https://github.com/terrene-foundation/kailash-py/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kailash_ml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+timeout = 120
+markers = [
+    "unit: Unit tests (no I/O, no network)",
+    "integration: Integration tests (real stores, real models)",
+    "bench: Benchmark tests (performance)",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.mypy]
+python_version = "3.10"
+strict = true

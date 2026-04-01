@@ -46,180 +46,20 @@ When to Use Traditional Workflows:
 """
 
 import asyncio
-import hashlib
-import json
 import logging
+import os
 import threading
 import time
-from collections import OrderedDict
-from dataclasses import dataclass
-from threading import RLock
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
+
+from dataflow.cache.auto_detection import CacheBackend
+from dataflow.cache.key_generator import CacheKeyGenerator
+from dataflow.cache.memory_cache import InMemoryCache
 
 if TYPE_CHECKING:
     from dataflow import DataFlow
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# Query Cache Implementation
-# ============================================================================
-
-
-@dataclass
-class CacheEntry:
-    """Cache entry with value, timestamp, and TTL."""
-
-    value: Any
-    timestamp: float
-    ttl: int
-
-
-class ExpressQueryCache:
-    """
-    Thread-safe LRU cache with TTL expiration for query results.
-
-    Features:
-    - LRU (Least Recently Used) eviction when max_size reached
-    - TTL (Time To Live) expiration for stale entries
-    - Thread-safe with RLock protection
-    - Automatic cache invalidation on writes
-    - Statistics tracking (hits, misses, evictions)
-    """
-
-    def __init__(self, max_size: int = 1000, default_ttl: int = 300):
-        """
-        Initialize cache.
-
-        Args:
-            max_size: Maximum number of entries (default: 1000)
-            default_ttl: Default time-to-live in seconds (default: 300 = 5 min)
-        """
-        self._cache: OrderedDict[str, CacheEntry] = OrderedDict()
-        self._max_size = max_size
-        self._default_ttl = default_ttl
-        self._lock = RLock()
-
-        # Statistics
-        self._hits = 0
-        self._misses = 0
-        self._evictions = 0
-        self._invalidations = 0
-
-    def _generate_key(self, model: str, operation: str, params: Dict[str, Any]) -> str:
-        """Generate cache key from model, operation, and parameters."""
-        key_data = (
-            f"{model}:{operation}:{json.dumps(params, sort_keys=True, default=str)}"
-        )
-        return hashlib.sha256(key_data.encode()).hexdigest()[:32]
-
-    def get(self, key: str) -> Optional[Any]:
-        """
-        Get value from cache.
-
-        Args:
-            key: Cache key
-
-        Returns:
-            Cached value or None if not found/expired
-        """
-        with self._lock:
-            if key not in self._cache:
-                self._misses += 1
-                return None
-
-            entry = self._cache[key]
-
-            # Check TTL
-            if time.time() - entry.timestamp > entry.ttl:
-                # Expired - remove
-                del self._cache[key]
-                self._misses += 1
-                return None
-
-            # Move to end (mark as recently used)
-            self._cache.move_to_end(key)
-            self._hits += 1
-            return entry.value
-
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
-        """
-        Set value in cache.
-
-        Args:
-            key: Cache key
-            value: Value to cache
-            ttl: Optional TTL override (uses default if not specified)
-        """
-        with self._lock:
-            # LRU eviction if at capacity
-            if key not in self._cache and len(self._cache) >= self._max_size:
-                # Remove oldest entry (first item)
-                self._cache.popitem(last=False)
-                self._evictions += 1
-
-            entry_ttl = ttl if ttl is not None else self._default_ttl
-            self._cache[key] = CacheEntry(
-                value=value, timestamp=time.time(), ttl=entry_ttl
-            )
-
-            # Move to end if updating existing key
-            if key in self._cache:
-                self._cache.move_to_end(key)
-
-    def invalidate_model(self, model: str) -> int:
-        """
-        Invalidate all cache entries for a model.
-
-        Called automatically on write operations (create, update, delete).
-
-        Args:
-            model: Model name
-
-        Returns:
-            Number of entries invalidated
-        """
-        with self._lock:
-            # Find keys that start with model name hash prefix
-            # Since we use hashed keys, we need to track model associations
-            # For simplicity, clear all entries containing the model name
-            keys_to_remove = []
-            for key in self._cache.keys():
-                # We'll use a separate tracking mechanism for model->key mapping
-                # For now, clear entries based on stored model association
-                entry = self._cache.get(key)
-                if entry and hasattr(entry, "model") and entry.model == model:
-                    keys_to_remove.append(key)
-
-            # For now, since we don't track model associations, invalidate all
-            # In production, maintain a model->keys mapping for efficient invalidation
-            count = len(self._cache)
-            self._cache.clear()
-            self._invalidations += count
-            return count
-
-    def clear(self) -> None:
-        """Clear all cache entries."""
-        with self._lock:
-            self._cache.clear()
-
-    def get_stats(self) -> Dict[str, Any]:
-        """Get cache statistics."""
-        with self._lock:
-            total = self._hits + self._misses
-            hit_rate = self._hits / total if total > 0 else 0.0
-
-            return {
-                "hits": self._hits,
-                "misses": self._misses,
-                "hit_rate": hit_rate,
-                "evictions": self._evictions,
-                "invalidations": self._invalidations,
-                "cached_entries": len(self._cache),
-                "max_size": self._max_size,
-                "default_ttl": self._default_ttl,
-            }
 
 
 # ============================================================================
@@ -258,6 +98,7 @@ class DataFlowExpress:
         cache_max_size: int = 1000,
         cache_ttl: int = 300,
         warm_schema_on_init: bool = False,
+        redis_url: Optional[str] = None,
     ):
         """
         Initialize ExpressDataFlow.
@@ -266,13 +107,41 @@ class DataFlowExpress:
             dataflow_instance: DataFlow instance with registered models
             cache_enabled: Enable query result caching (default: True)
             cache_max_size: Maximum cache entries (default: 1000)
-            cache_ttl: Cache TTL in seconds (default: 300 = 5 min)
+            cache_ttl: Cache TTL in seconds (default: 300 = 5 min).
+                A value of ``0`` disables caching entirely.
             warm_schema_on_init: Pre-warm schema cache on init (default: False)
+            redis_url: Redis connection URL. When provided (or when the
+                ``REDIS_URL`` environment variable is set) and Redis is
+                reachable, Redis is used as the cache backend.  Otherwise
+                an in-memory LRU cache is used.
         """
         self._db = dataflow_instance
-        self._cache_enabled = cache_enabled
-        self._cache = ExpressQueryCache(max_size=cache_max_size, default_ttl=cache_ttl)
+        self._default_cache_ttl = cache_ttl
         self._schema_warmed = False
+
+        # Disable caching when TTL is 0 or cache_enabled is False
+        self._cache_enabled = cache_enabled and cache_ttl > 0
+
+        # --- Cache backend (TSG-104) ---
+        # Resolve Redis URL: explicit param > env var > None
+        effective_redis_url = redis_url or os.environ.get("REDIS_URL")
+
+        if self._cache_enabled:
+            self._cache_manager: Optional[Union[InMemoryCache, Any]] = (
+                CacheBackend.auto_detect(
+                    redis_url=effective_redis_url,
+                    ttl=cache_ttl,
+                    max_size=cache_max_size,
+                )
+            )
+        else:
+            self._cache_manager = None
+
+        self._key_gen = CacheKeyGenerator()
+
+        # Local hit/miss counters for Express-level stats
+        self._cache_hits = 0
+        self._cache_misses = 0
 
         # Statistics
         self._operation_times: List[float] = []
@@ -353,6 +222,52 @@ class DataFlowExpress:
             logger.debug(f"Express {operation}: {elapsed:.2f}ms")
 
     # ========================================================================
+    # Validation Helper (TSG-103)
+    # ========================================================================
+
+    async def _validate_if_enabled(self, model: str, data: Dict[str, Any]) -> None:
+        """Validate data against model field validators if enabled.
+
+        Does nothing if ``validate_on_write`` is disabled or if the
+        model has no ``__field_validators__``.
+
+        Raises:
+            DataFlowValidationError: If validation fails.
+        """
+        if not getattr(self._db, "_validate_on_write", True):
+            return
+        model_info = self._db._models.get(model)
+        if model_info is None:
+            return
+        model_cls = (
+            model_info.get("class") if isinstance(model_info, dict) else model_info
+        )
+        if model_cls is None:
+            return
+        validators = getattr(model_cls, "__field_validators__", [])
+        if not validators:
+            return
+
+        from dataflow.validation.decorators import validate_model as _validate_instance
+        from dataflow.validation.result import ValidationResult
+
+        # Build a lightweight proxy with data as attributes
+        class _Proxy:
+            pass
+
+        proxy = _Proxy()
+        for k, v in data.items():
+            setattr(proxy, k, v)
+        _Proxy.__field_validators__ = validators
+
+        result = _validate_instance(proxy)
+        if not result.valid:
+            error_msgs = "; ".join(e.message for e in result.errors)
+            from dataflow.exceptions import DataFlowError
+
+            raise DataFlowError(f"Validation failed for {model}: {error_msgs}")
+
+    # ========================================================================
     # CRUD Operations
     # ========================================================================
 
@@ -376,12 +291,12 @@ class DataFlowExpress:
         """
 
         async def _create():
+            await self._validate_if_enabled(model, data)
             node = self._create_node(model, "Create")
             result = await node.async_run(**data)
 
-            # Invalidate cache for this model
-            if self._cache_enabled:
-                self._cache.invalidate_model(model)
+            # Model-scoped cache invalidation (TSG-104)
+            await self._invalidate_model_cache(model)
 
             # Issue #184 fix: SQLite INSERT doesn't return auto-generated fields
             # (created_at, updated_at, id). If the result is missing timestamps
@@ -411,12 +326,25 @@ class DataFlowExpress:
                     except Exception:
                         pass  # Best-effort read-back; original result still valid
 
+            # TSG-201: Emit write event
+            if hasattr(self._db, "_emit_write_event"):
+                record_id = (
+                    str(result.get("id", ""))
+                    if result and isinstance(result, dict)
+                    else None
+                )
+                self._db._emit_write_event(model, "create", record_id=record_id)
+
             return result
 
         return await self._execute_with_timing(f"{model}.create", _create())
 
     async def read(
-        self, model: str, id: str, cache_ttl: Optional[int] = None
+        self,
+        model: str,
+        id: str,
+        cache_ttl: Optional[int] = None,
+        use_primary: bool = False,  # TSG-105
     ) -> Optional[Dict[str, Any]]:
         """
         Read a single record by ID.
@@ -432,24 +360,21 @@ class DataFlowExpress:
         Example:
             user = await db.express.read("User", "user-123")
         """
-        cache_key = None
+        effective_ttl = cache_ttl if cache_ttl is not None else self._default_cache_ttl
 
         # Check cache first
-        if self._cache_enabled:
-            cache_key = self._cache._generate_key(model, "read", {"id": id})
-            cached = self._cache.get(cache_key)
-            if cached is not None:
-                logger.debug(f"Cache hit for {model}.read({id})")
-                return cached
+        cached_result = await self._cache_get(model, "read", {"id": id}, effective_ttl)
+        if cached_result is not None:
+            logger.debug(f"Cache hit for {model}.read({id})")
+            return cached_result
 
         async def _read():
             try:
                 node = self._create_node(model, "Read")
                 result = await node.async_run(id=id)
 
-                # Cache result
-                if self._cache_enabled and cache_key and result:
-                    self._cache.set(cache_key, result, ttl=cache_ttl)
+                # Cache result (TSG-104)
+                await self._cache_set(model, "read", {"id": id}, result, effective_ttl)
 
                 return result
             except Exception as e:
@@ -486,12 +411,16 @@ class DataFlowExpress:
         """
 
         async def _update():
+            await self._validate_if_enabled(model, fields)
             node = self._create_node(model, "Update")
             result = await node.async_run(filter={"id": id}, fields=fields)
 
-            # Invalidate cache for this model
-            if self._cache_enabled:
-                self._cache.invalidate_model(model)
+            # Model-scoped cache invalidation (TSG-104)
+            await self._invalidate_model_cache(model)
+
+            # TSG-201: Emit write event
+            if hasattr(self._db, "_emit_write_event"):
+                self._db._emit_write_event(model, "update", record_id=str(id))
 
             return result
 
@@ -516,9 +445,12 @@ class DataFlowExpress:
             node = self._create_node(model, "Delete")
             result = await node.async_run(id=id)
 
-            # Invalidate cache for this model
-            if self._cache_enabled:
-                self._cache.invalidate_model(model)
+            # Model-scoped cache invalidation (TSG-104)
+            await self._invalidate_model_cache(model)
+
+            # TSG-201: Emit write event
+            if hasattr(self._db, "_emit_write_event"):
+                self._db._emit_write_event(model, "delete", record_id=str(id))
 
             return (
                 result.get("deleted", False)
@@ -535,6 +467,7 @@ class DataFlowExpress:
         limit: int = 100,
         offset: int = 0,
         cache_ttl: Optional[int] = None,
+        use_primary: bool = False,  # TSG-105
     ) -> List[Dict[str, Any]]:
         """
         List records with optional filtering.
@@ -553,26 +486,24 @@ class DataFlowExpress:
             users = await db.express.list("User", filter={"status": "active"}, limit=50)
         """
         params = {"filter": filter or {}, "limit": limit, "offset": offset}
-
-        cache_key = None
+        effective_ttl = cache_ttl if cache_ttl is not None else self._default_cache_ttl
 
         # Check cache first
-        if self._cache_enabled:
-            cache_key = self._cache._generate_key(model, "list", params)
-            cached = self._cache.get(cache_key)
-            if cached is not None:
-                logger.debug(f"Cache hit for {model}.list")
-                return cached
+        cached_result = await self._cache_get(model, "list", params, effective_ttl)
+        if cached_result is not None:
+            logger.debug(f"Cache hit for {model}.list")
+            return cached_result
 
         async def _list():
             node = self._create_node(model, "List")
             result = await node.async_run(**params)
 
-            # Cache result
-            if self._cache_enabled and cache_key:
-                self._cache.set(cache_key, result, ttl=cache_ttl)
+            records = result if isinstance(result, list) else result.get("records", [])
 
-            return result if isinstance(result, list) else result.get("records", [])
+            # Cache result (TSG-104)
+            await self._cache_set(model, "list", params, records, effective_ttl)
+
+            return records
 
         return await self._execute_with_timing(f"{model}.list", _list())
 
@@ -581,6 +512,7 @@ class DataFlowExpress:
         model: str,
         filter: Dict[str, Any],
         cache_ttl: Optional[int] = None,
+        use_primary: bool = False,  # TSG-105
     ) -> Optional[Dict[str, Any]]:
         """
         Find a single record by filter criteria (non-PK lookup).
@@ -622,16 +554,13 @@ class DataFlowExpress:
             )
 
         params = {"filter": filter, "limit": 1, "offset": 0}
-
-        cache_key = None
+        effective_ttl = cache_ttl if cache_ttl is not None else self._default_cache_ttl
 
         # Check cache first
-        if self._cache_enabled:
-            cache_key = self._cache._generate_key(model, "find_one", params)
-            cached = self._cache.get(cache_key)
-            if cached is not None:
-                logger.debug(f"Cache hit for {model}.find_one")
-                return cached
+        cached_result = await self._cache_get(model, "find_one", params, effective_ttl)
+        if cached_result is not None:
+            logger.debug(f"Cache hit for {model}.find_one")
+            return cached_result
 
         async def _find_one():
             node = self._create_node(model, "List")
@@ -642,8 +571,7 @@ class DataFlowExpress:
             record = records[0] if records else None
 
             # Cache result (including None for not-found)
-            if self._cache_enabled and cache_key:
-                self._cache.set(cache_key, record, ttl=cache_ttl)
+            await self._cache_set(model, "find_one", params, record, effective_ttl)
 
             return record
 
@@ -654,6 +582,7 @@ class DataFlowExpress:
         model: str,
         filter: Optional[Dict[str, Any]] = None,
         cache_ttl: Optional[int] = None,
+        use_primary: bool = False,  # TSG-105
     ) -> int:
         """
         Count records with optional filtering.
@@ -672,25 +601,21 @@ class DataFlowExpress:
             active_count = await db.express.count("User", filter={"status": "active"})
         """
         params = {"filter": filter or {}}
-
-        cache_key = None
+        effective_ttl = cache_ttl if cache_ttl is not None else self._default_cache_ttl
 
         # Check cache first
-        if self._cache_enabled:
-            cache_key = self._cache._generate_key(model, "count", params)
-            cached = self._cache.get(cache_key)
-            if cached is not None:
-                logger.debug(f"Cache hit for {model}.count")
-                return cached
+        cached_result = await self._cache_get(model, "count", params, effective_ttl)
+        if cached_result is not None:
+            logger.debug(f"Cache hit for {model}.count")
+            return cached_result
 
         async def _count():
             node = self._create_node(model, "Count")
             result = await node.async_run(**params)
             count = result.get("count", 0) if isinstance(result, dict) else result
 
-            # Cache result
-            if self._cache_enabled and cache_key:
-                self._cache.set(cache_key, count, ttl=cache_ttl)
+            # Cache result (TSG-104)
+            await self._cache_set(model, "count", params, count, effective_ttl)
 
             return count
 
@@ -724,6 +649,7 @@ class DataFlowExpress:
         """
 
         async def _upsert():
+            await self._validate_if_enabled(model, data)
             node = self._create_node(model, "Upsert")
 
             # Simple upsert: use data as both create and update
@@ -737,9 +663,17 @@ class DataFlowExpress:
 
             result = await node.async_run(**params)
 
-            # Invalidate cache for this model
-            if self._cache_enabled:
-                self._cache.invalidate_model(model)
+            # Model-scoped cache invalidation (TSG-104)
+            await self._invalidate_model_cache(model)
+
+            # TSG-201: Emit write event
+            if hasattr(self._db, "_emit_write_event"):
+                record_id = (
+                    str(data.get("id", ""))
+                    if isinstance(data, dict) and "id" in data
+                    else None
+                )
+                self._db._emit_write_event(model, "upsert", record_id=record_id)
 
             # Return the record directly for simpler API
             if isinstance(result, dict) and "record" in result:
@@ -788,9 +722,17 @@ class DataFlowExpress:
 
             result = await node.async_run(**params)
 
-            # Invalidate cache for this model
-            if self._cache_enabled:
-                self._cache.invalidate_model(model)
+            # Model-scoped cache invalidation (TSG-104)
+            await self._invalidate_model_cache(model)
+
+            # TSG-201: Emit write event (upsert_advanced is also an upsert)
+            if hasattr(self._db, "_emit_write_event"):
+                record_id = (
+                    str(create.get("id", ""))
+                    if isinstance(create, dict) and "id" in create
+                    else None
+                )
+                self._db._emit_write_event(model, "upsert", record_id=record_id)
 
             return result
 
@@ -824,9 +766,12 @@ class DataFlowExpress:
             node = self._create_node(model, "BulkCreate")
             result = await node.async_run(data=records)
 
-            # Invalidate cache for this model
-            if self._cache_enabled:
-                self._cache.invalidate_model(model)
+            # Model-scoped cache invalidation (TSG-104)
+            await self._invalidate_model_cache(model)
+
+            # TSG-201: Emit write event
+            if hasattr(self._db, "_emit_write_event"):
+                self._db._emit_write_event(model, "bulk_create", record_id=None)
 
             # Handle different result formats
             if isinstance(result, list):
@@ -859,9 +804,12 @@ class DataFlowExpress:
             # Convert IDs list to filter format expected by BulkDeleteNode
             result = await node.async_run(filter={"id": {"$in": ids}})
 
-            # Invalidate cache for this model
-            if self._cache_enabled:
-                self._cache.invalidate_model(model)
+            # Model-scoped cache invalidation (TSG-104)
+            await self._invalidate_model_cache(model)
+
+            # TSG-201: Emit write event
+            if hasattr(self._db, "_emit_write_event"):
+                self._db._emit_write_event(model, "bulk_delete", record_id=None)
 
             # Handle different result formats
             if isinstance(result, bool):
@@ -874,14 +822,102 @@ class DataFlowExpress:
         return await self._execute_with_timing(f"{model}.bulk_delete", _bulk_delete())
 
     # ========================================================================
+    # Cache Helpers (TSG-104)
+    # ========================================================================
+
+    async def _cache_get(
+        self,
+        model: str,
+        operation: str,
+        params: Any,
+        effective_ttl: int,
+    ) -> Optional[Any]:
+        """Return cached value or ``None``.  Increments hit/miss counters."""
+        if not self._cache_enabled or not self._cache_manager or effective_ttl <= 0:
+            return None
+        cache_key = self._key_gen.generate_express_key(model, operation, params)
+        cached = await self._cache_manager.get(cache_key)
+        if cached is not None:
+            self._cache_hits += 1
+            return cached
+        self._cache_misses += 1
+        return None
+
+    async def _cache_set(
+        self,
+        model: str,
+        operation: str,
+        params: Any,
+        value: Any,
+        effective_ttl: int,
+    ) -> None:
+        """Store *value* in the cache if caching is active."""
+        if (
+            not self._cache_enabled
+            or not self._cache_manager
+            or effective_ttl <= 0
+            or value is None
+        ):
+            return
+        cache_key = self._key_gen.generate_express_key(model, operation, params)
+        await self._cache_manager.set(cache_key, value, ttl=effective_ttl)
+
+    async def _invalidate_model_cache(self, model: str) -> None:
+        """Clear all cache entries scoped to *model*."""
+        if not self._cache_enabled or not self._cache_manager:
+            return
+        pattern = f"{self._key_gen.prefix}:{self._key_gen.version}:{model}:*"
+        await self._cache_manager.clear_pattern(pattern)
+
+    # ========================================================================
     # Cache Management
     # ========================================================================
 
     def get_cache_stats(self) -> Dict[str, Any]:
-        """Get cache statistics."""
-        return self._cache.get_stats()
+        """Get cache statistics (sync convenience accessor).
 
-    def clear_cache(self, model: Optional[str] = None) -> int:
+        For full async stats including backend metrics, use
+        :meth:`cache_stats`.
+        """
+        return {
+            "hits": self._cache_hits,
+            "misses": self._cache_misses,
+            "backend": self._cache_backend_name(),
+        }
+
+    async def cache_stats(self) -> Dict[str, Any]:
+        """Return cache statistics including backend metrics.
+
+        Returns:
+            ``{"hits": int, "misses": int, "size": int, "backend": str}``
+        """
+        size = 0
+        if self._cache_manager is not None:
+            if isinstance(self._cache_manager, InMemoryCache):
+                size = len(self._cache_manager.cache)
+            else:
+                # For Redis-backed caches, size requires a server call
+                try:
+                    metrics = await self._cache_manager.get_metrics()
+                    size = metrics.get("cached_entries", 0)
+                except Exception:
+                    pass
+        return {
+            "hits": self._cache_hits,
+            "misses": self._cache_misses,
+            "size": size,
+            "backend": self._cache_backend_name(),
+        }
+
+    def _cache_backend_name(self) -> str:
+        """Return a human-readable label for the active cache backend."""
+        if not self._cache_enabled or self._cache_manager is None:
+            return "disabled"
+        if isinstance(self._cache_manager, InMemoryCache):
+            return "in_memory"
+        return "redis"
+
+    async def clear_cache(self, model: Optional[str] = None) -> int:
         """
         Clear cache entries.
 
@@ -891,12 +927,22 @@ class DataFlowExpress:
         Returns:
             Number of entries cleared
         """
+        if self._cache_manager is None:
+            return 0
         if model:
-            return self._cache.invalidate_model(model)
+            return await self._cache_manager.clear_pattern(
+                f"{self._key_gen.prefix}:{self._key_gen.version}:{model}:*"
+            )
         else:
-            count = len(self._cache._cache)
-            self._cache.clear()
-            return count
+            if isinstance(self._cache_manager, InMemoryCache):
+                count = len(self._cache_manager.cache)
+                await self._cache_manager.clear()
+                return count
+            else:
+                # Redis: clear all dataflow keys
+                return await self._cache_manager.clear_pattern(
+                    f"{self._key_gen.prefix}:*"
+                )
 
     # ========================================================================
     # Performance Metrics
@@ -931,10 +977,71 @@ class DataFlowExpress:
     def reset_stats(self) -> None:
         """Reset all statistics."""
         self._operation_times.clear()
-        self._cache._hits = 0
-        self._cache._misses = 0
-        self._cache._evictions = 0
-        self._cache._invalidations = 0
+        self._cache_hits = 0
+        self._cache_misses = 0
+
+    # ========================================================================
+    # File Import (TSG-102)
+    # ========================================================================
+
+    async def import_file(
+        self,
+        model_name: str,
+        file_path: str,
+        column_mapping: Optional[Dict[str, Any]] = None,
+        type_coercion: Optional[Dict[str, str]] = None,
+        upsert: bool = True,
+        batch_size: int = 1000,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Import records from a file into a model.
+
+        Reads the file via ``FileSourceNode``, then bulk-inserts or
+        bulk-upserts into the model.
+
+        Args:
+            model_name: Target model name.
+            file_path: Path to the input file.
+            column_mapping: ``{source_col: target_col}`` renames.
+            type_coercion: ``{field: type_name}`` coercions.
+            upsert: Use BulkUpsert semantics (default ``True``).
+            batch_size: Records per batch.
+            **kwargs: Forwarded to ``FileSourceNode.async_run()``.
+
+        Returns:
+            ``{"imported": int, "errors": [...]}``
+        """
+        from dataflow.nodes.file_source import FileSourceNode
+
+        node = FileSourceNode()
+        result = await node.async_run(
+            file_path=file_path,
+            column_mapping=column_mapping,
+            type_coercion=type_coercion,
+            batch_size=batch_size,
+            **kwargs,
+        )
+
+        records = result["records"]
+        errors = list(result.get("errors", []))
+        imported = 0
+
+        if records:
+            if upsert:
+                for record in records:
+                    try:
+                        await self.upsert(model_name, record)
+                        imported += 1
+                    except Exception as exc:
+                        errors.append(f"Upsert failed for record: {exc}")
+            else:
+                try:
+                    await self.bulk_create(model_name, records)
+                    imported = len(records)
+                except Exception as exc:
+                    errors.append(f"Bulk create failed: {exc}")
+
+        return {"imported": imported, "errors": errors}
 
 
 ExpressDataFlow = DataFlowExpress  # Deprecated alias
@@ -1010,7 +1117,11 @@ class SyncExpress:
         return self._run_sync(self._express.create(model, data))
 
     def read(
-        self, model: str, id: str, cache_ttl: Optional[int] = None
+        self,
+        model: str,
+        id: str,
+        cache_ttl: Optional[int] = None,
+        use_primary: bool = False,  # TSG-105
     ) -> Optional[Dict[str, Any]]:
         """Read a single record by ID (sync).
 
@@ -1018,11 +1129,14 @@ class SyncExpress:
             model: Model name (e.g., "User")
             id: Record ID
             cache_ttl: Optional cache TTL override
+            use_primary: Force read from primary adapter (TSG-105)
 
         Returns:
             Record or None if not found
         """
-        return self._run_sync(self._express.read(model, id, cache_ttl))
+        return self._run_sync(
+            self._express.read(model, id, cache_ttl, use_primary=use_primary)
+        )
 
     def update(self, model: str, id: str, fields: Dict[str, Any]) -> Dict[str, Any]:
         """Update a single record (sync).
@@ -1056,6 +1170,7 @@ class SyncExpress:
         limit: int = 100,
         offset: int = 0,
         cache_ttl: Optional[int] = None,
+        use_primary: bool = False,  # TSG-105
     ) -> List[Dict[str, Any]]:
         """List records with optional filtering (sync).
 
@@ -1065,12 +1180,15 @@ class SyncExpress:
             limit: Maximum records to return (default: 100)
             offset: Skip first N records (default: 0)
             cache_ttl: Optional cache TTL override
+            use_primary: Force read from primary adapter (TSG-105)
 
         Returns:
             List of records
         """
         return self._run_sync(
-            self._express.list(model, filter, limit, offset, cache_ttl)
+            self._express.list(
+                model, filter, limit, offset, cache_ttl, use_primary=use_primary
+            )
         )
 
     def find_one(
@@ -1078,6 +1196,7 @@ class SyncExpress:
         model: str,
         filter: Dict[str, Any],
         cache_ttl: Optional[int] = None,
+        use_primary: bool = False,  # TSG-105
     ) -> Optional[Dict[str, Any]]:
         """Find a single record by filter criteria (sync).
 
@@ -1085,17 +1204,21 @@ class SyncExpress:
             model: Model name (e.g., "User")
             filter: MongoDB-style filter criteria (required, must not be empty)
             cache_ttl: Optional cache TTL override
+            use_primary: Force read from primary adapter (TSG-105)
 
         Returns:
             Single record dict or None if not found
         """
-        return self._run_sync(self._express.find_one(model, filter, cache_ttl))
+        return self._run_sync(
+            self._express.find_one(model, filter, cache_ttl, use_primary=use_primary)
+        )
 
     def count(
         self,
         model: str,
         filter: Optional[Dict[str, Any]] = None,
         cache_ttl: Optional[int] = None,
+        use_primary: bool = False,  # TSG-105
     ) -> int:
         """Count records with optional filtering (sync).
 
@@ -1103,11 +1226,14 @@ class SyncExpress:
             model: Model name (e.g., "User")
             filter: Optional MongoDB-style filter criteria
             cache_ttl: Optional cache TTL override
+            use_primary: Force read from primary adapter (TSG-105)
 
         Returns:
             Number of matching records
         """
-        return self._run_sync(self._express.count(model, filter, cache_ttl))
+        return self._run_sync(
+            self._express.count(model, filter, cache_ttl, use_primary=use_primary)
+        )
 
     def upsert(
         self,
@@ -1180,3 +1306,66 @@ class SyncExpress:
             True if all deletions succeeded
         """
         return self._run_sync(self._express.bulk_delete(model, ids))
+
+    # ========================================================================
+    # Cache Management (TSG-104)
+    # ========================================================================
+
+    def cache_stats(self) -> Dict[str, Any]:
+        """Return cache statistics (sync).
+
+        Returns:
+            ``{"hits": int, "misses": int, "size": int, "backend": str}``
+        """
+        return self._run_sync(self._express.cache_stats())
+
+    def clear_cache(self, model: Optional[str] = None) -> int:
+        """Clear cache entries (sync).
+
+        Args:
+            model: Optional model name to clear only that model's entries
+
+        Returns:
+            Number of entries cleared
+        """
+        return self._run_sync(self._express.clear_cache(model))
+
+    # ========================================================================
+    # File Import (TSG-102)
+    # ========================================================================
+
+    def import_file(
+        self,
+        model_name: str,
+        file_path: str,
+        column_mapping: Optional[Dict[str, Any]] = None,
+        type_coercion: Optional[Dict[str, str]] = None,
+        upsert: bool = True,
+        batch_size: int = 1000,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Import records from a file into a model (sync).
+
+        Args:
+            model_name: Target model name.
+            file_path: Path to the input file.
+            column_mapping: ``{source_col: target_col}`` renames.
+            type_coercion: ``{field: type_name}`` coercions.
+            upsert: Use BulkUpsert semantics (default ``True``).
+            batch_size: Records per batch.
+            **kwargs: Forwarded to ``FileSourceNode.async_run()``.
+
+        Returns:
+            ``{"imported": int, "errors": [...]}``
+        """
+        return self._run_sync(
+            self._express.import_file(
+                model_name,
+                file_path,
+                column_mapping,
+                type_coercion,
+                upsert,
+                batch_size,
+                **kwargs,
+            )
+        )

@@ -22,7 +22,7 @@ docker run --rm --env-file .env terrenefoundation/kailash python /app/work/main.
 
 ## What's Included
 
-This image bundles `kailash[all]` — every framework and optional dependency:
+This image bundles all Kailash frameworks and dependencies:
 
 | Framework         | Version  | What It Does                                                                      |
 | ----------------- | -------- | --------------------------------------------------------------------------------- |

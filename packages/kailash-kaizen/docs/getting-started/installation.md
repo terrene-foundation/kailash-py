@@ -5,12 +5,14 @@ Complete setup instructions for the Kaizen Framework, including development tool
 ## System Requirements
 
 ### Minimum Requirements
+
 - **Python**: 3.9+ (3.11+ recommended)
 - **Memory**: 4GB RAM minimum, 8GB+ recommended
 - **Storage**: 2GB free space
 - **Platform**: Linux, macOS, Windows (WSL2)
 
 ### Optional Requirements
+
 - **Docker**: For integration testing and MCP servers
 - **Git**: For development and contribution workflows
 - **VS Code/PyCharm**: Recommended IDEs with Python support
@@ -57,6 +59,7 @@ pytest tests/unit/ -v
 ## Package Feature Sets
 
 ### Core Features (Always Included)
+
 - Basic framework and agent creation
 - Kailash SDK integration
 - Local runtime execution
@@ -65,38 +68,49 @@ pytest tests/unit/ -v
 ### Optional Feature Sets
 
 #### `[dev]` - Development Tools
+
 ```bash
 pip install kailash-kaizen[dev]
 ```
+
 Includes:
+
 - pytest and testing utilities
 - Code quality tools (black, flake8, mypy)
 - Documentation building tools
 - Performance profiling tools
 
 #### `[mcp]` - Model Context Protocol
+
 ```bash
 pip install kailash-kaizen[mcp]
 ```
+
 Includes:
+
 - MCP client/server libraries
 - Auto-discovery capabilities
 - Protocol validation tools
 
 #### `[enterprise]` - Enterprise Features
+
 ```bash
 pip install kailash-kaizen[enterprise]
 ```
+
 Includes:
+
 - Advanced security modules
 - Audit trail and compliance tools
 - Performance monitoring
 - Distributed transparency system
 
 #### `[all]` - Complete Installation
+
 ```bash
 pip install kailash-kaizen[all]
 ```
+
 Includes all feature sets above.
 
 ## Development Environment Setup
@@ -104,6 +118,7 @@ Includes all feature sets above.
 ### 1. Python Environment
 
 Using **conda** (recommended):
+
 ```bash
 conda create -n kaizen python=3.11
 conda activate kaizen
@@ -111,6 +126,7 @@ pip install kailash-kaizen[dev]
 ```
 
 Using **venv**:
+
 ```bash
 python -m venv kaizen-env
 source kaizen-env/bin/activate  # On Windows: kaizen-env\Scripts\activate
@@ -118,6 +134,7 @@ pip install kailash-kaizen[dev]
 ```
 
 Using **poetry**:
+
 ```bash
 poetry install --extras "dev mcp enterprise"
 poetry shell
@@ -142,7 +159,9 @@ cd tests/utils
 ### 3. IDE Configuration
 
 #### VS Code Setup
+
 Install recommended extensions:
+
 ```bash
 code --install-extension ms-python.python
 code --install-extension ms-python.black-formatter
@@ -151,18 +170,20 @@ code --install-extension ms-python.mypy-type-checker
 ```
 
 Create `.vscode/settings.json`:
+
 ```json
 {
-    "python.defaultInterpreterPath": "./kaizen-env/bin/python",
-    "python.testing.pytestEnabled": true,
-    "python.testing.pytestArgs": ["tests/"],
-    "python.linting.enabled": true,
-    "python.linting.flake8Enabled": true,
-    "python.formatting.provider": "black"
+  "python.defaultInterpreterPath": "./kaizen-env/bin/python",
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["tests/"],
+  "python.linting.enabled": true,
+  "python.linting.flake8Enabled": true,
+  "python.formatting.provider": "black"
 }
 ```
 
 #### PyCharm Setup
+
 1. Create new project with existing sources
 2. Configure Python interpreter to use virtual environment
 3. Enable pytest as test runner
@@ -171,6 +192,7 @@ Create `.vscode/settings.json`:
 ## Verification Steps
 
 ### 1. Basic Import Test
+
 ```python
 # Test core framework
 from kaizen import Kaizen
@@ -184,6 +206,7 @@ print("✅ Kailash SDK integration working")
 ```
 
 ### 2. Agent Creation Test
+
 ```python
 from kaizen import Kaizen
 
@@ -197,6 +220,7 @@ print(f"📊 Agent workflow: {agent.workflow}")
 ```
 
 ### 3. Development Tools Test
+
 ```bash
 # Run unit tests
 pytest tests/unit/ -v
@@ -215,6 +239,7 @@ python -m pytest tests/performance/ -v
 ### 1. Environment Variables (Optional)
 
 Create `.env` file in your project root:
+
 ```bash
 # AI Provider Configuration
 OPENAI_API_KEY=your_openai_key_here
@@ -232,12 +257,13 @@ KAIZEN_TELEMETRY_ENABLED=false
 ### 2. Configuration File (Optional)
 
 Create `kaizen.yaml`:
+
 ```yaml
 framework:
-  signature_programming_enabled: false  # Not yet implemented
-  mcp_integration_enabled: false       # Not yet implemented
-  multi_agent_enabled: false          # Not yet implemented
-  transparency_enabled: false         # Not yet implemented
+  signature_programming_enabled: false # Not yet implemented
+  mcp_integration_enabled: false # Not yet implemented
+  multi_agent_enabled: false # Not yet implemented
+  transparency_enabled: false # Not yet implemented
 
 performance:
   lazy_loading: true
@@ -253,6 +279,7 @@ development:
 ## Performance Considerations
 
 ### Import Performance
+
 The framework currently has a ~1100ms import time due to Core SDK node registration:
 
 ```python
@@ -264,11 +291,13 @@ print(f"Import time: {(end - start) * 1000:.0f}ms")
 ```
 
 **Optimization strategies**:
+
 - Use lazy imports in production code
 - Consider module-level imports only when needed
 - Future releases will optimize this
 
 ### Memory Usage
+
 - Base framework: ~50MB
 - With Core SDK: ~100MB
 - With all features: ~200MB
@@ -278,6 +307,7 @@ print(f"Import time: {(end - start) * 1000:.0f}ms")
 ### Common Installation Issues
 
 #### 1. Dependency Conflicts
+
 ```bash
 # Clear pip cache and reinstall
 pip cache purge
@@ -286,15 +316,17 @@ pip install kailash-kaizen[all]
 ```
 
 #### 2. Import Errors
+
 ```bash
 # Verify Core SDK installation
-pip install kailash[core]
+pip install kailash
 
 # Check Python path
 python -c "import sys; print('\n'.join(sys.path))"
 ```
 
 #### 3. Performance Issues
+
 ```bash
 # Test import performance
 python -c "import time; s=time.time(); import kaizen; print(f'{(time.time()-s)*1000:.0f}ms')"
@@ -304,6 +336,7 @@ export KAIZEN_PERFORMANCE_TRACKING=true
 ```
 
 #### 4. Docker Issues
+
 ```bash
 # Reset Docker environment
 docker system prune -f

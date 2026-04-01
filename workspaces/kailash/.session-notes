@@ -1,29 +1,48 @@
-# Session Notes — 2026-03-29 (session 2)
+# Session Notes — 2026-03-31 (session 11)
+
+### Read These Files First (in order)
+
+1. `pyproject.toml` lines 24-73 — all extras moved to base deps; only vault/aws/azure/ldap/dev/docs remain as extras
+2. `packages/kailash-kaizen/pyproject.toml` lines 25-58 — all 9 extras (azure, google, server, etc.) moved to base
+3. `packages/kailash-pact/pyproject.toml` lines 28-37 — kaizen + postgres moved to base deps
+4. `.claude/.proposals/latest.yaml` — codification proposal for loom `/sync`, covers this session's changes
+5. `CLAUDE.md` lines 175-187 — updated install table (no more `kailash[trust]` row)
 
 ## Accomplished
-- Full /redteam round 2 validation post-v2.2.0 release
-- Deployed 3 parallel red team agents: CI verifier, feature verifier, security reviewer
-- CI verified: all 10 GH issues closed, all pipelines green, v2.2.0 tag confirmed
-- All 6 sprint features (S4-S9) verified as fully implemented (9,600+ lines)
-- Security review found 0 CRITICAL, 4 HIGH, 3 MEDIUM findings — all fixed:
-  - H1: ShadowEnforcer List→deque(maxlen=N)
-  - H2: BudgetTracker callback bounds (max 100)
-  - H3+H4: str(exc) leak in PactEngine + MCP middleware
-  - M1: EnforcementRecord frozen=True
-  - M2: ShadowEnforcer threading.Lock
-- All tests passing: 3,072 unit + 112 trust + 1,157 PACT
-- PR #156 merged to main (fix/redteam-security-hardening)
 
-## In progress
-- Nothing — all work complete
+- **Dependency restructuring across 4 repos**: eliminated optional extras nonsense — `pip install kailash` now includes everything standard
+- **kailash-py**: 15+ extras collapsed into base deps (trust, server, http, database, postgres, mysql, files, auth, mfa, microsoft, monitoring, distributed, mcp, scheduler, otel, vector, dataframe)
+- **kailash-kaizen**: 9 extras → all base. **kailash-dataflow**: 4 extras → all base. **kailash-nexus**: cli → base. **kailash-pact**: kaizen+postgres → base
+- **kailash-rs**: 6 crates updated — all features now in defaults (core, kaizen, nodes, pact, enterprise). Fixed `durability-trust` missing from defaults (red team catch)
+- **kailash-rs Cargo.toml cleanup**: removed redundant `features = [...]` from 8 Cargo.toml files, 4 `required-features` lines, 4 source doc comments, 7 docs/skills
+- **kailash-coc-claude-py**: simplified template to `kailash>=2.3.1` (no brackets). 9 skills/rules files cleaned
+- **kailash-coc-claude-rs**: 7 skills files cleaned of stale `kailash[trust]` etc.
+- **Source code**: 20 files, 29 edits — all user-facing error messages updated (`pip install kailash[postgres]` → `pip install kailash`)
+- **Red team converged**: 1 round, 4 CRITICAL found+fixed, 0 open. No circular deps. No version conflicts.
+
+## Outstanding
+
+- [ ] `.claude/.proposals/latest.yaml` — needs `/sync py` at loom/ to distribute to USE templates
+- [ ] H1-H7: Version floor drift (redis, aiohttp, cryptography, fastapi, asyncpg, psutil, uvicorn) across sub-packages — cosmetic, pip resolves, fix in next version bump
+- [ ] M1: kailash-dataflow pulls Flask — evaluate migration to FastAPI for consistency
+- [ ] Dead `cfg(not(feature = ...))` blocks in kailash-rs — add `--no-default-features` CI job
+- [ ] `require_bilateral_consent` defaults to `False` (from S10)
+- [ ] CHANGELOG `[Unreleased]` entry needs version number when ready to release
+- [ ] ~20 workspace/ files have historical `kailash[extra]` refs — intentionally not touched
+
+## Oversight — Verify Before Starting
+
+- [ ] `grep -r 'kailash\[trust\]' src/ packages/` — should return 0 matches (only vault/aws/azure/ldap remain)
+- [ ] `grep -r 'kailash\[pact\]' packages/` — should return 0 matches
+- [ ] kailash-rs: `grep -r 'features.*=.*\["trust"\]' crates/*/Cargo.toml` — should return 0 (only default declarations)
+- [ ] `git log --oneline -1` — should still be `c9dcc8bf` (no commits made this session)
+
+## Oversight — Verify After Completing
+
+- [ ] `pip install -e . --no-deps` then `python -c "import kailash"` — base install works
+- [ ] `pytest tests/unit/ -q --timeout=30` — 3072+ passed, 0 failed
+- [ ] `pytest packages/kailash-pact/tests/unit/ -q --timeout=30` — 1240+ passed
 
 ## Blockers
-- None
 
-## Next steps
-- Sprint S10 planning (if new briefs added)
-- Consider /codify to capture security patterns from this red team round
-- Milestones file updated to all-complete state
-
-## Active todo
-- None — all todos cleared, all GH issues closed, zero open PRs
+- None — all changes are uncommitted across 4 repos, ready for branch/PR creation

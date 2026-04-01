@@ -153,7 +153,7 @@ class PostgreSQLStorage(StorageBackend):
         if asyncpg is None:
             raise ImportError(
                 "asyncpg is required for PostgreSQL storage. "
-                "Install with: pip install kailash[postgres]"
+                "Install with: pip install kailash"
             )
         _validate_table_name(table_name)
         self.host = host
@@ -172,7 +172,7 @@ class PostgreSQLStorage(StorageBackend):
             except ImportError as exc:
                 raise ImportError(
                     "asyncpg is required for PostgreSQL storage. "
-                    "Install it with: pip install kailash[postgres]"
+                    "Install it with: pip install kailash"
                 ) from exc
             self._pool = await _asyncpg.create_pool(
                 host=self.host,
@@ -318,7 +318,7 @@ class PostgreSQLEventStorage:
         if asyncpg is None:
             raise ImportError(
                 "asyncpg is required for PostgreSQL event storage. "
-                "Install with: pip install kailash[postgres]"
+                "Install with: pip install kailash"
             )
         _validate_table_name(table_name)
         self.host = host
@@ -337,7 +337,7 @@ class PostgreSQLEventStorage:
             except ImportError as exc:
                 raise ImportError(
                     "asyncpg is required for PostgreSQL storage. "
-                    "Install it with: pip install kailash[postgres]"
+                    "Install it with: pip install kailash"
                 ) from exc
             self._pool = await _asyncpg.create_pool(
                 host=self.host,

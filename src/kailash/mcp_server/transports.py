@@ -66,12 +66,12 @@ from urllib.parse import urljoin, urlparse
 try:
     import aiohttp
 except ImportError:
-    aiohttp = None  # type: ignore[assignment]  # Optional: pip install kailash[server]
+    aiohttp = None  # type: ignore[assignment]  # Included in base install
 
 try:
     import websockets
 except ImportError:
-    websockets = None  # type: ignore[assignment]  # Optional: pip install kailash[server]
+    websockets = None  # type: ignore[assignment]  # Included in base install
 
 from .auth import AuthProvider
 from .errors import MCPError, MCPErrorCode, TransportError

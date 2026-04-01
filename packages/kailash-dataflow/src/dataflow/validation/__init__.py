@@ -19,9 +19,11 @@ Usage::
 """
 
 from dataflow.validation.decorators import field_validator, validate_model
+from dataflow.validation.dsl import apply_validation_dict
 from dataflow.validation.field_validators import (
     email_validator,
     length_validator,
+    one_of_validator,
     pattern_validator,
     phone_validator,
     range_validator,
@@ -53,6 +55,8 @@ __all__ = [
     "range_validator",
     "pattern_validator",
     "phone_validator",
+    "one_of_validator",
+    "apply_validation_dict",
 ]
 
 __version__ = "0.6.0"

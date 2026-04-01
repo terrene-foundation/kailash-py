@@ -16,7 +16,7 @@ Layers:
   scoped trust environments with persistent stores, constraint enforcement,
   delegation, and enterprise features (RBAC, OIDC, SIEM, dashboard).
 - **Signing layer** (``kailash.trust.signing.*``): Ed25519 cryptographic
-  operations. Requires ``pynacl`` (install via ``pip install kailash[trust]``).
+  operations. Requires ``pynacl`` (included in the base ``pip install kailash``).
 - **Agents layer** (``kailash.trust.agents.*``): Trust-enhanced agent wrappers
   (TrustedAgent, PseudoAgent) for the trust sandwich pattern.
 
@@ -226,8 +226,7 @@ _CRYPTO_NAMES = frozenset(
 )
 
 _INSTALL_HINT = (
-    "Cryptographic operations require PyNaCl. "
-    "Install with: pip install kailash[trust]"
+    "Cryptographic operations require PyNaCl. " "Install with: pip install kailash"
 )
 
 

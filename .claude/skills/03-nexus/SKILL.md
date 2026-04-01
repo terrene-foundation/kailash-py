@@ -82,6 +82,11 @@ nexus.run(port=8000)
 - **[golden-patterns-catalog](golden-patterns-catalog.md)** - Top 7 production-validated codegen patterns
 - **[codegen-decision-tree](codegen-decision-tree.md)** - Decision tree, anti-patterns, scaffolding templates
 
+### Transport & Event System
+
+- **[nexus-transport-architecture](nexus-transport-architecture.md)** - Transport ABC, HTTPTransport, MCPTransport, HandlerRegistry
+- **[nexus-eventbus-phase2](nexus-eventbus-phase2.md)** - EventBus (janus.Queue), Phase 2 APIs, DataFlow bridge, NexusFile
+
 ## Key Concepts
 
 ### Zero-Config Platform

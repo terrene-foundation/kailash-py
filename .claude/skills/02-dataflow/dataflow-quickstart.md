@@ -26,43 +26,65 @@ Zero-config database framework built on Core SDK with automatic node generation 
 
 ## 30-Second Quick Start
 
-### Express API (default for most operations — 23x faster)
+### Express API (Default for CRUD)
+
+Express is 23x faster than workflow primitives for single-record operations. Use it for all simple CRUD.
 
 ```python
 from dataflow import DataFlow
 
+# 1. Zero-config initialization
 db = DataFlow()  # Auto-detects: SQLite (dev) or PostgreSQL (prod via DATABASE_URL)
 
+# 2. Define model - automatically generates 11 node types
 @db.model
 class User:
     name: str
     email: str
     active: bool = True
 
-# Express API — direct CRUD, no workflow overhead
-result = await db.express.create("User", {"name": "Alice", "email": "alice@example.com"})
-users = await db.express.list("User", {"active": True}, limit=10)
-user = await db.express.read("User", str(result["id"]))
-await db.express.update("User", str(result["id"]), {"name": "Bob"})
-count = await db.express.count("User")
+await db.initialize()
 
-# Sync variant (CLI scripts, non-async contexts):
+# 3. Express CRUD (async — recommended)
+result = await db.express.create("User", {"name": "Alice", "email": "alice@example.com"})
+user = await db.express.read("User", str(result["id"]))
+users = await db.express.list("User", {"active": True}, limit=10)
+count = await db.express.count("User")
+await db.express.update("User", str(result["id"]), {"name": "Bob"})
+await db.express.delete("User", str(result["id"]))
+
+# Sync Express (CLI scripts, non-async contexts)
 result = db.express_sync.create("User", {"name": "Alice", "email": "alice@example.com"})
 ```
 
-### Workflow API (for multi-step operations)
+### Workflow API (For Multi-Step Operations)
+
+Use WorkflowBuilder when you need multiple nodes with data flow between them, conditional branching, or saga patterns.
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime import LocalRuntime
 
-# Use workflows when you need multi-node pipelines, conditional branching, or transactions
+# UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode, UserListNode,
+# UserUpsertNode, UserCountNode,
+# UserBulkCreateNode, UserBulkUpdateNode, UserBulkDeleteNode, UserBulkUpsertNode
+# All created automatically from @db.model!
+
 workflow = WorkflowBuilder()
-workflow.add_node("UserCreateNode", "create", {"name": "Alice", "email": "alice@example.com"})
-workflow.add_node("UserListNode", "list", {"filter": {"active": True}, "limit": 10})
+
+workflow.add_node("UserCreateNode", "create", {
+    "name": "Alice",
+    "email": "alice@example.com"
+})
+
+workflow.add_node("UserListNode", "list", {
+    "filter": {"active": True},
+    "limit": 10
+})
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
+print(f"Created user ID: {results['create']['id']}")
 ```
 
 ## What is DataFlow?

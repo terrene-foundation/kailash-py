@@ -2,14 +2,14 @@
 
 ## Problem
 
-kailash/ is the canonical source of CO/COC artifacts, but has no mechanism to distinguish:
+loom/ is the canonical source of CO/COC artifacts, but has no mechanism to distinguish:
 
 - **Global** artifacts (same everywhere) from
 - **Language-specific** artifacts (Python patterns vs Rust patterns)
 
 Result: 85% of artifacts have drifted across py and rs templates, with no way to tell which drift is intentional (language-specific) vs accidental (sync failure).
 
-Additionally, ~/repos/.claude/ holds management artifacts (sync agent, commands) that should live in kailash/ as the single source of truth.
+Additionally, ~/repos/.claude/ holds management artifacts (sync agent, commands) that should live in loom/ as the single source of truth.
 
 ## Architecture
 
@@ -30,7 +30,7 @@ All artifacts belong to exactly one tier:
 ### Directory Structure
 
 ```
-kailash/.claude/
+loom/.claude/
   agents/              # Global agents (CC + CO + COC)
   commands/            # Global commands (CC + CO + COC)
   rules/               # Global rules (CC + CO + COC)
@@ -98,16 +98,16 @@ Files that MUST differ because of implementation language:
 
 ## Controlled Flow
 
-### Outbound: kailash/ → BUILD repos
+### Outbound: loom/ → BUILD repos
 
 ```
-kailash/  ──/sync py──→  kailash-coc-claude-py/  ──/sync──→  target project repos
-kailash/  ──/sync rs──→  kailash-coc-claude-rs/  ──/sync──→  target project repos
+loom/  ──/sync py──→  kailash-coc-claude-py/  ──/sync──→  target project repos
+loom/  ──/sync rs──→  kailash-coc-claude-rs/  ──/sync──→  target project repos
 ```
 
 The `/sync` command reads `sync-manifest.yaml`, applies the correct variant overlay, and produces the target artifacts.
 
-### Inbound: BUILD repo → kailash/ (proposal flow)
+### Inbound: BUILD repo → loom/ (proposal flow)
 
 ```
 BUILD repo (py or rs)
@@ -121,9 +121,9 @@ BUILD repo (py or rs)
     - Suggested tier (global vs language-specific)
     - Reason for each change
   ↓
-  kailash/ receives proposal (PR, diff file, or interactive review)
+  loom/ receives proposal (PR, diff file, or interactive review)
   ↓
-  HUMAN reviews at kailash/:
+  HUMAN reviews at loom/:
     1. Is this global or language-specific?
     2. Does the other SDK need an equivalent?
     3. Does this conflict with existing artifacts?
@@ -138,18 +138,18 @@ BUILD repo (py or rs)
 
 ### Control Gates
 
-| Gate                    | Who               | When                                      |
-| ----------------------- | ----------------- | ----------------------------------------- |
-| **Proposal review**     | Human at kailash/ | When BUILD repo proposes upstream changes |
-| **Tier classification** | Human at kailash/ | Deciding if artifact is global or variant |
-| **Cross-SDK alignment** | Human at kailash/ | Deciding if other SDK needs equivalent    |
-| **Sync authorization**  | Human at kailash/ | Before pushing changes to COC templates   |
+| Gate                    | Who            | When                                      |
+| ----------------------- | -------------- | ----------------------------------------- |
+| **Proposal review**     | Human at loom/ | When BUILD repo proposes upstream changes |
+| **Tier classification** | Human at loom/ | Deciding if artifact is global or variant |
+| **Cross-SDK alignment** | Human at loom/ | Deciding if other SDK needs equivalent    |
+| **Sync authorization**  | Human at loom/ | Before pushing changes to COC templates   |
 
 ### Never Allowed
 
 - BUILD repo directly modifying another BUILD repo's artifacts
 - py COC directly syncing to rs COC (or vice versa)
-- Any sync that bypasses kailash/ as the source of truth
+- Any sync that bypasses loom/ as the source of truth
 - Automated tier classification without human review
 
 ## sync-manifest.yaml
@@ -258,7 +258,7 @@ variants:
     rs: variants/rs/commands/test.md
   commands/release.md:
     py: variants/py/commands/release.md
-    # rs: no release command (RS doesn't publish packages)
+    rs: variants/rs/commands/release.md
 
   # Agents with language-specific content
   agents/frameworks/infrastructure-specialist.md:
@@ -298,31 +298,31 @@ exclude:
 
 ## Migration from ~/repos
 
-The management commands currently at ~/repos/.claude/ move to kailash/:
+The management commands currently at ~/repos/.claude/ move to loom/:
 
-| Current (~/repos)                    | New (kailash/)                                  | Notes                                       |
+| Current (~/repos)                    | New (loom/)                                     | Notes                                       |
 | ------------------------------------ | ----------------------------------------------- | ------------------------------------------- |
 | `.claude/agents/coc-sync.md`         | `.claude/agents/management/coc-sync.md`         | Rewritten for variant system                |
 | `.claude/agents/code-inspector.md`   | `.claude/agents/management/code-inspector.md`   | Absorbed                                    |
 | `.claude/agents/repo-admin.md`       | `.claude/agents/management/repo-admin.md`       | Absorbed                                    |
 | `.claude/agents/settings-manager.md` | `.claude/agents/management/settings-manager.md` | Absorbed                                    |
 | `.claude/commands/sync.md`           | `.claude/commands/sync.md`                      | Exists, update for variants                 |
-| `.claude/commands/repos.md`          | `.claude/commands/repos.md`                     | New in kailash/                             |
-| `.claude/commands/inspect.md`        | `.claude/commands/inspect.md`                   | New in kailash/                             |
-| `.claude/commands/settings.md`       | `.claude/commands/settings.md`                  | New in kailash/                             |
+| `.claude/commands/repos.md`          | `.claude/commands/repos.md`                     | New in loom/                                |
+| `.claude/commands/inspect.md`        | `.claude/commands/inspect.md`                   | New in loom/                                |
+| `.claude/commands/settings.md`       | `.claude/commands/settings.md`                  | New in loom/                                |
 | `.claude/rules/cross-repo.md`        | `.claude/rules/cross-repo.md`                   | Absorbed into existing cross-sdk-inspection |
 | `.claude/skills/coc-sync-mapping.md` | Replaced by sync-manifest.yaml                  | Structured data replaces prose              |
 | `CLAUDE.md`                          | Already exists                                  | Update for new architecture                 |
 
-After migration, ~/repos/.claude/ can be reduced to a thin settings.json (for basic hooks when working at root level) and a CLAUDE.md that says "for COC management, work in kailash/".
+After migration, ~/repos/.claude/ can be reduced to a thin settings.json (for basic hooks when working at root level) and a CLAUDE.md that says "for COC management, work in loom/".
 
 ## Implementation Order
 
-1. Create `variants/` directory structure in kailash/
+1. Create `variants/` directory structure in loom/
 2. Create `sync-manifest.yaml` with full tier and variant declarations
 3. Move language-specific content from current locations into variants/
 4. Normalize global files to be truly language-agnostic
-5. Absorb ~/repos management artifacts into kailash/
+5. Absorb ~/repos management artifacts into loom/
 6. Rewrite coc-sync agent to read manifest and apply overlays
 7. Update /codify to create proposals (replaces direct sync)
 8. Update CLAUDE.md for new architecture

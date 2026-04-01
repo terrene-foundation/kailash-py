@@ -237,9 +237,31 @@ raise Exception("something went wrong")  # Bare exception — uncatchable by gov
 
 **Why**: Governance errors carry structured context (`details` dict) that audit systems, dashboards, and parent agents consume. Bare exceptions lose this context and cannot be distinguished from unrelated errors in `except` handlers.
 
+### 9. Bridge Consent and Scope Validation
+
+When `require_bilateral_consent=True`, both endpoint roles must call `consent_bridge()` before `create_bridge()`. Bridge scope (`max_classification`, `operational_scope`) MUST NOT exceed either endpoint's envelope. Roles without envelopes MUST be rejected (fail-closed) for non-PUBLIC bridges.
+
+**Why**: Without scope validation, a bridge could grant SECRET access to a role with no clearance. Without consent, bridges can be imposed unilaterally.
+
+### 10. Validate Addresses on All Public Methods
+
+`consent_bridge()`, `register_compliance_role()`, and similar methods that accept role addresses MUST validate the address exists in `self._compiled_org.nodes` before proceeding.
+
+```python
+# DO:
+if role_address not in self._compiled_org.nodes:
+    raise PactError(f"Address '{role_address}' not in org", details={...})
+
+# DO NOT:
+self._compliance_role = role_address  # Phantom address accepted
+```
+
+**Why**: Phantom addresses bypass LCA verification — a non-existent compliance role could approve any bridge.
+
 ## Cross-References
 
 - `.claude/rules/trust-plane-security.md` — Trust-plane security patterns (NaN/Inf, bounded collections, fail-closed)
 - `.claude/rules/eatp.md` — EATP SDK conventions (dataclasses, error hierarchy, cryptography)
-- `packages/kailash-pact/src/pact/governance/agent.py` — Anti-self-modification defense
-- `packages/kailash-pact/src/pact/governance/envelopes.py` — Monotonic tightening
+- `src/kailash/trust/pact/engine.py` — GovernanceEngine (anti-self-modification, consent, scope validation)
+- `src/kailash/trust/pact/envelopes.py` — Monotonic tightening, gradient dereliction, passthrough detection
+- `src/kailash/trust/pact/eatp_emitter.py` — PactEatpEmitter protocol for EATP record emission

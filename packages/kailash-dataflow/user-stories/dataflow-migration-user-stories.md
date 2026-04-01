@@ -69,7 +69,7 @@ This document contains comprehensive user stories covering all personas and scen
 ```python
 # Scenario 1: Minimal setup
 def test_minimal_setup():
-    # Install: pip install kailash[dataflow]
+    # Install: pip install kailash-dataflow
     db = DataFlow(database_url="postgresql://localhost/myproject")
 
     @db.model

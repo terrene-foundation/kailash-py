@@ -94,7 +94,7 @@ store = PostgresTrustPlaneStore("postgresql://user:pass@host/db")
 store.initialize()
 ```
 
-Requires `pip install kailash[trust-postgres]`.
+Included in the base `pip install kailash`.
 
 ## Encryption at Rest
 
@@ -111,7 +111,7 @@ ciphertext = encrypt_record(record_dict, key)
 plaintext_dict = decrypt_record(ciphertext, key)
 ```
 
-Requires `pip install kailash[trust-encryption]`.
+Included in the base `pip install kailash`.
 
 ## RBAC
 
@@ -152,7 +152,7 @@ from kailash.trust.plane.key_managers.aws_kms import AwsKmsKeyManager
 km = AwsKmsKeyManager(key_id="arn:aws:kms:us-east-1:123:key/abc")
 ```
 
-Requires `pip install kailash[trust-aws]`.
+Requires `pip install kailash[aws-secrets]`.
 
 ### Azure Key Vault
 
@@ -162,7 +162,7 @@ from kailash.trust.plane.key_managers.azure_keyvault import AzureKeyVaultKeyMana
 km = AzureKeyVaultKeyManager(vault_url="https://myvault.vault.azure.net", key_name="trust-key")
 ```
 
-Requires `pip install kailash[trust-azure]`.
+Requires `pip install kailash[azure-secrets]`.
 
 ### HashiCorp Vault
 
@@ -172,7 +172,7 @@ from kailash.trust.plane.key_managers.vault import VaultKeyManager
 km = VaultKeyManager(vault_addr="https://vault.example.com", key_name="trust-key")
 ```
 
-Requires `pip install kailash[trust-vault]`.
+Requires `pip install kailash[vault]`.
 
 ## OIDC Identity Verification
 
@@ -189,7 +189,7 @@ verifier = OIDCVerifier(provider)
 claims = verifier.verify_token(jwt_token)
 ```
 
-Requires `pip install kailash[trust-sso]`.
+Included in the base `pip install kailash`.
 
 ## Shadow Mode
 

@@ -14,9 +14,6 @@ This example showcases:
 
 ```bash
 # Install DataFlow
-pip install kailash[dataflow]
-
-# Or install separately
 pip install kailash-dataflow
 ```
 
@@ -94,6 +91,7 @@ Query 1: 'Show me products with less than 10 items in stock'
 ### 1. Natural Language Processing
 
 The `NLToSQLAgent` uses an LLM to:
+
 - Parse natural language query intent
 - Identify target tables from context
 - Generate MongoDB-style filters for DataFlow
@@ -102,6 +100,7 @@ The `NLToSQLAgent` uses an LLM to:
 ### 2. DataFlow Integration
 
 DataFlow provides:
+
 - Automatic model-to-node generation (@db.model)
 - MongoDB-style query interface
 - Type-safe database operations
@@ -109,6 +108,7 @@ DataFlow provides:
 ### 3. AI-Enhanced Operations
 
 The integration combines:
+
 - LLM intelligence for query understanding
 - DataFlow's database abstraction
 - Signature-based programming from Kaizen

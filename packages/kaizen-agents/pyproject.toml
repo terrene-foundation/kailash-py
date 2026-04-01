@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "kailash[pact]>=2.2.0",
+    "kailash>=2.2.0",
     "kailash-kaizen>=2.3.2",
     "kailash-pact>=0.4.1",
     "openai>=1.30.0",

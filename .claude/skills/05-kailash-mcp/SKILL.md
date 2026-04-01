@@ -48,6 +48,10 @@ server.run()
 - **[mcp-structured-tools](mcp-structured-tools.md)** - Defining MCP tools
 - **[mcp-resources](mcp-resources.md)** - Exposing resources to agents
 
+### Platform Server
+
+- **[mcp-platform-server](mcp-platform-server.md)** - Unified kailash-mcp with contributor plugin system, security tiers
+
 ### Security & Operations
 
 - **[mcp-authentication](mcp-authentication.md)** - Authentication and authorization

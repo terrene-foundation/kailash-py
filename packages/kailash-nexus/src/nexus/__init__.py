@@ -29,13 +29,34 @@ from .core import MiddlewareInfo, Nexus, NexusPluginProtocol, RouterInfo, create
 from .engine import EnterpriseMiddlewareConfig, NexusEngine, Preset
 from .openapi import OpenApiGenerator, OpenApiInfo
 from .presets import PRESETS, NexusConfig, PresetConfig, apply_preset, get_preset
+from .background import BackgroundService
 from .probes import ProbeManager, ProbeResponse, ProbeState
+from .events import EventBus, NexusEvent, NexusEventType
+from .files import NexusFile
+from .registry import HandlerDef, HandlerParam, HandlerRegistry
+from .transports import HTTPTransport, MCPTransport, Transport
 
-__version__ = "1.6.1"
+__version__ = "1.7.0"
 __all__ = [
     # Core
     "Nexus",
     "create_nexus",
+    # Transport Layer
+    "Transport",
+    "HTTPTransport",
+    "MCPTransport",
+    # Handler Registry
+    "HandlerDef",
+    "HandlerParam",
+    "HandlerRegistry",
+    # Event System
+    "EventBus",
+    "NexusEvent",
+    "NexusEventType",
+    # Background Services
+    "BackgroundService",
+    # Files
+    "NexusFile",
     # Engine (cross-SDK parity with kailash-rs)
     "NexusEngine",
     "Preset",

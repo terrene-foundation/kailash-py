@@ -8,9 +8,6 @@ Get started with Kaizen in 5 minutes - from installation to your first working a
 # Install Kaizen (v0.2.0)
 pip install kailash-kaizen
 
-# Or install with Kailash SDK
-pip install kailash[kaizen]
-
 # Specific version
 pip install kailash-kaizen==0.2.0
 ```
@@ -63,6 +60,7 @@ print(f"Confidence: {result['confidence']}")
 ```
 
 **Complete Example:**
+
 ```python
 from kaizen.agents import SimpleQAAgent
 from kaizen.agents.specialized.simple_qa import QAConfig
@@ -168,6 +166,7 @@ results = await agent.execute_tool_chain([
 ```
 
 **12 Builtin Tools Available:**
+
 - **File**: read_file, write_file, delete_file, list_directory, file_exists
 - **HTTP**: http_get, http_post, http_put, http_delete
 - **Bash**: bash_command
@@ -235,11 +234,13 @@ from kaizen.agents import (
 ### Issue 1: Missing API Key
 
 **Error:**
+
 ```
 AuthenticationError: No API key provided
 ```
 
 **Solution:**
+
 ```bash
 # Create .env file
 echo "OPENAI_API_KEY=sk-..." > .env
@@ -253,11 +254,13 @@ load_dotenv()  # Load before creating agent
 ### Issue 2: Ollama Not Running
 
 **Error:**
+
 ```
 ConnectionError: Could not connect to Ollama
 ```
 
 **Solution:**
+
 ```bash
 # Install Ollama
 curl -fsSL https://ollama.com/install.sh | sh
@@ -272,11 +275,13 @@ ollama pull bakllava
 ### Issue 3: Wrong Import Path
 
 **Error:**
+
 ```
 ImportError: cannot import name 'SimpleQAAgent'
 ```
 
 **Solution:**
+
 ```python
 # ✅ CORRECT
 from kaizen.agents import SimpleQAAgent
@@ -298,6 +303,7 @@ from kaizen import SimpleQAAgent  # This doesn't work
 ### Try Examples
 
 Explore 35+ working examples:
+
 ```bash
 # Clone repository
 git clone https://github.com/terrene-foundation/kailash-py

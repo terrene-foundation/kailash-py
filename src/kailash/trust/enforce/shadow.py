@@ -95,17 +95,27 @@ class ShadowEnforcer:
         >>> print(shadow.report())
     """
 
-    def __init__(self, flag_threshold: int = 1, maxlen: int = 10_000):
+    def __init__(
+        self,
+        flag_threshold: int = 1,
+        maxlen: int = 10_000,
+        store: Any | None = None,
+    ):
         """Initialize shadow enforcer.
 
         Args:
             flag_threshold: Violation count that would trigger HELD in strict mode
             maxlen: Maximum number of records to retain (bounded deque)
+            store: Optional ShadowStore for persistent record storage.
+                When provided, records are written to the store in addition
+                to the in-memory deque. Defaults to None (in-memory only).
+                Pass a MemoryShadowStore or SqliteShadowStore instance.
         """
         self._classifier = StrictEnforcer(flag_threshold=flag_threshold)
         self._metrics = ShadowMetrics()
         self._records: deque[EnforcementRecord] = deque(maxlen=maxlen)
         self._lock = threading.Lock()
+        self._store = store
 
     def check(
         self,
@@ -183,6 +193,18 @@ class ShadowEnforcer:
 
             if result.reasoning_verified is False:
                 self._metrics.reasoning_verification_failed_count += 1
+
+        # Persist to store outside the lock to avoid holding it during I/O
+        if self._store is not None:
+            try:
+                self._store.append_record(record)
+            except Exception:
+                logger.exception(
+                    "[SHADOW] Failed to persist record to store for "
+                    "agent=%s action=%s -- continuing without persistence",
+                    agent_id,
+                    action,
+                )
 
         # Log outside lock to avoid holding it during I/O
         if verdict == Verdict.FLAGGED:

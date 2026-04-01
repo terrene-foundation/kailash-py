@@ -36,7 +36,7 @@ try:
 except ImportError:
     raise ImportError(
         "PostgreSQL store requires 'psycopg' and 'psycopg_pool'. "
-        "Install with: pip install kailash[postgres]"
+        "Install with: pip install kailash"
         "or: pip install 'psycopg[binary]>=3.0' psycopg_pool"
     )
 
@@ -594,7 +594,10 @@ class PostgresTrustPlaneStore:
                     "SELECT data FROM delegates ORDER BY delegate_id LIMIT %s",
                     (limit,),
                 )
-                return [DelegationRecipient.from_dict(row["data"]) for row in cursor.fetchall()]
+                return [
+                    DelegationRecipient.from_dict(row["data"])
+                    for row in cursor.fetchall()
+                ]
 
     def update_delegate(self, delegate: DelegationRecipient) -> None:
         """Update an existing delegate record (e.g. after revocation).

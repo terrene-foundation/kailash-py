@@ -29,7 +29,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type, Union
 try:
     import psutil
 except ImportError:
-    psutil = None  # Optional: pip install kailash[monitoring]
+    psutil = None  # Included in base install
 
 from kailash.sdk_exceptions import CircuitBreakerOpenError, ResourceLimitExceededError
 

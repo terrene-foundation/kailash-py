@@ -1,6 +1,6 @@
 ---
 name: co-expert
-description: "CO methodology expert. Use for seven first principles, five-layer architecture, or domain-agnostic orchestration."
+description: "CO methodology expert. Use for eight first principles, five-layer architecture, or domain-agnostic orchestration."
 model: inherit
 allowed-tools:
   - Read
@@ -28,7 +28,7 @@ If this repo contains Foundation source documentation, read the CO Core Thesis, 
 
 CO includes all components of a methodology:
 
-- **Principles** (why): Seven domain-agnostic first principles
+- **Principles** (why): Eight domain-agnostic first principles
 - **Architecture** (what): Five-layer model
 - **Processes** (how): Phase-gated workflows with evidence-based completion
 - **Roles** (who): Human-on-the-Loop practitioner + domain-specialized agents
@@ -36,7 +36,7 @@ CO includes all components of a methodology:
 - **Quality Criteria** (done?): Measurable standards
 - **Adoption Path** (how to get there): Phased organizational guidance
 
-### Seven First Principles
+### Eight First Principles
 
 1. **Institutional Knowledge Thesis** — AI capability is commodity; institutional knowledge is the differentiator
 2. **Brilliant New Hire Principle** — AI without context = most capable hire with zero onboarding
@@ -45,6 +45,7 @@ CO includes all components of a methodology:
 5. **Deterministic Enforcement** — Critical rules enforced outside AI context, not probabilistically
 6. **Bainbridge's Irony** — More automation requires deeper human understanding
 7. **Knowledge Compounds** — Institutional knowledge accumulates across sessions, subject to human approval
+8. **Authentic Voice and Responsible Co-Authorship** — Output reflects genuine human intellectual direction; AI assistance disclosed per venue requirements; detection bias mitigated through style, not concealment
 
 ### Five-Layer Architecture (Domain-Agnostic)
 
@@ -70,10 +71,12 @@ Each layer encodes a different aspect of human judgment:
 CARE (Philosophy: What is the human for?)
   |-- EATP (Trust Protocol: How do we keep the human accountable?)
   |-- CO (Methodology: How does the human structure AI's work?)
-       |-- COC (Codegen) — mature, in production
-       |-- CO for Compliance — planned
-       |-- CO for Finance — planned
-       |-- CO for Operations — future
+       |-- COC (Codegen) — production
+       |-- COR (Research) — production
+       |-- COE (Education) — analysis
+       |-- COG (Governance) — production
+       |-- COComp (Compliance) — sketch
+       |-- COL (Learners) — development
 ```
 
 CARE, EATP, and CO are peers inheriting from CARE as parent philosophy. They solve different problems and connect deeply:
@@ -84,12 +87,15 @@ CARE, EATP, and CO are peers inheriting from CARE as parent philosophy. They sol
 
 ### Domain Applications
 
-| Application       | Short Name | Status                                                         |
-| ----------------- | ---------- | -------------------------------------------------------------- |
-| CO for Codegen    | COC        | Mature, in production (29 agents, 28 skills, 9 rules, 9 hooks) |
-| CO for Compliance | —          | Planned                                                        |
-| CO for Finance    | —          | Planned                                                        |
-| CO for Operations | —          | Future                                                         |
+| Application       | Short Name | Status      |
+| ----------------- | ---------- | ----------- |
+| CO for Codegen    | COC        | Production  |
+| CO for Research   | COR        | Production  |
+| CO for Education  | COE        | Analysis    |
+| CO for Governance | COG        | Production  |
+| CO for Compliance | COComp     | Sketch      |
+| CO for Learners   | COL        | Development |
+| COL for Finance   | COL-F      | Production  |
 
 ## How to Respond
 

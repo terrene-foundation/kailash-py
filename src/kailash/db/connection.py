@@ -227,7 +227,7 @@ class ConnectionManager:
         except ImportError as exc:
             raise ImportError(
                 "aiosqlite is required for SQLite connections. "
-                "Install it with: pip install kailash[database]"
+                "Install it with: pip install kailash"
             ) from exc
 
         # Extract path from sqlite:///path or sqlite:///:memory:
@@ -318,7 +318,7 @@ class ConnectionManager:
         except ImportError as exc:
             raise ImportError(
                 "asyncpg is required for PostgreSQL connections. "
-                "Install it with: pip install kailash[postgres]"
+                "Install it with: pip install kailash"
             ) from exc
 
         self._pool = await asyncpg.create_pool(self.url)
@@ -331,7 +331,7 @@ class ConnectionManager:
         except ImportError as exc:
             raise ImportError(
                 "aiomysql is required for MySQL connections. "
-                "Install it with: pip install kailash[mysql]"
+                "Install it with: pip install kailash"
             ) from exc
 
         from urllib.parse import urlparse

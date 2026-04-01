@@ -1,0 +1,5 @@
+[project]
+name = "mcp-test-project"
+version = "0.1.0"
+description = "Fixture project for MCP platform server integration tests"
+requires-python = ">=3.10"

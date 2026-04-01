@@ -6,7 +6,7 @@ EATP Signing — Ed25519 cryptographic operations for trust chain integrity.
 
 This module re-exports the core signing functions from
 ``kailash.trust.signing.crypto``. All functions require ``pynacl``
-(install via ``pip install kailash[trust]``).
+(included in the base ``pip install kailash``).
 
 Functions:
 

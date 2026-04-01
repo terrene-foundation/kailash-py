@@ -20,10 +20,10 @@
               │                     │    Available immediately in that repo
               └────────┬────────────┘
                        │
-                       │  Developer moves to kailash/ (or automation triggers)
+                       │  Developer moves to loom/ (or automation triggers)
                        ▼
               ┌─────────────────────┐
-              │   kailash/ REVIEW   │  ◄── HUMAN-ON-THE-LOOP GATE
+              │   loom/ REVIEW   │  ◄── HUMAN-ON-THE-LOOP GATE
               │                     │
               │  /sync py    │  Scans kailash-py/.claude/ for changes
               │  (or /sync rs)  vs expected output (global + variant)
@@ -39,7 +39,7 @@
                        │
                        ▼
               ┌─────────────────────┐
-              │   kailash/ SYNC     │
+              │   loom/ SYNC     │
               │                     │
               │  /sync py           │──► kailash-coc-claude-py/ (template)
               │  /sync rs           │──► kailash-coc-claude-rs/ (template)
@@ -89,13 +89,13 @@ changes:
     reason: "Added L3 delegation instructions"
     diff_lines: "+15 -2"
 
-status: pending_review # Waiting for upstream review at kailash/
+status: pending_review # Waiting for upstream review at loom/
 ```
 
 3. Tells the developer:
 
 > Artifacts updated locally and available in this repo. A proposal has been created
-> for upstream review. When ready, open kailash/ and run `/sync py` to
+> for upstream review. When ready, open loom/ and run `/sync py` to
 > classify and upstream these changes.
 
 **What /codify does NOT do anymore:**
@@ -105,7 +105,7 @@ status: pending_review # Waiting for upstream review at kailash/
 
 ### Phase 3: /sync Gate 1 (Review) — The Control Gate
 
-The developer moves to kailash/ and runs `/sync py` (or `/sync rs`). The command auto-detects unreviewed changes and enters the review gate.
+The developer moves to loom/ and runs `/sync py` (or `/sync rs`). The command auto-detects unreviewed changes and enters the review gate.
 
 **Input**: Which BUILD repo to review
 
@@ -156,7 +156,7 @@ If yes → creates an alignment task (GitHub issue or local task) for the rs rep
 
 ### Phase 4: /sync — Outbound Distribution
 
-After review is complete, the human runs `/sync py` and/or `/sync rs` from kailash/.
+After review is complete, the human runs `/sync py` and/or `/sync rs` from loom/.
 
 This applies the variant architecture (guide 05): global files + variant overlay → produces the correct output for each template repo.
 
@@ -168,7 +168,7 @@ When a developer opens a BUILD repo in a new session:
 
 - `session-start.js` checks sync freshness (compares `.coc-sync-marker` timestamp)
 - If stale, notifies: "COC artifacts have been updated upstream. Run `/sync-update` to pull latest."
-- The BUILD repo pulls from its template (which was updated by kailash/)
+- The BUILD repo pulls from its template (which was updated by loom/)
 
 ## The Three Locations of an Artifact
 
@@ -176,8 +176,8 @@ At any point in time, an artifact exists in up to three places:
 
 | Location                              | Role                      | Updated by                                |
 | ------------------------------------- | ------------------------- | ----------------------------------------- |
-| `kailash/.claude/` (or `variants/`)   | **Source of truth**       | /sync (inbound from BUILD repos)          |
-| `kailash-coc-claude-{py,rs}/.claude/` | **Distribution template** | /sync (outbound from kailash/)            |
+| `loom/.claude/` (or `variants/`)      | **Source of truth**       | /sync (inbound from BUILD repos)          |
+| `kailash-coc-claude-{py,rs}/.claude/` | **Distribution template** | /sync (outbound from loom/)               |
 | `kailash-{py,rs}/.claude/`            | **Working copy**          | /codify (local), session-start sync check |
 
 ## Timing: When Does Each Step Happen?
@@ -185,15 +185,15 @@ At any point in time, an artifact exists in up to three places:
 | Step                      | When                                        | Who                        |
 | ------------------------- | ------------------------------------------- | -------------------------- |
 | /codify (local)           | End of implementation cycle                 | Autonomous (in BUILD repo) |
-| /sync Gate 1 (Review)     | After /codify, when developer is ready      | Human at kailash/          |
-| /sync Gate 2 (Distribute) | After review is approved                    | Human at kailash/          |
+| /sync Gate 1 (Review)     | After /codify, when developer is ready      | Human at loom/             |
+| /sync Gate 2 (Distribute) | After review is approved                    | Human at loom/             |
 | Session-start check       | Every new Claude Code session in BUILD repo | Automatic                  |
 
 The human gates are at **/sync Gate 1** (classification) and **/sync Gate 2** (distribution authorization). Everything else is autonomous.
 
 ## Edge Cases
 
-### What if the BUILD repo already has changes that aren't in kailash/?
+### What if the BUILD repo already has changes that aren't in loom/?
 
 /sync handles this. It diffs the BUILD repo against expected output, catching ALL changes — not just those from /codify. Ad-hoc edits, manual fixes, and experimental changes all surface during review.
 
@@ -211,20 +211,20 @@ The cross-SDK alignment check in step 5 of /sync flags this proactively. The hum
 
 ### What if someone syncs directly from BUILD to template (old way)?
 
-The `/sync` command at kailash/ is the only authorized outbound path. The BUILD repo's /codify no longer calls coc-sync. If someone manually runs the old sync, the next /sync from kailash/ will overwrite with the correct state.
+The `/sync` command at loom/ is the only authorized outbound path. The BUILD repo's /codify no longer calls coc-sync. If someone manually runs the old sync, the next /sync from loom/ will overwrite with the correct state.
 
 ### What about the COC templates for other LLMs?
 
-The same architecture applies. kailash-coc-gemini-py is another template that receives from kailash/ via /sync. Gemini-specific artifacts go in `variants/gemini-py/` (if any exist — most likely the templates are identical except for model references in hooks).
+The same architecture applies. kailash-coc-gemini-py is another template that receives from loom/ via /sync. Gemini-specific artifacts go in `variants/gemini-py/` (if any exist — most likely the templates are identical except for model references in hooks).
 
 ## What Changes in Existing Commands
 
 | Command                           | Change                                                        |
 | --------------------------------- | ------------------------------------------------------------- |
 | `/codify` (BUILD repos)           | Step 7 creates proposal instead of direct sync                |
-| `/sync` (kailash/)                | Two-gate: Gate 1 reviews inbound, Gate 2 distributes outbound |
+| `/sync` (loom/)                   | Two-gate: Gate 1 reviews inbound, Gate 2 distributes outbound |
 | `/sync` (BUILD/USE repos)         | Downstream pull from template (variant command)               |
-| `/repos`, `/inspect`, `/settings` | Absorbed from ~/repos to kailash/                             |
+| `/repos`, `/inspect`, `/settings` | Absorbed from ~/repos to loom/                                |
 
 ## What Changes in Existing Agents
 
@@ -232,9 +232,9 @@ The same architecture applies. kailash-coc-gemini-py is another template that re
 | ------------------------ | -------------------------------------------------------------------- |
 | `coc-sync`               | Rewritten: reads sync-manifest.yaml, applies overlays, variant-aware |
 | **NEW**: `sync-reviewer` | Scans BUILD repos, presents diffs, classifies changes                |
-| `code-inspector`         | Absorbed from ~/repos into kailash/agents/management/                |
-| `repo-admin`             | Absorbed from ~/repos into kailash/agents/management/                |
-| `settings-manager`       | Absorbed from ~/repos into kailash/agents/management/                |
+| `code-inspector`         | Absorbed from ~/repos into loom/agents/management/                   |
+| `repo-admin`             | Absorbed from ~/repos into loom/agents/management/                   |
+| `settings-manager`       | Absorbed from ~/repos into loom/agents/management/                   |
 
 ## What Changes in Existing Rules
 

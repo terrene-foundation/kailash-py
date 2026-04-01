@@ -201,6 +201,19 @@ Ask yourself:
 - **Enterprise requirements** → Multi-framework architecture
 - **Unsure** → Start with Core SDK, add frameworks as needed
 
+### Step 2b: Layer Selection
+
+After choosing a framework, determine whether the Engine or Primitive layer is appropriate:
+
+| Framework | Engine (default) | Primitives (when needed) |
+|-----------|-----------------|-------------------------|
+| DataFlow | `db.express` for CRUD, `DataFlowEngine` for enterprise | `WorkflowBuilder` + nodes for multi-step |
+| Nexus | `Nexus()` for deployment | Manual channels for custom protocols |
+| Kaizen | `Delegate` for agents, `GovernedSupervisor` for teams | `BaseAgent` for custom logic |
+| PACT | `GovernanceEngine` | Manual envelope construction |
+
+See `rules/framework-first.md` for the full three-layer model.
+
 ### Step 3: Implementation Path
 
 1. **Proof of concept** with minimal framework setup

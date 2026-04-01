@@ -208,8 +208,8 @@ Level 3 is planned for v1.1+. The migration path will be documented when the fea
 
 | Symptom                      | Cause                                | Fix                                                                 |
 | ---------------------------- | ------------------------------------ | ------------------------------------------------------------------- |
-| `No module named asyncpg`    | PostgreSQL driver not installed      | `pip install kailash[postgres]`                                     |
-| `No module named aiomysql`   | MySQL driver not installed           | `pip install kailash[mysql]`                                        |
+| `No module named asyncpg`    | Kailash not installed or corrupted   | `pip install kailash` (drivers are included in base install)        |
+| `No module named aiomysql`   | Kailash not installed or corrupted   | `pip install kailash` (drivers are included in base install)        |
 | Tables not created           | Insufficient database permissions    | Grant CREATE TABLE permission to the database user                  |
 | Connection refused           | Wrong host/port in DATABASE_URL      | Verify the database is running and the connection string is correct |
 | Workers not picking up tasks | KAILASH_QUEUE_URL not set on workers | Ensure all worker processes have the same environment variables     |
