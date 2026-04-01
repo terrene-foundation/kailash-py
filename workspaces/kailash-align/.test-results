@@ -1,0 +1,26 @@
+# Test Results — kailash-align
+# Generated: 2026-04-01
+# Commit: c8c7f897 (uncommitted changes on top)
+
+## Baseline (before implementation)
+- 211 passed, 1 skipped
+
+## After Implementation
+- 388 passed, 1 skipped
+- 0 regressions
+- 177 new tests added
+
+## Test Files
+- test_config.py: Config class validation (existing + updated matchers)
+- test_method_registry.py: NEW — 173 tests for registry, configs, pipeline refactor
+- test_pipeline.py: Pipeline dispatch + dataset validation (updated for MethodRegistry)
+- test_package.py: Package imports (fixed sys.modules contamination)
+- test_exceptions.py, test_registry.py, test_evaluator.py, etc.: unchanged
+
+## Changes Made
+1. config.py: Added KTOConfig, ORPOConfig, GRPOConfig, RLOOConfig, OnlineDPOConfig
+2. pipeline.py: Refactored to use MethodRegistry (generic _run_training())
+3. method_registry.py: Added XPO, NashMD, CPO, BCO (12 methods total)
+4. __init__.py: Updated exports (MethodRegistry, RewardRegistry, GPU, vLLM classes)
+5. AlignmentConfig: Dynamic method validation, loss_type, reward_funcs, auto-create configs
+6. AdapterSignature: Dynamic training_method validation via registry

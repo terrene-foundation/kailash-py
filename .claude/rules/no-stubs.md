@@ -25,6 +25,15 @@ Production code SHOULD NOT contain:
 - `return {"status": "ok"}` as a placeholder for real logic
 - Test fixtures masquerading as production defaults
 
+**Frontend mock data is a stub.** The following patterns in JS/TS/TSX/JSX production code are stubs:
+
+- Constants named `MOCK_*`, `FAKE_*`, `DUMMY_*`, `SAMPLE_*` (e.g., `MOCK_USERS`, `SAMPLE_DATA`)
+- Functions named `generate*()` or `mock*()` that produce synthetic/random data instead of calling APIs (e.g., `generateHourlyOccupancy()`, `mockTransactions()`)
+- Hardcoded arrays/objects serving as page data where an API call should exist
+- `Math.random()` used to generate display data (occupancy rates, transaction counts, etc.)
+
+**Why**: Frontend mock data is invisible to Python stub detection but has the same effect — users see fake data presented as real. A page with `generateHourlyOccupancy()` is as broken as a backend endpoint with `raise NotImplementedError`.
+
 ### 3. No Silent Fallbacks
 
 Production code MUST NOT silently swallow errors:
@@ -46,9 +55,10 @@ When implementing a feature:
 
 ## Enforcement
 
-- **PostToolUse hook**: `validate-workflow.js` **BLOCKS** (exit code 2) stub patterns in production Python code. This is NOT a warning — it stops the operation.
+- **PostToolUse hook**: `validate-workflow.js` **BLOCKS** (exit code 2) stub patterns in production Python AND JS/TS code. In JS/TS: detects `MOCK_*/FAKE_*/DUMMY_*/SAMPLE_*` constants, `mock*()` function declarations, data-producing `generate*Data/List/Records/Stats()` calls, and `Math.random()` display data. This is NOT a warning — it stops the operation.
 - **UserPromptSubmit hook**: Injects zero-tolerance reminder every turn
 - **Red-team agents**: Scan for violations during validation rounds. If a stub is found, the red team MUST fix it — not report it.
+- **Spec coverage audit**: `/redteam` step 1 reads plans and verifies each item exists with real data flowing — catches mock data that survived implementation.
 
 ## Why This Matters
 

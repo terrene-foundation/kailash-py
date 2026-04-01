@@ -49,6 +49,20 @@ When `/codify` creates or modifies artifacts in a BUILD repo (kailash-py, kailas
 
 **Why**: Direct BUILD-to-template sync bypasses classification (global vs variant) and cross-SDK alignment.
 
+### 2a. Downstream Repos Do NOT Propose Upstream
+
+Downstream project repos (everything except kailash-py, kailash-rs) consume COC artifacts from USE templates. When `/codify` runs in a downstream repo, artifact changes stay **local to that project** — no proposal manifest is created.
+
+```
+# Downstream repo /codify:
+/codify → writes to project/.claude/ (local only, no proposal)
+
+# NOT this:
+/codify → creates .proposals/latest.yaml (wrong — no upstream path exists)
+```
+
+**Why**: Downstream repos have no authority over COC artifacts. Their `.claude/` is template-managed. Project-specific artifacts (local rules, learned instincts) are project knowledge, not COC-level insights.
+
 ### 3. /sync Is the Only Outbound Path
 
 Only `/sync` executed at `loom/` may write to COC template repos. No other command, agent, or manual process may modify template repo artifacts.
