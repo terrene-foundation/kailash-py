@@ -14,29 +14,7 @@ import pytest
 # The kailash.mcp.__init__ imports from a Rust native module (kailash._kailash).
 # When the native module is not built, we need to import ResourceCache by path
 # manipulation to avoid the __init__ import chain.
-try:
-    from kailash.mcp.resources import ResourceCache
-except (ImportError, ModuleNotFoundError):
-    # Direct import bypassing the package __init__
-    import importlib.util
-    import sys
-    from pathlib import Path as _Path
-
-    _spec = importlib.util.spec_from_file_location(
-        "kailash.mcp.resources",
-        _Path(__file__).resolve().parents[3]
-        / "src"
-        / "kailash"
-        / "mcp"
-        / "resources.py",
-    )
-    if _spec and _spec.loader:
-        _mod = importlib.util.module_from_spec(_spec)
-        sys.modules["kailash.mcp.resources"] = _mod
-        _spec.loader.exec_module(_mod)
-        ResourceCache = _mod.ResourceCache  # type: ignore[assignment]
-    else:
-        pytest.skip("Cannot import ResourceCache", allow_module_level=True)
+from kailash.mcp_server.resource_cache import ResourceCache
 
 
 class TestResourceCache:
