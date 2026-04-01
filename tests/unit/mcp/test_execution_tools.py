@@ -156,9 +156,14 @@ class TestHandlerNotFound:
             pytest.skip("nexus not installed")
 
         tool = server._tool_manager._tools["nexus.test_handler"]
-        result = await tool.run(arguments={"handler_name": "nonexistent_handler"})
-        # FastMCP tool.run() returns a list of content items
-        parsed = json.loads(result[0].text) if hasattr(result[0], "text") else result
+        result = await tool.run({"handler_name": "nonexistent_handler"})
+        # FastMCP tool.run() may return a dict or a list of content items
+        if isinstance(result, dict):
+            parsed = result
+        elif isinstance(result, list) and result and hasattr(result[0], "text"):
+            parsed = json.loads(result[0].text)
+        else:
+            parsed = result
         assert "errors" in parsed or "error" in str(parsed)
 
     @pytest.mark.asyncio
@@ -178,7 +183,13 @@ class TestHandlerNotFound:
 
         tool = server._tool_manager._tools["kaizen.test_agent"]
         result = await tool.run(
-            arguments={"agent_name": "nonexistent_agent", "task": "hello"}
+            {"agent_name": "nonexistent_agent", "task": "hello"}
         )
-        parsed = json.loads(result[0].text) if hasattr(result[0], "text") else result
+        # FastMCP tool.run() may return a dict or a list of content items
+        if isinstance(result, dict):
+            parsed = result
+        elif isinstance(result, list) and result and hasattr(result[0], "text"):
+            parsed = json.loads(result[0].text)
+        else:
+            parsed = result
         assert "errors" in parsed or "error" in str(parsed)

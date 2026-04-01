@@ -6,8 +6,36 @@ Dynamic node generation for database operations.
 
 from typing import Any, Dict, List, Optional, Type, Union
 
-from kailash.nodes.base import Node, NodeParameter, NodeRegistry
-from kailash.nodes.base_async import AsyncNode
+try:
+    from kailash.nodes.base import Node, NodeParameter, NodeRegistry
+    if not hasattr(NodeRegistry, "register"):
+        # kailash 3.x Rust NodeRegistry — provide a no-op stub
+        class NodeRegistry:  # type: ignore[no-redef]
+            @staticmethod
+            def register(*args, **kwargs):
+                pass
+            @staticmethod
+            def unregister_nodes(*args, **kwargs):
+                pass
+except ImportError:
+    class Node:  # type: ignore[no-redef]
+        def __init__(self, **kwargs):
+            pass
+    class NodeParameter:  # type: ignore[no-redef]
+        def __init__(self, **kwargs):
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+    class NodeRegistry:  # type: ignore[no-redef]
+        @staticmethod
+        def register(*args, **kwargs):
+            pass
+        @staticmethod
+        def unregister_nodes(*args, **kwargs):
+            pass
+try:
+    from kailash.nodes.base_async import AsyncNode
+except ImportError:
+    AsyncNode = Node  # type: ignore[assignment,misc]
 
 from .async_utils import async_safe_run  # Phase 6: Async-safe execution
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking

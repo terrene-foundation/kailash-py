@@ -27,8 +27,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-from kailash.runtime import AsyncLocalRuntime
-from kailash.runtime.local import LocalRuntime
+from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 
 # Kailash imports for async workflow pattern
 from kailash.workflow.builder import WorkflowBuilder

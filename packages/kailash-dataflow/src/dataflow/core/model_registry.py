@@ -16,9 +16,11 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from kailash.nodes.data.sql import SQLDatabaseNode
-from kailash.runtime import AsyncLocalRuntime
-from kailash.runtime.local import LocalRuntime
+try:
+    from kailash.nodes.data.sql import SQLDatabaseNode
+except ImportError:
+    SQLDatabaseNode = None  # type: ignore[assignment,misc]
+from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
 logger = logging.getLogger(__name__)
@@ -47,13 +49,16 @@ class ModelRegistry:
         if runtime is not None:
             # Shared runtime provided — acquire a reference so the caller's
             # close() won't tear down the loop while we still need it.
-            self.runtime = runtime.acquire()
+            if hasattr(runtime, "acquire"):
+                self.runtime = runtime.acquire()
+                logger.debug(
+                    "ModelRegistry: Using injected runtime (ref_count=%d)",
+                    getattr(runtime, "ref_count", 0),
+                )
+            else:
+                self.runtime = runtime
             self._owns_runtime = False
             self._is_async = isinstance(runtime, AsyncLocalRuntime)
-            logger.debug(
-                "ModelRegistry: Using injected runtime (ref_count=%d)",
-                runtime.ref_count,
-            )
         else:
             # No runtime provided — create our own (backward-compatible path).
             # Detect async context to prevent deadlocks in FastAPI / pytest-async.
