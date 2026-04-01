@@ -11,6 +11,7 @@ NOTE (R2-03): vLLM requires CUDA. Not recommended for Apple Silicon.
 """
 from __future__ import annotations
 
+import abc
 import logging
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -64,7 +65,7 @@ class VLLMConfig:
             )
 
 
-class GenerationBackend:
+class GenerationBackend(abc.ABC):
     """Abstract base for generation backends used by online RL methods.
 
     Subclasses implement batch_generate() for fast rollout generation.
@@ -72,6 +73,7 @@ class GenerationBackend:
     completions that are then scored by reward functions.
     """
 
+    @abc.abstractmethod
     def batch_generate(
         self,
         prompts: list[str],
@@ -92,7 +94,6 @@ class GenerationBackend:
         Returns:
             List of lists: outer = per prompt, inner = completions.
         """
-        raise NotImplementedError
 
     def shutdown(self) -> None:
         """Clean up resources."""

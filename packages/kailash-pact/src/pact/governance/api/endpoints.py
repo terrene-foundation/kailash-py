@@ -83,6 +83,15 @@ def create_governance_router(
     """
     router = APIRouter(prefix="/api/v1/governance", tags=["governance"])
 
+    def _sanitize_error(exc: Exception) -> str:
+        """Return a sanitized error message, hiding internal details (P-H6)."""
+        from kailash.trust.pact.exceptions import PactError
+
+        if isinstance(exc, PactError):
+            return str(exc)  # PactError messages are designed for users
+        logger.exception("Internal error in governance API")
+        return "Internal governance error — check server logs"
+
     def _rate_limit(func: Any) -> Any:
         """Apply rate limiting if a limiter is configured."""
         if limiter is not None:
@@ -227,8 +236,20 @@ def create_governance_router(
         address: str,
         identity: str = Depends(auth.require_read),
     ) -> OrgNodeResponse:
-        """Look up a single node by its positional address."""
+        """Look up a single node by its positional address.
+
+        Supports both exact addresses and partial D/T/R resolution (#216).
+        If exact match fails, searches for nodes whose address ends with
+        the given suffix (e.g., 'R2' finds 'D1-T1-R2').
+        """
         node = engine.get_node(address)
+        if node is None:
+            # Try suffix-based resolution for non-head roles (#216)
+            compiled = engine.get_org()
+            for addr, n in compiled.nodes.items():
+                if addr.endswith(address) or n.name == address:
+                    node = n
+                    break
         if node is None:
             raise HTTPException(
                 status_code=404,
@@ -282,15 +303,24 @@ def create_governance_router(
         identity: str = Depends(auth.require_write),
     ) -> dict[str, Any]:
         """Grant knowledge clearance to a role."""
+        # Resolve D/T/R address to actual node address (#215)
+        resolved_address = req.role_address
+        node = engine.get_node(req.role_address)
+        if node is not None:
+            resolved_address = node.address
+
         clearance = RoleClearance(
-            role_address=req.role_address,
+            role_address=resolved_address,
             max_clearance=ConfidentialityLevel(req.max_clearance),
             compartments=frozenset(req.compartments),
             granted_by_role_address=req.granted_by_role_address,
             vetting_status=VettingStatus.ACTIVE,
         )
 
-        engine.grant_clearance(req.role_address, clearance)
+        try:
+            engine.grant_clearance(resolved_address, clearance)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=_sanitize_error(exc))
 
         await emit_governance_event(
             GovernanceEventType.CLEARANCE_GRANTED,
@@ -331,7 +361,10 @@ def create_governance_router(
             bilateral=req.bilateral,
         )
 
-        engine.create_bridge(bridge)
+        try:
+            engine.create_bridge(bridge)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=_sanitize_error(exc))
 
         await emit_governance_event(
             GovernanceEventType.BRIDGE_CREATED,
@@ -372,7 +405,10 @@ def create_governance_router(
             created_by_role_address=req.created_by_role_address,
         )
 
-        engine.create_ksp(ksp)
+        try:
+            engine.create_ksp(ksp)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=_sanitize_error(exc))
 
         await emit_governance_event(
             GovernanceEventType.KSP_CREATED,
@@ -427,7 +463,10 @@ def create_governance_router(
             envelope=envelope_config,
         )
 
-        engine.set_role_envelope(role_envelope)
+        try:
+            engine.set_role_envelope(role_envelope)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=_sanitize_error(exc))
 
         await emit_governance_event(
             GovernanceEventType.ENVELOPE_SET,

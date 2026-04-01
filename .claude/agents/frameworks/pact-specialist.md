@@ -147,6 +147,25 @@ valid = signed.verify(public_key)  # Checks signature + expiry, fail-closed
 - Fail-closed: any error during verification returns `False`
 - 90-day default expiry (`_SIGNED_ENVELOPE_EXPIRY_DAYS`)
 
+## API Hardening (R2 Red Team — 0.6.0)
+
+### Error Sanitization (P-H6)
+
+All mutation endpoints (`grant_clearance`, `create_bridge`, `create_ksp`, `set_envelope`) wrap engine calls in try/except with `_sanitize_error()`. PactError messages pass through; generic exceptions log internally and return sanitized message. Query endpoints (`verify_action`, `check_access`) rely on engine-internal fail-closed handling.
+
+### NaN/Inf on Operational Rate Limits (P-H8/P-H9)
+
+`_validate_finite_fields()` and `SetEnvelopeRequest.validate_constraints()` now check `operational.max_actions_per_day` and `operational.max_actions_per_hour` in addition to financial fields. Any NaN/Inf in rate limits is rejected before reaching the engine.
+
+### AuditChain Integrity on Deserialization (P-H10)
+
+`AuditChain.from_dict()` now calls `verify_integrity()` after reconstruction. Corrupted chains are logged as warnings (not silently accepted).
+
+### D/T/R Address Resolution in API (#215/#216)
+
+- `grant_clearance` endpoint resolves D/T/R addresses via `engine.get_node()` before granting
+- `get_node` endpoint supports suffix-based resolution (e.g., "R2" finds "D1-T1-R2")
+
 ## When NOT to Use This Agent
 
 - For EATP protocol questions (trust chains, delegation, signing) -> use **eatp-expert**

@@ -651,6 +651,8 @@ class GovernanceEngine:
         # must be in the list. Empty allowed_actions + envelope exists = nothing allowed.
         # When no envelope exists, the caller gets None (maximally permissive)
         # and _evaluate_against_envelope is never called.
+        # None dimensions (financial=None, temporal=None) are already handled:
+        # they skip evaluation entirely (GH #217 — confirmed by design).
         if action not in allowed_actions:
             return (
                 "blocked",

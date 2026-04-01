@@ -45,6 +45,25 @@ class ParamDistribution:
     high: float | None = None
     choices: list[Any] | None = None  # for categorical
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "type": self.type,
+            "low": self.low,
+            "high": self.high,
+            "choices": self.choices,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ParamDistribution:
+        return cls(
+            name=data["name"],
+            type=data["type"],
+            low=data.get("low"),
+            high=data.get("high"),
+            choices=data.get("choices"),
+        )
+
 
 @dataclass
 class SearchSpace:
@@ -100,6 +119,17 @@ class SearchSpace:
             samples.append(params)
         return samples
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "params": [p.to_dict() for p in self.params],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SearchSpace:
+        return cls(
+            params=[ParamDistribution.from_dict(p) for p in data["params"]],
+        )
+
 
 @dataclass
 class SearchConfig:
@@ -114,6 +144,31 @@ class SearchConfig:
     n_jobs: int = 1
     register_best: bool = True
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "strategy": self.strategy,
+            "n_trials": self.n_trials,
+            "timeout_seconds": self.timeout_seconds,
+            "metric_to_optimize": self.metric_to_optimize,
+            "direction": self.direction,
+            "early_stopping_patience": self.early_stopping_patience,
+            "n_jobs": self.n_jobs,
+            "register_best": self.register_best,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SearchConfig:
+        return cls(
+            strategy=data.get("strategy", "bayesian"),
+            n_trials=data.get("n_trials", 50),
+            timeout_seconds=data.get("timeout_seconds"),
+            metric_to_optimize=data.get("metric_to_optimize", "accuracy"),
+            direction=data.get("direction", "maximize"),
+            early_stopping_patience=data.get("early_stopping_patience"),
+            n_jobs=data.get("n_jobs", 1),
+            register_best=data.get("register_best", True),
+        )
+
 
 @dataclass
 class TrialResult:
@@ -124,6 +179,25 @@ class TrialResult:
     metrics: dict[str, float]
     training_time_seconds: float
     pruned: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "trial_number": self.trial_number,
+            "params": dict(self.params),
+            "metrics": dict(self.metrics),
+            "training_time_seconds": self.training_time_seconds,
+            "pruned": self.pruned,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> TrialResult:
+        return cls(
+            trial_number=data["trial_number"],
+            params=data["params"],
+            metrics=data["metrics"],
+            training_time_seconds=data["training_time_seconds"],
+            pruned=data.get("pruned", False),
+        )
 
 
 @dataclass
@@ -137,6 +211,29 @@ class SearchResult:
     total_time_seconds: float
     strategy: str
     model_version: Any | None = None  # ModelVersion | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "best_params": dict(self.best_params),
+            "best_metrics": dict(self.best_metrics),
+            "best_trial_number": self.best_trial_number,
+            "all_trials": [t.to_dict() for t in self.all_trials],
+            "total_time_seconds": self.total_time_seconds,
+            "strategy": self.strategy,
+            "model_version": None,  # ModelVersion is not JSON-serializable
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SearchResult:
+        return cls(
+            best_params=data["best_params"],
+            best_metrics=data["best_metrics"],
+            best_trial_number=data["best_trial_number"],
+            all_trials=[TrialResult.from_dict(t) for t in data["all_trials"]],
+            total_time_seconds=data["total_time_seconds"],
+            strategy=data["strategy"],
+            model_version=data.get("model_version"),
+        )
 
 
 # ---------------------------------------------------------------------------

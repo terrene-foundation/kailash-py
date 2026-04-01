@@ -250,8 +250,8 @@ class TestAdapterSignature:
             AdapterSignature(base_model_id="test/model", adapter_type="prefix")
 
     def test_invalid_training_method(self):
-        with pytest.raises(ValueError, match="training_method must be"):
-            AdapterSignature(base_model_id="test/model", training_method="ppo")
+        with pytest.raises(ValueError, match="Unknown training method"):
+            AdapterSignature(base_model_id="test/model", training_method="nonexistent")
 
     def test_valid_qlora(self):
         sig = AdapterSignature(base_model_id="test/model", adapter_type="qlora")
@@ -285,8 +285,8 @@ class TestAlignmentConfig:
         assert isinstance(cfg.dpo, DPOConfig)
 
     def test_invalid_method(self):
-        with pytest.raises(ValueError, match="method must be"):
-            AlignmentConfig(base_model_id="test/model", method="ppo")
+        with pytest.raises(ValueError, match="Unknown training method"):
+            AlignmentConfig(base_model_id="test/model", method="nonexistent")
 
     def test_sft_method(self):
         cfg = AlignmentConfig(base_model_id="test/model", method="sft")

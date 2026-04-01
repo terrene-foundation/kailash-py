@@ -31,6 +31,8 @@ __all__ = [
     "to_pandas",
     "from_pandas",
     "polars_to_dict_records",
+    "from_arrow",
+    "dict_records_to_polars",
 ]
 
 
@@ -349,3 +351,41 @@ def polars_to_dict_records(
             f"of {max_rows}. Use the Arrow path (polars_to_arrow) for bulk data."
         )
     return df.to_dicts()
+
+
+def from_arrow(table: Any) -> pl.DataFrame:
+    """Convert a PyArrow Table to a polars DataFrame.
+
+    Wraps ``pl.from_arrow()`` for consistency with the rest of the
+    interop module.
+
+    Parameters
+    ----------
+    table:
+        A ``pyarrow.Table`` instance.
+
+    Returns
+    -------
+    pl.DataFrame
+    """
+    return pl.from_arrow(table)
+
+
+def dict_records_to_polars(records: list[dict[str, Any]]) -> pl.DataFrame:
+    """Convert a list of dicts to a polars DataFrame.
+
+    Inverse of :func:`polars_to_dict_records`.  Intended for DataFlow
+    Express API response handling.
+
+    Parameters
+    ----------
+    records:
+        List of row dicts (e.g. from ``db.express.list()``).
+
+    Returns
+    -------
+    pl.DataFrame
+    """
+    if not records:
+        return pl.DataFrame()
+    return pl.DataFrame(records)

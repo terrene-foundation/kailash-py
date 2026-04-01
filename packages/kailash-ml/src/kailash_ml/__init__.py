@@ -22,11 +22,17 @@ def __getattr__(name: str):  # noqa: N807
         "AutoMLEngine": "kailash_ml.engines.automl_engine",
         "DataExplorer": "kailash_ml.engines.data_explorer",
         "FeatureEngineer": "kailash_ml.engines.feature_engineer",
+        "EnsembleEngine": "kailash_ml.engines.ensemble",
+        "ExperimentTracker": "kailash_ml.engines.experiment_tracker",
+        "PreprocessingPipeline": "kailash_ml.engines.preprocessing",
+        "ModelVisualizer": "kailash_ml.engines.model_visualizer",
         # Bridge
         "OnnxBridge": "kailash_ml.bridge.onnx_bridge",
         # Compat
         "MlflowFormatReader": "kailash_ml.compat.mlflow_format",
         "MlflowFormatWriter": "kailash_ml.compat.mlflow_format",
+        # Dashboard
+        "MLDashboard": "kailash_ml.dashboard",
         # Decorators
         "ExperimentalWarning": "kailash_ml._decorators",
     }
@@ -49,8 +55,13 @@ __all__ = [
     "AutoMLEngine",
     "DataExplorer",
     "FeatureEngineer",
+    "EnsembleEngine",
+    "ExperimentTracker",
+    "PreprocessingPipeline",
+    "ModelVisualizer",
     "OnnxBridge",
     "MlflowFormatReader",
     "MlflowFormatWriter",
+    "MLDashboard",
     "ExperimentalWarning",
 ]

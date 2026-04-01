@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import math
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -62,6 +63,53 @@ class AutoMLConfig:
     audit_batch_size: int = 10
     audit_flush_interval_seconds: float = 30.0
 
+    def __post_init__(self) -> None:
+        import math
+
+        if not math.isfinite(self.max_llm_cost_usd):
+            raise ValueError("max_llm_cost_usd must be finite")
+        if self.max_llm_cost_usd < 0:
+            raise ValueError("max_llm_cost_usd must be non-negative")
+        if not math.isfinite(self.approval_timeout_seconds):
+            raise ValueError("approval_timeout_seconds must be finite")
+        if self.approval_timeout_seconds <= 0:
+            raise ValueError("approval_timeout_seconds must be positive")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "task_type": self.task_type,
+            "metric_to_optimize": self.metric_to_optimize,
+            "direction": self.direction,
+            "candidate_families": self.candidate_families,
+            "search_strategy": self.search_strategy,
+            "search_n_trials": self.search_n_trials,
+            "register_best": self.register_best,
+            "agent": self.agent,
+            "auto_approve": self.auto_approve,
+            "max_llm_cost_usd": self.max_llm_cost_usd,
+            "approval_timeout_seconds": self.approval_timeout_seconds,
+            "audit_batch_size": self.audit_batch_size,
+            "audit_flush_interval_seconds": self.audit_flush_interval_seconds,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AutoMLConfig:
+        return cls(
+            task_type=data.get("task_type", "classification"),
+            metric_to_optimize=data.get("metric_to_optimize", "accuracy"),
+            direction=data.get("direction", "maximize"),
+            candidate_families=data.get("candidate_families"),
+            search_strategy=data.get("search_strategy", "random"),
+            search_n_trials=data.get("search_n_trials", 30),
+            register_best=data.get("register_best", True),
+            agent=data.get("agent", False),
+            auto_approve=data.get("auto_approve", False),
+            max_llm_cost_usd=data.get("max_llm_cost_usd", 1.0),
+            approval_timeout_seconds=data.get("approval_timeout_seconds", 600.0),
+            audit_batch_size=data.get("audit_batch_size", 10),
+            audit_flush_interval_seconds=data.get("audit_flush_interval_seconds", 30.0),
+        )
+
 
 @dataclass
 class CandidateResult:
@@ -72,6 +120,25 @@ class CandidateResult:
     default_metrics: dict[str, float]
     search_result: Any | None = None  # SearchResult | None
     rank: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "model_class": self.model_class,
+            "framework": self.framework,
+            "default_metrics": dict(self.default_metrics),
+            "search_result": None,  # SearchResult is not JSON-serializable here
+            "rank": self.rank,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CandidateResult:
+        return cls(
+            model_class=data["model_class"],
+            framework=data["framework"],
+            default_metrics=data["default_metrics"],
+            search_result=data.get("search_result"),
+            rank=data.get("rank", 0),
+        )
 
 
 @dataclass
@@ -98,6 +165,33 @@ class AutoMLResult:
     total_time_seconds: float = 0.0
     model_version: Any | None = None  # ModelVersion | None
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "best_model": self.best_model.to_dict(),
+            "best_metrics": dict(self.best_metrics),
+            "all_candidates": [c.to_dict() for c in self.all_candidates],
+            "search_result": None,  # SearchResult is not JSON-serializable here
+            "agent_recommendation": None,  # AgentRecommendation serialized separately
+            "baseline_recommendation": list(self.baseline_recommendation),
+            "total_time_seconds": self.total_time_seconds,
+            "model_version": None,  # ModelVersion is not JSON-serializable
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AutoMLResult:
+        return cls(
+            best_model=CandidateResult.from_dict(data["best_model"]),
+            best_metrics=data["best_metrics"],
+            all_candidates=[
+                CandidateResult.from_dict(c) for c in data["all_candidates"]
+            ],
+            search_result=data.get("search_result"),
+            agent_recommendation=data.get("agent_recommendation"),
+            baseline_recommendation=data.get("baseline_recommendation", []),
+            total_time_seconds=data.get("total_time_seconds", 0.0),
+            model_version=data.get("model_version"),
+        )
+
 
 # ---------------------------------------------------------------------------
 # LLMCostTracker (Guardrail 2)
@@ -116,7 +210,7 @@ class LLMCostTracker:
             raise ValueError("max_budget_usd must be a finite non-negative number")
         self._max_budget = max_budget_usd
         self._spent: float = 0.0
-        self._calls: list[dict[str, Any]] = []
+        self._calls: deque[dict[str, Any]] = deque(maxlen=10000)
 
     def record(self, model: str, input_tokens: int, output_tokens: int) -> None:
         """Record a Delegate call and check budget."""

@@ -41,26 +41,7 @@ __all__ = [
 # Security: model class allowlist (C1)
 # ---------------------------------------------------------------------------
 
-_ALLOWED_MODEL_PREFIXES = frozenset(
-    {
-        "sklearn.",
-        "lightgbm.",
-        "xgboost.",
-        "catboost.",
-        "kailash_ml.",
-        "torch.",
-        "lightning.",
-    }
-)
-
-
-def _validate_model_class(model_class: str) -> None:
-    """Validate model_class against allowlist to prevent arbitrary code execution."""
-    if not any(model_class.startswith(prefix) for prefix in _ALLOWED_MODEL_PREFIXES):
-        raise ValueError(
-            f"Model class '{model_class}' not in allowed prefixes: {sorted(_ALLOWED_MODEL_PREFIXES)}. "
-            f"For custom models, use a prefix from the allowlist."
-        )
+from kailash_ml.engines._shared import validate_model_class as _validate_model_class
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +55,7 @@ class ModelSpec:
 
     model_class: str  # e.g. "sklearn.ensemble.RandomForestClassifier"
     hyperparameters: dict[str, Any] = field(default_factory=dict)
-    framework: str = "sklearn"  # "sklearn" | "lightgbm"
+    framework: str = "sklearn"  # "sklearn" | "lightgbm" | "lightning"
 
     def instantiate(self) -> Any:
         """Create model instance from spec."""
@@ -87,6 +68,21 @@ class ModelSpec:
         module = importlib.import_module(parts[0])
         cls = getattr(module, parts[1])
         return cls(**self.hyperparameters)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "model_class": self.model_class,
+            "hyperparameters": dict(self.hyperparameters),
+            "framework": self.framework,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ModelSpec:
+        return cls(
+            model_class=data["model_class"],
+            hyperparameters=data.get("hyperparameters", {}),
+            framework=data.get("framework", "sklearn"),
+        )
 
 
 @dataclass
@@ -101,6 +97,25 @@ class EvalSpec:
     test_size: float = 0.2
     min_threshold: dict[str, float] = field(default_factory=dict)
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "metrics": list(self.metrics),
+            "split_strategy": self.split_strategy,
+            "n_splits": self.n_splits,
+            "test_size": self.test_size,
+            "min_threshold": dict(self.min_threshold),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> EvalSpec:
+        return cls(
+            metrics=data.get("metrics", ["accuracy"]),
+            split_strategy=data.get("split_strategy", "holdout"),
+            n_splits=data.get("n_splits", 5),
+            test_size=data.get("test_size", 0.2),
+            min_threshold=data.get("min_threshold", {}),
+        )
+
 
 @dataclass
 class TrainingResult:
@@ -112,6 +127,28 @@ class TrainingResult:
     data_shape: tuple[int, int]
     registered: bool  # True if model was registered
     threshold_met: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "model_version": None,  # ModelVersion is not JSON-serializable
+            "metrics": dict(self.metrics),
+            "training_time_seconds": self.training_time_seconds,
+            "data_shape": list(self.data_shape),
+            "registered": self.registered,
+            "threshold_met": self.threshold_met,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> TrainingResult:
+        shape = data["data_shape"]
+        return cls(
+            model_version=data.get("model_version"),
+            metrics=data["metrics"],
+            training_time_seconds=data["training_time_seconds"],
+            data_shape=(shape[0], shape[1]) if shape else (0, 0),
+            registered=data["registered"],
+            threshold_met=data["threshold_met"],
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -126,53 +163,10 @@ def _compute_metrics(
     model: Any = None,
     X_test: np.ndarray | None = None,
 ) -> dict[str, float]:
-    """Compute requested metrics. Supports common sklearn metrics."""
-    from sklearn import metrics as skmetrics
+    """Compute requested metrics. Delegates to shared implementation."""
+    from kailash_ml.engines._shared import compute_metrics_by_name
 
-    results: dict[str, float] = {}
-    for name in metric_names:
-        if name == "accuracy":
-            results[name] = float(skmetrics.accuracy_score(y_true, y_pred))
-        elif name == "f1":
-            results[name] = float(
-                skmetrics.f1_score(y_true, y_pred, average="weighted", zero_division=0)
-            )
-        elif name == "precision":
-            results[name] = float(
-                skmetrics.precision_score(
-                    y_true, y_pred, average="weighted", zero_division=0
-                )
-            )
-        elif name == "recall":
-            results[name] = float(
-                skmetrics.recall_score(
-                    y_true, y_pred, average="weighted", zero_division=0
-                )
-            )
-        elif name == "mse":
-            results[name] = float(skmetrics.mean_squared_error(y_true, y_pred))
-        elif name == "rmse":
-            results[name] = float(np.sqrt(skmetrics.mean_squared_error(y_true, y_pred)))
-        elif name == "mae":
-            results[name] = float(skmetrics.mean_absolute_error(y_true, y_pred))
-        elif name == "r2":
-            results[name] = float(skmetrics.r2_score(y_true, y_pred))
-        elif name == "auc" and model is not None and X_test is not None:
-            if hasattr(model, "predict_proba"):
-                y_prob = model.predict_proba(X_test)
-                if y_prob.shape[1] == 2:
-                    results[name] = float(skmetrics.roc_auc_score(y_true, y_prob[:, 1]))
-                else:
-                    results[name] = float(
-                        skmetrics.roc_auc_score(
-                            y_true, y_prob, multi_class="ovr", average="weighted"
-                        )
-                    )
-            else:
-                results[name] = 0.0
-        else:
-            logger.warning("Unknown or unsupported metric: %s", name)
-    return results
+    return compute_metrics_by_name(y_true, y_pred, metric_names, model, X_test)
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +236,11 @@ class TrainingPipeline:
         # Train
         start = time.perf_counter()
 
-        if model_spec.framework == "lightgbm":
+        if model_spec.framework == "lightning":
+            model = self._train_lightning(
+                train_data, feature_cols, target_col, model_spec
+            )
+        elif model_spec.framework == "lightgbm":
             model = self._train_lightgbm(
                 train_data, feature_cols, target_col, model_spec
             )
@@ -383,6 +381,77 @@ class TrainingPipeline:
         model.fit(X_train, y_train)
         return model
 
+    def _train_lightning(
+        self,
+        train_data: pl.DataFrame,
+        feature_cols: list[str],
+        target_col: str,
+        model_spec: ModelSpec,
+    ) -> Any:
+        """Train a PyTorch Lightning model.
+
+        Lazily imports ``lightning`` and ``torch``. Raises ImportError with
+        install instructions if the ``[dl]`` extra is not installed.
+
+        The model_class should be a fully qualified Lightning Module class,
+        e.g. ``"lightning.pytorch.demos.boring_classes.BoringModel"``.
+        Hyperparameters are passed to both the module constructor and the
+        Trainer (separated by prefix ``trainer_`` for Trainer kwargs).
+        """
+        try:
+            import lightning as L
+            import torch
+            from torch.utils.data import DataLoader, TensorDataset
+        except ImportError as exc:
+            raise ImportError(
+                "PyTorch Lightning is required for DL training. "
+                "Install with: pip install kailash-ml[dl]"
+            ) from exc
+
+        X_train, y_train, _ = to_sklearn_input(
+            train_data, feature_columns=feature_cols, target_column=target_col
+        )
+
+        # Separate trainer kwargs (prefixed with trainer_) from module kwargs
+        module_kwargs = {}
+        trainer_kwargs: dict[str, Any] = {
+            "max_epochs": 10,
+            "enable_progress_bar": False,
+            "enable_model_summary": False,
+        }
+        for k, v in model_spec.hyperparameters.items():
+            if k.startswith("trainer_"):
+                trainer_kwargs[k[len("trainer_") :]] = v
+            else:
+                module_kwargs[k] = v
+
+        # Instantiate Lightning module
+        _validate_model_class(model_spec.model_class)
+        parts = model_spec.model_class.rsplit(".", 1)
+        if len(parts) != 2:
+            raise ValueError(
+                f"model_class must be 'module.ClassName', got '{model_spec.model_class}'"
+            )
+        mod = importlib.import_module(parts[0])
+        module_cls = getattr(mod, parts[1])
+        lightning_module = module_cls(**module_kwargs)
+
+        # Create DataLoader from numpy arrays
+        X_tensor = torch.tensor(X_train, dtype=torch.float32)
+        y_tensor = torch.tensor(y_train, dtype=torch.float32)
+        dataset = TensorDataset(X_tensor, y_tensor)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=trainer_kwargs.pop("batch_size", 32),
+            shuffle=True,
+        )
+
+        # Train
+        trainer = L.Trainer(**trainer_kwargs)
+        trainer.fit(lightning_module, dataloader)
+
+        return lightning_module
+
     # ------------------------------------------------------------------
     # Private: evaluation
     # ------------------------------------------------------------------
@@ -403,8 +472,30 @@ class TrainingPipeline:
         if y_test is None:
             return {}
 
-        y_pred = model.predict(X_test)
+        if framework == "lightning":
+            y_pred = self._predict_lightning(model, X_test)
+        else:
+            y_pred = model.predict(X_test)
         return _compute_metrics(y_test, y_pred, eval_spec.metrics, model, X_test)
+
+    @staticmethod
+    def _predict_lightning(model: Any, X: np.ndarray) -> np.ndarray:
+        """Generate predictions from a Lightning module."""
+        try:
+            import torch
+        except ImportError as exc:
+            raise ImportError(
+                "PyTorch is required for Lightning prediction. "
+                "Install with: pip install kailash-ml[dl]"
+            ) from exc
+
+        model.eval()
+        with torch.no_grad():
+            X_tensor = torch.tensor(X, dtype=torch.float32)
+            output = model(X_tensor)
+            if isinstance(output, torch.Tensor):
+                return output.cpu().numpy()
+            return np.array(output)
 
     # ------------------------------------------------------------------
     # Private: splitting

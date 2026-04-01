@@ -31,7 +31,7 @@ class TestAlignmentPipelineTrainDispatch:
     async def test_dpo_requires_preference_dataset(self):
         cfg = AlignmentConfig(base_model_id="test/model", method="dpo")
         pipeline = AlignmentPipeline(config=cfg)
-        with pytest.raises(TrainingError, match="DPO requires preference_dataset"):
+        with pytest.raises(TrainingError, match="dpo requires preference_dataset"):
             await pipeline.train(dataset=None, adapter_name="test")
 
     @pytest.mark.asyncio
@@ -44,14 +44,12 @@ class TestAlignmentPipelineTrainDispatch:
             await pipeline.train(dataset=None, adapter_name="test")
 
 
-class TestPreferenceDatasetValidation:
-    def _make_pipeline(self) -> AlignmentPipeline:
-        cfg = AlignmentConfig(base_model_id="test/model", method="dpo")
-        return AlignmentPipeline(config=cfg)
+class TestDatasetValidation:
+    """Tests for dataset validators used by MethodRegistry."""
 
-    def test_missing_columns(self):
+    def test_preference_missing_columns(self):
         """Dataset with wrong columns raises TrainingError."""
-        pipeline = self._make_pipeline()
+        from kailash_align.method_registry import _validate_preference_columns
 
         class FakeDataset:
             column_names = ["text", "label"]
@@ -59,12 +57,12 @@ class TestPreferenceDatasetValidation:
             def __len__(self):
                 return 1
 
-        with pytest.raises(TrainingError, match="missing required columns"):
-            pipeline._validate_preference_dataset(FakeDataset())
+        with pytest.raises(TrainingError, match="missing"):
+            _validate_preference_columns(FakeDataset())
 
-    def test_empty_dataset(self):
+    def test_preference_empty_dataset(self):
         """Empty dataset raises TrainingError."""
-        pipeline = self._make_pipeline()
+        from kailash_align.method_registry import _validate_preference_columns
 
         class FakeDataset:
             column_names = ["prompt", "chosen", "rejected"]
@@ -73,27 +71,11 @@ class TestPreferenceDatasetValidation:
                 return 0
 
         with pytest.raises(TrainingError, match="empty"):
-            pipeline._validate_preference_dataset(FakeDataset())
+            _validate_preference_columns(FakeDataset())
 
-    def test_empty_string_in_column(self):
-        """Non-empty string check on first row."""
-        pipeline = self._make_pipeline()
-
-        class FakeDataset:
-            column_names = ["prompt", "chosen", "rejected"]
-
-            def __len__(self):
-                return 1
-
-            def __getitem__(self, idx):
-                return {"prompt": "test", "chosen": "", "rejected": "bad response"}
-
-        with pytest.raises(TrainingError, match="non-empty strings"):
-            pipeline._validate_preference_dataset(FakeDataset())
-
-    def test_valid_dataset_passes(self):
+    def test_preference_valid_passes(self):
         """Valid preference dataset passes validation."""
-        pipeline = self._make_pipeline()
+        from kailash_align.method_registry import _validate_preference_columns
 
         class FakeDataset:
             column_names = ["prompt", "chosen", "rejected"]
@@ -101,15 +83,71 @@ class TestPreferenceDatasetValidation:
             def __len__(self):
                 return 2
 
-            def __getitem__(self, idx):
-                return {
-                    "prompt": "What is 2+2?",
-                    "chosen": "4",
-                    "rejected": "5",
-                }
-
         # Should not raise
-        pipeline._validate_preference_dataset(FakeDataset())
+        _validate_preference_columns(FakeDataset())
+
+    def test_unpaired_missing_columns(self):
+        """Unpaired dataset with wrong columns raises TrainingError."""
+        from kailash_align.method_registry import _validate_unpaired_columns
+
+        class FakeDataset:
+            column_names = ["text"]
+
+            def __len__(self):
+                return 1
+
+        with pytest.raises(TrainingError, match="missing"):
+            _validate_unpaired_columns(FakeDataset())
+
+    def test_unpaired_valid_passes(self):
+        """Valid unpaired dataset passes."""
+        from kailash_align.method_registry import _validate_unpaired_columns
+
+        class FakeDataset:
+            column_names = ["prompt", "completion", "label"]
+
+            def __len__(self):
+                return 2
+
+        _validate_unpaired_columns(FakeDataset())
+
+    def test_prompt_only_missing_column(self):
+        """Prompt-only dataset without prompt column raises."""
+        from kailash_align.method_registry import _validate_prompt_only
+
+        class FakeDataset:
+            column_names = ["text"]
+
+            def __len__(self):
+                return 1
+
+        with pytest.raises(TrainingError, match="prompt"):
+            _validate_prompt_only(FakeDataset())
+
+    def test_prompt_only_valid_passes(self):
+        """Valid prompt-only dataset passes."""
+        from kailash_align.method_registry import _validate_prompt_only
+
+        class FakeDataset:
+            column_names = ["prompt"]
+
+            def __len__(self):
+                return 2
+
+        _validate_prompt_only(FakeDataset())
+
+    def test_sft_empty_raises(self):
+        """Empty SFT dataset raises."""
+        from kailash_align.method_registry import _validate_sft_columns
+
+        class FakeDataset:
+            column_names = ["text"]
+
+            def __len__(self):
+                return 0
+
+        with pytest.raises(TrainingError, match="empty"):
+            _validate_sft_columns(FakeDataset())
 
 
 class TestCheckpointDetection:

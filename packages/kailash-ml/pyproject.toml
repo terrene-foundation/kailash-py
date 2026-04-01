@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-ml"
-version = "0.1.0"
+version = "0.2.0"
 description = "Machine learning lifecycle for the Kailash ecosystem"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -30,6 +30,7 @@ keywords = ["ml", "machine-learning", "kailash", "automl", "feature-store", "mod
 dependencies = [
     "kailash>=1.0",
     "kailash-dataflow>=1.0",
+    "kailash-nexus>=1.0",
     "kailash-ml-protocols>=0.1.0",
     "polars>=1.0",
     "numpy>=1.24",
@@ -84,6 +85,7 @@ dev = [
 
 [project.scripts]
 kailash-ml-gpu-setup = "kailash_ml._gpu_setup:main"
+kailash-ml-dashboard = "kailash_ml.dashboard:main"
 
 [project.urls]
 Documentation = "https://docs.terrene.foundation/kailash-ml"

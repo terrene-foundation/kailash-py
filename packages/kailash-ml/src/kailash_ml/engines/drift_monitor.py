@@ -9,11 +9,12 @@ are breached.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import numpy as np
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "DriftMonitor",
     "DriftReport",
+    "DriftSpec",
     "FeatureDriftResult",
     "PerformanceDegradationReport",
 ]
@@ -65,6 +67,17 @@ class FeatureDriftResult:
             "drift_type": self.drift_type,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> FeatureDriftResult:
+        return cls(
+            feature_name=data["feature_name"],
+            psi=data["psi"],
+            ks_statistic=data["ks_statistic"],
+            ks_pvalue=data["ks_pvalue"],
+            drift_detected=data["drift_detected"],
+            drift_type=data["drift_type"],
+        )
+
 
 @dataclass
 class DriftReport:
@@ -83,6 +96,33 @@ class DriftReport:
     def drifted_features(self) -> list[str]:
         return [f.feature_name for f in self.feature_results if f.drift_detected]
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "model_name": self.model_name,
+            "feature_results": [f.to_dict() for f in self.feature_results],
+            "overall_drift_detected": self.overall_drift_detected,
+            "overall_severity": self.overall_severity,
+            "checked_at": self.checked_at.isoformat(),
+            "reference_set_at": self.reference_set_at.isoformat(),
+            "sample_size_reference": self.sample_size_reference,
+            "sample_size_current": self.sample_size_current,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> DriftReport:
+        return cls(
+            model_name=data["model_name"],
+            feature_results=[
+                FeatureDriftResult.from_dict(f) for f in data["feature_results"]
+            ],
+            overall_drift_detected=data["overall_drift_detected"],
+            overall_severity=data["overall_severity"],
+            checked_at=datetime.fromisoformat(data["checked_at"]),
+            reference_set_at=datetime.fromisoformat(data["reference_set_at"]),
+            sample_size_reference=data["sample_size_reference"],
+            sample_size_current=data["sample_size_current"],
+        )
+
 
 @dataclass
 class PerformanceDegradationReport:
@@ -94,6 +134,67 @@ class PerformanceDegradationReport:
     degradation: dict[str, float]  # metric_name -> absolute change
     degraded: bool  # True if any metric degraded beyond threshold
     checked_at: datetime
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "model_name": self.model_name,
+            "baseline_metrics": dict(self.baseline_metrics),
+            "current_metrics": dict(self.current_metrics),
+            "degradation": dict(self.degradation),
+            "degraded": self.degraded,
+            "checked_at": self.checked_at.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> PerformanceDegradationReport:
+        return cls(
+            model_name=data["model_name"],
+            baseline_metrics=data["baseline_metrics"],
+            current_metrics=data["current_metrics"],
+            degradation=data["degradation"],
+            degraded=data["degraded"],
+            checked_at=datetime.fromisoformat(data["checked_at"]),
+        )
+
+
+@dataclass
+class DriftSpec:
+    """Specification for scheduled drift monitoring.
+
+    Parameters
+    ----------
+    feature_columns:
+        Feature columns to monitor. If None, uses those from the stored reference.
+    psi_threshold:
+        Override PSI threshold for this schedule. If None, uses monitor default.
+    ks_threshold:
+        Override KS threshold for this schedule. If None, uses monitor default.
+    on_drift_detected:
+        Optional async callback invoked when drift is detected.
+        Signature: ``async def handler(report: DriftReport) -> None``.
+    """
+
+    feature_columns: list[str] | None = None
+    psi_threshold: float | None = None
+    ks_threshold: float | None = None
+    on_drift_detected: Any = None  # async callable or None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "feature_columns": self.feature_columns,
+            "psi_threshold": self.psi_threshold,
+            "ks_threshold": self.ks_threshold,
+            "on_drift_detected": None,  # callable is not serializable
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> DriftSpec:
+        return cls(
+            feature_columns=data.get("feature_columns"),
+            psi_threshold=data.get("psi_threshold"),
+            ks_threshold=data.get("ks_threshold"),
+            # on_drift_detected is not restored from serialized form
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -282,13 +383,26 @@ class DriftMonitor:
         ks_threshold: float = 0.05,
         performance_threshold: float = 0.1,
     ) -> None:
+        import math
+
+        for name, val in [
+            ("psi_threshold", psi_threshold),
+            ("ks_threshold", ks_threshold),
+            ("performance_threshold", performance_threshold),
+        ]:
+            if not math.isfinite(val):
+                raise ValueError(f"{name} must be finite, got {val}")
+
         self._conn = conn
         self._psi_threshold = psi_threshold
         self._ks_threshold = ks_threshold
         self._performance_threshold = performance_threshold
         self._initialized = False
-        # In-memory reference cache
+        # In-memory reference cache (bounded to prevent OOM with many models)
         self._references: dict[str, _StoredReference] = {}
+        self._max_references = 100
+        # Scheduled monitoring tasks
+        self._scheduled_tasks: dict[str, asyncio.Task[None]] = {}
 
     async def _ensure_tables(self) -> None:
         if not self._initialized:
@@ -356,34 +470,42 @@ class DriftMonitor:
             set_at=now,
         )
         self._references[model_name] = ref
+        # Evict oldest references if over limit
+        while len(self._references) > self._max_references:
+            oldest_key = next(iter(self._references))
+            if oldest_key != model_name:
+                del self._references[oldest_key]
+            else:
+                break
 
-        # Persist to database
-        existing = await self._conn.fetchone(
-            "SELECT model_name FROM _kml_drift_references WHERE model_name = ?",
-            model_name,
-        )
-        if existing:
-            await self._conn.execute(
-                "UPDATE _kml_drift_references "
-                "SET feature_columns = ?, statistics = ?, sample_size = ?, set_at = ? "
-                "WHERE model_name = ?",
-                json.dumps(feature_columns),
-                json.dumps(statistics, default=str),
-                reference_data.height,
-                now.isoformat(),
+        # Persist to database (transaction eliminates TOCTOU race)
+        async with self._conn.transaction() as tx:
+            existing = await tx.fetchone(
+                "SELECT model_name FROM _kml_drift_references WHERE model_name = ?",
                 model_name,
             )
-        else:
-            await self._conn.execute(
-                "INSERT INTO _kml_drift_references "
-                "(model_name, feature_columns, statistics, sample_size, set_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                model_name,
-                json.dumps(feature_columns),
-                json.dumps(statistics, default=str),
-                reference_data.height,
-                now.isoformat(),
-            )
+            if existing:
+                await tx.execute(
+                    "UPDATE _kml_drift_references "
+                    "SET feature_columns = ?, statistics = ?, sample_size = ?, set_at = ? "
+                    "WHERE model_name = ?",
+                    json.dumps(feature_columns),
+                    json.dumps(statistics, default=str),
+                    reference_data.height,
+                    now.isoformat(),
+                    model_name,
+                )
+            else:
+                await tx.execute(
+                    "INSERT INTO _kml_drift_references "
+                    "(model_name, feature_columns, statistics, sample_size, set_at) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    model_name,
+                    json.dumps(feature_columns),
+                    json.dumps(statistics, default=str),
+                    reference_data.height,
+                    now.isoformat(),
+                )
 
         logger.info(
             "Set reference for '%s' (%d samples, %d features).",
@@ -554,13 +676,13 @@ class DriftMonitor:
                 skmetrics.accuracy_score(y_true, y_pred)
             )
         except Exception:
-            pass
+            logger.debug("Could not compute accuracy metric.", exc_info=True)
         try:
             current_metrics["f1"] = float(
                 skmetrics.f1_score(y_true, y_pred, average="weighted", zero_division=0)
             )
         except Exception:
-            pass
+            logger.debug("Could not compute f1 metric.", exc_info=True)
 
         # Load or use provided baseline
         if baseline_metrics is None:
@@ -608,6 +730,97 @@ class DriftMonitor:
         )
 
     # ------------------------------------------------------------------
+    # Scheduled monitoring
+    # ------------------------------------------------------------------
+
+    async def schedule_monitoring(
+        self,
+        model_name: str,
+        interval: timedelta,
+        data_fn: Any,  # async callable returning pl.DataFrame
+        spec: DriftSpec | None = None,
+    ) -> None:
+        """Schedule periodic drift monitoring as an asyncio background task.
+
+        Parameters
+        ----------
+        model_name:
+            Model identifier (must have a reference set).
+        interval:
+            How often to run drift checks.
+        data_fn:
+            Async callable that returns the current data as ``pl.DataFrame``.
+            Signature: ``async def get_data() -> pl.DataFrame``.
+        spec:
+            Optional drift check specification overrides.
+        """
+        if model_name not in self._references:
+            raise ValueError(
+                f"No reference set for model '{model_name}'. Call set_reference() first."
+            )
+        if interval.total_seconds() < 1:
+            raise ValueError("Monitoring interval must be at least 1 second.")
+
+        # Cancel existing schedule for this model
+        await self.cancel_monitoring(model_name)
+
+        spec = spec or DriftSpec()
+
+        async def _monitoring_loop() -> None:
+            while True:
+                await asyncio.sleep(interval.total_seconds())
+                try:
+                    current_data = await data_fn()
+                    report = await self.check_drift(model_name, current_data)
+                    if (
+                        report.overall_drift_detected
+                        and spec.on_drift_detected is not None
+                    ):
+                        await spec.on_drift_detected(report)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    logger.exception(
+                        "Scheduled drift check failed for '%s'.", model_name
+                    )
+
+        task = asyncio.create_task(
+            _monitoring_loop(), name=f"drift-monitor-{model_name}"
+        )
+        self._scheduled_tasks[model_name] = task
+        logger.info(
+            "Scheduled drift monitoring for '%s' every %s.",
+            model_name,
+            interval,
+        )
+
+    async def cancel_monitoring(self, model_name: str) -> bool:
+        """Cancel scheduled monitoring for a model.
+
+        Returns ``True`` if a task was cancelled, ``False`` if none was active.
+        """
+        task = self._scheduled_tasks.pop(model_name, None)
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            logger.info("Cancelled drift monitoring for '%s'.", model_name)
+            return True
+        return False
+
+    async def shutdown(self) -> None:
+        """Cancel all scheduled monitoring tasks."""
+        for model_name in list(self._scheduled_tasks):
+            await self.cancel_monitoring(model_name)
+
+    @property
+    def active_schedules(self) -> list[str]:
+        """Return model names with active monitoring schedules."""
+        return [name for name, task in self._scheduled_tasks.items() if not task.done()]
+
+    # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
 
@@ -637,25 +850,26 @@ class DriftMonitor:
         return json.loads(row["metrics"])
 
     async def _store_baseline(self, model_name: str, metrics: dict[str, float]) -> None:
-        """Store performance baseline."""
+        """Store performance baseline (transaction eliminates TOCTOU race)."""
         now_iso = datetime.now(timezone.utc).isoformat()
-        existing = await self._conn.fetchone(
-            "SELECT model_name FROM _kml_performance_baselines WHERE model_name = ?",
-            model_name,
-        )
-        if existing:
-            await self._conn.execute(
-                "UPDATE _kml_performance_baselines SET metrics = ?, set_at = ? "
-                "WHERE model_name = ?",
-                json.dumps(metrics),
-                now_iso,
+        async with self._conn.transaction() as tx:
+            existing = await tx.fetchone(
+                "SELECT model_name FROM _kml_performance_baselines WHERE model_name = ?",
                 model_name,
             )
-        else:
-            await self._conn.execute(
-                "INSERT INTO _kml_performance_baselines (model_name, metrics, set_at) "
-                "VALUES (?, ?, ?)",
-                model_name,
-                json.dumps(metrics),
-                now_iso,
-            )
+            if existing:
+                await tx.execute(
+                    "UPDATE _kml_performance_baselines SET metrics = ?, set_at = ? "
+                    "WHERE model_name = ?",
+                    json.dumps(metrics),
+                    now_iso,
+                    model_name,
+                )
+            else:
+                await tx.execute(
+                    "INSERT INTO _kml_performance_baselines (model_name, metrics, set_at) "
+                    "VALUES (?, ?, ?)",
+                    model_name,
+                    json.dumps(metrics),
+                    now_iso,
+                )

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-align"
-version = "0.1.0"
+version = "0.2.0"
 description = "LLM fine-tuning and alignment framework for the Kailash platform"
 readme = "README.md"
 license = "Apache-2.0"
@@ -33,6 +33,8 @@ dependencies = [
     "peft>=0.10,<1.0",
     "accelerate>=1.4,<2.0",
     "datasets>=3.0,<4.0",
+    "click>=8.0",
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]

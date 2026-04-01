@@ -20,7 +20,10 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from kailash.trust.pact.config import ConstraintEnvelopeConfig, FinancialConstraintConfig
+from kailash.trust.pact.config import (
+    ConstraintEnvelopeConfig,
+    FinancialConstraintConfig,
+)
 
 __all__ = [
     "CheckAccessRequest",
@@ -362,6 +365,22 @@ class SetEnvelopeRequest(BaseModel):
                         )
             # Validate remaining fields via the Pydantic model
             FinancialConstraintConfig(**fin)
+
+        # Validate operational rate limits are finite (P-H8/P-H9)
+        if "operational" in v and v["operational"] is not None:
+            ops = v["operational"]
+            _OPERATIONAL_NUMERIC_FIELDS = (
+                "max_actions_per_day",
+                "max_actions_per_hour",
+            )
+            for field_name in _OPERATIONAL_NUMERIC_FIELDS:
+                val = ops.get(field_name)
+                if val is not None and isinstance(val, (int, float)):
+                    if not math.isfinite(val):
+                        raise ValueError(
+                            f"constraints.operational.{field_name} must be finite, "
+                            f"got {val!r}. NaN/Inf values bypass rate limit checks."
+                        )
         return v
 
 

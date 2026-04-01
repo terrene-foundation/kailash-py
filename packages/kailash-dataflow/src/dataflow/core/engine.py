@@ -4349,25 +4349,37 @@ class DataFlow(DataFlowEventMixin):
                 config = getattr(model_cls, "__dataflow__", {})
                 custom_indexes = config.get("indexes", [])
 
+                from dataflow.query.models import validate_identifier
+
                 for index_config in custom_indexes:
-                    index_name = index_config.get(
-                        "name", f"idx_{table_name}_{index_config['fields'][0]}"
-                    )
                     fields = index_config.get("fields", [])
+                    if not fields:
+                        continue
+                    index_name = index_config.get(
+                        "name", f"idx_{table_name}_{fields[0]}"
+                    )
                     unique = index_config.get("unique", False)
 
-                    if fields:
-                        unique_keyword = "UNIQUE " if unique else ""
-                        fields_str = ", ".join(fields)
-                        sql = f"CREATE {unique_keyword}INDEX IF NOT EXISTS {index_name} ON {table_name} ({fields_str});"
-                        indexes.append(sql)
+                    # Validate all identifiers before interpolation (C1 fix)
+                    validate_identifier(index_name)
+                    for f in fields:
+                        validate_identifier(f)
+
+                    unique_keyword = "UNIQUE " if unique else ""
+                    fields_str = ", ".join(fields)
+                    sql = f"CREATE {unique_keyword}INDEX IF NOT EXISTS {index_name} ON {table_name} ({fields_str});"
+                    indexes.append(sql)
 
         # Add automatic indexes for foreign keys
+        from dataflow.query.models import validate_identifier as _validate_id
+
         relationships = self.get_relationships(model_name)
         for rel_name, rel_info in relationships.items():
             if rel_info.get("type") == "belongs_to" and rel_info.get("foreign_key"):
                 foreign_key = rel_info["foreign_key"]
+                _validate_id(foreign_key)
                 index_name = f"idx_{table_name}_{foreign_key}"
+                _validate_id(index_name)
                 sql = f"CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({foreign_key});"
                 indexes.append(sql)
 

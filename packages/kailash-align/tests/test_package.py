@@ -23,21 +23,32 @@ class TestVersion:
 class TestLazyImports:
     def test_import_does_not_load_torch(self):
         """Importing kailash_align should NOT load torch."""
-        # Unload kailash_align if loaded
-        mods_to_remove = [k for k in sys.modules if k.startswith("kailash_align")]
-        for mod in mods_to_remove:
-            del sys.modules[mod]
-
         # If torch was already loaded by another test, skip this test
         if "torch" in sys.modules:
             pytest.skip("torch already loaded by another test in this process")
 
-        import kailash_align  # noqa: F401
+        # Save and remove kailash_align modules to test fresh import
+        saved_modules = {
+            k: sys.modules[k]
+            for k in list(sys.modules)
+            if k.startswith("kailash_align")
+        }
+        for mod in saved_modules:
+            del sys.modules[mod]
 
-        # torch should NOT be in sys.modules from just importing kailash_align
-        assert (
-            "torch" not in sys.modules
-        ), "Importing kailash_align loaded torch -- lazy imports broken"
+        try:
+            import kailash_align  # noqa: F401
+
+            # torch should NOT be in sys.modules from just importing kailash_align
+            assert (
+                "torch" not in sys.modules
+            ), "Importing kailash_align loaded torch -- lazy imports broken"
+        finally:
+            # Restore original modules to prevent contamination
+            for mod in list(sys.modules):
+                if mod.startswith("kailash_align"):
+                    del sys.modules[mod]
+            sys.modules.update(saved_modules)
 
     def test_lazy_getattr_raises_for_unknown(self):
         import kailash_align
