@@ -4,6 +4,19 @@ node_modules/
 # Python
 __pycache__/
 
+# Editable install symlinks (pip install -e creates these)
+src/kailash/runtime.py
+src/kailash/dataflow
+src/kailash/enterprise
+src/kailash/infra
+src/kailash/kaizen
+src/kailash/mcp
+src/kailash/nexus
+src/kailash/pact
+src/kailash/py.typed
+src/kailash/trust_plane
+src/kailash/_kailash.cpython-*.so
+
 # Test artifacts (mock objects leaking to filesystem)
 <Mock *
 *.py[cod]
