@@ -128,6 +128,9 @@ class Nexus:
         enable_discovery: bool = False,
         rate_limit_config: Optional[Dict[str, Any]] = None,
         enable_durability: bool = True,  # Disable for testing to prevent caching issues
+        # Gateway configuration
+        server_type: str = "enterprise",  # "enterprise", "durable", "basic"
+        max_workers: Optional[int] = None,  # None = auto-detect
         # Preset System
         preset: Optional[str] = None,
         # CORS Configuration
@@ -154,6 +157,11 @@ class Nexus:
             enable_discovery: Enable MCP service discovery (default: False)
             rate_limit_config: Advanced rate limiting configuration (default: None)
             enable_durability: Enable durability/caching (default: True, set False for tests)
+            server_type: Gateway server type. "enterprise" (full features),
+                "durable" (checkpointing only), or "basic" (minimal). Override
+                via NEXUS_SERVER_TYPE env var.
+            max_workers: Maximum thread pool workers for the gateway. None = auto-detect
+                (min(4, cpu_count)). Override via NEXUS_MAX_WORKERS env var.
             cors_origins: Allowed origins for CORS. Defaults to ["*"] in development,
                 must be explicitly set in production.
             cors_allow_methods: Allowed HTTP methods. Defaults to ["*"].
@@ -179,6 +187,25 @@ class Nexus:
         self._enable_sse_transport = enable_sse_transport
         self._enable_discovery = enable_discovery
         self._enable_durability = enable_durability
+        self._server_type = os.getenv("NEXUS_SERVER_TYPE", server_type)
+        _valid_server_types = {"enterprise", "durable", "basic"}
+        if self._server_type not in _valid_server_types:
+            raise ValueError(
+                f"Invalid server_type '{self._server_type}'. "
+                f"Must be one of: {sorted(_valid_server_types)}"
+            )
+        if "NEXUS_MAX_WORKERS" in os.environ:
+            try:
+                self._max_workers = int(os.environ["NEXUS_MAX_WORKERS"])
+            except ValueError:
+                raise ValueError(
+                    f"NEXUS_MAX_WORKERS must be a positive integer, "
+                    f"got '{os.environ['NEXUS_MAX_WORKERS']}'"
+                )
+        else:
+            self._max_workers = max_workers
+        if self._max_workers is not None and self._max_workers < 1:
+            raise ValueError(f"max_workers must be >= 1, got {self._max_workers}")
         self.rate_limit_config = rate_limit_config or {}
         self.name = "nexus"  # Platform name for MCP server
 
@@ -296,7 +323,17 @@ class Nexus:
         )
         self._transports.append(self._http_transport)
 
-        # Create gateway eagerly (existing behavior — needed before start())
+        # Server-level shared runtime — MUST be created BEFORE gateway so the
+        # gateway can share it instead of creating its own pool (fixes #211).
+        if runtime is not None:
+            self.runtime = runtime.acquire()
+            self._owns_runtime = False
+        else:
+            self.runtime = AsyncLocalRuntime()
+            self._owns_runtime = True
+
+        # Create gateway eagerly (existing behavior — needed before start()).
+        # Gateway receives self.runtime to avoid creating a duplicate pool.
         self._initialize_gateway()
 
         # Apply preset if specified (after gateway, so middleware/plugins can be applied)
@@ -315,14 +352,6 @@ class Nexus:
 
         # Initialize revolutionary capabilities
         self._initialize_revolutionary_capabilities()
-
-        # Server-level shared runtime — eliminates per-request runtime creation (M3-001)
-        if runtime is not None:
-            self.runtime = runtime.acquire()
-            self._owns_runtime = False
-        else:
-            self.runtime = AsyncLocalRuntime()
-            self._owns_runtime = True
 
         # Initialize MCP server
         self._initialize_mcp_server()
@@ -447,16 +476,25 @@ class Nexus:
         cors_config = self._build_cors_config()
 
         try:
+            # Auto-detect max_workers if not explicitly set
+            max_workers = self._max_workers
+            if max_workers is None:
+                cpu_count = os.cpu_count() or 4
+                max_workers = min(4, cpu_count)
+
             # Create gateway using module-level create_gateway (patchable by tests)
+            # Pass self.runtime to share a single AsyncLocalRuntime (fixes #211
+            # dual-runtime bug where gateway created its own pool independently).
             gateway = create_gateway(
                 title="Kailash Nexus - Zero-Config Workflow Platform",
-                server_type="enterprise",
+                server_type=self._server_type,
                 enable_durability=self._enable_durability,
                 enable_resource_management=True,
                 enable_async_execution=True,
                 enable_health_checks=True,
                 cors_origins=None,  # Nexus handles CORS natively
-                max_workers=20,
+                max_workers=max_workers,
+                runtime=getattr(self, "runtime", None),
             )
             # Store in HTTPTransport
             self._http_transport._gateway = gateway

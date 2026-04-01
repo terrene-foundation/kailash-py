@@ -203,8 +203,8 @@ class TestMCPServerCreation:
         """Test that Nexus creates an MCP server (either enhanced or simple)."""
         from nexus.core import Nexus
 
-        # Create Nexus
-        app = Nexus(enable_auth=False)
+        # Create Nexus with HTTP transport (required for MCP server init)
+        app = Nexus(enable_auth=False, enable_http_transport=True)
 
         # Should have MCP server (either enhanced or simple)
         assert hasattr(app, "_mcp_server")

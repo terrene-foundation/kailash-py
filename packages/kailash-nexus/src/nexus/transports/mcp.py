@@ -39,10 +39,12 @@ class MCPTransport(Transport):
         port: int = 3001,
         namespace: str = "nexus",
         server_name: str = "kailash-nexus",
+        runtime=None,
     ):
         self._port = port
         self._namespace = namespace
         self._server_name = server_name
+        self._injected_runtime = runtime
         self._server = None  # FastMCP instance (lazy)
         self._thread: Optional[threading.Thread] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -162,11 +164,19 @@ class MCPTransport(Transport):
         logger.debug(f"MCP workflow tool registered: {tool_name}")
 
     def _get_shared_runtime(self):
-        """Return a shared AsyncLocalRuntime, creating once on first use."""
-        if not hasattr(self, "_shared_runtime") or self._shared_runtime is None:
-            from kailash.runtime import AsyncLocalRuntime
+        """Return a shared AsyncLocalRuntime, creating once on first use.
 
-            self._shared_runtime = AsyncLocalRuntime()
+        If an injected runtime was provided at construction, acquires from it
+        instead of creating a new pool (fixes orphan runtime per #211).
+        """
+        if not hasattr(self, "_shared_runtime") or self._shared_runtime is None:
+            injected = getattr(self, "_injected_runtime", None)
+            if injected is not None:
+                self._shared_runtime = injected.acquire()
+            else:
+                from kailash.runtime import AsyncLocalRuntime
+
+                self._shared_runtime = AsyncLocalRuntime()
         return self._shared_runtime
 
     def _run_in_thread(self) -> None:

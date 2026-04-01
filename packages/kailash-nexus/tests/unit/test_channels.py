@@ -111,13 +111,14 @@ class TestChannelConfiguration:
         # - CLI doesn't need server initialization
         from nexus import Nexus
 
-        # Creating Nexus automatically initializes channels via gateway
-        app = Nexus(enable_durability=False)
+        # Creating Nexus automatically initializes channels via gateway.
+        # MCP server requires enable_http_transport=True (default is False).
+        app = Nexus(enable_durability=False, enable_http_transport=True)
 
         # Verify gateway was created
         assert app._gateway is not None
 
-        # Verify MCP server was created
+        # Verify MCP server was created (requires enable_http_transport=True)
         assert app._mcp_server is not None
 
         # Channel status is tracked in channel registry
