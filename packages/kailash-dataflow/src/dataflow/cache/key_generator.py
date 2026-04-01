@@ -94,6 +94,50 @@ class CacheKeyGenerator:
         sql, params = builder.build_select()
         return self.generate_key(model_name, sql, params)
 
+    def generate_express_key(
+        self,
+        model_name: str,
+        operation: str,
+        params: Any = None,
+    ) -> str:
+        """Generate cache key for Express operations (no SQL).
+
+        Produces keys like ``dataflow:v1:User:list:a1b2c3d4`` where the
+        trailing segment is a short hash of the serialised *params*.
+
+        Args:
+            model_name: Name of the model (e.g. ``"User"``).
+            operation: Express operation name (``"read"``, ``"list"``, etc.).
+            params: Arbitrary JSON-serialisable parameters (optional).
+
+        Returns:
+            Deterministic cache key.
+
+        Raises:
+            ValueError: If *model_name* or *operation* is empty/None.
+        """
+        if not model_name:
+            raise ValueError("Model name is required")
+        if not operation:
+            raise ValueError("Operation is required")
+
+        parts: list[str] = [self.prefix, self.version]
+        if self.namespace:
+            parts.append(self.namespace)
+        parts.append(model_name)
+        parts.append(operation)
+
+        if params is not None:
+            param_str = json.dumps(params, sort_keys=True, default=str)
+            param_hash = hashlib.md5(param_str.encode()).hexdigest()[:8]
+            parts.append(param_hash)
+
+        return ":".join(parts)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
     def _hash_query(self, sql: str, params: List[Any]) -> str:
         """
         Create hash from query and parameters.

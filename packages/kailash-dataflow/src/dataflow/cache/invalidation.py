@@ -13,13 +13,37 @@ import asyncio
 import inspect
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Set,
+    Union,
+    runtime_checkable,
+)
 
 from dataflow.core.async_utils import async_safe_run  # Phase 6: Async-safe execution
 
 from .redis_manager import RedisCacheManager
 
 logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class CacheBackendProtocol(Protocol):
+    """Protocol for cache backends usable with ``CacheInvalidator``.
+
+    Both ``InMemoryCache`` and ``AsyncRedisCacheAdapter`` satisfy this
+    protocol without modification.
+    """
+
+    async def delete(self, key: str) -> int: ...
+    async def clear_pattern(self, pattern: str) -> int: ...
+    async def get(self, key: str) -> Any: ...
+    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool: ...
 
 
 @dataclass
@@ -44,13 +68,19 @@ class InvalidationPattern:
 class CacheInvalidator:
     """Manages cache invalidation patterns."""
 
-    def __init__(self, cache_manager: RedisCacheManager, enabled: bool = True):
+    def __init__(
+        self,
+        cache_manager: Union[RedisCacheManager, "CacheBackendProtocol", Any],
+        enabled: bool = True,
+    ):
         """
         Initialize cache invalidator.
 
         Args:
-            cache_manager: Redis cache manager instance
-            enabled: Whether cache invalidation is enabled (default True)
+            cache_manager: Cache backend — any object satisfying
+                ``CacheBackendProtocol`` (``InMemoryCache``,
+                ``AsyncRedisCacheAdapter``, ``RedisCacheManager``, etc.).
+            enabled: Whether cache invalidation is enabled (default True).
                      FIX: CACHE_INVALIDATION_BUG_REPORT.md - Added to skip invalidation
                      when caching is disabled.
         """

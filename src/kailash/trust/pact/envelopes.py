@@ -43,6 +43,7 @@ __all__ = [
     "EffectiveEnvelopeSnapshot",
     "MonotonicTighteningError",
     "RoleEnvelope",
+    "SignedEnvelope",
     "TaskEnvelope",
     "check_degenerate_envelope",
     "check_gradient_dereliction",
@@ -51,6 +52,7 @@ __all__ = [
     "compute_effective_envelope_with_version",
     "default_envelope_for_posture",
     "intersect_envelopes",
+    "sign_envelope",
 ]
 
 
@@ -1161,3 +1163,202 @@ def check_gradient_dereliction(
                 )
 
     return warnings
+
+
+# ---------------------------------------------------------------------------
+# Signed Envelope (Issue #207) -- Ed25519 signing for ConstraintEnvelopeConfig
+# ---------------------------------------------------------------------------
+
+_SIGNED_ENVELOPE_EXPIRY_DAYS: int = 90
+"""Default expiry for signed envelopes: 90 days."""
+
+
+@dataclass(frozen=True)
+class SignedEnvelope:
+    """A ConstraintEnvelopeConfig wrapped with an Ed25519 signature.
+
+    Provides cryptographic proof that a specific authority approved this
+    envelope configuration. The signature covers the canonical JSON
+    representation of the envelope, ensuring tamper detection.
+
+    frozen=True: immutable after creation (security invariant).
+
+    Attributes:
+        envelope: The ConstraintEnvelopeConfig being signed.
+        signature: Base64-encoded Ed25519 signature of the envelope's
+            canonical JSON representation.
+        signed_at: When the signature was created (UTC).
+        signed_by: Identifier of the signing authority (D/T/R address
+            or key ID).
+        expires_at: When this signed envelope expires (default: 90 days
+            after signed_at). After expiry, the signature is considered
+            invalid and the envelope must be re-signed.
+    """
+
+    envelope: ConstraintEnvelopeConfig
+    signature: str
+    signed_at: datetime
+    signed_by: str
+    expires_at: datetime
+
+    def verify(self, public_key: str) -> bool:
+        """Validate the signature and check expiry.
+
+        Uses Ed25519 verification via kailash.trust.signing.crypto.
+        Returns False (fail-closed) if:
+        - The signature does not match the envelope content
+        - The signed envelope has expired (past expires_at)
+        - Any unexpected error occurs
+
+        Args:
+            public_key: Base64-encoded Ed25519 public key.
+
+        Returns:
+            True if the signature is valid AND the envelope has not expired.
+            False otherwise.
+
+        Raises:
+            ImportError: If PyNaCl is not installed.
+        """
+        # Check expiry first (cheap check before crypto)
+        if datetime.now(UTC) > self.expires_at:
+            logger.warning(
+                "SignedEnvelope for '%s' has expired (expires_at=%s)",
+                self.signed_by,
+                self.expires_at.isoformat(),
+            )
+            return False
+
+        try:
+            from kailash.trust.signing.crypto import (
+                serialize_for_signing,
+                verify_signature,
+            )
+
+            payload = serialize_for_signing(self.envelope.model_dump(mode="json"))
+            return verify_signature(payload, self.signature, public_key)
+        except ImportError:
+            raise
+        except Exception:
+            logger.exception(
+                "SignedEnvelope verification failed for '%s' -- "
+                "fail-closed to False",
+                self.signed_by,
+            )
+            return False
+
+    def is_valid(self, public_key: str) -> bool:
+        """Non-throwing validity check.
+
+        Equivalent to verify() but catches ALL exceptions (including
+        ImportError) and returns False instead. Safe to call in
+        contexts where PyNaCl availability is uncertain.
+
+        Args:
+            public_key: Base64-encoded Ed25519 public key.
+
+        Returns:
+            True if signature is valid and envelope has not expired.
+            False on any error.
+        """
+        try:
+            return self.verify(public_key)
+        except Exception:
+            return False
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a dict suitable for JSON encoding.
+
+        Returns:
+            A dict with all fields. The envelope is serialized via
+            model_dump(mode='json'). Datetimes as ISO 8601.
+        """
+        return {
+            "envelope": self.envelope.model_dump(mode="json"),
+            "signature": self.signature,
+            "signed_at": self.signed_at.isoformat(),
+            "signed_by": self.signed_by,
+            "expires_at": self.expires_at.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SignedEnvelope:
+        """Deserialize from a dict.
+
+        Args:
+            data: Dict as produced by to_dict().
+
+        Returns:
+            A SignedEnvelope instance.
+
+        Raises:
+            KeyError: If required fields are missing.
+            ValueError: If field values are invalid.
+        """
+        envelope = ConstraintEnvelopeConfig(**data["envelope"])
+
+        signed_at_raw = data["signed_at"]
+        if isinstance(signed_at_raw, str):
+            signed_at = datetime.fromisoformat(signed_at_raw)
+        else:
+            signed_at = signed_at_raw
+
+        expires_at_raw = data["expires_at"]
+        if isinstance(expires_at_raw, str):
+            expires_at = datetime.fromisoformat(expires_at_raw)
+        else:
+            expires_at = expires_at_raw
+
+        return cls(
+            envelope=envelope,
+            signature=data["signature"],
+            signed_at=signed_at,
+            signed_by=data["signed_by"],
+            expires_at=expires_at,
+        )
+
+
+def sign_envelope(
+    envelope: ConstraintEnvelopeConfig,
+    private_key: str,
+    signed_by: str,
+    *,
+    expires_in_days: int = _SIGNED_ENVELOPE_EXPIRY_DAYS,
+) -> SignedEnvelope:
+    """Sign a ConstraintEnvelopeConfig with an Ed25519 private key.
+
+    Creates a SignedEnvelope wrapping the original envelope with a
+    cryptographic signature, signer identity, and expiry.
+
+    Args:
+        envelope: The ConstraintEnvelopeConfig to sign.
+        private_key: Base64-encoded Ed25519 private key.
+        signed_by: Identifier of the signing authority.
+        expires_in_days: Number of days until the signed envelope expires.
+            Defaults to 90 days.
+
+    Returns:
+        A SignedEnvelope with the signature and metadata.
+
+    Raises:
+        ImportError: If PyNaCl is not installed.
+        ValueError: If the private key is invalid or expires_in_days <= 0.
+    """
+    if expires_in_days <= 0:
+        raise ValueError(f"expires_in_days must be positive, got {expires_in_days}")
+
+    from datetime import timedelta
+
+    from kailash.trust.signing.crypto import serialize_for_signing, sign
+
+    now = datetime.now(UTC)
+    payload = serialize_for_signing(envelope.model_dump(mode="json"))
+    signature = sign(payload, private_key)
+
+    return SignedEnvelope(
+        envelope=envelope,
+        signature=signature,
+        signed_at=now,
+        signed_by=signed_by,
+        expires_at=now + timedelta(days=expires_in_days),
+    )

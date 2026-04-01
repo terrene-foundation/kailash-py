@@ -8,10 +8,10 @@ Pull the latest CO/COC artifacts from the upstream template and merge them into 
 
 ## Context
 
-This repo inherits its `.claude/` directory from a USE template (`kailash-coc-claude-py`). The template is updated when the kailash/ source runs `/sync`. This command pulls those updates into your repo.
+This repo inherits its `.claude/` directory from a USE template (`kailash-coc-claude-py`). The template is updated when the loom/ source runs `/sync`. This command pulls those updates into your repo.
 
 ```
-kailash/ (source) → kailash-coc-claude-py/ (USE template) → THIS REPO
+loom/ (source) → kailash-coc-claude-py/ (USE template) → THIS REPO
                                                               ↑ you are here
 ```
 
@@ -41,14 +41,32 @@ Check `.claude/.coc-sync-marker` for the template. If missing, auto-detect:
 Search paths (in order):
 
 1. `../{template}/` (sibling directory)
-2. `../../kailash/{template}/` (kailash parent)
+2. `../../loom/{template}/` (loom parent)
 3. Ask user for path
 
-### 3. Compare freshness
+### 3. Check SDK version compatibility
+
+Read this project's SDK version from `pyproject.toml` (look for `kailash` or `kailash-enterprise` in `[project.dependencies]` or `[tool.poetry.dependencies]`). Read the template's VERSION file for the `build_version` (the loom/ source version the template was synced from).
+
+Report both in the sync header:
+```
+Project SDK: kailash==2.0.0 (from pyproject.toml)
+Template COC: 1.0.0 (from template .claude/VERSION)
+```
+
+If the template artifacts were codified from a newer SDK version than the project uses, warn:
+```
+⚠ Template artifacts may reference SDK features newer than your installed version.
+  Consider upgrading: pip install --upgrade kailash
+```
+
+This is informational — sync proceeds regardless. The warning helps developers understand why some skill content may reference unfamiliar APIs.
+
+### 4. Compare freshness
 
 Compare `.coc-sync-marker` timestamps. If already fresh: "Already up to date."
 
-### 4. Pull and merge
+### 5. Pull and merge
 
 **Updated from template** (shared artifacts):
 
@@ -79,17 +97,17 @@ Compare `.coc-sync-marker` timestamps. If already fresh: "Already up to date."
 - `scripts/hooks/*.js` — updated
 - `scripts/hooks/lib/*.js` — updated
 
-### 5. Verify integrity
+### 6. Verify integrity
 
 - Every hook in `settings.json` has a corresponding script
 - Every `require("./lib/...")` has a matching lib file
 
-### 6. Update tracking
+### 7. Update tracking
 
 - Write `.claude/.coc-sync-marker` with timestamp and template source
 - If `.claude/VERSION` exists, update `upstream.version` to match the template's VERSION version (so future session-start checks report correctly)
 
-### 7. Report
+### 8. Report
 
 ```
 ## Sync Complete: kailash-coc-claude-py → this repo
@@ -107,12 +125,12 @@ Your artifacts are current with the template.
 If you created knowledge worth sharing (via `/codify`):
 
 1. `/codify` creates `.claude/.proposals/latest.yaml`
-2. Open kailash/ and run `/sync py`
+2. Open loom/ and run `/sync py`
 3. Human classifies each change (global vs variant)
 4. `/sync` distributes to USE templates
 5. Other projects pull via their `/sync`
 
-**Never** edit the template directly. All changes flow through kailash/.
+**Never** edit the template directly. All changes flow through loom/.
 
 ## When to Run
 

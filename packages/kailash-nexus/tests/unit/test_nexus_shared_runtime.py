@@ -87,19 +87,25 @@ class TestNexusMCPToolClosure:
     """Test that _register_workflow_as_mcp_tool uses self.runtime, not a new one."""
 
     def test_workflow_tool_closure_uses_shared_runtime(self):
-        """The closure created by _register_workflow_as_mcp_tool must use self.runtime."""
+        """The closure created by _register_workflow_as_mcp_tool must use self.runtime.
+
+        Note: In WebSocket-only mode (default), _mcp_server is None since the
+        old Nexus MCPServer was removed.  This test manually injects a mock
+        server to verify the closure wiring.
+        """
         from nexus import Nexus
 
         app = Nexus()
+
+        # In WebSocket-only mode, _mcp_server is None.
+        # Inject a mock to test the closure behaviour.
+        app._mcp_server = MagicMock()
+        app._mcp_server._tools = {}
 
         # Create a mock workflow
         mock_workflow = MagicMock()
         mock_workflow.nodes = {"test_node": MagicMock()}
         mock_workflow.metadata = None
-
-        # Ensure _mcp_server has _tools attribute
-        if not hasattr(app._mcp_server, "_tools"):
-            app._mcp_server._tools = {}
 
         app._register_workflow_as_mcp_tool("test_workflow", mock_workflow)
 
@@ -116,14 +122,14 @@ class TestNexusMCPToolClosure:
 
         app = Nexus()
 
+        # Inject mock server (WebSocket-only mode has no server by default)
+        app._mcp_server = MagicMock()
+        app._mcp_server._tools = {}
+
         # Create a mock workflow
         mock_workflow = MagicMock()
         mock_workflow.nodes = {"test_node": MagicMock()}
         mock_workflow.metadata = None
-
-        # Ensure _mcp_server has _tools
-        if not hasattr(app._mcp_server, "_tools"):
-            app._mcp_server._tools = {}
 
         app._register_workflow_as_mcp_tool("test_workflow", mock_workflow)
         tool_func = app._mcp_server._tools["test_workflow"]
@@ -143,188 +149,13 @@ class TestNexusMCPToolClosure:
         # Cleanup
         app.close()
 
+    # NOTE: TestMCPServerSharedRuntime was removed along with the old
+    # nexus.mcp.server.MCPServer class.  The shared runtime pattern is now
+    # tested through the unified kailash-platform MCP server in
+    # tests/unit/mcp/test_platform_server.py.
 
-class TestMCPServerSharedRuntime:
-    """Test that MCPServer accepts and uses a shared runtime."""
-
-    def test_mcp_server_accepts_runtime_parameter(self):
-        """MCPServer.__init__ accepts an optional runtime parameter."""
-        from kailash.runtime import AsyncLocalRuntime
-        from nexus.mcp.server import MCPServer
-
-        runtime = AsyncLocalRuntime()
-        server = MCPServer(runtime=runtime.acquire())
-
-        assert server.runtime is runtime
-        assert server._owns_runtime is False
-
-        # Cleanup
-        server.close()
-        runtime.close()
-
-    def test_mcp_server_creates_own_runtime_when_none_provided(self):
-        """MCPServer creates its own runtime when none is provided."""
-        from kailash.runtime import AsyncLocalRuntime
-        from nexus.mcp.server import MCPServer
-
-        server = MCPServer()
-        assert server.runtime is not None
-        assert isinstance(server.runtime, AsyncLocalRuntime)
-        assert server._owns_runtime is True
-
-        # Cleanup
-        server.close()
-
-    def test_mcp_server_close_releases_runtime(self):
-        """MCPServer.close() calls release() on the runtime."""
-        from kailash.runtime import AsyncLocalRuntime
-        from nexus.mcp.server import MCPServer
-
-        shared_runtime = AsyncLocalRuntime()
-
-        server = MCPServer(runtime=shared_runtime.acquire())
-        post_create = shared_runtime.ref_count
-
-        server.close()
-        assert shared_runtime.ref_count < post_create  # close reduced ref count
-
-        # Cleanup
-        shared_runtime.close()
-
-    @pytest.mark.asyncio
-    async def test_mcp_server_handle_call_tool_uses_shared_runtime(self):
-        """MCPServer.handle_call_tool uses self.runtime, not a new one."""
-        from kailash.runtime import AsyncLocalRuntime
-        from nexus.mcp.server import MCPServer
-
-        runtime = AsyncLocalRuntime()
-        server = MCPServer(runtime=runtime.acquire())
-
-        # Register a test workflow
-        mock_workflow = MagicMock()
-        mock_workflow.nodes = {"node1": MagicMock()}
-        server.register_workflow("test_wf", mock_workflow)
-
-        # Mock execute_workflow_async on the shared runtime to track calls
-        original_runtime = server.runtime
-        server.runtime.execute_workflow_async = AsyncMock(
-            return_value=({"node1": {"result": "data"}}, "run-456")
-        )
-
-        # Verify ref count stays stable (no new runtimes created)
-        ref_count_before = runtime.ref_count
-
-        result = await server.handle_call_tool(
-            {"name": "test_wf", "arguments": {"key": "value"}}
-        )
-
-        # The shared runtime's execute method was called (not a new runtime's)
-        original_runtime.execute_workflow_async.assert_called_once()
-        # Ref count unchanged — no new runtime was created
-        assert runtime.ref_count == ref_count_before
-
-        assert result["type"] == "result"
-
-        # Cleanup
-        server.close()
-        runtime.close()
-
-
-class TestMCPWebSocketServerSharedRuntime:
-    """Test that MCPWebSocketServer accepts and uses a shared runtime."""
-
-    def test_websocket_server_accepts_runtime_parameter(self):
-        """MCPWebSocketServer.__init__ accepts an optional runtime parameter."""
-        from kailash.runtime import AsyncLocalRuntime
-        from nexus.mcp_websocket_server import MCPWebSocketServer
-
-        runtime = AsyncLocalRuntime()
-        mcp_server = MagicMock()
-
-        ws_server = MCPWebSocketServer(mcp_server=mcp_server, runtime=runtime.acquire())
-
-        assert ws_server.runtime is runtime
-        assert ws_server._owns_runtime is False
-
-        # Cleanup
-        ws_server.close()
-        runtime.close()
-
-    def test_websocket_server_creates_own_runtime_when_none_provided(self):
-        """MCPWebSocketServer creates its own runtime when none is provided."""
-        from kailash.runtime import AsyncLocalRuntime
-        from nexus.mcp_websocket_server import MCPWebSocketServer
-
-        mcp_server = MagicMock()
-        ws_server = MCPWebSocketServer(mcp_server=mcp_server)
-
-        assert ws_server.runtime is not None
-        assert isinstance(ws_server.runtime, AsyncLocalRuntime)
-        assert ws_server._owns_runtime is True
-
-        # Cleanup
-        ws_server.close()
-
-    def test_websocket_server_close_releases_runtime(self):
-        """MCPWebSocketServer.close() releases the runtime reference."""
-        from kailash.runtime import AsyncLocalRuntime
-        from nexus.mcp_websocket_server import MCPWebSocketServer
-
-        shared_runtime = AsyncLocalRuntime()
-
-        mcp_server = MagicMock()
-        ws_server = MCPWebSocketServer(
-            mcp_server=mcp_server, runtime=shared_runtime.acquire()
-        )
-        post_create = shared_runtime.ref_count
-
-        ws_server.close()
-        assert shared_runtime.ref_count < post_create  # close reduced ref count
-
-        # Cleanup
-        shared_runtime.close()
-
-    @pytest.mark.asyncio
-    async def test_websocket_server_tools_call_uses_shared_runtime(self):
-        """MCPWebSocketServer.handle_mcp_request for tools/call uses self.runtime."""
-        from kailash.runtime import AsyncLocalRuntime
-        from nexus.mcp_websocket_server import MCPWebSocketServer
-
-        runtime = AsyncLocalRuntime()
-        mcp_server = MagicMock()
-        mcp_server._workflows = {"test_wf": MagicMock()}
-        mcp_server._workflows["test_wf"].nodes = {"node1": MagicMock()}
-        # Ensure _tools does not exist so it takes the _workflows path
-        del mcp_server._tools
-
-        ws_server = MCPWebSocketServer(mcp_server=mcp_server, runtime=runtime.acquire())
-
-        # Mock execute_workflow_async on the shared runtime to track calls
-        original_runtime = ws_server.runtime
-        ws_server.runtime.execute_workflow_async = AsyncMock(
-            return_value=({"node1": {"result": "data"}}, "run-789")
-        )
-
-        # Verify ref count stays stable (no new runtimes created)
-        ref_count_before = runtime.ref_count
-
-        result = await ws_server.handle_mcp_request(
-            "tools/call",
-            {"name": "test_wf", "arguments": {"key": "value"}},
-            request_id=1,
-        )
-
-        # The shared runtime's execute method was called (not a new runtime's)
-        original_runtime.execute_workflow_async.assert_called_once()
-        # Ref count unchanged — no new runtime was created
-        assert runtime.ref_count == ref_count_before
-
-        assert result["jsonrpc"] == "2.0"
-        assert "result" in result
-
-        # Cleanup
-        ws_server.close()
-        runtime.close()
+    # NOTE: TestMCPWebSocketServerSharedRuntime was removed along with the old
+    # nexus.mcp_websocket_server.MCPWebSocketServer class.
 
 
 class TestNexusRuntimeLifecycle:

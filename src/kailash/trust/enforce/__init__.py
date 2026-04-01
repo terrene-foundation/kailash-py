@@ -32,6 +32,11 @@ from kailash.trust.enforce.proximity import (
     ProximityScanner,
 )
 from kailash.trust.enforce.shadow import ShadowEnforcer, ShadowMetrics
+from kailash.trust.enforce.shadow_store import (
+    MemoryShadowStore,
+    ShadowStore,
+    SqliteShadowStore,
+)
 from kailash.trust.enforce.strict import (
     EATPBlockedError,
     EATPHeldError,
@@ -52,6 +57,10 @@ __all__ = [
     # Shadow enforcement
     "ShadowEnforcer",
     "ShadowMetrics",
+    # Shadow stores
+    "ShadowStore",
+    "MemoryShadowStore",
+    "SqliteShadowStore",
     # Challenge-response
     "ChallengeProtocol",
     "ChallengeRequest",

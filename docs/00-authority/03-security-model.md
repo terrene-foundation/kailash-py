@@ -33,7 +33,7 @@ plaintext = decrypt_record(ciphertext, key)
 - Random 96-bit nonce per encryption
 - Decryption failures raise `TrustDecryptionError`
 
-Install: `pip install kailash[trust-encryption]`
+Install: `pip install kailash` (included in base install)
 
 ## Role-Based Access Control (RBAC)
 
@@ -99,7 +99,7 @@ Supported providers: `okta`, `azure_ad`, `google`, `generic_oidc`.
 
 Default token expiry: 8 hours (configurable).
 
-Install: `pip install kailash[trust-sso]`
+Install: `pip install kailash` (included in base install)
 
 ## File Permissions
 

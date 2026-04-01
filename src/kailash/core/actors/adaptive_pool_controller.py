@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 try:
     import psutil
 except ImportError:
-    psutil = None  # Optional: pip install kailash[monitoring]
+    psutil = None  # Included in base install
 
 logger = logging.getLogger(__name__)
 
@@ -409,7 +409,7 @@ class ResourceMonitor:
     def __init__(self):
         if psutil is None:
             raise ImportError(
-                "psutil is required for ResourceMonitor. Install with: pip install kailash[monitoring]"
+                "psutil is required for ResourceMonitor. Install with: pip install kailash"
             )
         self.process = psutil.Process()
         self.last_check_time = datetime.min

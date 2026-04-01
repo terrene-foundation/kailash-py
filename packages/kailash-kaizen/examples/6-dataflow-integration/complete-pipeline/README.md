@@ -5,23 +5,27 @@ Complete demonstration of ALL integration features across Phases 1-4.
 ## Features Demonstrated
 
 ### Phase 1: Base Integration
+
 - ✅ DataFlow connection management
 - ✅ Connection pooling for multi-agent systems
 - ✅ Lazy initialization
 
 ### Phase 2: AI-Enhanced Database Operations
+
 - ✅ Natural language → SQL query generation
 - ✅ AI-driven data transformation
 - ✅ Automated data quality analysis
 - ✅ Query optimization
 
 ### Phase 3: Database-Driven AI Workflows
+
 - ✅ Model training from database tables
 - ✅ Real-time inference with database context
 - ✅ Prediction storage back to database
 - ✅ Automated pipeline orchestration
 
 ### Phase 4: Performance & Testing
+
 - ✅ Query result caching (LRU with TTL)
 - ✅ Batch operation optimization
 - ✅ Connection pooling metrics
@@ -31,9 +35,6 @@ Complete demonstration of ALL integration features across Phases 1-4.
 
 ```bash
 # Install Kaizen with DataFlow support
-pip install kailash[dataflow]
-
-# Or install separately
 pip install kailash kailash-dataflow
 ```
 
@@ -187,13 +188,13 @@ pipeline_result = orchestrator.create_pipeline(
 
 Based on Phase 4 optimizations:
 
-| Operation | Performance Target | Actual |
-|-----------|-------------------|--------|
-| NL → SQL Query | <500ms | ~300ms |
-| Cached Query | <5ms | ~2ms |
-| Batch Insert | >1000 rec/sec | ~2500 rec/sec |
-| Inference | <100ms | ~75ms |
-| Connection Pool Hit | N/A | 95%+ |
+| Operation           | Performance Target | Actual        |
+| ------------------- | ------------------ | ------------- |
+| NL → SQL Query      | <500ms             | ~300ms        |
+| Cached Query        | <5ms               | ~2ms          |
+| Batch Insert        | >1000 rec/sec      | ~2500 rec/sec |
+| Inference           | <100ms             | ~75ms         |
+| Connection Pool Hit | N/A                | 95%+          |
 
 ## Integration Architecture
 

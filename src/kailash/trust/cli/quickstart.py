@@ -406,7 +406,7 @@ async def run_quickstart(verbose: bool = False) -> None:
     )
     print(f"  {_WHITE}eatp status{_RESET}")
     print()
-    print(f"{_DIM}Docs: https://eatp.dev | pip install kailash[trust]{_RESET}")
+    print(f"{_DIM}Docs: https://eatp.dev | pip install kailash{_RESET}")
     print(_RESET)
 
 

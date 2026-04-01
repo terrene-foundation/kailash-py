@@ -62,13 +62,9 @@ docker run -d \
   postgres:16
 ```
 
-### Install the PostgreSQL Driver
-
-```bash
-pip install kailash[postgres]
-```
-
 ### Set the Database URL
+
+The PostgreSQL driver (asyncpg) is included in the base `pip install kailash`.
 
 ```bash
 export KAILASH_DATABASE_URL=postgresql://kailash:kailash@localhost:5432/kailash

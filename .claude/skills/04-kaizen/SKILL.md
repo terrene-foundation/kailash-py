@@ -255,6 +255,25 @@ For in-depth documentation, see `packages/kailash-kaizen/docs/`:
   - `PlanExecutor` with gradient rules (G1-G8)
   - 7 typed modifications with batch-atomic application
 
+### ML Integration (kailash-ml)
+
+- **[kaizen-ml-integration](kaizen-ml-integration.md)** - 9 ML engines (FeatureStore, ModelRegistry, TrainingPipeline, InferenceServer, DriftMonitor, HyperparameterSearch, AutoMLEngine, DataExplorer, FeatureEngineer)
+  - Quality tiers: P0 (5 engines), P1 (2 engines), P2 (2 @experimental engines)
+  - Polars-native data with 8 interop converters (sklearn, LightGBM, HuggingFace, pandas, Arrow)
+  - AutoMLEngine with 5 optional LLM guardrails via `AgentInfusionProtocol`
+  - DataFlow-backed FeatureStore with point-in-time queries (see also `skills/02-dataflow/dataflow-ml-integration.md`)
+
+### Alignment & Fine-Tuning (kailash-align)
+
+- **[kaizen-align-serving](kaizen-align-serving.md)** - LLM fine-tuning, evaluation, and serving pipeline
+  - `AdapterRegistry` (composition over ModelRegistry, LoRA/QLoRA lifecycle tracking)
+  - `AlignmentPipeline` (TRL wrapper: SFT then DPO chaining)
+  - `AlignmentEvaluator` (lm-eval-harness, `[eval]` optional extra)
+  - `AlignmentServing` (GGUF via llama-cpp-python, Ollama deploy, vLLM config, BYOG)
+  - `AdapterMerger` (PEFT merge_and_unload)
+  - `KaizenModelBridge` (create_delegate for Ollama/vLLM -- budget note: use max_turns not budget_usd for local models)
+  - `OnPremModelCache` (air-gap support, kailash-align-prepare CLI)
+
 ### v1.0 Developer Guides
 
 Located in the package source:

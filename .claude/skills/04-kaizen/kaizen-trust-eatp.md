@@ -2,7 +2,7 @@
 
 **Cryptographically verifiable trust chains for AI agents**, enabling enterprise-grade accountability, authorization, and secure multi-agent communication.
 
-> **Architecture Note**: As of v0.1.0, EATP is a standalone SDK (`pip install kailash[trust]`). Kaizen's `kaizen.trust` module is a **shim layer** that re-exports from the standalone package. Canonical code lives in the trust module. For standalone SDK documentation, see `skills/26-eatp-reference/`.
+> **Architecture Note**: EATP is included in the base install (`pip install kailash`). Kaizen's `kaizen.trust` module is a **shim layer** that re-exports from the standalone package. Canonical code lives in the trust module. For standalone SDK documentation, see `skills/26-eatp-reference/`.
 
 ## Overview
 

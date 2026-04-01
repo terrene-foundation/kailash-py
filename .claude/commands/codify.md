@@ -68,17 +68,20 @@ Validate that generated agents and skills are correct, complete, and secure. **c
 
 ### 7. Create upstream proposal (MANDATORY)
 
-After artifacts are updated and validated locally, create a proposal for upstream review at kailash/ (the source of truth). This step is NOT optional — codification is incomplete without upstream propagation.
+After artifacts are updated and validated locally, create a proposal for upstream review at loom/ (the source of truth). This step is NOT optional — codification is incomplete without upstream propagation.
 
-**DO NOT sync directly to COC template repos.** All distribution flows through kailash/ via `/sync`.
+**DO NOT sync directly to COC template repos.** All distribution flows through loom/ via `/sync`.
 
 1. Create `.claude/.proposals/` directory if it doesn't exist
-2. Generate `.claude/.proposals/latest.yaml` listing all artifact changes:
+2. Read the SDK version from `pyproject.toml` (py) or `Cargo.toml` (rs) and the COC artifact version from `.claude/VERSION`
+3. Generate `.claude/.proposals/latest.yaml` listing all artifact changes:
 
 ```yaml
 source_repo: kailash-py # or kailash-rs
 codify_date: YYYY-MM-DD
 codify_session: "type(scope): description of work"
+sdk_version: "2.2.1" # from pyproject.toml or Cargo.toml
+coc_version: "1.0.0" # from .claude/VERSION
 
 changes:
   - file: relative/path/to/artifact.md
@@ -100,7 +103,7 @@ status: pending_review
 
 > Artifacts updated locally and available in this repo. Proposal created at
 > `.claude/.proposals/latest.yaml` with {N} changes for upstream review.
-> When ready, open kailash/ and run `/sync {py|rs}` to classify and distribute.
+> When ready, open loom/ and run `/sync {py|rs}` to classify and distribute.
 
 See `rules/artifact-flow.md` for the full flow rules.
 
@@ -129,7 +132,7 @@ Deploy these agents as a team for codification:
 **Upstream proposal (step 7 — mandatory):**
 
 - Generate `.claude/.proposals/latest.yaml` with tier suggestions for each changed artifact
-- See `rules/artifact-flow.md` for the controlled flow: BUILD repo → kailash/ → templates
+- See `rules/artifact-flow.md` for the controlled flow: BUILD repo → loom/ → templates
 
 ### Journal
 

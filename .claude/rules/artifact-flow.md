@@ -10,25 +10,25 @@ These rules apply to ALL artifact creation, modification, and distribution opera
 
 Two sources of truth exist, each authoritative for their tier:
 
-- **co/** (`~/repos/co/`) — CC (Claude Code) and CO (Cognitive Orchestration) authority. Methodology, base rules, base commands, Claude Code guides.
-- **kailash/** — COC (Codegen) authority. SDK agents, framework specialists, variant system, codegen-specific rules.
+- **atelier/** (`~/repos/atelier/`) — CC (Claude Code) and CO (Cognitive Orchestration) authority. Methodology, base rules, base commands, Claude Code guides.
+- **loom/** — COC (Codegen) authority. SDK agents, framework specialists, variant system, codegen-specific rules.
 
-CC+CO artifacts flow: `co/ → kailash/` (via `/sync-to-coc`) → then kailash/ distributes to USE templates.
-COC artifacts flow: `BUILD repos → kailash/` (via proposals) → then kailash/ distributes to USE templates.
+CC+CO artifacts flow: `atelier/ → loom/` (via `/sync-to-coc`) → then loom/ distributes to USE templates.
+COC artifacts flow: `BUILD repos → loom/` (via proposals) → then loom/ distributes to USE templates.
 
 ```
 # DO:
-co/ edits CC/CO → /sync-to-coc → kailash/ → /sync → USE templates
-BUILD repos /codify → proposal → kailash/ → /sync → USE templates
+atelier/ edits CC/CO → /sync-to-coc → loom/ → /sync → USE templates
+BUILD repos /codify → proposal → loom/ → /sync → USE templates
 
 # DO NOT:
-kailash/ edits CC/CO independently (drifts from co/)
-BUILD repos sync directly to templates (bypasses kailash/)
+loom/ edits CC/CO independently (drifts from atelier/)
+BUILD repos sync directly to templates (bypasses loom/)
 ```
 
-**Why**: CC and CO are domain-agnostic — they serve research, finance, compliance, AND codegen. co/ ensures all domains share the same methodology. COC is codegen-specific — kailash/ is the authority for SDK patterns.
+**Why**: CC and CO are domain-agnostic — they serve research, finance, compliance, AND codegen. atelier/ ensures all domains share the same methodology. COC is codegen-specific — loom/ is the authority for SDK patterns.
 
-**How to apply**: For CC/CO changes, edit at co/ first. For COC changes, edit at kailash/ (via BUILD repo proposals).
+**How to apply**: For CC/CO changes, edit at atelier/ first. For COC changes, edit at loom/ (via BUILD repo proposals).
 
 ### 2. BUILD Repos Write Locally, Propose Upstream
 
@@ -41,7 +41,7 @@ When `/codify` creates or modifies artifacts in a BUILD repo (kailash-py, kailas
 ```
 # DO:
 /codify → writes to kailash-py/.claude/ + creates proposal
-/sync py (at kailash/) → reviews, classifies, distributes
+/sync py (at loom/) → reviews, classifies, distributes
 
 # DO NOT:
 /codify → writes to kailash-py/.claude/ → syncs to kailash-coc-claude-py/
@@ -51,13 +51,13 @@ When `/codify` creates or modifies artifacts in a BUILD repo (kailash-py, kailas
 
 ### 3. /sync Is the Only Outbound Path
 
-Only `/sync` executed at `kailash/` may write to COC template repos. No other command, agent, or manual process may modify template repo artifacts.
+Only `/sync` executed at `loom/` may write to COC template repos. No other command, agent, or manual process may modify template repo artifacts.
 
 **Why**: The /sync command reads `sync-manifest.yaml` and applies the variant overlay correctly. Manual copies produce inconsistent results.
 
 ### 4. Human Classifies Every Inbound Change
 
-When artifact changes from a BUILD repo are reviewed at kailash/, a human must classify each change as:
+When artifact changes from a BUILD repo are reviewed at loom/, a human must classify each change as:
 
 - **Global** → `.claude/{type}/{file}` (synced to all targets)
 - **Variant** → `.claude/variants/{lang}/{type}/{file}` (synced to one target)
@@ -87,7 +87,7 @@ During `/sync`, variants work as follows:
 
 ### 1. No Direct Cross-Repo Artifact Sync
 
-MUST NOT sync artifacts directly between BUILD repos (kailash-py ↔ kailash-rs) or between BUILD repos and templates (kailash-py → kailash-coc-claude-py). All paths go through kailash/.
+MUST NOT sync artifacts directly between BUILD repos (kailash-py ↔ kailash-rs) or between BUILD repos and templates (kailash-py → kailash-coc-claude-py). All paths go through loom/.
 
 ### 2. No Template Repo Editing
 
@@ -102,4 +102,4 @@ MUST NOT automatically place artifacts into global vs variant without human appr
 - `rules/cross-sdk-inspection.md` — Cross-SDK alignment (integrated into /sync review gate)
 - `rules/agents.md` — Agent orchestration rules
 
-Note: The variant architecture design docs (`guides/co-setup/05-variant-architecture.md`, `guides/co-setup/06-artifact-lifecycle.md`) and `sync-manifest.yaml` exist at kailash/ (source of truth) only — not in downstream repos.
+Note: The variant architecture design docs (`guides/co-setup/05-variant-architecture.md`, `guides/co-setup/06-artifact-lifecycle.md`) and `sync-manifest.yaml` exist at loom/ (source of truth) only — not in downstream repos.

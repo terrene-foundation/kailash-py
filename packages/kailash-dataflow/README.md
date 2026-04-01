@@ -62,8 +62,6 @@ workflow.add_node("UserUpdateNode", "update", {
 
 ```bash
 pip install kailash-dataflow
-# or
-pip install kailash[dataflow]
 ```
 
 ### Basic Usage

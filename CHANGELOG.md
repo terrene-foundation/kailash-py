@@ -15,14 +15,83 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
-### [Unreleased] — PACT Spec-Conformance
+### [2.4.0] - 2026-04-01
+
+**Minor Release** — kailash 2.4.0
 
 #### Added
 
-- **PACT write-time tightening for all 5 CARE dimensions** (#200): `validate_tightening()` now checks Temporal, Data Access, and Communication dimensions in addition to Financial, Confidentiality, Operational, and Delegation. Per-dimension gradient thresholds (`DimensionThresholds`, `GradientThresholdsConfig`) allow configurable auto-approve/flag/hold/block ranges. Gradient dereliction and pass-through envelope detection added.
-- **PACT auto-create vacant head roles** (#201): `compile_org()` auto-synthesizes vacant head roles for headless departments and teams per spec Section 4.2. Bridge bilateral consent protocol (`consent_bridge()`) and scope validation against endpoint envelopes added. Compliance role as alternative bridge approver.
-- **PACT vacancy interim envelope** (#202): Vacant roles within the configurable deadline window now operate under an interim envelope (intersection of own + parent's envelope) instead of being fully blocked. `vacancy_deadline_hours` parameter on `GovernanceEngine`.
-- **PACT EATP record emission** (#199): `GovernanceEngine` emits `GenesisRecord`, `DelegationRecord`, and `CapabilityAttestation` via the new `PactEatpEmitter` protocol (Section 5.7 normative mapping). `InMemoryPactEmitter` default implementation. Access denials include `barrier_enforced` audit flag.
+- **Unified MCP Platform Server**: Single FastMCP server consolidating 7 AST contributors (workflow, node, runtime, trust, PACT, test generation, execution). Security tier system (public/authenticated/admin) for tool access control. MCP resources for workflow listings and node catalogs.
+- **PACT write-time tightening for all 5 CARE dimensions** (#200): `validate_tightening()` now checks Temporal, Data Access, and Communication dimensions. Per-dimension gradient thresholds (`DimensionThresholds`, `GradientThresholdsConfig`) with configurable auto-approve/flag/hold/block ranges. Gradient dereliction and pass-through envelope detection.
+- **PACT auto-create vacant head roles** (#201): `compile_org()` auto-synthesizes vacant head roles for headless departments and teams per spec Section 4.2. Bridge bilateral consent protocol (`consent_bridge()`) and scope validation against endpoint envelopes.
+- **PACT vacancy interim envelope** (#202): Vacant roles within configurable deadline window operate under an interim envelope (intersection of own + parent's). `vacancy_deadline_hours` parameter on `GovernanceEngine`.
+- **PACT EATP record emission** (#199): `GovernanceEngine` emits `GenesisRecord`, `DelegationRecord`, and `CapabilityAttestation` via `PactEatpEmitter` protocol. `InMemoryPactEmitter` default implementation. Access denials include `barrier_enforced` audit flag.
+
+#### Security
+
+- 11 findings fixed (4 CRITICAL + 7 HIGH), 0 open CRITICAL/HIGH across all workspaces
+
+---
+
+### [kailash-dataflow 1.5.0] - 2026-04-01
+
+#### Added
+
+- **DerivedModel**: Computed models that auto-update when source models change. Declarative derivation rules with dependency tracking.
+- **FileSource node**: Import data from CSV, JSON, and Parquet files directly into DataFlow models with schema inference and validation.
+- **Validation DSL**: Declarative field validation rules (`required`, `min`/`max`, `pattern`, `unique`, custom validators) applied at model level before database writes.
+- **Express cache wiring**: Transparent caching layer for `db.express` reads with configurable TTL and invalidation on writes.
+- **ReadReplica support**: Route read queries to replica databases automatically. Configurable read/write splitting with lag-aware routing.
+- **Retention engine**: Time-based and count-based data retention policies. Automatic cleanup of expired records with configurable schedules.
+- **EventMixin**: `on_source_change` callback system for reactive data pipelines. Models can subscribe to changes in other models.
+
+---
+
+### [kailash-nexus 1.7.0] - 2026-04-01
+
+#### Added
+
+- **Transport ABC**: Abstract base class for pluggable transport implementations. Clean separation of protocol handling from business logic.
+- **HTTPTransport**: Production HTTP transport implementation replacing the monolithic gateway. Supports middleware, CORS, and streaming.
+- **MCPTransport**: Dedicated MCP transport with proper protocol handling, resource management, and tool dispatch.
+- **HandlerRegistry**: Centralized handler registration and dispatch. Type-safe handler resolution with middleware support.
+- **EventBus**: Internal event system for cross-component communication. Publish/subscribe pattern with typed events.
+- **BackgroundService**: Managed background task lifecycle with graceful shutdown, health monitoring, and restart policies.
+- **Phase 2 APIs**: File serving, bridge patterns, and extended handler capabilities for complex multi-channel workflows.
+
+#### Changed
+
+- Transport layer refactored from monolithic gateway to pluggable architecture. Existing APIs remain backward-compatible via `MIGRATION.md`.
+
+---
+
+### [kailash-ml 0.1.0] - 2026-04-01
+
+**Initial Release** — kailash-ml 0.1.0
+
+#### Added
+
+- **ML Protocol layer** (`kailash-ml-protocols`): Shared interfaces for model training, evaluation, feature engineering, and serving.
+- **9 ML engines**: FeatureStore, FeatureEngineer, ModelTrainer, ModelEvaluator, ModelRegistry, ExperimentTracker, DataVersioner, PipelineOrchestrator, ModelServer.
+- **8 interop converters**: Polars-native data handling with converters for pandas, NumPy, PyArrow, scikit-learn, XGBoost, LightGBM, CatBoost, and PyTorch.
+- **MLflow v1 compatibility**: Drop-in experiment tracking compatible with MLflow's logging API.
+- **ONNX bridge**: Export trained models to ONNX format for cross-framework inference.
+
+---
+
+### [kailash-align 0.1.0] - 2026-04-01
+
+**Initial Release** — kailash-align 0.1.0
+
+#### Added
+
+- **AdapterRegistry**: Pluggable adapter system for model fine-tuning backends (LoRA, QLoRA, full fine-tune).
+- **AlignmentConfig**: Unified configuration for SFT, DPO, and RLHF training pipelines.
+- **SFT/DPO pipeline**: Supervised fine-tuning and direct preference optimization with dataset validation and checkpoint management.
+- **Evaluator**: Model quality assessment with configurable metrics, benchmark suites, and regression detection.
+- **Serving (GGUF)**: Quantized model serving with GGUF format support for efficient on-device inference.
+- **Bridge**: Integration layer connecting kailash-ml training outputs to alignment workflows.
+- **OnPrem**: On-premises deployment utilities for air-gapped environments.
 
 ---
 

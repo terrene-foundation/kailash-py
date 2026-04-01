@@ -28,9 +28,9 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
 
-    - name: Install kailash trust
+    - name: Install kailash
       shell: bash
-      run: pip install "kailash[trust]"
+      run: pip install kailash
 
     - name: Check for trust-plane project
       id: check

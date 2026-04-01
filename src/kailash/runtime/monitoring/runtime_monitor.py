@@ -21,7 +21,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 try:
     import psutil
 except ImportError:
-    psutil = None  # Optional: pip install kailash[monitoring]
+    psutil = None  # Included in base install
 
 logger = logging.getLogger(__name__)
 

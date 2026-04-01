@@ -101,12 +101,12 @@ Workers dequeue tasks and execute workflows. The same `WorkflowBuilder` code fro
 
 **Database URLs** (`KAILASH_DATABASE_URL`):
 
-| Scheme              | Database   | Driver    | Install extra                   |
-| ------------------- | ---------- | --------- | ------------------------------- |
-| `postgresql://`     | PostgreSQL | asyncpg   | `pip install kailash[postgres]` |
-| `postgres://`       | PostgreSQL | asyncpg   | `pip install kailash[postgres]` |
-| `mysql://`          | MySQL      | aiomysql  | `pip install kailash[mysql]`    |
-| `sqlite:///path.db` | SQLite     | aiosqlite | `pip install kailash[database]` |
+| Scheme              | Database   | Driver    | Install               |
+| ------------------- | ---------- | --------- | --------------------- |
+| `postgresql://`     | PostgreSQL | asyncpg   | `pip install kailash` |
+| `postgres://`       | PostgreSQL | asyncpg   | `pip install kailash` |
+| `mysql://`          | MySQL      | aiomysql  | `pip install kailash` |
+| `sqlite:///path.db` | SQLite     | aiosqlite | `pip install kailash` |
 
 **Queue URLs** (`KAILASH_QUEUE_URL`):
 

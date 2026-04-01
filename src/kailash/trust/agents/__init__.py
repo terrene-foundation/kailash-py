@@ -35,9 +35,7 @@ _AGENT_NAMES = frozenset(
     }
 )
 
-_INSTALL_HINT = (
-    "Trust agent types require PyNaCl. " "Install with: pip install kailash[trust]"
-)
+_INSTALL_HINT = "Trust agent types require PyNaCl. " "Install with: pip install kailash"
 
 
 def __getattr__(name: str):

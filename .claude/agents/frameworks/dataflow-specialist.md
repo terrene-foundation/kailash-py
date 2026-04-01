@@ -50,10 +50,31 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 - "Troubleshooting?" -> [`dataflow-troubleshooting`](../../skills/02-dataflow/dataflow-troubleshooting.md)
 - "SQLite concurrency? Pool? WAL?" -> [`dataflow-sqlite-concurrency`](../../skills/02-dataflow/dataflow-sqlite-concurrency.md)
 
+### Enterprise Features
+
+- "Derived models? Materialized views?" -> [`dataflow-derived-models`](../../skills/02-dataflow/dataflow-derived-models.md)
+- "File import? CSV/Excel?" -> [`dataflow-file-import`](../../skills/02-dataflow/dataflow-file-import.md)
+- "Model validation? DSL?" -> [`dataflow-validation-dsl`](../../skills/02-dataflow/dataflow-validation-dsl.md)
+- "Express caching? TTL?" -> [`dataflow-express-cache`](../../skills/02-dataflow/dataflow-express-cache.md)
+- "Read replicas? Write/read splitting?" -> [`dataflow-read-replicas`](../../skills/02-dataflow/dataflow-read-replicas.md)
+- "Data retention? Archive/delete policies?" -> [`dataflow-retention`](../../skills/02-dataflow/dataflow-retention.md)
+- "Write events? Event bus?" -> [`dataflow-events`](../../skills/02-dataflow/dataflow-events.md)
+
 ### Integration
 
 - "With Nexus?" -> [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-integration.md)
 - "Migration guide?" -> [`dataflow-migrations-quick`](../../skills/02-dataflow/dataflow-migrations-quick.md)
+
+### Layer Preference (Engine-First)
+
+| Need                         | Layer     | API                                                       |
+| ---------------------------- | --------- | --------------------------------------------------------- |
+| Simple CRUD                  | Engine    | `db.express.create()`, `db.express.list()` (23x faster)   |
+| Enterprise features          | Engine    | `DataFlowEngine.builder()` with validation/classification |
+| Complex multi-step workflows | Primitive | `WorkflowBuilder` + generated nodes                       |
+| Custom transaction control   | Primitive | `TransactionScopeNode` + `WorkflowBuilder`                |
+
+**Default to `db.express`** for single-record operations. Use `WorkflowBuilder` only for multi-step workflows.
 
 ## Primary Responsibilities
 
@@ -196,6 +217,13 @@ workflow.add_node("UserUpdateNode", "update", {
 - **Multi-Operation Migrations**: Enterprise migration system supports atomic multi-operation batches
 - **Debug Persistence**: KnowledgeBase supports persistent SQLite storage (`KnowledgeBase(db_path="path.db")`)
 - **SQLite CARE Audit Storage**: Runtime monitoring data persisted to SQLite WAL-mode database (`~/.kailash/tracking/tracking.db`) with ACID guarantees. All frameworks use `enable_monitoring=True` by default, so DataFlow workflows automatically get CARE audit persistence via deferred in-memory tracking (~35us/node) + post-execution SQLite flush
+- **DerivedModelEngine**: Application-layer materialized views with `@db.derived_model`, scheduled/manual/on_source_change refresh, cycle detection
+- **FileSourceNode**: CSV/TSV/Excel/Parquet/JSON/JSONL ingestion + `db.express.import_file()` convenience method
+- **Declarative Validation**: `__validation__` dict on models with named validators (email, url, uuid, phone), length/range/pattern/one_of rules
+- **Express Cache**: Model-scoped caching via `CacheBackendProtocol` with automatic write-through invalidation
+- **Read Replicas**: `DataFlow(read_url="...")` with dual pool, `use_primary=True` for write-after-read consistency
+- **RetentionEngine**: Archive/delete/partition policies declared via `__dataflow__["retention"]`, dry_run support
+- **DataFlowEventMixin**: Core SDK EventBus integration, 8 WRITE_OPERATIONS, `db.on_model_change()` convenience
 
 ### Framework Positioning
 
@@ -229,15 +257,22 @@ DataFlow includes an 8-component enterprise migration system. See [`dataflow-ent
 
 ### Core Decision Matrix
 
-| Need                   | Use                                        |
-| ---------------------- | ------------------------------------------ |
-| Simple CRUD            | Basic nodes                                |
-| Bulk import            | BulkCreateNode                             |
-| Complex queries        | ListNode + MongoDB filters                 |
-| Aggregation (GROUP BY) | `dataflow.query.count_by/sum_by/aggregate` |
-| Existing database      | `auto_migrate=True` (auto-detects) |
-| Schema changes         | Enterprise migration system                |
-| Risk assessment        | RiskAssessmentEngine                       |
+| Need                   | Use                                             |
+| ---------------------- | ----------------------------------------------- |
+| Simple CRUD            | Basic nodes                                     |
+| Bulk import            | BulkCreateNode or `db.express.import_file()`    |
+| File ingestion         | FileSourceNode (CSV/Excel/Parquet/JSON)         |
+| Complex queries        | ListNode + MongoDB filters                      |
+| Aggregation (GROUP BY) | `dataflow.query.count_by/sum_by/aggregate`      |
+| Materialized views     | `@db.derived_model` + DerivedModelEngine        |
+| Model validation       | `__validation__` dict on models                 |
+| Express caching        | `cache_enabled=True` + CacheBackendProtocol     |
+| Read/write splitting   | `DataFlow(read_url="...")` + `use_primary=True` |
+| Data retention         | RetentionEngine (archive/delete/partition)      |
+| Write event handling   | `db.on_model_change()` + EventBus               |
+| Existing database      | `auto_migrate=True` (auto-detects)              |
+| Schema changes         | Enterprise migration system                     |
+| Risk assessment        | RiskAssessmentEngine                            |
 
 ## Key Rules
 
@@ -304,6 +339,13 @@ See: [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-inte
 | Express API              | [`dataflow-express`](../../skills/02-dataflow/dataflow-express.md)                             |
 | TDD Mode                 | [`dataflow-tdd-mode`](../../skills/02-dataflow/dataflow-tdd-mode.md)                           |
 | SQLite Concurrency       | [`dataflow-sqlite-concurrency`](../../skills/02-dataflow/dataflow-sqlite-concurrency.md)       |
+| Derived Models           | [`dataflow-derived-models`](../../skills/02-dataflow/dataflow-derived-models.md)               |
+| File Import              | [`dataflow-file-import`](../../skills/02-dataflow/dataflow-file-import.md)                     |
+| Validation DSL           | [`dataflow-validation-dsl`](../../skills/02-dataflow/dataflow-validation-dsl.md)               |
+| Express Cache            | [`dataflow-express-cache`](../../skills/02-dataflow/dataflow-express-cache.md)                 |
+| Read Replicas            | [`dataflow-read-replicas`](../../skills/02-dataflow/dataflow-read-replicas.md)                 |
+| Retention Policies       | [`dataflow-retention`](../../skills/02-dataflow/dataflow-retention.md)                         |
+| Write Events             | [`dataflow-events`](../../skills/02-dataflow/dataflow-events.md)                               |
 
 ## Related Agents
 

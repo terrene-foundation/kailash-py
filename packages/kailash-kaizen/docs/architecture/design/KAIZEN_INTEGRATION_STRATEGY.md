@@ -374,8 +374,8 @@ class LoadAwareAgent:
 ### 4.1 Unified Installation and Configuration
 
 ```python
-# Single installation for all frameworks with Kaizen
-pip install kailash[dataflow,nexus,kaizen]
+# Install all frameworks
+pip install kailash kailash-dataflow kailash-nexus kailash-kaizen
 
 # Unified configuration
 from kailash import configure
@@ -538,7 +538,7 @@ class ResourceManager:
 
 ### Developer Experience
 
-- [ ] Single `pip install kailash[kaizen]` for all features
+- [ ] Single `pip install kailash-kaizen` for all features
 - [ ] Consistent API patterns across all frameworks
 - [ ] Automatic migration tools with 90% accuracy
 - [ ] Clear upgrade paths for existing workflows

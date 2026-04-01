@@ -37,6 +37,7 @@ from .config import (
     MonitoringConfig,
     SecurityConfig,
 )
+from .events import DataFlowEventMixin
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 from .nodes import NodeGenerator
 from .schema_cache import create_schema_cache  # ADR-001: Schema cache integration
@@ -60,7 +61,7 @@ ErrorEnhancer = PlatformErrorEnhancer
 logger = logging.getLogger(__name__)
 
 
-class DataFlow:
+class DataFlow(DataFlowEventMixin):
     """Main DataFlow interface."""
 
     # ADR-017: Global test mode control
@@ -104,8 +105,12 @@ class DataFlow:
         enable_caching: Optional[
             bool
         ] = None,  # FIX: Alias for cache_enabled (bug report)
+        validate_on_write: bool = True,  # TSG-103: Validate on Express write ops
         log_level: Optional[int] = None,  # ADR-002: Centralized logging config
         log_config: Optional[LoggingConfig] = None,  # ADR-002: Full logging config
+        read_url: Optional[str] = None,  # TSG-105: Read replica URL
+        read_pool_size: Optional[int] = None,  # TSG-105: Separate pool size for reads
+        redis_url: Optional[str] = None,  # TSG-107: Redis URL for Express cache backend
         **kwargs,
     ):
         """Initialize DataFlow.
@@ -437,7 +442,47 @@ class DataFlow:
         self._bulk_operations = BulkOperations(self)
         self._transaction_manager = TransactionManager(self)
         self._connection_manager = ConnectionManager(self)
-        self._express_dataflow = ExpressDataFlow(self)
+
+        # TSG-105: Dual-adapter read replica support
+        self._read_url = read_url
+        self._read_pool_size = read_pool_size
+        self._read_connection_manager: Optional[ConnectionManager] = None
+        if read_url:
+            self._read_connection_manager = ConnectionManager(
+                self, url_override=read_url, pool_size_override=read_pool_size
+            )
+
+        # TSG-201: Initialize event bus for write-event emission
+        self._init_events()
+
+        # TSG-104: Wire cache configuration into Express
+        _express_cache_ttl = getattr(self.config, "cache_ttl", 300)
+        _express_cache_enabled = getattr(
+            self.config, "enable_query_cache", cache_enabled
+        )
+        # TSG-107: Explicit redis_url parameter takes precedence over config
+        _express_redis_url = redis_url or getattr(self.config, "cache_redis_url", None)
+        _express_cache_max_size = getattr(self.config, "cache_max_size", 1000)
+        self._express_dataflow = ExpressDataFlow(
+            self,
+            cache_enabled=_express_cache_enabled,
+            cache_max_size=_express_cache_max_size,
+            cache_ttl=_express_cache_ttl,
+            redis_url=_express_redis_url,
+        )
+
+        # TSG-103: Validation on write flag
+        self._validate_on_write = validate_on_write
+
+        # TSG-106: Retention engine
+        from ..features.retention import RetentionEngine
+
+        self._retention_engine = RetentionEngine(self)
+
+        # TSG-100: Derived model engine
+        from ..features.derived import DerivedModelEngine
+
+        self._derived_engine = DerivedModelEngine(self)
 
         # Initialize workflow binder
         from .workflow_binding import DataFlowWorkflowBinder
@@ -505,6 +550,35 @@ class DataFlow:
         # Track models that need table creation (deferred until _ensure_connected)
         self._pending_table_creations: list = []
 
+    # ------------------------------------------------------------------
+    # TSG-105: Read-replica connection routing
+    # ------------------------------------------------------------------
+
+    def _get_connection_manager(self, operation: str) -> ConnectionManager:
+        """Route to read or write connection manager based on *operation*.
+
+        When ``read_url`` was provided at construction time, read operations
+        (``list``, ``read``, ``count``, ``find_one``, ``search``) are routed
+        to the read-replica connection manager.  All other operations use the
+        primary (write) connection manager.
+
+        When no ``read_url`` was supplied, the primary connection manager is
+        always returned (single-adapter mode -- backward compatible).
+        """
+        if self._read_connection_manager is None:
+            return self._connection_manager  # single-adapter mode
+        if operation in ("list", "read", "count", "find_one", "search"):
+            return self._read_connection_manager
+        return self._connection_manager  # writes always go to primary
+
+    def _get_connection_manager_for_primary(self) -> ConnectionManager:
+        """Always return the primary connection manager.
+
+        Used by transactions and when ``use_primary=True`` is passed on
+        read methods.
+        """
+        return self._connection_manager
+
     def _ensure_connected(self) -> None:
         """Lazily initialize all DB-touching resources on first use.
 
@@ -567,6 +641,33 @@ class DataFlow:
                             "Pool startup validation failed (non-fatal)",
                             exc_info=True,
                         )
+
+                    # TSG-105: Validate read-replica pool when dual-adapter mode
+                    if self._read_connection_manager is not None:
+                        try:
+                            read_pool_size = (
+                                self._read_pool_size
+                                if self._read_pool_size is not None
+                                else resolved_pool_size
+                            )
+                            read_max_overflow = max(2, read_pool_size // 2)
+                            validate_pool_config(
+                                database_url=self._read_url,
+                                pool_size=read_pool_size,
+                                max_overflow=read_max_overflow,
+                            )
+                            total = resolved_pool_size + read_pool_size
+                            logger.debug(
+                                "TSG-105: Dual-adapter pool: primary=%d + read=%d = %d total",
+                                resolved_pool_size,
+                                read_pool_size,
+                                total,
+                            )
+                        except Exception:
+                            logger.debug(
+                                "Read pool startup validation failed (non-fatal)",
+                                exc_info=True,
+                            )
 
                 # PY-2/PY-5: Pool utilization monitor + leak detection
                 if self.config.monitoring.connection_metrics:
@@ -704,6 +805,12 @@ class DataFlow:
             # This enables @db.model to work in async contexts by deferring discover_schema()
             # until initialize() is called, which is always in a proper async context.
             await self._process_pending_relationship_detection()
+
+            # TSG-101: Validate derived model dependency graph and set up
+            # on_source_change event subscriptions.
+            if self._derived_engine._models:
+                self._derived_engine.validate_dependencies()
+                self._derived_engine.setup_event_subscriptions()
 
             logger.debug("DataFlow initialization completed successfully")
             return True
@@ -1103,6 +1210,43 @@ class DataFlow:
             "registered_at": datetime.now(),
         }
         cls._dataflow_config = getattr(cls, "__dataflow__", {})
+
+        # TSG-103: Parse __validation__ dict into __field_validators__
+        validation_dict = getattr(cls, "__validation__", None)
+        if validation_dict is not None:
+            from ..validation.dsl import apply_validation_dict
+
+            apply_validation_dict(cls, validation_dict)
+
+        # TSG-106: Register retention policy from __dataflow__["retention"]
+        if "retention" in config:
+            from ..features.retention import RetentionPolicy
+
+            ret_cfg = config["retention"]
+            cutoff_field = ret_cfg.get("cutoff_field")
+            if cutoff_field is None:
+                # Resolution order: created_at > updated_at > first datetime > error
+                for candidate in ("created_at", "updated_at"):
+                    if candidate in fields:
+                        cutoff_field = candidate
+                        break
+                if cutoff_field is None:
+                    for fname, finfo in fields.items():
+                        if finfo.get("type") is datetime:
+                            cutoff_field = fname
+                            break
+                if cutoff_field is None:
+                    cutoff_field = "created_at"  # Default; table likely has auto-field
+
+            policy = RetentionPolicy(
+                model_name=model_name,
+                table_name=table_name,
+                policy=ret_cfg.get("policy", "delete"),
+                after_days=ret_cfg.get("after_days", 365),
+                archive_table=ret_cfg.get("archive_table"),
+                cutoff_field=cutoff_field,
+            )
+            self._retention_engine.register(policy)
 
         # Add multi-tenant support if enabled
         if self.config.security.multi_tenant:
@@ -2362,6 +2506,174 @@ class DataFlow:
         if not hasattr(self, "_express_sync") or self._express_sync is None:
             self._express_sync = SyncExpress(self._express_dataflow)
         return self._express_sync
+
+    @property
+    def retention(self):
+        """Access the RetentionEngine for data retention policies.
+
+        Policies are registered automatically during ``@db.model``
+        decoration when ``__dataflow__["retention"]`` is present.
+
+        Example:
+            results = await db.retention.run()
+            results = await db.retention.run(dry_run=True)
+            status = db.retention.status()
+
+        Returns:
+            RetentionEngine
+        """
+        return self._retention_engine
+
+    # ------------------------------------------------------------------
+    # TSG-100: Derived models
+    # ------------------------------------------------------------------
+
+    def derived_model(
+        self,
+        sources: List[str],
+        refresh: str = "manual",
+        schedule: Optional[str] = None,
+        debounce_ms: float = 100.0,
+    ):
+        """Decorator to register a derived model with DataFlow.
+
+        The decorated class receives full ``@db.model`` treatment first
+        (table creation, 11 CRUD nodes), then is registered as a derived
+        model with the ``DerivedModelEngine``.
+
+        The class **must** define a ``compute`` static/class method:
+
+            @staticmethod
+            def compute(sources: Dict[str, List[Dict]]) -> List[Dict]:
+                ...
+
+        .. warning::
+
+            DerivedModel loads all source records into memory.  For tables
+            exceeding available RAM, use SQL materialized views directly.
+
+        Args:
+            sources: List of source model names (e.g., ``["Order", "LineItem"]``).
+            refresh: ``"scheduled"``, ``"manual"`` (default), or
+                ``"on_source_change"`` for automatic event-driven refresh.
+            schedule: Cron expression or interval string (e.g., ``"every 6h"``,
+                ``"0 */6 * * *"``).  Required when ``refresh="scheduled"``.
+            debounce_ms: Debounce window in milliseconds for
+                ``on_source_change`` mode (default 100ms).  Multiple writes
+                within this window are coalesced into a single recompute.
+
+        Example::
+
+            @db.derived_model(sources=["Order", "LineItem"], refresh="manual")
+            class OrderSummary:
+                id: str
+                order_count: int
+                total_revenue: float
+
+                @staticmethod
+                def compute(sources):
+                    orders = sources["Order"]
+                    return [{"id": "summary", "order_count": len(orders),
+                             "total_revenue": sum(o.get("amount", 0) for o in orders)}]
+        """
+        from ..features.derived import DerivedModelMeta
+
+        def decorator(cls: type) -> type:
+            # Apply @db.model first -- gives table, CRUD nodes, etc.
+            cls = self.model(cls)
+
+            # Validate compute method exists
+            compute_fn = getattr(cls, "compute", None)
+            if compute_fn is None or not callable(compute_fn):
+                raise TypeError(
+                    f"Derived model '{cls.__name__}' must define a callable "
+                    f"'compute(sources)' static method."
+                )
+
+            if refresh == "scheduled" and not schedule:
+                raise ValueError(
+                    f"Derived model '{cls.__name__}' with refresh='scheduled' "
+                    f"requires a 'schedule' parameter."
+                )
+
+            meta = DerivedModelMeta(
+                model_name=cls.__name__,
+                sources=list(sources),
+                refresh=refresh,
+                schedule=schedule,
+                compute_fn=compute_fn,
+                debounce_ms=debounce_ms,
+            )
+            self._derived_engine.register(meta)
+            return cls
+
+        return decorator
+
+    async def refresh_derived(self, model_name: str):
+        """Manually trigger a refresh for a derived model.
+
+        Args:
+            model_name: The name of the derived model to refresh.
+
+        Returns:
+            RefreshResult with upsert count and timing information.
+        """
+        return await self._derived_engine.refresh(model_name)
+
+    def refresh_derived_sync(self, model_name: str):
+        """Synchronous variant of :meth:`refresh_derived`.
+
+        Uses ``async_safe_run`` to bridge async/sync contexts safely.
+        """
+        from dataflow.core.async_utils import async_safe_run
+
+        return async_safe_run(self._derived_engine.refresh(model_name))
+
+    def derived_model_status(self) -> Dict[str, Any]:
+        """Return metadata for all registered derived models.
+
+        Returns:
+            ``{model_name: DerivedModelMeta}`` mapping.
+        """
+        return self._derived_engine.status()
+
+    async def validate(self, model_name: str, data: Dict[str, Any]):
+        """Validate data against a model's field validators.
+
+        Args:
+            model_name: Name of the registered model.
+            data: Dict of field values to validate.
+
+        Returns:
+            ValidationResult from ``dataflow.validation.result``.
+        """
+        from ..validation.decorators import validate_model as _validate_instance
+        from ..validation.result import ValidationResult
+
+        model_info = self._models.get(model_name)
+        if model_info is None:
+            raise ValueError(f"Model '{model_name}' is not registered")
+
+        model_cls = model_info["class"]
+        validators = getattr(model_cls, "__field_validators__", [])
+        if not validators:
+            return ValidationResult()
+
+        # Build a lightweight object with the data as attributes
+        class _Proxy:
+            pass
+
+        proxy = _Proxy()
+        for k, v in data.items():
+            setattr(proxy, k, v)
+        # Set the class-level validators so validate_model sees them
+        _Proxy.__field_validators__ = validators
+
+        return _validate_instance(proxy)
+
+    def validate_sync(self, model_name: str, data: Dict[str, Any]):
+        """Synchronous wrapper for :meth:`validate`."""
+        return async_safe_run(self.validate(model_name, data))
 
     @property
     def schema_state_manager(self):
@@ -6009,7 +6321,8 @@ class DataFlow:
 
         db_url = self.config.database.url
         masked_url = _re.sub(r"://[^@]+@", "://***:***@", db_url) if db_url else None
-        return {
+
+        result = {
             "status": "healthy" if connection_health else "unhealthy",
             "database": "connected" if connection_health else "disconnected",
             "database_url": masked_url,
@@ -6018,6 +6331,19 @@ class DataFlow:
             "monitoring_enabled": self.config._monitoring_config.enabled,
             "connection_healthy": connection_health,
         }
+
+        # TSG-105: Report read-replica health when dual-adapter mode is active
+        if self._read_connection_manager is not None:
+            result["read_replica"] = {
+                "url": (
+                    _re.sub(r"://[^@]+@", "://***:***@", self._read_url)
+                    if self._read_url
+                    else None
+                ),
+                "status": "connected",
+            }
+
+        return result
 
     def _check_database_connection(self) -> bool:
         """Check if database connection is working."""
@@ -7607,6 +7933,19 @@ class DataFlow:
                     health_status["components"]["pool"] = "ok"
             except Exception:
                 health_status["components"]["pool"] = "error"
+
+        # TSG-105: Report read-replica health when dual-adapter mode is active
+        if self._read_connection_manager is not None:
+            import re as _re
+
+            health_status["read_replica"] = {
+                "url": (
+                    _re.sub(r"://[^@]+@", "://***:***@", self._read_url)
+                    if self._read_url
+                    else None
+                ),
+                "status": "connected",
+            }
 
         return health_status
 

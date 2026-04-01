@@ -11,35 +11,65 @@ from ..adapters.connection_parser import ConnectionParser
 
 
 class ConnectionManager:
-    """Database connection management for DataFlow."""
+    """Database connection management for DataFlow.
 
-    def __init__(self, dataflow_instance):
+    Args:
+        dataflow_instance: The owning DataFlow instance.
+        url_override: When provided, overrides the DataFlow's database URL.
+            Used by TSG-105 to create a separate read-replica connection pool.
+        pool_size_override: When provided, overrides the configured pool size.
+            Used by TSG-105 for independent read-pool sizing.
+    """
+
+    def __init__(
+        self,
+        dataflow_instance,
+        url_override: Optional[str] = None,
+        pool_size_override: Optional[int] = None,
+    ):
         self.dataflow = dataflow_instance
+        self._url_override = url_override
+        self._pool_size_override = pool_size_override
         self._connection_pool = None
+
+        effective_pool_size = (
+            pool_size_override
+            if pool_size_override is not None
+            else dataflow_instance.config.database.get_pool_size(
+                dataflow_instance.config.environment
+            )
+        )
         self._connection_stats = {
             "active_connections": 0,
             "total_connections": 0,
-            "pool_size": dataflow_instance.config.database.get_pool_size(
-                dataflow_instance.config.environment
-            ),
+            "pool_size": effective_pool_size,
         }
 
     def initialize_pool(self) -> Dict[str, Any]:
         """Initialize the connection pool."""
         config = self.dataflow.config
 
-        # Parse database URL using safe parser
-        db_url = config.database.get_connection_url(config.environment)
+        # TSG-105: Use url_override when provided (read replica)
+        if self._url_override:
+            db_url = self._url_override
+        else:
+            db_url = config.database.get_connection_url(config.environment)
+
         if not isinstance(db_url, str):
             raise ValueError(
                 f"Expected database URL to be a string, got {type(db_url).__name__}: {db_url}"
             )
         parsed_components = ConnectionParser.parse_connection_string(db_url)
 
+        effective_pool_size = (
+            self._pool_size_override
+            if self._pool_size_override is not None
+            else config.database.get_pool_size(config.environment)
+        )
         pool_config = {
             "database_url": db_url,
-            "pool_size": config.database.get_pool_size(config.environment),
-            "max_overflow": config.database.get_max_overflow(config.environment),
+            "pool_size": effective_pool_size,
+            "max_overflow": max(2, effective_pool_size // 2),
             "pool_recycle": config.database.pool_recycle or 3600,
             "echo": config.database.echo or False,
         }

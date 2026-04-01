@@ -9,7 +9,7 @@ from typing import Any
 try:
     import psutil
 except ImportError:
-    psutil = None  # Optional: pip install kailash[monitoring]
+    psutil = None  # Included in base install
 
 from kailash.sdk_exceptions import WorkflowExecutionError
 

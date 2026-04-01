@@ -99,40 +99,16 @@ class TestEnhancedMCPServerCreation:
         call_args = mock_server.call_args[1]
         assert call_args["enable_discovery"] is True
 
-    def test_system_resource_registration(self):
-        """Test that system information resource is registered in WebSocket-only mode."""
+    def test_websocket_only_mode_no_mcp_server(self):
+        """In WebSocket-only mode, MCP server is not started (use kailash-mcp instead)."""
         from nexus.core import Nexus
 
-        # Mock the simple MCP server's _resources dict
-        with patch("nexus.mcp.MCPServer") as mock_simple_server:
-            mock_server_instance = Mock()
-            mock_server_instance._resources = {}  # Simple server uses dict for resources
-            mock_simple_server.return_value = mock_server_instance
+        # Create Nexus in WebSocket-only mode (default: no HTTP transport)
+        app = Nexus()
 
-            # Create Nexus in WebSocket-only mode (default)
-            app = Nexus()
-
-            # Should register system resource in simple server
-            assert "system://nexus/info" in mock_server_instance._resources
-
-            # Test the resource handler
-            import asyncio
-
-            handler = mock_server_instance._resources["system://nexus/info"]
-
-            # Mock workflow list
-            app._workflows = {"test": Mock()}
-
-            # Call handler
-            result = asyncio.run(handler("system://nexus/info"))
-
-            assert result["mimeType"] == "application/json"
-
-            # Parse content
-            content = json.loads(result["content"])
-            assert content["platform"] == "Kailash Nexus"
-            assert content["version"] == "1.0.0"
-            assert "test" in content["workflows"]
+        # With the old MCPServer removed, WebSocket-only mode has no MCP server
+        assert app._mcp_server is None
+        assert app._mcp_channel is None
 
 
 class TestMCPChannelIntegration:
@@ -189,24 +165,17 @@ class TestMCPChannelIntegration:
             "test_workflow", workflow
         )
 
-    def test_fallback_to_simple_server(self):
-        """Test fallback to simple server when Core SDK not available with HTTP transport."""
+    def test_fallback_when_core_sdk_unavailable(self):
+        """Test graceful fallback when Core SDK MCP server is not available."""
         from nexus.core import Nexus
 
         # Mock import error for Core SDK when HTTP transport is enabled
         with patch("nexus.core.Nexus._create_sdk_mcp_server", side_effect=ImportError):
-            with patch("nexus.mcp.MCPServer") as mock_simple_server:
-                mock_server_instance = Mock()
-                mock_server_instance._resources = {}  # Mock resources dict
-                mock_simple_server.return_value = mock_server_instance
+            app = Nexus(enable_http_transport=True)
 
-                # Should still create Nexus with simple server (fallback from HTTP mode)
-                app = Nexus(enable_http_transport=True)
-
-                # Should have simple server
-                assert hasattr(app, "_mcp_server")
-                assert app._mcp_channel is None
-                mock_simple_server.assert_called_once()
+            # Without the old simple MCPServer fallback, both should be None
+            assert app._mcp_server is None
+            assert app._mcp_channel is None
 
 
 class TestAPIKeyManagement:
@@ -298,46 +267,25 @@ class TestMCPServerLifecycle:
 
     @patch("asyncio.set_event_loop")
     @patch("asyncio.new_event_loop")
-    def test_run_mcp_server_fallback(self, mock_new_loop, mock_set_loop):
-        """Test running simple MCP server with WebSocket wrapper in WebSocket-only mode."""
+    def test_run_mcp_server_no_server(self, mock_new_loop, mock_set_loop):
+        """Test running MCP server when no server is configured (WebSocket-only mode).
+
+        Since the old Nexus MCPServer was removed, WebSocket-only mode
+        no longer starts an MCP server.  _run_mcp_server should return
+        gracefully.
+        """
         from nexus.core import Nexus
 
-        # Mock event loop
         mock_loop = Mock()
         mock_new_loop.return_value = mock_loop
 
-        # Create Nexus in WebSocket-only mode (no channel)
-        with patch("nexus.mcp.MCPServer") as mock_simple_server:
-            mock_server_instance = Mock()
-            mock_server_instance._resources = {}
-            mock_simple_server.return_value = mock_server_instance
+        app = Nexus()
+        # Simulate no MCP server configured (WebSocket-only mode after cleanup)
+        app._mcp_server = None
+        app._mcp_channel = None
 
-            app = Nexus()  # WebSocket-only by default
-
-        # Verify no channel was created
-        assert app._mcp_channel is None
-        assert app._mcp_server is not None
-
-        # Mock WebSocket server wrapper
-        with patch("nexus.mcp_websocket_server.MCPWebSocketServer") as mock_ws_server:
-            mock_ws_instance = Mock()
-            mock_ws_server.return_value = mock_ws_instance
-            mock_loop.create_task = Mock()
-
-            # Run server
-            try:
-                app._run_mcp_server()
-            except Exception:
-                pass  # Expected due to mocking
-
-        # Should create new loop and set it
-        mock_new_loop.assert_called_once()
-        mock_set_loop.assert_called_once_with(mock_loop)
-
-        # Should create WebSocket wrapper (not call run() directly)
-        mock_ws_server.assert_called_once_with(
-            app._mcp_server, host="0.0.0.0", port=app._mcp_port
-        )
+        # Should not raise
+        app._run_mcp_server()
 
     def test_stop_mcp_channel(self):
         """Test stopping MCP channel."""
@@ -392,23 +340,16 @@ class TestErrorHandling:
         """Test handling of MCP server creation errors with HTTP transport enabled."""
         from nexus.core import Nexus
 
-        # Test fallback when SDK MCP server creation fails with HTTP transport enabled
+        # When SDK MCP server creation fails, Nexus sets _mcp_server to None
         with patch(
             "kailash.mcp_server.MCPServer",
             side_effect=ImportError("Server creation failed"),
         ):
-            with patch("nexus.mcp.MCPServer") as mock_simple_server:
-                mock_server_instance = Mock()
-                mock_server_instance._resources = {}  # Mock resources dict for simple server
-                mock_simple_server.return_value = mock_server_instance
+            app = Nexus(enable_http_transport=True)
 
-                # Should handle error gracefully and fall back to simple server
-                app = Nexus(enable_http_transport=True)
-
-                # Should fall back to simple server
-                assert hasattr(app, "_mcp_server")
-                assert app._mcp_channel is None
-                mock_simple_server.assert_called_once()
+            # Should handle error gracefully -- no MCP server
+            assert app._mcp_server is None
+            assert app._mcp_channel is None
 
     @patch("kailash.mcp_server.MCPServer", side_effect=ImportError)
     def test_workflow_registration_without_mcp(self, mock_server):

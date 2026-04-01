@@ -10,6 +10,10 @@ How to apply, adapt, and maintain the Cognitive Orchestration (CO) setup across 
 | [02 - Project Types](02-project-types.md)             | Coding, governance, education, and other archetypes — what to include/exclude for each |
 | [03 - Creating Components](03-creating-components.md) | How to create agents, skills, rules, commands, and hooks for any domain                |
 | [04 - Propagation](04-propagation.md)                 | How to apply updates across repositories                                               |
+| [05 - Variant Architecture](05-variant-architecture.md) | Single source + language-specific overlays (py/rs)                                   |
+| [06 - Artifact Lifecycle](06-artifact-lifecycle.md)   | From issue to institutional knowledge — the complete flow                              |
+| [07 - Sync Flow](07-sync-flow.md)                     | Merge semantics, adaptation rules, conflict resolution                                 |
+| [08 - Versioning](08-versioning.md)                   | Version tracking, update detection, bootstrap for existing repos                       |
 
 ## Quick Start
 

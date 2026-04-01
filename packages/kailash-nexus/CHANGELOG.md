@@ -1,5 +1,31 @@
 # Nexus Changelog
 
+## [1.7.0] - 2026-04-01
+
+### Added
+
+- **Transport ABC**: Abstract base class for pluggable transport implementations. Clean separation of protocol handling from business logic.
+- **HTTPTransport**: Production HTTP transport replacing the monolithic gateway. Supports middleware, CORS, and streaming.
+- **MCPTransport**: Dedicated MCP transport with proper protocol handling, resource management, and tool dispatch.
+- **HandlerRegistry**: Centralized handler registration and dispatch. Type-safe handler resolution with middleware support.
+- **EventBus**: Internal event system for cross-component communication. Publish/subscribe with typed events.
+- **BackgroundService**: Managed background task lifecycle with graceful shutdown, health monitoring, and restart policies.
+- **Phase 2 APIs**: File serving, bridge patterns, and extended handler capabilities.
+
+### Changed
+
+- Transport layer refactored from monolithic gateway to pluggable architecture. Existing APIs remain backward-compatible.
+
+### Test Results
+
+- 1,153 tests passed, 0 failures
+
+## [1.6.1] - 2026-03-31
+
+### Fixed
+
+- `__del__` finalizer safety for 3 Nexus classes.
+
 ## [1.4.1] - 2026-02-22
 
 ### V4 Audit Hardening Patch

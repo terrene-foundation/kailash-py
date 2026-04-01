@@ -26,10 +26,15 @@ classifiers = [
 readme = "README.md"
 keywords = ["governance", "pact", "agent", "trust", "D/T/R", "envelopes", "clearance", "EATP", "AI"]
 dependencies = [
-    "kailash[pact]>=2.2.0",
+    "kailash>=2.2.0",
     "click>=8.0",
     "fastapi>=0.109",
     "slowapi>=0.1.9",
+    # Kaizen integration
+    "kailash-kaizen>=2.0.0",
+    # PostgreSQL
+    "psycopg[binary]>=3.0",
+    "psycopg_pool>=3.0",
 ]
 
 [project.urls]
@@ -46,16 +51,6 @@ dev = [
     "httpx>=0.27",
     "mypy>=1.8",
     "ruff>=0.3",
-]
-kaizen = [
-    "kailash-kaizen>=2.0.0",
-]
-postgres = [
-    "psycopg[binary]>=3.0",
-    "psycopg_pool>=3.0",
-]
-all = [
-    "kailash-pact[kaizen,postgres]",
 ]
 
 [project.scripts]

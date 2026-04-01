@@ -1,11 +1,19 @@
-"""MCP (Model Context Protocol) server integration for Nexus."""
+"""MCP (Model Context Protocol) integration for Nexus.
 
-from .server import MCPServer, SimpleMCPClient
-from .transport import WebSocketClientTransport, WebSocketServerTransport
+.. deprecated::
+    The Nexus-specific MCP server (``MCPServer``, ``SimpleMCPClient``,
+    ``WebSocketServerTransport``, ``WebSocketClientTransport``) has been
+    replaced by the unified ``kailash-platform`` MCP server at
+    ``kailash.mcp.platform_server``.  These classes have been removed.
 
-__all__ = [
-    "MCPServer",
-    "SimpleMCPClient",
-    "WebSocketServerTransport",
-    "WebSocketClientTransport",
-]
+    To start the new platform server::
+
+        kailash-mcp --project-root .
+
+    Or in Python::
+
+        from kailash.mcp.platform_server import create_platform_server
+        server = create_platform_server()
+"""
+
+__all__: list[str] = []

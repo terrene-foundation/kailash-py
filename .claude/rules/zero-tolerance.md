@@ -47,7 +47,7 @@ When you encounter a bug in the SDK:
 
 **DO NOT work around it. DO NOT re-implement it naively.**
 
-**This is a BUILD repo.** You have the source. Fix it directly in the affected package. Do NOT file GitHub issues for your own repo — use the internal todo system.
+File a GitHub issue on the SDK repository (`terrene-foundation/kailash-py`) with a minimal reproduction. Use a supported alternative pattern if one exists.
 
 **BLOCKED:** Naive re-implementations, post-processing to "fix" SDK output, downgrading to avoid bugs.
 

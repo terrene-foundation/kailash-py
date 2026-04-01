@@ -9,11 +9,13 @@ These scenarios demonstrate Kaizen's developer experience across different user 
 ## 🎯 Scenarios
 
 ### 1. Beginner - Simple Q&A Bot
+
 **File**: `01-beginner-simple-qa-bot.py`
 
 **User Profile**: Just learning AI agents, no prior experience
 
 **What it demonstrates**:
+
 - ✅ Minimal code (< 20 lines of logic)
 - ✅ Zero-config complexity
 - ✅ Immediate results
@@ -28,11 +30,13 @@ python user-scenarios/01-beginner-simple-qa-bot.py
 ---
 
 ### 2. Data Analyst - CSV Data Analysis
+
 **File**: `02-data-analyst-csv-analysis.py`
 
 **User Profile**: Data analyst working with datasets
 
 **What it demonstrates**:
+
 - ✅ Data integration with pandas
 - ✅ Multiple analysis tasks
 - ✅ Structured output
@@ -47,11 +51,13 @@ python user-scenarios/02-data-analyst-csv-analysis.py
 ---
 
 ### 3. Product Manager - Customer Feedback Analysis
+
 **File**: `03-product-manager-feedback-analysis.py`
 
 **User Profile**: Product manager collecting user feedback
 
 **What it demonstrates**:
+
 - ✅ Memory persistence across sessions
 - ✅ Batch processing of feedback
 - ✅ Sentiment analysis
@@ -66,11 +72,13 @@ python user-scenarios/03-product-manager-feedback-analysis.py
 ---
 
 ### 4. DevOps - Log Analysis with Memory
+
 **File**: `04-devops-log-analysis-memory.py`
 
 **User Profile**: DevOps engineer monitoring application logs
 
 **What it demonstrates**:
+
 - ✅ Log parsing and pattern detection
 - ✅ Memory continuity across interactions
 - ✅ Multi-phase analysis workflow
@@ -85,11 +93,13 @@ python user-scenarios/04-devops-log-analysis-memory.py
 ---
 
 ### 5. Content Creator - Multi-Modal Content
+
 **File**: `05-content-creator-multimodal.py`
 
 **User Profile**: Content creator working with images and videos
 
 **What it demonstrates**:
+
 - ✅ Vision agent for image analysis
 - ✅ Multi-modal workflow (vision + text)
 - ✅ Content generation pipeline
@@ -106,11 +116,13 @@ python user-scenarios/05-content-creator-multimodal.py
 ---
 
 ### 6. ML Engineer - Multi-Agent Research System
+
 **File**: `06-ml-engineer-multiagent-research.py`
 
 **User Profile**: ML engineer researching new techniques
 
 **What it demonstrates**:
+
 - ✅ Multiple specialized agents coordination
 - ✅ Research → Analysis → Review workflow
 - ✅ Chain-of-thought reasoning
@@ -129,13 +141,13 @@ python user-scenarios/06-ml-engineer-multiagent-research.py
 ### Prerequisites
 
 1. **Install Kaizen**:
+
    ```bash
-   pip install kailash[kaizen]
-   # or
    pip install kailash-kaizen
    ```
 
 2. **Install Ollama** (free, local LLM):
+
    ```bash
    # macOS/Linux
    curl -fsSL https://ollama.com/install.sh | sh
@@ -144,6 +156,7 @@ python user-scenarios/06-ml-engineer-multiagent-research.py
    ```
 
 3. **Pull required models**:
+
    ```bash
    ollama pull llama2      # Text generation
    ollama pull bakllava    # Vision (for scenario 5)
@@ -158,11 +171,13 @@ python user-scenarios/06-ml-engineer-multiagent-research.py
 ### Running Scenarios
 
 **Run individual scenario**:
+
 ```bash
 python user-scenarios/01-beginner-simple-qa-bot.py
 ```
 
 **Run all scenarios** (requires Ollama running):
+
 ```bash
 for script in user-scenarios/*.py; do
     echo "Running $script..."
@@ -173,14 +188,14 @@ done
 
 ## 📊 Complexity Matrix
 
-| Scenario | Complexity | Agents | Memory | Multi-Modal | Lines of Code |
-|----------|-----------|--------|--------|-------------|---------------|
-| 1. Beginner Q&A | ⭐ | 1 | No | No | 70 |
-| 2. Data Analyst | ⭐⭐ | 1 | No | No | 150 |
-| 3. Product Manager | ⭐⭐⭐ | 1 | Yes | No | 180 |
-| 4. DevOps Log Analysis | ⭐⭐⭐ | 1 | Yes | No | 190 |
-| 5. Content Creator | ⭐⭐⭐⭐ | 2 | No | Yes | 210 |
-| 6. ML Engineer | ⭐⭐⭐⭐⭐ | 3 | No | No | 250 |
+| Scenario               | Complexity | Agents | Memory | Multi-Modal | Lines of Code |
+| ---------------------- | ---------- | ------ | ------ | ----------- | ------------- |
+| 1. Beginner Q&A        | ⭐         | 1      | No     | No          | 70            |
+| 2. Data Analyst        | ⭐⭐       | 1      | No     | No          | 150           |
+| 3. Product Manager     | ⭐⭐⭐     | 1      | Yes    | No          | 180           |
+| 4. DevOps Log Analysis | ⭐⭐⭐     | 1      | Yes    | No          | 190           |
+| 5. Content Creator     | ⭐⭐⭐⭐   | 2      | No     | Yes         | 210           |
+| 6. ML Engineer         | ⭐⭐⭐⭐⭐ | 3      | No     | No          | 250           |
 
 ## 🎓 Learning Path
 
@@ -195,6 +210,7 @@ done
 ## 💡 Key Concepts Demonstrated
 
 ### Agent Types Used
+
 - **SimpleQAAgent**: Basic question answering
 - **MemoryAgent**: Session-based memory persistence
 - **VisionAgent**: Image analysis (multi-modal)
@@ -202,6 +218,7 @@ done
 - **RAGResearchAgent**: Research with retrieval
 
 ### Patterns Demonstrated
+
 - ✅ Single-agent patterns
 - ✅ Memory persistence with `session_id`
 - ✅ Multi-modal processing (vision + text)
@@ -229,47 +246,56 @@ config = SimpleQAConfig(
 ```
 
 **Requirements for cloud providers**:
+
 - Set API keys in `.env`
 - Load with `load_dotenv()`
 
 ## 🐛 Troubleshooting
 
 ### Ollama Connection Error
+
 ```
 Error: Could not connect to Ollama
 ```
 
 **Solution**: Ensure Ollama is running
+
 ```bash
 ollama serve  # Start Ollama server
 ```
 
 ### Model Not Found
+
 ```
 Error: Model 'llama2' not found
 ```
 
 **Solution**: Pull the model first
+
 ```bash
 ollama pull llama2
 ```
 
 ### Import Error
+
 ```
 ModuleNotFoundError: No module named 'kaizen'
 ```
 
 **Solution**: Install Kaizen
+
 ```bash
 pip install kailash[kaizen]
 ```
 
 ### Vision Agent Error (Scenario 5)
+
 ```
 Error: Image file not found
 ```
 
 **Solution**: Scenario 5 simulates vision analysis. For real vision:
+
 1. Replace placeholder paths with actual image files
 2. Use `vision_agent.analyze(image="/path/to/real/image.jpg", question="...")`
 

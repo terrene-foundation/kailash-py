@@ -174,13 +174,14 @@ workflow.add_node("NodeType", "node_id", {"param": "value"})
 
 ## Kailash Platform
 
-| Framework    | Purpose                                | Install                        |
-| ------------ | -------------------------------------- | ------------------------------ |
-| **Core SDK** | Workflow orchestration, 140+ nodes     | `pip install kailash`          |
-| **Trust**    | EATP protocol + trust-plane governance | `pip install kailash[trust]`   |
-| **DataFlow** | Zero-config database operations        | `pip install kailash-dataflow` |
-| **Nexus**    | Multi-channel deployment (API+CLI+MCP) | `pip install kailash-nexus`    |
-| **Kaizen**   | AI agent framework                     | `pip install kailash-kaizen`   |
-| **PACT**     | Organizational governance (D/T/R)      | `pip install kailash-pact`     |
+| Framework    | Purpose                                 | Install                        |
+| ------------ | --------------------------------------- | ------------------------------ |
+| **Core SDK** | Workflow orchestration, 140+ nodes      | `pip install kailash`          |
+| **DataFlow** | Zero-config database operations         | `pip install kailash-dataflow` |
+| **Nexus**    | Multi-channel deployment (API+CLI+MCP)  | `pip install kailash-nexus`    |
+| **Kaizen**   | AI agent framework                      | `pip install kailash-kaizen`   |
+| **PACT**     | Organizational governance (D/T/R)       | `pip install kailash-pact`     |
+| **ML**       | ML lifecycle (9 engines, polars-native) | `pip install kailash-ml`       |
+| **Align**    | LLM fine-tuning & serving pipeline      | `pip install kailash-align`    |
 
-All frameworks are built ON Core SDK — they don't replace it.
+`pip install kailash` includes all standard dependencies (trust, server, HTTP, database, monitoring, data). Sub-packages add framework-specific functionality. Only vendor-specific secret backends (Vault, AWS, Azure, LDAP) remain as optional extras.

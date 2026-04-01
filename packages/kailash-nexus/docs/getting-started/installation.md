@@ -149,16 +149,16 @@ spec:
         app: nexus-app
     spec:
       containers:
-      - name: nexus
-        image: my-nexus-app:latest
-        ports:
-        - containerPort: 8000
-        - containerPort: 3001
-        env:
-        - name: NEXUS_API_PORT
-          value: "8000"
-        - name: NEXUS_MCP_PORT
-          value: "3001"
+        - name: nexus
+          image: my-nexus-app:latest
+          ports:
+            - containerPort: 8000
+            - containerPort: 3001
+          env:
+            - name: NEXUS_API_PORT
+              value: "8000"
+            - name: NEXUS_MCP_PORT
+              value: "3001"
 ---
 apiVersion: v1
 kind: Service
@@ -168,12 +168,12 @@ spec:
   selector:
     app: nexus-app
   ports:
-  - name: api
-    port: 8000
-    targetPort: 8000
-  - name: mcp
-    port: 3001
-    targetPort: 3001
+    - name: api
+      port: 8000
+      targetPort: 8000
+    - name: mcp
+      port: 3001
+      targetPort: 3001
   type: LoadBalancer
 ```
 
@@ -185,30 +185,6 @@ kubectl apply -f deployment.yaml
 
 ## Optional Dependencies
 
-### For AI/ML Workflows
-
-```bash
-pip install kailash-nexus kailash[ai]
-```
-
-Includes:
-- OpenAI integration
-- Ollama support
-- Vector databases
-- Embedding generators
-
-### For Enterprise Features
-
-```bash
-pip install kailash-nexus kailash[enterprise]
-```
-
-Includes:
-- OAuth2 providers
-- Advanced monitoring
-- Enterprise connectors
-- Compliance tools
-
 ### For Development
 
 ```bash
@@ -216,6 +192,7 @@ pip install kailash-nexus kailash[dev]
 ```
 
 Includes:
+
 - Testing utilities
 - Development servers
 - Debug tools

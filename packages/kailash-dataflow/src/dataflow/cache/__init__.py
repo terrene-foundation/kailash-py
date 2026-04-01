@@ -14,7 +14,7 @@ Features:
 
 from .async_redis_adapter import AsyncRedisCacheAdapter
 from .auto_detection import CacheBackend
-from .invalidation import CacheInvalidator, InvalidationPattern
+from .invalidation import CacheBackendProtocol, CacheInvalidator, InvalidationPattern
 from .key_generator import CacheKeyGenerator
 from .list_node_integration import (
     CacheableListNode,
@@ -27,6 +27,8 @@ from .redis_manager import CacheConfig, RedisCacheManager
 __all__ = [
     # Backend detection
     "CacheBackend",
+    # Protocol
+    "CacheBackendProtocol",
     # Cache implementations
     "RedisCacheManager",
     "InMemoryCache",

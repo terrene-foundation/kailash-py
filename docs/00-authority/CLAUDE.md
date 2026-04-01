@@ -52,15 +52,19 @@ Per-project config in `.trustplane.toml`. Precedence: CLI flags > env vars (`TRU
 | `cli.py`              | Click CLI (`attest` command)                                         |
 | `mcp_server.py`       | FastMCP server for AI agent integration                              |
 
-## Install Extras
+## Installation
+
+The base install includes the full trust-plane: SQLite, PostgreSQL, encryption, OIDC/SSO, RBAC, and all core features.
 
 ```bash
-pip install kailash[trust]                # Core (SQLite default)
-pip install kailash[trust-encryption]    # AES-256-GCM at rest
-pip install kailash[trust-sso]           # OIDC/JWT identity verification
-pip install kailash[trust-aws]           # AWS KMS key management
-pip install kailash[trust-azure]         # Azure Key Vault
-pip install kailash[trust-vault]         # HashiCorp Vault Transit
-pip install kailash[trust-postgres]      # PostgreSQL backend
+pip install kailash                      # Everything included
+```
+
+Vendor-specific secret backends are optional extras:
+
+```bash
+pip install kailash[aws-secrets]         # AWS KMS key management
+pip install kailash[azure-secrets]       # Azure Key Vault
+pip install kailash[vault]               # HashiCorp Vault Transit
 pip install kailash[trust-windows]       # Windows file permissions (pywin32)
 ```

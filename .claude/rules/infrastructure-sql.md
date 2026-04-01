@@ -145,7 +145,7 @@ class InMemoryExecutionStore:
 
 ### 8. Lazy Driver Imports
 
-Database driver packages (`aiosqlite`, `asyncpg`, `aiomysql`) MUST be imported inside the method that uses them, not at module top level.
+Database driver packages (`aiosqlite`, `asyncpg`, `aiomysql`) are included in the base `pip install kailash`. Lazy imports are no longer strictly required for these three drivers, but remain acceptable practice for consistency.
 
 ```python
 # DO:
@@ -155,7 +155,7 @@ async def _init_postgres(self):
     except ImportError as exc:
         raise ImportError(
             "asyncpg is required for PostgreSQL connections. "
-            "Install it with: pip install kailash[postgres]"
+            "Install it with: pip install kailash"
         ) from exc
     self._pool = await asyncpg.create_pool(self.url)
 

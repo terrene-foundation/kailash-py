@@ -7,7 +7,7 @@ for automatic query result caching and cache invalidation.
 
 import logging
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .invalidation import CacheInvalidator, InvalidationPattern
 from .key_generator import CacheKeyGenerator
@@ -21,7 +21,7 @@ class ListNodeCacheIntegration:
 
     def __init__(
         self,
-        cache_manager: RedisCacheManager,
+        cache_manager: Union[RedisCacheManager, Any],
         key_generator: CacheKeyGenerator,
         invalidator: CacheInvalidator,
     ):
@@ -308,7 +308,7 @@ class CacheableListNode:
 
 
 def create_cache_integration(
-    cache_manager: RedisCacheManager,
+    cache_manager: Union[RedisCacheManager, Any],
     key_generator: CacheKeyGenerator,
     invalidator: CacheInvalidator,
 ) -> ListNodeCacheIntegration:

@@ -70,12 +70,12 @@ def __getattr__(name):
         except ImportError:
             raise ImportError(
                 f"{name} requires server dependencies. "
-                f"Install with: pip install kailash[server]"
+                f"Install with: pip install kailash"
             ) from None
     raise AttributeError(f"module 'kailash' has no attribute {name!r}")
 
 
-__version__ = "2.3.4"
+__version__ = "2.4.0"
 
 __all__ = [
     # Core workflow components

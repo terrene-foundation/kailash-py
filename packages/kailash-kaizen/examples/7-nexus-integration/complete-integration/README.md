@@ -93,14 +93,14 @@ channels = deploy_multi_channel(agent, app, "assistant")
 
 ## Performance Targets
 
-| Operation         | Target    | Typical   | Status |
-|-------------------|-----------|-----------|--------|
-| Multi-channel deploy | <2s    | ~1.5s     | ✓      |
-| Cached deploy     | <0.2s     | ~0.15s    | ✓      |
-| API latency       | <500ms    | ~300ms    | ✓      |
-| CLI latency       | <500ms    | ~300ms    | ✓      |
-| MCP latency       | <500ms    | ~300ms    | ✓      |
-| Session sync      | <50ms     | ~10ms     | ✓      |
+| Operation            | Target | Typical | Status |
+| -------------------- | ------ | ------- | ------ |
+| Multi-channel deploy | <2s    | ~1.5s   | ✓      |
+| Cached deploy        | <0.2s  | ~0.15s  | ✓      |
+| API latency          | <500ms | ~300ms  | ✓      |
+| CLI latency          | <500ms | ~300ms  | ✓      |
+| MCP latency          | <500ms | ~300ms  | ✓      |
+| Session sync         | <50ms  | ~10ms   | ✓      |
 
 ## Usage
 
@@ -255,6 +255,7 @@ print(f"Active sessions: {session_metrics['active_sessions']}")
 This example includes comprehensive tests in `tests/integration/test_end_to_end_nexus.py`.
 
 Run tests:
+
 ```bash
 pytest tests/integration/test_end_to_end_nexus.py -v
 ```
@@ -312,10 +313,9 @@ ERROR: Nexus not available. Install with: pip install kailash-nexus
 ```
 
 **Solution**: Install Nexus integration
+
 ```bash
 pip install kailash-nexus
-# or
-pip install kailash[nexus]
 ```
 
 ### Slow Deployment
@@ -323,6 +323,7 @@ pip install kailash[nexus]
 **Symptoms**: Deployment takes >5 seconds
 
 **Solutions**:
+
 1. Ensure `auto_discovery=False` when using with DataFlow
 2. Verify caching is enabled (`use_cache=True`, default)
 3. Check for network/database latency
@@ -332,6 +333,7 @@ pip install kailash[nexus]
 **Symptoms**: State not preserved across channels
 
 **Solutions**:
+
 1. Verify same `session_id` used across channels
 2. Check `session_manager.get_session_state()` returns expected data
 3. Ensure session hasn't expired (check TTL)

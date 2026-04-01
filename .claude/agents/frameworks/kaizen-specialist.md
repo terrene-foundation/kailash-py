@@ -86,6 +86,20 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - "Anti-self-modification?" -> [`kaizen-agents-security`](../../skills/04-kaizen/kaizen-agents-security.md)
 - "Governance security patterns?" -> [`kaizen-agents-security`](../../skills/04-kaizen/kaizen-agents-security.md)
 
+**ML Integration** (kailash-ml):
+
+- "ML engines?" -> [`kaizen-ml-integration`](../../skills/04-kaizen/kaizen-ml-integration.md)
+- "FeatureStore?" -> [`dataflow-ml-integration`](../../skills/02-dataflow/dataflow-ml-integration.md)
+- "ModelRegistry?" -> [`kaizen-ml-integration`](../../skills/04-kaizen/kaizen-ml-integration.md)
+- "AutoML + agents?" -> [`kaizen-ml-integration`](../../skills/04-kaizen/kaizen-ml-integration.md)
+
+**Alignment & Fine-Tuning** (kailash-align):
+
+- "Fine-tuning?" -> [`kaizen-align-serving`](../../skills/04-kaizen/kaizen-align-serving.md)
+- "AdapterRegistry?" -> [`kaizen-align-serving`](../../skills/04-kaizen/kaizen-align-serving.md)
+- "Ollama/vLLM deploy?" -> [`kaizen-align-serving`](../../skills/04-kaizen/kaizen-align-serving.md)
+- "KaizenModelBridge?" -> [`kaizen-align-serving`](../../skills/04-kaizen/kaizen-align-serving.md)
+
 **L3 Autonomy Primitives** (SDK):
 
 - "L3 overview?" -> [`kaizen-l3-overview`](../../skills/04-kaizen/kaizen-l3-overview.md)
@@ -116,6 +130,8 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **L3 Autonomy**: Agent spawning, envelope enforcement, scoped context, typed messaging, plan DAG execution
 - **Kaizen-Agents Governance** (v0.1.0): GovernedSupervisor with progressive disclosure (Layer 1/2/3), 7 governance modules (accountability, budget, cascade, clearance, dereliction, bypass, vacancy), EATP audit trail, PACT integration
 - **Governed Multi-Agent Orchestration**: LLM-orchestrated, PACT-aware agent systems with security-hardened tooling
+- **ML Integration** (kailash-ml): 9 ML engines (FeatureStore, ModelRegistry, TrainingPipeline, InferenceServer, DriftMonitor, HyperparameterSearch, AutoMLEngine, DataExplorer, FeatureEngineer) with polars-native interop, quality tiers (P0/P1/P2), and optional LLM-augmented AutoML with 5 guardrails
+- **Alignment & Serving** (kailash-align): AdapterRegistry for LoRA tracking, AlignmentPipeline (SFT/DPO via TRL), serving pipeline (GGUF, Ollama, vLLM), KaizenModelBridge for Delegate integration
 
 ### Use Skills Instead When:
 
@@ -155,21 +171,6 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 
 **Built on Kailash Core SDK** - Uses WorkflowBuilder and LocalRuntime underneath
 
-### Layer Preference (Engine-First)
-
-When recommending Kaizen patterns, prefer the highest abstraction layer:
-
-| Need                        | Layer     | API                                        | Package        |
-| --------------------------- | --------- | ------------------------------------------ | -------------- |
-| Autonomous agent with tools | Engine    | `Delegate`                                 | kaizen-agents  |
-| Governed multi-agent team   | Engine    | `GovernedSupervisor`                       | kaizen-agents  |
-| Multi-agent coordination    | Engine    | `Pipeline.router()`, `Pipeline.ensemble()` | kaizen-agents  |
-| Custom agent logic          | Primitive | `BaseAgent` + `Signature`                  | kailash-kaizen |
-
-**Default to Delegate** for autonomous agents. BaseAgent is for custom extension logic where Delegate's TAOD loop doesn't fit.
-
-**Agent API is deprecated** since v0.5.0 — route users to Delegate instead.
-
 - **When to use Kaizen**: AI agents, multi-agent systems, signature-based programming, LLM workflows
 - **When NOT to use**: Simple workflows (Core SDK), database apps (DataFlow), multi-channel platforms (Nexus)
 
@@ -189,6 +190,8 @@ When recommending Kaizen patterns, prefer the highest abstraction layer:
 - **CARE/EATP Trust Framework** (v1.2.1): Cryptographic trust chains, 5-posture enum with state machine, constraint dimensions, knowledge ledger with provenance, enterprise crypto (multi-sig genesis, Merkle audit, CRL), RFC 3161 timestamping
 - **SQLite CARE Audit Persistence** (v0.12.2/v1.2.2): EATP audit events from `RuntimeAuditGenerator` are now persisted atomically to SQLite WAL-mode database via `DeferredStorageBackend.flush_to_sqlite()`. Kaizen agents using `LocalRuntime(enable_monitoring=True)` (default) get automatic ACID-compliant CARE audit trails
 - **FallbackRouter Safety Hardening**: `on_fallback` callback fires before each fallback (raise `FallbackRejectedError` to block unsafe fallbacks), WARNING-level logging on every fallback, model capability validation before routing
+- **kailash-ml Integration**: 9 ML engines with polars-native data, DataFlow-backed FeatureStore, ConnectionManager persistence, ONNX export, MLflow v1 compat. Quality tiers: P0 (5 engines: FeatureStore, ModelRegistry, TrainingPipeline, InferenceServer, DriftMonitor), P1 (HyperparameterSearch, AutoMLEngine), P2 (@experimental: DataExplorer, FeatureEngineer). AutoMLEngine has 5 guardrails for LLM augmentation (model selection, feature engineering, hyperparameter suggestions, result interpretation, next-step recommendation)
+- **kailash-align Integration**: AdapterRegistry (composition over ModelRegistry), AlignmentPipeline (TRL wrapper: SFT then DPO), AlignmentEvaluator (lm-eval-harness), AlignmentServing (GGUF via llama-cpp-python, Ollama deploy, vLLM config, BYOG), adapter merge (PEFT merge_and_unload), KaizenModelBridge (create_delegate for Ollama/vLLM), OnPremModelCache (air-gap support). All 4 agents deferred to v1.1
 - **AgentTeam Deprecated**: Use `OrchestrationRuntime` instead for multi-agent coordination
 - **MCP Session Wiring**: `discover_mcp_resources()`, `read_mcp_resource()`, `discover_mcp_prompts()`, `get_mcp_prompt()` are wired and functional on agent sessions
 - **Performance Caches** (v1.0): 7 caches with 10-100x speedup (Schema, Embedding, Prompt, etc.)
@@ -368,32 +371,12 @@ result = agent.process("input")
 - Composition validation (DAG, schema compat, cost) (v1.3)
 - MCP Catalog Server for agent discovery (v1.3)
 - Posture-budget integration (v1.3)
+- ML engine integration (kailash-ml): FeatureStore, ModelRegistry, TrainingPipeline, InferenceServer, DriftMonitor, AutoML
+- LLM fine-tuning and alignment (kailash-align): adapter lifecycle, serving pipeline, KaizenModelBridge
 
 ## For Detailed Patterns
 
-See the [Kaizen Skills](../../skills/04-kaizen/) (47 skills) for:
-
-- Quick start guide ([`kaizen-quickstart-template`](../../skills/04-kaizen/kaizen-quickstart-template.md))
-- BaseAgent basics ([`kaizen-baseagent-quick`](../../skills/04-kaizen/kaizen-baseagent-quick.md))
-- Signatures ([`kaizen-signatures`](../../skills/04-kaizen/kaizen-signatures.md))
-- Multi-agent patterns ([`kaizen-multi-agent-setup`](../../skills/04-kaizen/kaizen-multi-agent-setup.md))
-- Chain of Thought ([`kaizen-chain-of-thought`](../../skills/04-kaizen/kaizen-chain-of-thought.md))
-- RAG patterns ([`kaizen-rag-agent`](../../skills/04-kaizen/kaizen-rag-agent.md))
-- Vision ([`kaizen-vision-processing`](../../skills/04-kaizen/kaizen-vision-processing.md))
-- Audio ([`kaizen-audio-processing`](../../skills/04-kaizen/kaizen-audio-processing.md))
-- Tool calling ([`kaizen-tool-calling`](../../skills/04-kaizen/kaizen-tool-calling.md))
-- Control Protocol ([`kaizen-control-protocol`](../../skills/04-kaizen/kaizen-control-protocol.md))
-- Observability ([`kaizen-observability-tracing`](../../skills/04-kaizen/kaizen-observability-tracing.md))
-- Memory ([`kaizen-memory-system`](../../skills/04-kaizen/kaizen-memory-system.md))
-- Checkpoints ([`kaizen-checkpoint-resume`](../../skills/04-kaizen/kaizen-checkpoint-resume.md))
-- Interrupts ([`kaizen-interrupt-mechanism`](../../skills/04-kaizen/kaizen-interrupt-mechanism.md))
-- Trust/EATP ([`kaizen-trust-eatp`](../../skills/04-kaizen/kaizen-trust-eatp.md))
-- Common issues ([`kaizen-common-issues`](../../skills/04-kaizen/kaizen-common-issues.md))
-- v1.0 features ([`kaizen-v1-features`](../../skills/04-kaizen/kaizen-v1-features.md))
-- Agent manifest & deploy ([`kaizen-agent-manifest`](../../skills/04-kaizen/kaizen-agent-manifest.md))
-- Composition validation ([`kaizen-composition`](../../skills/04-kaizen/kaizen-composition.md))
-- MCP Catalog Server ([`kaizen-catalog-server`](../../skills/04-kaizen/kaizen-catalog-server.md))
-- Budget tracking & posture ([`kaizen-budget-tracking`](../../skills/04-kaizen/kaizen-budget-tracking.md))
+See the [Kaizen Skills](../../skills/04-kaizen/) (49 skills) -- the Skills Quick Reference above maps queries to skill files.
 
 **This subagent focuses on**:
 

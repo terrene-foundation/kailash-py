@@ -22,10 +22,7 @@ This guide covers upgrading between infrastructure levels. Each migration is add
 - [ ] Database server is running and accessible (PostgreSQL, MySQL, or SQLite on a shared path)
 - [ ] Database and user are created with appropriate permissions
 - [ ] Network connectivity from application to database is confirmed
-- [ ] Required driver is installed:
-  - PostgreSQL: `pip install kailash[postgres]` (installs asyncpg)
-  - MySQL: `pip install kailash[mysql]` (installs aiomysql)
-  - SQLite (shared): `pip install kailash[database]` (installs aiosqlite)
+- [ ] Required driver is available (all drivers are included in the base `pip install kailash`)
 
 ### Step 1: Set the Environment Variable
 
@@ -242,12 +239,10 @@ else:
 
 **Symptom**: `ImportError: asyncpg is required for PostgreSQL connections`
 
-**Fix**: Install the appropriate extra:
+**Fix**: All database drivers are included in the base install. Ensure you have the latest version:
 
 ```bash
-pip install kailash[postgres]   # PostgreSQL
-pip install kailash[mysql]      # MySQL
-pip install kailash[database]   # SQLite (aiosqlite)
+pip install --upgrade kailash
 ```
 
 ### 2. Using SQLite for Multi-Process Production

@@ -935,6 +935,33 @@ class GovernanceEngine:
         with self._lock:
             return self._compiled_org.nodes.get(address)
 
+    def list_roles(self, prefix: str | None = None) -> list[OrgNode]:
+        """List all Role nodes in the compiled org. Thread-safe.
+
+        Optionally filters by address prefix (e.g., "D1-R1" returns all
+        Role nodes whose address starts with "D1-R1").
+
+        Args:
+            prefix: Optional D/T/R address prefix to filter by. When None,
+                returns all Role nodes in the organization.
+
+        Returns:
+            A list of OrgNode instances whose node_type is ROLE, optionally
+            filtered by the given prefix.
+        """
+        from kailash.trust.pact.addressing import NodeType
+
+        with self._lock:
+            results: list[OrgNode] = []
+            for addr, node in self._compiled_org.nodes.items():
+                if node.node_type != NodeType.ROLE:
+                    continue
+                if prefix is not None:
+                    if addr != prefix and not addr.startswith(prefix + "-"):
+                        continue
+                results.append(node)
+            return results
+
     def get_context(
         self,
         role_address: str,

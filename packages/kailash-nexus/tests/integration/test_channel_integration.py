@@ -316,7 +316,8 @@ class TestMCPChannelIntegration:
     async def test_mcp_tool_discovery(self, docker_env):
         """Test MCP tool discovery from workflows."""
         from nexus import Nexus
-        from nexus.mcp import SimpleMCPClient
+
+        pytest.skip("SimpleMCPClient removed -- old Nexus MCP server deleted")
 
         from kailash.workflow.builder import WorkflowBuilder
 
@@ -383,7 +384,8 @@ result = {
     async def test_mcp_resource_access(self, docker_env):
         """Test MCP resource access for workflows."""
         from nexus import Nexus
-        from nexus.mcp import SimpleMCPClient
+
+        pytest.skip("SimpleMCPClient removed -- old Nexus MCP server deleted")
 
         from kailash.workflow.builder import WorkflowBuilder
 
