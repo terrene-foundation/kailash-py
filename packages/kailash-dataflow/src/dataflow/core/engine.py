@@ -15,8 +15,7 @@ from copy import deepcopy
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
-from kailash.runtime import AsyncLocalRuntime
-from kailash.runtime.local import LocalRuntime
+from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
 from ..features.bulk import BulkOperations
@@ -734,20 +733,12 @@ class DataFlow(DataFlowEventMixin):
             # to avoid re-entrance from _create_table_sync -> _ensure_connected
             self._connected = True
 
-            # 6. Process pending table creations from @db.model decorators
+            # 6. Process pending table creations from @db.model decorators.
+            # Batch all DDL into a single connection to avoid rapid open/close
+            # churn that overwhelms Docker Desktop's vpnkit proxy (#211).
             if self._pending_table_creations:
-                for model_name in self._pending_table_creations:
-                    if self._auto_migrate and not self._existing_schema_mode:
-                        sync_success = self._create_table_sync(model_name)
-                        if sync_success:
-                            logger.debug(
-                                f"Deferred table creation for '{model_name}' succeeded"
-                            )
-                        else:
-                            logger.debug(
-                                f"Deferred table creation for '{model_name}' failed, "
-                                f"table will be created lazily on first access"
-                            )
+                if self._auto_migrate and not self._existing_schema_mode:
+                    self._create_tables_batch(list(self._pending_table_creations))
                 self._pending_table_creations.clear()
 
             logger.debug(
@@ -4368,7 +4359,7 @@ class DataFlow(DataFlowEventMixin):
                     if fields:
                         unique_keyword = "UNIQUE " if unique else ""
                         fields_str = ", ".join(fields)
-                        sql = f"CREATE {unique_keyword}INDEX {index_name} ON {table_name} ({fields_str});"
+                        sql = f"CREATE {unique_keyword}INDEX IF NOT EXISTS {index_name} ON {table_name} ({fields_str});"
                         indexes.append(sql)
 
         # Add automatic indexes for foreign keys
@@ -4377,7 +4368,7 @@ class DataFlow(DataFlowEventMixin):
             if rel_info.get("type") == "belongs_to" and rel_info.get("foreign_key"):
                 foreign_key = rel_info["foreign_key"]
                 index_name = f"idx_{table_name}_{foreign_key}"
-                sql = f"CREATE INDEX {index_name} ON {table_name} ({foreign_key});"
+                sql = f"CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} ({foreign_key});"
                 indexes.append(sql)
 
         return indexes
@@ -6748,6 +6739,112 @@ class DataFlow(DataFlowEventMixin):
             )
             return False
 
+    def _create_tables_batch(self, model_names: list) -> None:
+        """Create tables for multiple models in a single database connection.
+
+        Uses SyncDDLExecutor.execute_ddl_batch() to run all CREATE TABLE and
+        CREATE INDEX statements through one connection. This eliminates the
+        rapid open/close churn that overwhelms Docker Desktop's vpnkit proxy
+        when creating tables for many models (e.g., 21 models = 63+ connections
+        reduced to 1 connection).
+
+        Falls back to per-model _create_table_sync() if batching fails.
+
+        Args:
+            model_names: List of model names to create tables for.
+        """
+        if not model_names:
+            return
+
+        database_url = self.config.database.url
+        if not database_url:
+            return
+
+        # Skip batch for in-memory SQLite (needs shared connection for CRUD)
+        if database_url == ":memory:" or database_url == "sqlite:///:memory:":
+            for name in model_names:
+                self._create_table_sync(name)
+            return
+
+        # Skip for MongoDB
+        db_type = self._detect_database_type()
+        if db_type == "mongodb":
+            return
+
+        try:
+            from ..migrations.sync_ddl_executor import SyncDDLExecutor
+
+            # Collect all DDL statements
+            all_sql: list = []
+            model_sql_map: dict = {}  # model_name -> (start_idx, count)
+            for model_name in model_names:
+                start = len(all_sql)
+                table_sql = self._generate_create_table_sql(model_name, db_type)
+                all_sql.append(table_sql)
+                index_sqls = self._generate_indexes_sql(model_name, db_type)
+                all_sql.extend(index_sqls)
+                model_sql_map[model_name] = (start, len(all_sql) - start)
+
+            if not all_sql:
+                return
+
+            # Execute all DDL in one connection
+            executor = SyncDDLExecutor(database_url)
+            result = executor.execute_ddl_batch(all_sql)
+
+            if result.get("success"):
+                logger.debug(
+                    "Batch DDL: created %d tables + indexes in single connection",
+                    len(model_names),
+                )
+                # Mark all as ensured in cache
+                for model_name in model_names:
+                    schema_checksum = None
+                    model_info = self._models.get(model_name)
+                    if model_info and self._schema_cache.enable_schema_validation:
+                        schema_checksum = self._calculate_schema_checksum(
+                            model_info["fields"]
+                        )
+                    self._schema_cache.mark_table_ensured(
+                        model_name, database_url, schema_checksum
+                    )
+            else:
+                error = result.get("error", "")
+                executed = result.get("executed_count", 0)
+                if "already exists" in error.lower():
+                    logger.debug(
+                        "Batch DDL: some tables already exist (OK), "
+                        "executed %d/%d statements",
+                        executed,
+                        len(all_sql),
+                    )
+                    # Mark all as ensured (they exist either way)
+                    for model_name in model_names:
+                        self._schema_cache.mark_table_ensured(
+                            model_name, database_url, None
+                        )
+                else:
+                    logger.warning(
+                        "Batch DDL failed at statement %d: %s. "
+                        "Falling back to per-model creation.",
+                        executed + 1,
+                        error,
+                    )
+                    # Fallback: try each model individually
+                    for model_name in model_names:
+                        self._create_table_sync(model_name)
+
+        except ImportError:
+            # SyncDDLExecutor not available — fall back to per-model
+            for model_name in model_names:
+                self._create_table_sync(model_name)
+        except Exception as e:
+            logger.warning(
+                "Batch DDL failed: %s. Falling back to per-model creation.", e
+            )
+            for model_name in model_names:
+                self._create_table_sync(model_name)
+
     def create_tables_sync(self, database_type: str = None):
         """Create database tables for all registered models using synchronous DDL.
 
@@ -6860,15 +6957,24 @@ class DataFlow(DataFlowEventMixin):
 
     def _register_specialized_nodes(self):
         """Register DataFlow specialized nodes."""
-        from kailash.nodes.base import NodeRegistry
+        try:
+            from kailash.nodes.base import NodeRegistry
 
-        from ..nodes import (
-            MigrationNode,
-            SchemaModificationNode,
-            TransactionCommitNode,
-            TransactionRollbackNode,
-            TransactionScopeNode,
-        )
+            if not hasattr(NodeRegistry, "register"):
+                return  # kailash 3.x: node registration not supported
+        except ImportError:
+            return  # kailash 3.x: node registration not supported
+
+        try:
+            from ..nodes import (
+                MigrationNode,
+                SchemaModificationNode,
+                TransactionCommitNode,
+                TransactionRollbackNode,
+                TransactionScopeNode,
+            )
+        except ImportError:
+            return  # nodes not available in this kailash version
 
         # Register transaction nodes
         NodeRegistry.register(TransactionScopeNode, alias="TransactionScopeNode")

@@ -1,127 +1,41 @@
-source_repo: kailash-py
-codify_date: 2026-04-01
-codify_session: "feat(codify): extract dataflow, nexus, mcp implementation knowledge into agents and skills"
-sdk_version: "2.3.4"
-coc_version: "1.0.0"
+# Codification proposal from fix/nexus-connection-stampede
+# Created: 2026-04-01
+# Source: PR #213 (fixes #211, #212)
 
-changes:
-  # Agent: dataflow-specialist — added enterprise features knowledge
-  - file: .claude/agents/frameworks/dataflow-specialist.md
-    action: modified
-    suggested_tier: coc
-    reason: "Added skill refs and decision matrix entries for 8 new DataFlow features: derived models, file import, validation DSL, express cache, read replicas, retention, events, on_source_change."
-    diff_lines: "+35 -0"
+artifacts:
+  - type: rule
+    action: update
+    target: rules/dataflow-pool.md
+    classification: global  # applies to both py and rs
+    change: |
+      Add Rule 7: Batch DDL Operations
+      When creating tables for multiple models, MUST batch all DDL into a single
+      database connection. Per-model open/execute/close cycles create connection
+      churn that overwhelms Docker Desktop's vpnkit proxy.
+      Pattern: Use execute_ddl_batch() not execute_ddl() in loops.
 
-  # Agent: nexus-specialist — added transport and Phase 2 APIs
-  - file: .claude/agents/frameworks/nexus-specialist.md
-    action: modified
-    suggested_tier: coc
-    reason: "Added Transport architecture section (Transport ABC, HTTPTransport, MCPTransport), Phase 2 APIs (on_event, scheduled, emit, NexusFile), EventBus, DataFlow bridge."
-    diff_lines: "+40 -0"
+  - type: rule
+    action: update
+    target: rules/connection-pool.md
+    classification: variant/py  # py-specific (rs uses Preset enum)
+    change: |
+      Add Rule 7: Nexus Gateway Auto-Detect Workers
+      MUST NOT hardcode max_workers in gateway creation. Use auto-detect
+      (min(4, cpu_count)) or explicit env var (NEXUS_MAX_WORKERS).
+      MUST share Nexus runtime with gateway — no orphan runtimes.
 
-  # Agent: mcp-specialist — added platform server knowledge
-  - file: .claude/agents/frameworks/mcp-specialist.md
-    action: modified
-    suggested_tier: coc
-    reason: "Added Platform Server section with contributor plugin architecture, security tiers (1-4), AST-based scanning, scan_info metadata."
-    diff_lines: "+35 -0"
+  - type: skill
+    action: create
+    target: skills/project/nexus-connection-safety.md
+    classification: variant/py
+    change: |
+      New skill documenting Nexus connection safety patterns:
+      - server_type/max_workers configuration
+      - NEXUS_SERVER_TYPE/NEXUS_MAX_WORKERS env vars
+      - Runtime sharing between Nexus and gateway
+      - Batch DDL for auto_migrate
 
-  # Skill: dataflow-derived-models — new
-  - file: .claude/skills/02-dataflow/dataflow-derived-models.md
-    action: created
-    suggested_tier: variant-py
-    reason: "DerivedModelEngine patterns: @db.derived_model, scheduled/manual/on_source_change refresh, compute functions, cycle detection."
-
-  # Skill: dataflow-file-import — new
-  - file: .claude/skills/02-dataflow/dataflow-file-import.md
-    action: created
-    suggested_tier: variant-py
-    reason: "FileSourceNode usage: CSV/TSV/Excel/Parquet/JSON/JSONL, db.express.import_file(), column mapping, type coercion."
-
-  # Skill: dataflow-validation-dsl — new
-  - file: .claude/skills/02-dataflow/dataflow-validation-dsl.md
-    action: created
-    suggested_tier: variant-py
-    reason: "Declarative __validation__ dict: named validators, length/range/pattern/one_of rules, custom callables."
-
-  # Skill: dataflow-express-cache — new
-  - file: .claude/skills/02-dataflow/dataflow-express-cache.md
-    action: created
-    suggested_tier: variant-py
-    reason: "Express cache wiring: CacheBackendProtocol, model-scoped invalidation, TTL, Redis support, cache stats."
-
-  # Skill: dataflow-read-replicas — new
-  - file: .claude/skills/02-dataflow/dataflow-read-replicas.md
-    action: created
-    suggested_tier: variant-py
-    reason: "Read replica support: DataFlow(read_url=...), use_primary=True, dual pool, health check."
-
-  # Skill: dataflow-retention — new
-  - file: .claude/skills/02-dataflow/dataflow-retention.md
-    action: created
-    suggested_tier: variant-py
-    reason: "RetentionEngine: archive/delete/partition policies, __dataflow__['retention'] declaration, dry_run."
-
-  # Skill: dataflow-events — new
-  - file: .claude/skills/02-dataflow/dataflow-events.md
-    action: created
-    suggested_tier: variant-py
-    reason: "DataFlowEventMixin: WRITE_OPERATIONS, db.on_model_change(), Core SDK EventBus integration, fire-and-forget emission."
-
-  # Skill: nexus-transport-architecture — new
-  - file: .claude/skills/03-nexus/nexus-transport-architecture.md
-    action: created
-    suggested_tier: variant-py
-    reason: "Transport ABC, HTTPTransport, MCPTransport, HandlerRegistry, HandlerDef, HandlerParam, _extract_params."
-
-  # Skill: nexus-eventbus-phase2 — new
-  - file: .claude/skills/03-nexus/nexus-eventbus-phase2.md
-    action: created
-    suggested_tier: variant-py
-    reason: "EventBus (janus.Queue, bounded 256), Phase 2 APIs (@app.on_event, @app.scheduled, app.emit), NexusFile, DataFlow bridge, BackgroundService."
-
-  # Skill: mcp-platform-server — new
-  - file: .claude/skills/05-kailash-mcp/mcp-platform-server.md
-    action: created
-    suggested_tier: variant-py
-    reason: "Platform server: FastMCP, 7 contributors, register_tools protocol, SecurityTier, AST scanning, namespace validation."
-
-  # SKILL.md updates (navigation entries)
-  - file: .claude/skills/02-dataflow/SKILL.md
-    action: modified
-    suggested_tier: variant-py
-    reason: "Added Enterprise Features section with links to 7 new skill files."
-
-  - file: .claude/skills/03-nexus/SKILL.md
-    action: modified
-    suggested_tier: variant-py
-    reason: "Added Transport & Event System section with links to 2 new skill files."
-
-  - file: .claude/skills/05-kailash-mcp/SKILL.md
-    action: modified
-    suggested_tier: variant-py
-    reason: "Added Platform Server section with link to new skill file."
-
-notes: |
-  Codification of 3 workspaces covering 8 DataFlow features, Nexus transport
-  refactor + Phase 2 APIs, and MCP Platform Server.
-
-  All agent files remain under 400 lines. Knowledge is extracted into 10 new
-  detailed skill files with code examples sourced from actual implementations.
-
-  Key implementation sources verified:
-  - packages/kailash-dataflow/src/dataflow/features/derived.py
-  - packages/kailash-dataflow/src/dataflow/nodes/file_source.py
-  - packages/kailash-dataflow/src/dataflow/validation/dsl.py
-  - packages/kailash-dataflow/src/dataflow/core/events.py
-  - packages/kailash-dataflow/src/dataflow/features/retention.py
-  - packages/kailash-dataflow/src/dataflow/cache/invalidation.py
-  - packages/kailash-nexus/src/nexus/transports/base.py
-  - packages/kailash-nexus/src/nexus/events.py
-  - packages/kailash-nexus/src/nexus/registry.py
-  - packages/kailash-nexus/src/nexus/bridges/dataflow.py
-  - packages/kailash-nexus/src/nexus/files.py
-  - src/kailash/mcp/platform_server.py
-  - src/kailash/mcp/contrib/__init__.py
-
-status: pending
+red_team_findings:
+  deferred:
+    - C1: SQL injection in _generate_indexes_sql — pre-existing, needs _validate_identifier() calls
+    - H4: Unbounded _performance_metrics lists in Nexus core — needs deque(maxlen=10000)

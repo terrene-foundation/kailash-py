@@ -253,6 +253,10 @@ class TestRouterGatewayInit:
         app._router_queue = []
         app._routers = []
         app._enable_durability = False
+        app._server_type = "enterprise"
+        app._max_workers = 2
+        app.runtime = None
+        app._owns_runtime = True
         app._cors_origins = None
         app._cors_allow_methods = None
         app._cors_allow_headers = None
@@ -284,6 +288,10 @@ class TestRouterGatewayInit:
         app._router_queue = []
         app._routers = []
         app._enable_durability = False
+        app._server_type = "enterprise"
+        app._max_workers = 2
+        app.runtime = None
+        app._owns_runtime = True
         app._cors_origins = None
         app._cors_allow_methods = None
         app._cors_allow_headers = None

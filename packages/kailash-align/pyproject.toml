@@ -29,7 +29,7 @@ dependencies = [
     "kailash-kaizen>=0.3.0",
     "torch>=2.2,<3.0",
     "transformers>=4.40,<5.0",
-    "trl>=0.25,<1.0",
+    "trl>=1.0,<2.0",
     "peft>=0.10,<1.0",
     "accelerate>=1.4,<2.0",
     "datasets>=3.0,<4.0",
@@ -46,8 +46,11 @@ serve = [
     "llama-cpp-python>=0.3",
     "gguf>=0.10",
 ]
+online = [
+    "vllm>=0.6",
+]
 full = [
-    "kailash-align[rlhf,eval,serve]",
+    "kailash-align[rlhf,eval,serve,online]",
 ]
 dev = [
     "pytest>=8.0",
