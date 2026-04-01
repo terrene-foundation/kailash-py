@@ -9,6 +9,9 @@ on:
       - "nexus-v*" # Nexus: nexus-v1.4.3
       - "pact-v*" # PACT: pact-v0.2.0
       - "kaizen-agents-v*" # Kaizen Agents: kaizen-agents-v0.3.0
+      - "ml-v*" # ML: ml-v0.1.0
+      - "align-v*" # Align: align-v0.1.0
+      - "ml-protocols-v*" # ML Protocols: ml-protocols-v0.1.0
   workflow_dispatch:
     inputs:
       package:
@@ -22,6 +25,9 @@ on:
           - kailash-nexus
           - kailash-pact
           - kaizen-agents
+          - kailash-ml
+          - kailash-align
+          - kailash-ml-protocols
       publish_to:
         description: "Target registry"
         required: true
@@ -53,6 +59,9 @@ jobs:
               kailash-nexus)     echo "package_dir=packages/kailash-nexus" >> $GITHUB_OUTPUT ;;
               kailash-pact)      echo "package_dir=packages/kailash-pact" >> $GITHUB_OUTPUT ;;
               kaizen-agents)    echo "package_dir=packages/kaizen-agents" >> $GITHUB_OUTPUT ;;
+              kailash-ml)       echo "package_dir=packages/kailash-ml" >> $GITHUB_OUTPUT ;;
+              kailash-align)    echo "package_dir=packages/kailash-align" >> $GITHUB_OUTPUT ;;
+              kailash-ml-protocols) echo "package_dir=packages/kailash-ml-protocols" >> $GITHUB_OUTPUT ;;
             esac
             echo "package=$PACKAGE" >> $GITHUB_OUTPUT
             echo "version=manual" >> $GITHUB_OUTPUT
@@ -77,6 +86,18 @@ jobs:
             elif [[ "$TAG" =~ ^kaizen-agents-v(.+)$ ]]; then
               echo "package=kaizen-agents" >> $GITHUB_OUTPUT
               echo "package_dir=packages/kaizen-agents" >> $GITHUB_OUTPUT
+              VERSION="${BASH_REMATCH[1]}"
+            elif [[ "$TAG" =~ ^ml-protocols-v(.+)$ ]]; then
+              echo "package=kailash-ml-protocols" >> $GITHUB_OUTPUT
+              echo "package_dir=packages/kailash-ml-protocols" >> $GITHUB_OUTPUT
+              VERSION="${BASH_REMATCH[1]}"
+            elif [[ "$TAG" =~ ^ml-v(.+)$ ]]; then
+              echo "package=kailash-ml" >> $GITHUB_OUTPUT
+              echo "package_dir=packages/kailash-ml" >> $GITHUB_OUTPUT
+              VERSION="${BASH_REMATCH[1]}"
+            elif [[ "$TAG" =~ ^align-v(.+)$ ]]; then
+              echo "package=kailash-align" >> $GITHUB_OUTPUT
+              echo "package_dir=packages/kailash-align" >> $GITHUB_OUTPUT
               VERSION="${BASH_REMATCH[1]}"
             elif [[ "$TAG" =~ ^v(.+)$ ]]; then
               echo "package=kailash" >> $GITHUB_OUTPUT
