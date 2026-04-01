@@ -1,5 +1,19 @@
 # Nexus Changelog
 
+## [1.7.1] - 2026-04-01
+
+### Fixed
+
+- **Connection stampede on Docker Desktop** (#211, #212): Nexus enterprise gateway created a duplicate `AsyncLocalRuntime` independently from Nexus's own runtime, doubling the connection pool footprint. Gateway now shares Nexus's runtime via `runtime=` injection.
+- **Hardcoded `server_type="enterprise"` and `max_workers=20`**: Both are now configurable via constructor params (`server_type`, `max_workers`) and env vars (`NEXUS_SERVER_TYPE`, `NEXUS_MAX_WORKERS`). Default auto-detects `min(4, cpu_count)`.
+- **Input validation**: `server_type` validates against `{"enterprise", "durable", "basic"}` at construction. `max_workers` rejects `< 1` and non-numeric env var values.
+- **MCP transport orphan runtime**: `MCPTransport` now accepts an optional `runtime` parameter to share the parent's pool instead of creating its own.
+- **Pre-existing test failures**: 2 tests that required `enable_http_transport=True` for MCP server initialization now pass.
+
+### Added
+
+- 8 regression tests in `tests/regression/test_issue_211.py` covering dual runtime elimination, configurable gateway, and env var overrides.
+
 ## [1.7.0] - 2026-04-01
 
 ### Added

@@ -1,5 +1,12 @@
 # DataFlow Changelog
 
+## [1.5.1] - 2026-04-01
+
+### Fixed
+
+- **Connection stampede during auto_migrate** (#212): `_create_table_sync()` opened a fresh psycopg2 connection per DDL statement (63+ connections for 21 models). New `_create_tables_batch()` batches all `CREATE TABLE` and `CREATE INDEX` into a single connection. Reduces DDL connections from ~88 to 1.
+- **Missing `IF NOT EXISTS` on `CREATE INDEX`**: User-defined and FK indexes now use `CREATE INDEX IF NOT EXISTS`, matching kailash-rs behavior. Prevents "relation already exists" errors on re-run.
+
 ## [1.5.0] - 2026-04-01
 
 ### Added

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-nexus"
-version = "1.7.0"
+version = "1.7.1"
 description = "Zero-configuration multi-channel workflow orchestration platform"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
