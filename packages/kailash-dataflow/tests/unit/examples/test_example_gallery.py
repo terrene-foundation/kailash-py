@@ -8,11 +8,13 @@ This test file validates 5 high-value integration examples:
 4. File Storage - S3 Upload (2 tests)
 5. Authentication - JWT + OAuth2 (2 tests)
 
-Tests use PostgreSQL for real infrastructure testing (NO SQLite :memory:).
+Uses SQLite in-memory for unit tests (Tier 1). PostgreSQL integration
+tests belong in tests/integration/.
 """
 
 import asyncio
 import os
+import tempfile
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -22,11 +24,10 @@ from kailash.workflow.builder import WorkflowBuilder
 
 from dataflow import DataFlow
 
-# PostgreSQL test database URL
-PG_URL = os.getenv(
-    "TEST_DATABASE_URL",
-    "postgresql://kaizen_dev:kaizen_dev_password@localhost:5432/kailash_test",
-)
+# SQLite file-based for unit tests (Tier 1)
+# :memory: SQLite cannot acquire migration locks in async context
+_DB_FILE = tempfile.mktemp(suffix=".db", prefix="test_example_gallery_")
+DB_URL = f"sqlite:///{_DB_FILE}"
 
 
 # ============================================================================
@@ -54,7 +55,7 @@ class TestStripeSubscription:
         2. Store customer record in database
         3. Return customer ID and stripe_customer_id
         """
-        db = DataFlow(PG_URL)
+        db = DataFlow(DB_URL)
 
         @db.model
         class Customer:
@@ -125,7 +126,7 @@ customer_email = "alice@example.com"
         2. Extract payment intent data
         3. Update customer subscription status
         """
-        db = DataFlow(PG_URL)
+        db = DataFlow(DB_URL)
 
         @db.model
         class Subscription:
@@ -237,7 +238,7 @@ class TestSendGridEmail:
         2. Send email via SendGrid API
         3. Log email sent event
         """
-        db = DataFlow(PG_URL)
+        db = DataFlow(DB_URL)
 
         @db.model
         class EmailLog:
@@ -320,7 +321,7 @@ status = "sent"
         2. Send batch of emails via SendGrid
         3. Log campaign results
         """
-        db = DataFlow(PG_URL)
+        db = DataFlow(DB_URL)
 
         @db.model
         class BulkEmailLog:
@@ -416,7 +417,7 @@ class TestOpenAIIntegration:
         2. Call OpenAI API for chat completion
         3. Parse and store response
         """
-        db = DataFlow(PG_URL)
+        db = DataFlow(DB_URL)
 
         @db.model
         class ChatCompletion:
@@ -502,7 +503,7 @@ completion_id = f"cmpl_{uuid.uuid4().hex[:24]}"
         2. Process chunks as they arrive
         3. Store final response
         """
-        db = DataFlow(PG_URL)
+        db = DataFlow(DB_URL)
 
         @db.model
         class StreamingCompletion:
@@ -604,7 +605,7 @@ class TestS3Upload:
         3. Upload file to S3
         4. Store file metadata in database
         """
-        db = DataFlow(PG_URL)
+        db = DataFlow(DB_URL)
 
         @db.model
         class FileUpload:
@@ -699,7 +700,7 @@ upload_success = True
         3. Track progress for each file
         4. Store batch metadata
         """
-        db = DataFlow(PG_URL)
+        db = DataFlow(DB_URL)
 
         @db.model
         class BatchUpload:
@@ -832,7 +833,7 @@ class TestAuthentication:
         3. Generate JWT tokens
         4. Store token metadata
         """
-        db = DataFlow(PG_URL)
+        db = DataFlow(DB_URL)
 
         @db.model
         class User:
@@ -965,7 +966,7 @@ refresh_expires_at = "2025-11-06T04:00:00"
         4. Create user record
         5. Generate internal session token
         """
-        db = DataFlow(PG_URL)
+        db = DataFlow(DB_URL)
 
         @db.model
         class OAuthUser:

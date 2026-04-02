@@ -611,7 +611,7 @@ def _get_cached_allowed_types() -> list[type]:
 
         lgb = _importlib2.import_module("lightgbm")
         allowed_types.extend([lgb.Dataset, lgb.Booster])
-    except (ImportError, AttributeError):
+    except (ImportError, AttributeError, OSError):
         pass
 
     # Data visualization
