@@ -341,6 +341,11 @@ class DataFlow(DataFlowEventMixin):
         self._nodes = {}  # Store generated nodes for testing
         self._tenant_context = None if not self.config.security.multi_tenant else {}
 
+        # Fabric Engine: source and product registrations (populated by .source() and @product())
+        self._sources: Dict[str, Any] = {}
+        self._products: Dict[str, Any] = {}
+        self._fabric: Optional[Any] = None
+
         # DATAFLOW-ASYNC-MODEL-DECORATOR-001: Deferred relationship detection
         # Store models that need relationship detection, to be processed during initialize()
         # This prevents discover_schema() from being called during model registration,
@@ -1657,6 +1662,234 @@ class DataFlow(DataFlowEventMixin):
             interactive=interactive,
             auto_confirm=auto_confirm,
         )
+
+    # ------------------------------------------------------------------
+    # Fabric Engine: source registration
+    # ------------------------------------------------------------------
+
+    def source(self, name: str, config: Any) -> None:
+        """Register an external data source with the fabric engine.
+
+        Sources are external data endpoints (REST APIs, files, cloud storage,
+        databases, streams) that products can depend on. Source data is polled
+        or pushed via webhooks and cached for product computation.
+
+        Args:
+            name: Unique source name. Must not conflict with model names.
+            config: Source configuration (RestSourceConfig, FileSourceConfig, etc.)
+
+        Raises:
+            ValueError: If name conflicts with a model or another source.
+            ValueError: If config validation fails.
+
+        Example::
+
+            db.source("crm", RestSourceConfig(
+                url="https://api.example.com",
+                auth=BearerAuth(token_env="CRM_API_TOKEN"),
+                poll_interval=60,
+            ))
+        """
+        # Validate name uniqueness across models AND sources
+        if name in self._models:
+            raise ValueError(
+                f"Source name '{name}' conflicts with registered model '{name}'. "
+                f"Choose a different name."
+            )
+        if name in self._sources:
+            raise ValueError(
+                f"Source '{name}' is already registered. "
+                f"Registered sources: {list(self._sources.keys())}"
+            )
+
+        # Validate config
+        if hasattr(config, "validate"):
+            config.validate()
+
+        # Create adapter from config
+        from dataflow.adapters.source_adapter import BaseSourceAdapter
+        from dataflow.fabric.config import (
+            CloudSourceConfig,
+            DatabaseSourceConfig,
+            FileSourceConfig,
+            RestSourceConfig,
+            StreamSourceConfig,
+        )
+
+        adapter: BaseSourceAdapter
+
+        if isinstance(config, RestSourceConfig):
+            from dataflow.adapters.rest_adapter import RestSourceAdapter
+
+            adapter = RestSourceAdapter(name, config)
+        elif isinstance(config, FileSourceConfig):
+            from dataflow.adapters.file_adapter import FileSourceAdapter
+
+            adapter = FileSourceAdapter(name, config)
+        elif isinstance(config, CloudSourceConfig):
+            from dataflow.adapters.cloud_adapter import CloudSourceAdapter
+
+            adapter = CloudSourceAdapter(name, config)
+        elif isinstance(config, DatabaseSourceConfig):
+            from dataflow.adapters.database_source_adapter import DatabaseSourceAdapter
+
+            adapter = DatabaseSourceAdapter(name, config)
+        elif isinstance(config, StreamSourceConfig):
+            from dataflow.adapters.stream_adapter import StreamSourceAdapter
+
+            adapter = StreamSourceAdapter(name, config)
+        else:
+            raise ValueError(
+                f"Unknown source config type: {type(config).__name__}. "
+                f"Expected one of: RestSourceConfig, FileSourceConfig, "
+                f"CloudSourceConfig, DatabaseSourceConfig, StreamSourceConfig."
+            )
+
+        self._sources[name] = {
+            "name": name,
+            "config": config,
+            "adapter": adapter,
+        }
+
+        logger.debug(
+            "Registered source '%s' (type=%s)",
+            name,
+            type(config).__name__,
+        )
+
+    def get_sources(self) -> Dict[str, Any]:
+        """Get all registered sources."""
+        return {name: info["config"] for name, info in self._sources.items()}
+
+    def product(
+        self,
+        name: str,
+        mode: str = "materialized",
+        depends_on: Optional[List[str]] = None,
+        staleness: Optional[Any] = None,
+        schedule: Optional[str] = None,
+        multi_tenant: bool = False,
+        auth: Optional[Dict[str, Any]] = None,
+        rate_limit: Optional[Any] = None,
+        write_debounce: Optional[Any] = None,
+        cache_miss: str = "timeout",
+    ) -> Callable:
+        """Decorator to register a data product with the fabric engine.
+
+        Products are declarative data transformations that auto-refresh when
+        their dependencies (models or sources) change. The decorated function
+        receives a FabricContext and returns the product data.
+
+        Args:
+            name: Unique product name.
+            mode: "materialized" (pre-computed), "parameterized" (on-demand), "virtual" (no cache).
+            depends_on: List of model or source names this product reads.
+            staleness: StalenessPolicy for cache expiry.
+            schedule: Optional cron expression for scheduled refresh.
+            multi_tenant: If True, cache is per-tenant.
+            auth: Auth config dict (e.g., {"roles": ["admin"]}).
+            rate_limit: RateLimit config for request throttling.
+            write_debounce: timedelta for debouncing writes.
+            cache_miss: Strategy for parameterized cache miss: "timeout" | "async_202" | "inline".
+
+        Example::
+
+            @db.product("dashboard", depends_on=["User", "crm"])
+            async def dashboard(ctx):
+                users = await ctx.express.list("User")
+                deals = await ctx.source("crm").fetch("deals")
+                return {"users": len(users), "deals": len(deals)}
+        """
+        from dataflow.fabric.products import register_product
+
+        def decorator(fn: Callable) -> Callable:
+            register_product(
+                products=self._products,
+                models=self._models,
+                sources=self._sources,
+                name=name,
+                fn=fn,
+                mode=mode,
+                depends_on=depends_on or [],
+                staleness=staleness,
+                schedule=schedule,
+                multi_tenant=multi_tenant,
+                auth=auth,
+                rate_limit=rate_limit,
+                write_debounce=write_debounce,
+                cache_miss=cache_miss,
+            )
+            return fn
+
+        return decorator
+
+    def get_products(self) -> Dict[str, Any]:
+        """Get all registered products."""
+        return {name: info for name, info in self._products.items()}
+
+    async def start(
+        self,
+        fail_fast: bool = True,
+        dev_mode: bool = False,
+        nexus: Optional[Any] = None,
+        coordination: Optional[str] = None,
+        host: str = "127.0.0.1",
+        port: int = 8000,
+        enable_writes: bool = False,
+        tenant_extractor: Optional[Callable] = None,
+    ) -> Any:
+        """Start the fabric runtime — the main entry point for data products.
+
+        This connects all sources, elects a leader, pre-warms materialized
+        products, starts change detection, and registers serving endpoints.
+
+        Args:
+            fail_fast: Raise on source health check failure.
+            dev_mode: Skip pre-warming, in-memory cache, reduced poll intervals.
+            nexus: Existing Nexus instance to attach to (production).
+            coordination: "redis" or "postgresql". Auto-detects if None.
+            host: Bind address for internal server (if no nexus provided).
+            port: Port for internal server.
+            enable_writes: Enable write pass-through endpoints.
+            tenant_extractor: Lambda to extract tenant_id from request.
+
+        Returns:
+            The FabricRuntime instance.
+        """
+        from dataflow.fabric.runtime import FabricRuntime
+
+        redis_url = getattr(self.config, "redis_url", None) or getattr(
+            self.config.database, "redis_url", None
+        )
+        if hasattr(self, "_redis_url"):
+            redis_url = self._redis_url or redis_url
+
+        self._fabric = FabricRuntime(
+            dataflow=self,
+            sources=self._sources,
+            products=self._products,
+            fail_fast=fail_fast,
+            dev_mode=dev_mode,
+            redis_url=redis_url,
+            host=host,
+            port=port,
+            enable_writes=enable_writes,
+            tenant_extractor=tenant_extractor,
+            nexus=nexus,
+        )
+        await self._fabric.start()
+        return self._fabric
+
+    async def stop(self) -> None:
+        """Stop the fabric runtime gracefully."""
+        if self._fabric is not None:
+            await self._fabric.stop()
+            self._fabric = None
+
+    @property
+    def fabric(self) -> Optional[Any]:
+        """Access the running FabricRuntime, or None if not started."""
+        return self._fabric
 
     def set_tenant_context(self, tenant_id: str):
         """Set the current tenant context for multi-tenant operations."""

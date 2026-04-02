@@ -466,6 +466,7 @@ class DataFlowExpress:
         filter: Optional[Dict[str, Any]] = None,
         limit: int = 100,
         offset: int = 0,
+        order_by: Optional[str] = None,
         cache_ttl: Optional[int] = None,
         use_primary: bool = False,  # TSG-105
     ) -> List[Dict[str, Any]]:
@@ -477,6 +478,7 @@ class DataFlowExpress:
             filter: Optional MongoDB-style filter criteria
             limit: Maximum records to return (default: 100)
             offset: Skip first N records (default: 0)
+            order_by: Optional field name to sort by (e.g., "created_at" or "-created_at" for desc)
             cache_ttl: Optional cache TTL override
 
         Returns:
@@ -486,6 +488,8 @@ class DataFlowExpress:
             users = await db.express.list("User", filter={"status": "active"}, limit=50)
         """
         params = {"filter": filter or {}, "limit": limit, "offset": offset}
+        if order_by:
+            params["order_by"] = order_by
         effective_ttl = cache_ttl if cache_ttl is not None else self._default_cache_ttl
 
         # Check cache first
@@ -1169,6 +1173,7 @@ class SyncExpress:
         filter: Optional[Dict[str, Any]] = None,
         limit: int = 100,
         offset: int = 0,
+        order_by: Optional[str] = None,
         cache_ttl: Optional[int] = None,
         use_primary: bool = False,  # TSG-105
     ) -> List[Dict[str, Any]]:
@@ -1179,6 +1184,7 @@ class SyncExpress:
             filter: Optional MongoDB-style filter criteria
             limit: Maximum records to return (default: 100)
             offset: Skip first N records (default: 0)
+            order_by: Optional field name to sort by (e.g., "created_at" or "-created_at" for desc)
             cache_ttl: Optional cache TTL override
             use_primary: Force read from primary adapter (TSG-105)
 
@@ -1187,7 +1193,13 @@ class SyncExpress:
         """
         return self._run_sync(
             self._express.list(
-                model, filter, limit, offset, cache_ttl, use_primary=use_primary
+                model,
+                filter,
+                limit,
+                offset,
+                order_by,
+                cache_ttl,
+                use_primary=use_primary,
             )
         )
 

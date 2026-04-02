@@ -195,6 +195,38 @@ class DataFlowEngineBuilder:
         self._validate_on_write = enabled
         return self
 
+    def source(self, name: str, config: Any) -> DataFlowEngineBuilder:
+        """Register an external data source (chainable).
+
+        The source is applied to the DataFlow instance at build() time.
+
+        Example::
+
+            engine = await (
+                DataFlowEngine.builder("sqlite:///app.db")
+                .source("crm", RestSourceConfig(url="https://api.example.com"))
+                .source("config", FileSourceConfig(path="./config.yaml"))
+                .build()
+            )
+        """
+        sources = self._dataflow_kwargs.setdefault("_fabric_sources", [])
+        sources.append((name, config))
+        return self
+
+    def fabric(self, **kwargs: Any) -> DataFlowEngineBuilder:
+        """Configure fabric runtime parameters (chainable).
+
+        Example::
+
+            engine = await (
+                DataFlowEngine.builder("sqlite:///app.db")
+                .fabric(dev_mode=True, enable_writes=True)
+                .build()
+            )
+        """
+        self._dataflow_kwargs.setdefault("_fabric_config", {}).update(kwargs)
+        return self
+
     def config(self, **kwargs: Any) -> DataFlowEngineBuilder:
         """Pass additional configuration to the underlying DataFlow instance."""
         self._dataflow_kwargs.update(kwargs)
@@ -202,21 +234,35 @@ class DataFlowEngineBuilder:
 
     async def build(self) -> DataFlowEngine:
         """Build the DataFlowEngine instance (async -- connects to database)."""
+        # Extract fabric-specific config before passing to DataFlow
+        kwargs = dict(self._dataflow_kwargs)
+        fabric_sources = kwargs.pop("_fabric_sources", [])
+        fabric_config = kwargs.pop("_fabric_config", {})
+
         dataflow = DataFlow(
             database_url=self._database_url,
             slow_query_threshold=self._slow_query_threshold,
-            **self._dataflow_kwargs,
+            **kwargs,
         )
+
+        # Register builder-specified sources
+        for name, config in fabric_sources:
+            dataflow.source(name, config)
 
         query_engine = QueryEngine(slow_query_threshold=self._slow_query_threshold)
 
-        return DataFlowEngine(
+        engine = DataFlowEngine(
             dataflow=dataflow,
             validation=self._validation,
             classification=self._classification,
             query_engine=query_engine,
             validate_on_write=self._validate_on_write,
         )
+
+        # Store fabric config for later start()
+        engine._fabric_config = fabric_config
+
+        return engine
 
 
 class DataFlowEngine:
