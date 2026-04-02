@@ -35,7 +35,7 @@ changes:
     reason: "Updated to reference new ml-quick-reference.md"
     diff_lines: "+7 -3"
 
-status: pending_review
+status: reviewed
 
 notes: |
   Session 17 — comprehensive session across 7 workspaces:

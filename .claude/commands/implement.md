@@ -33,13 +33,23 @@ You MUST always use the todo-manager to create detailed todos for EVERY SINGLE T
 - Review with agents before implementation
 - Ensure that both FE and BE detailed todos exist, if applicable
 
-### 2. Implement
+### 2. Context anchoring (MUST run before each todo)
+
+Before implementing ANY todo, re-read the source material that spawned it:
+
+1. **Re-read the plan section** in `02-plans/` that this todo implements — not the whole directory, but the specific plan paragraphs. If the plan describes a `DataFabric` class with 3 methods, you are building that class with those 3 methods.
+2. **Re-read relevant journals** in `workspaces/<project>/journal/` — decisions, trade-offs, and risks from analysis inform how to implement. If a journal says "chose event-driven over polling because of X," the implementation must be event-driven.
+3. **Re-read the todo itself** — the description, not just the title. Todos have implementation details that get ignored when agents skim titles.
+
+**Why this step exists**: Without it, agents implement from vague memory of what they think the todo means, not from what was actually specified. Plans describe 15 details; agents remember 3. The other 12 become mock data and missing features.
+
+### 3. Implement
 
 Continue with the implementation of the next todo/phase using a team of agents, following procedural directives.
 
 - Ensure that both FE and BE are implemented, if applicable
 
-### 3. Quality standards
+### 4. Quality standards
 
 Always involve tdd-implementer, testing-specialists, value auditor, ai ui ux specialists, with any agents relevant to the work at hand.
 
@@ -48,7 +58,7 @@ Always involve tdd-implementer, testing-specialists, value auditor, ai ui ux spe
   - Always address pre-existing failures — do not pass until all failures, warnings, hints are resolved
 - Always identify the root causes of issues, and implement optimal, elegant fixes
 
-### 4. Testing requirements
+### 5. Testing requirements
 
 Follow the **test-once protocol** from `rules/testing.md`:
 
@@ -60,7 +70,7 @@ Follow the **test-once protocol** from `rules/testing.md`:
 
 Do NOT run the full suite multiple times per todo. Do NOT re-run tests that tdd-implementer already ran.
 
-### 5. LLM usage
+### 6. LLM usage
 
 When writing and testing agents, always utilize the LLM's capabilities instead of naive NLP approaches (keywords, regex, etc).
 
@@ -68,22 +78,22 @@ When writing and testing agents, always utilize the LLM's capabilities instead o
 - Always check `.env` for api keys and model names to use in development
   - Always assume model names in memory are outdated — perform a web check on model names in `.env` before declaring them invalid
 
-### 6. Update docs and close todos
+### 7. Spec-verify and close todos
 
-After completing each todo:
+Before moving ANY todo from `active/` to `completed/`, MUST:
 
-- Move it from `todos/active/` to `todos/completed/`
-- Ensure every task is verified with evidence before closing
+1. **Re-read the plan section** that spawned this todo (same files from step 2)
+2. **Check every detail** — not "does the file exist" but "does the implementation match what the plan specified, line by line"
+3. **Check wiring** — if the todo involves UI, verify it calls real APIs (not mock/generated data). If it involves an architecture component, verify the designed abstraction exists (not ad-hoc replacements).
+4. **Check journals** — if analysis journals flagged risks or constraints for this area, verify they were addressed
+5. **Write verification record** — append a `## Verification` section to the todo file listing what was checked (plan reference, wiring status, journal constraints addressed). This is the audit trail — without it, "verified" is an unsubstantiated claim.
 
-At the end of each implementation cycle, create and update documentation at the **project root** (not inside the workspace):
+A todo is complete when the plan says X and the code does X. Not when the code does something and happens to compile.
 
-- `docs/` (complete detailed docs capturing every detail of the codebase)
-  - This is the last resort document that agents use to find elusive and deep documentation
-- `docs/00-authority/`
-  - Authoritative documents that developers and codegen read first for full situational awareness
-  - Ensure you create/update `README.md` (navigating authority documents) and `CLAUDE.md` (preloaded instructions)
-- Use as many subdirectories and files as required, naming them sequentially 00-, 01- for easy referencing
-- Focus on capturing the essence and intent — the 'what it is' and 'how to use it' — not status/progress/reports
+At the end of each implementation cycle, update documentation at the **project root** (not workspace):
+
+- `docs/` — complete codebase docs; `docs/00-authority/` — authoritative `README.md` + `CLAUDE.md`
+- Focus on essence and intent ('what it is', 'how to use it'), not status/progress
 
 ## Agent Teams
 
@@ -123,6 +133,7 @@ Deploy these agents as a team for each implementation cycle:
 ### Journal
 
 After completing each task, create journal entries for insights produced:
+
 - **DECISION** entries for implementation choices (architecture, library selection, design patterns)
 - **DISCOVERY** entries for technical findings during development
 - **RISK** entries for potential issues discovered during implementation

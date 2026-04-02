@@ -1,53 +1,50 @@
-# Session Notes — 2026-04-01 (session 12)
+# Session Notes — 2026-04-03 (Data Fabric Engine analysis complete)
 
 ### Read These Files First (in order)
 
-1. `workspaces/kailash/04-validate/04-convergence-report.md` — full red team convergence report, test counts, security fixes
-2. `workspaces/kailash/01-analysis/06-cross-workspace-synthesis.md` — cross-workspace dependencies and sequencing
-3. `.claude/.proposals/latest.yaml` — codification proposal with 16+ artifact changes for upstream `/sync`
-4. `packages/kailash-ml/README.md` — kailash-ml documentation (expanded this session)
-5. `packages/kailash-align/pyproject.toml` — kailash-align deps and extras ([rlhf], [eval], [serve], [full])
-6. `CLAUDE.md` — updated framework table now includes kailash-ml and kailash-align
+1. `workspaces/data-fabric-engine/.spec-coverage` — final analysis status (98%, 39 findings resolved, READY)
+2. `workspaces/data-fabric-engine/01-analysis/01-research/13-fabric-on-dataflow-layers.md` — THE definitive doc: fabric maps onto DataFlow's 10-layer stack
+3. `workspaces/data-fabric-engine/01-analysis/02-architecture-options/04-final-convergence.md` — all design decisions (auth, headers not envelope, rate limiting, multi-tenancy, shutdown)
+4. `workspaces/data-fabric-engine/04-validate/02-runtime-redteam-convergence.md` — runtime fixes (supervised tasks, Lua atomic, webhook queue)
+5. `workspaces/data-fabric-engine/04-validate/03-layer-redteam-convergence.md` — layer fixes (PipelineContext, pool partition, ProductInvokeNode)
+6. `workspaces/data-fabric-engine/02-plans/02-competitor-informed-refinements.md` — SSE, MessagePack, MGET batch, Redis debounce
+7. `workspaces/data-fabric-engine/todos/active/` — 6 milestone files, 39 todos, approved for /implement
 
 ## Accomplished
 
-- **5 workspaces: full pipeline** (/analyze → /todos → /implement → /redteam → /codify) in one session
-- **dataflow-enhancements**: 8 features (DerivedModel, FileSource, Validation DSL, Cache wiring, ReadReplica, Retention, EventMixin, on_source_change) — 3690 tests pass
-- **nexus-transport-refactor**: B0a (HandlerRegistry, EventBus, BackgroundService) + B0b (Transport ABC, HTTPTransport, MCPTransport, Phase 2 APIs) — 1153 tests pass
-- **mcp-platform-server**: Unified FastMCP server, 7 AST contributors, security tiers, MCP resources, old MCP cleanup — 20 tests pass
-- **kailash-ml**: NEW package — protocols, interop (8 converters), 9 engines (FeatureStore through FeatureEngineer), MLflow v1 compat, ONNX bridge — 163 tests pass
-- **kailash-align**: NEW package — AdapterRegistry, AlignmentConfig, SFT/DPO pipeline, Evaluator, Serving (GGUF), Bridge, OnPrem — 211 tests pass
-- **GH issues**: #204 (cache bug), #205 (GovernanceEngine), #206 (ShadowStore), #207 (SignedEnvelope) — all closed
-- **Security**: 11 findings fixed (4C + 7H), 0 open CRITICAL/HIGH
-- **Codification**: 3 agents updated, 13 new skills created, upstream proposal at `.claude/.proposals/latest.yaml`
-- **Total**: ~80 new files, ~730 new tests, 5292 passing, 0 regressions
+- Full Data Fabric Engine analysis: 13 research docs, 6 red team rounds, 39 findings all resolved
+- **Core decision**: DataFlow IS the fabric — adds 1 new layer (FabricRuntime), extends 3 existing layers, 7 unchanged
+- **Three new concepts**: `db.source()`, `@db.product()`, `await db.start()` — 100% backward compatible
+- Competitor research: Hasura (poll-based internally), Supabase (WAL), Denodo (relational cache), RisingWave (streaming mat views)
+- Competitor-informed: SSE over HTTP/2, MessagePack (6x faster), Redis Hash metadata, MGET batch, Redis sorted set debounce
+- 39 implementation todos across 6 milestones, red-teamed
+- Cross-SDK issue filed: esperie-enterprise/kailash-rs#143
 
 ## Outstanding
 
-- [ ] All changes are UNCOMMITTED — create branch `feat/five-workspace-sprint-s12` and PR
-- [ ] `/sync py` at loom/ to distribute 16 codified artifacts to USE template
-- [ ] `/release` for new packages: kailash-ml 0.1.0, kailash-align 0.1.0, kailash-ml-protocols 0.1.0
-- [ ] Version bumps needed: kailash-dataflow (new features), kailash-nexus (transport refactor)
-- [ ] CHANGELOG entries for all 5 workspaces + trust/PACT features
-- [ ] 22 pre-existing test failures (DataFlow PG auth, knowledge_base; Nexus channel init, MCP server check)
-- [ ] ML-400 (6 Kaizen agents) skipped — needs LLM API keys for integration testing
-- [ ] ML-500 (integration tests) needs full engine-to-engine E2E with real training
+- [ ] `/implement` 39 todos in `workspaces/data-fabric-engine/todos/active/01-06.md`
+- [ ] M1 (01-08): BaseSourceAdapter, configs, 5 adapters, core wiring
+- [ ] M2 (09-13): Products, FabricContext, PipelineExecutor, ChangeDetector, LeaderElector
+- [ ] M3 (14-18): Serving, writes, webhooks, FabricRuntime, event bus
+- [ ] M4 (19-25): Health, traces, metrics, logging, SSE, batch, programmatic API
+- [ ] M5 (26-33): Builder, MockSource, cron, multi-tenancy, packaging, tests, reference app, docs
+- [ ] M6 (34-39): Product DAG, filter allowlist, OAuth2, nonces, params, dev debounce
+- [ ] Prior outstanding: kailash-align EATP gaps, 20 dataflow test failures, Nexus dead code
 
 ## Oversight — Verify Before Starting
 
-- [ ] `git log --oneline -1` — should still be `c9dcc8bf` (no commits this session)
-- [ ] `uv run pytest packages/kailash-ml/tests/ -q --timeout=60` — 163 passed, 1 skipped
-- [ ] `uv run pytest packages/kailash-align/tests/ -q --timeout=60` — 211 passed, 1 skipped
-- [ ] `gh issue list --state open` — should return 0 open issues
+- [ ] `workspaces/data-fabric-engine/todos/active/` has 6 files (01-foundation through 06-security)
+- [ ] No existing `packages/kailash-dataflow/src/dataflow/fabric/` directory yet
+- [ ] DataFlow baseline: `cd packages/kailash-dataflow && uv run pytest tests/ -x --timeout=30 -q`
+- [ ] `.spec-coverage` shows "READY FOR /todos" status
 
 ## Oversight — Verify After Completing
 
-- [ ] Branch pushed, PR created with all changes
-- [ ] `pip install -e packages/kailash-ml` works
-- [ ] `pip install -e packages/kailash-align` works
-- [ ] `pip install -e packages/kailash-ml-protocols` works
-- [ ] `/sync py` completed at loom/ with proposal classified
+- [ ] All existing DataFlow tests still pass (backward compat)
+- [ ] New fabric tests: `uv run pytest tests/fabric/ -x`
+- [ ] `DataFlow("sqlite:///:memory:")` + `@db.model` works without fabric features
+- [ ] Reference app runs: `python examples/fabric_reference/app.py`
 
 ## Blockers
 
-- None — all changes ready for commit/PR/release
+None. Todos approved. Next session: `/implement`.
