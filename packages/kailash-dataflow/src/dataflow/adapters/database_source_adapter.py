@@ -89,8 +89,9 @@ class DatabaseSourceAdapter(BaseSourceAdapter):
                     ) from exc
                 self._conn = await asyncpg.connect(url)
             else:
+                scheme = url.split("://")[0] if "://" in url else "unknown"
                 raise ValueError(
-                    f"Unsupported database URL scheme for source adapter: {url[:30]}..."
+                    f"Unsupported database URL scheme for source adapter: {scheme}"
                 )
 
         logger.info("Database source adapter '%s' connected", self.name)
@@ -163,6 +164,7 @@ class DatabaseSourceAdapter(BaseSourceAdapter):
 
     async def _try_updated_at(self, table: str) -> bool:
         """Check if table has an updated_at column."""
+        _validate_table_name(table)  # Defense-in-depth
         try:
             if hasattr(self._conn, "fetchval"):
                 result = await self._conn.fetchval(

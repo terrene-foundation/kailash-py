@@ -155,9 +155,10 @@ class FabricServingLayer:
                         validate_filter(filter_dict)
                         params["filter"] = filter_dict
                     except (json.JSONDecodeError, ValueError) as e:
+                        logger.debug("Invalid filter parameter: %s", e)
                         return {
                             "_status": 400,
-                            "error": str(e),
+                            "error": "Invalid filter parameter",
                         }
 
                 # Clamp limit
@@ -356,7 +357,7 @@ class FabricServingLayer:
 
             except Exception as e:
                 logger.error("Write to '%s' failed: %s", target, e)
-                return {"_status": 500, "error": f"Write failed: {e}"}
+                return {"_status": 500, "error": "Write operation failed"}
 
         handler.__name__ = f"fabric_write_{target}"
         return handler

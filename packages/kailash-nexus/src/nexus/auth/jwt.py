@@ -279,12 +279,33 @@ class JWTMiddleware(BaseHTTPMiddleware):
             if self.config.max_token_age_seconds is not None:
                 iat = payload.get("iat")
                 if iat is not None:
-                    token_age = int(datetime.now(timezone.utc).timestamp()) - int(iat)
+                    import math
+
+                    iat_float = float(iat)
+                    if not math.isfinite(iat_float):
+                        return JSONResponse(
+                            status_code=401,
+                            content={
+                                "detail": "Invalid iat claim",
+                                "error": "invalid_token",
+                            },
+                        )
+                    token_age = int(datetime.now(timezone.utc).timestamp()) - int(
+                        iat_float
+                    )
+                    if token_age < 0:
+                        return JSONResponse(
+                            status_code=401,
+                            content={
+                                "detail": "Token issued in the future",
+                                "error": "invalid_token",
+                            },
+                        )
                     if token_age > self.config.max_token_age_seconds:
                         return JSONResponse(
                             status_code=401,
                             content={
-                                "detail": f"Token too old ({token_age}s > {self.config.max_token_age_seconds}s)",
+                                "detail": "Token too old",
                                 "error": "token_too_old",
                             },
                         )

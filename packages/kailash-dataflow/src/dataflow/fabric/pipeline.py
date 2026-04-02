@@ -467,3 +467,58 @@ class PipelineExecutor:
     def db_semaphore(self) -> asyncio.Semaphore:
         """The DB connection budget semaphore for pipeline-scoped DB access."""
         return self._db_semaphore
+
+
+class InMemoryDebouncer:
+    """Fallback debouncer for dev mode when Redis is not available.
+
+    Uses asyncio timer handles to coalesce rapid source-change events.
+    Debounce state does not survive process restart.
+    """
+
+    def __init__(self) -> None:
+        self._timers: Dict[str, asyncio.TimerHandle] = {}
+        logger.debug(
+            "Using in-memory debounce (dev mode). "
+            "Debounce state will not survive process restart."
+        )
+
+    async def enqueue(
+        self,
+        product_name: str,
+        debounce_seconds: float,
+        callback: Callable[[str], Any],
+    ) -> None:
+        """Enqueue a debounced product refresh.
+
+        If called again for the same product within debounce_seconds,
+        the previous timer is cancelled and a new one starts.
+        """
+        if product_name in self._timers:
+            self._timers[product_name].cancel()
+
+        loop = asyncio.get_running_loop()
+        self._timers[product_name] = loop.call_later(
+            debounce_seconds,
+            lambda: asyncio.ensure_future(self._fire(product_name, callback)),
+        )
+
+    async def _fire(self, product_name: str, callback: Callable[[str], Any]) -> None:
+        """Execute the debounced callback."""
+        self._timers.pop(product_name, None)
+        try:
+            result = callback(product_name)
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception:
+            logger.exception("Debounced callback failed for '%s'", product_name)
+
+    def cancel_all(self) -> None:
+        """Cancel all pending debounce timers."""
+        for timer in self._timers.values():
+            timer.cancel()
+        self._timers.clear()
+
+    @property
+    def pending_count(self) -> int:
+        return len(self._timers)

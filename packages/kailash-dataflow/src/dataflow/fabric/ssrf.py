@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import socket
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -65,17 +66,44 @@ def validate_url_safe(url: str) -> str:
     if ".." in (parsed.path or ""):
         raise SSRFError(f"Path traversal detected in URL: {url!r}")
 
-    # Check if hostname is an IP address
+    # Check if hostname is an IP address literal
     try:
         addr = ipaddress.ip_address(hostname)
     except ValueError:
-        # hostname is not an IP literal — it's a domain name, which is allowed.
-        # DNS rebinding protection would require async resolution, which is
-        # handled at the httpx level with transport hooks if needed.
-        pass
+        # hostname is a domain name — resolve it to check for DNS rebinding
+        _check_resolved_addresses(hostname, url)
     else:
-        for network in _BLOCKED_NETWORKS:
-            if addr in network:
-                raise SSRFError(f"URL targets blocked IP range {network}: {url!r}")
+        _check_ip_blocked(addr, url)
 
     return url
+
+
+def _check_ip_blocked(
+    addr: ipaddress.IPv4Address | ipaddress.IPv6Address, url: str
+) -> None:
+    """Check a single IP address against blocked networks."""
+    for network in _BLOCKED_NETWORKS:
+        if addr in network:
+            raise SSRFError(f"URL targets blocked IP range {network}: {url!r}")
+
+
+def _check_resolved_addresses(hostname: str, url: str) -> None:
+    """Resolve DNS and check all returned addresses against blocked ranges.
+
+    Prevents DNS rebinding attacks where a domain resolves to private IPs.
+    """
+    try:
+        results = socket.getaddrinfo(
+            hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM
+        )
+        for family, _, _, _, sockaddr in results:
+            ip_str = sockaddr[0]
+            try:
+                addr = ipaddress.ip_address(ip_str)
+                _check_ip_blocked(addr, url)
+            except ValueError:
+                continue
+    except socket.gaierror:
+        # DNS resolution failed — hostname doesn't exist. Allow the request
+        # to proceed so the HTTP client produces a clear connection error.
+        pass

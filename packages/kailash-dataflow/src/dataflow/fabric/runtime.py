@@ -97,6 +97,7 @@ class FabricRuntime:
         self._shutting_down = False
         self._started = False
         self._started_at: Optional[datetime] = None
+        self._health_manager: Optional[Any] = None
 
     def _validate_params(self) -> None:
         """Validate parameter combinations at startup (TODO-38)."""
@@ -463,6 +464,16 @@ class FabricRuntime:
             "cached": cached is not None,
             "cached_at": cached[1].get("cached_at") if cached else None,
         }
+
+    def last_trace(self, name: str) -> Dict[str, Any]:
+        """Get the last pipeline trace for a product."""
+        if self._health_manager is None:
+            from dataflow.fabric.health import FabricHealthManager
+
+            self._health_manager = FabricHealthManager(
+                self._sources, self._products, self._pipeline, self._started_at
+            )
+        return self._health_manager.get_trace(name)
 
     @property
     def serving(self) -> Optional[FabricServingLayer]:

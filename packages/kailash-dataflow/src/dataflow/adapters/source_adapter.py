@@ -16,6 +16,7 @@ Circuit breaker: configurable failure threshold with automatic probe.
 from __future__ import annotations
 
 import asyncio
+import collections
 import enum
 import logging
 import time
@@ -149,7 +150,9 @@ class BaseSourceAdapter(BaseAdapter):
         self._circuit_breaker = CircuitBreaker(
             config=kwargs.get("circuit_breaker", CircuitBreakerConfig())
         )
-        self._last_successful_data: Dict[str, Any] = {}
+        self._last_successful_data: collections.OrderedDict[str, Any] = (
+            collections.OrderedDict()
+        )
         self._last_change_detected: Optional[datetime] = None
         self._connect_lock = asyncio.Lock()
 
@@ -326,9 +329,18 @@ class BaseSourceAdapter(BaseAdapter):
         """
         return self._last_successful_data.get(path)
 
+    _MAX_CACHED_PATHS = 1000
+
     def _record_successful_data(self, path: str, data: Any) -> None:
-        """Store data as last known good for graceful degradation."""
+        """Store data as last known good for graceful degradation.
+
+        Bounded to _MAX_CACHED_PATHS entries with LRU eviction.
+        """
+        if path in self._last_successful_data:
+            self._last_successful_data.move_to_end(path)
         self._last_successful_data[path] = data
+        while len(self._last_successful_data) > self._MAX_CACHED_PATHS:
+            self._last_successful_data.popitem(last=False)
 
     def _record_change_detected(self) -> None:
         """Mark that a change was detected now."""
