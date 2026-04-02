@@ -54,6 +54,7 @@ class RestSourceAdapter(BaseSourceAdapter):
         self._last_etag: Optional[str] = None
         self._last_modified: Optional[str] = None
         self._last_content_hash: Optional[str] = None
+        self._oauth2_manager: Optional[Any] = None
 
     # ------------------------------------------------------------------
     # BaseAdapter / BaseSourceAdapter properties
@@ -97,11 +98,10 @@ class RestSourceAdapter(BaseSourceAdapter):
     # Auth helpers
     # ------------------------------------------------------------------
 
-    def _apply_request_auth(self, headers: Dict[str, str]) -> None:
-        """Apply per-request auth headers (Bearer / API key).
+    async def _apply_request_auth(self, headers: Dict[str, str]) -> None:
+        """Apply per-request auth headers (Bearer / API key / OAuth2).
 
-        BasicAuth is handled at the client level; OAuth2 is not yet
-        supported (TODO-36 builds the full token lifecycle).
+        BasicAuth is handled at the client level.
         """
         auth = self.config.auth
         if isinstance(auth, BearerAuth):
@@ -109,7 +109,12 @@ class RestSourceAdapter(BaseSourceAdapter):
         elif isinstance(auth, ApiKeyAuth):
             headers[auth.header] = auth.get_key()
         elif isinstance(auth, OAuth2Auth):
-            raise NotImplementedError("OAuth2 token lifecycle managed by TODO-36")
+            if self._oauth2_manager is None:
+                from dataflow.fabric.auth import OAuth2TokenManager
+
+                self._oauth2_manager = OAuth2TokenManager(auth)
+            token = await self._oauth2_manager.get_access_token()
+            headers["Authorization"] = f"Bearer {token}"
         # BasicAuth is configured on self._client — nothing to do here.
 
     def _ensure_connected(self) -> httpx.AsyncClient:
@@ -152,7 +157,7 @@ class RestSourceAdapter(BaseSourceAdapter):
         """
         client = self._ensure_connected()
         headers: Dict[str, str] = {}
-        self._apply_request_auth(headers)
+        await self._apply_request_auth(headers)
 
         # First call: probe for conditional GET support
         if self._supports_etag is None and self._supports_last_modified is None:
@@ -222,7 +227,7 @@ class RestSourceAdapter(BaseSourceAdapter):
         client = self._ensure_connected()
         safe_path = self._safe_url(path) if path else "/"
         headers: Dict[str, str] = {}
-        self._apply_request_auth(headers)
+        await self._apply_request_auth(headers)
 
         resp = await client.get(safe_path, headers=headers, params=params)
         resp.raise_for_status()
@@ -248,7 +253,7 @@ class RestSourceAdapter(BaseSourceAdapter):
         client = self._ensure_connected()
         safe_path = self._safe_url(path) if path else "/"
         headers: Dict[str, str] = {}
-        self._apply_request_auth(headers)
+        await self._apply_request_auth(headers)
 
         # First request
         params: Dict[str, Any] = {"limit": page_size, "offset": 0}
@@ -282,7 +287,7 @@ class RestSourceAdapter(BaseSourceAdapter):
             if next_url:
                 validate_url_safe(next_url)
                 next_headers: Dict[str, str] = {}
-                self._apply_request_auth(next_headers)
+                await self._apply_request_auth(next_headers)
                 resp = await client.get(next_url, headers=next_headers)
             else:
                 params["offset"] += page_size
@@ -333,7 +338,7 @@ class RestSourceAdapter(BaseSourceAdapter):
         client = self._ensure_connected()
         safe_path = self._safe_url(path) if path else "/"
         headers: Dict[str, str] = {"Content-Type": "application/json"}
-        self._apply_request_auth(headers)
+        await self._apply_request_auth(headers)
 
         resp = await client.post(safe_path, headers=headers, json=data)
         resp.raise_for_status()

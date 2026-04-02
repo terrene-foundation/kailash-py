@@ -168,9 +168,10 @@ class FabricRuntime:
             self._change_detector = ChangeDetector(
                 sources=self._sources,
                 products=self._products,
-                on_change=self._on_source_change,
+                pipeline_executor=self._pipeline,
                 dev_mode=self._dev_mode,
             )
+            self._change_detector.set_on_change(self._on_source_change_with_trigger)
             await self._change_detector.start()
 
         # 7. Set up webhook receiver (all workers — RT-2)
@@ -313,6 +314,12 @@ class FabricRuntime:
                 logger.debug("Pre-warmed product '%s'", name)
             except Exception:
                 logger.exception("Failed to pre-warm product '%s'", name)
+
+    async def _on_source_change_with_trigger(
+        self, product_name: str, triggered_by: str = ""
+    ) -> None:
+        """Callback from ChangeDetector (2-arg: product_name, triggered_by)."""
+        await self._on_source_change(product_name)
 
     async def _on_source_change(self, product_name: str) -> None:
         """Callback when a source change triggers a product refresh."""
