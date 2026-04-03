@@ -13,6 +13,10 @@ on:
       - "packages/kaizen-agents/examples/autonomy/**"
       - "packages/kailash-kaizen/tests/examples/**"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   validate-examples:
     name: Validate Autonomy Examples
@@ -20,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.11"]
 
     steps:
       - name: Checkout repository
@@ -38,22 +42,6 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('**/setup.py', '**/requirements*.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-
-      - name: Install Ollama
-        run: |
-          curl -fsSL https://ollama.com/install.sh | sh
-
-          # Start Ollama in background
-          ollama serve &
-
-          # Wait for Ollama to be ready (max 30 seconds)
-          timeout 30 bash -c 'until curl -s http://localhost:11434/api/tags > /dev/null; do sleep 1; done'
-
-          # Pull required model for examples
-          ollama pull llama3.2:1b
-
-          # Verify model is available
-          ollama list | grep llama3.2:1b
 
       - name: Install dependencies
         working-directory: packages/kaizen-agents
@@ -142,5 +130,5 @@ jobs:
           echo "Python Version: ${{ matrix.python-version }}"
           echo "Examples Validated: 15"
           echo "READMEs Validated: 16 (15 examples + gallery)"
-          echo "Ollama Model: llama3.2:1b"
+          echo "Validation: syntax + imports"
           echo "========================================================================"

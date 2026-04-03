@@ -7,9 +7,23 @@ name: CI Pipeline
 on:
   push:
     branches: [feat/*, feature/*, fix/*, docs/*, session/*, session-*]
+    paths:
+      - "src/**"
+      - "packages/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/unified-ci.yml"
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened]
+    paths:
+      - "src/**"
+      - "packages/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/unified-ci.yml"
   workflow_dispatch:
     inputs:
       test-mode:
@@ -83,6 +97,16 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v6
 
+      - name: Restore uv cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            .venv
+          key: ${{ runner.os }}-uv-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-py${{ matrix.python-version }}-
+
       - name: Install dependencies
         run: |
           uv venv .venv
@@ -133,6 +157,16 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
+
+      - name: Restore uv cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            .venv
+          key: ${{ runner.os }}-uv-py3.11-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-py3.11-
 
       - name: Install dependencies
         run: |

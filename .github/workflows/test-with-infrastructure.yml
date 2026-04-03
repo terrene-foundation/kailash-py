@@ -1,3 +1,7 @@
+# NOTE: This workflow currently starts Docker infrastructure services but does not
+# execute any actual test commands (no pytest invocation). It validates that
+# services come up and are reachable. Actual infrastructure test execution
+# should be added when infrastructure-specific tests exist.
 name: Test with SDK Infrastructure
 
 on:
@@ -9,6 +13,10 @@ on:
   # Run weekly to ensure infrastructure compatibility
   schedule:
     - cron: "0 0 * * 0" # Sunday at midnight UTC
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 env:
   SDK_DEV_MODE: true
