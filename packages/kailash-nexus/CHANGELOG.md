@@ -1,5 +1,12 @@
 # Nexus Changelog
 
+## [1.7.2] - 2026-04-03
+
+### Fixed
+
+- **Nexus auth security hardening** (#226): API key auth validation, token age checking, stale session detection hook
+- Auth JWT module refactored for security (constant-time comparison, bounded token cache)
+
 ## [1.7.1] - 2026-04-01
 
 ### Fixed

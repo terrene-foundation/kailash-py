@@ -15,6 +15,17 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [2.4.1] - 2026-04-03
+
+**Patch Release** — kailash 2.4.1
+
+#### Fixed
+
+- MCP `ResourceCache` implementation and collection error fix
+- Removed editable install symlinks accidentally committed
+- Resolved 42 pre-existing DataFlow test failures (knowledge_base path, SQLite isolation, flaky assertions)
+- Resolved 7 pre-existing trust/PACT test failures (audit action count, vacancy enforcement, MCP import)
+
 ### [2.4.0] - 2026-04-01
 
 **Minor Release** — kailash 2.4.0
