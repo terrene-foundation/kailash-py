@@ -12,6 +12,7 @@ on:
     paths:
       - "packages/kaizen-agents/examples/autonomy/**"
       - "packages/kailash-kaizen/tests/examples/**"
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}

@@ -18,6 +18,7 @@ on:
       - ".claude/rules/**"
       - ".claude/commands/**"
       - "scripts/hooks/**"
+  workflow_dispatch:
 
 jobs:
   notify:
