@@ -17,8 +17,10 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import math
 import os
 import time
+from abc import ABC, abstractmethod
 from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any, Callable, Coroutine, Dict, Optional
@@ -34,14 +36,14 @@ _MAX_NONCE_ENTRIES = 10_000
 _NONCE_TTL_SECONDS = 300  # Match timestamp window
 
 
-class _NonceBackend:
+class _NonceBackend(ABC):
     """Abstract nonce deduplication backend."""
 
-    async def contains(self, source_name: str, nonce: str) -> bool:
-        raise NotImplementedError
+    @abstractmethod
+    async def contains(self, source_name: str, nonce: str) -> bool: ...
 
-    async def add(self, source_name: str, nonce: str) -> None:
-        raise NotImplementedError
+    @abstractmethod
+    async def add(self, source_name: str, nonce: str) -> None: ...
 
 
 class _InMemoryNonceBackend(_NonceBackend):
@@ -85,9 +87,16 @@ class _RedisNonceBackend(_NonceBackend):
 
     async def add(self, source_name: str, nonce: str) -> None:
         key = f"fabric:webhook:nonces:{source_name}"
-        await self._redis.sadd(key, nonce)
-        # Refresh TTL on every add so the set auto-cleans
-        await self._redis.expire(key, _NONCE_TTL_SECONDS)
+        # Pipeline ensures SADD + EXPIRE are atomic (no TTL-less orphan on crash)
+        if hasattr(self._redis, "pipeline"):
+            async with self._redis.pipeline() as pipe:
+                pipe.sadd(key, nonce)
+                pipe.expire(key, _NONCE_TTL_SECONDS)
+                await pipe.execute()
+        else:
+            # Fallback for Redis clients without pipeline support
+            await self._redis.sadd(key, nonce)
+            await self._redis.expire(key, _NONCE_TTL_SECONDS)
 
 
 # Backward-compatible alias for existing tests
@@ -233,8 +242,14 @@ class WebhookReceiver:
                     ts = ts.replace(tzinfo=timezone.utc)
             except ValueError:
                 try:
-                    # Try Unix timestamp
-                    ts = datetime.fromtimestamp(float(timestamp_str), tz=timezone.utc)
+                    # Try Unix timestamp (guard NaN/Inf per trust-plane-security.md)
+                    ts_float = float(timestamp_str)
+                    if not math.isfinite(ts_float):
+                        return {
+                            "accepted": False,
+                            "reason": "Invalid timestamp format",
+                        }
+                    ts = datetime.fromtimestamp(ts_float, tz=timezone.utc)
                 except (ValueError, OverflowError):
                     return {"accepted": False, "reason": "Invalid timestamp format"}
 

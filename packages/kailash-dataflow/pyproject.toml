@@ -73,7 +73,7 @@ streaming = [
     "websockets>=13.0",
 ]
 fabric-all = [
-    "kailash-dataflow[fabric,cloud,excel,streaming]",
+    "kailash-dataflow[fabric,cloud,excel,parquet,streaming]",
 ]
 dev = [
     "pytest>=7.0.0",

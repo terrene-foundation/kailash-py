@@ -1690,6 +1690,15 @@ class DataFlow(DataFlowEventMixin):
                 poll_interval=60,
             ))
         """
+        # Validate source name format (used in Redis keys, cache keys, endpoints)
+        import re
+
+        _SOURCE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$")
+        if not _SOURCE_NAME_RE.match(name):
+            raise ValueError(
+                f"Invalid source name '{name}': must match [a-zA-Z_][a-zA-Z0-9_-]{{0,63}}"
+            )
+
         # Validate name uniqueness across models AND sources
         if name in self._models:
             raise ValueError(
