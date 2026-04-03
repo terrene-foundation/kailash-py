@@ -8,8 +8,10 @@ import threading
 
 import pytest
 
-# MCP server tests require the 'mcp' package
-pytest.importorskip("mcp")
+# MCP server tests require the 'mcp' package with FastMCP
+pytest.importorskip(
+    "mcp.server", reason="mcp.server (FastMCP) required for MCP e2e tests"
+)
 
 import kailash.trust.plane.mcp_server as mcp_mod
 from kailash.trust.plane.models import ConstraintEnvelope, OperationalConstraints

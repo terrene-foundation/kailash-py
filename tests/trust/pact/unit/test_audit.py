@@ -57,6 +57,9 @@ class TestPactAuditAction:
     def test_address_computed_value(self) -> None:
         assert PactAuditAction.ADDRESS_COMPUTED.value == "address_computed"
 
+    def test_bridge_consent_value(self) -> None:
+        assert PactAuditAction.BRIDGE_CONSENT.value == "bridge_consent"
+
     def test_all_audit_actions_exist(self) -> None:
         """All action types per thesis Section 5.7 normative mapping + extensions.
 
@@ -64,8 +67,9 @@ class TestPactAuditAction:
         - BRIDGE_APPROVED (Section 4.4 LCA approval)
         - VACANCY_DESIGNATED (Section 5.5 vacancy management)
         - VACANCY_SUSPENDED (Section 5.5 vacancy management)
+        - BRIDGE_CONSENT (Section 4.4 bilateral consent)
         """
-        assert len(PactAuditAction) == 13
+        assert len(PactAuditAction) == 14
 
 
 # ===========================================================================
