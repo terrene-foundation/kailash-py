@@ -1,54 +1,48 @@
 source_repo: kailash-py
-codify_date: "2026-04-02"
-codify_session: "feat(all): session 17 — ML/align/pact releases + dataflow/nexus/mcp implementations"
+codify_date: "2026-04-03"
+codify_session: "feat(dataflow): Data Fabric Engine — external sources, derived products, fabric runtime"
 sdk_version: "2.4.0"
 coc_version: "1.0.0"
 
 changes:
-  - file: agents/frameworks/ml-specialist.md
+  - file: agents/frameworks/dataflow-specialist.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Added Data Fabric Engine knowledge — db.source(), @db.product(), db.start(), source adapters, webhook receiver, layer preference, decision matrix"
+    diff_lines: "+25 -5"
+
+  - file: skills/02-dataflow/dataflow-fabric-engine.md
     action: created
     suggested_tier: coc-py
-    reason: "New ML lifecycle specialist agent covering 13 engines, 6 Kaizen agents, RL module"
-    diff_lines: "+239 -0"
+    reason: "New skill for Data Fabric Engine — source types, product modes, runtime params, webhooks, MockSource testing, observability, security, optional extras"
+    diff_lines: "+280 -0"
 
-  - file: agents/frameworks/align-specialist.md
+  - file: skills/02-dataflow/SKILL.md
     action: modified
     suggested_tier: coc-py
-    reason: "R3 findings: bounded registries, subprocess hardening, division-by-zero guards"
-    diff_lines: "+29 -0"
+    reason: "Added Data Fabric Engine section with link to new skill, updated description to include fabric trigger keywords"
+    diff_lines: "+5 -1"
 
-  - file: agents/frameworks/pact-specialist.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "R2 findings: API error sanitization, NaN/Inf on rate limits, AuditChain integrity"
-    diff_lines: "+18 -0"
-
-  - file: skills/project/ml-quick-reference.md
-    action: created
-    suggested_tier: coc-py
-    reason: "ML engines quick reference — tables, patterns, interop, security checklist"
-    diff_lines: "+194 -0"
-
-  - file: skills/project/SKILL.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "Updated to reference new ml-quick-reference.md"
-    diff_lines: "+7 -3"
-
-status: reviewed
+status: pending_review
 
 notes: |
-  Session 17 — comprehensive session across 7 workspaces:
+  Session 19 — Data Fabric Engine completion + codification:
 
-  RELEASED:
-  - kailash-pact 0.6.0 (5 HIGH fixes, 2 GH issues, R2 converged, 1257 tests)
-  - kailash-ml 0.2.0 (13 engines, 6 agents, RL module, R3 converged, 508 tests)
-  - kailash-align 0.2.0 (bounded registry, subprocess hardening, R3 converged, 391 tests)
+  IMPLEMENTED (TODOs 30-33, 37):
+  - TODO-30: fabric/cloud/streaming/fabric-all optional extras in pyproject.toml
+  - TODO-31: 7 Tier 2 integration tests (no mocking, real infrastructure)
+  - TODO-32: Reference app at examples/fabric_reference/
+  - TODO-33: README.md fabric section + CHANGELOG.md [Unreleased] entry
+  - TODO-37: Redis-backed webhook nonce storage (SADD+TTL) with in-memory dev fallback
 
-  VERIFIED COMPLETE (all implementations + tests passing):
-  - dataflow-enhancements: 9 todos (DerivedModel, FileSource, Validation, Cache, ReadReplica, Retention, Events) — 158 tests
-  - nexus-transport-refactor: 23 todos (HandlerRegistry, EventBus, BackgroundService, Transport ABC, Phase2 APIs) — 118 new tests, 1273 total
-  - mcp-platform-server: 13 todos (FastMCP server, 7 contributors, resources, test gen) — 108 tests
-  - kailash core PACT #199-#202: 14 todos (all-dimension tightening, gradient, bridges, vacancy, EATP emission) — 94 tests, 1257 total
+  RED TEAM (converged in 2 rounds):
+  - Round 1: 1C + 2H + 3M fixed (ABC, source validation, NaN guard, Redis pipeline, parquet)
+  - Round 2: 2M fixed (regex module-level, Redis fallback error handling)
+  - 3957 tests passing, 0 regressions
 
-  0 active todos remaining. 0 open GitHub issues.
+  CODIFIED:
+  - dataflow-specialist agent: fabric engine knowledge (377 lines, under 400 limit)
+  - dataflow-fabric-engine skill: comprehensive reference (source types, product modes, runtime, webhooks, testing, security)
+  - SKILL.md: updated with fabric section + trigger keywords
+
+  All 3 artifacts are coc-py tier (Python SDK specific).
