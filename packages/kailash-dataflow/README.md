@@ -1,6 +1,6 @@
 # Kailash DataFlow
 
-**Multi-Database Framework** - Django simplicity meets enterprise-grade production quality with PostgreSQL, MySQL, SQLite, and MongoDB support.
+**Multi-Database Data Operations Framework** - Django simplicity meets enterprise-grade production quality with PostgreSQL, MySQL, SQLite, and MongoDB support, plus external data source integration via the Data Fabric Engine.
 
 > ✅ **Database Support**: DataFlow supports PostgreSQL (full features), MySQL (100% feature parity since v0.5.6), SQLite (near-complete parity), and MongoDB (document database with flexible schema).
 >
@@ -62,6 +62,15 @@ workflow.add_node("UserUpdateNode", "update", {
 
 ```bash
 pip install kailash-dataflow
+```
+
+#### Optional Extras (Data Fabric Engine)
+
+```bash
+pip install kailash-dataflow[fabric]        # REST, file, and core fabric support (httpx, watchdog, msgpack)
+pip install kailash-dataflow[cloud]          # Cloud storage adapters (S3, GCS, Azure)
+pip install kailash-dataflow[streaming]      # Streaming adapters (Kafka, WebSocket)
+pip install kailash-dataflow[fabric-all]     # All fabric dependencies (fabric + cloud + excel + streaming)
 ```
 
 ### Basic Usage
@@ -322,6 +331,108 @@ class User:  # Same name, different instance - works!
 - **Redis Query Caching**: `User.cached_query()` with automatic invalidation
 - **Multi-Database Runtime**: SQLite/MySQL execution support
 - **Advanced Multi-Tenancy**: Automatic query modification for tenant isolation
+
+## Data Fabric Engine
+
+DataFlow now supports external data sources and derived data products. The fabric engine extends DataFlow from database operations to unified data operations — connect any data source, define declarative products, and serve them with auto-generated endpoints.
+
+### Core API
+
+Three new methods on the `DataFlow` instance:
+
+```python
+from dataflow import DataFlow
+from dataflow.fabric import RestSourceConfig, BearerAuth, StalenessPolicy
+
+db = DataFlow("postgresql://user:pass@localhost/mydb")
+
+# 1. Register an external data source
+db.source("crm", RestSourceConfig(
+    url="https://api.example.com",
+    auth=BearerAuth(token_env="CRM_API_TOKEN"),
+    poll_interval=60,
+))
+
+# 2. Define a data product (decorator)
+@db.product("dashboard", depends_on=["User", "crm"])
+async def dashboard(ctx):
+    users = await ctx.express.list("User")
+    deals = await ctx.source("crm").fetch("deals")
+    return {"users": len(users), "deals": len(deals)}
+
+# 3. Start the fabric runtime
+await db.start(host="127.0.0.1", port=8000)
+```
+
+### Product Modes
+
+| Mode              | Behavior                                                                                     |
+| ----------------- | -------------------------------------------------------------------------------------------- |
+| **materialized**  | Pre-computed and cached. Auto-refreshes on source changes. Best for dashboards and reports.  |
+| **parameterized** | Computed per-request with parameters. Cached by parameter combination with configurable TTL. |
+| **virtual**       | Computed on every request, never cached. Best for real-time or user-specific data.           |
+
+```python
+@db.product("stats", mode="materialized", depends_on=["Order"])
+async def stats(ctx):
+    return await ctx.express.count("Order")
+
+@db.product("search", mode="parameterized", depends_on=["Product"])
+async def search(ctx, q: str = "", limit: int = 10):
+    return await ctx.express.list("Product", {"name": {"$like": f"%{q}%"}}, limit=limit)
+
+@db.product("live", mode="virtual", depends_on=["Sensor"])
+async def live(ctx):
+    return await ctx.express.list("Sensor", {"active": True})
+```
+
+### Source Types
+
+| Source Type | Config Class           | Description                                                         |
+| ----------- | ---------------------- | ------------------------------------------------------------------- |
+| REST        | `RestSourceConfig`     | HTTP APIs with ETag caching, auth, webhook support, SSRF protection |
+| File        | `FileSourceConfig`     | Local files with filesystem watching (watchdog)                     |
+| Cloud       | `CloudSourceConfig`    | S3, GCS, Azure Blob storage with prefix filtering                   |
+| Database    | `DatabaseSourceConfig` | External databases (read-only by default)                           |
+| Stream      | `StreamSourceConfig`   | Kafka topics and WebSocket streams                                  |
+
+### `db.start()` Parameters
+
+```python
+await db.start(
+    fail_fast=True,            # Raise on source health check failure
+    dev_mode=False,            # Skip pre-warming, use in-memory cache
+    nexus=None,                # Attach to existing Nexus instance for auth
+    coordination=None,         # "redis" or "postgresql" (auto-detects)
+    host="127.0.0.1",         # Bind address for fabric endpoints
+    port=8000,                 # Port for fabric endpoints
+    enable_writes=False,       # Enable write pass-through endpoints
+    tenant_extractor=None,     # Multi-tenant request handler
+)
+```
+
+### Observability
+
+The fabric runtime exposes built-in observability:
+
+- **Health endpoints**: Source health status with circuit breaker state
+- **Pipeline traces**: Execution traces for each product refresh
+- **Prometheus metrics**: Request counts, latencies, cache hit rates
+- **SSE (Server-Sent Events)**: Real-time product update notifications
+
+### Key Features
+
+- **Pipeline executor** with change detection and configurable debounce
+- **Leader election** for multi-worker coordination (Redis or in-memory)
+- **Circuit breaker** per source with configurable staleness policies
+- **Webhook receiver** with HMAC validation and nonce deduplication (Redis or in-memory)
+- **Auto-generated REST endpoints** for all registered products
+- **Write pass-through** with event-driven product refresh
+- **SSRF protection** with DNS rebinding defense on REST sources
+
+### Migration Guide
+
+All existing DataFlow code continues to work unchanged. Fabric features are opt-in — you only need to install the extras and use the new API methods (`db.source()`, `@db.product()`, `await db.start()`) when you want external data source integration. Existing models, workflows, and express operations are unaffected.
 
 ## 📚 Documentation
 

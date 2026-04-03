@@ -77,6 +77,17 @@ class JWTConfig:
     verify_exp: bool = True
     leeway: int = 0
 
+    # GH #226: API key authentication
+    api_key_header: str = "X-API-Key"
+    api_key_enabled: bool = False
+    api_key_validator: Optional[Callable[[str], Any]] = None
+
+    # GH #226: Absolute token age check (independent of exp claim)
+    max_token_age_seconds: Optional[int] = None
+
+    # GH #226: Post-validation hook for stale detection / audit
+    on_token_validated: Optional[Callable[[Dict[str, Any]], Any]] = None
+
     # Minimum secret length for symmetric algorithms (NIST SP 800-117 recommends
     # key length >= hash output size: 256 bits = 32 bytes for HS256)
     MIN_SECRET_LENGTH: int = 32
@@ -215,15 +226,108 @@ class JWTMiddleware(BaseHTTPMiddleware):
                 headers={"WWW-Authenticate": 'Bearer realm="api"'},
             )
 
-        # Verify token
+        # GH #226: Handle API key authentication
+        if token.startswith("__apikey__") and self.config.api_key_enabled:
+            api_key = token[len("__apikey__") :]
+            if self.config.api_key_validator:
+                try:
+                    import asyncio
+                    import inspect
+
+                    result = self.config.api_key_validator(api_key)
+                    if inspect.isawaitable(result):
+                        result = await result
+                    if not result:
+                        return JSONResponse(
+                            status_code=401,
+                            content={
+                                "detail": "Invalid API key",
+                                "error": "invalid_api_key",
+                            },
+                        )
+                    # api_key_validator can return a user dict or True
+                    if isinstance(result, dict):
+                        user = self._create_user_from_payload(result)
+                    else:
+                        user = AuthenticatedUser(user_id="apikey", roles=["api"])
+                    request.state.user = user
+                    request.state.token = api_key
+                    request.state.token_payload = {"type": "api_key"}
+                    return await call_next(request)
+                except Exception as e:
+                    logger.warning("API key validation failed: %s", e)
+                    return JSONResponse(
+                        status_code=401,
+                        content={
+                            "detail": "API key validation error",
+                            "error": "api_key_error",
+                        },
+                    )
+            else:
+                return JSONResponse(
+                    status_code=500,
+                    content={
+                        "detail": "API key auth enabled but no validator configured"
+                    },
+                )
+
+        # Verify JWT token
         try:
             payload = self._verify_token(token)
+
+            # GH #226: Absolute token age check (kailash-rs#145)
+            if self.config.max_token_age_seconds is not None:
+                iat = payload.get("iat")
+                if iat is not None:
+                    import math
+
+                    iat_float = float(iat)
+                    if not math.isfinite(iat_float):
+                        return JSONResponse(
+                            status_code=401,
+                            content={
+                                "detail": "Invalid iat claim",
+                                "error": "invalid_token",
+                            },
+                        )
+                    token_age = int(datetime.now(timezone.utc).timestamp()) - int(
+                        iat_float
+                    )
+                    if token_age < 0:
+                        return JSONResponse(
+                            status_code=401,
+                            content={
+                                "detail": "Token issued in the future",
+                                "error": "invalid_token",
+                            },
+                        )
+                    if token_age > self.config.max_token_age_seconds:
+                        return JSONResponse(
+                            status_code=401,
+                            content={
+                                "detail": "Token too old",
+                                "error": "token_too_old",
+                            },
+                        )
+
             user = self._create_user_from_payload(payload)
 
             # Store user in request state
             request.state.user = user
             request.state.token = token
             request.state.token_payload = payload
+
+            # GH #226: Post-validation hook (kailash-rs#145)
+            if self.config.on_token_validated:
+                try:
+                    import asyncio
+                    import inspect
+
+                    result = self.config.on_token_validated(payload)
+                    if inspect.isawaitable(result):
+                        await result
+                except Exception:
+                    logger.exception("on_token_validated hook failed")
 
             return await call_next(request)
 
@@ -269,13 +373,22 @@ class JWTMiddleware(BaseHTTPMiddleware):
         return False
 
     def _extract_token(self, request: Request) -> Optional[str]:
-        """Extract JWT token from request.
+        """Extract JWT token or API key from request.
 
         Extraction priority:
-        1. Authorization header (Bearer token)
-        2. Cookie (if configured)
-        3. Query parameter (if configured)
+        1. API key header (if api_key_enabled)
+        2. Authorization header (Bearer token)
+        3. Cookie (if configured)
+        4. Query parameter (if configured)
         """
+        # 0. API key (GH #226: kailash-rs#144)
+        if self.config.api_key_enabled:
+            api_key = request.headers.get(self.config.api_key_header, "")
+            if api_key:
+                # Store API key marker — dispatch() will handle validation
+                request.state._fabric_api_key = api_key
+                return f"__apikey__{api_key}"
+
         # 1. Authorization header
         auth_header = request.headers.get(self.config.token_header, "")
         if auth_header.startswith("Bearer "):

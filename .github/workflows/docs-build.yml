@@ -19,6 +19,7 @@ on:
       - "CHANGELOG.md"
       - "mkdocs.yml"
       - ".github/workflows/docs-build.yml"
+  workflow_dispatch:
 
 concurrency:
   # Prevent duplicate runs: Use branch name for both push and PR events

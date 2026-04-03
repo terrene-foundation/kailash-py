@@ -4,9 +4,12 @@ This module provides a centralized knowledge base that loads and queries
 error patterns and solutions from YAML databases.
 """
 
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import yaml
+
+_DEBUG_DIR = Path(__file__).parent
 
 
 class KnowledgeBase:
@@ -47,8 +50,16 @@ class KnowledgeBase:
             FileNotFoundError: If YAML files don't exist
             yaml.YAMLError: If YAML files are malformed
         """
-        self.patterns_path = patterns_path
-        self.solutions_path = solutions_path
+        self.patterns_path = str(
+            Path(patterns_path)
+            if Path(patterns_path).is_absolute()
+            else _DEBUG_DIR / Path(patterns_path).name
+        )
+        self.solutions_path = str(
+            Path(solutions_path)
+            if Path(solutions_path).is_absolute()
+            else _DEBUG_DIR / Path(solutions_path).name
+        )
         self.patterns: Dict[str, Dict] = {}
         self.solutions: Dict[str, Dict] = {}
         self._load_patterns()

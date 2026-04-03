@@ -66,9 +66,19 @@ Ensure user-facing documentation reflects new capabilities. Verify README.md, do
 
 Validate that generated agents and skills are correct, complete, and secure. **claude-code-architect** verifies cc-artifacts compliance (descriptions under 120 chars, agents under 400 lines, commands under 150 lines, rules path-scoped, SKILL.md progressive disclosure).
 
-### 7. Create upstream proposal (MANDATORY)
+### 7. Create upstream proposal (BUILD repos only)
 
-After artifacts are updated and validated locally, create a proposal for upstream review at loom/ (the source of truth). This step is NOT optional — codification is incomplete without upstream propagation.
+**This step applies ONLY to BUILD repos** (kailash-py, kailash-rs). Detect by checking:
+
+- Git remote contains `kailash-py` or `kailash-rs`, OR
+- `pyproject.toml` contains `name = "kailash"` or `Cargo.toml` contains `name = "kailash"`
+
+**If this is a downstream project repo** (anything else): SKIP this step. Downstream repos consume COC artifacts from templates — they do not propose changes upstream. Artifact changes from `/codify` in downstream repos stay local to that project. Report:
+
+> Artifacts updated locally. This is a downstream project repo — changes stay local.
+> Only BUILD repos (kailash-py, kailash-rs) create upstream proposals.
+
+**If this is a BUILD repo**: Create a proposal for upstream review at loom/ (source of truth).
 
 **DO NOT sync directly to COC template repos.** All distribution flows through loom/ via `/sync`.
 
@@ -93,13 +103,13 @@ changes:
 status: pending_review
 ```
 
-3. For each changed artifact, suggest a tier:
+4. For each changed artifact, suggest a tier:
    - **cc**: Claude Code universal (guides, cc-audit)
    - **co**: Methodology universal (CO principles, journal, communication)
    - **coc**: Codegen, language-agnostic (workflow phases, analysis patterns)
    - **coc-py** / **coc-rs**: Language-specific (code examples, SDK patterns)
 
-4. Report to the developer:
+5. Report to the developer:
 
 > Artifacts updated locally and available in this repo. Proposal created at
 > `.claude/.proposals/latest.yaml` with {N} changes for upstream review.
@@ -129,9 +139,10 @@ Deploy these agents as a team for codification:
 - **testing-specialist** — Verify any code examples in skills are testable
 - **security-reviewer** — Audit agents/skills for prompt injection, insecure patterns, secrets exposure
 
-**Upstream proposal (step 7 — mandatory):**
+**Upstream proposal (step 7 — BUILD repos only):**
 
-- Generate `.claude/.proposals/latest.yaml` with tier suggestions for each changed artifact
+- Only in BUILD repos (kailash-py, kailash-rs): generate `.claude/.proposals/latest.yaml` with tier suggestions
+- Downstream project repos: skip proposal creation, changes stay local
 - See `rules/artifact-flow.md` for the controlled flow: BUILD repo → loom/ → templates
 
 ### Journal

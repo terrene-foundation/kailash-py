@@ -10,8 +10,17 @@ import os
 import sqlite3
 from typing import Any, Dict, List
 
-import mysql.connector
 import pytest
+
+try:
+    import mysql.connector as mysql_connector
+except ImportError:
+    mysql_connector = None
+
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
 from dataflow import DataFlow
 from dataflow.nodes.bulk_create import BulkCreateNode
 from dataflow.nodes.bulk_delete import BulkDeleteNode
@@ -101,7 +110,7 @@ class TestSQLInjectionWithRealDatabases:
                 host_db = parts[1].split("/")
                 host_port = host_db[0].split(":")
 
-                conn = mysql.connector.connect(
+                conn = mysql_connector.connect(
                     host=host_port[0],
                     port=int(host_port[1]) if len(host_port) > 1 else 3306,
                     user=user_pass[0],

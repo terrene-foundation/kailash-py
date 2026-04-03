@@ -23,7 +23,28 @@ This phase executes under the **autonomous execution model** (see `rules/autonom
 
 ## Workflow
 
-### 1. End-to-end validation
+### 1. Spec coverage audit (MUST run first)
+
+Before any code quality checks, verify **what was specified was actually built**:
+
+1. Read every file in `workspaces/<project>/02-plans/` and `workspaces/<project>/todos/completed/`
+2. For each planned feature, endpoint, architecture component, or data flow:
+   - **Exists?** — grep codebase for the implementation (file/class/function/route)
+   - **Wired?** — does it call real APIs/services, or use mock/generated data?
+   - **Architecture?** — do planned abstractions (data fabric, ML fabric, etc.) exist as designed, not just replaced with ad-hoc calls?
+3. Flag every item that is missing, unwired, or architecturally substituted
+4. Write results to `workspaces/<project>/.spec-coverage` (plan item → status: implemented/unwired/missing/substituted). Subsequent rounds read this file to verify coverage was checked.
+
+**A file existing is NOT completion. Real data flowing end-to-end is completion.**
+
+Detection patterns for unwired frontend code:
+
+- Functions named `generate*()` or `mock*()` producing synthetic data
+- Constants named `MOCK_*`, `FAKE_*`, `DUMMY_*`, `SAMPLE_*`
+- Hardcoded arrays/objects serving as page data instead of API calls
+- `fetch()` or API calls that are commented out or absent where plans require them
+
+### 2. End-to-end validation
 
 Review implementation with red team agents using playwright mcp (web) and marionette mcp (flutter).
 
@@ -32,7 +53,7 @@ Review implementation with red team agents using playwright mcp (web) and marion
   - Using frontend API endpoints only
   - Using browser via Playwright MCP only
 
-### 2. User flow validation
+### 3. User flow validation
 
 Ensure red team agents peruse `workspaces/<project>/03-user-flows/` and fully understand the detailed storyboard for each user.
 
@@ -43,7 +64,7 @@ Ensure red team agents peruse `workspaces/<project>/03-user-flows/` and fully un
 - Focus on intent, vision, and user requirements — never naive technical assertions
 - Every action and expectation from user must be evaluated against implementation
 
-### 3. Test-once protocol — do NOT re-run existing tests
+### 4. Test-once protocol — do NOT re-run existing tests
 
 The `/implement` phase already ran the full test suite and wrote `.test-results`. Red team agents MUST:
 
@@ -65,11 +86,11 @@ The `/implement` phase already ran the full test suite and wrote `.test-results`
 - Security audit findings that require fixes
 - After each fix, run only the affected tests + the new regression test for the fix
 
-### 4. Report results
+### 5. Report results
 
 Report all detailed steps and results taken in validation and testing tasks.
 
-### 5. Parity check (if required)
+### 6. Parity check (if required)
 
 If parity with an existing system is required:
 
@@ -87,6 +108,7 @@ Deploy these agents as a red team for validation:
 
 **Core red team (always):**
 
+- **deep-analyst** — **Step 1 owner**: read every plan in `02-plans/`, compare against codebase, produce `.spec-coverage` report. Also: failure points, edge cases, systemic issues.
 - **testing-specialist** — Verify 3-tier test coverage, Real infrastructure recommended compliance
 - **e2e-runner** — Generate and run Playwright E2E tests (web) or Marionette tests (Flutter)
 - **value-auditor** — Evaluate every page/flow from skeptical enterprise buyer perspective
@@ -94,7 +116,6 @@ Deploy these agents as a red team for validation:
 
 **Validation perspectives (deploy selectively based on findings):**
 
-- **deep-analyst** — Identify failure points, edge cases, systemic issues
 - **coc-expert** — Check methodological compliance: are guardrails in place? Is institutional knowledge captured? Are the three fault lines addressed?
 - **gold-standards-validator** — Compliance check against project standards
 - **intermediate-reviewer** — Code quality review across all changed files
@@ -104,11 +125,22 @@ Deploy these agents as a red team for validation:
 - **uiux-designer** — Audit visual hierarchy, responsive behavior, accessibility
 - **ai-ux-designer** — Audit AI interaction patterns (if AI-facing UI)
 
-Run multiple red team rounds. Converge when all agents find no remaining gaps.
+## Convergence Criteria
+
+ALL of the following must be true for convergence:
+
+1. **0 CRITICAL findings** across all agents
+2. **0 HIGH findings** across all agents
+3. **2 consecutive clean rounds** (no new findings)
+4. **Spec coverage: 100%** — every planned feature, endpoint, and architecture component verified as existing AND wired to real data (step 1 audit passes with zero gaps)
+5. **Frontend integration: 0 mock data** — no `MOCK_*/FAKE_*/DUMMY_*` constants, no `mock*()`/`generate*Data()`-style functions producing synthetic data, no hardcoded arrays serving as page data in production code
+
+Criteria 1-3 are necessary but NOT sufficient. Without 4-5, convergence certifies code quality on incomplete software.
 
 ### Journal
 
 Create journal entries for validation findings:
+
 - **RISK** entries for vulnerabilities, weaknesses, or failure modes discovered
 - **GAP** entries for missing tests, documentation, or edge cases
 - **CONNECTION** entries for unexpected dependencies or interactions found

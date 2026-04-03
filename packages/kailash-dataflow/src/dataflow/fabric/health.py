@@ -1,0 +1,236 @@
+# Copyright 2026 Terrene Foundation
+# SPDX-License-Identifier: Apache-2.0
+"""
+Fabric Health & Trace endpoints.
+
+GET /fabric/_health — overall fabric health (sources, products, cache, pipelines).
+GET /fabric/_trace/{product} — last 20 pipeline runs for a product.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from collections import deque
+from datetime import datetime, timezone
+from typing import Any, Deque, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
+
+__all__ = ["FabricHealthManager"]
+
+# Sanitize error messages — no connection strings, credentials, or full stacks
+_CREDENTIAL_PATTERNS = [
+    re.compile(r"postgresql://[^@]+@"),
+    re.compile(r"redis://[^@]+@"),
+    re.compile(r"password[=:]\S+", re.IGNORECASE),
+    re.compile(r"token[=:]\S+", re.IGNORECASE),
+    re.compile(r"secret[=:]\S+", re.IGNORECASE),
+]
+
+
+def _sanitize_error(error: Optional[str]) -> Optional[str]:
+    """Remove credentials and connection strings from error messages."""
+    if error is None:
+        return None
+    sanitized = error
+    for pattern in _CREDENTIAL_PATTERNS:
+        sanitized = pattern.sub("[REDACTED]", sanitized)
+    # Truncate stack traces — keep only first line
+    if "\n" in sanitized:
+        sanitized = sanitized.split("\n")[0]
+    return sanitized[:500]  # Hard cap
+
+
+class FabricHealthManager:
+    """Manages health checks and trace storage for the fabric runtime."""
+
+    def __init__(
+        self,
+        sources: Dict[str, Dict[str, Any]],
+        products: Dict[str, Any],
+        pipeline: Any,
+        started_at: Optional[datetime] = None,
+    ) -> None:
+        self._sources = sources
+        self._products = products
+        self._pipeline = pipeline
+        self._started_at = started_at or datetime.now(timezone.utc)
+
+    def get_health(self) -> Dict[str, Any]:
+        """Build the /fabric/_health response."""
+        uptime = (datetime.now(timezone.utc) - self._started_at).total_seconds()
+
+        # Source health
+        source_health: Dict[str, Any] = {}
+        for name, info in self._sources.items():
+            adapter = info.get("adapter")
+            if adapter:
+                source_health[name] = {
+                    "healthy": adapter.healthy,
+                    "state": adapter.state.value,
+                    "circuit_breaker": adapter.circuit_breaker.state.value,
+                    "consecutive_failures": adapter.circuit_breaker.failure_count,
+                    "last_change_detected": (
+                        adapter.last_change_detected.isoformat()
+                        if adapter.last_change_detected
+                        else None
+                    ),
+                    "last_error": _sanitize_error(adapter.circuit_breaker.last_error),
+                }
+
+        # Product health
+        product_health: Dict[str, Any] = {}
+        for name, product in self._products.items():
+            cached = self._pipeline.get_cached(name) if self._pipeline else None
+            if cached:
+                _, metadata = cached
+                cached_at = metadata.get("cached_at", "")
+                age = 0
+                if cached_at:
+                    try:
+                        dt = datetime.fromisoformat(cached_at)
+                        age = int((datetime.now(timezone.utc) - dt).total_seconds())
+                    except (ValueError, TypeError):
+                        pass
+                product_health[name] = {
+                    "freshness": (
+                        "fresh"
+                        if age <= product.staleness.max_age.total_seconds()
+                        else "stale"
+                    ),
+                    "age_seconds": age,
+                    "cached_at": cached_at,
+                    "pipeline_ms": metadata.get("pipeline_ms", 0),
+                }
+            else:
+                product_health[name] = {
+                    "freshness": "cold",
+                    "age_seconds": None,
+                    "cached_at": None,
+                }
+
+        # Pipeline stats
+        pipeline_stats = {}
+        if self._pipeline and hasattr(self._pipeline, "_traces"):
+            all_traces = []
+            if isinstance(self._pipeline._traces, dict):
+                for traces in self._pipeline._traces.values():
+                    all_traces.extend(traces)
+            total = len(all_traces)
+            successful = sum(1 for t in all_traces if t.get("status") == "success")
+            failed = total - successful
+            durations = [
+                t.get("duration_ms", 0) for t in all_traces if t.get("duration_ms")
+            ]
+            avg_duration = sum(durations) / len(durations) if durations else 0
+            pipeline_stats = {
+                "total_runs": total,
+                "successful": successful,
+                "failed": failed,
+                "avg_duration_ms": round(avg_duration, 1),
+            }
+
+        # Overall status
+        all_sources_healthy = all(
+            info.get("adapter", None) is None or info["adapter"].healthy
+            for info in self._sources.values()
+        )
+        any_products_stale = any(
+            p.get("freshness") == "stale" for p in product_health.values()
+        )
+
+        if not all_sources_healthy:
+            status = (
+                "degraded"
+                if any(
+                    info.get("adapter") and info["adapter"].healthy
+                    for info in self._sources.values()
+                )
+                else "unhealthy"
+            )
+        elif any_products_stale:
+            status = "degraded"
+        else:
+            status = "healthy"
+
+        return {
+            "status": status,
+            "uptime_seconds": round(uptime, 1),
+            "sources": source_health,
+            "products": product_health,
+            "pipelines": pipeline_stats,
+        }
+
+    def get_trace(self, product_name: str) -> Dict[str, Any]:
+        """Build the /fabric/_trace/{product} response.
+
+        Returns the last 20 pipeline runs for a product. Error messages
+        are sanitized to prevent credential leakage.
+        """
+        if product_name not in self._products:
+            return {"error": f"Product '{product_name}' not found"}
+
+        traces: List[Dict[str, Any]] = []
+        if self._pipeline and hasattr(self._pipeline, "_traces"):
+            raw_traces = self._pipeline._traces
+            if isinstance(raw_traces, dict):
+                product_traces = raw_traces.get(product_name, [])
+            elif isinstance(raw_traces, deque):
+                product_traces = [
+                    t for t in raw_traces if t.get("product_name") == product_name
+                ]
+            else:
+                product_traces = []
+
+            for trace in product_traces:
+                sanitized = dict(trace)
+                if "error" in sanitized:
+                    sanitized["error"] = _sanitize_error(sanitized["error"])
+                # Sanitize step errors
+                for step in sanitized.get("steps", []):
+                    if "error" in step:
+                        step["error"] = _sanitize_error(step["error"])
+                traces.append(sanitized)
+
+        return {
+            "product": product_name,
+            "trace_count": len(traces),
+            "traces": traces[-20:],  # Last 20
+        }
+
+    def get_health_handler(self) -> Dict[str, Any]:
+        """Route definition for GET /fabric/_health."""
+
+        async def handler(**kwargs: Any) -> Dict[str, Any]:
+            return {
+                "_status": 200,
+                "data": self.get_health(),
+            }
+
+        handler.__name__ = "fabric_health"
+        return {
+            "method": "GET",
+            "path": "/fabric/_health",
+            "handler": handler,
+            "metadata": {"type": "health", "auth": {"roles": ["admin"]}},
+        }
+
+    def get_trace_handler(self) -> Dict[str, Any]:
+        """Route definition for GET /fabric/_trace/{product}."""
+
+        async def handler(product: str = "", **kwargs: Any) -> Dict[str, Any]:
+            if not product:
+                return {"_status": 400, "error": "product parameter required"}
+            return {
+                "_status": 200,
+                "data": self.get_trace(product),
+            }
+
+        handler.__name__ = "fabric_trace"
+        return {
+            "method": "GET",
+            "path": "/fabric/_trace/{product}",
+            "handler": handler,
+            "metadata": {"type": "trace", "auth": {"roles": ["admin"]}},
+        }

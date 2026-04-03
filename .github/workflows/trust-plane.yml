@@ -11,6 +11,7 @@ on:
     paths:
       - "src/kailash/trust/**"
       - ".github/workflows/trust-plane.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read

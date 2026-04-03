@@ -1,6 +1,6 @@
 ---
 name: dataflow-specialist
-description: "DataFlow database specialist. Use for zero-config DB operations, bulk processing, or auto-generated nodes."
+description: "DataFlow specialist. Use for zero-config DB ops, external data integration, bulk processing, auto-generated nodes."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---
@@ -65,12 +65,21 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 - "With Nexus?" -> [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-integration.md)
 - "Migration guide?" -> [`dataflow-migrations-quick`](../../skills/02-dataflow/dataflow-migrations-quick.md)
 
+### Data Fabric Engine
+
+- "External sources? db.source()?" -> [`dataflow-fabric-engine`](../../skills/02-dataflow/dataflow-fabric-engine.md)
+- "Products? @db.product()?" -> [`dataflow-fabric-engine`](../../skills/02-dataflow/dataflow-fabric-engine.md)
+- "Fabric runtime? db.start()?" -> [`dataflow-fabric-engine`](../../skills/02-dataflow/dataflow-fabric-engine.md)
+- "Source adapters? REST/File/Cloud?" -> [`dataflow-fabric-engine`](../../skills/02-dataflow/dataflow-fabric-engine.md)
+- "Webhook receiver? HMAC?" -> [`dataflow-fabric-engine`](../../skills/02-dataflow/dataflow-fabric-engine.md)
+
 ### Layer Preference (Engine-First)
 
 | Need                         | Layer     | API                                                       |
 | ---------------------------- | --------- | --------------------------------------------------------- |
 | Simple CRUD                  | Engine    | `db.express.create()`, `db.express.list()` (23x faster)   |
 | Enterprise features          | Engine    | `DataFlowEngine.builder()` with validation/classification |
+| External data integration    | Engine    | `db.source()`, `@db.product()`, `db.start()`              |
 | Complex multi-step workflows | Primitive | `WorkflowBuilder` + generated nodes                       |
 | Custom transaction control   | Primitive | `TransactionScopeNode` + `WorkflowBuilder`                |
 
@@ -95,8 +104,6 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 - Fast db.express operations -> Use `dataflow-express` Skill
 
 ## DataFlow Quick Config Reference
-
-> **Note**: `auto_migrate=True` now works correctly in Docker/FastAPI environments. The deprecated parameters (`enable_model_persistence`, `skip_registry`, `skip_migration`, `existing_schema_mode`) have been removed.
 
 | Use Case        | Config                                              | Notes                               |
 | --------------- | --------------------------------------------------- | ----------------------------------- |
@@ -224,6 +231,7 @@ workflow.add_node("UserUpdateNode", "update", {
 - **Read Replicas**: `DataFlow(read_url="...")` with dual pool, `use_primary=True` for write-after-read consistency
 - **RetentionEngine**: Archive/delete/partition policies declared via `__dataflow__["retention"]`, dry_run support
 - **DataFlowEventMixin**: Core SDK EventBus integration, 8 WRITE_OPERATIONS, `db.on_model_change()` convenience
+- **Data Fabric Engine**: External data source integration with `db.source()`, derived products with `@db.product()`, auto-generated serving endpoints via `db.start()`. 5 source adapters (REST/File/Cloud/Database/Stream), pipeline executor, leader election, circuit breaker, webhook receiver (HMAC + Redis nonce), SSRF protection
 
 ### Framework Positioning
 
@@ -231,6 +239,7 @@ workflow.add_node("UserUpdateNode", "update", {
 
 - Database-first applications requiring CRUD
 - Need automatic node generation (@db.model)
+- External data integration (REST APIs, files, cloud storage, databases, streams)
 - Bulk data processing (10k+ ops/sec)
 - Multi-tenant SaaS applications
 - Enterprise data management
@@ -257,22 +266,25 @@ DataFlow includes an 8-component enterprise migration system. See [`dataflow-ent
 
 ### Core Decision Matrix
 
-| Need                   | Use                                             |
-| ---------------------- | ----------------------------------------------- |
-| Simple CRUD            | Basic nodes                                     |
-| Bulk import            | BulkCreateNode or `db.express.import_file()`    |
-| File ingestion         | FileSourceNode (CSV/Excel/Parquet/JSON)         |
-| Complex queries        | ListNode + MongoDB filters                      |
-| Aggregation (GROUP BY) | `dataflow.query.count_by/sum_by/aggregate`      |
-| Materialized views     | `@db.derived_model` + DerivedModelEngine        |
-| Model validation       | `__validation__` dict on models                 |
-| Express caching        | `cache_enabled=True` + CacheBackendProtocol     |
-| Read/write splitting   | `DataFlow(read_url="...")` + `use_primary=True` |
-| Data retention         | RetentionEngine (archive/delete/partition)      |
-| Write event handling   | `db.on_model_change()` + EventBus               |
-| Existing database      | `auto_migrate=True` (auto-detects)              |
-| Schema changes         | Enterprise migration system                     |
-| Risk assessment        | RiskAssessmentEngine                            |
+| Need                   | Use                                                  |
+| ---------------------- | ---------------------------------------------------- |
+| Simple CRUD            | Basic nodes                                          |
+| Bulk import            | BulkCreateNode or `db.express.import_file()`         |
+| File ingestion         | FileSourceNode (CSV/Excel/Parquet/JSON)              |
+| Complex queries        | ListNode + MongoDB filters                           |
+| Aggregation (GROUP BY) | `dataflow.query.count_by/sum_by/aggregate`           |
+| Materialized views     | `@db.derived_model` + DerivedModelEngine             |
+| Model validation       | `__validation__` dict on models                      |
+| Express caching        | `cache_enabled=True` + CacheBackendProtocol          |
+| Read/write splitting   | `DataFlow(read_url="...")` + `use_primary=True`      |
+| Data retention         | RetentionEngine (archive/delete/partition)           |
+| Write event handling   | `db.on_model_change()` + EventBus                    |
+| External data sources  | `db.source()` + source config classes                |
+| Derived products       | `@db.product()` (materialized/parameterized/virtual) |
+| Fabric runtime         | `await db.start()` with auto-generated endpoints     |
+| Existing database      | `auto_migrate=True` (auto-detects)                   |
+| Schema changes         | Enterprise migration system                          |
+| Risk assessment        | RiskAssessmentEngine                                 |
 
 ## Key Rules
 
@@ -346,6 +358,7 @@ See: [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-inte
 | Read Replicas            | [`dataflow-read-replicas`](../../skills/02-dataflow/dataflow-read-replicas.md)                 |
 | Retention Policies       | [`dataflow-retention`](../../skills/02-dataflow/dataflow-retention.md)                         |
 | Write Events             | [`dataflow-events`](../../skills/02-dataflow/dataflow-events.md)                               |
+| Data Fabric Engine       | [`dataflow-fabric-engine`](../../skills/02-dataflow/dataflow-fabric-engine.md)                 |
 
 ## Related Agents
 

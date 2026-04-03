@@ -1,0 +1,39 @@
+# Test Results — Data Fabric Engine (All TODOs Complete)
+# Generated: 2026-04-03
+
+## Baseline
+- commit: 1b4472a4
+- passed: 3690, failed: 20, errors: 22
+
+## Session 1 Final (M1-M6 + GH issues + pre-existing fixes)
+- commit: 1a302d20
+- passed: 3927
+- failed: 0
+- errors: 0
+- new_fabric_tests: 163
+- new_express_tests: 5
+- pre_existing_fixes: 42
+- regression_count: 0
+
+## Session 2 Final (TODOs 30-33, 37 + collection fixes)
+- commit: 6744f086
+- scope: unit + fabric tests (excludes infra-dependent integration/e2e/perf)
+- passed: 3957
+- failed: 0
+- errors: 0
+- new_tests_this_session: 18 (10 webhook nonce, 4 source registration, 4 adapter-passthrough + 7 fabric integration - 7 counted in fabric)
+- collection_errors_fixed: 2 (psycopg2, mysql.connector importorskip)
+- regression_count: 0
+
+## Milestones
+- M1 Foundation (TODO 01-08): Done
+- M2 Products & Pipeline (TODO 09-13): Done
+- M3 Serving & Runtime (TODO 14-18): Done
+- M4 Observability (TODO 19-25): Done
+- M5 Integration & Testing (TODO 26-33): Done
+- M6 Security & Gaps (TODO 34-39): Done
+
+## GitHub Issues
+- #228: Express order_by (Done)
+- #227: Resolved by M4 (metrics + SSE)
+- #226: Nexus auth gaps (Done — API key, token age, hook)

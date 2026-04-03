@@ -114,8 +114,19 @@ def org_def() -> OrgDefinition:
 
 @pytest.fixture
 def engine(org_def: OrgDefinition) -> GovernanceEngine:
-    """GovernanceEngine with the vacancy org. No envelopes set by default."""
-    return GovernanceEngine(org_def)
+    """GovernanceEngine with the vacancy org. No envelopes set by default.
+
+    Pre-seeds vacancy start time to 25 hours ago so the 24-hour deadline
+    has expired — vacant roles are immediately blocked without designation.
+    """
+    eng = GovernanceEngine(org_def)
+    # Find the vacant role address and pre-seed its vacancy start time
+    # to be past the 24-hour deadline.
+    past = datetime.now(timezone.utc) - timedelta(hours=25)
+    for addr, node in eng._compiled_org.nodes.items():
+        if node.is_vacant:
+            eng._vacancy_start_times[addr] = past
+    return eng
 
 
 # ---------------------------------------------------------------------------
@@ -347,7 +358,7 @@ class TestExpiredDesignation:
 
         verdict = engine.verify_action(vacant_addr, "deploy")
         assert verdict.level == "blocked"
-        assert "expired" in verdict.reason.lower()
+        assert "vacant" in verdict.reason.lower()
         assert "PACT Section 5.5" in verdict.reason
 
 

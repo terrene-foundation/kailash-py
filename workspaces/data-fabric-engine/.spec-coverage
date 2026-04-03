@@ -1,0 +1,49 @@
+# Spec Coverage: Data Fabric Engine (Analysis Phase — FINAL)
+# Generated: 2026-04-03 (final red team passed)
+# Status: READY FOR /todos
+
+## Coverage: 98% (53 PASS, 1 PARTIAL, 0 MISSING)
+
+A. Source Registration:       6/6 PASS (100%)
+B. Product Definition:       11/11 PASS (100%)
+C. Pipeline:                  7/7 PASS (100%)
+D. Serving:                   9/9 PASS (100%)
+E. Observability:             5/5 PASS (100%)
+F. Runtime:                   6/6 PASS (100%)
+G. Testing:                   3/3 PASS (100%)
+H. DataFlow Integration:      6/7 PASS (93%) — builder chain PARTIAL
+I. Runtime Transformation:    9/9 PASS (100%)
+
+## Cross-Document Consistency (Final Audit)
+- 8/14 concepts: CONSISTENT across all documents
+- 6/14 concepts: CONTRADICTED but resolved (doc 04 authoritative)
+- Stale documents (08, 09, 12, 01-arch-plan) have override banners
+
+## Implementation Readiness: 10/10 components buildable without guessing
+
+## Remaining Gaps: 14 total, 0 blocking
+- 2 minor items to resolve in /todos (db.start() param table, dev-mode debounce)
+- 12 items resolvable during implementation
+
+## Red Team Rounds Summary
+| Round | Focus | Findings | Status |
+|-------|-------|----------|--------|
+| 1 | Architecture | 6 CRITICAL | All resolved (doc 02-convergence) |
+| 2 | Developer experience | 10 gaps | All resolved (doc 08-api-spec) |
+| 3 | Spec + value + security | 4C + 6H | All resolved (doc 04-final-convergence) |
+| 4 | Runtime transformation | 1C + 7M | All resolved (runtime-redteam-convergence) |
+| 5 | Layer mapping | 1C + 3M | All resolved (layer-redteam-convergence) |
+| 6 | Final consistency audit | 0C + 0H | Clean. 14 minor gaps, 0 blocking. |
+
+Total across 6 rounds: 39 findings. All resolved. 0 unresolved.
+
+## Document Authority Chain (definitive)
+1. doc 04 (final-convergence) — all design decisions
+2. runtime-redteam-convergence — TaskGroup→supervised, Lua atomic, webhook queue
+3. layer-redteam-convergence — PipelineContext, pool partition, ProductInvokeNode
+4. doc 02 (competitor-refinements) — SSE, MessagePack, MGET batch, Redis debounce
+5. doc 13 (fabric-on-dataflow-layers) — THE definitive layer mapping
+6. doc 12 (runtime-transformation) — runtime mechanics (read with convergence overrides)
+7. doc 10 (integration-spec) — code-level integration
+8. doc 08 (api-specification) — FabricContext, SourceHandle, testing (read with doc 04 overrides)
+9. doc 09 (end-to-end) — lifecycle narrative (read with doc 04 overrides)

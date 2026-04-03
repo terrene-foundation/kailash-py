@@ -1,6 +1,6 @@
 ---
 name: dataflow
-description: "Kailash DataFlow - zero-config database framework with automatic model-to-node generation. Use when asking about 'database operations', 'DataFlow', 'database models', 'CRUD operations', 'bulk operations', 'database queries', 'database migrations', 'multi-tenancy', 'multi-instance', 'database transactions', 'PostgreSQL', 'MySQL', 'SQLite', 'MongoDB', 'pgvector', 'vector search', 'document database', 'RAG', 'semantic search', 'existing database', 'database performance', 'database deployment', 'database testing', or 'TDD with databases'. DataFlow is NOT an ORM - it generates 11 workflow nodes per SQL model, 8 nodes for MongoDB, and 3 nodes for vector operations."
+description: "Kailash DataFlow - zero-config data operations framework with automatic model-to-node generation and Data Fabric Engine. Use when asking about 'database operations', 'DataFlow', 'database models', 'CRUD operations', 'bulk operations', 'database queries', 'database migrations', 'multi-tenancy', 'multi-instance', 'database transactions', 'PostgreSQL', 'MySQL', 'SQLite', 'MongoDB', 'pgvector', 'vector search', 'document database', 'RAG', 'semantic search', 'existing database', 'database performance', 'database deployment', 'database testing', 'TDD with databases', 'external data sources', 'data products', 'db.source', 'db.product', 'db.start', 'fabric engine', 'source adapters', 'REST source', 'webhooks', or 'data fabric'. DataFlow is NOT an ORM - it generates 11 workflow nodes per SQL model, 8 nodes for MongoDB, and 3 nodes for vector operations."
 ---
 
 # Kailash DataFlow - Zero-Config Database Framework
@@ -112,6 +112,10 @@ Each `@db.model` class generates:
 - **[dataflow-connection-isolation](dataflow-connection-isolation.md)** - ⚠️ CRITICAL: ACID guarantees
 
 ### Advanced Features
+
+### Data Fabric Engine
+
+- **[dataflow-fabric-engine](dataflow-fabric-engine.md)** - External data sources (`db.source()`), derived products (`@db.product()`), fabric runtime (`db.start()`), 5 source adapters, webhooks, SSRF protection, observability
 
 ### Enterprise Features
 
