@@ -153,6 +153,70 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 ```
 
+## CI Efficiency Patterns
+
+### Every Workflow MUST Have
+
+1. **Concurrency group** — prevents queue flooding on rapid pushes:
+
+```yaml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+```
+
+2. **`workflow_dispatch`** — allows manual triggering for debugging. Every workflow with path filters MUST also have `workflow_dispatch:` so it can be run manually when path filters would otherwise skip it.
+
+3. **Path filtering** on `push`/`pull_request` — skip CI on irrelevant changes:
+
+```yaml
+on:
+  push:
+    branches: [feat/*, fix/*]
+    paths:
+      - "src/**"
+      - "packages/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+  workflow_dispatch: # Always pair with path filters
+```
+
+### uv Dependency Caching
+
+Add after `setup-uv` step. Saves ~3-4 minutes per matrix job:
+
+```yaml
+- name: Restore uv cache
+  uses: actions/cache@v4
+  with:
+    path: |
+      ~/.cache/uv
+      .venv
+    key: ${{ runner.os }}-uv-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
+    restore-keys: |
+      ${{ runner.os }}-uv-py${{ matrix.python-version }}-
+```
+
+### Matrix Version Alignment
+
+Python versions in CI matrix MUST match `requires-python` in `pyproject.toml`. Do NOT test versions below the minimum:
+
+```yaml
+# pyproject.toml says requires-python = ">=3.11"
+# DO:
+matrix:
+  python-version: ["3.11", "3.12", "3.13"]
+
+# DO NOT:
+matrix:
+  python-version: ["3.8", "3.9", "3.10", "3.11"]  # Wastes 3x matrix jobs
+```
+
+### Avoid Heavy Downloads in Validation
+
+Do NOT download large models/binaries (Ollama, Docker images) in syntax/import validation workflows. Only download when actually executing the code that needs them.
+
 ## Test Matrix Design
 
 ### Python Version Strategy

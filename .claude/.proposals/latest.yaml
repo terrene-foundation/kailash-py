@@ -23,6 +23,12 @@ changes:
     reason: "Added Data Fabric Engine section with link to new skill, updated description to include fabric trigger keywords"
     diff_lines: "+5 -1"
 
+  - file: skills/10-deployment-git/deployment-ci.md
+    action: modified
+    suggested_tier: coc
+    reason: "Added CI Efficiency Patterns section — concurrency groups, path filtering + workflow_dispatch pairing, uv caching, matrix version alignment, heavy download avoidance"
+    diff_lines: "+55 -0"
+
 status: pending_review
 
 notes: |
