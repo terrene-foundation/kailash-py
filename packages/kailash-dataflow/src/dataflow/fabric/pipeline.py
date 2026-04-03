@@ -16,6 +16,7 @@ Design references:
 from __future__ import annotations
 
 import asyncio
+import collections
 import hashlib
 import json
 import logging
@@ -161,7 +162,7 @@ class PipelineExecutor:
         pool_fraction = int(pool_size * 0.2)
         db_budget = max(1, pool_fraction)
         self._db_semaphore = asyncio.Semaphore(db_budget)
-        logger.info(
+        logger.debug(
             "PipelineExecutor: max_concurrent=%d, db_budget=%d (pool_size=%d)",
             max_concurrent,
             db_budget,
@@ -172,9 +173,13 @@ class PipelineExecutor:
         self._queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue(maxsize=100)
 
         # In-memory cache (used when dev_mode or no redis_url)
-        self._cache_data: Dict[str, bytes] = {}
+        # Bounded to prevent OOM from high-cardinality parameterized products
+        self._cache_data: collections.OrderedDict[str, bytes] = (
+            collections.OrderedDict()
+        )
         self._cache_hash: Dict[str, str] = {}
         self._cache_metadata: Dict[str, Dict[str, Any]] = {}
+        self._max_cache_entries = 10_000
 
         # Bounded trace storage
         self._traces: Deque[PipelineTrace] = deque(maxlen=_DEFAULT_MAX_TRACES)
@@ -189,27 +194,34 @@ class PipelineExecutor:
     def _resolve_pool_size(self) -> int:
         """Resolve pool size from the DataFlow config.
 
-        Uses ``config.database.pool_size`` if set, otherwise defaults to 10
-        which yields a db_budget of 2 (the minimum viable concurrency for
-        pipeline DB access).
+        Uses ``DatabaseConfig.get_pool_size()`` as the single source of truth
+        (dataflow-pool.md Rule 1). Falls back to get_pool_size() with default
+        environment detection if the config path is unavailable.
         """
         try:
             config = getattr(self._dataflow, "config", None)
             if config is not None:
                 db_config = getattr(config, "database", None)
                 if db_config is not None:
+                    # Canonical path: DatabaseConfig.get_pool_size()
+                    get_fn = getattr(db_config, "get_pool_size", None)
+                    if get_fn is not None:
+                        env = getattr(config, "environment", "development")
+                        return int(get_fn(env))
                     pool_size = getattr(db_config, "pool_size", None)
                     if pool_size is not None:
                         return int(pool_size)
-                    # Try get_pool_size() method
-                    get_fn = getattr(db_config, "get_pool_size", None)
-                    if get_fn is not None:
-                        return int(get_fn())
         except Exception:
             logger.debug(
-                "Could not resolve pool_size from DataFlow config; using default"
+                "Could not resolve pool_size from DataFlow config; using DatabaseConfig default"
             )
-        return 10  # Yields db_budget = max(1, 2) = 2
+        # Fall back to DatabaseConfig canonical default
+        try:
+            from dataflow.core.config import DatabaseConfig
+
+            return DatabaseConfig().get_pool_size("development")
+        except Exception:
+            return 5  # Minimal safe fallback — yields db_budget = max(1, 1) = 1
 
     # ------------------------------------------------------------------
     # Cache operations (in-memory; Redis is a future extension)
@@ -236,9 +248,17 @@ class PipelineExecutor:
     ) -> None:
         """Store serialized data, hash, and metadata in the cache."""
         key = _cache_key(product_name, params)
+        if key in self._cache_data:
+            self._cache_data.move_to_end(key)
         self._cache_data[key] = data_bytes
         self._cache_hash[key] = content_hash
         self._cache_metadata[key] = metadata
+        # LRU eviction for high-cardinality parameterized products
+        while len(self._cache_data) > self._max_cache_entries:
+            evicted_key = next(iter(self._cache_data))
+            del self._cache_data[evicted_key]
+            self._cache_hash.pop(evicted_key, None)
+            self._cache_metadata.pop(evicted_key, None)
 
     def _get_cached_hash(
         self, product_name: str, params: Optional[Dict[str, Any]] = None

@@ -134,6 +134,10 @@ class BasicAuth(AuthConfig):
             raise ValueError(
                 f"Environment variable '{self.username_env}' is not set or empty"
             )
+        if not password:
+            raise ValueError(
+                f"Environment variable '{self.password_env}' is not set or empty"
+            )
         return username, password
 
 

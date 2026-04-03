@@ -221,7 +221,7 @@ class OAuth2TokenManager:
             seconds=expires_in_seconds
         )
 
-        logger.info(
+        logger.debug(
             "OAuth2TokenManager: acquired token (expires_in=%ds, expires_at=%s)",
             expires_in_seconds,
             self._expires_at.isoformat(),

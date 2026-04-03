@@ -107,7 +107,7 @@ class ChangeDetector:
                 name=f"change_detector:{source_name}",
             )
             self._tasks.append(task)
-            logger.info(
+            logger.debug(
                 "ChangeDetector: started poll loop for '%s' (interval=%.1fs)",
                 source_name,
                 poll_interval,
@@ -129,7 +129,7 @@ class ChangeDetector:
             await asyncio.gather(*self._tasks, return_exceptions=True)
 
         self._tasks.clear()
-        logger.info("ChangeDetector: all poll loops stopped")
+        logger.debug("ChangeDetector: all poll loops stopped")
 
     @property
     def running(self) -> bool:
@@ -215,7 +215,7 @@ class ChangeDetector:
             if changed:
                 affected = self._get_affected_products(source_name)
                 if affected:
-                    logger.info(
+                    logger.debug(
                         "ChangeDetector: source '%s' changed — triggering %d product(s): %s",
                         source_name,
                         len(affected),

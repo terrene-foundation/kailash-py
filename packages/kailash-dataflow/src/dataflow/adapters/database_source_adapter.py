@@ -14,6 +14,7 @@ Table names are validated per infrastructure-sql.md to prevent injection.
 
 from __future__ import annotations
 
+import collections
 import logging
 import re
 from datetime import datetime, timezone
@@ -49,10 +50,11 @@ class DatabaseSourceAdapter(BaseSourceAdapter):
         super().__init__(name, circuit_breaker=config.circuit_breaker)
         self.config = config
         self._conn: Any = None
-        self._last_state: Dict[str, Any] = (
-            {}
-        )  # table -> last known state for change detection
+        self._last_state: collections.OrderedDict[str, Any] = (
+            collections.OrderedDict()
+        )  # table -> last known state for change detection (bounded)
         self._change_detection_strategy: Dict[str, str] = {}  # table -> strategy
+        self._MAX_TRACKED_TABLES = 1000
 
     @property
     def database_type(self) -> str:
@@ -94,7 +96,7 @@ class DatabaseSourceAdapter(BaseSourceAdapter):
                     f"Unsupported database URL scheme for source adapter: {scheme}"
                 )
 
-        logger.info("Database source adapter '%s' connected", self.name)
+        logger.debug("Database source adapter '%s' connected", self.name)
 
     async def _disconnect(self) -> None:
         if self._conn is not None:
@@ -116,7 +118,11 @@ class DatabaseSourceAdapter(BaseSourceAdapter):
             current_state = await self._get_table_state(table, strategy)
 
             if self._last_state.get(table) != current_state:
+                if table in self._last_state:
+                    self._last_state.move_to_end(table)
                 self._last_state[table] = current_state
+                while len(self._last_state) > self._MAX_TRACKED_TABLES:
+                    self._last_state.popitem(last=False)
                 changed = True
 
         return changed

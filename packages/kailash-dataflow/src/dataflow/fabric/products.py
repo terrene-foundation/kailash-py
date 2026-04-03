@@ -187,7 +187,7 @@ def register_product(
     )
 
     products[name] = registration
-    logger.info(
+    logger.debug(
         "Registered product '%s' (mode=%s, depends_on=%s, schedule=%s)",
         name,
         product_mode.value,

@@ -31,7 +31,6 @@ class StreamSourceAdapter(BaseSourceAdapter):
         self._consumer: Any = None
         self._producer: Any = None
         self._ws: Any = None
-        self._buffer: List[Any] = []
 
     @property
     def database_type(self) -> str:
@@ -80,7 +79,7 @@ class StreamSourceAdapter(BaseSourceAdapter):
         else:
             raise ValueError(f"Unknown stream broker type: {self.config.broker}")
 
-        logger.info(
+        logger.debug(
             "Stream adapter '%s' connected to %s", self.name, self.config.broker
         )
 

@@ -28,12 +28,19 @@ __all__ = ["SSEManager"]
 class SSEManager:
     """Manages SSE connections and event broadcasting."""
 
+    _MAX_CLIENTS = 1000
+
     def __init__(self) -> None:
         self._clients: List[asyncio.Queue[str]] = []
         self._lock = asyncio.Lock()
 
     async def add_client(self) -> asyncio.Queue[str]:
-        """Register a new SSE client. Returns a queue that receives events."""
+        """Register a new SSE client. Returns a queue that receives events.
+
+        Rejects connections beyond _MAX_CLIENTS to prevent resource exhaustion.
+        """
+        if len(self._clients) >= self._MAX_CLIENTS:
+            raise ConnectionError(f"Maximum SSE clients ({self._MAX_CLIENTS}) reached")
         queue: asyncio.Queue[str] = asyncio.Queue(maxsize=100)
         async with self._lock:
             self._clients.append(queue)

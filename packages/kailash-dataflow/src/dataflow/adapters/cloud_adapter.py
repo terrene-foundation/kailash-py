@@ -10,6 +10,7 @@ for GCS). All cloud SDKs are lazy-imported.
 
 from __future__ import annotations
 
+import collections
 import hashlib
 import json
 import logging
@@ -30,7 +31,8 @@ class CloudSourceAdapter(BaseSourceAdapter):
         super().__init__(name, circuit_breaker=config.circuit_breaker)
         self.config = config
         self._client: Any = None
-        self._last_etags: Dict[str, str] = {}
+        self._last_etags: collections.OrderedDict[str, str] = collections.OrderedDict()
+        self._MAX_ETAG_ENTRIES = 10_000
 
     @property
     def database_type(self) -> str:
@@ -71,7 +73,7 @@ class CloudSourceAdapter(BaseSourceAdapter):
         else:
             raise ValueError(f"Unknown cloud provider: {provider}")
 
-        logger.info(
+        logger.debug(
             "Cloud adapter '%s' connected to %s bucket '%s'",
             self.name,
             provider,
@@ -82,6 +84,14 @@ class CloudSourceAdapter(BaseSourceAdapter):
         if self.config.provider == "azure" and self._client is not None:
             self._client.close()
         self._client = None
+
+    def _store_etag(self, key: str, etag: str) -> None:
+        """Store an etag with LRU eviction."""
+        if key in self._last_etags:
+            self._last_etags.move_to_end(key)
+        self._last_etags[key] = etag
+        while len(self._last_etags) > self._MAX_ETAG_ENTRIES:
+            self._last_etags.popitem(last=False)
 
     async def detect_change(self) -> bool:
         if self._client is None:
@@ -98,7 +108,7 @@ class CloudSourceAdapter(BaseSourceAdapter):
                 key = obj["Key"]
                 etag = obj["ETag"]
                 if self._last_etags.get(key) != etag:
-                    self._last_etags[key] = etag
+                    self._store_etag(key, etag)
                     changed = True
 
         elif self.config.provider == "gcs":
@@ -107,7 +117,7 @@ class CloudSourceAdapter(BaseSourceAdapter):
             for blob in blobs:
                 etag = blob.etag or ""
                 if self._last_etags.get(blob.name) != etag:
-                    self._last_etags[blob.name] = etag
+                    self._store_etag(blob.name, etag)
                     changed = True
 
         elif self.config.provider == "azure":
@@ -116,7 +126,7 @@ class CloudSourceAdapter(BaseSourceAdapter):
             for blob in blobs:
                 etag = blob.etag or ""
                 if self._last_etags.get(blob.name) != etag:
-                    self._last_etags[blob.name] = etag
+                    self._store_etag(blob.name, etag)
                     changed = True
 
         return changed

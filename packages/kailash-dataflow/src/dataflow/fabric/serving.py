@@ -73,7 +73,6 @@ class FabricServingLayer:
         self._sources = sources or {}
         self._enable_writes = enable_writes
         self._on_product_refresh = on_product_refresh
-        self._rate_counters: Dict[str, Dict[str, float]] = {}
 
     def get_routes(self) -> List[Dict[str, Any]]:
         """Generate route definitions for all products.

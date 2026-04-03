@@ -111,7 +111,7 @@ class FabricScheduler:
                 name=f"fabric_scheduler:{product_name}",
             )
             self._tasks.append(task)
-            logger.info(
+            logger.debug(
                 "FabricScheduler: started schedule for '%s' (cron=%s)",
                 product_name,
                 cron_expr,
@@ -129,7 +129,7 @@ class FabricScheduler:
             await asyncio.gather(*self._tasks, return_exceptions=True)
 
         self._tasks.clear()
-        logger.info("FabricScheduler: all schedule tasks stopped")
+        logger.debug("FabricScheduler: all schedule tasks stopped")
 
     @property
     def running(self) -> bool:
@@ -245,7 +245,7 @@ class FabricScheduler:
             # Fire the callback
             try:
                 await self._on_schedule(product_name)
-                logger.info(
+                logger.debug(
                     "FabricScheduler: triggered product '%s' (cron=%s)",
                     product_name,
                     cron_expr,

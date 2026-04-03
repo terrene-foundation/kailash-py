@@ -85,7 +85,7 @@ class CircuitBreaker:
                 self.failure_count = 0
                 self.success_count = 0
                 self.last_error = None
-                logger.info("Circuit breaker closed after successful probe")
+                logger.debug("Circuit breaker closed after successful probe")
         elif self.state == CircuitBreakerState.CLOSED:
             self.failure_count = 0
 
@@ -120,7 +120,7 @@ class CircuitBreaker:
             if elapsed >= self.config.probe_interval:
                 self.state = CircuitBreakerState.HALF_OPEN
                 self.success_count = 0
-                logger.info("Circuit breaker entering half-open state for probe")
+                logger.debug("Circuit breaker entering half-open state for probe")
                 return True
             return False
 
@@ -189,7 +189,7 @@ class BaseSourceAdapter(BaseAdapter):
                 await self._connect()
                 self._state = SourceState.ACTIVE
                 self.is_connected = True
-                logger.info("Source '%s' connected", self.name)
+                logger.debug("Source '%s' connected", self.name)
             except Exception as e:
                 self._state = SourceState.ERROR
                 self.is_connected = False
@@ -203,7 +203,7 @@ class BaseSourceAdapter(BaseAdapter):
         finally:
             self._state = SourceState.DISCONNECTED
             self.is_connected = False
-            logger.info("Source '%s' disconnected", self.name)
+            logger.debug("Source '%s' disconnected", self.name)
 
     @abstractmethod
     async def _connect(self) -> None:
