@@ -98,7 +98,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: Restore uv cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/uv
           key: ${{ runner.os }}-uv-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
@@ -157,7 +157,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: Restore uv cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/uv
           key: ${{ runner.os }}-uv-py3.11-${{ hashFiles('pyproject.toml', 'uv.lock') }}
