@@ -8,6 +8,7 @@ import asyncio
 import inspect
 import logging
 import os
+import re
 import threading
 import time
 import warnings
@@ -40,6 +41,9 @@ from .events import DataFlowEventMixin
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 from .nodes import NodeGenerator
 from .schema_cache import create_schema_cache  # ADR-001: Schema cache integration
+
+# Source name validation (used in Redis keys, cache keys, endpoint paths)
+_SOURCE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$")
 
 # ErrorEnhancer for rich error messages
 # Platform ErrorEnhancer for module-level (static) enhancements
@@ -1691,9 +1695,6 @@ class DataFlow(DataFlowEventMixin):
             ))
         """
         # Validate source name format (used in Redis keys, cache keys, endpoints)
-        import re
-
-        _SOURCE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$")
         if not _SOURCE_NAME_RE.match(name):
             raise ValueError(
                 f"Invalid source name '{name}': must match [a-zA-Z_][a-zA-Z0-9_-]{{0,63}}"

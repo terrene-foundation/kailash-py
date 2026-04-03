@@ -94,9 +94,18 @@ class _RedisNonceBackend(_NonceBackend):
                 pipe.expire(key, _NONCE_TTL_SECONDS)
                 await pipe.execute()
         else:
-            # Fallback for Redis clients without pipeline support
+            # Fallback for Redis clients without pipeline support.
+            # If expire fails after sadd, remove the nonce to avoid
+            # a TTL-less entry that persists indefinitely.
             await self._redis.sadd(key, nonce)
-            await self._redis.expire(key, _NONCE_TTL_SECONDS)
+            try:
+                await self._redis.expire(key, _NONCE_TTL_SECONDS)
+            except Exception:
+                logger.warning(
+                    "Failed to set TTL on nonce set '%s'; removing nonce to prevent leak",
+                    key,
+                )
+                await self._redis.srem(key, nonce)
 
 
 # Backward-compatible alias for existing tests
