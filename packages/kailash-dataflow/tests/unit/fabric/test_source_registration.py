@@ -16,6 +16,7 @@ from dataflow.fabric.config import (
     FileSourceConfig,
     RestSourceConfig,
 )
+from dataflow.fabric.testing import MockSource
 
 
 class TestSourceRegistration:
@@ -84,6 +85,41 @@ class TestSourceRegistration:
         source_info = db._sources["crm"]
         assert "adapter" in source_info
         assert source_info["adapter"].name == "crm"
+
+    def test_register_adapter_directly(self, db):
+        """db.source() accepts a BaseSourceAdapter instance (e.g. MockSource)."""
+        mock = MockSource("crm", data={"": {"deals": [1, 2, 3]}})
+        db.source("crm", mock)
+
+        source_info = db._sources["crm"]
+        assert source_info["adapter"] is mock
+        assert source_info["config"] is None
+        assert source_info["name"] == "crm"
+
+    def test_register_adapter_name_conflict_with_model(self, db):
+        @db.model
+        class User:
+            name: str
+
+        mock = MockSource("User", data={})
+        with pytest.raises(ValueError, match="conflicts with registered model"):
+            db.source("User", mock)
+
+    def test_register_adapter_duplicate_raises(self, db):
+        mock = MockSource("src", data={})
+        db.source("src", mock)
+        with pytest.raises(ValueError, match="already registered"):
+            db.source("src", MockSource("src2", data={}))
+
+    def test_adapter_and_config_sources_coexist(self, db):
+        mock = MockSource("mock_src", data={"": {"ok": True}})
+        db.source("mock_src", mock)
+        db.source("rest_src", RestSourceConfig(url="https://api.example.com"))
+
+        assert "mock_src" in db._sources
+        assert "rest_src" in db._sources
+        assert db._sources["mock_src"]["adapter"] is mock
+        assert db._sources["rest_src"]["config"] is not None
 
     def test_fabric_fields_initialized(self):
         """DataFlow.__init__ creates _sources, _products, _fabric."""

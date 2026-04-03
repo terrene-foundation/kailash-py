@@ -1,5 +1,24 @@
 # DataFlow Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Data Fabric Engine**: External data source integration and derived data products
+  - `db.source()` — register REST, File, Cloud, Database, and Stream sources
+  - `@db.product()` — define materialized, parameterized, and virtual data products
+  - `await db.start()` — start the fabric runtime with auto-generated endpoints
+  - 5 source adapters: REST (httpx, ETag caching, SSRF protection), File (watchdog), Cloud (S3/GCS/Azure), Database, Stream (Kafka/WebSocket)
+  - Pipeline executor with change detection and configurable debounce
+  - Leader election for multi-worker coordination (Redis or in-memory)
+  - Circuit breaker per source with configurable staleness policies
+  - Webhook receiver with HMAC validation and nonce deduplication (Redis or in-memory)
+  - Auto-generated REST endpoints for all registered products
+  - Write pass-through with event-driven product refresh
+  - Observability: health endpoints, pipeline traces, Prometheus metrics, SSE
+  - SSRF protection with DNS rebinding defense on REST sources
+  - Optional extras: `fabric`, `cloud`, `streaming`, `fabric-all`
+
 ## [1.5.1] - 2026-04-01
 
 ### Fixed

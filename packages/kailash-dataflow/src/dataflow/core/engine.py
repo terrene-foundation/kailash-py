@@ -1702,12 +1702,30 @@ class DataFlow(DataFlowEventMixin):
                 f"Registered sources: {list(self._sources.keys())}"
             )
 
+        # Accept either a config object or a BaseSourceAdapter directly.
+        # Direct adapter registration is useful for MockSource in tests
+        # and custom adapters that don't need a config wrapper.
+        from dataflow.adapters.source_adapter import BaseSourceAdapter
+
+        if isinstance(config, BaseSourceAdapter):
+            adapter = config
+            self._sources[name] = {
+                "name": name,
+                "config": None,
+                "adapter": adapter,
+            }
+            logger.debug(
+                "Registered source '%s' (adapter=%s)",
+                name,
+                type(adapter).__name__,
+            )
+            return
+
         # Validate config
         if hasattr(config, "validate"):
             config.validate()
 
         # Create adapter from config
-        from dataflow.adapters.source_adapter import BaseSourceAdapter
         from dataflow.fabric.config import (
             CloudSourceConfig,
             DatabaseSourceConfig,
@@ -1716,39 +1734,40 @@ class DataFlow(DataFlowEventMixin):
             StreamSourceConfig,
         )
 
-        adapter: BaseSourceAdapter
+        adapter_instance: BaseSourceAdapter
 
         if isinstance(config, RestSourceConfig):
             from dataflow.adapters.rest_adapter import RestSourceAdapter
 
-            adapter = RestSourceAdapter(name, config)
+            adapter_instance = RestSourceAdapter(name, config)
         elif isinstance(config, FileSourceConfig):
             from dataflow.adapters.file_adapter import FileSourceAdapter
 
-            adapter = FileSourceAdapter(name, config)
+            adapter_instance = FileSourceAdapter(name, config)
         elif isinstance(config, CloudSourceConfig):
             from dataflow.adapters.cloud_adapter import CloudSourceAdapter
 
-            adapter = CloudSourceAdapter(name, config)
+            adapter_instance = CloudSourceAdapter(name, config)
         elif isinstance(config, DatabaseSourceConfig):
             from dataflow.adapters.database_source_adapter import DatabaseSourceAdapter
 
-            adapter = DatabaseSourceAdapter(name, config)
+            adapter_instance = DatabaseSourceAdapter(name, config)
         elif isinstance(config, StreamSourceConfig):
             from dataflow.adapters.stream_adapter import StreamSourceAdapter
 
-            adapter = StreamSourceAdapter(name, config)
+            adapter_instance = StreamSourceAdapter(name, config)
         else:
             raise ValueError(
                 f"Unknown source config type: {type(config).__name__}. "
                 f"Expected one of: RestSourceConfig, FileSourceConfig, "
-                f"CloudSourceConfig, DatabaseSourceConfig, StreamSourceConfig."
+                f"CloudSourceConfig, DatabaseSourceConfig, StreamSourceConfig, "
+                f"or a BaseSourceAdapter instance."
             )
 
         self._sources[name] = {
             "name": name,
             "config": config,
-            "adapter": adapter,
+            "adapter": adapter_instance,
         }
 
         logger.debug(

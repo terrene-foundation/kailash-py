@@ -14,7 +14,12 @@ from datetime import datetime, timezone
 import pytest
 
 from dataflow.fabric.config import RestSourceConfig, WebhookConfig
-from dataflow.fabric.webhooks import WebhookReceiver, _BoundedNonceSet
+from dataflow.fabric.webhooks import (
+    WebhookReceiver,
+    _BoundedNonceSet,
+    _InMemoryNonceBackend,
+    _RedisNonceBackend,
+)
 
 
 def _make_sources(webhook_secret_env: str = "TEST_HOOK_SECRET") -> dict:
@@ -147,3 +152,103 @@ class TestBoundedNonceSet:
         assert not nonces.contains("a")
         assert nonces.contains("d")
         assert len(nonces) == 3
+
+
+class TestInMemoryNonceBackend:
+    @pytest.mark.asyncio
+    async def test_add_and_contains(self):
+        backend = _InMemoryNonceBackend(maxsize=10)
+        assert not await backend.contains("src", "nonce-1")
+        await backend.add("src", "nonce-1")
+        assert await backend.contains("src", "nonce-1")
+
+    @pytest.mark.asyncio
+    async def test_source_isolation(self):
+        """Nonces are scoped per source — different sources don't collide."""
+        backend = _InMemoryNonceBackend(maxsize=10)
+        await backend.add("src_a", "nonce-1")
+        assert await backend.contains("src_a", "nonce-1")
+        assert not await backend.contains("src_b", "nonce-1")
+
+    @pytest.mark.asyncio
+    async def test_eviction(self):
+        backend = _InMemoryNonceBackend(maxsize=3)
+        await backend.add("s", "a")
+        await backend.add("s", "b")
+        await backend.add("s", "c")
+        await backend.add("s", "d")  # Evicts "a"
+        assert not await backend.contains("s", "a")
+        assert await backend.contains("s", "d")
+
+
+class TestRedisNonceBackend:
+    """Tests Redis nonce backend with a fake async Redis client."""
+
+    class _FakeRedis:
+        """Minimal async Redis stub for unit tests."""
+
+        def __init__(self):
+            self._sets: dict[str, set[str]] = {}
+            self._ttls: dict[str, int] = {}
+
+        async def sismember(self, key: str, member: str) -> bool:
+            return member in self._sets.get(key, set())
+
+        async def sadd(self, key: str, *members: str) -> int:
+            if key not in self._sets:
+                self._sets[key] = set()
+            added = 0
+            for m in members:
+                if m not in self._sets[key]:
+                    self._sets[key].add(m)
+                    added += 1
+            return added
+
+        async def expire(self, key: str, ttl: int) -> bool:
+            self._ttls[key] = ttl
+            return True
+
+    @pytest.mark.asyncio
+    async def test_add_and_contains(self):
+        redis = self._FakeRedis()
+        backend = _RedisNonceBackend(redis)
+        assert not await backend.contains("crm", "nonce-1")
+        await backend.add("crm", "nonce-1")
+        assert await backend.contains("crm", "nonce-1")
+
+    @pytest.mark.asyncio
+    async def test_sets_ttl(self):
+        redis = self._FakeRedis()
+        backend = _RedisNonceBackend(redis)
+        await backend.add("crm", "nonce-1")
+        assert redis._ttls["fabric:webhook:nonces:crm"] == 300
+
+    @pytest.mark.asyncio
+    async def test_source_isolation(self):
+        redis = self._FakeRedis()
+        backend = _RedisNonceBackend(redis)
+        await backend.add("src_a", "n1")
+        assert await backend.contains("src_a", "n1")
+        assert not await backend.contains("src_b", "n1")
+
+
+class TestWebhookReceiverWithRedis:
+    @pytest.fixture(autouse=True)
+    def set_secret(self, monkeypatch):
+        monkeypatch.setenv("TEST_HOOK_SECRET", "my_secret_123")
+
+    @pytest.mark.asyncio
+    async def test_redis_nonce_dedup(self):
+        """Duplicate nonces are rejected when using Redis backend."""
+        redis = TestRedisNonceBackend._FakeRedis()
+        receiver = WebhookReceiver(_make_sources(), redis_client=redis)
+        body = b'{"event": "test"}'
+        sig = _sign(body, "my_secret_123")
+        headers = {"X-Webhook-Signature": sig, "X-Webhook-Delivery-Id": "nonce-42"}
+
+        r1 = await receiver.handle_webhook("crm", headers, body)
+        assert r1["accepted"] is True
+
+        r2 = await receiver.handle_webhook("crm", headers, body)
+        assert r2["accepted"] is False
+        assert "Duplicate" in r2["reason"]
