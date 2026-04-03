@@ -16,9 +16,9 @@
 - regression_count: 0
 
 ## Session 2 Final (TODOs 30-33, 37 + collection fixes)
-- commit: uncommitted (on 1a302d20)
+- commit: 6744f086
 - scope: unit + fabric tests (excludes infra-dependent integration/e2e/perf)
-- passed: 3945
+- passed: 3957
 - failed: 0
 - errors: 0
 - new_tests_this_session: 18 (10 webhook nonce, 4 source registration, 4 adapter-passthrough + 7 fabric integration - 7 counted in fabric)
