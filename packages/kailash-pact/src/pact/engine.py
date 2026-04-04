@@ -6,9 +6,9 @@ PactEngine is the single facade that bridges the Trust Plane (GovernanceEngine)
 with the Execution Plane (GovernedSupervisor). It provides a progressive
 disclosure API:
 
-    Layer 1: engine = PactEngine(org="org.yaml", model="claude-sonnet-4-6")
+    Layer 1: engine = PactEngine(org="org.yaml", model=os.environ.get("DEFAULT_LLM_MODEL"))
              result = await engine.submit("Analyze Q3 data", role="D1-R1")
-    Layer 2: engine = PactEngine(org="org.yaml", model="...", budget_usd=50.0, clearance="confidential")
+    Layer 2: engine = PactEngine(org="org.yaml", model=..., budget_usd=50.0, clearance="confidential")
     Layer 3: engine.governance / engine.costs / engine.events
 
 Design principles:
@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import os
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,77 @@ from pact.work import WorkResult, WorkSubmission
 logger = logging.getLogger(__name__)
 
 __all__ = ["PactEngine"]
+
+
+class _ReadOnlyGovernanceView:
+    """Read-only wrapper around GovernanceEngine.
+
+    Proxies read-only methods and properties (org_name, compiled_org,
+    verify_action, compute_envelope, check_access, get_org, get_node,
+    list_roles, audit_chain) while raising AttributeError for mutating
+    methods (set_role_envelope, grant_clearance, etc.).
+
+    This ensures that external consumers of ``PactEngine.governance``
+    cannot mutate the governance engine directly.
+    """
+
+    __slots__ = ("_engine",)
+
+    # Methods that are safe to proxy (read-only / query)
+    _PROXIED_METHODS: frozenset[str] = frozenset(
+        {
+            "org_name",
+            "compiled_org",
+            "verify_action",
+            "compute_envelope",
+            "check_access",
+            "get_org",
+            "get_node",
+            "list_roles",
+            "audit_chain",
+            "get_clearance",
+            "get_role_envelope",
+            "get_effective_envelope",
+            "describe_address",
+            "explain_access",
+            "explain_envelope",
+        }
+    )
+
+    # Methods that MUST be blocked (mutating)
+    _BLOCKED_METHODS: frozenset[str] = frozenset(
+        {
+            "set_role_envelope",
+            "grant_clearance",
+            "create_bridge",
+            "approve_bridge",
+            "consent_bridge",
+            "register_compliance_role",
+            "designate_interim",
+            "revoke_interim",
+            "register_ksp",
+            "revoke_ksp",
+        }
+    )
+
+    def __init__(self, engine: Any) -> None:
+        object.__setattr__(self, "_engine", engine)
+
+    def __getattr__(self, name: str) -> Any:
+        if name in _ReadOnlyGovernanceView._BLOCKED_METHODS:
+            raise AttributeError(
+                f"'{name}' is a mutating method and is not available through "
+                f"the read-only governance view. Use engine._admin_governance "
+                f"for administrative operations."
+            )
+        return getattr(object.__getattribute__(self, "_engine"), name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        raise AttributeError("Cannot set attributes on the read-only governance view.")
+
+    def __repr__(self) -> str:
+        engine = object.__getattribute__(self, "_engine")
+        return f"_ReadOnlyGovernanceView(org={engine.org_name!r})"
 
 
 class PactEngine:
@@ -87,14 +159,15 @@ class PactEngine:
         # Load org and create GovernanceEngine (Trust Plane)
         self._governance = self._create_governance_engine(org, store_backend)
 
+        # Degenerate envelope detection (#241) -- warn on envelopes so tight
+        # that no meaningful action is possible. Cap at 50 warnings.
+        self._detect_degenerate_envelopes()
+
         # Create cost tracker (Execution Plane bridge)
         self._costs = CostTracker(budget_usd=budget_usd, cost_model=cost_model)
 
         # Create event bus (bounded history per trust-plane-security.md rule 4)
         self._events = EventBus(maxlen=10000)
-
-        # Supervisor is lazy -- only created when kaizen-agents is installed
-        self._supervisor: Any | None = None
 
         logger.info(
             "PactEngine initialized: org=%s model=%s budget=$%s clearance=%s",
@@ -218,6 +291,12 @@ class PactEngine:
                 context=ctx,
             )
             cost_usd = supervisor_result.budget_consumed
+            if not math.isfinite(cost_usd) or cost_usd < 0:
+                logger.error(
+                    "budget_consumed is non-finite or negative (%r) — recording as 0.0",
+                    cost_usd,
+                )
+                cost_usd = 0.0
             if cost_usd > 0:
                 self._costs.record(cost_usd, f"submit: {objective[:80]}")
 
@@ -322,13 +401,25 @@ class PactEngine:
     # -------------------------------------------------------------------
 
     @property
-    def governance(self) -> Any:
-        """The Trust Plane GovernanceEngine instance (Layer 3 administrative API).
+    def governance(self) -> _ReadOnlyGovernanceView:
+        """Read-only view of the Trust Plane GovernanceEngine (Layer 3 API).
 
-        WARNING: This returns the mutable GovernanceEngine. Do NOT pass this
-        reference to agent code — agents must receive GovernanceContext (frozen)
-        only, per pact-governance.md Rule 1. This property is for administrative
-        use: org compilation, envelope inspection, clearance queries.
+        Returns a ``_ReadOnlyGovernanceView`` that proxies read-only methods
+        (org_name, verify_action, compute_envelope, check_access, etc.) and
+        raises ``AttributeError`` for mutating methods (set_role_envelope,
+        grant_clearance, etc.).
+
+        For internal administrative mutations use ``_admin_governance``.
+        """
+        return _ReadOnlyGovernanceView(self._governance)
+
+    @property
+    def _admin_governance(self) -> Any:
+        """The mutable GovernanceEngine for internal PactEngine use only.
+
+        This returns the raw GovernanceEngine without the read-only wrapper.
+        It is private (underscore-prefixed) and MUST NOT be exposed to agent
+        code. Use ``governance`` for external consumers.
         """
         return self._governance
 
@@ -345,6 +436,55 @@ class PactEngine:
     # -------------------------------------------------------------------
     # Internal helpers
     # -------------------------------------------------------------------
+
+    def _detect_degenerate_envelopes(self) -> None:
+        """Scan org Role nodes for degenerate envelopes and log warnings.
+
+        Called once during __init__ after compile_org(). Iterates all Role
+        nodes in the compiled org (only Roles have valid envelope addresses),
+        computes each effective envelope, and runs
+        ``check_degenerate_envelope()`` on it. Caps warnings at 50 to
+        prevent log flooding for large organizations.
+        """
+        from kailash.trust.pact.addressing import NodeType
+        from kailash.trust.pact.envelopes import check_degenerate_envelope
+
+        compiled_org = self._governance.get_org()
+        degenerate_count = 0
+
+        for address, node in compiled_org.nodes.items():
+            # Only Role nodes have valid D/T/R addresses for envelope computation
+            if node.node_type != NodeType.ROLE:
+                continue
+            try:
+                envelope = self._governance.compute_envelope(address)
+            except Exception:
+                # Fail-safe: if envelope computation fails, skip this node
+                continue
+            if envelope is None:
+                continue
+            degenerate_warnings = check_degenerate_envelope(envelope)
+            if degenerate_warnings:
+                if degenerate_count < 50:
+                    logger.warning(
+                        "Degenerate envelope at '%s': %s",
+                        address,
+                        "; ".join(degenerate_warnings),
+                    )
+                degenerate_count += 1
+
+        if degenerate_count > 50:
+            logger.warning(
+                "... and %d more degenerate envelopes (total: %d)",
+                degenerate_count - 50,
+                degenerate_count,
+            )
+        elif degenerate_count > 0:
+            logger.warning(
+                "Found %d degenerate envelope(s) in org '%s'",
+                degenerate_count,
+                compiled_org.org_id,
+            )
 
     @staticmethod
     def _create_governance_engine(
@@ -389,15 +529,15 @@ class PactEngine:
         return GovernanceEngine(org_def, store_backend=store_backend)
 
     def _get_or_create_supervisor(self) -> Any | None:
-        """Lazily create a GovernedSupervisor if kaizen-agents is installed.
+        """Create a fresh GovernedSupervisor if kaizen-agents is installed.
+
+        A new supervisor is created on every call so that ``budget_usd``
+        reflects ``self._costs.remaining`` at the time of each submit().
 
         Returns:
             A GovernedSupervisor instance, or None if kaizen-agents
             is not importable.
         """
-        if self._supervisor is not None:
-            return self._supervisor
-
         try:
             from kaizen_agents.supervisor import GovernedSupervisor
         except ImportError:
@@ -408,7 +548,7 @@ class PactEngine:
             return None
 
         supervisor = GovernedSupervisor(
-            model=self._model or "claude-sonnet-4-6",
+            model=self._model or os.environ.get("DEFAULT_LLM_MODEL"),
             budget_usd=(
                 self._costs.remaining if self._costs.remaining is not None else 1.0
             ),
@@ -427,7 +567,6 @@ class PactEngine:
             ),
             cost_model=self._costs.cost_model,
         )
-        self._supervisor = supervisor
         return supervisor
 
 
