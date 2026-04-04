@@ -584,3 +584,13 @@ class FabricRuntime:
     @property
     def is_leader(self) -> bool:
         return self._leader.is_leader if self._leader else False
+
+    def get_mcp_tools(self) -> List[Dict[str, Any]]:
+        """Generate MCP tool definitions for all registered products.
+
+        Returns a list of MCP-compatible tool definition dicts that can be
+        registered with a kailash-mcp server or any MCP-compatible runtime.
+        """
+        from dataflow.fabric.mcp_integration import generate_mcp_tools
+
+        return generate_mcp_tools(self._products)
