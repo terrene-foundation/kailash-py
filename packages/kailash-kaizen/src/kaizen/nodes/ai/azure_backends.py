@@ -7,6 +7,7 @@ This module provides concrete backend implementations for Azure services:
 Both backends implement the AzureBackend abstract interface for interoperability.
 """
 
+import asyncio
 import logging
 import os
 import re
@@ -124,7 +125,11 @@ class AzureOpenAIBackend(AzureBackend):
         self._async_client = None
         self._endpoint = self._get_endpoint()
         self._api_key = self._get_api_key()
-        self._api_version = os.getenv("AZURE_API_VERSION", DEFAULT_API_VERSION)
+        self._api_version = (
+            os.getenv("AZURE_OPENAI_API_VERSION")
+            or os.getenv("AZURE_API_VERSION")
+            or DEFAULT_API_VERSION
+        )
         self._deployment = os.getenv("AZURE_DEPLOYMENT")
 
     def _get_endpoint(self) -> Optional[str]:
@@ -291,7 +296,10 @@ class AzureOpenAIBackend(AzureBackend):
             response = client.chat.completions.create(**request_params)
             return self._format_response(response)
         except Exception as e:
-            raise RuntimeError(f"Azure OpenAI error: {str(e)}")
+            logger.error("Azure OpenAI chat failed: %s", e, exc_info=True)
+            raise RuntimeError(
+                "Azure OpenAI chat request failed. Check logs for details."
+            ) from e
 
     async def chat_async(self, messages: List[Dict], **kwargs) -> Dict[str, Any]:
         """Generate chat completion using Azure OpenAI (async)."""
@@ -327,8 +335,13 @@ class AzureOpenAIBackend(AzureBackend):
         try:
             response = await client.chat.completions.create(**request_params)
             return self._format_response(response)
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            raise
         except Exception as e:
-            raise RuntimeError(f"Azure OpenAI async error: {str(e)}")
+            logger.error("Azure OpenAI async chat failed: %s", e, exc_info=True)
+            raise RuntimeError(
+                "Azure OpenAI async chat request failed. Check logs for details."
+            ) from e
 
     def embed(self, texts: List[str], **kwargs) -> List[List[float]]:
         """Generate embeddings using Azure OpenAI."""
@@ -345,7 +358,10 @@ class AzureOpenAIBackend(AzureBackend):
             response = client.embeddings.create(**request_params)
             return [item.embedding for item in response.data]
         except Exception as e:
-            raise RuntimeError(f"Azure OpenAI embedding error: {str(e)}")
+            logger.error("Azure OpenAI embedding failed: %s", e, exc_info=True)
+            raise RuntimeError(
+                "Azure OpenAI embedding request failed. Check logs for details."
+            ) from e
 
 
 class AzureAIFoundryBackend(AzureBackend):
@@ -624,7 +640,10 @@ class AzureAIFoundryBackend(AzureBackend):
             response = self._sync_chat_client.complete(**request_params)
             return self._format_response(response)
         except Exception as e:
-            raise RuntimeError(f"Azure AI Foundry error: {str(e)}")
+            logger.error("Azure AI Foundry chat failed: %s", e, exc_info=True)
+            raise RuntimeError(
+                "Azure AI Foundry chat request failed. Check logs for details."
+            ) from e
 
     async def chat_async(self, messages: List[Dict], **kwargs) -> Dict[str, Any]:
         """Generate chat completion using Azure AI Foundry (async)."""
@@ -669,8 +688,13 @@ class AzureAIFoundryBackend(AzureBackend):
         try:
             response = await self._async_chat_client.complete(**request_params)
             return self._format_response(response)
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            raise
         except Exception as e:
-            raise RuntimeError(f"Azure AI Foundry async error: {str(e)}")
+            logger.error("Azure AI Foundry async chat failed: %s", e, exc_info=True)
+            raise RuntimeError(
+                "Azure AI Foundry async chat request failed. Check logs for details."
+            ) from e
 
     def embed(self, texts: List[str], **kwargs) -> List[List[float]]:
         """Generate embeddings using Azure AI Foundry."""
@@ -692,7 +716,10 @@ class AzureAIFoundryBackend(AzureBackend):
             response = self._sync_embed_client.embed(**request_params)
             return [item.embedding for item in response.data]
         except Exception as e:
-            raise RuntimeError(f"Azure AI Foundry embedding error: {str(e)}")
+            logger.error("Azure AI Foundry embedding failed: %s", e, exc_info=True)
+            raise RuntimeError(
+                "Azure AI Foundry embedding request failed. Check logs for details."
+            ) from e
 
 
 # Re-export for convenience

@@ -17,6 +17,7 @@ AZURE_OPENAI_PATTERNS = [
     r".*\.openai\.azure\.com",  # Standard Azure OpenAI
     r".*\.privatelink\.openai\.azure\.com",  # Private endpoint
     r".*cognitiveservices\.azure\.com.*openai",  # Legacy cognitive services with openai path
+    r".*\.cognitiveservices\.azure\.com",  # Cognitive Services (India South, other regions)
 ]
 
 # Endpoint patterns for Azure AI Foundry
@@ -41,7 +42,8 @@ class AzureBackendDetector:
         AZURE_ENDPOINT: Unified endpoint URL (recommended)
         AZURE_API_KEY: Unified API key
         AZURE_BACKEND: Explicit backend override ('openai' or 'foundry')
-        AZURE_API_VERSION: API version (default: 2024-10-21)
+        AZURE_OPENAI_API_VERSION: API version (standard Azure naming, preferred)
+        AZURE_API_VERSION: API version fallback (default: 2024-10-21)
 
         Legacy (backward compatible):
         AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY
@@ -220,7 +222,11 @@ class AzureBackendDetector:
         return {
             "endpoint": self._get_endpoint(),
             "api_key": self._get_api_key(),
-            "api_version": os.getenv("AZURE_API_VERSION", "2024-10-21"),
+            "api_version": (
+                os.getenv("AZURE_OPENAI_API_VERSION")
+                or os.getenv("AZURE_API_VERSION")
+                or "2024-10-21"
+            ),
             "deployment": os.getenv("AZURE_DEPLOYMENT"),
             "backend": backend,
         }
