@@ -161,9 +161,9 @@ class TestPactEngineProperties:
     ) -> None:
         """Read-only governance view should block mutating methods."""
         gov = engine_from_yaml.governance
-        with pytest.raises(AttributeError, match="mutating method"):
+        with pytest.raises(AttributeError, match="does not expose"):
             gov.set_role_envelope(None)
-        with pytest.raises(AttributeError, match="mutating method"):
+        with pytest.raises(AttributeError, match="does not expose"):
             gov.grant_clearance("D1-R1", None)
 
     def test_governance_read_only_blocks_setattr(
@@ -171,7 +171,7 @@ class TestPactEngineProperties:
     ) -> None:
         """Read-only governance view should block attribute setting."""
         gov = engine_from_yaml.governance
-        with pytest.raises(AttributeError, match="Cannot set attributes"):
+        with pytest.raises(AttributeError):
             gov.custom_attr = "injected"
 
     def test_admin_governance_returns_mutable_engine(
@@ -739,7 +739,7 @@ class TestReadOnlyGovernanceView:
             "revoke_ksp",
         ]
         for method_name in blocked_methods:
-            with pytest.raises(AttributeError, match="mutating method"):
+            with pytest.raises(AttributeError, match="does not expose"):
                 getattr(gov, method_name)
 
     def test_repr_includes_org_name(self, engine_from_yaml: PactEngine) -> None:

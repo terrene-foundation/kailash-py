@@ -24,8 +24,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from pact.costs import CostTracker
 from pact.enforcement import EnforcementMode, validate_enforcement_mode
@@ -34,7 +35,65 @@ from pact.work import WorkResult, WorkSubmission
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["PactEngine"]
+__all__ = [
+    "GovernanceHeldError",
+    "HeldActionCallback",
+    "GovernanceCallback",
+    "PactEngine",
+]
+
+
+class GovernanceHeldError(Exception):
+    """Raised when a governance verdict is HELD and no on_held callback handles it."""
+
+    def __init__(self, verdict: Any, role: str, action: str, context: dict[str, Any] | None = None) -> None:
+        self.verdict = verdict
+        self.role = role
+        self.action = action
+        self.context = context or {}
+        super().__init__(f"Action held for human review: {role} attempting {action}")
+
+
+@runtime_checkable
+class HeldActionCallback(Protocol):
+    """Protocol for handling HELD verdicts. Return True to proceed, False to block."""
+
+    async def __call__(self, verdict: Any, role: str, action: str, context: dict[str, Any]) -> bool: ...
+
+
+@runtime_checkable
+class GovernanceCallback(Protocol):
+    """Protocol for per-node governance verification."""
+
+    async def __call__(self, role_address: str, action: str, context: dict[str, Any]) -> Any: ...
+
+
+class _DefaultGovernanceCallback:
+    """Default per-node governance callback calling verify_action() per node."""
+
+    def __init__(self, governance: Any, on_held: HeldActionCallback | None = None) -> None:
+        self._governance = governance
+        self._on_held = on_held
+
+    async def __call__(self, role_address: str, action: str, context: dict[str, Any]) -> Any:
+        from kailash.trust.pact.exceptions import PactError
+
+        verdict = self._governance.verify_action(role_address=role_address, action=action, context=context)
+
+        if verdict.is_held:
+            if self._on_held is not None:
+                proceed = await self._on_held(verdict, role_address, action, context)
+                if proceed:
+                    return verdict
+            raise GovernanceHeldError(verdict=verdict, role=role_address, action=action, context=context)
+
+        if verdict.is_blocked:
+            raise PactError(
+                f"Governance BLOCKED: {verdict.reason}",
+                details={"level": verdict.level, "reason": verdict.reason, "role_address": role_address, "action": action},
+            )
+
+        return verdict
 
 
 class PactEngine:
@@ -71,11 +130,13 @@ class PactEngine:
         clearance: str = "restricted",
         store_backend: str = "memory",
         cost_model: Any | None = None,
+        on_held: HeldActionCallback | None = None,
         enforcement_mode: EnforcementMode = EnforcementMode.ENFORCE,
     ) -> None:
         # Validate enforcement mode (DISABLED requires env var guard)
         validate_enforcement_mode(enforcement_mode)
         self._enforcement_mode = enforcement_mode
+        self._on_held = on_held
 
         # Validate budget_usd (NaN/Inf/negative per pact-governance.md rule 6)
         if budget_usd is not None:
@@ -92,6 +153,9 @@ class PactEngine:
 
         # Load org and create GovernanceEngine (Trust Plane)
         self._governance = self._create_governance_engine(org, store_backend)
+
+        # Detect degenerate envelopes at init (#241)
+        self._detect_degenerate_envelopes()
 
         # Create cost tracker (Execution Plane bridge)
         self._costs = CostTracker(budget_usd=budget_usd, cost_model=cost_model)
@@ -329,14 +393,22 @@ class PactEngine:
 
     @property
     def governance(self) -> Any:
-        """The Trust Plane GovernanceEngine instance (Layer 3 administrative API).
+        """Read-only governance view (Layer 3).
 
-        WARNING: This returns the mutable GovernanceEngine. Do NOT pass this
-        reference to agent code — agents must receive GovernanceContext (frozen)
-        only, per pact-governance.md Rule 1. This property is for administrative
-        use: org compilation, envelope inspection, clearance queries.
+        Returns a _ReadOnlyGovernanceView that proxies read-only methods.
+        Use ._admin_governance for mutable access (internal only).
         """
+        return _ReadOnlyGovernanceView(self._governance)
+
+    @property
+    def _admin_governance(self) -> Any:
+        """Mutable governance engine for internal PactEngine use only."""
         return self._governance
+
+    @property
+    def governance_callback(self) -> GovernanceCallback:
+        """The per-node governance callback."""
+        return _DefaultGovernanceCallback(governance=self._governance, on_held=self._on_held)
 
     @property
     def costs(self) -> CostTracker:
@@ -572,6 +644,32 @@ class PactEngine:
             "max_depth": 0,
         }
 
+    def _detect_degenerate_envelopes(self) -> None:
+        """Scan org Role nodes for degenerate envelopes and log warnings."""
+        from kailash.trust.pact.addressing import NodeType
+        from kailash.trust.pact.envelopes import check_degenerate_envelope
+
+        compiled_org = self._governance.get_org()
+        degenerate_count = 0
+        for address, node in compiled_org.nodes.items():
+            if node.node_type != NodeType.ROLE:
+                continue
+            try:
+                envelope = self._governance.compute_envelope(address)
+            except Exception:
+                continue
+            if envelope is None:
+                continue
+            degenerate_warnings = check_degenerate_envelope(envelope)
+            if degenerate_warnings:
+                if degenerate_count < 50:
+                    logger.warning("Degenerate envelope at '%s': %s", address, "; ".join(degenerate_warnings))
+                degenerate_count += 1
+        if degenerate_count > 50:
+            logger.warning("... and %d more degenerate envelopes (total: %d)", degenerate_count - 50, degenerate_count)
+        elif degenerate_count > 0:
+            logger.warning("Found %d degenerate envelope(s) in org '%s'", degenerate_count, compiled_org.org_id)
+
     @staticmethod
     def _create_governance_engine(
         org: str | Path | dict[str, Any],
@@ -634,7 +732,7 @@ class PactEngine:
             return None
 
         supervisor = GovernedSupervisor(
-            model=self._model or "claude-sonnet-4-6",
+            model=self._model or os.environ.get("DEFAULT_LLM_MODEL"),
             budget_usd=(
                 self._costs.remaining if self._costs.remaining is not None else 1.0
             ),
@@ -718,3 +816,45 @@ def _org_def_from_dict(data: dict[str, Any]) -> Any:
         teams=teams,
         roles=roles,
     )
+
+
+class _ReadOnlyGovernanceView:
+    """Read-only wrapper around GovernanceEngine per pact-governance.md Rule 1."""
+
+    __slots__ = ("_engine",)
+
+    def __init__(self, engine: Any) -> None:
+        self._engine = engine
+
+    @property
+    def org_name(self) -> str:
+        return self._engine.org_name
+
+    @property
+    def compiled_org(self) -> Any:
+        return self._engine.compiled_org
+
+    def verify_action(self, *args: Any, **kwargs: Any) -> Any:
+        return self._engine.verify_action(*args, **kwargs)
+
+    def compute_envelope(self, *args: Any, **kwargs: Any) -> Any:
+        return self._engine.compute_envelope(*args, **kwargs)
+
+    def __repr__(self) -> str:
+        return f"<_ReadOnlyGovernanceView org='{self._engine.org_name}'>"
+
+    def __getattr__(self, name: str) -> Any:
+        _BLOCKED = {
+            "update_envelope", "modify_envelope", "set_role_envelope",
+            "grant_clearance", "revoke_clearance", "register_vacancy",
+            "register_tool", "compile_org", "set_compliance_role",
+            "create_bridge", "approve_bridge", "consent_bridge",
+            "register_compliance_role", "designate_interim", "revoke_interim",
+            "register_ksp", "revoke_ksp",
+        }
+        if name in _BLOCKED:
+            raise AttributeError(
+                f"'{type(self).__name__}' does not expose '{name}'. "
+                "Use PactEngine._admin_governance for mutable operations."
+            )
+        return getattr(self._engine, name)
