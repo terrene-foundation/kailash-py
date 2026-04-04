@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from pact.costs import CostTracker
+from pact.enforcement import EnforcementMode, validate_enforcement_mode
 from pact.events import EventBus
 from pact.work import WorkResult, WorkSubmission
 
@@ -70,7 +71,12 @@ class PactEngine:
         clearance: str = "restricted",
         store_backend: str = "memory",
         cost_model: Any | None = None,
+        enforcement_mode: EnforcementMode = EnforcementMode.ENFORCE,
     ) -> None:
+        # Validate enforcement mode (DISABLED requires env var guard)
+        validate_enforcement_mode(enforcement_mode)
+        self._enforcement_mode = enforcement_mode
+
         # Validate budget_usd (NaN/Inf/negative per pact-governance.md rule 6)
         if budget_usd is not None:
             if not math.isfinite(budget_usd):
@@ -97,11 +103,12 @@ class PactEngine:
         self._supervisor: Any | None = None
 
         logger.info(
-            "PactEngine initialized: org=%s model=%s budget=$%s clearance=%s",
+            "PactEngine initialized: org=%s model=%s budget=$%s clearance=%s mode=%s",
             self._governance.org_name,
             model or "(none)",
             f"{budget_usd:.2f}" if budget_usd is not None else "unlimited",
             clearance,
+            enforcement_mode.value,
         )
 
     # -------------------------------------------------------------------
@@ -134,6 +141,7 @@ class PactEngine:
         """
         ctx = context or {}
         events_emitted: list[dict[str, Any]] = []
+        governance_verdicts: list[dict[str, Any]] = []
 
         # Emit submission event
         self._events.emit(
@@ -142,8 +150,34 @@ class PactEngine:
                 "objective": objective,
                 "role": role,
                 "context": ctx,
+                "enforcement_mode": self._enforcement_mode.value,
             },
         )
+
+        # --- DISABLED mode: skip governance entirely ---
+        if self._enforcement_mode == EnforcementMode.DISABLED:
+            logger.warning(
+                "PactEngine.submit: governance DISABLED for role=%s objective='%s' -- "
+                "all governance checks skipped",
+                role,
+                objective[:80],
+            )
+            self._events.emit(
+                "work.governance_disabled",
+                {
+                    "objective": objective,
+                    "role": role,
+                    "enforcement_mode": "disabled",
+                },
+            )
+            return await self._execute_supervised(
+                objective,
+                role,
+                ctx,
+                events_emitted,
+                governance_verdicts,
+                shadow=False,
+            )
 
         # Step 1: Verify action via Trust Plane (GovernanceEngine)
         try:
@@ -152,7 +186,7 @@ class PactEngine:
                 action="submit",
                 context=ctx,
             )
-        except Exception as exc:
+        except Exception:
             logger.exception(
                 "PactEngine.submit: governance verify_action raised for role=%s -- fail-closed",
                 role,
@@ -171,7 +205,40 @@ class PactEngine:
                 events=events_emitted,
             )
 
-        # Check if governance blocks the action
+        verdict_dict = verdict.to_dict()
+        governance_verdicts.append(verdict_dict)
+
+        # --- SHADOW mode: log verdict but never block ---
+        if self._enforcement_mode == EnforcementMode.SHADOW:
+            shadow_verdict = {**verdict_dict, "shadow": True}
+            logger.info(
+                "PactEngine.submit [SHADOW]: role=%s action=submit level=%s reason='%s'",
+                role,
+                verdict.level,
+                verdict.reason,
+            )
+            self._events.emit(
+                "work.governance_shadow",
+                {
+                    "objective": objective,
+                    "role": role,
+                    "verdict_level": verdict.level,
+                    "reason": verdict.reason,
+                    "shadow": True,
+                },
+            )
+            governance_verdicts[-1] = shadow_verdict
+            events_emitted.append(shadow_verdict)
+            return await self._execute_supervised(
+                objective,
+                role,
+                ctx,
+                events_emitted,
+                governance_verdicts,
+                shadow=True,
+            )
+
+        # --- ENFORCE mode: verdicts are binding ---
         if not verdict.allowed:
             self._events.emit(
                 "work.blocked",
@@ -185,87 +252,21 @@ class PactEngine:
             return WorkResult(
                 success=False,
                 error=f"Governance {verdict.level}: {verdict.reason}",
-                events=[verdict.to_dict()],
+                events=[verdict_dict],
+                governance_verdicts=governance_verdicts,
             )
 
-        events_emitted.append(verdict.to_dict())
+        events_emitted.append(verdict_dict)
 
-        # Step 2: Execute via Execution Plane (GovernedSupervisor)
-        supervisor = self._get_or_create_supervisor()
-        if supervisor is None:
-            self._events.emit(
-                "work.completed",
-                {
-                    "objective": objective,
-                    "role": role,
-                    "success": False,
-                    "reason": "kaizen-agents not installed",
-                },
-            )
-            return WorkResult(
-                success=False,
-                error=(
-                    "Execution plane unavailable: kaizen-agents is not installed. "
-                    "Install with: pip install kailash-kaizen"
-                ),
-                events=events_emitted,
-            )
-
-        # Execute through supervisor
-        try:
-            supervisor_result = await supervisor.run(
-                objective=objective,
-                context=ctx,
-            )
-            cost_usd = supervisor_result.budget_consumed
-            if cost_usd > 0:
-                self._costs.record(cost_usd, f"submit: {objective[:80]}")
-
-            self._events.emit(
-                "work.completed",
-                {
-                    "objective": objective,
-                    "role": role,
-                    "success": supervisor_result.success,
-                    "cost_usd": cost_usd,
-                },
-            )
-
-            return WorkResult(
-                success=supervisor_result.success,
-                results=supervisor_result.results,
-                cost_usd=cost_usd,
-                events=[
-                    {
-                        "type": (
-                            e.event_type.value
-                            if hasattr(e.event_type, "value")
-                            else str(e.event_type)
-                        ),
-                        "node_id": getattr(e, "node_id", None),
-                    }
-                    for e in supervisor_result.events
-                ],
-            )
-
-        except Exception as exc:
-            logger.exception(
-                "PactEngine.submit: supervisor execution failed for role=%s -- fail-closed",
-                role,
-            )
-            self._events.emit(
-                "work.failed",
-                {
-                    "objective": objective,
-                    "role": role,
-                    "error": "Execution failed",
-                },
-            )
-            return WorkResult(
-                success=False,
-                error="Execution failed — see server logs for details",
-                events=events_emitted,
-            )
+        # Step 2: Execute via Execution Plane
+        return await self._execute_supervised(
+            objective,
+            role,
+            ctx,
+            events_emitted,
+            governance_verdicts,
+            shadow=False,
+        )
 
     def submit_sync(
         self,
@@ -317,6 +318,11 @@ class PactEngine:
         """The clearance level string."""
         return self._clearance
 
+    @property
+    def enforcement_mode(self) -> EnforcementMode:
+        """The current enforcement mode."""
+        return self._enforcement_mode
+
     # -------------------------------------------------------------------
     # Layer 3: Direct access to governance subsystems
     # -------------------------------------------------------------------
@@ -345,6 +351,226 @@ class PactEngine:
     # -------------------------------------------------------------------
     # Internal helpers
     # -------------------------------------------------------------------
+
+    async def _execute_supervised(
+        self,
+        objective: str,
+        role: str,
+        ctx: dict[str, Any],
+        events_emitted: list[dict[str, Any]],
+        governance_verdicts: list[dict[str, Any]],
+        *,
+        shadow: bool,
+    ) -> WorkResult:
+        """Execute work through the supervisor (Execution Plane).
+
+        Shared by all enforcement modes after governance checks are handled.
+
+        Args:
+            objective: Natural-language description of the work.
+            role: D/T/R address of the requesting role.
+            ctx: Context dict for execution.
+            events_emitted: Accumulated event dicts.
+            governance_verdicts: Accumulated governance verdict dicts.
+            shadow: True if running in shadow mode.
+
+        Returns:
+            A WorkResult with execution outcome.
+        """
+        supervisor = self._get_or_create_supervisor()
+        if supervisor is None:
+            self._events.emit(
+                "work.completed",
+                {
+                    "objective": objective,
+                    "role": role,
+                    "success": False,
+                    "reason": "kaizen-agents not installed",
+                },
+            )
+            return WorkResult(
+                success=False,
+                error=(
+                    "Execution plane unavailable: kaizen-agents is not installed. "
+                    "Install with: pip install kailash-kaizen"
+                ),
+                events=events_emitted,
+                governance_shadow=shadow,
+                governance_verdicts=governance_verdicts,
+            )
+
+        try:
+            supervisor_result = await supervisor.run(
+                objective=objective,
+                context=ctx,
+            )
+            cost_usd = supervisor_result.budget_consumed
+            if cost_usd > 0:
+                self._costs.record(cost_usd, f"submit: {objective[:80]}")
+
+            self._events.emit(
+                "work.completed",
+                {
+                    "objective": objective,
+                    "role": role,
+                    "success": supervisor_result.success,
+                    "cost_usd": cost_usd,
+                },
+            )
+
+            return WorkResult(
+                success=supervisor_result.success,
+                results=supervisor_result.results,
+                cost_usd=cost_usd,
+                events=[
+                    {
+                        "type": (
+                            e.event_type.value
+                            if hasattr(e.event_type, "value")
+                            else str(e.event_type)
+                        ),
+                        "node_id": getattr(e, "node_id", None),
+                    }
+                    for e in supervisor_result.events
+                ],
+                governance_shadow=shadow,
+                governance_verdicts=governance_verdicts,
+            )
+
+        except Exception:
+            logger.exception(
+                "PactEngine.submit: supervisor execution failed for role=%s -- fail-closed",
+                role,
+            )
+            self._events.emit(
+                "work.failed",
+                {
+                    "objective": objective,
+                    "role": role,
+                    "error": "Execution failed",
+                },
+            )
+            return WorkResult(
+                success=False,
+                error="Execution failed — see server logs for details",
+                events=events_emitted,
+                governance_shadow=shadow,
+                governance_verdicts=governance_verdicts,
+            )
+
+    def _adapt_envelope(self, role_address: str) -> dict[str, Any]:
+        """Resolve effective envelope and map all 5 PACT constraint dimensions
+        to supervisor parameters.
+
+        Maps the canonical PACT constraint dimensions:
+        - Financial -> budget_usd
+        - Operational -> tools, max_depth (max_delegation_depth)
+        - Data Access -> data_clearance
+        - Temporal -> timeout_seconds
+        - Communication -> allowed_channels, notification_policy
+
+        NaN guard: every numeric field is validated with math.isfinite().
+        Missing envelope: maximally restrictive defaults are returned.
+
+        Args:
+            role_address: The D/T/R address to resolve the envelope for.
+
+        Returns:
+            A dict of supervisor kwargs mapped from the envelope.
+        """
+        envelope = self._governance.compute_envelope(role_address)
+        if envelope is None:
+            return self._maximally_restrictive_defaults()
+
+        result: dict[str, Any] = {}
+
+        # --- Financial ---
+        if envelope.financial is not None:
+            max_spend = envelope.financial.max_spend_usd
+            if max_spend is not None and math.isfinite(max_spend):
+                remaining = self._costs.remaining
+                result["budget_usd"] = min(
+                    max_spend, remaining if remaining is not None else max_spend
+                )
+            else:
+                if max_spend is not None:
+                    logger.error(
+                        "_adapt_envelope: non-finite financial.max_spend_usd=%r for "
+                        "role=%s -- using restrictive default",
+                        max_spend,
+                        role_address,
+                    )
+                remaining = self._costs.remaining
+                result["budget_usd"] = remaining if remaining is not None else 0.0
+        else:
+            remaining = self._costs.remaining
+            result["budget_usd"] = remaining if remaining is not None else 0.0
+
+        # --- Operational ---
+        if envelope.operational is not None:
+            allowed = envelope.operational.allowed_actions
+            if allowed is not None:
+                result["tools"] = list(allowed)
+            max_depth = envelope.max_delegation_depth
+            if max_depth is not None:
+                if math.isfinite(float(max_depth)):
+                    result["max_depth"] = int(max_depth)
+                else:
+                    logger.error(
+                        "_adapt_envelope: non-finite max_delegation_depth=%r for "
+                        "role=%s -- using restrictive default",
+                        max_depth,
+                        role_address,
+                    )
+                    result["max_depth"] = 0
+        else:
+            result["tools"] = []
+            result["max_depth"] = 0
+
+        # --- Data Access ---
+        # confidentiality_clearance lives at the envelope level, not data_access
+        clearance = envelope.confidentiality_clearance
+        if clearance is not None:
+            result["data_clearance"] = (
+                clearance.value if hasattr(clearance, "value") else str(clearance)
+            )
+        else:
+            result["data_clearance"] = "none"
+
+        # --- Temporal ---
+        # ConstraintEnvelopeConfig.temporal has active_hours_start/end but
+        # no max_duration_seconds. We map active hours window to a timeout
+        # estimate, or use the restrictive default.
+        result["timeout_seconds"] = 60  # Default restrictive timeout
+
+        # --- Communication ---
+        if envelope.communication is not None:
+            channels = envelope.communication.allowed_channels
+            if channels is not None:
+                result["allowed_channels"] = list(channels)
+            # Map external_requires_approval as notification policy
+            if envelope.communication.external_requires_approval:
+                result["notification_policy"] = "approval_required"
+
+        return result
+
+    @staticmethod
+    def _maximally_restrictive_defaults() -> dict[str, Any]:
+        """Return maximally restrictive supervisor defaults when no envelope exists.
+
+        No spending, no actions, no data access, 1-minute timeout, no delegation.
+        This is the fail-closed default per pact-governance.md rule 4.
+
+        Returns:
+            A dict of maximally restrictive supervisor kwargs.
+        """
+        return {
+            "budget_usd": 0.0,
+            "tools": [],
+            "data_clearance": "none",
+            "timeout_seconds": 60,
+            "max_depth": 0,
+        }
 
     @staticmethod
     def _create_governance_engine(
