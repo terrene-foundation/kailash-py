@@ -15,7 +15,7 @@ For agents with 30+ tools, kaizen-agents provides automatic tool hydration — o
 from kaizen_agents import Delegate
 
 # Automatic: activates when tool count > 30
-delegate = Delegate(model=os.environ["LLM_MODEL"], tools=my_50_tools)
+delegate = Delegate(model="gpt-4o", tools=my_50_tools)
 # search_tools auto-injected, hydration transparent to LLM
 
 # Manual threshold override

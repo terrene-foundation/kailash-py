@@ -1,7 +1,7 @@
 ---
 paths:
-  - "src/**"
-  - "packages/**"
+  - "**/src/**"
+  - "**/tests/**"
 ---
 
 # Cross-SDK Issue Inspection

@@ -192,4 +192,4 @@ Use this skill when:
 For conversation UX questions, invoke:
 - `uiux-designer` - UX decisions
 - `flutter-specialist` - Flutter implementation
-- `frontend-developer` - React/web implementation
+- `react-specialist` - React/web implementation

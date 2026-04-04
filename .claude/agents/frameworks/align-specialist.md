@@ -11,13 +11,6 @@ model: opus
 
 LLM fine-tuning and alignment framework specialist for kailash-align. Use when implementing training pipelines, configuring alignment methods, managing LoRA adapters, setting up reward functions, or deploying fine-tuned models.
 
-## Skills Quick Reference
-
-**Use the skill instead when:**
-
-- "Which method?" -> `packages/kailash-align/docs/01-method-selection-guide.md`
-- "Full architecture?" -> `packages/kailash-align/docs/00-authority/CLAUDE.md`
-
 ## Core Architecture
 
 ```
@@ -77,7 +70,7 @@ def accuracy_reward(completions: list[str], prompts: list[str], **kwargs) -> lis
 
 ### Config Validation Pattern
 
-Method-specific config classes (LoRAConfig, SFTConfig, DPOConfig, KTOConfig, ORPOConfig, GRPOConfig, RLOOConfig, OnlineDPOConfig, ServingConfig, EvalConfig) are `@dataclass(frozen=True)` with `__post_init__` validation. AlignmentConfig and OnPremConfig are mutable dataclasses.
+All config classes are `@dataclass(frozen=True)` with `__post_init__` validation:
 
 - `_validate_finite()` for NaN/Inf rejection
 - `_validate_positive()` for positive-only fields
@@ -109,11 +102,11 @@ Set `AlignmentConfig.loss_type` to use DPO variants without new trainer code:
 ### Bounded Registries (R3 Red Team)
 
 - AdapterRegistry: `max_adapters=10,000`, `max_versions_per_adapter=1,000` — prevents OOM from unbounded growth
-- Exceeding bounds raises `AlignmentError`
+- Exceeding bounds raises `RegistryCapacityError`
 
 ### Shell/Subprocess Hardening (R3 Red Team)
 
-- Generated shell scripts (launch\*vllm.sh) sanitize adapter*name: regex `[^\w.:-]` replaced with `*`
+- Generated shell scripts (launch*vllm.sh) sanitize adapter_name: regex `[^\w.:-]` replaced with `*`
 - Subprocess calls use `--` separator before path arguments (prevents flag injection)
 - `_convert_hf_to_gguf` and `_quantize_gguf` pass model_path via `shell=False` list form
 
@@ -146,8 +139,6 @@ pip install kailash-align[full]     # Everything
 
 ## Cross-References
 
-- `packages/kailash-align/docs/00-authority/CLAUDE.md` — Full architecture reference
-- `packages/kailash-align/docs/01-method-selection-guide.md` — Method decision tree
 - `.claude/agents/frameworks/kaizen-specialist.md` — KaizenModelBridge integration
 - `.claude/agents/frameworks/ml-specialist.md` — ML lifecycle engines (feature engineering, drift, AutoML)
 - `.claude/skills/04-kaizen/` — Kaizen Delegate patterns

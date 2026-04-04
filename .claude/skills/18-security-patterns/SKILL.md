@@ -10,7 +10,6 @@ Mandatory security patterns for all Kailash SDK development. These patterns prev
 ## Overview
 
 Security patterns cover:
-
 - Secret management (no hardcoded credentials)
 - Input validation (prevent injection attacks)
 - Authentication and authorization
@@ -50,32 +49,35 @@ workflow.add_node("User_Read", "read_user", {
 
 ```python
 # ❌ WRONG - HTTP in production
-workflow.add_node("HTTPRequestNode", "api", {
+workflow.add_node("APICallNode", "api", {
     "url": "http://api.example.com/data"  # Insecure!
 })
 
 # ✅ CORRECT - HTTPS always
-workflow.add_node("HTTPRequestNode", "api", {
+workflow.add_node("APICallNode", "api", {
     "url": "https://api.example.com/data"
 })
 ```
 
 ## Reference Documentation
 
-### Detailed Patterns
+### Core Security
+- **[security-secrets](security-secrets.md)** - Secret management patterns
+- **[security-input-validation](security-input-validation.md)** - Input validation
+- **[security-injection-prevention](security-injection-prevention.md)** - SQL/code injection prevention
 
-- **[security-attack-chains](security-attack-chains.md)** - Attack chain analysis and prevention
+### Authentication & Authorization
+- **[security-auth-patterns](security-auth-patterns.md)** - Auth best practices
+- **[security-api-keys](security-api-keys.md)** - API key management
+- **[security-tokens](security-tokens.md)** - Token handling
 
-### Rules (always loaded)
-
-- **`.claude/rules/security.md`** - Core security rules (secrets, injection, input validation)
-- **`.claude/rules/trust-plane-security.md`** - Trust-plane security patterns
-- **`.claude/rules/pact-governance.md`** - PACT governance security
+### OWASP Compliance
+- **[security-owasp-top10](security-owasp-top10.md)** - OWASP Top 10 prevention
+- **[security-audit-checklist](security-audit-checklist.md)** - Security audit checklist
 
 ## Security Checklist
 
 ### Before Every Commit
-
 - [ ] No hardcoded secrets (API keys, passwords, tokens)
 - [ ] All user inputs validated
 - [ ] SQL/code injection prevented
@@ -84,7 +86,6 @@ workflow.add_node("HTTPRequestNode", "api", {
 - [ ] Error messages don't expose internals
 
 ### Before Every Deployment
-
 - [ ] Environment variables configured
 - [ ] Secrets stored in secure vault
 - [ ] Authentication enabled
@@ -94,19 +95,18 @@ workflow.add_node("HTTPRequestNode", "api", {
 
 ## Common Vulnerabilities Prevented
 
-| Vulnerability            | Prevention Pattern                        |
-| ------------------------ | ----------------------------------------- |
-| SQL Injection            | Use DataFlow parameterized nodes          |
-| Code Injection           | Avoid `eval()`, use PythonCodeNode safely |
-| Credential Exposure      | Environment variables, secret managers    |
-| XSS                      | Output encoding, CSP headers              |
-| CSRF                     | Token validation, SameSite cookies        |
-| Insecure Deserialization | Validate serialized data                  |
+| Vulnerability | Prevention Pattern |
+|--------------|-------------------|
+| SQL Injection | Use DataFlow parameterized nodes |
+| Code Injection | Avoid `eval()`, use PythonCodeNode safely |
+| Credential Exposure | Environment variables, secret managers |
+| XSS | Output encoding, CSP headers |
+| CSRF | Token validation, SameSite cookies |
+| Insecure Deserialization | Validate serialized data |
 
 ## Integration with Rules
 
 Security patterns are enforced by:
-
 - `.claude/rules/security.md` - Security rules
 - `scripts/hooks/validate-bash-command.js` - Command validation
 - `gold-standards-validator` agent - Compliance checking
@@ -114,7 +114,6 @@ Security patterns are enforced by:
 ## When to Use This Skill
 
 Use this skill when:
-
 - Handling user input or external data
 - Storing or transmitting credentials
 - Making API calls to external services
@@ -131,7 +130,6 @@ Use this skill when:
 ## Support
 
 For security-related questions, invoke:
-
 - `security-reviewer` - OWASP-based security analysis
 - `gold-standards-validator` - Compliance checking
 - `testing-specialist` - Security testing patterns

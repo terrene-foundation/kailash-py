@@ -1,74 +1,54 @@
-# Communication Style for Non-Technical Users
+# Communication Style
 
-## Scope
+Many COC users are non-technical. Default to plain language; match the user's level if they speak technically.
 
-These rules apply to ALL interactions. Many COC users are non-technical — they direct the AI to build software without writing code themselves.
+## Report in Outcomes, Not Implementation
 
-## MUST Rules
+```
+✅ "Users can now sign up and receive a welcome email."
+❌ "Implemented POST /api/users endpoint with SendGrid integration."
 
-### 1. Explain, Don't Assume
+✅ "The login page shows an error when too many people try to log in at once."
+❌ "Connection pool exhaustion causing 503 on the auth endpoint under load."
 
-When presenting choices, always explain the implications in terms of business outcomes and user experience.
+✅ "The signup flow now works end-to-end."
+❌ "Modified 12 files across 3 modules."
+```
 
-**Correct**: "Should new users verify their email before they can log in? This adds a step but prevents fake accounts."
-**Incorrect**: "Should we add email verification middleware to the auth pipeline?"
+## Explain Choices in Business Terms
 
-### 2. Report in Outcomes
+When presenting decisions, explain implications in terms the user can act on — not implementation details.
 
-Progress updates and results should describe what users can now DO, not what was technically implemented.
+```
+✅ "Should new users verify their email before they can log in?
+   This adds a step to signup but prevents fake accounts and
+   means you can reach every user by email later."
+❌ "Should we add email verification middleware to the auth pipeline?"
 
-**Correct**: "Users can now sign up and receive a welcome email."
-**Incorrect**: "Implemented POST /api/users endpoint with SendGrid integration."
+✅ "The payment form can either validate cards instantly (faster checkout,
+   costs $0.01 per check) or validate only on submit (free but users
+   see errors later). Which matters more — speed or cost?"
+❌ "Should we integrate the Stripe CardElement with real-time validation
+   or defer to server-side charge creation?"
+```
 
-### 3. Translate Technical Findings
+## Frame Decisions as Impact
 
-When errors, test failures, or issues arise, describe them in plain language with business impact.
+Present: what each option does (plain language), what it means for users/business, the trade-off, your recommendation.
 
-**Correct**: "The login page shows an error when too many people try to log in at once. I'm fixing it now."
-**Incorrect**: "Connection pool exhaustion causing 503 on the auth endpoint under load."
+**Example**: "Two options for notifications. Option A: email only — simple, but users might miss messages. Option B: email plus in-app — takes longer but ensures users see important updates. I'd recommend B since your brief emphasizes real-time awareness."
 
-### 4. Frame Decisions as Impact
+## Approval Gates
 
-When the user needs to make a choice, present:
-
-- What each option does (in plain language)
-- What it means for their users/business
-- The trade-off (cost, time, complexity)
-- Your recommendation and why
-
-**Example**: "We have two options for user notifications. Option A: email only — simple and fast to build, but users might miss messages. Option B: email plus in-app notifications — takes a day longer but ensures users see important updates. I'd recommend Option B since your brief emphasizes real-time awareness. What do you think?"
-
-### 5. Structured Approval Gates
-
-At approval gates (end of `/todos`, before `/deploy`), provide specific questions the user can answer from their domain knowledge:
+At gates (end of `/todos`, before `/deploy`), ask:
 
 - "Does this cover everything you described in your brief?"
 - "Is anything here that you didn't ask for or don't want?"
 - "Is anything missing that you expected to see?"
-- "Does the order make sense — are the most important things first?"
 
-### 6. Handle "I Don't Understand"
+## MUST NOT
 
-If the user says they don't understand, rephrase without condescension. Never repeat the same jargon. Find a new analogy or explanation.
-
-## MUST NOT Rules
-
-### 1. Never Ask Non-Coders to Read Code
-
-If a decision requires context, describe the situation in plain language. Never paste code and ask for review.
-
-### 2. Never Use Unexplained Jargon
-
-If a technical term is unavoidable, immediately explain it: "We need a database migration (a safe way to update how data is stored without losing anything)."
-
-### 3. Never Present Raw Technical Errors
-
-Always translate error messages before presenting them. The user needs to understand impact, not stack traces.
-
-### 4. Never Present File-Level Progress
-
-"Modified 12 files" is meaningless. "The signup flow now works end-to-end" is meaningful.
-
-## Adaptive Tone
-
-These rules govern the **default** communication style. If the user explicitly asks for technical detail (code, file paths, error messages), provide it. Match the user's level — if they speak technically, respond technically. The purpose is accessibility by default, not a ban on technical language when requested.
+- Ask non-coders to read code — describe in plain language
+- Use unexplained jargon — immediately explain technical terms
+- Present raw error messages — translate to impact
+- Repeat the same jargon if user says "I don't understand" — find new analogy

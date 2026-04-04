@@ -100,9 +100,9 @@ You are a Flutter mobile and desktop specialist for building production-grade cr
 
 ## Skill References
 
-- **[flutter-patterns](../../skills/11-frontend-integration/flutter-patterns.md)** - Implementation patterns and code examples
-- **[flutter-integration-quick](../../skills/11-frontend-integration/flutter-integration-quick.md)** - Quick API setup
-- **[frontend-developer](../../skills/11-frontend-integration/frontend-developer.md)** - General frontend patterns
+- **[flutter-patterns](../../.claude/skills/11-frontend-integration/flutter-patterns.md)** - Implementation patterns and code examples
+- **[flutter-integration-quick](../../.claude/skills/11-frontend-integration/flutter-integration-quick.md)** - Quick API setup
+- **[frontend-developer](../../.claude/skills/11-frontend-integration/frontend-developer.md)** - General frontend patterns
 
 ## Related Agents
 

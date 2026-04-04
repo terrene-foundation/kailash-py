@@ -25,15 +25,12 @@ Nexus transforms workflows into a complete platform with:
 ```python
 from nexus import Nexus
 
-# Create Nexus instance (zero-config)
-app = Nexus()
-
-# Register workflows
+# Define workflow
 workflow = create_my_workflow()
-app.register("my_workflow", workflow.build())
 
-# Start the platform (blocks until Ctrl+C)
-app.start()
+# Deploy to all channels at once
+nexus = Nexus([workflow])
+nexus.run(port=8000)
 
 # Now available via:
 # - HTTP API: POST http://localhost:8000/api/workflow/{workflow_id}
@@ -84,11 +81,6 @@ app.start()
 - **[nexus-auth-plugin](nexus-auth-plugin.md)** - NexusAuthPlugin unified auth (JWT, RBAC, SSO, rate limiting, tenant, audit)
 - **[golden-patterns-catalog](golden-patterns-catalog.md)** - Top 7 production-validated codegen patterns
 - **[codegen-decision-tree](codegen-decision-tree.md)** - Decision tree, anti-patterns, scaffolding templates
-
-### Transport & Event System
-
-- **[nexus-transport-architecture](nexus-transport-architecture.md)** - Transport ABC, HTTPTransport, MCPTransport, HandlerRegistry
-- **[nexus-eventbus-phase2](nexus-eventbus-phase2.md)** - EventBus (janus.Queue), Phase 2 APIs, DataFlow bridge, NexusFile
 
 ## Key Concepts
 
@@ -148,35 +140,35 @@ Use Nexus when you need to:
 ```python
 from nexus import Nexus
 from dataflow import DataFlow
-from kailash.workflow.builder import WorkflowBuilder
 
 # Define models
-db = DataFlow("sqlite:///app.db", auto_migrate=True)
+db = DataFlow(...)
 @db.model
 class User:
     id: str
     name: str
 
-# Build workflows using generated nodes, register with Nexus
-app = Nexus()
+# Auto-generates CRUD endpoints for all models
+nexus = Nexus(db.get_workflows())
+nexus.run()
 
-create_wf = WorkflowBuilder()
-create_wf.add_node("UserCreateNode", "create", {"name": "placeholder"})
-app.register("user_create", create_wf.build())
-
-app.start()
+# GET  /api/User/list
+# POST /api/User/create
+# GET  /api/User/read/{id}
+# PUT  /api/User/update/{id}
+# DELETE /api/User/delete/{id}
 ```
 
 ### With Kaizen (Agent Platform)
 
 ```python
 from nexus import Nexus
+from kaizen.base import BaseAgent
 
 # Deploy agents via all channels
 agent_workflow = create_agent_workflow()
-app = Nexus()
-app.register("agent", agent_workflow.build())
-app.start()
+nexus = Nexus([agent_workflow])
+nexus.run()
 
 # Agents accessible via API, CLI, and MCP
 ```
@@ -188,11 +180,14 @@ from nexus import Nexus
 from kailash.workflow.builder import WorkflowBuilder
 
 # Deploy custom workflows
-app = Nexus()
-app.register("workflow_1", create_workflow_1().build())
-app.register("workflow_2", create_workflow_2().build())
-app.register("workflow_3", create_workflow_3().build())
-app.start()
+workflows = [
+    create_workflow_1(),
+    create_workflow_2(),
+    create_workflow_3(),
+]
+
+nexus = Nexus(workflows)
+nexus.run(port=8000)
 ```
 
 ### Standalone Platform
@@ -200,13 +195,18 @@ app.start()
 ```python
 from nexus import Nexus
 
-# Complete platform with enterprise features
-app = Nexus(
-    enable_monitoring=True,
-    enable_auth=True,
+# Complete platform from workflows
+nexus = Nexus(
+    workflows=[...],
+    plugins=[custom_plugin],
+    health_checks=True,
+    monitoring=True
 )
-app.register("my_workflow", workflow.build())
-app.start()
+nexus.run(
+    host="0.0.0.0",
+    port=8000,
+    workers=4
+)
 ```
 
 ## Critical Rules
@@ -226,21 +226,20 @@ app.start()
 ### Development
 
 ```python
-app = Nexus()
-app.register("my_workflow", workflow.build())
-app.start()  # Single process, default port 8000
+nexus = Nexus(workflows)
+nexus.run(port=8000)  # Single process, hot reload
 ```
 
 ### Production (Docker)
 
 ```python
-app = Nexus(
-    api_port=8000,
-    enable_auth=True,
-    enable_monitoring=True,
+from kailash.runtime import AsyncLocalRuntime
+
+nexus = Nexus(
+    workflows,
+    runtime_factory=lambda: AsyncLocalRuntime()
 )
-app.register("my_workflow", workflow.build())
-app.start()
+nexus.run(host="0.0.0.0", port=8000, workers=4)
 ```
 
 ### With Load Balancer
@@ -263,16 +262,16 @@ docker-compose up --scale nexus=3
 
 ## Related Skills
 
-- **[01-core-sdk](../01-core-sdk/SKILL.md)** - Core workflow patterns
-- **[02-dataflow](../02-dataflow/SKILL.md)** - Auto CRUD API generation
-- **[04-kaizen](../04-kaizen/SKILL.md)** - AI agent deployment
+- **[01-core-sdk](../../01-core-sdk/SKILL.md)** - Core workflow patterns
+- **[02-dataflow](../dataflow/SKILL.md)** - Auto CRUD API generation
+- **[04-kaizen](../kaizen/SKILL.md)** - AI agent deployment
 - **[05-kailash-mcp](../05-kailash-mcp/SKILL.md)** - MCP channel details
-- **[17-gold-standards](../17-gold-standards/SKILL.md)** - Best practices
+- **[17-gold-standards](../../17-gold-standards/SKILL.md)** - Best practices
 
 ## Support
 
 For Nexus-specific questions, invoke:
 
 - `nexus-specialist` - Nexus implementation and deployment
-- `deployment-specialist` - Production deployment patterns
-- `framework-advisor` - When to use Nexus vs other approaches
+- `release-specialist` - Production deployment patterns
+- ``decide-framework` skill` - When to use Nexus vs other approaches

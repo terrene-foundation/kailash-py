@@ -1,95 +1,70 @@
-# Framework-First: Engine Over Primitives
+---
+paths:
+  - "**/*.py"
+  - "**/*.rs"
+---
 
-## Scope
+# Framework-First: Use the Highest Abstraction Layer
 
-These rules apply when writing application code using Kailash frameworks.
+Default to Engines. Drop to Primitives only when Engines can't express the behavior. Never use Raw.
 
-**Applies to**: `**/*.py`, `**/*.rs`
+## Four-Layer Hierarchy
 
-## The Three-Layer Model
+```
+Entrypoints  →  Applications (aegis, aether), CLI (cli-rs), others (kz-engage)
+Engines      →  DataFlowEngine, NexusEngine, DelegateEngine/SupervisorAgent, GovernanceEngine
+Primitives   →  DataFlow, @db.model, Nexus(), BaseAgent, Signature, envelopes
+Specs        →  CARE, EATP, CO, COC, PACT (standards/protocols/methodology)
+```
 
-Every Kailash framework provides three abstraction layers. Default to the highest layer (Engine) and drop to lower layers only when needed.
+Specs define → Primitives implement building blocks → Engines compose into opinionated frameworks → Entrypoints are products users interact with.
 
-| Framework | Layer 1: Raw (Outside Kailash) | Layer 2: Primitives | Layer 3: Engine (Default) |
-|-----------|-------------------------------|--------------------|--------------------------|
-| **DataFlow** | Raw SQL, SQLAlchemy, Django ORM | `@db.model` + `WorkflowBuilder` + generated nodes | `DataFlowEngine.builder()` + `db.express` |
-| **Nexus** | Raw FastAPI, Actix, axum | `ChannelManager`, manual channel setup | `Nexus()` zero-config, `NexusEngine.builder()` |
-| **Kaizen** | Raw LLM API calls (OpenAI/Anthropic SDK) | `BaseAgent` + `Signature` (single agents) | `Delegate`, `GovernedSupervisor`, `Pipeline` patterns |
-| **PACT** | Manual policy construction | Individual envelope builders | `GovernanceEngine` |
+| Framework    | Raw (never ❌)      | Primitives                                   | Engine (default ✅)                                                     | Entrypoints              |
+| ------------ | ------------------- | -------------------------------------------- | ----------------------------------------------------------------------- | ------------------------ |
+| **DataFlow** | Raw SQL, SQLAlchemy | `DataFlow`, `@db.model`, `db.express`, nodes | `DataFlowEngine.builder()` (validation, classification, query tracking) | aegis, aether, kz-engage |
+| **Nexus**    | Raw FastAPI/Actix   | `Nexus()`, handlers, channels                | `NexusEngine` (middleware stack, auth, K8s)                             | aegis, aether            |
+| **Kaizen**   | Raw LLM API calls   | `BaseAgent`, `Signature`                     | `DelegateEngine`, `SupervisorAgent`                                     | kaizen-cli-rs            |
+| **PACT**     | Manual policy       | Envelopes, D/T/R addressing                  | `GovernanceEngine` (thread-safe, fail-closed)                           | aegis                    |
 
-## MUST Rules
+**Note**: `db.express` is a primitive convenience for lightweight CRUD (~23x faster by bypassing workflow). `DataFlowEngine` wraps `DataFlow` with enterprise features (validation, classification, query engine, retention).
 
-### 1. Engine-First for All Framework Operations
-
-When using a Kailash framework, MUST start with the Engine layer. Drop to Primitives only when the Engine cannot express the required behavior.
+## DO / DO NOT
 
 ```python
-# DO: Engine layer (DataFlow Express for simple CRUD)
-result = await db.express.create("User", {"name": "Alice", "email": "alice@example.com"})
-users = await db.express.list("User", filter={"active": True})
+# ✅ Engine layer (DataFlowEngine for production)
+engine = DataFlowEngine.builder("postgresql://...")
+    .slow_query_threshold(Duration.from_secs(1))
+    .build()
 
-# DO NOT: Primitives for simple CRUD (10x more code, same result)
+# ✅ Primitive convenience (db.express for simple CRUD)
+result = await db.express.create("User", {"name": "Alice"})
+
+# ❌ Raw primitives for what Engine handles
 workflow = WorkflowBuilder()
-workflow.add_node("UserCreateNode", "create", {"name": "Alice", "email": "alice@example.com"})
+workflow.add_node("UserCreateNode", "create", {"name": "Alice"})
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 ```
 
 ```python
-# DO: Engine layer (Delegate for autonomous agents)
-from kaizen_agents import Delegate
+# ✅ Engine layer (DelegateEngine/SupervisorAgent for agents)
 delegate = Delegate(model=os.environ["LLM_MODEL"])
-async for event in delegate.run("Analyze this data"):
-    print(event)
+async for event in delegate.run("Analyze this data"): ...
 
-# DO NOT: Primitives for autonomous agents (60+ lines of boilerplate)
-class MyAgent(BaseAgent):
-    class Sig(Signature):
-        task: str = InputField(...)
-        response: str = OutputField(...)
-    # ... 50+ more lines of wiring
+# ❌ Primitives for simple autonomous task
+class MyAgent(BaseAgent): ...  # 60+ lines boilerplate
 ```
 
-### 2. Consult Framework Specialist Before Dropping to Primitives
+## When Primitives Are Correct
 
-If the Engine layer does not fit your use case, consult the relevant framework specialist before writing Primitive-level code. The specialist may know an Engine-level pattern you missed.
+- Complex multi-step workflows (node wiring, branching, sagas)
+- Custom transaction control (savepoints, isolation levels)
+- Custom agent execution model (DelegateEngine's TAOD loop doesn't fit)
+- Performance-critical paths where workflow overhead matters
+- Simple CRUD via `db.express` (designed as primitive convenience)
 
-### 3. Never Bypass Frameworks (Layer 1)
+**Always consult the framework specialist before dropping to Primitives.**
 
-When a Kailash framework exists for your use case, MUST NOT write raw code that duplicates framework functionality. This is the existing "Framework-First" directive from CLAUDE.md — Layer 1 is always wrong when a framework exists.
+## Raw Is Always Wrong
 
-## When to Use Primitives (Layer 2)
-
-Primitives are the correct choice when:
-
-- **Complex multi-step workflows** requiring explicit node wiring, conditional branching, or saga patterns
-- **Custom transaction control** with savepoints or isolation levels that the engine doesn't expose
-- **Custom agent extension** where the Delegate's TAOD loop doesn't fit your execution model
-- **Novel patterns** the engine doesn't support yet — but file a feature request when this happens
-- **Performance-critical paths** where workflow overhead matters and express doesn't cover the operation
-
-## Detection Patterns
-
-Code review SHOULD flag these patterns:
-
-```python
-# FLAG: WorkflowBuilder with single DataFlow CRUD node → suggest db.express
-workflow = WorkflowBuilder()
-workflow.add_node("UserCreateNode", "create", {"name": "Alice"})
-# Suggest: await db.express.create("User", {"name": "Alice"})
-
-# FLAG: BaseAgent subclass for simple autonomous task → suggest Delegate
-class SimpleAgent(BaseAgent):
-    # ... if this is just a TAOD loop with tools, use Delegate instead
-
-# FLAG: Manual FastAPI route when Nexus handler covers it → suggest Nexus
-@app.post("/api/workflow")
-async def run_workflow():
-    # Suggest: nexus.register("workflow", workflow.build())
-```
-
-## Cross-References
-
-- `rules/agents.md` Rule 3 — Framework specialist required for framework work
-- `rules/patterns.md` — Framework-specific execution patterns
-- `skills/13-architecture-decisions/decide-framework.md` — Framework selection guide
+When a Kailash framework exists for your use case, MUST NOT write raw code that duplicates framework functionality.

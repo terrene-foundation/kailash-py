@@ -69,8 +69,8 @@ result = data["key"] if data else None
 ## When to Escalate
 
 Escalate to a different agent if:
-- Fix requires architectural changes → framework-advisor
-- Fix requires new dependencies → requirements-analyst
+- Fix requires architectural changes → `decide-framework` skill
+- Fix requires new dependencies → analyst
 - Error is in test, not code → testing-specialist
 - Error is security-related → security-reviewer
 
@@ -97,7 +97,7 @@ Escalate to a different agent if:
 ## Related Agents
 - **pattern-expert**: For pattern-related issues
 - **testing-specialist**: For test failures
-- **framework-advisor**: If architectural change needed
+- **`decide-framework` skill**: If architectural change needed
 - **security-reviewer**: For security-related errors
 
 ## Skill References

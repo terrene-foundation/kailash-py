@@ -29,7 +29,9 @@ changes:
     reason: "Added CI Efficiency Patterns section — concurrency groups, path filtering + workflow_dispatch pairing, uv caching, matrix version alignment, heavy download avoidance"
     diff_lines: "+55 -0"
 
-status: pending_review
+status: reviewed
+reviewed_date: "2026-04-03"
+review_notes: "3 variant-py (fabric engine), 1 global (CI patterns)"
 
 notes: |
   Session 19 — Data Fabric Engine completion + codification:

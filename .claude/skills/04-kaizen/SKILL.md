@@ -43,8 +43,8 @@ class SummarizeSignature(Signature):
 # Define configuration
 @dataclass
 class SummaryConfig:
-    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
-    model: str = os.environ.get("LLM_MODEL", "")
+    llm_provider: str = "openai"
+    model: str = "gpt-4"
     temperature: float = 0.7
 
 # Create agent with signature
@@ -85,10 +85,10 @@ router = Pipeline.router(
 
 # Blackboard: Iterative problem-solving
 blackboard = Pipeline.blackboard(
-    specialists=[solver, analyzer, optimizer],
+    agents=[solver, analyzer, optimizer],
     controller=controller,
-    max_iterations=5,
-    selection_mode="semantic"
+    max_iterations=10,
+    discovery_mode="a2a"
 )
 ```
 
@@ -255,25 +255,6 @@ For in-depth documentation, see `packages/kailash-kaizen/docs/`:
   - `PlanExecutor` with gradient rules (G1-G8)
   - 7 typed modifications with batch-atomic application
 
-### ML Integration (kailash-ml)
-
-- **[kaizen-ml-integration](kaizen-ml-integration.md)** - 9 ML engines (FeatureStore, ModelRegistry, TrainingPipeline, InferenceServer, DriftMonitor, HyperparameterSearch, AutoMLEngine, DataExplorer, FeatureEngineer)
-  - Quality tiers: P0 (5 engines), P1 (2 engines), P2 (2 @experimental engines)
-  - Polars-native data with 8 interop converters (sklearn, LightGBM, HuggingFace, pandas, Arrow)
-  - AutoMLEngine with 5 optional LLM guardrails via `AgentInfusionProtocol`
-  - DataFlow-backed FeatureStore with point-in-time queries (see also `skills/02-dataflow/dataflow-ml-integration.md`)
-
-### Alignment & Fine-Tuning (kailash-align)
-
-- **[kaizen-align-serving](kaizen-align-serving.md)** - LLM fine-tuning, evaluation, and serving pipeline
-  - `AdapterRegistry` (composition over ModelRegistry, LoRA/QLoRA lifecycle tracking)
-  - `AlignmentPipeline` (TRL wrapper: SFT then DPO chaining)
-  - `AlignmentEvaluator` (lm-eval-harness, `[eval]` optional extra)
-  - `AlignmentServing` (GGUF via llama-cpp-python, Ollama deploy, vLLM config, BYOG)
-  - `AdapterMerger` (PEFT merge_and_unload)
-  - `KaizenModelBridge` (create_delegate for Ollama/vLLM -- budget note: use max_turns not budget_usd for local models)
-  - `OnPremModelCache` (air-gap support, kailash-align-prepare CLI)
-
 ### v1.0 Developer Guides
 
 Located in the package source:
@@ -434,9 +415,8 @@ from nexus import Nexus
 
 # Deploy agents via API/CLI/MCP
 agent_workflow = create_agent_workflow()
-app = Nexus()
-app.register("agent", agent_workflow.build())
-app.start()  # Agents available via all channels
+nexus = Nexus([agent_workflow])
+nexus.run()  # Agents available via all channels
 ```
 
 ### With Core SDK (Custom Workflows)
@@ -495,11 +475,11 @@ workflow.add_node("KaizenAgent", "agent1", {
 
 ## Related Skills
 
-- **[01-core-sdk](../01-core-sdk/SKILL.md)** - Core workflow patterns
-- **[02-dataflow](../02-dataflow/SKILL.md)** - Database integration
-- **[03-nexus](../03-nexus/SKILL.md)** - Multi-channel deployment
+- **[01-core-sdk](../../01-core-sdk/SKILL.md)** - Core workflow patterns
+- **[02-dataflow](../dataflow/SKILL.md)** - Database integration
+- **[03-nexus](../nexus/SKILL.md)** - Multi-channel deployment
 - **[05-kailash-mcp](../05-kailash-mcp/SKILL.md)** - MCP server integration
-- **[17-gold-standards](../17-gold-standards/SKILL.md)** - Best practices
+- **[17-gold-standards](../../17-gold-standards/SKILL.md)** - Best practices
 
 ## Support
 
@@ -507,4 +487,4 @@ For Kaizen-specific questions, invoke:
 
 - `kaizen-specialist` - Kaizen framework implementation
 - `testing-specialist` - Agent testing strategies
-- `framework-advisor` - When to use Kaizen vs other frameworks
+- ``decide-framework` skill` - When to use Kaizen vs other frameworks

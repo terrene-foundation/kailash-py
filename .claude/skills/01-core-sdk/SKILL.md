@@ -174,5 +174,4 @@ Use this skill when you need to:
 For complex workflows or debugging, invoke:
 
 - `pattern-expert` - Workflow patterns and cyclic debugging
-- `sdk-navigator` - Find specific nodes or patterns
 - `testing-specialist` - Test workflow implementations

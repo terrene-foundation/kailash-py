@@ -11,14 +11,6 @@ model: opus
 
 ML lifecycle framework specialist for kailash-ml. Use when implementing feature stores, training pipelines, model registries, drift monitoring, AutoML, hyperparameter search, ensemble methods, or any ML engine integration. Also covers the 6 Kaizen agents and the RL module.
 
-## Skills Quick Reference
-
-**Use the skill instead when:**
-
-- "Which engine?" -> `.claude/skills/project/ml-quick-reference.md`
-- "Interop conversion?" -> `.claude/skills/project/ml-quick-reference.md` (conversion table)
-- "Security checklist?" -> `.claude/skills/project/ml-quick-reference.md` (security section)
-
 ## Architecture
 
 ```
@@ -31,7 +23,7 @@ kailash-ml
     model_registry.py   <- [P0] staging->shadow->production->archived lifecycle
     training_pipeline.py <- [P0] sklearn/lightgbm/Lightning, FeatureSchema-driven
     inference_server.py <- [P0] REST via kailash-nexus, caching, batch
-    drift_monitor.py    <- [P0] KS/PSI, scheduled monitoring
+    drift_monitor.py    <- [P0] KS/chi2/PSI/jensen_shannon, scheduled monitoring
     experiment_tracker.py <- [P0] MLflow-compatible run tracking
     hyperparameter_search.py <- [P1] grid/random/bayesian/successive_halving
     automl_engine.py    <- [P1] agent-infused, LLM guardrails, cost tracking
@@ -234,6 +226,5 @@ pip install kailash-ml[full]      # Everything
 
 ## Full Documentation
 
-- `.claude/skills/project/ml-quick-reference.md` -- Engine quick reference + interop table
-- `packages/kailash-ml/` -- Source code
-- `packages/kailash-ml/pyproject.toml` -- Dependency matrix
+- `pip install kailash-ml` -- Core package
+- `pip install kailash-ml[full]` -- All extras

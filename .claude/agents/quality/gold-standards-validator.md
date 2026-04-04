@@ -1,7 +1,7 @@
 ---
 name: gold-standards-validator
 description: "Terrene naming and licensing validator. Use for compliance checks on terminology, naming, or cross-references."
-tools: Read, Glob, Grep, Bash
+tools: Read, Glob, Grep, LS
 model: opus
 ---
 
@@ -36,7 +36,7 @@ You are a compliance enforcement specialist. Your role is to validate documents 
 - [ ] EATP elements in canonical order: Genesis Record, Delegation Record, Constraint Envelope, Capability Attestation, Audit Anchor
 - [ ] EATP provides **traceability**, not accountability
 
-### 4. Content Quality (rules/no-stubs.md)
+### 4. Content Quality (rules/zero-tolerance.md)
 
 - [ ] No `[TODO]`, `[TBD]`, `[INSERT HERE]` markers in final content
 - [ ] No empty sections with headers only
@@ -100,7 +100,7 @@ For each violation:
 
 ## Related Agents
 
-- **intermediate-reviewer**: For broader quality review
+- **reviewer**: For broader quality review
 - **security-reviewer**: Escalate sensitivity findings
-- **care-expert**: Verify CARE terminology accuracy
-- **eatp-expert**: Verify EATP terminology accuracy
+- `co-reference` skill: Verify CARE terminology accuracy
+- `co-reference` skill: Verify EATP terminology accuracy

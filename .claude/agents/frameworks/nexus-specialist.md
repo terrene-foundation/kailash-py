@@ -11,11 +11,11 @@ You are a multi-channel platform specialist for Kailash Nexus implementation. Ex
 
 ### Layer Preference (Engine-First)
 
-| Need                    | Layer     | API                                         |
-| ----------------------- | --------- | ------------------------------------------- |
-| Standard deployment     | Engine    | `Nexus()` zero-config                       |
-| Enterprise with presets | Engine    | `NexusEngine.builder().preset(Preset.SAAS)` |
-| Custom channel setup    | Primitive | `ChannelManager` (rarely needed)            |
+| Need | Layer | API |
+|------|-------|-----|
+| Standard deployment | Engine | `Nexus()` zero-config |
+| Enterprise with presets | Engine | `NexusEngine.builder().preset(Preset.SAAS)` |
+| Custom channel setup | Primitive | `ChannelManager` (rarely needed) |
 
 **Default to `Nexus()`** — it handles API + CLI + MCP from a single registration. Drop to primitives only for custom protocol extensions.
 
@@ -79,40 +79,6 @@ async def greet(name: str, greeting: str = "Hello") -> dict:
 app = Nexus(auto_discovery=False)
 ```
 
-## Transport Architecture
-
-Nexus uses a Transport ABC for protocol abstraction. Built-in transports:
-
-| Transport | Protocol       | Class           |
-| --------- | -------------- | --------------- |
-| HTTP      | FastAPI routes | `HTTPTransport` |
-| MCP       | FastMCP tools  | `MCPTransport`  |
-
-Transports read from `HandlerRegistry` and build protocol-specific dispatch. Custom transports extend `Transport` ABC with `start()`, `stop()`, `is_running`, and optional `on_handler_registered()`.
-
-## Phase 2 APIs
-
-| API                | Purpose               | Example                                    |
-| ------------------ | --------------------- | ------------------------------------------ |
-| `@app.on_event()`  | React to events       | `@app.on_event("user.created")`            |
-| `@app.scheduled()` | Periodic tasks        | `@app.scheduled("5m")`                     |
-| `app.emit()`       | Fire custom events    | `app.emit("order.shipped", {"id": "123"})` |
-| `NexusFile`        | Cross-transport files | HTTP multipart, CLI path, MCP base64       |
-
-### EventBus
-
-Internal event system using `janus.Queue` (bounded 256) for sync/async bridging. Supports `subscribe_filtered()` for event type matching.
-
-### DataFlow Event Bridge
-
-```python
-app.integrate_dataflow(db)
-
-@app.on_event("dataflow.User.create")
-async def on_user_created(event):
-    await send_welcome_email(event.payload["record_id"])
-```
-
 ## Framework Selection
 
 **Choose Nexus when:**
@@ -155,11 +121,6 @@ async def on_user_created(event):
 - `.claude/skills/03-nexus/nexus-auth-plugin.md` -- NexusAuthPlugin: JWT, RBAC, SSO, tenant isolation, rate limiting, audit logging, middleware ordering, common gotchas
 - `.claude/skills/03-nexus/nexus-enterprise-features.md` -- Enterprise auth patterns
 
-### Transport & Events
-
-- `.claude/skills/03-nexus/nexus-transport-architecture.md` -- Transport ABC, HTTPTransport, MCPTransport, custom transports
-- `.claude/skills/03-nexus/nexus-eventbus-phase2.md` -- EventBus, Phase 2 APIs, DataFlow bridge, NexusFile
-
 ### Troubleshooting
 
 - `.claude/skills/03-nexus/nexus-troubleshooting.md` -- Common issues and solutions (startup blocking, workflow not found, port conflicts, auth injection, sandbox warnings)
@@ -169,8 +130,8 @@ async def on_user_created(event):
 - **dataflow-specialist**: Database integration with Nexus platform
 - **mcp-specialist**: MCP channel implementation
 - **pattern-expert**: Core SDK workflows for Nexus registration
-- **framework-advisor**: Choose between Core SDK and Nexus
-- **deployment-specialist**: Production deployment and scaling
+- **`decide-framework` skill**: Choose between Core SDK and Nexus
+- **release-specialist**: Production deployment and scaling
 
 ## Full Documentation
 
