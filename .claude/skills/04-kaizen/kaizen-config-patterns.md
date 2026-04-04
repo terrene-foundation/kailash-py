@@ -63,17 +63,30 @@ BaseAgent looks for these fields in your domain config:
 # Core fields (extracted automatically)
 llm_provider: str     # "openai", "anthropic", "ollama", "mock"
 model: str            # Model name (from LLM_MODEL env var)
-temperature: float    # Sampling temperature (0.0-1.0)
+temperature: float    # Sampling temperature (0.0-2.0)
 max_tokens: int       # Maximum tokens to generate
 
 # Optional fields (extracted if present)
 timeout: int          # Request timeout in seconds
 retry_attempts: int   # Number of retries on failure
 max_turns: int        # Enable BufferMemory if > 0
-provider_config: dict # Provider-specific configuration
+provider_config: dict # Provider-specific operational settings (api_version, deployment)
+response_format: dict # Structured output config (json_schema, json_object) — v2.5.0+
+structured_output_mode: str  # "auto" (deprecated), "explicit" (recommended), "off"
+api_key: str          # Per-request API key override (BYOK)
+base_url: str         # Per-request base URL override
 ```
 
 **All other fields** are ignored by BaseAgent and available for your domain logic.
+
+### Important: response_format vs provider_config (v2.5.0+)
+
+These two fields serve different purposes:
+
+- `response_format` — Structured output config sent to the LLM API. Use for `{"type": "json_schema", ...}` or `{"type": "json_object"}`.
+- `provider_config` — Provider-specific operational settings. Use for `{"api_version": "2024-10-21"}`, `{"deployment": "my-gpt4"}`, etc.
+
+**Never** put structured output keys (`type`, `json_schema`, `schema`) in `provider_config`. A deprecation shim will auto-migrate them, but new code should use `response_format` directly.
 
 ## Configuration Patterns
 
@@ -305,31 +318,52 @@ class OllamaConfig:
         }
 ```
 
-### Azure AI Foundry Configuration (v0.7.1)
+### Azure Configuration (v2.5.0)
 
 ```python
 @dataclass
 class AzureConfig:
-    """Azure AI Foundry configuration.
+    """Azure configuration.
 
-    Prerequisites:
-        export AZURE_AI_INFERENCE_ENDPOINT="https://your-endpoint.azure.com"
-        export AZURE_AI_INFERENCE_API_KEY="your-key"
+    Canonical env vars (v2.5.0+):
+        export AZURE_ENDPOINT="https://your-endpoint.azure.com"
+        export AZURE_API_KEY="your-key"
+        export AZURE_API_VERSION="2024-10-21"
+
+    Legacy env vars (deprecated, emit DeprecationWarning):
+        AZURE_OPENAI_ENDPOINT, AZURE_AI_INFERENCE_ENDPOINT
+        AZURE_OPENAI_API_KEY, AZURE_AI_INFERENCE_API_KEY
+        AZURE_OPENAI_API_VERSION
     """
     llm_provider: str = "azure"
     model: str = os.environ.get("LLM_MODEL", "")  # Or any deployed model
     temperature: float = 0.7
     max_tokens: int = 1000
 
+    # Provider-specific settings only (NOT structured output)
     provider_config: dict = None
 
     def __post_init__(self):
         self.provider_config = {
-            "api_version": "2024-02-01"
+            "api_version": "2024-10-21"
         }
 ```
 
 **Features**: Chat completions, vision/multi-modal support, embeddings, tool calling, async support.
+
+**Azure with structured output** (use `response_format`, not `provider_config`):
+
+```python
+from kaizen.core.structured_output import create_structured_output_config
+
+config = BaseAgentConfig(
+    llm_provider="azure",
+    model=os.environ["LLM_MODEL"],
+    response_format=create_structured_output_config(MySignature(), strict=True),
+    provider_config={"api_version": "2024-10-21"},  # Separate from response_format
+    structured_output_mode="explicit",
+)
+```
 
 ### Docker Model Runner Configuration (v0.7.1)
 
@@ -520,6 +554,48 @@ super().__init__(config=agent_config, ...)
 ```python
 # RIGHT - Let BaseAgent do the work
 super().__init__(config=config, ...)
+```
+
+### ❌ Structured Output in provider_config (Deprecated)
+
+```python
+# WRONG - provider_config is for provider settings, not structured output
+config = BaseAgentConfig(
+    provider_config={"type": "json_schema", "json_schema": {...}}  # DEPRECATED
+)
+```
+
+### ✅ Use response_format Instead
+
+```python
+# RIGHT - response_format is the dedicated field for structured output
+config = BaseAgentConfig(
+    response_format={"type": "json_schema", "json_schema": {...}},
+    structured_output_mode="explicit",
+)
+```
+
+### ❌ Auto-Generated Config Without Understanding
+
+```python
+# RISKY - auto-generates invisible config from signature (deprecated mode)
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model=os.environ["LLM_MODEL"],
+    # structured_output_mode defaults to "auto" — generates config you never see
+)
+```
+
+### ✅ Explicit Config You Control
+
+```python
+# RIGHT - you see exactly what config is being sent
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model=os.environ["LLM_MODEL"],
+    response_format=create_structured_output_config(MySignature(), strict=True),
+    structured_output_mode="explicit",
+)
 ```
 
 ## Configuration Testing

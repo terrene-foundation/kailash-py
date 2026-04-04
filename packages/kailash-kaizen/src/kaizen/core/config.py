@@ -53,7 +53,9 @@ class BaseAgentConfig:
     response_format: Optional[Dict[str, Any]] = (
         None  # Structured output config (json_schema, json_object)
     )
-    structured_output_mode: str = "auto"  # "auto" (deprecated), "explicit", or "off"
+    structured_output_mode: str = (
+        "explicit"  # "explicit", "off", or "auto" (deprecated)
+    )
     api_key: Optional[str] = None  # Per-request API key override for BYOK
     base_url: Optional[str] = None  # Per-request base URL override
 

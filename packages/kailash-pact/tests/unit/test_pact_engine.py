@@ -803,6 +803,111 @@ class TestModelEnvVar:
             engine = PactEngine(org=str(minimal_yaml_path))
             assert engine.model is None
 
+
+# ---------------------------------------------------------------------------
+# Input Validation Tests (#232 Tier 1)
+# ---------------------------------------------------------------------------
+
+
+class TestSubmitInputValidation:
+    """submit() rejects invalid objective and role parameters."""
+
+    def test_empty_objective_returns_error(self, minimal_yaml_path: Path) -> None:
+        engine = PactEngine(org=str(minimal_yaml_path))
+        result = engine.submit_sync("", role="D1-R1")
+        assert result.success is False
+        assert "objective" in result.error
+
+    def test_whitespace_objective_returns_error(self, minimal_yaml_path: Path) -> None:
+        engine = PactEngine(org=str(minimal_yaml_path))
+        result = engine.submit_sync("   ", role="D1-R1")
+        assert result.success is False
+        assert "objective" in result.error
+
+    def test_empty_role_returns_error(self, minimal_yaml_path: Path) -> None:
+        engine = PactEngine(org=str(minimal_yaml_path))
+        result = engine.submit_sync("Analyze data", role="")
+        assert result.success is False
+        assert "role" in result.error
+
+    def test_whitespace_role_returns_error(self, minimal_yaml_path: Path) -> None:
+        engine = PactEngine(org=str(minimal_yaml_path))
+        result = engine.submit_sync("Analyze data", role="  ")
+        assert result.success is False
+        assert "role" in result.error
+
+
+# ---------------------------------------------------------------------------
+# WorkResult budget_allocated + audit_trail Tests (#232 Tier 2)
+# ---------------------------------------------------------------------------
+
+
+class TestWorkResultNewFields:
+    """WorkResult carries budget_allocated and audit_trail."""
+
+    def test_defaults_for_new_fields(self) -> None:
+        result = WorkResult(success=True)
+        assert result.budget_allocated is None
+        assert result.audit_trail == []
+
+    def test_budget_allocated_round_trip(self) -> None:
+        result = WorkResult(success=True, budget_allocated=50.0)
+        data = result.to_dict()
+        assert data["budget_allocated"] == 50.0
+        restored = WorkResult.from_dict(data)
+        assert restored.budget_allocated == pytest.approx(50.0)
+
+    def test_audit_trail_round_trip(self) -> None:
+        trail = [
+            {
+                "timestamp": "2026-04-05T00:00:00+00:00",
+                "event": "submitted",
+                "role_address": "D1-R1",
+                "details": {},
+            }
+        ]
+        result = WorkResult(success=True, audit_trail=trail)
+        data = result.to_dict()
+        assert len(data["audit_trail"]) == 1
+        restored = WorkResult.from_dict(data)
+        assert restored.audit_trail[0]["event"] == "submitted"
+
+    def test_budget_allocated_none_round_trip(self) -> None:
+        result = WorkResult(success=True, budget_allocated=None)
+        data = result.to_dict()
+        assert data["budget_allocated"] is None
+        restored = WorkResult.from_dict(data)
+        assert restored.budget_allocated is None
+
+    def test_nan_budget_allocated_rejected(self) -> None:
+        data = {"success": True, "budget_allocated": float("nan")}
+        with pytest.raises(ValueError, match="finite"):
+            WorkResult.from_dict(data)
+
+    def test_submit_populates_budget_and_trail(self, minimal_yaml_path: Path) -> None:
+        """submit() should populate budget_allocated and audit_trail."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        engine = PactEngine(org=str(minimal_yaml_path), budget_usd=100.0)
+        mock_supervisor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.budget_consumed = 2.0
+        mock_result.success = True
+        mock_result.results = {}
+        mock_result.events = []
+        mock_supervisor.run = AsyncMock(return_value=mock_result)
+
+        with patch.object(
+            engine, "_get_or_create_supervisor", return_value=mock_supervisor
+        ):
+            result = engine.submit_sync("Test", role="D1-R1")
+
+        assert result.budget_allocated == pytest.approx(100.0)
+        assert len(result.audit_trail) >= 2  # submission_received + execution_completed
+        events = [e["event"] for e in result.audit_trail]
+        assert "submission_received" in events
+        assert "execution_completed" in events
+
     def test_no_hardcoded_model_in_supervisor(self, minimal_yaml_path: Path) -> None:
         """_get_or_create_supervisor should not use hardcoded model strings."""
         import inspect

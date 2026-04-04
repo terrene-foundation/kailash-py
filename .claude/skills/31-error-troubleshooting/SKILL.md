@@ -37,18 +37,29 @@ Common error patterns and solutions for Kailash SDK.
 - **[error-dataflow-template-syntax](error-dataflow-template-syntax.md)** - Template string errors
   - Symptom: `SyntaxError` in template strings | Fix: Use `{{variable}}` syntax
 
+### Kaizen Provider Errors
+
+- **[error-kaizen-provider-config](error-kaizen-provider-config.md)** - Provider configuration issues
+  - Azure 400 "messages must contain 'json'" | Use `json_prompt_suffix()` or set `response_format`
+  - "Missing required parameter: response_format.type" | Don't put `api_version` in `response_format`
+  - DeprecationWarning about `provider_config` | Migrate to `response_format` field
+  - Azure env var deprecation warnings | Switch to canonical names (`AZURE_ENDPOINT`, `AZURE_API_KEY`)
+
 ## Quick Error Reference
 
-| Symptom                       | Error Type            | Quick Fix                     |
-| ----------------------------- | --------------------- | ----------------------------- |
-| API hangs forever             | Nexus blocking        | Use `AsyncLocalRuntime`       |
-| `TypeError: expects Workflow` | Missing `.build()`    | Add `.build()` call           |
-| Node gets wrong data          | Connection params     | Check 4-parameter format      |
-| `ValidationError`             | Parameter validation  | Check required params         |
-| Infinite loop                 | Cycle convergence     | Add convergence condition     |
-| Template `SyntaxError`        | DataFlow template     | Use `{{variable}}` syntax     |
-| Runtime fails                 | Runtime execution     | Check logs, validate inputs   |
-| "too many connections"        | Connection exhaustion | Use `external_pool` injection |
+| Symptom                                            | Error Type            | Quick Fix                                       |
+| -------------------------------------------------- | --------------------- | ----------------------------------------------- |
+| API hangs forever                                  | Nexus blocking        | Use `AsyncLocalRuntime`                         |
+| `TypeError: expects Workflow`                      | Missing `.build()`    | Add `.build()` call                             |
+| Node gets wrong data                               | Connection params     | Check 4-parameter format                        |
+| `ValidationError`                                  | Parameter validation  | Check required params                           |
+| Infinite loop                                      | Cycle convergence     | Add convergence condition                       |
+| Template `SyntaxError`                             | DataFlow template     | Use `{{variable}}` syntax                       |
+| Runtime fails                                      | Runtime execution     | Check logs, validate inputs                     |
+| "too many connections"                             | Connection exhaustion | Use `external_pool` injection                   |
+| Azure 400 "messages must contain 'json'"           | Kaizen provider       | Use `json_prompt_suffix()` or `response_format` |
+| "Missing required parameter: response_format.type" | Kaizen provider       | Don't put `api_version` in `response_format`    |
+| DeprecationWarning about `provider_config`         | Kaizen provider       | Migrate to `response_format` field              |
 
 ## Error Prevention Checklist
 
@@ -59,6 +70,9 @@ Common error patterns and solutions for Kailash SDK.
 - Cyclic workflows have convergence checks?
 - Template strings use `{{variable}}` syntax?
 - Using `external_pool` in multi-worker deployments?
+- Structured output in `response_format` (not `provider_config`)?
+- Azure using canonical env vars (`AZURE_ENDPOINT`, `AZURE_API_KEY`)?
+- `structured_output_mode="explicit"` for new agents?
 
 ## Debugging Tips
 

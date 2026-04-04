@@ -182,10 +182,10 @@ class WorkflowGenerator:
             )
         )
         structured_output_mode = (
-            getattr(self.config, "structured_output_mode", "auto")
+            getattr(self.config, "structured_output_mode", "explicit")
             if hasattr(self.config, "structured_output_mode")
             else (
-                self.config.get("structured_output_mode", "auto")
+                self.config.get("structured_output_mode", "explicit")
                 if isinstance(self.config, dict)
                 else "auto"
             )
@@ -245,11 +245,13 @@ class WorkflowGenerator:
                     name=f"{self.signature.__class__.__name__}",
                 )
                 warnings.warn(
-                    "Auto-generated structured output is deprecated. "
-                    "Set response_format explicitly on BaseAgentConfig. "
+                    "structured_output_mode='auto' is deprecated and will be "
+                    "removed in v3.0. The default is now 'explicit'. "
+                    "Set response_format explicitly on BaseAgentConfig or use "
+                    "StructuredOutput.from_signature(). "
                     "Example: BaseAgentConfig(response_format={'type': 'json_object'}, "
                     "structured_output_mode='explicit')",
-                    DeprecationWarning,
+                    FutureWarning,
                     stacklevel=2,
                 )
 
@@ -268,7 +270,7 @@ class WorkflowGenerator:
         # Create LLMAgentNode with signature-based configuration
         node_config = {
             "provider": llm_provider or "openai",
-            "model": model or os.environ.get("DEFAULT_LLM_MODEL", "gpt-4"),
+            "model": model or os.environ.get("DEFAULT_LLM_MODEL"),
             "system_prompt": self._get_system_prompt(),
             "generation_config": generation_config,
         }
@@ -399,7 +401,7 @@ class WorkflowGenerator:
         # Create simple LLMAgentNode configuration (no signature)
         node_config = {
             "provider": self.config.llm_provider or "openai",
-            "model": self.config.model or os.environ.get("DEFAULT_LLM_MODEL", "gpt-4"),
+            "model": self.config.model or os.environ.get("DEFAULT_LLM_MODEL"),
             "generation_config": generation_config,
         }
 
@@ -508,10 +510,10 @@ class WorkflowGenerator:
             )
         )
         structured_output_mode = (
-            getattr(self.config, "structured_output_mode", "auto")
+            getattr(self.config, "structured_output_mode", "explicit")
             if hasattr(self.config, "structured_output_mode")
             else (
-                self.config.get("structured_output_mode", "auto")
+                self.config.get("structured_output_mode", "explicit")
                 if isinstance(self.config, dict)
                 else "auto"
             )

@@ -434,6 +434,71 @@ workflow.add_node("KaizenAgent", "agent1", {
 })
 ```
 
+## Provider Configuration (v2.5.0 — Explicit over Implicit)
+
+As of v2.5.0, provider configuration follows an **explicit over implicit** model. Structured output config is separated from provider-specific settings.
+
+### BaseAgentConfig Fields
+
+| Field                    | Purpose                                                                | Example                                      |
+| ------------------------ | ---------------------------------------------------------------------- | -------------------------------------------- |
+| `response_format`        | Structured output config (json_schema, json_object)                    | `{"type": "json_schema", "json_schema": {}}` |
+| `provider_config`        | Provider-specific operational settings only                            | `{"api_version": "2024-10-21"}`              |
+| `structured_output_mode` | Controls auto-generation: `"auto"` (deprecated), `"explicit"`, `"off"` | `"explicit"`                                 |
+
+### Quick Pattern
+
+```python
+from kaizen.core.config import BaseAgentConfig
+from kaizen.core.structured_output import create_structured_output_config
+
+# Explicit mode (recommended)
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model=os.environ["LLM_MODEL"],
+    response_format=create_structured_output_config(MySignature(), strict=True),
+    structured_output_mode="explicit",
+)
+
+# Azure with provider-specific settings (separate from response_format)
+config = BaseAgentConfig(
+    llm_provider="azure",
+    model=os.environ["LLM_MODEL"],
+    response_format={"type": "json_object"},
+    provider_config={"api_version": "2024-10-21"},
+    structured_output_mode="explicit",
+)
+```
+
+### Azure Env Vars (Canonical Names)
+
+| Canonical           | Legacy (deprecated)                                    |
+| ------------------- | ------------------------------------------------------ |
+| `AZURE_ENDPOINT`    | `AZURE_OPENAI_ENDPOINT`, `AZURE_AI_INFERENCE_ENDPOINT` |
+| `AZURE_API_KEY`     | `AZURE_OPENAI_API_KEY`, `AZURE_AI_INFERENCE_API_KEY`   |
+| `AZURE_API_VERSION` | `AZURE_OPENAI_API_VERSION`                             |
+
+Legacy vars emit `DeprecationWarning`. Use `resolve_azure_env()` from `kaizen.nodes.ai.azure_detection` for canonical-first resolution.
+
+### Anti-Patterns
+
+- **Never** put structured output config in `provider_config` — use `response_format`
+- **Never** rely on auto-generated structured output without understanding it — set `structured_output_mode="explicit"`
+- **Never** use multiple env var names for the same Azure setting without deprecation
+- **Never** use error-based backend switching — detect the backend upfront or set `AZURE_BACKEND` explicitly
+
+### Prompt Utilities
+
+`kaizen.core.prompt_utils` is the single source of truth for signature-based prompt generation:
+
+- `generate_prompt_from_signature(signature)` — builds system prompt from signature fields
+- `json_prompt_suffix(output_fields)` — returns JSON format instructions for Azure `json_object` compatibility
+
+For detailed configuration patterns, see:
+
+- **[kaizen-config-patterns](kaizen-config-patterns.md)** — Domain configs, auto-extraction, provider-specific patterns
+- **[kaizen-structured-outputs](kaizen-structured-outputs.md)** — Full structured output guide with migration examples
+
 ## Critical Rules
 
 - ✅ Define signatures before implementing agents
@@ -443,8 +508,11 @@ workflow.add_node("KaizenAgent", "agent1", {
 - ✅ Test agents with real infrastructure (real infrastructure recommended)
 - ✅ Enable hooks for observability
 - ✅ Use AgentRegistry for distributed coordination
+- ✅ Use `response_format` for structured output (not `provider_config`)
+- ✅ Set `structured_output_mode="explicit"` for new agents
 - ❌ NEVER skip signature definitions
 - ❌ NEVER ignore cost tracking in production
+- ❌ NEVER put structured output keys in `provider_config`
 - ❌ Avoid mocking LLM calls in integration tests (real infrastructure recommended)
 
 ### Kaizen-Agents Governance (v0.1.0)

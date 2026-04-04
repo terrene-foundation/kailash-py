@@ -108,8 +108,12 @@ class TestProviderConfigMigration:
 class TestStructuredOutputMode:
     """Test structured_output_mode field validation."""
 
-    def test_default_is_auto(self):
+    def test_default_is_explicit(self):
         config = BaseAgentConfig()
+        assert config.structured_output_mode == "explicit"
+
+    def test_auto_mode_still_accepted(self):
+        config = BaseAgentConfig(structured_output_mode="auto")
         assert config.structured_output_mode == "auto"
 
     def test_explicit_mode_accepted(self):

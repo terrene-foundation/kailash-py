@@ -349,6 +349,8 @@ class DataFlow(DataFlowEventMixin):
         self._sources: Dict[str, Any] = {}
         self._products: Dict[str, Any] = {}
         self._fabric: Optional[Any] = None
+        # Track whether user explicitly passed database_url=None (fabric-only intent)
+        self._explicit_no_database = database_url is None and config is None
 
         # DATAFLOW-ASYNC-MODEL-DECORATOR-001: Deferred relationship detection
         # Store models that need relationship detection, to be processed during initialize()
@@ -596,6 +598,21 @@ class DataFlow(DataFlowEventMixin):
         """
         return self._connection_manager
 
+    @property
+    def _fabric_only(self) -> bool:
+        """True when this DataFlow instance is used for fabric (sources/products) only.
+
+        Fabric-only mode is detected when:
+        - Sources or products are registered (fabric intent)
+        - No @db.model classes are registered (no database intent)
+        - User did not explicitly provide a database_url or config
+
+        In this mode, database initialization is skipped entirely.
+        """
+        has_fabric = bool(self._sources) or bool(self._products)
+        has_models = bool(self._models)
+        return has_fabric and not has_models and self._explicit_no_database
+
     def _ensure_connected(self) -> None:
         """Lazily initialize all DB-touching resources on first use.
 
@@ -620,6 +637,15 @@ class DataFlow(DataFlowEventMixin):
         with self._connect_lock:
             # Double-check after acquiring lock
             if self._connected:
+                return
+
+            # Fabric-only mode (#251): skip DB initialization when only
+            # sources/products are registered and no database_url was given.
+            if self._fabric_only:
+                logger.debug(
+                    "DataFlow: Fabric-only mode — skipping database initialization"
+                )
+                self._connected = True
                 return
 
             logger.debug("DataFlow: Lazy connection — initializing database resources")
@@ -772,6 +798,11 @@ class DataFlow(DataFlowEventMixin):
         Returns:
             bool: True if initialization successful, False otherwise
         """
+        # Fabric-only mode (#251): no database to initialize
+        if self._fabric_only:
+            logger.debug("DataFlow.initialize: fabric-only mode — no database to init")
+            return True
+
         # Issue #171: Ensure sync connection resources are initialized first
         self._ensure_connected()
 

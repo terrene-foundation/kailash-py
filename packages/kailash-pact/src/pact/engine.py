@@ -25,6 +25,7 @@ import asyncio
 import logging
 import math
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -226,9 +227,35 @@ class PactEngine:
             A WorkResult with the outcome. success=False if governance
             blocks the action or if kaizen-agents is not available.
         """
+        # Input validation (Tier 1): reject empty/invalid objective and role
+        if not objective or not isinstance(objective, str) or not objective.strip():
+            return WorkResult(
+                success=False,
+                error="objective must be a non-empty string",
+            )
+        if not role or not isinstance(role, str) or not role.strip():
+            return WorkResult(
+                success=False,
+                error="role must be a non-empty D/T/R address",
+            )
+
         ctx = context or {}
         events_emitted: list[dict[str, Any]] = []
         governance_verdicts: list[dict[str, Any]] = []
+        audit_trail: list[dict[str, Any]] = []
+        budget = self._costs._budget  # Budget allocated to this engine
+
+        def _audit(event: str, details: dict[str, Any] | None = None) -> None:
+            audit_trail.append(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "event": event,
+                    "role_address": role,
+                    "details": details or {},
+                }
+            )
+
+        _audit("submission_received", {"objective": objective[:200]})
 
         # Emit submission event
         self._events.emit(
@@ -249,6 +276,7 @@ class PactEngine:
                 role,
                 objective[:80],
             )
+            _audit("governance_skipped", {"enforcement_mode": "disabled"})
             self._events.emit(
                 "work.governance_disabled",
                 {
@@ -264,6 +292,8 @@ class PactEngine:
                 events_emitted,
                 governance_verdicts,
                 shadow=False,
+                budget_allocated=budget,
+                audit_trail=audit_trail,
             )
 
         # Step 1: Verify action via Trust Plane (GovernanceEngine)
@@ -278,6 +308,7 @@ class PactEngine:
                 "PactEngine.submit: governance verify_action raised for role=%s -- fail-closed",
                 role,
             )
+            _audit("governance_error", {"error": "verification raised"})
             self._events.emit(
                 "work.blocked",
                 {
@@ -290,10 +321,15 @@ class PactEngine:
                 success=False,
                 error="Governance verification failed — see server logs for details",
                 events=events_emitted,
+                budget_allocated=budget,
+                audit_trail=audit_trail,
             )
 
         verdict_dict = verdict.to_dict()
         governance_verdicts.append(verdict_dict)
+        _audit(
+            "governance_verified", {"level": verdict.level, "allowed": verdict.allowed}
+        )
 
         # --- SHADOW mode: log verdict but never block ---
         if self._enforcement_mode == EnforcementMode.SHADOW:
@@ -323,10 +359,13 @@ class PactEngine:
                 events_emitted,
                 governance_verdicts,
                 shadow=True,
+                budget_allocated=budget,
+                audit_trail=audit_trail,
             )
 
         # --- ENFORCE mode: verdicts are binding ---
         if not verdict.allowed:
+            _audit("governance_blocked", {"reason": verdict.reason})
             self._events.emit(
                 "work.blocked",
                 {
@@ -341,6 +380,8 @@ class PactEngine:
                 error=f"Governance {verdict.level}: {verdict.reason}",
                 events=[verdict_dict],
                 governance_verdicts=governance_verdicts,
+                budget_allocated=budget,
+                audit_trail=audit_trail,
             )
 
         events_emitted.append(verdict_dict)
@@ -353,6 +394,8 @@ class PactEngine:
             events_emitted,
             governance_verdicts,
             shadow=False,
+            budget_allocated=budget,
+            audit_trail=audit_trail,
         )
 
     def submit_sync(
@@ -458,6 +501,8 @@ class PactEngine:
         governance_verdicts: list[dict[str, Any]],
         *,
         shadow: bool,
+        budget_allocated: float | None = None,
+        audit_trail: list[dict[str, Any]] | None = None,
     ) -> WorkResult:
         """Execute work through the supervisor (Execution Plane).
 
@@ -470,12 +515,27 @@ class PactEngine:
             events_emitted: Accumulated event dicts.
             governance_verdicts: Accumulated governance verdict dicts.
             shadow: True if running in shadow mode.
+            budget_allocated: Budget ceiling for this submission.
+            audit_trail: Accumulated audit trail entries.
 
         Returns:
             A WorkResult with execution outcome.
         """
+        trail = audit_trail if audit_trail is not None else []
+
+        def _audit(event: str, details: dict[str, Any] | None = None) -> None:
+            trail.append(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "event": event,
+                    "role_address": role,
+                    "details": details or {},
+                }
+            )
+
         supervisor = self._get_or_create_supervisor()
         if supervisor is None:
+            _audit("execution_unavailable", {"reason": "kaizen-agents not installed"})
             self._events.emit(
                 "work.completed",
                 {
@@ -494,8 +554,11 @@ class PactEngine:
                 events=events_emitted,
                 governance_shadow=shadow,
                 governance_verdicts=governance_verdicts,
+                budget_allocated=budget_allocated,
+                audit_trail=trail,
             )
 
+        _audit("execution_started")
         try:
             supervisor_result = await supervisor.run(
                 objective=objective,
@@ -512,6 +575,10 @@ class PactEngine:
             if cost_usd > 0:
                 self._costs.record(cost_usd, f"submit: {objective[:80]}")
 
+            _audit(
+                "execution_completed",
+                {"success": supervisor_result.success, "cost_usd": cost_usd},
+            )
             self._events.emit(
                 "work.completed",
                 {
@@ -526,6 +593,7 @@ class PactEngine:
                 success=supervisor_result.success,
                 results=supervisor_result.results,
                 cost_usd=cost_usd,
+                budget_allocated=budget_allocated,
                 events=[
                     {
                         "type": (
@@ -537,6 +605,7 @@ class PactEngine:
                     }
                     for e in supervisor_result.events
                 ],
+                audit_trail=trail,
                 governance_shadow=shadow,
                 governance_verdicts=governance_verdicts,
             )
@@ -546,6 +615,7 @@ class PactEngine:
                 "PactEngine.submit: supervisor execution failed for role=%s -- fail-closed",
                 role,
             )
+            _audit("execution_failed", {"error": "supervisor raised"})
             self._events.emit(
                 "work.failed",
                 {
@@ -560,6 +630,8 @@ class PactEngine:
                 events=events_emitted,
                 governance_shadow=shadow,
                 governance_verdicts=governance_verdicts,
+                budget_allocated=budget_allocated,
+                audit_trail=trail,
             )
 
     def _adapt_envelope(self, role_address: str) -> dict[str, Any]:

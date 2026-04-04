@@ -42,6 +42,33 @@ _HEADER_CONSUMER = "X-Fabric-Consumer"
 # Filter operator allowlist (TODO-35)
 ALLOWED_OPERATORS = {"$eq", "$ne", "$gt", "$gte", "$lt", "$lte", "$in", "$nin"}
 
+# Parameter validation constraints (security: HIGH from red team)
+_MAX_CONSUMER_LENGTH = 255
+_CONSUMER_PATTERN = __import__("re").compile(r"^[a-zA-Z0-9_-]+$")
+_VALID_REFRESH_VALUES = {"true", "false"}
+
+
+def _validate_consumer_param(value: Any) -> str | None:
+    """Validate the consumer query parameter. Returns error message or None."""
+    if not isinstance(value, str):
+        return "consumer must be a string"
+    if len(value) > _MAX_CONSUMER_LENGTH:
+        return f"consumer name exceeds maximum length of {_MAX_CONSUMER_LENGTH}"
+    if not value:
+        return "consumer name must not be empty"
+    if not _CONSUMER_PATTERN.match(value):
+        return "consumer name must contain only alphanumeric characters, hyphens, and underscores"
+    return None
+
+
+def _validate_refresh_param(value: Any) -> str | None:
+    """Validate the refresh query parameter. Returns error message or None."""
+    if not isinstance(value, str):
+        return "refresh must be a string"
+    if value.lower() not in _VALID_REFRESH_VALUES:
+        return "refresh must be 'true' or 'false'"
+    return None
+
 
 def validate_filter(filter_dict: dict) -> dict:
     """Validate and sanitize filter operators. Raises ValueError on disallowed operators."""
@@ -146,22 +173,26 @@ class FabricServingLayer:
             if request and hasattr(request, "query_params"):
                 params = dict(request.query_params)
 
-            # Parse refresh flag — ?refresh=true bypasses cache
-            refresh = params.pop("refresh", "false")
-            if isinstance(refresh, str):
-                refresh = refresh.lower() == "true"
-            # Extract consumer param before passing to product logic
-            consumer_name = params.pop("consumer", None)
+            # Validate and parse refresh flag — ?refresh=true bypasses cache
+            raw_refresh = params.pop("refresh", "false")
+            refresh_error = _validate_refresh_param(raw_refresh)
+            if refresh_error:
+                return {"_status": 400, "error": refresh_error}
+            refresh = isinstance(raw_refresh, str) and raw_refresh.lower() == "true"
 
-            # Validate consumer early — fail fast on unknown/unsupported
+            # Validate and extract consumer param
+            consumer_name = params.pop("consumer", None)
             if consumer_name is not None:
+                consumer_error = _validate_consumer_param(consumer_name)
+                if consumer_error:
+                    return {"_status": 400, "error": consumer_error}
+                # Check product supports this consumer (don't leak registry list)
                 if consumer_name not in product.consumers:
                     return {
                         "_status": 400,
                         "error": (
-                            f"Consumer '{consumer_name}' is not supported by "
-                            f"product '{name}'. "
-                            f"Available consumers: {product.consumers}"
+                            f"Consumer '{consumer_name}' is not available "
+                            f"for product '{name}'."
                         ),
                     }
                 if self._consumer_registry.get(consumer_name) is None:
@@ -169,7 +200,7 @@ class FabricServingLayer:
                         "_status": 400,
                         "error": (
                             f"Consumer '{consumer_name}' is declared on product "
-                            f"'{name}' but no adapter function is registered."
+                            f"'{name}' but no adapter is registered."
                         ),
                     }
 
@@ -313,9 +344,7 @@ class FabricServingLayer:
                     sources=source_adapters,
                     products_cache={},
                 )
-                result = await self._pipeline.execute_product(
-                    name, product.fn, ctx
-                )
+                result = await self._pipeline.execute_product(name, product.fn, ctx)
                 return {
                     "_status": 200,
                     "_headers": {
