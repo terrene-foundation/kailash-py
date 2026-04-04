@@ -274,13 +274,13 @@ class TestAdapterFactoryIntegration:
 
             # Verify adapter type - handle both single types and tuples of acceptable types
             if isinstance(expected_type, tuple):
-                assert isinstance(adapter, expected_type), (
-                    f"Expected one of {expected_type}, got {type(adapter)}"
-                )
+                assert isinstance(
+                    adapter, expected_type
+                ), f"Expected one of {expected_type}, got {type(adapter)}"
             else:
-                assert isinstance(adapter, expected_type), (
-                    f"Expected {expected_type}, got {type(adapter)}"
-                )
+                assert isinstance(
+                    adapter, expected_type
+                ), f"Expected {expected_type}, got {type(adapter)}"
 
             # Verify configuration inheritance
             assert adapter.connection_string == connection_string
@@ -307,14 +307,14 @@ class TestAdapterFactoryIntegration:
 
             # Verify adapter can be created
             adapter = factory.create_adapter(connection_string)
-            assert adapter.database_type == expected_type
+            assert adapter.source_type == expected_type
 
     def test_adapter_factory_custom_registration_integration(self):
         """Test custom adapter registration and usage."""
 
         class CustomAdapter(DatabaseAdapter):
             @property
-            def database_type(self):
+            def source_type(self):
                 return "custom"
 
             @property
@@ -360,7 +360,7 @@ class TestAdapterFactoryIntegration:
         # Test creation
         adapter = factory.create_adapter("custom://localhost/test")
         assert isinstance(adapter, CustomAdapter)
-        assert adapter.database_type == "custom"
+        assert adapter.source_type == "custom"
 
         # Test functionality
         assert adapter.supports_feature("custom_feature") is True
@@ -381,20 +381,20 @@ class TestAdapterDialectIntegration:
         ]
 
         for adapter in adapters:
-            dialect = dialect_manager.get_dialect(adapter.database_type)
+            dialect = dialect_manager.get_dialect(adapter.source_type)
 
             # Verify dialect matches adapter
             assert dialect is not None
-            assert adapter.get_dialect() == adapter.database_type
+            assert adapter.get_dialect() == adapter.source_type
 
             # Test feature compatibility
-            if adapter.database_type == "postgresql":
+            if adapter.source_type == "postgresql":
                 assert dialect.supports_feature("arrays") is True
                 assert adapter.supports_feature("arrays") is True
-            elif adapter.database_type == "mysql":
+            elif adapter.source_type == "mysql":
                 assert dialect.supports_feature("json") is True
                 assert adapter.supports_feature("json") is True
-            elif adapter.database_type == "sqlite":
+            elif adapter.source_type == "sqlite":
                 assert dialect.supports_feature("cte") is True
                 assert adapter.supports_feature("cte") is True
 
@@ -439,7 +439,7 @@ class TestAdapterDialectIntegration:
             compatible_adapters = []
             for adapter in adapters:
                 if adapter.supports_feature(feature):
-                    compatible_adapters.append(adapter.database_type)
+                    compatible_adapters.append(adapter.source_type)
 
             # Verify at least one adapter supports each common feature
             assert len(compatible_adapters) > 0

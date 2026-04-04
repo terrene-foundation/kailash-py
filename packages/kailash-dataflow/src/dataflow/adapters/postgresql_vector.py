@@ -52,8 +52,8 @@ class PostgreSQLVectorAdapter(PostgreSQLAdapter):
         self._pgvector_installed = None
 
     @property
-    def database_type(self) -> str:
-        """Get specific database type identifier."""
+    def source_type(self) -> str:
+        """Get specific source type identifier."""
         return "postgresql_vector"  # Distinguish from base PostgreSQL
 
     def supports_feature(self, feature: str) -> bool:

@@ -39,7 +39,7 @@ class StubSourceAdapter(BaseSourceAdapter):
         self._fetch_count = 0
 
     @property
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         return "stub"
 
     async def _connect(self) -> None:

@@ -47,9 +47,9 @@ class TestMockSource:
         result = await source.fetch("items")
         assert result == [1, 2, 3]
 
-    def test_database_type(self):
+    def test_source_type(self):
         source = MockSource("test")
-        assert source.database_type == "mock"
+        assert source.source_type == "mock"
 
     @pytest.mark.asyncio
     async def test_set_data(self):

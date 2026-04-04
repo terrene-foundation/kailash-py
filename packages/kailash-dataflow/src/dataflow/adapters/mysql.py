@@ -26,7 +26,7 @@ class MySQLAdapter(DatabaseAdapter):
     """MySQL database adapter with real aiomysql support."""
 
     @property
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         return "mysql"
 
     @property

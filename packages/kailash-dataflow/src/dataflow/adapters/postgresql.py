@@ -20,7 +20,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
     """PostgreSQL database adapter."""
 
     @property
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         return "postgresql"
 
     @property

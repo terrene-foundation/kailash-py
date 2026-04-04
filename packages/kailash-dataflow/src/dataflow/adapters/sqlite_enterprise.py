@@ -98,7 +98,7 @@ class SQLiteEnterpriseAdapter(DatabaseAdapter):
     """Enterprise SQLite database adapter with advanced features."""
 
     @property
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         return "sqlite"
 
     @property

@@ -33,14 +33,14 @@ class StreamSourceAdapter(BaseSourceAdapter):
         self._ws: Any = None
 
     @property
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         broker = self.config.broker
         if broker.startswith("ws://") or broker.startswith("wss://"):
             return "websocket"
         return "kafka"
 
     async def _connect(self) -> None:
-        if self.database_type == "kafka":
+        if self.source_type == "kafka":
             try:
                 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
             except ImportError as exc:
@@ -65,7 +65,7 @@ class StreamSourceAdapter(BaseSourceAdapter):
             )
             await self._producer.start()
 
-        elif self.database_type == "websocket":
+        elif self.source_type == "websocket":
             try:
                 import websockets
             except ImportError as exc:
@@ -102,7 +102,7 @@ class StreamSourceAdapter(BaseSourceAdapter):
         self, path: str = "", params: Optional[Dict[str, Any]] = None
     ) -> Any:
         """Consume a batch of messages from the stream."""
-        if self.database_type == "kafka":
+        if self.source_type == "kafka":
             if self._consumer is None:
                 raise ConnectionError(f"Stream adapter '{self.name}' not connected")
 
@@ -115,7 +115,7 @@ class StreamSourceAdapter(BaseSourceAdapter):
             self._record_successful_data(path, messages)
             return messages
 
-        elif self.database_type == "websocket":
+        elif self.source_type == "websocket":
             if self._ws is None:
                 raise ConnectionError(f"Stream adapter '{self.name}' not connected")
 
@@ -138,7 +138,7 @@ class StreamSourceAdapter(BaseSourceAdapter):
         self, path: str = "", page_size: int = 100
     ) -> AsyncIterator[List[Any]]:
         """Consume messages in batches."""
-        if self.database_type == "kafka":
+        if self.source_type == "kafka":
             if self._consumer is None:
                 raise ConnectionError(f"Stream adapter '{self.name}' not connected")
 
@@ -153,14 +153,14 @@ class StreamSourceAdapter(BaseSourceAdapter):
             if page:
                 yield page
 
-        elif self.database_type == "websocket":
+        elif self.source_type == "websocket":
             # WebSocket doesn't support batching natively — yield single messages
             data = await self.fetch(path)
             yield [data] if not isinstance(data, list) else data
 
     async def write(self, path: str, data: Any) -> Any:
         """Produce messages to the stream."""
-        if self.database_type == "kafka":
+        if self.source_type == "kafka":
             if self._producer is None:
                 raise ConnectionError(f"Stream adapter '{self.name}' not connected")
 
@@ -173,7 +173,7 @@ class StreamSourceAdapter(BaseSourceAdapter):
                 await self._producer.send_and_wait(topic, data)
                 return {"topic": topic, "count": 1}
 
-        elif self.database_type == "websocket":
+        elif self.source_type == "websocket":
             if self._ws is None:
                 raise ConnectionError(f"Stream adapter '{self.name}' not connected")
 

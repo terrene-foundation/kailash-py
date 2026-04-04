@@ -22,7 +22,7 @@ class TestPostgreSQLVectorAdapter:
         """PostgreSQLVectorAdapter initializes with correct defaults."""
         adapter = PostgreSQLVectorAdapter("postgresql://localhost/vectordb")
 
-        assert adapter.database_type == "postgresql_vector"
+        assert adapter.source_type == "postgresql_vector"
         assert adapter.adapter_type == "sql"
         assert adapter.vector_dimensions == 1536  # OpenAI default
         assert adapter.default_distance == "cosine"
@@ -391,4 +391,4 @@ class TestPostgreSQLVectorAdapter:
         repr_str = repr(adapter)
 
         assert "PostgreSQLVectorAdapter" in repr_str
-        assert "database_type='postgresql_vector'" in repr_str
+        assert "source_type='postgresql_vector'" in repr_str
