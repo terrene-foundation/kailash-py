@@ -140,6 +140,9 @@ from kailash.trust.pact.gradient import EvaluationResult, GradientEngine
 # --- Testing utilities (stays in kailash-pact) ---
 from pact.governance.testing import MockGovernedAgent
 
+# --- Enforcement modes ---
+from pact.enforcement import EnforcementMode, validate_enforcement_mode
+
 # --- PactEngine (Dual Plane bridge) ---
 from pact.engine import PactEngine
 from pact.work import WorkResult, WorkSubmission
@@ -273,6 +276,9 @@ __all__ = [
     # Gradient engine
     "EvaluationResult",
     "GradientEngine",
+    # Enforcement modes
+    "EnforcementMode",
+    "validate_enforcement_mode",
     # PactEngine (Dual Plane bridge)
     "PactEngine",
     "WorkResult",
