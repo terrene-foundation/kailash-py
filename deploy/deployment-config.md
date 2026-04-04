@@ -17,11 +17,11 @@
 
 | Package          | Tag Pattern        | Current Version |
 | ---------------- | ------------------ | --------------- |
-| kailash (core)   | `v*`               | 2.3.2           |
-| kailash-dataflow | `dataflow-v*`      | 1.4.0           |
-| kailash-kaizen   | `kaizen-v*`        | 2.3.3           |
-| kailash-nexus    | `nexus-v*`         | 1.6.1           |
-| kailash-pact     | `pact-v*`          | 0.6.0           |
+| kailash (core)   | `v*`               | 2.5.0           |
+| kailash-dataflow | `dataflow-v*`      | 1.7.0           |
+| kailash-kaizen   | `kaizen-v*`        | 2.4.0           |
+| kailash-nexus    | `nexus-v*`         | 1.8.0           |
+| kailash-pact     | `pact-v*`          | 0.7.0           |
 | kaizen-agents    | `kaizen-agents-v*` | 0.6.0           |
 
 ## Release Runbook

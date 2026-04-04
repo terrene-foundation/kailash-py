@@ -15,6 +15,43 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [kailash-kaizen 2.4.0] - 2026-04-04
+
+Explicit provider configuration refactor — eliminates implicit magic that caused #254-257.
+
+#### Added
+
+- `response_format` field on BaseAgentConfig for explicit structured output configuration
+- `structured_output_mode` field ("auto"/"explicit"/"off") with deprecation path
+- `StructuredOutput` helper class: `from_signature()`, `for_provider()`, `prompt_hint()`
+- `prompt_utils.py` — single source of truth for signature-based prompt generation
+- `resolve_azure_env()` helper for canonical-first env var resolution with deprecation
+- NaN/Inf guard on `temperature` and `budget_limit_usd` fields
+
+#### Changed
+
+- `provider_config` now holds only provider-specific settings (api_version, deployment)
+- Azure env vars canonicalized: `AZURE_ENDPOINT`, `AZURE_API_KEY`, `AZURE_API_VERSION`
+- System prompt generation unified — BaseAgent and WorkflowGenerator share `prompt_utils`
+- Hardcoded `"gpt-4"` model default replaced with `os.environ.get("DEFAULT_LLM_MODEL")`
+
+#### Deprecated
+
+- `provider_config` for structured output (use `response_format` instead) — migration shim auto-converts
+- `structured_output_mode="auto"` (will change to "explicit" in next minor)
+- Legacy Azure env vars (`AZURE_OPENAI_*`, `AZURE_AI_INFERENCE_*`) — use canonical names
+
+#### Fixed
+
+- #254: Azure json_object response_format requires 'json' in system prompt
+- #255: provider_config dual purpose — api_version misinterpreted as response_format
+- #256: Azure endpoint detection missing cognitiveservices.azure.com pattern
+- #257: AZURE_OPENAI_API_VERSION env var not read
+
+#### Removed
+
+- Error-based Azure backend fallback (`handle_error()`) — use `AZURE_BACKEND` explicitly
+
 ### [2.5.0] - 2026-04-04
 
 **Multi-Package Release** — kailash 2.5.0, kailash-pact 0.7.0, kailash-dataflow 1.7.0, kailash-nexus 1.8.0
