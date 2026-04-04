@@ -758,11 +758,12 @@ class LLMAgentNode(Node):
         provider_config = self.config.get(
             "provider_config", kwargs.get("provider_config", {})
         )
-        if provider_config:
-            # provider_config IS the response_format (from create_structured_output_config)
-            # Format: {"type": "json_schema", "json_schema": {...}} for strict mode
-            # or {"type": "json_object"} for legacy mode
-            generation_config["response_format"] = provider_config
+        if provider_config and isinstance(provider_config, dict):
+            # Only use as response_format if it contains a "type" key
+            # (structured output configs: {"type": "json_schema", ...} or {"type": "json_object"})
+            # Other provider_config keys (e.g., api_version for Azure) are NOT response_format
+            if "type" in provider_config:
+                generation_config["response_format"] = provider_config
 
         streaming = kwargs.get("streaming", False)
         timeout = kwargs.get("timeout", 120)

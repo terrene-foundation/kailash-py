@@ -238,6 +238,20 @@ class WorkflowGenerator:
         if provider_config:
             node_config["provider_config"] = provider_config
 
+            # Azure requires the word "json" in messages when using
+            # response_format.type == "json_object" or "json_schema".
+            # Append instruction if system prompt doesn't already mention it.
+            if isinstance(provider_config, dict) and provider_config.get("type") in (
+                "json_object",
+                "json_schema",
+            ):
+                system_prompt = node_config.get("system_prompt", "")
+                if "json" not in system_prompt.lower():
+                    node_config["system_prompt"] = (
+                        system_prompt
+                        + "\n\nRespond with a JSON object containing the output fields."
+                    )
+
         # Discover and add MCP tools if agent is provided
         # This enables autonomous agents to use tools via MCP client integration
         if self.agent and hasattr(self.agent, "discover_mcp_tools"):
