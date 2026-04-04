@@ -60,6 +60,7 @@ class PactAuditAction(str, Enum):
     VACANCY_DESIGNATED = "vacancy_designated"
     VACANCY_SUSPENDED = "vacancy_suspended"
     BRIDGE_CONSENT = "bridge_consent"
+    BRIDGE_REJECTED = "bridge_rejected"
 
 
 def create_pact_audit_details(
