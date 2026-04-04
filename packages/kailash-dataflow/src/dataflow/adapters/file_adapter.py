@@ -182,7 +182,7 @@ class FileSourceAdapter(BaseSourceAdapter):
     # ------------------------------------------------------------------
 
     @property
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         return "file"
 
     def supports_feature(self, feature: str) -> bool:

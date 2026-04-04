@@ -35,7 +35,7 @@ class CloudSourceAdapter(BaseSourceAdapter):
         self._MAX_ETAG_ENTRIES = 10_000
 
     @property
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         return f"cloud:{self.config.provider}"
 
     async def _connect(self) -> None:

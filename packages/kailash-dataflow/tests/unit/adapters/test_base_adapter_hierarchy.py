@@ -31,8 +31,8 @@ class TestBaseAdapterHierarchy:
         # Should have adapter_type property
         assert adapter.adapter_type == "sql"
 
-        # Should have database_type property
-        assert adapter.database_type == "postgresql"
+        # Should have source_type property
+        assert adapter.source_type == "postgresql"
 
     def test_mysql_adapter_hierarchy(self):
         """MySQL adapter inherits correctly from BaseAdapter."""
@@ -47,8 +47,8 @@ class TestBaseAdapterHierarchy:
         # Should have adapter_type property
         assert adapter.adapter_type == "sql"
 
-        # Should have database_type property
-        assert adapter.database_type == "mysql"
+        # Should have source_type property
+        assert adapter.source_type == "mysql"
 
     def test_sqlite_adapter_hierarchy(self):
         """SQLite adapter inherits correctly from BaseAdapter."""
@@ -63,8 +63,8 @@ class TestBaseAdapterHierarchy:
         # Should have adapter_type property
         assert adapter.adapter_type == "sql"
 
-        # Should have database_type property
-        assert adapter.database_type == "sqlite"
+        # Should have source_type property
+        assert adapter.source_type == "sqlite"
 
     def test_all_sql_adapters_have_sql_adapter_type(self):
         """All SQL adapters should have adapter_type='sql'."""
@@ -75,9 +75,9 @@ class TestBaseAdapterHierarchy:
         ]
 
         for adapter in adapters:
-            assert adapter.adapter_type == "sql", (
-                f"{adapter.__class__.__name__} should have adapter_type='sql'"
-            )
+            assert (
+                adapter.adapter_type == "sql"
+            ), f"{adapter.__class__.__name__} should have adapter_type='sql'"
 
     def test_adapter_connection_info(self):
         """Test get_connection_info method from BaseAdapter."""
@@ -86,11 +86,11 @@ class TestBaseAdapterHierarchy:
         info = adapter.get_connection_info()
 
         assert "adapter_type" in info
-        assert "database_type" in info
+        assert "source_type" in info
         assert "connected" in info
 
         assert info["adapter_type"] == "sql"
-        assert info["database_type"] == "postgresql"
+        assert info["source_type"] == "postgresql"
         assert info["connected"] is False  # Not connected yet
 
     def test_adapter_repr(self):
@@ -100,7 +100,7 @@ class TestBaseAdapterHierarchy:
         repr_str = repr(adapter)
 
         assert "PostgreSQLAdapter" in repr_str
-        assert "database_type='postgresql'" in repr_str
+        assert "source_type='postgresql'" in repr_str
         assert "connected=False" in repr_str
 
     @pytest.mark.asyncio
@@ -114,12 +114,12 @@ class TestBaseAdapterHierarchy:
 
         assert isinstance(health, dict)
         assert "healthy" in health
-        assert "database_type" in health
+        assert "source_type" in health
         assert "adapter_type" in health
         assert "connected" in health
 
         # Should have database info even if unhealthy
-        assert health["database_type"] == "postgresql"
+        assert health["source_type"] == "postgresql"
         assert health["adapter_type"] == "sql"
 
     def test_database_adapter_is_sql_type(self):

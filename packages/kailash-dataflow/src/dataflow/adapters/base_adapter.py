@@ -50,15 +50,28 @@ class BaseAdapter(ABC):
 
     @property
     @abstractmethod
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         """
-        Get specific database type identifier.
+        Get specific source type identifier.
 
         Returns:
-            Specific database: 'postgresql', 'mysql', 'sqlite', 'mongodb',
-            'neo4j', 'qdrant', 'milvus', 'redis', etc.
+            Specific source: 'postgresql', 'mysql', 'sqlite', 'mongodb',
+            'neo4j', 'qdrant', 'milvus', 'redis', 'file', 'rest',
+            'cache', etc.
         """
         pass
+
+    @property
+    def database_type(self) -> str:
+        """Deprecated: use source_type instead."""
+        import warnings
+
+        warnings.warn(
+            "database_type is deprecated, use source_type instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.source_type
 
     @abstractmethod
     async def connect(self) -> None:
@@ -91,7 +104,7 @@ class BaseAdapter(ABC):
             Dict with health status:
             {
                 "healthy": bool,
-                "database_type": str,
+                "source_type": str,
                 "connected": bool,
                 "error": str (optional)
             }
@@ -102,15 +115,15 @@ class BaseAdapter(ABC):
 
             return {
                 "healthy": True,
-                "database_type": self.database_type,
+                "source_type": self.source_type,
                 "adapter_type": self.adapter_type,
                 "connected": self.is_connected,
             }
         except Exception as e:
-            logger.error(f"Health check failed for {self.database_type}: {e}")
+            logger.error(f"Health check failed for {self.source_type}: {e}")
             return {
                 "healthy": False,
-                "database_type": self.database_type,
+                "source_type": self.source_type,
                 "adapter_type": self.adapter_type,
                 "connected": self.is_connected,
                 "error": str(e),
@@ -139,10 +152,10 @@ class BaseAdapter(ABC):
         """
         return {
             "adapter_type": self.adapter_type,
-            "database_type": self.database_type,
+            "source_type": self.source_type,
             "connected": self.is_connected,
         }
 
     def __repr__(self) -> str:
         """String representation of adapter."""
-        return f"{self.__class__.__name__}(database_type='{self.database_type}', connected={self.is_connected})"
+        return f"{self.__class__.__name__}(source_type='{self.source_type}', connected={self.is_connected})"

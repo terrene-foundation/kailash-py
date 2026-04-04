@@ -112,7 +112,7 @@ class TestConnectionLifecycle:
 
         assert adapter.state == SourceState.ACTIVE
         assert adapter.is_connected is True
-        assert adapter.database_type == "file"
+        assert adapter.source_type == "file"
 
         await adapter.disconnect()
         assert adapter.state == SourceState.DISCONNECTED

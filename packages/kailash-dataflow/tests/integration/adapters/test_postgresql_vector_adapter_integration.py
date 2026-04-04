@@ -124,7 +124,7 @@ class TestPostgreSQLVectorAdapterIntegration:
         """Test adapter connects to PostgreSQL successfully."""
         # Adapter should be connected via fixture
         assert vector_adapter is not None
-        assert vector_adapter.database_type == "postgresql_vector"
+        assert vector_adapter.source_type == "postgresql_vector"
         assert vector_adapter.adapter_type == "sql"
 
     async def test_pgvector_extension_installation(self, vector_adapter, test_suite):

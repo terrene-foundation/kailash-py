@@ -49,11 +49,11 @@ class TestMongoDBAdapterInitialization:
 
         assert adapter.adapter_type == "document"
 
-    def test_database_type_property(self):
-        """Test database_type property returns 'mongodb'."""
+    def test_source_type_property(self):
+        """Test source_type property returns 'mongodb'."""
         adapter = MongoDBAdapter("mongodb://localhost:27017/testdb")
 
-        assert adapter.database_type == "mongodb"
+        assert adapter.source_type == "mongodb"
 
 
 class TestMongoDBAdapterFeatureDetection:

@@ -67,8 +67,8 @@ class DatabaseAdapter(BaseAdapter):
 
     @property
     @abstractmethod
-    def database_type(self) -> str:
-        """Get specific database type identifier."""
+    def source_type(self) -> str:
+        """Get specific source type identifier."""
         pass
 
     @property

@@ -72,7 +72,7 @@ class MockSource(BaseSourceAdapter):
     # ------------------------------------------------------------------
 
     @property
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         """Identifier for this adapter type."""
         return "mock"
 
