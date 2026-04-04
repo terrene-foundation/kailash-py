@@ -466,8 +466,9 @@ class WorkflowGenerator:
         This is the fallback implementation when no custom prompt_generator
         callback is provided. It generates a prompt from signature fields.
 
-        Analyzes signature input/output fields to create an appropriate
-        system prompt for the LLM.
+        Delegates to shared prompt_utils for description, field listing,
+        and field descriptions (single source of truth), then appends
+        JSON formatting instructions when structured outputs are not in use.
 
         Returns:
             str: System prompt
@@ -477,55 +478,20 @@ class WorkflowGenerator:
             >>> print(prompt)
             Task: Given question, produce answer.
         """
+        from kaizen.core.prompt_utils import (
+            generate_prompt_from_signature,
+            json_prompt_suffix,
+        )
+
         if not self.signature:
             return "You are a helpful AI assistant."
 
-        # Start with signature description if available
-        parts = []
+        # Get base prompt from shared utility (single source of truth for
+        # description, input/output listing, and field descriptions)
+        base_prompt = generate_prompt_from_signature(self.signature)
 
-        if hasattr(self.signature, "description") and self.signature.description:
-            parts.append(self.signature.description)
-        elif hasattr(self.signature, "name") and self.signature.name:
-            parts.append(f"Task: {self.signature.name}")
-
-        # Describe inputs
-        if hasattr(self.signature, "inputs") and self.signature.inputs:
-            input_list = ", ".join(self.signature.inputs)
-            parts.append(f"\nInputs: {input_list}")
-
-        # Describe outputs
-        if hasattr(self.signature, "outputs") and self.signature.outputs:
-            output_list = ", ".join(
-                self.signature.outputs
-                if isinstance(self.signature.outputs, list)
-                else [str(self.signature.outputs)]
-            )
-            parts.append(f"Outputs: {output_list}")
-
-        # Add field descriptions if available
-        if hasattr(self.signature, "input_fields") and self.signature.input_fields:
-            field_descs = []
-            for field_name, field_def in self.signature.input_fields.items():
-                if isinstance(field_def, dict) and "desc" in field_def:
-                    field_descs.append(f"  - {field_name}: {field_def['desc']}")
-            if field_descs:
-                parts.append("\nInput Field Descriptions:")
-                parts.extend(field_descs)
-
-        if hasattr(self.signature, "output_fields") and self.signature.output_fields:
-            field_descs = []
-            for field_name, field_def in self.signature.output_fields.items():
-                if isinstance(field_def, dict) and "desc" in field_def:
-                    field_type = field_def.get("type", str).__name__
-                    field_descs.append(
-                        f"  - {field_name} ({field_type}): {field_def['desc']}"
-                    )
-            if field_descs:
-                parts.append("\nOutput Field Descriptions:")
-                parts.extend(field_descs)
-
-        # Add JSON formatting instructions ONLY if not using structured outputs
-        # When using strict mode, the provider API enforces the schema automatically
+        # Add JSON formatting instructions ONLY if not using structured outputs.
+        # When using strict mode, the provider API enforces the schema automatically.
         llm_provider = (
             getattr(self.config, "llm_provider", None)
             if hasattr(self.config, "llm_provider")
@@ -569,41 +535,6 @@ class WorkflowGenerator:
             and self.signature.output_fields
             and not using_structured_outputs
         ):
-            parts.append("\n---")
-            parts.append(
-                "\nIMPORTANT: You must respond with a valid JSON object containing exactly these fields:"
-            )
-            json_example = {}
-            for field_name, field_def in self.signature.output_fields.items():
-                field_type = field_def.get("type", str)
-                # Generate example values based on type
-                if field_type == str:
-                    json_example[field_name] = f"<your {field_name} here>"
-                elif field_type == float:
-                    json_example[field_name] = 0.0
-                elif field_type == int:
-                    json_example[field_name] = 0
-                elif field_type == bool:
-                    json_example[field_name] = False
-                elif field_type == list:
-                    json_example[field_name] = []
-                elif field_type == dict:
-                    json_example[field_name] = {}
-                else:
-                    json_example[field_name] = f"<{field_name}>"
+            base_prompt += json_prompt_suffix(self.signature.output_fields)
 
-            import json as json_module
-
-            parts.append(
-                f"\nExpected JSON format:\n```json\n{json_module.dumps(json_example, indent=2)}\n```"
-            )
-            parts.append(
-                "\nDo not include any explanation or text outside the JSON object."
-            )
-
-        # Join all parts
-        if parts:
-            return "\n".join(parts)
-
-        # Fallback
-        return "You are a helpful AI assistant."
+        return base_prompt if base_prompt else "You are a helpful AI assistant."

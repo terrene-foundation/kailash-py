@@ -376,7 +376,7 @@ class LLMAgentNode(Node):
                 type=dict,
                 required=False,
                 default={},
-                description="Provider-specific configuration (e.g., response_format for OpenAI Structured Outputs)",
+                description="Provider-specific settings (e.g., api_version, deployment). Use response_format for structured output.",
             ),
             "api_key": NodeParameter(
                 name="api_key",

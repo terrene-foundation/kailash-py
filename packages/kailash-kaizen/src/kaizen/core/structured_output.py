@@ -24,11 +24,12 @@ Usage with BaseAgent:
     >>> # Create structured output config
     >>> response_format = create_structured_output_config(QASignature(), strict=True)
     >>>
-    >>> # Pass to BaseAgent via generation_config
+    >>> # Pass to BaseAgent via response_format field
     >>> config = BaseAgentConfig(
     ...     llm_provider="openai",
     ...     model="gpt-4o-2024-08-06",  # Required for strict mode
-    ...     generation_config={"response_format": response_format}
+    ...     response_format=response_format,
+    ...     structured_output_mode="explicit",
     ... )
     >>> agent = BaseAgent(config=config, signature=QASignature())
     >>> result = agent.run(question="What is AI?")  # 100% schema compliance!

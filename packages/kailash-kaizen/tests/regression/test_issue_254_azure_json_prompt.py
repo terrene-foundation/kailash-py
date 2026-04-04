@@ -103,5 +103,5 @@ class TestIssue254AzureJsonPrompt:
 
         # OpenAI auto-generates json_schema (strict=True), which also triggers
         # the json instruction — this is harmless and ensures compatibility
-        provider_config = node_config.get("provider_config", {})
-        assert provider_config.get("type") in ("json_schema", "json_object")
+        response_format = node_config.get("response_format", {})
+        assert response_format.get("type") in ("json_schema", "json_object")
