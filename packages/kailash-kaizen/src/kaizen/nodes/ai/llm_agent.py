@@ -753,17 +753,18 @@ class LLMAgentNode(Node):
             "generation_config", kwargs.get("generation_config", {})
         )
 
-        # Merge provider_config into generation_config for provider-specific parameters
-        # (e.g., response_format for OpenAI Structured Outputs)
+        # Read response_format directly (structured output config)
+        response_format = self.config.get(
+            "response_format", kwargs.get("response_format", {})
+        )
+        if response_format and isinstance(response_format, dict):
+            generation_config["response_format"] = response_format
+
+        # Read provider_config separately (provider-specific settings like api_version)
+        # These are NOT response_format — they're passed to the provider backend
         provider_config = self.config.get(
             "provider_config", kwargs.get("provider_config", {})
         )
-        if provider_config and isinstance(provider_config, dict):
-            # Only use as response_format if it contains a "type" key
-            # (structured output configs: {"type": "json_schema", ...} or {"type": "json_object"})
-            # Other provider_config keys (e.g., api_version for Azure) are NOT response_format
-            if "type" in provider_config:
-                generation_config["response_format"] = provider_config
 
         streaming = kwargs.get("streaming", False)
         timeout = kwargs.get("timeout", 120)

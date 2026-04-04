@@ -165,7 +165,29 @@ class WorkflowGenerator:
         provider_config = (
             getattr(self.config, "provider_config", None)
             if hasattr(self.config, "provider_config")
-            else self.config.get("provider_config")
+            else (
+                self.config.get("provider_config")
+                if isinstance(self.config, dict)
+                else None
+            )
+        )
+        response_format = (
+            getattr(self.config, "response_format", None)
+            if hasattr(self.config, "response_format")
+            else (
+                self.config.get("response_format")
+                if isinstance(self.config, dict)
+                else None
+            )
+        )
+        structured_output_mode = (
+            getattr(self.config, "structured_output_mode", "auto")
+            if hasattr(self.config, "structured_output_mode")
+            else (
+                self.config.get("structured_output_mode", "auto")
+                if isinstance(self.config, dict)
+                else "auto"
+            )
         )
 
         if temperature is not None:
@@ -173,8 +195,13 @@ class WorkflowGenerator:
         if max_tokens is not None:
             generation_config["max_tokens"] = max_tokens
 
-        # Auto-configure structured outputs for OpenAI when signature present
-        # This ensures JSON schema compliance for signature output fields
+        # Structured output configuration
+        #
+        # response_format holds structured output config (json_object, json_schema).
+        # structured_output_mode controls behavior:
+        #   "off"      — no structured output, even if response_format is set
+        #   "explicit"  — use only what the user provided in response_format
+        #   "auto"      — auto-generate if not provided (deprecated behavior)
         #
         # NOTE: Use strict=False when prompt_generator is provided, as this indicates
         # the agent has custom system prompt (e.g., BaseAutonomousAgent with tool calling).
@@ -187,25 +214,43 @@ class WorkflowGenerator:
         providers_with_structured_output = ["openai", "google", "gemini", "azure"]
         effective_provider = llm_provider or "openai"
 
-        if (
-            not provider_config
-            and effective_provider in providers_with_structured_output
-            and self.signature
-        ):
-            from kaizen.core.structured_output import create_structured_output_config
+        if structured_output_mode == "off":
+            response_format = None
+        elif structured_output_mode == "explicit":
+            pass  # Only use what the user provided in response_format
+        elif structured_output_mode == "auto":
+            # Auto-generate if not provided (deprecated behavior)
+            if (
+                not response_format
+                and effective_provider in providers_with_structured_output
+                and self.signature
+            ):
+                import warnings
 
-            # Detect tool calling mode: custom prompt generator indicates autonomous agents
-            # with tool-aware system prompts (BaseAutonomousAgent._generate_system_prompt)
-            # Also, strict mode only works for OpenAI - other providers use it for schema guidance
-            use_strict_mode = (
-                self.prompt_generator is None and effective_provider == "openai"
-            )
+                from kaizen.core.structured_output import (
+                    create_structured_output_config,
+                )
 
-            provider_config = create_structured_output_config(
-                signature=self.signature,
-                strict=use_strict_mode,  # True for OpenAI without tools, False otherwise
-                name=f"{self.signature.__class__.__name__}",
-            )
+                # Detect tool calling mode: custom prompt generator indicates autonomous agents
+                # with tool-aware system prompts (BaseAutonomousAgent._generate_system_prompt)
+                # Also, strict mode only works for OpenAI - other providers use it for schema guidance
+                use_strict_mode = (
+                    self.prompt_generator is None and effective_provider == "openai"
+                )
+
+                response_format = create_structured_output_config(
+                    signature=self.signature,
+                    strict=use_strict_mode,  # True for OpenAI without tools, False otherwise
+                    name=f"{self.signature.__class__.__name__}",
+                )
+                warnings.warn(
+                    "Auto-generated structured output is deprecated. "
+                    "Set response_format explicitly on BaseAgentConfig. "
+                    "Example: BaseAgentConfig(response_format={'type': 'json_object'}, "
+                    "structured_output_mode='explicit')",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
 
         # Get optional per-request overrides
         api_key = (
@@ -234,23 +279,29 @@ class WorkflowGenerator:
             )
             node_config["credential_ref"] = credential_ref
 
-        # Add provider-specific config (preserve as nested dict for LLMAgentNode)
+        # Add structured output config
+        if response_format:
+            node_config["response_format"] = response_format
+
+        # Add provider-specific config separately (api_version, deployment, etc.)
         if provider_config:
             node_config["provider_config"] = provider_config
 
-            # Azure requires the word "json" in messages when using
-            # response_format.type == "json_object" or "json_schema".
-            # Append instruction if system prompt doesn't already mention it.
-            if isinstance(provider_config, dict) and provider_config.get("type") in (
-                "json_object",
-                "json_schema",
-            ):
-                system_prompt = node_config.get("system_prompt", "")
-                if "json" not in system_prompt.lower():
-                    node_config["system_prompt"] = (
-                        system_prompt
-                        + "\n\nRespond with a JSON object containing the output fields."
-                    )
+        # Azure requires the word "json" in messages when using
+        # response_format.type == "json_object" or "json_schema".
+        # Append instruction if system prompt doesn't already mention it.
+        # Removal deferred to Phase 4 (StructuredOutput.prompt_hint())
+        if (
+            response_format
+            and isinstance(response_format, dict)
+            and response_format.get("type") in ("json_object", "json_schema")
+        ):
+            system_prompt = node_config.get("system_prompt", "")
+            if "json" not in system_prompt.lower():
+                node_config["system_prompt"] = (
+                    system_prompt
+                    + "\n\nRespond with a JSON object containing the output fields."
+                )
 
         # Discover and add MCP tools if agent is provided
         # This enables autonomous agents to use tools via MCP client integration
@@ -473,24 +524,43 @@ class WorkflowGenerator:
                 parts.append("\nOutput Field Descriptions:")
                 parts.extend(field_descs)
 
-        # Add JSON formatting instructions ONLY if not using OpenAI structured outputs
-        # When using strict mode, OpenAI API enforces the schema automatically
+        # Add JSON formatting instructions ONLY if not using structured outputs
+        # When using strict mode, the provider API enforces the schema automatically
         llm_provider = (
             getattr(self.config, "llm_provider", None)
             if hasattr(self.config, "llm_provider")
             else self.config.get("llm_provider")
         )
-        provider_config = (
-            getattr(self.config, "provider_config", None)
-            if hasattr(self.config, "provider_config")
-            else self.config.get("provider_config")
+        response_format = (
+            getattr(self.config, "response_format", None)
+            if hasattr(self.config, "response_format")
+            else (
+                self.config.get("response_format")
+                if isinstance(self.config, dict)
+                else None
+            )
+        )
+        structured_output_mode = (
+            getattr(self.config, "structured_output_mode", "auto")
+            if hasattr(self.config, "structured_output_mode")
+            else (
+                self.config.get("structured_output_mode", "auto")
+                if isinstance(self.config, dict)
+                else "auto"
+            )
         )
 
-        # Check if using structured outputs (OpenAI json_schema mode)
+        # Check if using structured outputs (json_schema mode via response_format)
         using_structured_outputs = False
-        if provider_config and isinstance(provider_config, dict):
-            using_structured_outputs = provider_config.get("type") == "json_schema"
-        elif llm_provider == "openai" and self.signature:
+        if structured_output_mode == "off":
+            using_structured_outputs = False
+        elif response_format and isinstance(response_format, dict):
+            using_structured_outputs = response_format.get("type") == "json_schema"
+        elif (
+            structured_output_mode == "auto"
+            and llm_provider == "openai"
+            and self.signature
+        ):
             # Will auto-configure structured outputs in generate_signature_workflow()
             using_structured_outputs = True
 

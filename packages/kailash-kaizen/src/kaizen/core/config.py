@@ -47,7 +47,13 @@ class BaseAgentConfig:
     model: Optional[str] = None
     temperature: Optional[float] = 0.1  # Default to 0.1 for deterministic responses
     max_tokens: Optional[int] = None
-    provider_config: Optional[Dict[str, Any]] = None
+    provider_config: Optional[Dict[str, Any]] = (
+        None  # Provider-specific settings (api_version, deployment)
+    )
+    response_format: Optional[Dict[str, Any]] = (
+        None  # Structured output config (json_schema, json_object)
+    )
+    structured_output_mode: str = "auto"  # "auto" (deprecated), "explicit", or "off"
     api_key: Optional[str] = None  # Per-request API key override for BYOK
     base_url: Optional[str] = None  # Per-request base URL override
 
@@ -98,10 +104,68 @@ class BaseAgentConfig:
 
             self.permission_mode = PermissionMode.DEFAULT
 
+        # Deprecation shim: migrate provider_config with "type" key to response_format
+        self._migrate_provider_config()
+
         self._validate_parameters()
+
+    def _migrate_provider_config(self):
+        """Migrate structured output keys from provider_config to response_format."""
+        import warnings
+
+        structured_output_keys = {"type", "json_schema", "schema"}
+
+        if (
+            self.provider_config
+            and isinstance(self.provider_config, dict)
+            and "type" in self.provider_config
+        ):
+            if self.response_format is None:
+                # Split: structured output keys → response_format, rest stays
+                response_format_parts = {}
+                remaining = {}
+                for k, v in self.provider_config.items():
+                    if k in structured_output_keys:
+                        response_format_parts[k] = v
+                    else:
+                        remaining[k] = v
+
+                self.response_format = response_format_parts
+                self.provider_config = remaining if remaining else None
+
+                warnings.warn(
+                    "provider_config with 'type' key is deprecated for structured output. "
+                    "Use response_format instead. "
+                    "Example: BaseAgentConfig(response_format={'type': 'json_object'})",
+                    DeprecationWarning,
+                    stacklevel=3,
+                )
+            else:
+                # Both set — strip structured output keys from provider_config
+                remaining = {
+                    k: v
+                    for k, v in self.provider_config.items()
+                    if k not in structured_output_keys
+                }
+                self.provider_config = remaining if remaining else None
+
+                warnings.warn(
+                    "Both response_format and provider_config contain structured output keys. "
+                    "Using response_format; structured output keys removed from provider_config.",
+                    DeprecationWarning,
+                    stacklevel=3,
+                )
 
     def _validate_parameters(self):
         """Validate configuration parameters."""
+        # Validate structured_output_mode
+        valid_modes = ("auto", "explicit", "off")
+        if self.structured_output_mode not in valid_modes:
+            raise ValueError(
+                f"structured_output_mode must be one of {valid_modes}, "
+                f"got '{self.structured_output_mode}'"
+            )
+
         # Validate temperature
         if self.temperature is not None:
             if self.temperature < 0.0:
@@ -164,6 +228,8 @@ class BaseAgentConfig:
                 temperature=config.get("temperature"),
                 max_tokens=config.get("max_tokens"),
                 provider_config=config.get("provider_config"),
+                response_format=config.get("response_format"),
+                structured_output_mode=config.get("structured_output_mode", "auto"),
                 api_key=config.get("api_key"),
                 base_url=config.get("base_url"),
                 use_async_llm=config.get("use_async_llm", False),
@@ -186,6 +252,10 @@ class BaseAgentConfig:
             kwargs["max_tokens"] = getattr(config, "max_tokens")
         if hasattr(config, "provider_config"):
             kwargs["provider_config"] = getattr(config, "provider_config")
+        if hasattr(config, "response_format"):
+            kwargs["response_format"] = getattr(config, "response_format")
+        if hasattr(config, "structured_output_mode"):
+            kwargs["structured_output_mode"] = getattr(config, "structured_output_mode")
         if hasattr(config, "api_key"):
             kwargs["api_key"] = getattr(config, "api_key")
         if hasattr(config, "base_url"):

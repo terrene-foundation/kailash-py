@@ -1471,6 +1471,8 @@ class BaseAgent(Node):
             node_config["max_tokens"] = self.config.max_tokens
         if self.config.provider_config is not None:
             node_config["provider_config"] = self.config.provider_config
+        if self.config.response_format is not None:
+            node_config["response_format"] = self.config.response_format
 
         # Add the LLM agent node using string-based node name
         workflow.add_node("LLMAgentNode", "agent", node_config)
