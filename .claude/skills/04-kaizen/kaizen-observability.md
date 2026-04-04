@@ -7,7 +7,7 @@ Monitor, trace, and debug AI agent execution with structured logging and metrics
 Track execution spans for timing and correlation.
 
 ```python
-from kailash_kaizen.observability import SpanContext
+from kaizen.observability import SpanContext
 import time
 
 # Create a span for tracking
@@ -27,7 +27,7 @@ print(f"Trace ID: {span.trace_id}")
 Collect and aggregate execution metrics.
 
 ```python
-from kailash_kaizen.observability import MetricsCollector
+from kaizen.observability import MetricsCollector
 
 metrics = MetricsCollector()
 
@@ -48,7 +48,7 @@ print(f"Avg latency: {summary['latency_ms_avg']}ms")
 Aggregate logs from multiple agents.
 
 ```python
-from kailash_kaizen.observability import LogAggregator
+from kaizen.observability import LogAggregator
 
 logs = LogAggregator()
 
@@ -69,7 +69,7 @@ all_logs = logs.get_all()
 Unified observability combining spans, metrics, and logs.
 
 ```python
-from kailash_kaizen.observability import ObservabilityManager
+from kaizen.observability import ObservabilityManager
 
 obs = ObservabilityManager()
 
@@ -97,8 +97,8 @@ print(f"Metrics: {report['metrics']}")
 ## Integration with Agents
 
 ```python
-from kailash_kaizen import BaseAgent
-from kailash_kaizen.observability import ObservabilityManager
+from kaizen import BaseAgent
+from kaizen.observability import ObservabilityManager
 
 class ObservableAgent(BaseAgent):
     def __init__(self, name, obs=None):

@@ -16,7 +16,7 @@ pip install kailash-pact
 ## Minimal Example
 
 ```python
-from pact.governance.config import (
+from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
@@ -26,7 +26,7 @@ from pact.governance.config import (
     WorkspaceConfig,
     TrustPostureLevel,
 )
-from pact.governance.engine import GovernanceEngine
+from kailash.trust.pact.engine import GovernanceEngine
 
 # 1. Define constraint envelope
 analyst_envelope = ConstraintEnvelopeConfig(
@@ -125,5 +125,5 @@ engine = GovernanceEngine(
 
 - `pact-governance-engine.md` -- full engine API
 - `pact-envelopes.md` -- envelope model
-- Source: `pact/governance/engine.py`
-- Source: `pact/governance/config.py`
+- Source: `src/kailash/trust/pact/engine.py`
+- Source: `src/kailash/trust/pact/config.py`

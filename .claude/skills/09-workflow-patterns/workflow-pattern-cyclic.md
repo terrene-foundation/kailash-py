@@ -17,6 +17,7 @@ Patterns for implementing loops, iterations, and cyclic workflows.
 ## Quick Reference
 
 Cyclic workflows enable:
+
 - **Loop until condition** - Repeat until success/threshold
 - **Batch processing** - Process items in chunks
 - **Retry logic** - Automatic retry with backoff
@@ -37,13 +38,13 @@ workflow.add_node("SetVariableNode", "init_counter", {
 })
 
 # 2. Process iteration
-workflow.add_node("APICallNode", "check_status", {
+workflow.add_node("HTTPRequestNode", "check_status", {
     "url": "https://api.example.com/status",
     "method": "GET"
 })
 
 # 3. Evaluate condition
-workflow.add_node("ConditionalNode", "check_complete", {
+workflow.add_node("SwitchNode", "check_complete", {
     "condition": "{{check_status.status}} == 'completed'",
     "true_branch": "complete",
     "false_branch": "increment"
@@ -56,7 +57,7 @@ workflow.add_node("TransformNode", "increment", {
 })
 
 # 5. Check max iterations
-workflow.add_node("ConditionalNode", "check_max", {
+workflow.add_node("SwitchNode", "check_max", {
     "condition": "{{increment.result}} < 10",
     "true_branch": "wait",
     "false_branch": "timeout"
@@ -103,12 +104,12 @@ workflow.add_node("MapNode", "process_batch", {
 })
 
 # 4. Update database
-workflow.add_node("DatabaseExecuteNode", "mark_processed", {
+workflow.add_node("SQLDatabaseNode", "mark_processed", {
     "query": "UPDATE items SET processed = TRUE WHERE id IN ({{process_batch.ids}})"
 })
 
 # 5. Check for more items
-workflow.add_node("ConditionalNode", "check_more", {
+workflow.add_node("SwitchNode", "check_more", {
     "condition": "{{load_items.has_more}} == true",
     "true_branch": "load_items",  # Loop back!
     "false_branch": "complete"
@@ -133,21 +134,21 @@ workflow.add_node("SetVariableNode", "init_retry", {
 })
 
 # 2. Execute operation
-workflow.add_node("APICallNode", "api_call", {
+workflow.add_node("HTTPRequestNode", "api_call", {
     "url": "https://api.example.com/operation",
     "method": "POST",
     "timeout": 30
 })
 
 # 3. Check success
-workflow.add_node("ConditionalNode", "check_success", {
+workflow.add_node("SwitchNode", "check_success", {
     "condition": "{{api_call.status_code}} == 200",
     "true_branch": "success",
     "false_branch": "check_retry"
 })
 
 # 4. Check retry count
-workflow.add_node("ConditionalNode", "check_retry", {
+workflow.add_node("SwitchNode", "check_retry", {
     "condition": "{{init_retry.retry_count}} < 5",
     "true_branch": "calculate_backoff",
     "false_branch": "failed"
@@ -194,19 +195,19 @@ workflow.add_node("SetVariableNode", "init_prompt", {
 # 2. Generate content (LLM)
 workflow.add_node("LLMNode", "generate", {
     "provider": "openai",
-    "model": "gpt-4",
+    "model": os.environ["LLM_MODEL"],
     "prompt": "{{init_prompt.prompt}}"
 })
 
 # 3. Evaluate quality
 workflow.add_node("LLMNode", "evaluate", {
     "provider": "openai",
-    "model": "gpt-4",
+    "model": os.environ["LLM_MODEL"],
     "prompt": "Rate this description 1-10: {{generate.response}}"
 })
 
 # 4. Check quality threshold
-workflow.add_node("ConditionalNode", "check_quality", {
+workflow.add_node("SwitchNode", "check_quality", {
     "condition": "{{evaluate.score}} >= 8",
     "true_branch": "approved",
     "false_branch": "refine"
@@ -215,12 +216,12 @@ workflow.add_node("ConditionalNode", "check_quality", {
 # 5. Refine prompt with feedback
 workflow.add_node("LLMNode", "refine", {
     "provider": "openai",
-    "model": "gpt-4",
+    "model": os.environ["LLM_MODEL"],
     "prompt": "Improve this: {{generate.response}}. Feedback: {{evaluate.feedback}}"
 })
 
 # 6. Check max iterations
-workflow.add_node("ConditionalNode", "check_max", {
+workflow.add_node("SwitchNode", "check_max", {
     "condition": "{{init_prompt.iteration}} < 3",
     "true_branch": "increment",
     "false_branch": "use_best"
@@ -266,6 +267,5 @@ workflow.add_connection("increment", "result", "generate", "iteration")  # Loop!
 - **Conditional Logic**: [`nodes-logic-reference`](../nodes/nodes-logic-reference.md)
 
 ## Documentation
-
 
 <!-- Trigger Keywords: loop workflow, cyclic, iterate, repeat until, workflow cycles, retry logic, batch processing -->

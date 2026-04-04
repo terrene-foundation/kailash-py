@@ -8,18 +8,18 @@ The `Delegate` class is the primary user-facing API for kaizen-agents. It compos
 from kaizen_agents import Delegate
 
 # Layer 1 — Simple (one-liner)
-delegate = Delegate(model="claude-sonnet-4-20250514")
+delegate = Delegate(model=os.environ["LLM_MODEL"])
 
 # Layer 2 — Configured (tools + system prompt)
 delegate = Delegate(
-    model="claude-sonnet-4-20250514",
+    model=os.environ["LLM_MODEL"],
     tools=[search_tool, calculator_tool],
     system_prompt="You are a research assistant.",
 )
 
 # Layer 3 — Governed (budget + envelope)
 delegate = Delegate(
-    model="claude-sonnet-4-20250514",
+    model=os.environ["LLM_MODEL"],
     tools=[search_tool],
     budget_usd=10.0,  # NaN/Inf validated via math.isfinite()
 )
@@ -87,7 +87,7 @@ print(result)  # "4"
 Per-model cost estimation with NaN/Inf defense:
 
 ```python
-delegate = Delegate(model="claude-sonnet-4-20250514", budget_usd=5.0)
+delegate = Delegate(model=os.environ["LLM_MODEL"], budget_usd=5.0)
 # Tracks cumulative cost per turn
 # Yields BudgetExhausted event when limit reached
 ```

@@ -475,6 +475,95 @@ class PipelineExecutor:
         )
 
     # ------------------------------------------------------------------
+    # Cache invalidation
+    # ------------------------------------------------------------------
+
+    def invalidate(
+        self, product_name: str, params: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """Remove cached data for a specific product.
+
+        Args:
+            product_name: Name of the product to invalidate.
+            params: Optional parameters (for parameterized products).
+
+        Returns:
+            ``True`` if the cache entry existed and was removed, ``False`` otherwise.
+        """
+        key = _cache_key(product_name, params)
+        existed = key in self._cache_data
+        self._cache_data.pop(key, None)
+        self._cache_hash.pop(key, None)
+        self._cache_metadata.pop(key, None)
+        if existed:
+            logger.debug(
+                "Invalidated cache for product '%s' (key=%s)", product_name, key
+            )
+        return existed
+
+    def invalidate_all(self) -> int:
+        """Clear all cached product data.
+
+        Returns:
+            The number of cache entries that were cleared.
+        """
+        count = len(self._cache_data)
+        self._cache_data.clear()
+        self._cache_hash.clear()
+        self._cache_metadata.clear()
+        if count:
+            logger.debug("Invalidated all cache entries (count=%d)", count)
+        return count
+
+    # ------------------------------------------------------------------
+    # Graceful drain
+    # ------------------------------------------------------------------
+
+    async def drain(self, timeout: float = 30.0) -> None:
+        """Wait for in-flight pipeline executions to complete.
+
+        Acquires all semaphore slots to ensure no executions are running,
+        then releases them. If the timeout expires before all slots can be
+        acquired, a warning is logged and the method returns.
+
+        Args:
+            timeout: Maximum seconds to wait for in-flight work to finish.
+        """
+        acquired = 0
+        try:
+            deadline = asyncio.get_event_loop().time() + timeout
+            for _ in range(self._max_concurrent):
+                remaining = deadline - asyncio.get_event_loop().time()
+                if remaining <= 0:
+                    logger.warning(
+                        "Pipeline drain timed out after %.1fs with %d/%d slots acquired",
+                        timeout,
+                        acquired,
+                        self._max_concurrent,
+                    )
+                    return
+                try:
+                    await asyncio.wait_for(
+                        self._exec_semaphore.acquire(), timeout=remaining
+                    )
+                    acquired += 1
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "Pipeline drain timed out after %.1fs with %d/%d slots acquired",
+                        timeout,
+                        acquired,
+                        self._max_concurrent,
+                    )
+                    return
+            logger.debug(
+                "Pipeline drained successfully (%d slots)", self._max_concurrent
+            )
+        finally:
+            # Release all acquired slots so the semaphore returns to its original state
+            for _ in range(acquired):
+                self._exec_semaphore.release()
+
+    # ------------------------------------------------------------------
     # Trace access
     # ------------------------------------------------------------------
 

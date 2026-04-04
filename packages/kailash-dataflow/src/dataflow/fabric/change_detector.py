@@ -239,7 +239,14 @@ class ChangeDetector:
         """Return product names whose ``depends_on`` includes ``source_name``."""
         affected: List[str] = []
         for product_name, registration in self._products.items():
-            depends_on = registration.get("depends_on", [])
+            # Support both ProductRegistration dataclass (attribute access)
+            # and plain dicts (legacy / tests).
+            if hasattr(registration, "depends_on"):
+                depends_on = registration.depends_on
+            elif isinstance(registration, dict):
+                depends_on = registration.get("depends_on", [])
+            else:
+                depends_on = []
             if source_name in depends_on:
                 affected.append(product_name)
         return affected
@@ -293,8 +300,20 @@ class ChangeDetector:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _get_poll_interval(adapter: BaseSourceAdapter) -> float:
-        """Extract poll interval from the adapter's config or use default."""
+    def _get_poll_interval(adapter: Any) -> float:
+        """Extract poll interval from the adapter's config or use default.
+
+        Handles both ``BaseSourceAdapter`` instances and legacy dict
+        source info (extracting the adapter from the ``"adapter"`` key
+        if necessary).
+        """
+        # If a dict was passed (shouldn't happen after #253 fix, but
+        # be defensive), extract the real adapter from it.
+        if isinstance(adapter, dict):
+            adapter = adapter.get("adapter")
+            if adapter is None:
+                return 60.0
+
         # Source adapters may store their config in various attributes.
         config = getattr(adapter, "_config", None) or getattr(adapter, "config", None)
         if config is not None:

@@ -13,11 +13,12 @@ description: "Gold standard for security practices. Use when asking 'security st
 ## Security Principles
 
 ### 1. Secrets Management
+
 ```python
 # ✅ GOOD: Environment variables
 import os
 
-workflow.add_node("APICallNode", "api", {
+workflow.add_node("HTTPRequestNode", "api", {
     "url": "https://api.example.com",
     "headers": {
         "Authorization": f"Bearer {os.getenv('API_KEY')}"
@@ -29,6 +30,7 @@ workflow.add_node("APICallNode", "api", {
 ```
 
 ### 2. SQL Injection Prevention
+
 ```python
 # ✅ GOOD: Parameterized queries
 workflow.add_node("DatabaseQueryNode", "query", {
@@ -41,9 +43,10 @@ workflow.add_node("DatabaseQueryNode", "query", {
 ```
 
 ### 3. Input Validation
+
 ```python
 # ✅ GOOD: Validate all inputs
-workflow.add_node("DataValidationNode", "validate", {
+workflow.add_node("CodeValidationNode", "validate", {
     "input": "{{input.user_data}}",
     "schema": {
         "email": "email",
@@ -55,6 +58,7 @@ workflow.add_node("DataValidationNode", "validate", {
 ```
 
 ### 4. Authentication & Authorization
+
 ```python
 # ✅ GOOD: Check permissions
 workflow.add_node("DatabaseQueryNode", "check_auth", {
@@ -62,7 +66,7 @@ workflow.add_node("DatabaseQueryNode", "check_auth", {
     "parameters": ["{{input.user_id}}"]
 })
 
-workflow.add_node("ConditionalNode", "authorize", {
+workflow.add_node("SwitchNode", "authorize", {
     "condition": "{{check_auth.role}} in ['admin', 'editor']",
     "true_branch": "process",
     "false_branch": "unauthorized"
@@ -70,9 +74,10 @@ workflow.add_node("ConditionalNode", "authorize", {
 ```
 
 ### 5. Audit Logging
+
 ```python
 # ✅ GOOD: Log all sensitive operations
-workflow.add_node("DatabaseExecuteNode", "audit_log", {
+workflow.add_node("SQLDatabaseNode", "audit_log", {
     "query": "INSERT INTO audit_log (user_id, action, resource, timestamp) VALUES (?, ?, ?, NOW())",
     "parameters": ["{{input.user_id}}", "delete_user", "{{input.target_user}}"]
 })

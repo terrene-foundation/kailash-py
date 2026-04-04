@@ -148,12 +148,12 @@ await progress.complete_progress(token)
 
 ```python
 # OLD: Mock was default
-workflow.add_node("LLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "mcp_servers": [config]  # Was mocked by default
 })
 
 # NEW: Real is default, explicit mock needed
-workflow.add_node("LLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "mcp_servers": [config],
     "use_real_mcp": False  # Only for testing
 })

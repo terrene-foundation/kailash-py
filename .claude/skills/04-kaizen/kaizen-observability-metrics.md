@@ -300,7 +300,7 @@ collector.record_histogram("answer_quality_score", value=0.85)
 collector.set_gauge("pending_questions", value=12)
 
 # Cost tracking
-collector.increment_counter("llm_api_calls_total", labels={"model": "gpt-4"})
+collector.increment_counter("llm_api_calls_total", labels={"model": os.environ["LLM_MODEL"]})
 collector.record_histogram("llm_cost_usd", value=0.003)
 ```
 

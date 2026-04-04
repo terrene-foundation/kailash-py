@@ -30,7 +30,7 @@ workflow.add_node("DeduplicateNode", "dedupe", {
 })
 
 # 3. Validate schema
-workflow.add_node("DataValidationNode", "validate", {
+workflow.add_node("CodeValidationNode", "validate", {
     "input": "{{dedupe.data}}",
     "schema": {"email": "email", "age": "integer"}
 })
@@ -58,6 +58,5 @@ workflow.add_connection("clean", "data", "aggregate", "input")
 ```
 
 ## Documentation
-
 
 <!-- Trigger Keywords: data pipeline, data processing, data transformation, data cleaning, data quality -->

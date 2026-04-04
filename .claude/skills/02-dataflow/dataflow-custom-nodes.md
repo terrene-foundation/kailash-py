@@ -35,7 +35,7 @@ workflow.add_node("UserCreateNode", "create_user", {
 })
 
 # Add custom business logic node
-workflow.add_node("APICallNode", "send_welcome_email", {
+workflow.add_node("HTTPRequestNode", "send_welcome_email", {
     "url": "https://api.sendgrid.com/mail/send",
     "method": "POST",
     "body": {
@@ -46,7 +46,7 @@ workflow.add_node("APICallNode", "send_welcome_email", {
 })
 
 # Add custom validation node
-workflow.add_node("ConditionalNode", "check_domain", {
+workflow.add_node("SwitchNode", "check_domain", {
     "condition": "{{create_user.email}}.endswith('@company.com')",
     "true_branch": "internal_user",
     "false_branch": "external_user"
@@ -88,6 +88,5 @@ workflow.add_connection("get_users", "users", "calculate_metrics", "input")
 4. **Keep models simple** - DataFlow handles data, custom nodes handle logic
 
 ## Documentation
-
 
 <!-- Trigger Keywords: custom dataflow nodes, extend dataflow, custom operations, dataflow business logic -->

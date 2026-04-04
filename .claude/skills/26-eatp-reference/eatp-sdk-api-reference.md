@@ -65,10 +65,10 @@ Complete API surface for the standalone EATP Python SDK.
 
 ### Postures
 
-| Export                | Type  | Module                   |
-| --------------------- | ----- | ------------------------ |
-| `TrustPosture`        | Enum  | `kailash.trust.postures` |
-| `PostureStateMachine` | Class | `kailash.trust.postures` |
+| Export                | Type  | Module                           |
+| --------------------- | ----- | -------------------------------- |
+| `TrustPosture`        | Enum  | `kailash.trust.posture.postures` |
+| `PostureStateMachine` | Class | `kailash.trust.posture.postures` |
 
 ### Exceptions
 
@@ -274,15 +274,15 @@ class EATPBlockedError(PermissionError): ...
 class EATPHeldError(PermissionError): ...
 ```
 
-### `kailash.trust.postures` — Trust Postures
+### `kailash.trust.posture.postures` — Trust Postures
 
 ```python
 class TrustPosture(str, Enum):
-    FULL_AUTONOMY = "full_autonomy"   # autonomy_level=5
-    ASSISTED = "assisted"              # autonomy_level=4
-    SUPERVISED = "supervised"          # autonomy_level=3
-    HUMAN_DECIDES = "human_decides"    # autonomy_level=2
-    BLOCKED = "blocked"                # autonomy_level=1
+    DELEGATED = "delegated"                    # autonomy_level=5
+    CONTINUOUS_INSIGHT = "continuous_insight"   # autonomy_level=4
+    SHARED_PLANNING = "shared_planning"        # autonomy_level=3
+    SUPERVISED = "supervised"                  # autonomy_level=2
+    PSEUDO_AGENT = "pseudo_agent"              # autonomy_level=1
 
     @property
     def autonomy_level(self) -> int: ...

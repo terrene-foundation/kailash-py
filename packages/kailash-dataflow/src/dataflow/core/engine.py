@@ -502,6 +502,15 @@ class DataFlow(DataFlowEventMixin):
 
         self._tenant_context_switch = TenantContextSwitch(self)
 
+        # Audit trail persistence (lazy — backend initialized in _ensure_connected)
+        from .audit_integration import AuditIntegration
+
+        self._audit_integration: Optional[AuditIntegration] = None
+        self._audit_backend = None  # EventStoreBackend, set in _ensure_connected
+        if self.config.security.audit_enabled:
+            # Create in-memory-only integration now; backend wired in _ensure_connected
+            self._audit_integration = AuditIntegration(enabled=True)
+
         # Issue #171: Lazy connection — defer all DB-touching initialization
         # to _ensure_connected(), which is called on first query/operation.
         # __init__() stores config only — no pool probe, no migration, no connection.
@@ -812,6 +821,10 @@ class DataFlow(DataFlowEventMixin):
                 self._derived_engine.validate_dependencies()
                 self._derived_engine.setup_event_subscriptions()
 
+            # Audit trail persistence: auto-detect backend and initialize
+            if self._audit_integration is not None and self._audit_backend is None:
+                await self._initialize_audit_backend()
+
             logger.debug("DataFlow initialization completed successfully")
             return True
 
@@ -1095,6 +1108,72 @@ class DataFlow(DataFlowEventMixin):
         else:
             # Use regular connection manager
             return self._connection_manager.get_async_connection()
+
+    async def _initialize_audit_backend(self) -> None:
+        """Auto-detect and initialize the audit persistence backend.
+
+        Selects SQLiteEventStore or PostgreSQLEventStore based on the
+        database URL, creates the table/indexes, and wires the backend
+        into the existing AuditIntegration instance.
+        """
+        database_url = self.config.database.url or ":memory:"
+
+        try:
+            if (
+                "postgresql" in database_url.lower()
+                or "postgres" in database_url.lower()
+            ):
+                from dataflow.core.event_stores.postgresql import PostgreSQLEventStore
+
+                backend = PostgreSQLEventStore(database_url=database_url)
+            else:
+                # Default to SQLite for sqlite URLs and :memory:
+                from dataflow.core.event_stores.sqlite import SQLiteEventStore
+
+                if database_url == ":memory:" or "sqlite" in database_url.lower():
+                    # For in-memory or SQLite URLs, derive a file path
+                    if database_url == ":memory:":
+                        db_path = ":memory:"
+                    elif database_url.startswith("sqlite:///"):
+                        # sqlite:///path/to/db.sqlite -> path/to/audit_events.db
+                        import os
+
+                        base_dir = os.path.dirname(
+                            database_url.replace("sqlite:///", "")
+                        )
+                        db_path = (
+                            os.path.join(base_dir, "audit_events.db")
+                            if base_dir
+                            else "audit_events.db"
+                        )
+                    else:
+                        db_path = "audit_events.db"
+                else:
+                    db_path = "audit_events.db"
+
+                backend = SQLiteEventStore(db_path=db_path)
+
+            await backend.initialize()
+            self._audit_backend = backend
+
+            # Re-create integration with the backend attached
+            from .audit_integration import AuditIntegration
+
+            old_events = (
+                self._audit_integration.events if self._audit_integration else []
+            )
+            self._audit_integration = AuditIntegration(enabled=True, backend=backend)
+            # Preserve any events logged before backend was ready
+            self._audit_integration.events.extend(old_events)
+
+            logger.info(
+                "Audit trail persistence initialized (%s)", type(backend).__name__
+            )
+        except Exception:
+            logger.exception(
+                "Failed to initialize audit persistence backend; "
+                "falling back to in-memory audit only"
+            )
 
     def _initialize_database(self):
         """Initialize database connection and setup."""
@@ -1919,6 +1998,17 @@ class DataFlow(DataFlowEventMixin):
     def fabric(self) -> Optional[Any]:
         """Access the running FabricRuntime, or None if not started."""
         return self._fabric
+
+    @property
+    def audit(self) -> Optional["AuditIntegration"]:
+        """Access the audit integration for querying audit trails.
+
+        Returns ``None`` when ``audit_logging=False`` (the default).
+        When enabled, the returned ``AuditIntegration`` supports both
+        in-memory ``get_events()`` and async ``query()``/``get_trail()``
+        methods backed by the persistence store.
+        """
+        return self._audit_integration
 
     def set_tenant_context(self, tenant_id: str):
         """Set the current tenant context for multi-tenant operations."""
@@ -8257,10 +8347,10 @@ class DataFlow(DataFlowEventMixin):
             Dictionary with health status information
         """
         self._ensure_connected()
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         health_status = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "status": "healthy",
             "database": "connected",
             "models_registered": len(self._models),
@@ -8664,6 +8754,15 @@ class DataFlow(DataFlowEventMixin):
                 logger.debug(f"Failed to close memory connection: {e}")
             finally:
                 self._memory_connection = None
+
+        # Close audit persistence backend
+        if hasattr(self, "_audit_backend") and self._audit_backend is not None:
+            try:
+                await self._audit_backend.close()
+            except Exception as e:
+                logger.debug(f"Error closing audit backend: {e}")
+            finally:
+                self._audit_backend = None
 
         # M2-001: Close the shared runtime LAST (actual cleanup at ref_count=0)
         if hasattr(self, "runtime") and self.runtime is not None:

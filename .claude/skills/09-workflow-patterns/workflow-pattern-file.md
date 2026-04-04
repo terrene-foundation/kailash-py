@@ -17,6 +17,7 @@ Patterns for automated file processing, transformation, and batch operations.
 ## Quick Reference
 
 File processing patterns:
+
 - **Batch file processing** - Process multiple files
 - **File transformation** - Convert formats
 - **Document extraction** - PDF, DOCX to text
@@ -91,7 +92,7 @@ workflow.add_node("TransformNode", "extract_text", {
 # 4. Analyze with AI
 workflow.add_node("LLMNode", "analyze_document", {
     "provider": "openai",
-    "model": "gpt-4",
+    "model": os.environ["LLM_MODEL"],
     "prompt": "Summarize this document: {{extract_text.text}}"
 })
 
@@ -118,7 +119,7 @@ workflow.add_connection("analyze_document", "response", "save_results", "data")
 workflow = WorkflowBuilder()
 
 # 1. Read source file
-workflow.add_node("ConditionalNode", "detect_format", {
+workflow.add_node("SwitchNode", "detect_format", {
     "condition": "{{input.file_ext}}",
     "branches": {
         ".csv": "read_csv",
@@ -136,8 +137,9 @@ workflow.add_node("JSONReaderNode", "read_json", {
     "file_path": "{{input.file_path}}"
 })
 
-workflow.add_node("ExcelReaderNode", "read_excel", {
-    "file_path": "{{input.file_path}}"
+workflow.add_node("PythonCodeNode", "read_excel", {
+    "code": "import openpyxl; wb = openpyxl.load_workbook(file_path); ws = wb.active; result = {'data': [dict(zip([c.value for c in ws[1]], [c.value for c in row])) for row in ws.iter_rows(min_row=2)]}",
+    "input_variables": ["file_path"]
 })
 
 # 3. Normalize to common format
@@ -147,7 +149,7 @@ workflow.add_node("TransformNode", "normalize", {
 })
 
 # 4. Write in target format
-workflow.add_node("ConditionalNode", "write_format", {
+workflow.add_node("SwitchNode", "write_format", {
     "condition": "{{input.target_format}}",
     "branches": {
         "csv": "write_csv",
@@ -227,6 +229,5 @@ workflow.add_error_handler("process", "move_failed")
 - **ETL Patterns**: [`workflow-pattern-etl`](workflow-pattern-etl.md)
 
 ## Documentation
-
 
 <!-- Trigger Keywords: file processing, batch file, document workflow, file automation, CSV processing, PDF extraction -->

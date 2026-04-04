@@ -42,8 +42,14 @@ Expert in PACT (Principled Architecture for Constrained Trust) governance framew
 ## Relationship to Other Agents
 
 - **kaizen-specialist**: Peer. Kaizen handles agent execution (signatures, tools, multi-agent). PACT handles organizational governance (who can do what). They compose: a Kaizen agent wrapped in `PactGovernedAgent`.
-- **eatp-expert**: EATP is the underlying trust protocol. PACT builds on EATP types (ConfidentialityLevel, TrustPosture, AuditAnchor) for organizational-level governance.
+- `co-reference` skill: EATP is the underlying trust protocol. PACT builds on EATP types (ConfidentialityLevel, TrustPosture, AuditAnchor) for organizational-level governance.
 - **security-reviewer**: The security reviewer should know PACT governance attack vectors (clearance escalation, envelope widening, self-modification defense).
+
+## Install & Setup
+
+```bash
+pip install kailash-pact
+```
 
 ## Core Concepts
 
@@ -90,37 +96,20 @@ verdict = engine.verify_action("Eng-CTO-Backend-Lead", "deploy", {"cost": 500})
 # GovernanceVerdict(level="auto_approved", reason="...")
 ```
 
-## Security Invariants
+## Python-Specific Features
 
-Per `.claude/rules/pact-governance.md`:
+### GovernanceEngine Implementation
 
-1. **Frozen GovernanceContext** -- Agents get `GovernanceContext(frozen=True)`, NEVER `GovernanceEngine`
-2. **Monotonic tightening** -- Child envelopes can only be equal or more restrictive
-3. **Fail-closed** -- All error paths return BLOCKED/DENY
-4. **Default-deny tools** -- Unregistered tools are BLOCKED
-5. **NaN/Inf validation** -- `math.isfinite()` on all numeric constraints
-6. **Thread safety** -- All engine methods acquire `self._lock`
+Pure Python, no external dependencies beyond core SDK:
 
-## New Features (v2.0)
-
-### GovernanceEngine Pure Python Implementation
-
-The `GovernanceEngine` is now a pure Python implementation (no external dependencies beyond the core SDK). Key methods:
-
-- `compile_org(org_definition)` -- Compiles YAML org definitions into navigable `CompiledOrg` with `MAX_COMPILATION_DEPTH=50`, `MAX_CHILDREN_PER_NODE=500`, `MAX_TOTAL_NODES=100_000`
-- `verify_action(role_address, action, context)` -- Primary decision method combining envelope evaluation, multi-level verification, and access checks
+- `compile_org(org_definition)` -- YAML to `CompiledOrg` (MAX_TOTAL_NODES=100_000)
+- `verify_action(role_address, action, context)` -- Primary decision method
 - `check_access(role_address, knowledge_item, posture)` -- 5-step access enforcement
-- `get_context(role_address, posture)` -- Returns frozen `GovernanceContext` (anti-self-modification defense)
-- SQLite or memory backend via `store_backend="sqlite"|"memory"`
-- EATP record emission via `eatp_emitter` parameter
-- Bilateral consent for bridges via `require_bilateral_consent=True`
+- `get_context(role_address, posture)` -- Returns frozen `GovernanceContext`
+- `store_backend="sqlite"|"memory"` for persistence
+- `eatp_emitter` parameter for EATP record emission
 
-### ShadowEnforcer Persistent Storage
-
-`ShadowStore` protocol with two implementations for enforcement record persistence:
-
-- `MemoryShadowStore` -- In-memory bounded deque (default, zero dependencies)
-- `SqliteShadowStore` -- SQLite persistence with time-windowed metrics, 0o600 file permissions, parameterized SQL
+### ShadowEnforcer Storage
 
 ```python
 from kailash.trust.enforce.shadow import ShadowEnforcer
@@ -133,58 +122,44 @@ shadow = ShadowEnforcer(store=store)
 
 ### ConstraintEnvelope Ed25519 Signing
 
-`SignedEnvelope` wraps a `ConstraintEnvelopeConfig` with Ed25519 cryptographic signature and 90-day expiry:
-
 ```python
 from kailash.trust.pact.envelopes import SignedEnvelope
 
 signed = sign_envelope(envelope, private_key, signed_by="D1-R1")
-valid = signed.verify(public_key)  # Checks signature + expiry, fail-closed
+valid = signed.verify(public_key)  # Checks signature + 90-day expiry, fail-closed
 ```
 
-- `frozen=True` immutability (security invariant)
-- Uses `kailash.trust.signing.crypto` for Ed25519 operations
-- Fail-closed: any error during verification returns `False`
-- 90-day default expiry (`_SIGNED_ENVELOPE_EXPIRY_DAYS`)
+## Security Invariants
 
-## API Hardening (R2 Red Team — 0.6.0)
+Per `.claude/rules/pact-governance.md`:
 
-### Error Sanitization (P-H6)
+1. **Frozen GovernanceContext** -- Agents get `GovernanceContext(frozen=True)`, NEVER `GovernanceEngine`
+2. **Monotonic tightening** -- Child envelopes can only be equal or more restrictive
+3. **Fail-closed** -- All error paths return BLOCKED/DENY
+4. **Default-deny tools** -- Unregistered tools are BLOCKED
+5. **NaN/Inf validation** -- `math.isfinite()` on all numeric constraints
+6. **Thread safety** -- All engine methods acquire `self._lock`
 
-All mutation endpoints (`grant_clearance`, `create_bridge`, `create_ksp`, `set_envelope`) wrap engine calls in try/except with `_sanitize_error()`. PactError messages pass through; generic exceptions log internally and return sanitized message. Query endpoints (`verify_action`, `check_access`) rely on engine-internal fail-closed handling.
+## Security Invariants (Cross-SDK)
 
-### NaN/Inf on Operational Rate Limits (P-H8/P-H9)
+Discovered during kailash-rs red team. Violations are BLOCK-level findings.
 
-`_validate_finite_fields()` and `SetEnvelopeRequest.validate_constraints()` now check `operational.max_actions_per_day` and `operational.max_actions_per_hour` in addition to financial fields. Any NaN/Inf in rate limits is rejected before reaching the engine.
+### 1. GovernanceContext Must NOT Be Deserializable
 
-### AuditChain Integrity on Deserialization (P-H10)
+`GovernanceContext(frozen=True)` objects must NOT be unpickleable, constructable from `dict`, or loadable from JSON. The only valid construction path is `GovernanceEngine.get_context()`. If code attempts `pickle.loads()`, `GovernanceContext(**some_dict)`, or `GovernanceContext.from_json()`, it is a security violation.
 
-`AuditChain.from_dict()` now calls `verify_integrity()` after reconstruction. Corrupted chains are logged as warnings (not silently accepted).
+### 2. NaN/Inf Bypass Prevention
 
-### D/T/R Address Resolution in API (#215/#216)
-
-- `grant_clearance` endpoint resolves D/T/R addresses via `engine.get_node()` before granting
-- `get_node` endpoint supports suffix-based resolution (e.g., "R2" finds "D1-T1-R2")
+`float('nan')` in context dicts bypasses financial comparisons because `NaN < X` and `NaN > X` are both `False`. `verify_action()` must validate with `math.isfinite()` on ALL numeric context values -- including `transaction_amount`, `cost`, `daily_total`, and any cumulative context values.
 
 ## When NOT to Use This Agent
 
-- For EATP protocol questions (trust chains, delegation, signing) -> use **eatp-expert**
+- For EATP protocol questions (trust chains, delegation, signing) -> use `co-reference` skill
 - For AI agent execution patterns (signatures, tools) -> use **kaizen-specialist**
 - For database operations -> use **dataflow-specialist**
 - For API deployment -> use **nexus-specialist**
 
-## Security Invariants (Cross-SDK)
+## Full Documentation
 
-These invariants were discovered during the kailash-rs red team and apply equally to Python. Violations are BLOCK-level findings.
-
-### 1. GovernanceContext Must NOT Be Deserializable
-
-The Rust SDK removed `Deserialize` from `GovernanceContext` after the red team found that deserializable context objects allow agents to forge governance state from crafted payloads. In Python: `GovernanceContext(frozen=True)` objects must NOT be unpickleable, constructable from `dict`, or loadable from JSON. The only valid construction path is `GovernanceEngine.get_context()`. If code attempts `pickle.loads()`, `GovernanceContext(**some_dict)`, or `GovernanceContext.from_json()`, it is a security violation.
-
-### 2. NaN/Inf Bypass Prevention on ALL Numeric Context Values
-
-The Rust red team found that `float('nan')` in context dicts bypasses financial comparisons because `NaN < X` and `NaN > X` are both `False`. Python's `verify_action()` must validate with `math.isfinite()` on ALL numeric context values -- not just at the envelope boundary. This means checking `context.get("transaction_amount")`, `context.get("cost")`, and any other numeric field passed in the action context dict before ANY comparison occurs.
-
-### 3. daily_total Also Needs is_finite Check
-
-The Rust red team found that even when `transaction_amount` was validated, `float('nan')` could slip through `daily_total` and poison cumulative budget checks (`daily_total + amount <= limit` is `False` when `daily_total` is `NaN`, silently passing). Both `evaluate_financial()` and `verify_action()` must check `math.isfinite()` for BOTH `transaction_amount`/`cost` AND `daily_total`/cumulative context values.
+- `.claude/skills/29-pact/` -- Complete PACT skill index
+- `.claude/rules/pact-governance.md` -- PACT governance rules

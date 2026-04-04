@@ -13,12 +13,12 @@ You are a specialized MCP agent for the Kailash SDK project. Your role is to pro
 
 For common MCP queries, use Skills for instant answers:
 
-| Query Type                  | Use Skill Instead       |
-| --------------------------- | ----------------------- |
-| "MCP transports?"           | `/05-kailash-mcp`       |
-| "Structured tools?"         | `mcp-structured-tools`  |
-| "MCP resources?"            | `mcp-resources`         |
-| "Basic server setup?"       | `SKILL.md`              |
+| Query Type                  | Use Skill Instead      |
+| --------------------------- | ---------------------- |
+| "MCP transports?"           | `/05-kailash-mcp`      |
+| "Structured tools?"         | `mcp-structured-tools` |
+| "MCP resources?"            | `mcp-resources`        |
+| "Basic server setup?"       | `SKILL.md`             |
 | "LLMAgentNode integration?" | `mcp-advanced-patterns` |
 
 ## Use This Agent For
@@ -83,54 +83,17 @@ workflow.add_node("LLMAgentNode", "agent", {
 })
 ```
 
-## Platform Server (kailash-mcp)
-
-The unified `kailash-mcp` command exposes namespace-prefixed tools for every installed framework via a contributor plugin system.
-
-### Architecture
-
-```
-kailash-mcp (FastMCP server)
-  ├── core.*       — workflow, node, runtime introspection
-  ├── platform.*   — cross-framework connections, config
-  ├── dataflow.*   — model discovery, schema, query tools
-  ├── nexus.*      — handler, route, event inspection
-  ├── kaizen.*     — agent discovery (AST-based scanning)
-  ├── trust.*      — trust plane, EATP inspection
-  └── pact.*       — governance, envelope inspection
-```
-
-### Contributor Protocol
-
-Each framework implements `register_tools(server, project_root, namespace)`. Tools MUST use `{namespace}.` prefix. Contributors that fail to load are skipped gracefully.
-
-### Security Tiers
-
-| Tier | Name          | Default   | Env Var                                          |
-| ---- | ------------- | --------- | ------------------------------------------------ |
-| 1    | INTROSPECTION | Always on | --                                               |
-| 2    | SCAFFOLD      | Always on | --                                               |
-| 3    | VALIDATION    | On        | `KAILASH_MCP_ENABLE_VALIDATION=false` to disable |
-| 4    | EXECUTION     | Off       | `KAILASH_MCP_ENABLE_EXECUTION=true` to enable    |
-
-### Key Design Decisions
-
-- **AST-based scanning** (not runtime registry) -- discovers agents, models, handlers by parsing source code
-- **scan_info metadata** -- reports scan method, file count, limitations per contributor
-- **Tier 4 subprocess isolation** -- execution tools run in isolated subprocesses
-
 ## Skill References
 
 - **[SKILL.md](../../skills/05-kailash-mcp/SKILL.md)** - MCP overview and basic server setup
 - **[mcp-advanced-patterns](../../skills/05-kailash-mcp/mcp-advanced-patterns.md)** - JWT auth, service discovery, LLMAgentNode integration
-- **[mcp-platform-server](../../skills/05-kailash-mcp/mcp-platform-server.md)** - Platform server, contributor protocol, security tiers
 
 ## Related Agents
 
 - **kaizen-specialist**: Kaizen agent integration with MCP tools
 - **nexus-specialist**: MCP channel deployment via Nexus
 - **pattern-expert**: Core SDK patterns for MCP workflows
-- **framework-advisor**: Choose MCP integration approach
+- **`decide-framework` skill**: Choose MCP integration approach
 - **security-reviewer**: MCP authentication and security patterns
 
 ## Full Documentation

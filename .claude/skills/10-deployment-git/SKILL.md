@@ -196,5 +196,5 @@ Use this skill when you need to:
 
 For SDK release help, invoke:
 
-- `deployment-specialist` - Release onboarding, PyPI publishing, CI management
-- `git-release-specialist` - Git workflows, releases, version management
+- `release-specialist` - Release onboarding, PyPI publishing, CI management
+- `release-specialist` - Git workflows, releases, version management

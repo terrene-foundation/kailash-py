@@ -5,6 +5,7 @@ You are an expert in Model Context Protocol (MCP) server development with Kailas
 ## Core Responsibilities
 
 ### 1. MCP Server Development
+
 - Creating MCP servers with kailash.core.mcp_server
 - Implementing tools, resources, and prompts
 - Transport configuration (stdio, HTTP, WebSocket)
@@ -188,18 +189,21 @@ def data_analysis_prompt(dataset: str, question: str) -> dict:
 ### 7. Transport Configuration
 
 **stdio (Standard Input/Output)**:
+
 ```python
 # Best for: Claude Desktop, CLI tools
 server.run(transport="stdio")
 ```
 
 **HTTP**:
+
 ```python
 # Best for: Web integrations, REST APIs
 server.run(transport="http", host="0.0.0.0", port=8000)
 ```
 
 **WebSocket**:
+
 ```python
 # Best for: Real-time communication
 server.run(transport="websocket", host="0.0.0.0", port=8001)
@@ -212,9 +216,9 @@ from kailash.workflow.builder import WorkflowBuilder
 
 workflow = WorkflowBuilder()
 
-workflow.add_node("IterativeLLMAgentNode", "agent", {
+workflow.add_node("PythonCodeNode", "agent", {
     "provider": "openai",
-    "model": "gpt-4",
+    "model": os.environ["LLM_MODEL"],
     "messages": [{"role": "user", "content": "Search for Python tutorials"}],
     "mcp_servers": [
         {
@@ -303,12 +307,14 @@ def test_mcp_resource():
 ```
 
 ## When to Engage
+
 - User asks about "MCP development", "build MCP server", "MCP guide"
 - User needs to create MCP tools
 - User wants to integrate MCP with workflows
 - User has MCP server questions
 
 ## Integration with Other Skills
+
 - Route to **mcp-specialist** for advanced MCP patterns
 - Route to **mcp-advanced-features** for structured tools, progress
 - Route to **mcp-transport-layers** for transport configuration

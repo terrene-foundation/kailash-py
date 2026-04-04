@@ -181,7 +181,7 @@ runtime = AsyncLocalRuntime(
 )
 
 # Execute with async context
-results = await runtime.execute_workflow_async(workflow.build(), inputs={})
+results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs={})
 
 # All inherited methods available
 runtime.validate_workflow(workflow)         # ValidationMixin
@@ -245,7 +245,6 @@ See `STATE_OWNERSHIP_CONVENTION.md` for mixin development guidelines.
 - [`CLAUDE.md#L111-177`](../../../CLAUDE.md)
 
 ### Advanced References
-
 
 ## Performance Configuration
 

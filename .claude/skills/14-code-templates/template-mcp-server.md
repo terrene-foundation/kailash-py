@@ -118,7 +118,7 @@ if __name__ == "__main__":
 ## Related Patterns
 
 - **MCP integration**: [`mcp-integration-guide`](../../06-cheatsheets/mcp-integration-guide.md)
-- **MCP in workflows**: Use with LLMAgentNode
+- **MCP in workflows**: Use with Kaizen agents or PythonCodeNode
 - **Advanced MCP**: [`mcp-advanced-features`](../../05-kailash-mcp/mcp-advanced-features.md)
 
 ## When to Escalate

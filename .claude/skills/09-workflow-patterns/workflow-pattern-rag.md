@@ -11,12 +11,13 @@ Retrieval Augmented Generation patterns for AI-powered document search and Q&A.
 > Category: `workflow-patterns`
 > Priority: `HIGH`
 > SDK Version: `0.9.25+`
-> Related Skills: [`nodes-ai-reference`](../nodes/nodes-ai-reference.md), [`workflow-pattern-ai-document`](workflow-pattern-ai-document.md)
+> Related Skills: [`04-kaizen`](../../04-kaizen/SKILL.md), [`workflow-pattern-ai-document`](workflow-pattern-ai-document.md)
 > Related Subagents: `pattern-expert` (RAG workflows), `kaizen-specialist` (AI agents)
 
 ## Quick Reference
 
 RAG workflow components:
+
 - **Document ingestion** - Load and chunk documents
 - **Embedding generation** - Convert text to vectors
 - **Vector storage** - Store in vector database
@@ -120,7 +121,7 @@ Answer:'''
 # 5. Generate answer with LLM
 workflow.add_node("LLMNode", "generate_answer", {
     "provider": "openai",
-    "model": "gpt-4",
+    "model": os.environ["LLM_MODEL"],
     "prompt": "{{build_prompt.result}}",
     "temperature": 0.3
 })
@@ -181,7 +182,7 @@ workflow.add_node("RerankNode", "rerank_all", {
 # 4. Generate comprehensive answer
 workflow.add_node("LLMNode", "generate", {
     "provider": "openai",
-    "model": "gpt-4",
+    "model": os.environ["LLM_MODEL"],
     "prompt": """Answer using context from docs, code, and API:
 
 Context: {{rerank_all.documents}}
@@ -242,7 +243,7 @@ workflow.add_node("VectorSearchNode", "search", {
 # 5. Generate answer with history
 workflow.add_node("LLMNode", "generate", {
     "provider": "openai",
-    "model": "gpt-4",
+    "model": os.environ["LLM_MODEL"],
     "prompt": """Conversation History:
 {{build_context.context}}
 
@@ -250,3 +251,4 @@ Relevant Documents:
 {{search.results}}
 
 User: {{input.query}}
+```

@@ -5,318 +5,64 @@ description: "Mandatory best practices and gold standards for Kailash SDK develo
 
 # Kailash Gold Standards - Mandatory Best Practices
 
-Mandatory best practices and standards for all Kailash SDK development. These are **required** patterns that must be followed.
+These are **required** patterns that prevent bugs, ensure consistency, and maintain code quality.
 
-## Overview
-
-Gold standards are **mandatory** practices for:
-- Absolute imports (no relative imports)
-- Parameter passing patterns
-- Error handling strategies
-- Testing policies (Real infrastructure recommended in Tiers 2-3)
-- Workflow design principles
-- Custom node development
-- Security requirements
-- Documentation standards
-- Test creation guidelines
-
-**IMPORTANT**: These are not suggestions - they are **required standards** that prevent bugs, ensure consistency, and maintain code quality.
-
-## Reference Documentation
+## Sub-File Index
 
 ### Code Organization
 
-#### Absolute Imports (MANDATORY)
-- **[gold-absolute-imports](gold-absolute-imports.md)** - Absolute import requirement
-  - **Rule**: ALWAYS use absolute imports, NEVER relative
-  - **Reason**: Prevents import errors, enables refactoring
-  - **Pattern**: `from kailash.workflow.builder import WorkflowBuilder`
-  - **Never**: `from ..workflow import builder`
+- **[gold-absolute-imports](gold-absolute-imports.md)** - ALWAYS absolute, NEVER relative
+  - `from kailash.workflow.builder import WorkflowBuilder` (not `from ..workflow import builder`)
+- **[gold-parameter-passing](gold-parameter-passing.md)** - 4-parameter connections + dict result access
+  - `workflow.add_connection(source_id, source_param, target_id, target_param)`
+  - `results["node_id"]["result"]` (not `results["node_id"].result`)
 
-#### Parameter Passing (MANDATORY)
-- **[gold-parameter-passing](gold-parameter-passing.md)** - Parameter standards
-  - **Rule**: Use 4-parameter connection format
-  - **Pattern**: `workflow.add_connection(source_id, source_param, target_id, target_param)`
-  - **Rule**: Access results with dict pattern
-  - **Pattern**: `results["node_id"]["result"]`
-  - **Never**: `results["node_id"].result`
+### Testing
 
-### Testing Standards
-
-#### Real infrastructure recommended Policy (MANDATORY)
-- **[gold-mocking-policy](gold-mocking-policy.md)** - Real infrastructure recommended in Tiers 2-3
-  - **Rule**: NO mocking in integration (Tier 2) or E2E (Tier 3) tests
-  - **Reason**: Mocking hides real-world issues
-  - **Required**: Use real databases, APIs, infrastructure
-  - **Allowed**: Mocking ONLY in Tier 1 unit tests
-
-#### Testing Standards (MANDATORY)
-- **[gold-testing](gold-testing.md)** - Testing requirements
-  - **Rule**: Follow 3-tier strategy (Unit, Integration, E2E)
-  - **Rule**: Tiers 2-3 use real infrastructure
-  - **Rule**: All tests must clean up resources
-  - **Rule**: Tests must be deterministic
-
-#### Test Creation (MANDATORY)
-- **[gold-test-creation](gold-test-creation.md)** - Test creation standards
-  - **Rule**: Write tests BEFORE implementation (TDD)
-  - **Rule**: One assertion focus per test
-  - **Rule**: Use AAA pattern (Arrange, Act, Assert)
-  - **Rule**: Descriptive test names
+- **[gold-mocking-policy](gold-mocking-policy.md)** - Real infrastructure in Tiers 2-3
+  - Mocking ONLY in Tier 1 unit tests; Tiers 2-3 use real databases, APIs, infrastructure
+- **[gold-testing](gold-testing.md)** - 3-tier strategy, deterministic tests, resource cleanup
+- **[gold-test-creation](gold-test-creation.md)** - TDD, one assertion focus, AAA pattern
 
 ### Error Handling
 
-#### Error Handling (MANDATORY)
-- **[gold-error-handling](gold-error-handling.md)** - Error handling requirements
-  - **Rule**: Always handle errors explicitly
-  - **Rule**: Never swallow exceptions silently
-  - **Rule**: Provide actionable error messages
-  - **Rule**: Clean up resources in finally blocks
-  - **Rule**: Log errors with context
+- **[gold-error-handling](gold-error-handling.md)** - Explicit handling, no silent swallowing, actionable messages, cleanup in `finally`
 
 ### Workflow & Node Design
 
-#### Workflow Design (MANDATORY)
-- **[gold-workflow-design](gold-workflow-design.md)** - Workflow standards
-  - **Rule**: Always call `.build()` before execution
-  - **Pattern**: `runtime.execute(workflow.build())`
-  - **Rule**: Use string-based node API
-  - **Rule**: Validate inputs before processing
-  - **Rule**: Single responsibility per workflow
-
-#### Custom Node Development (MANDATORY)
-- **[gold-custom-nodes](gold-custom-nodes.md)** - Custom node standards
-  - **Rule**: Extend BaseNode
-  - **Rule**: Validate all inputs
-  - **Rule**: Handle errors gracefully
-  - **Rule**: Document parameters clearly
-  - **Rule**: Return consistent output format
+- **[gold-workflow-design](gold-workflow-design.md)** - Always `.build()` before execute, string-based node API, single responsibility
+- **[gold-custom-nodes](gold-custom-nodes.md)** - Extend BaseNode, validate inputs, consistent output format
 
 ### Security & Documentation
 
-#### Security (MANDATORY)
-- **[gold-security](gold-security.md)** - Security requirements
-  - **Rule**: NEVER hardcode secrets
-  - **Rule**: Use environment variables for credentials
-  - **Rule**: Validate all user inputs
-  - **Rule**: Prevent SQL injection
-  - **Rule**: Prevent code injection
-  - **Rule**: Use HTTPS for API calls
+- **[gold-security](gold-security.md)** - No hardcoded secrets, env vars for credentials, input validation, injection prevention
+- **[gold-documentation](gold-documentation.md)** - Document all public APIs, include examples, explain WHY not just WHAT
 
-#### Documentation (MANDATORY)
-- **[gold-documentation](gold-documentation.md)** - Documentation standards
-  - **Rule**: Document all public APIs
-  - **Rule**: Include code examples
-  - **Rule**: Keep docs updated with code
-  - **Rule**: Use docstrings for all functions/classes
-  - **Rule**: Explain WHY, not just WHAT
-
-## Critical Gold Standards
+## Quick Reference
 
 All workflow patterns follow the **canonical 4-parameter pattern** from `/01-core-sdk`.
 
-### 1. Absolute Imports ALWAYS
-```python
-# ✅ CORRECT (Gold Standard)
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
+| Standard    | Correct                                                       | Wrong                                            |
+| ----------- | ------------------------------------------------------------- | ------------------------------------------------ |
+| Imports     | `from kailash.workflow.builder import WorkflowBuilder`        | `from ..workflow.builder import WorkflowBuilder` |
+| Connections | `workflow.add_connection("n1", "result", "n2", "input_data")` | `workflow.add_connection("n1", "n2")`            |
+| Execution   | `runtime.execute(workflow.build())`                           | `runtime.execute(workflow)`                      |
+| Results     | `results["node_id"]["result"]`                                | `results["node_id"].result`                      |
+| Secrets     | `os.environ["API_KEY"]`                                       | `api_key = "sk-..."`                             |
+| Testing     | Real DB in Tier 2-3                                           | `Mock(spec=DataFlow)` in Tier 2-3                |
+| Errors      | `except WorkflowExecutionError as e: logger.error(...)`       | `except: pass`                                   |
+| Development | Write test first, then implement                              | Implement first, add tests later                 |
 
-# ❌ WRONG (Violates Gold Standard)
-from ..workflow.builder import WorkflowBuilder
-from .runtime import LocalRuntime
-```
+## Before Every Commit
 
-### 2. Real infrastructure recommended in Tiers 2-3
-```python
-# ✅ CORRECT (Gold Standard - Tier 2)
-def test_dataflow_crud(db: DataFlow):  # Real database
-    """Test with real PostgreSQL/SQLite."""
-    workflow = db.create_workflow(...)
-    results = runtime.execute(workflow.build())
-    # Verify in actual database
-
-# ❌ WRONG (Violates Gold Standard)
-def test_dataflow_crud():
-    """Test with mocked database."""
-    db = Mock(spec=DataFlow)  # Real infrastructure recommended in Tier 2!
-    db.create_workflow.return_value = mock_workflow
-```
-
-### 3. 4-Parameter Connections ALWAYS
-```python
-# ✅ CORRECT (Gold Standard)
-workflow.add_connection("node1", "result", "node2", "input_data")
-
-# ❌ WRONG (Violates Gold Standard)
-workflow.add_connection("node1", "node2")
-```
-
-### 4. Always Call .build()
-```python
-# ✅ CORRECT (Gold Standard)
-results = runtime.execute(workflow.build())
-
-# ❌ WRONG (Violates Gold Standard)
-results = runtime.execute(workflow)
-```
-
-### 5. Dict-Based Result Access
-```python
-# ✅ CORRECT (Gold Standard)
-value = results["node_id"]["result"]
-
-# ❌ WRONG (Violates Gold Standard)
-value = results["node_id"].result
-```
-
-### 6. Environment Variables for Secrets
-```python
-# ✅ CORRECT (Gold Standard)
-import os
-api_key = os.environ["API_KEY"]
-
-# ❌ WRONG (Violates Gold Standard)
-api_key = "sk-1234567890abcdef"  # Hardcoded!
-```
-
-### 7. TDD (Test-First Development)
-```python
-# ✅ CORRECT (Gold Standard)
-# 1. Write test first
-def test_user_creation():
-    user = create_user("test@example.com")
-    assert user.email == "test@example.com"
-
-# 2. Then implement
-def create_user(email):
-    return User(email=email)
-
-# ❌ WRONG (Violates Gold Standard)
-# Write implementation first, then add tests
-```
-
-### 8. Explicit Error Handling
-```python
-# ✅ CORRECT (Gold Standard)
-try:
-    results = runtime.execute(workflow.build())
-except WorkflowExecutionError as e:
-    logger.error(f"Workflow failed: {e}")
-    raise
-finally:
-    cleanup_resources()
-
-# ❌ WRONG (Violates Gold Standard)
-try:
-    results = runtime.execute(workflow.build())
-except:  # Too broad, swallows errors
-    pass  # Silent failure!
-```
-
-## Compliance Checklist
-
-### Before Every Commit
-- [ ] All imports are absolute
-- [ ] All connections use 4 parameters
-- [ ] Called `.build()` before execute
-- [ ] No hardcoded secrets
-- [ ] Error handling present
-- [ ] Tests written (TDD)
-- [ ] No mocking in Tier 2-3 tests
-- [ ] Documentation updated
-
-### Before Every PR
-- [ ] Gold standards validator passed
-- [ ] All tests passing
-- [ ] Code reviewed for compliance
-- [ ] Security validation passed
-- [ ] Documentation complete
-
-### Before Every Release
-- [ ] Full gold standards audit
-- [ ] All patterns compliant
-- [ ] Security audit complete
-- [ ] Documentation verified
-
-## Enforcement
-
-### Automated Validation
-```bash
-# Run gold standards validator
-python -m kailash.validation.gold_standards validate-all
-
-# Check specific standards
-python -m kailash.validation.gold_standards check-imports
-python -m kailash.validation.gold_standards check-mocking
-python -m kailash.validation.gold_standards check-security
-```
-
-### Code Review Focus
-- Check absolute imports
-- Verify Real infrastructure recommended policy
-- Validate connection format
-- Check error handling
-- Verify TDD approach
-- Review security patterns
-
-## Why Gold Standards Matter
-
-### Problems They Prevent
-
-**Absolute Imports**: Prevent import errors during refactoring
-
-**Real infrastructure recommended**: Catch real database issues, API timeouts, race conditions
-
-**4-Parameter Connections**: Prevent wrong data routing
-
-**.build() Requirement**: Prevent TypeError at runtime
-
-**Error Handling**: Prevent silent failures
-
-**TDD**: Prevent bugs before they exist
-
-**Security Standards**: Prevent credential leaks, injection attacks
-
-## Quick Patterns
-
-### Correct Import Pattern
-```python
-# ✅ CORRECT: Absolute imports
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime import LocalRuntime
-
-# ❌ WRONG: Relative imports
-from ..workflow import builder  # NEVER use this
-```
-
-### Correct Execution Pattern
-```python
-# ✅ CORRECT: Always .build()
-results, run_id = runtime.execute(workflow.build())
-
-# ❌ WRONG: Missing .build()
-results = runtime.execute(workflow)  # WILL FAIL
-```
-
-### Correct Testing Pattern
-```python
-# Tier 2-3: Real infrastructure
-@pytest.fixture
-def db():
-    return DataFlow("sqlite:///:memory:")  # Real DB
-
-# ❌ WRONG in Tier 2-3: Mocking
-@patch('module.function')  # PROHIBITED
-```
-
-## When to Use This Skill
-
-Use this skill:
-- **Before writing code** - Know the standards
-- **During code review** - Validate compliance
-- **When in doubt** - Check gold standards
-- **Before deployment** - Ensure compliance
-- **When onboarding** - Learn required patterns
+- All imports absolute
+- All connections use 4 parameters
+- `.build()` called before execute
+- No hardcoded secrets
+- Error handling present
+- Tests written (TDD)
+- No mocking in Tier 2-3 tests
+- Documentation updated
 
 ## Related Skills
 
@@ -327,8 +73,6 @@ Use this skill:
 
 ## Support
 
-For gold standards compliance, invoke:
 - `gold-standards-validator` - Automated compliance checking
 - `pattern-expert` - Pattern validation
 - `testing-specialist` - Testing compliance
-- `requirements-analyst` - Standards documentation

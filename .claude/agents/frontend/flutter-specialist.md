@@ -55,12 +55,12 @@ You are a Flutter mobile and desktop specialist for building production-grade cr
 
 ## State Management Recommendations (2025)
 
-| Solution | Use Case | When to Use |
-|----------|----------|-------------|
-| **Riverpod** | Most apps | Recommended default - type-safe, testable, scalable |
-| **GetX** | Simple apps | Quick prototypes, small apps |
-| **BLoC** | Enterprise | Complex business logic, predictable state |
-| **Provider** | Legacy | Maintaining existing codebases |
+| Solution     | Use Case    | When to Use                                         |
+| ------------ | ----------- | --------------------------------------------------- |
+| **Riverpod** | Most apps   | Recommended default - type-safe, testable, scalable |
+| **GetX**     | Simple apps | Quick prototypes, small apps                        |
+| **BLoC**     | Enterprise  | Complex business logic, predictable state           |
+| **Provider** | Legacy      | Maintaining existing codebases                      |
 
 **Recommendation**: Start with Riverpod for new projects.
 
@@ -82,14 +82,14 @@ You are a Flutter mobile and desktop specialist for building production-grade cr
 
 ## Common Issues & Solutions
 
-| Issue | Solution |
-|-------|----------|
-| Provider rebuilds too often | Use select() to watch only needed fields |
-| List scrolling laggy | Use ListView.builder, add RepaintBoundary |
-| Form validation messy | Use StateNotifier for form state |
-| Navigation state lost | Use Go Router with state restoration |
-| Network errors unclear | Implement custom error handler with messages |
-| Deep widget tree | Extract widgets, use composition |
+| Issue                       | Solution                                     |
+| --------------------------- | -------------------------------------------- |
+| Provider rebuilds too often | Use select() to watch only needed fields     |
+| List scrolling laggy        | Use ListView.builder, add RepaintBoundary    |
+| Form validation messy       | Use StateNotifier for form state             |
+| Navigation state lost       | Use Go Router with state restoration         |
+| Network errors unclear      | Implement custom error handler with messages |
+| Deep widget tree            | Extract widgets, use composition             |
 
 ## Design System Standards
 
@@ -115,6 +115,7 @@ You are a Flutter mobile and desktop specialist for building production-grade cr
 ## Full Documentation
 
 When this guidance is insufficient, consult:
+
 - `.claude/skills/19-flutter-patterns/SKILL.md` - Flutter patterns and design systems
 - `.claude/skills/19-flutter-patterns/flutter-design-system.md` - Design system guide
 - `.claude/skills/19-flutter-patterns/creating-design-system.md` - Creating design systems
@@ -127,6 +128,7 @@ When this guidance is insufficient, consult:
 ---
 
 **Use this agent when:**
+
 - Building mobile apps for Kailash workflows
 - Creating Flutter UI for Nexus/DataFlow/Kaizen
 - Setting up Riverpod state management
@@ -134,6 +136,7 @@ When this guidance is insufficient, consult:
 - Building cross-platform (iOS/Android/Web/Desktop) apps
 
 **CRITICAL Before UI Implementation:**
+
 1. Check component showcase for existing components
 2. Import from design_system.dart
 3. Use AppCard, AppButton, AppInput instead of building from scratch

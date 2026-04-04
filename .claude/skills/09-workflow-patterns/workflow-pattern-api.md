@@ -17,6 +17,7 @@ Patterns for integrating and orchestrating APIs in workflows.
 ## Quick Reference
 
 API patterns enable:
+
 - **REST APIs** - GET, POST, PUT, DELETE operations
 - **GraphQL** - Query and mutation execution
 - **Webhooks** - Event-driven integrations
@@ -33,7 +34,7 @@ from kailash.runtime import LocalRuntime
 workflow = WorkflowBuilder()
 
 # 1. Authenticate
-workflow.add_node("APICallNode", "auth", {
+workflow.add_node("HTTPRequestNode", "auth", {
     "url": "https://api.example.com/auth/token",
     "method": "POST",
     "body": {
@@ -43,7 +44,7 @@ workflow.add_node("APICallNode", "auth", {
 })
 
 # 2. Get user data
-workflow.add_node("APICallNode", "get_user", {
+workflow.add_node("HTTPRequestNode", "get_user", {
     "url": "https://api.example.com/users/{{input.user_id}}",
     "method": "GET",
     "headers": {
@@ -52,7 +53,7 @@ workflow.add_node("APICallNode", "get_user", {
 })
 
 # 3. Update user profile
-workflow.add_node("APICallNode", "update_profile", {
+workflow.add_node("HTTPRequestNode", "update_profile", {
     "url": "https://api.example.com/users/{{input.user_id}}/profile",
     "method": "PUT",
     "headers": {
@@ -62,7 +63,7 @@ workflow.add_node("APICallNode", "update_profile", {
 })
 
 # 4. Trigger webhook
-workflow.add_node("APICallNode", "notify_webhook", {
+workflow.add_node("HTTPRequestNode", "notify_webhook", {
     "url": "{{input.webhook_url}}",
     "method": "POST",
     "body": {
@@ -90,17 +91,17 @@ with LocalRuntime() as runtime:
 workflow = WorkflowBuilder()
 
 # Fetch data from multiple APIs in parallel
-workflow.add_node("APICallNode", "api_weather", {
+workflow.add_node("HTTPRequestNode", "api_weather", {
     "url": "https://api.weather.com/current/{{input.city}}",
     "method": "GET"
 })
 
-workflow.add_node("APICallNode", "api_news", {
+workflow.add_node("HTTPRequestNode", "api_news", {
     "url": "https://api.news.com/headlines/{{input.city}}",
     "method": "GET"
 })
 
-workflow.add_node("APICallNode", "api_events", {
+workflow.add_node("HTTPRequestNode", "api_events", {
     "url": "https://api.events.com/search?location={{input.city}}",
     "method": "GET"
 })
@@ -133,7 +134,7 @@ workflow.add_node("SetVariableNode", "init_retry", {
 })
 
 # 2. Make API call
-workflow.add_node("APICallNode", "api_call", {
+workflow.add_node("HTTPRequestNode", "api_call", {
     "url": "https://api.example.com/operation",
     "method": "POST",
     "body": "{{input.data}}",
@@ -141,14 +142,14 @@ workflow.add_node("APICallNode", "api_call", {
 })
 
 # 3. Check response status
-workflow.add_node("ConditionalNode", "check_status", {
+workflow.add_node("SwitchNode", "check_status", {
     "condition": "{{api_call.status_code}} >= 200 AND {{api_call.status_code}} < 300",
     "true_branch": "success",
     "false_branch": "check_retry"
 })
 
 # 4. Check if should retry
-workflow.add_node("ConditionalNode", "check_retry", {
+workflow.add_node("SwitchNode", "check_retry", {
     "condition": "{{init_retry.retry_count}} < {{init_retry.max_retries}}",
     "true_branch": "backoff",
     "false_branch": "failed"
@@ -186,7 +187,7 @@ workflow.add_connection("increment", "result", "api_call", "retry")  # Retry
 workflow = WorkflowBuilder()
 
 # 1. GraphQL query
-workflow.add_node("APICallNode", "graphql_query", {
+workflow.add_node("HTTPRequestNode", "graphql_query", {
     "url": "https://api.example.com/graphql",
     "method": "POST",
     "headers": {
@@ -221,7 +222,7 @@ workflow.add_node("TransformNode", "extract_posts", {
 })
 
 # 3. GraphQL mutation
-workflow.add_node("APICallNode", "graphql_mutation", {
+workflow.add_node("HTTPRequestNode", "graphql_mutation", {
     "url": "https://api.example.com/graphql",
     "method": "POST",
     "headers": {
@@ -263,7 +264,7 @@ workflow.add_node("TransformNode", "validate_signature", {
     "transformation": "hmac_sha256(input.body, expected)"
 })
 
-workflow.add_node("ConditionalNode", "check_signature", {
+workflow.add_node("SwitchNode", "check_signature", {
     "condition": "{{validate_signature.result}} == {{input.signature}}",
     "true_branch": "process",
     "false_branch": "reject"
@@ -276,7 +277,7 @@ workflow.add_node("TransformNode", "parse_payload", {
 })
 
 # 3. Route by event type
-workflow.add_node("ConditionalNode", "route_event", {
+workflow.add_node("SwitchNode", "route_event", {
     "condition": "{{parse_payload.event_type}}",
     "branches": {
         "user.created": "create_user",
@@ -286,17 +287,17 @@ workflow.add_node("ConditionalNode", "route_event", {
 })
 
 # 4. Process each event type
-workflow.add_node("DatabaseExecuteNode", "create_user", {
+workflow.add_node("SQLDatabaseNode", "create_user", {
     "query": "INSERT INTO users (id, name, email) VALUES (?, ?, ?)",
     "parameters": "{{parse_payload.data}}"
 })
 
-workflow.add_node("DatabaseExecuteNode", "update_user", {
+workflow.add_node("SQLDatabaseNode", "update_user", {
     "query": "UPDATE users SET name = ?, email = ? WHERE id = ?",
     "parameters": "{{parse_payload.data}}"
 })
 
-workflow.add_node("DatabaseExecuteNode", "delete_user", {
+workflow.add_node("SQLDatabaseNode", "delete_user", {
     "query": "DELETE FROM users WHERE id = ?",
     "parameters": ["{{parse_payload.data.id}}"]
 })
@@ -337,6 +338,5 @@ api.run(port=8000)  # POST /execute receives webhooks
 - **Error Handling**: [`gold-error-handling`](../../17-gold-standards/gold-error-handling.md)
 
 ## Documentation
-
 
 <!-- Trigger Keywords: API workflow, REST integration, API orchestration, webhook, API automation, GraphQL -->

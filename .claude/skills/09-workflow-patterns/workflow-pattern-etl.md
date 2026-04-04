@@ -17,6 +17,7 @@ Comprehensive patterns for Extract, Transform, Load workflows.
 ## Quick Reference
 
 ETL patterns enable:
+
 - **Data extraction** - CSV, JSON, databases, APIs
 - **Transformation** - Clean, normalize, enrich, aggregate
 - **Loading** - Write to databases, files, APIs
@@ -38,7 +39,7 @@ workflow.add_node("CSVReaderNode", "extract", {
 })
 
 # 2. TRANSFORM: Validate data
-workflow.add_node("DataValidationNode", "validate", {
+workflow.add_node("CodeValidationNode", "validate", {
     "input": "{{extract.data}}",
     "schema": {
         "email": "email",
@@ -59,14 +60,14 @@ workflow.add_node("TransformNode", "clean", {
 })
 
 # 4. TRANSFORM: Enrich data
-workflow.add_node("APICallNode", "enrich_location", {
+workflow.add_node("HTTPRequestNode", "enrich_location", {
     "url": "https://api.example.com/geocode",
     "method": "POST",
     "body": "{{clean.data}}"
 })
 
 # 5. LOAD: Insert to database
-workflow.add_node("DatabaseExecuteNode", "load", {
+workflow.add_node("SQLDatabaseNode", "load", {
     "query": """
         INSERT INTO customers (name, email, age, location)
         VALUES (?, ?, ?, ?)
@@ -107,7 +108,7 @@ workflow.add_node("SetVariableNode", "init_page", {
     "has_more": True
 })
 
-workflow.add_node("APICallNode", "extract_api", {
+workflow.add_node("HTTPRequestNode", "extract_api", {
     "url": "https://api.example.com/users?page={{init_page.page}}",
     "method": "GET",
     "headers": {"Authorization": "Bearer {{secrets.api_token}}"}
@@ -131,7 +132,7 @@ workflow.add_node("FilterNode", "filter_active", {
 })
 
 # 4. LOAD: Batch insert
-workflow.add_node("DatabaseExecuteNode", "load_batch", {
+workflow.add_node("SQLDatabaseNode", "load_batch", {
     "query": """
         INSERT INTO users (user_id, full_name, email_address, created_at)
         VALUES (?, ?, ?, ?)
@@ -142,7 +143,7 @@ workflow.add_node("DatabaseExecuteNode", "load_batch", {
 })
 
 # 5. Check for more pages
-workflow.add_node("ConditionalNode", "check_more", {
+workflow.add_node("SwitchNode", "check_more", {
     "condition": "{{extract_api.has_next_page}} == true",
     "true_branch": "next_page",
     "false_branch": "complete"
@@ -192,7 +193,7 @@ workflow.add_node("TransformNode", "transform_schema", {
 })
 
 # 3. TRANSFORM: Validate business rules
-workflow.add_node("DataValidationNode", "validate_rules", {
+workflow.add_node("CodeValidationNode", "validate_rules", {
     "input": "{{transform_schema.data}}",
     "rules": [
         {"field": "email_address", "validation": "email_format"},
@@ -202,7 +203,7 @@ workflow.add_node("DataValidationNode", "validate_rules", {
 })
 
 # 4. LOAD: Insert to target DB
-workflow.add_node("DatabaseExecuteNode", "load_target", {
+workflow.add_node("SQLDatabaseNode", "load_target", {
     "connection": "target_db",
     "query": """
         INSERT INTO users (legacy_id, full_name, email_address, registration_date)
@@ -213,7 +214,7 @@ workflow.add_node("DatabaseExecuteNode", "load_target", {
 })
 
 # 5. Update source DB (mark as migrated)
-workflow.add_node("DatabaseExecuteNode", "mark_migrated", {
+workflow.add_node("SQLDatabaseNode", "mark_migrated", {
     "connection": "source_db",
     "query": """
         UPDATE legacy_users
@@ -223,7 +224,7 @@ workflow.add_node("DatabaseExecuteNode", "mark_migrated", {
 })
 
 # 6. Handle failures
-workflow.add_node("DatabaseExecuteNode", "log_failures", {
+workflow.add_node("SQLDatabaseNode", "log_failures", {
     "connection": "source_db",
     "query": """
         INSERT INTO migration_failures (legacy_id, error, data)
@@ -274,7 +275,7 @@ workflow.add_node("AggregateNode", "calculate_metrics", {
 })
 
 # 4. LOAD: Write to time-series DB
-workflow.add_node("DatabaseExecuteNode", "load_metrics", {
+workflow.add_node("SQLDatabaseNode", "load_metrics", {
     "connection": "timescaledb",
     "query": """
         INSERT INTO user_metrics (user_id, event_type, count, avg_duration, last_seen, window_start)
@@ -319,6 +320,5 @@ workflow.add_connection("load_metrics", "result", "ack_messages", "message_ids")
 - **Database Nodes**: [`nodes-database-reference`](../nodes/nodes-database-reference.md)
 
 ## Documentation
-
 
 <!-- Trigger Keywords: ETL, data pipeline, extract transform load, data migration, data integration, batch processing -->

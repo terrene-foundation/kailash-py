@@ -68,8 +68,9 @@ class TestPactAuditAction:
         - VACANCY_DESIGNATED (Section 5.5 vacancy management)
         - VACANCY_SUSPENDED (Section 5.5 vacancy management)
         - BRIDGE_CONSENT (Section 4.4 bilateral consent)
+        - BRIDGE_REJECTED (Section 4.4 LCA rejection)
         """
-        assert len(PactAuditAction) == 14
+        assert len(PactAuditAction) == 15
 
 
 # ===========================================================================

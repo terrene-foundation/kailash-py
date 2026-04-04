@@ -1,7 +1,7 @@
 """DataFlow Audit Trail Manager Module."""
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -115,7 +115,7 @@ class AuditTrailManager:
         if self.retention_days <= 0:
             return 0
 
-        cutoff_date = datetime.utcnow().timestamp() - (
+        cutoff_date = datetime.now(UTC).timestamp() - (
             self.retention_days * 24 * 60 * 60
         )
         initial_count = len(self.integration.events)

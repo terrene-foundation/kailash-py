@@ -1,8 +1,14 @@
+---
+paths:
+  - "**/trust/**"
+  - "**/eatp/**"
+---
+
 # EATP SDK Rules
 
 ## Scope
 
-These rules apply when editing `src/kailash/trust/**` files (excluding `plane/`)
+These rules apply when working with EATP trust code.
 
 ## SDK Conventions
 

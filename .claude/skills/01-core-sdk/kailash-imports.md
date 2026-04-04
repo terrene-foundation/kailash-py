@@ -45,6 +45,7 @@ results, run_id = runtime.execute(workflow.build())
 ## Step-by-Step Guide
 
 ### 1. Core Workflow Imports (Required)
+
 ```python
 # Essential workflow components
 from kailash.workflow.builder import WorkflowBuilder
@@ -52,22 +53,25 @@ from kailash.runtime.local import LocalRuntime
 ```
 
 ### 2. Async Runtime (Docker/FastAPI)
+
 ```python
 # For async contexts (Docker, FastAPI, etc.)
 from kailash.runtime.async_local import AsyncLocalRuntime
 ```
 
 ### 3. Node Imports (Optional - Only for Type Hints)
+
 ```python
 # String-based nodes don't require imports
 # But you can import for type hints/IDE support
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.ai import LLMAgentNode
+# For LLM integration, use Kaizen agents (see skills/04-kaizen/)
 ```
 
 ### 4. Access Control & Security
+
 ```python
 # For access-controlled workflows
 from kailash.runtime.access_controlled import AccessControlledRuntime
@@ -75,6 +79,7 @@ from kailash.access_control import UserContext, PermissionRule
 ```
 
 ### 5. Custom Node Development
+
 ```python
 # For creating custom nodes
 from kailash.nodes.base import Node, NodeParameter
@@ -83,17 +88,18 @@ from typing import Dict, Any
 
 ## Key Import Patterns
 
-| Component | Import | When to Use |
-|-----------|--------|-------------|
-| **WorkflowBuilder** | `from kailash.workflow.builder import WorkflowBuilder` | Always (core) |
-| **LocalRuntime** | `from kailash.runtime.local import LocalRuntime` | Sync workflows |
-| **AsyncLocalRuntime** | `from kailash.runtime.async_local import AsyncLocalRuntime` | Docker/FastAPI |
-| **Nodes** | String-based (no import) | Production workflows |
-| **Node classes** | `from kailash.nodes.<category> import <Node>` | Type hints only |
+| Component             | Import                                                      | When to Use          |
+| --------------------- | ----------------------------------------------------------- | -------------------- |
+| **WorkflowBuilder**   | `from kailash.workflow.builder import WorkflowBuilder`      | Always (core)        |
+| **LocalRuntime**      | `from kailash.runtime.local import LocalRuntime`            | Sync workflows       |
+| **AsyncLocalRuntime** | `from kailash.runtime.async_local import AsyncLocalRuntime` | Docker/FastAPI       |
+| **Nodes**             | String-based (no import)                                    | Production workflows |
+| **Node classes**      | `from kailash.nodes.<category> import <Node>`               | Type hints only      |
 
 ## Common Mistakes
 
 ### ❌ Mistake 1: Importing Node Instances
+
 ```python
 # Wrong - Don't import nodes for string-based workflows
 from kailash.nodes.code import PythonCodeNode
@@ -104,6 +110,7 @@ workflow.add_node("CSVReaderNode", "reader", {})  # Imports unnecessary
 ```
 
 ### ✅ Fix: Minimal Imports
+
 ```python
 # Correct - Only import core components
 from kailash.workflow.builder import WorkflowBuilder
@@ -115,19 +122,23 @@ workflow.add_node("PythonCodeNode", "processor", {})
 ```
 
 ### ❌ Mistake 2: Wrong Runtime Import
+
 ```python
 # Wrong - Using wrong runtime module
-from kailash.runtime import LocalRuntime  # May not work
+from kailash.runtime.local_runtime import LocalRuntime  # Wrong submodule name
 ```
 
 ### ✅ Fix: Correct Module Path
+
 ```python
-# Correct - Full module path
-from kailash.runtime.local import LocalRuntime
+# Correct - Either works
+from kailash.runtime import LocalRuntime            # Package-level re-export
+from kailash.runtime.local import LocalRuntime      # Direct module path
 from kailash.runtime.async_local import AsyncLocalRuntime
 ```
 
 ### ❌ Mistake 3: Relative Imports in SDK Usage
+
 ```python
 # Wrong - Relative imports in user code
 from .workflow.builder import WorkflowBuilder  # Error
@@ -135,6 +146,7 @@ from ..kailash import LocalRuntime  # Error
 ```
 
 ### ✅ Fix: Always Use Absolute Imports
+
 ```python
 # Correct - Absolute imports only
 from kailash.workflow.builder import WorkflowBuilder
@@ -144,6 +156,7 @@ from kailash.runtime.local import LocalRuntime
 ## Examples
 
 ### Example 1: Basic Data Processing
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
@@ -165,6 +178,7 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 ### Example 2: Async Workflow for Docker
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.async_local import AsyncLocalRuntime
@@ -188,6 +202,7 @@ results = await runtime.execute_workflow_async(workflow.build(), inputs={})
 ```
 
 ### Example 3: Type Hints for IDE Support
+
 ```python
 # Import for type hints and IDE autocomplete
 from kailash.nodes.code import PythonCodeNode
@@ -222,12 +237,14 @@ runtime = LocalRuntime()
 ## When to Escalate to Subagent
 
 Use `sdk-navigator` subagent when:
+
 - Finding specific node imports
 - Exploring advanced SDK features
 - Understanding module structure
 - Resolving import errors
 
 Use `pattern-expert` subagent when:
+
 - Designing complex import patterns
 - Structuring large projects
 - Creating reusable components

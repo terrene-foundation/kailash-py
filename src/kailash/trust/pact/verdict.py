@@ -63,6 +63,16 @@ class GovernanceVerdict:
         """
         return self.level in ("auto_approved", "flagged")
 
+    @property
+    def is_held(self) -> bool:
+        """True if the action requires human review before proceeding."""
+        return self.level == "held"
+
+    @property
+    def is_blocked(self) -> bool:
+        """True if the action is permanently rejected."""
+        return self.level == "blocked"
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a plain dict suitable for JSON encoding or audit storage.
 

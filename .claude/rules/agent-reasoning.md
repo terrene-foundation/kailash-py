@@ -1,10 +1,16 @@
+---
+paths:
+  - "**/kaizen/**"
+  - "**/*agent*"
+  - "**/agents/**"
+---
+
 # Agent Reasoning Architecture — LLM-First Rule
 
 ## Scope
 
 These rules apply to ALL agent code, ALL Kaizen implementations, ALL AI agent patterns, and ALL codegen that produces agent logic. This includes:
 
-- `packages/kailash-kaizen/**`
 - Any file creating, extending, or configuring a `BaseAgent`
 - Any file implementing agent routing, dispatch, classification, or decision-making
 - Any code that processes user input to determine agent behavior
@@ -50,30 +56,6 @@ Under NO circumstances shall the following be used for agent decision-making:
 - Embedding similarity with hardcoded thresholds for routing
 
 **UNLESS the user EXPLICITLY says**: "use deterministic logic here", "use keyword matching", "use regex", "this needs to be rule-based", or equivalent explicit opt-in.
-
-## WARNING TO CODEGEN
-
-```
-+================================================================+
-|                                                                  |
-|   WARNING: DETERMINISTIC AGENT LOGIC DETECTED                   |
-|                                                                  |
-|   You are writing if-else/regex/keyword logic inside an agent.   |
-|   This is ALMOST CERTAINLY WRONG.                                |
-|                                                                  |
-|   An AI agent's entire purpose is to REASON using an LLM.        |
-|   If you're writing conditionals to route, classify, extract,    |
-|   or decide — you're building a script, not an agent.            |
-|                                                                  |
-|   The LLM handles: routing, classification, extraction,          |
-|                     evaluation, decision-making                  |
-|   Tools handle:     fetching data, writing data, calling APIs    |
-|                                                                  |
-|   STOP. Let the LLM reason. Use self.run() with a clear          |
-|   signature that describes what you need.                        |
-|                                                                  |
-+================================================================+
-```
 
 ## MUST Rules
 
@@ -271,30 +253,3 @@ def tool_handler(data):
     if data["type"] == "urgent":         # BLOCKED — LLM determines urgency
         return escalate(data)
 ```
-
-## Enforcement
-
-- **intermediate-reviewer agent** — MUST flag deterministic agent logic as CRITICAL finding during code review
-- **kaizen-specialist agent** — MUST refuse to generate agent code with deterministic routing unless user explicitly opts in
-- **validate-workflow.js hook** — Agent files containing keyword/regex routing patterns in decision paths produce WARNING
-- **Red-team agents** — During /redteam, MUST check all agent implementations for deterministic reasoning anti-patterns
-
-## Why This Matters
-
-Every `if "keyword" in message` you write is:
-
-- **Fragile** — Breaks on synonyms, typos, rephrasing, multilingual input
-- **Incomplete** — Misses cases you didn't anticipate (the long tail is infinite)
-- **Wasteful** — You're paying for an LLM and not using it
-- **Unmaintainable** — Every new case needs a new branch; the code grows forever
-- **Defeating the purpose** — You built an agent to reason; then you lobotomized it with a script
-
-The LLM handles ALL of these naturally. It generalizes. It understands intent, not keywords. It handles edge cases you never imagined. **Let it do its job.**
-
-## Cross-References
-
-- `rules/no-stubs.md` — No deferred implementation (related: don't stub reasoning with if-else)
-- `rules/zero-tolerance.md` — Pre-existing deterministic routing MUST be refactored when found
-- `rules/agents.md` Rule 3 — Framework specialist required for Kaizen work
-- `.claude/agents/frameworks/kaizen-specialist.md` — Kaizen agent definition (enforces this rule)
-- `.claude/skills/04-kaizen/kaizen-baseagent-quick.md` — BaseAgent quick reference

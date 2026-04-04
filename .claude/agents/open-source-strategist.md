@@ -1,9 +1,8 @@
 ---
 name: open-source-strategist
 description: "Open-source strategy advisor. Use for licensing, open/proprietary boundaries, or community building decisions."
-model: inherit
-allowed-tools:
-  - Read
+tools: Read, Write, Edit, Grep, Glob, Bash, Task
+model: opus
   - Glob
   - Grep
   - WebSearch
@@ -89,9 +88,9 @@ These projects compete for developer mindshare:
 4. **Reference competitive landscape** when discussing positioning
 5. **Be practical about community building** — developers need docs, examples, and a responsive maintainer
 
-## Related Experts
+## Related Agents
 
-- **eatp-expert** — For EATP technical details
-- **care-expert** — For CARE governance philosophy
-- **co-expert** — For CO methodology details
-- **deep-analyst** — For risk analysis and competitive assessment
+- **analyst**: Risk analysis and competitive assessment
+- **gold-standards-validator**: Terrene naming and licensing compliance
+- **reviewer**: Documentation and code quality review
+- `co-reference` skill — CARE/EATP/CO methodology reference

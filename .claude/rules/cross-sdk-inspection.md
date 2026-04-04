@@ -1,3 +1,9 @@
+---
+paths:
+  - "**/src/**"
+  - "**/tests/**"
+---
+
 # Cross-SDK Issue Inspection
 
 ## Scope

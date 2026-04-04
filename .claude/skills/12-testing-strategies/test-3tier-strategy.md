@@ -29,7 +29,7 @@ def test_llm_integration():
     workflow = WorkflowBuilder()
     workflow.add_node("LLMNode", "llm", {
         "provider": "openai",
-        "model": "gpt-4",
+        "model": os.environ["LLM_MODEL"],
         "prompt": "Say hello"
     })
     runtime = LocalRuntime()

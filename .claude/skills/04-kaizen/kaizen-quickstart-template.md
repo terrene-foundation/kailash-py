@@ -25,8 +25,8 @@ class MySignature(Signature):
 # 2. Create domain config
 @dataclass
 class MyConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-3.5-turbo"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.7
     max_tokens: int = 1000
 

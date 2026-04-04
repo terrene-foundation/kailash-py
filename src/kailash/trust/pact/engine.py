@@ -1212,6 +1212,19 @@ class GovernanceEngine:
                     },
                 )
 
+            # Vacancy check: vacant roles cannot approve bridges
+            approver_node = self._compiled_org.nodes.get(approver_address)
+            if approver_node is not None and approver_node.is_vacant:
+                raise PactError(
+                    f"Bridge approval cannot be given by vacant role '{approver_address}'",
+                    details={
+                        "approver_address": approver_address,
+                        "is_vacant": True,
+                        "source_address": source_address,
+                        "target_address": target_address,
+                    },
+                )
+
             approver_type = "compliance" if is_compliance else "lca"
 
             now = datetime.now(UTC)
@@ -1247,6 +1260,122 @@ class GovernanceEngine:
         )
 
         return approval
+
+    def reject_bridge(
+        self,
+        source_address: str,
+        target_address: str,
+        rejector_address: str,
+    ) -> bool:
+        """Reject (remove) a bridge approval. Thread-safe. Emits audit anchor.
+
+        The rejector must be the LCA of the source and target roles or the
+        designated compliance role. Vacant roles cannot reject bridges.
+
+        Args:
+            source_address: D/T/R address of one side of the bridge.
+            target_address: D/T/R address of the other side of the bridge.
+            rejector_address: D/T/R address of the role rejecting the bridge.
+                Must be the LCA of source and target, or the compliance role.
+
+        Returns:
+            True if an approval existed and was removed, False if no approval
+            was found for the given source/target pair.
+
+        Raises:
+            PactError: If the rejector is not the LCA or compliance role,
+                if the rejector is vacant, if addresses cannot be parsed,
+                or if no common ancestor exists.
+        """
+        with self._lock:
+            # Parse addresses -- fail-closed on parse errors
+            try:
+                source_addr = Address.parse(source_address)
+                target_addr = Address.parse(target_address)
+            except Exception as exc:
+                raise PactError(
+                    f"Cannot parse bridge addresses: {exc}",
+                    details={
+                        "source_address": source_address,
+                        "target_address": target_address,
+                    },
+                ) from exc
+
+            # Compute LCA
+            lca = Address.lowest_common_ancestor(source_addr, target_addr)
+            if lca is None:
+                raise PactError(
+                    "Cannot reject bridge: addresses have no common ancestor",
+                    details={
+                        "source_address": source_address,
+                        "target_address": target_address,
+                    },
+                )
+
+            # Verify the rejector IS the LCA or the compliance role
+            lca_str = str(lca)
+            is_lca = rejector_address == lca_str
+            is_compliance = (
+                self._compliance_role is not None
+                and rejector_address == self._compliance_role
+            )
+            if not is_lca and not is_compliance:
+                raise PactError(
+                    f"Bridge rejection must come from the LCA ({lca}) "
+                    f"or the compliance role ({self._compliance_role}), "
+                    f"not {rejector_address}",
+                    details={
+                        "source_address": source_address,
+                        "target_address": target_address,
+                        "rejector_address": rejector_address,
+                        "required_lca": lca_str,
+                        "compliance_role": self._compliance_role,
+                    },
+                )
+
+            # Vacancy check: vacant roles cannot reject bridges
+            rejector_node = self._compiled_org.nodes.get(rejector_address)
+            if rejector_node is not None and rejector_node.is_vacant:
+                raise PactError(
+                    f"Bridge rejection cannot be given by vacant role '{rejector_address}'",
+                    details={
+                        "rejector_address": rejector_address,
+                        "is_vacant": True,
+                        "source_address": source_address,
+                        "target_address": target_address,
+                    },
+                )
+
+            # Remove approval if it exists (check both orderings)
+            removed = False
+            for key in (
+                f"{source_address}|{target_address}",
+                f"{target_address}|{source_address}",
+            ):
+                if key in self._bridge_approvals:
+                    del self._bridge_approvals[key]
+                    removed = True
+
+        rejector_type = "compliance" if is_compliance else "lca"
+
+        self._emit_audit(
+            PactAuditAction.BRIDGE_REJECTED.value,
+            create_pact_audit_details(
+                PactAuditAction.BRIDGE_REJECTED,
+                role_address=rejector_address,
+                target_address=target_address,
+                reason=(
+                    f"Bridge between '{source_address}' and '{target_address}' "
+                    f"rejected by {rejector_type} '{rejector_address}'"
+                ),
+                source_address=source_address,
+                lca_address=rejector_address,
+                rejector_type=rejector_type,
+                approval_existed=removed,
+            ),
+        )
+
+        return removed
 
     def _check_bridge_approval(
         self,

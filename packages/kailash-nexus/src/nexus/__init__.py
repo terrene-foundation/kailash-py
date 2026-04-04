@@ -33,7 +33,9 @@ from .background import BackgroundService
 from .probes import ProbeManager, ProbeResponse, ProbeState
 from .events import EventBus, NexusEvent, NexusEventType
 from .files import NexusFile
+from .metrics import register_metrics_endpoint
 from .registry import HandlerDef, HandlerParam, HandlerRegistry
+from .sse import register_sse_endpoint
 from .transports import HTTPTransport, MCPTransport, Transport
 
 __version__ = "1.7.2"
@@ -78,4 +80,7 @@ __all__ = [
     # OpenAPI
     "OpenApiGenerator",
     "OpenApiInfo",
+    # Metrics & SSE
+    "register_metrics_endpoint",
+    "register_sse_endpoint",
 ]

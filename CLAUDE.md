@@ -36,10 +36,10 @@ See `rules/e2e-god-mode.md` and `rules/no-stubs.md` for enforcement details.
 
 Pre-existing failures MUST be fixed, not reported. Stubs are BLOCKED. Naive fallbacks are BLOCKED. SDK bugs get GitHub issues, not workarounds. See `rules/zero-tolerance.md`.
 
-### 5. Mandatory Reviews
+### 5. Recommended Reviews
 
-- **Code review** (intermediate-reviewer) after EVERY file change — see `rules/agents.md` Rule 1
-- **Security review** (security-reviewer) before EVERY commit — NO exceptions — see `rules/agents.md` Rule 2
+- **Code review** (intermediate-reviewer) after file changes — see `rules/agents.md` Rule 1
+- **Security review** (security-reviewer) before commits — see `rules/agents.md` Rule 2
 - **NO MOCKING** in Tier 2/3 tests — use real infrastructure — see `rules/testing.md`
 
 ### 6. LLM-First Agent Reasoning
@@ -174,14 +174,14 @@ workflow.add_node("NodeType", "node_id", {"param": "value"})
 
 ## Kailash Platform
 
-| Framework    | Purpose                                 | Install                        |
-| ------------ | --------------------------------------- | ------------------------------ |
-| **Core SDK** | Workflow orchestration, 140+ nodes      | `pip install kailash`          |
-| **DataFlow** | Zero-config database operations         | `pip install kailash-dataflow` |
-| **Nexus**    | Multi-channel deployment (API+CLI+MCP)  | `pip install kailash-nexus`    |
-| **Kaizen**   | AI agent framework                      | `pip install kailash-kaizen`   |
-| **PACT**     | Organizational governance (D/T/R)       | `pip install kailash-pact`     |
-| **ML**       | ML lifecycle (9 engines, polars-native) | `pip install kailash-ml`       |
-| **Align**    | LLM fine-tuning & serving pipeline      | `pip install kailash-align`    |
+| Framework    | Purpose                                  | Install                        |
+| ------------ | ---------------------------------------- | ------------------------------ |
+| **Core SDK** | Workflow orchestration, 140+ nodes       | `pip install kailash`          |
+| **DataFlow** | Zero-config database operations          | `pip install kailash-dataflow` |
+| **Nexus**    | Multi-channel deployment (API+CLI+MCP)   | `pip install kailash-nexus`    |
+| **Kaizen**   | AI agent framework                       | `pip install kailash-kaizen`   |
+| **PACT**     | Organizational governance (D/T/R)        | `pip install kailash-pact`     |
+| **ML**       | ML lifecycle (13 engines, polars-native) | `pip install kailash-ml`       |
+| **Align**    | LLM fine-tuning & serving pipeline       | `pip install kailash-align`    |
 
 `pip install kailash` includes all standard dependencies (trust, server, HTTP, database, monitoring, data). Sub-packages add framework-specific functionality. Only vendor-specific secret backends (Vault, AWS, Azure, LDAP) remain as optional extras.

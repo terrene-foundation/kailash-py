@@ -32,11 +32,12 @@ Sync Thread (MCP)     janus.Queue      Async Loop (FastAPI)
 ### subscribe_filtered
 
 ```python
-# Subscribe to events matching a filter
-bus.subscribe_filtered(
-    event_filter=lambda e: e.event_type.startswith("dataflow."),
-    handler=my_handler,
+# Subscribe to events matching a predicate — returns an asyncio.Queue
+q = bus.subscribe_filtered(
+    predicate=lambda e: e.event_type.startswith("dataflow.")
 )
+# Consume matching events from the queue
+event = await q.get()
 ```
 
 ## Phase 2 APIs
@@ -130,7 +131,7 @@ from nexus import Nexus, NexusFile
 async def upload_document(file: NexusFile, title: str = "Untitled") -> dict:
     return {
         "filename": file.filename,
-        "size": len(file.data),
+        "size": file.size,
         "content_type": file.content_type,
     }
 ```
@@ -154,15 +155,20 @@ from nexus.background import BackgroundService
 class BackgroundService(ABC):
     """Internal services: scheduler, metrics, cleanup."""
 
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Unique name for this background service."""
+        ...
+
     @abstractmethod
     async def start(self) -> None: ...
 
     @abstractmethod
     async def stop(self) -> None: ...
 
-    @property
     @abstractmethod
-    def is_running(self) -> bool: ...
+    def is_healthy(self) -> bool: ...
 ```
 
 Built-in services include `SchedulerBackgroundService` for `@app.scheduled()` handlers.

@@ -13,11 +13,12 @@ description: "Gold standard for error handling. Use when asking 'error handling 
 ## Error Handling Patterns
 
 ### 1. Try-Catch at Node Level
+
 ```python
 workflow = WorkflowBuilder()
 
 # Critical operation
-workflow.add_node("APICallNode", "payment_api", {
+workflow.add_node("HTTPRequestNode", "payment_api", {
     "url": "https://api.stripe.com/charge",
     "method": "POST",
     "timeout": 30
@@ -29,13 +30,14 @@ workflow.add_error_handler("payment_api", "refund_user")
 ```
 
 ### 2. Validation Before Processing
+
 ```python
 # ✅ GOOD: Validate first
-workflow.add_node("DataValidationNode", "validate_input", {
+workflow.add_node("CodeValidationNode", "validate_input", {
     "schema": {"email": "email", "amount": "decimal > 0"}
 })
 
-workflow.add_node("ConditionalNode", "check_valid", {
+workflow.add_node("SwitchNode", "check_valid", {
     "condition": "{{validate_input.is_valid}} == true",
     "true_branch": "process",
     "false_branch": "error_response"
@@ -43,18 +45,20 @@ workflow.add_node("ConditionalNode", "check_valid", {
 ```
 
 ### 3. Graceful Degradation
+
 ```python
 # Primary path
-workflow.add_node("APICallNode", "primary_api", {...})
+workflow.add_node("HTTPRequestNode", "primary_api", {...})
 
 # Fallback on error
 workflow.add_error_handler("primary_api", "fallback_api")
-workflow.add_node("APICallNode", "fallback_api", {...})
+workflow.add_node("HTTPRequestNode", "fallback_api", {...})
 ```
 
 ### 4. Error Logging
+
 ```python
-workflow.add_node("DatabaseExecuteNode", "log_error", {
+workflow.add_node("SQLDatabaseNode", "log_error", {
     "query": "INSERT INTO error_log (node_id, error, timestamp) VALUES (?, ?, NOW())",
     "parameters": ["{{error.node_id}}", "{{error.message}}"]
 })

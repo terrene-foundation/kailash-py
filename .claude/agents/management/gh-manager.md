@@ -66,7 +66,7 @@ You are a GitHub management agent responsible for creating, tracking, and syncin
 ## Integration Points
 
 ```
-requirements-analyst → gh-manager → todo-manager
+analyst → gh-manager → todo-manager
      (ADR/requirements)     (issues)     (local todos)
 ```
 
@@ -101,9 +101,9 @@ requirements-analyst → gh-manager → todo-manager
 ## Related Agents
 
 - **todo-manager**: Bidirectional sync between GitHub issues and local todos
-- **requirements-analyst**: Create issues from ADRs and requirements
-- **intermediate-reviewer**: Review progress and update issue comments
-- **git-release-specialist**: Coordinate releases and version management
+- **analyst**: Create issues from ADRs and requirements
+- **reviewer**: Review progress and update issue comments
+- **release-specialist**: Coordinate releases and version management
 
 ## Full Documentation
 

@@ -135,5 +135,5 @@ Critical info at beginning/end of context. Middle gets less attention. Trim tool
 ## Support
 
 - **claude-code-architect** — Primary expert for CC artifact work
-- **co-expert** — CO methodology (principles, layers)
-- **coc-expert** — COC methodology (five-layer implementation)
+- `co-reference` skill — CO methodology (principles, layers)
+- `co-reference` skill — COC methodology (five-layer implementation)

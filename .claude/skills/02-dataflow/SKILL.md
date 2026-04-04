@@ -224,4 +224,4 @@ For DataFlow-specific questions, invoke:
 
 - `dataflow-specialist` - DataFlow implementation and patterns
 - `testing-specialist` - DataFlow testing strategies (NO MOCKING policy)
-- `framework-advisor` - Choose between Core SDK and DataFlow
+- ``decide-framework` skill` - Choose between Core SDK and DataFlow

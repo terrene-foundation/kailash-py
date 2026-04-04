@@ -11,13 +11,6 @@ model: opus
 
 LLM fine-tuning and alignment framework specialist for kailash-align. Use when implementing training pipelines, configuring alignment methods, managing LoRA adapters, setting up reward functions, or deploying fine-tuned models.
 
-## Skills Quick Reference
-
-**Use the skill instead when:**
-
-- "Which method?" -> `packages/kailash-align/docs/01-method-selection-guide.md`
-- "Full architecture?" -> `packages/kailash-align/docs/00-authority/CLAUDE.md`
-
 ## Core Architecture
 
 ```
@@ -146,8 +139,6 @@ pip install kailash-align[full]     # Everything
 
 ## Cross-References
 
-- `packages/kailash-align/docs/00-authority/CLAUDE.md` — Full architecture reference
-- `packages/kailash-align/docs/01-method-selection-guide.md` — Method decision tree
 - `.claude/agents/frameworks/kaizen-specialist.md` — KaizenModelBridge integration
 - `.claude/agents/frameworks/ml-specialist.md` — ML lifecycle engines (feature engineering, drift, AutoML)
 - `.claude/skills/04-kaizen/` — Kaizen Delegate patterns

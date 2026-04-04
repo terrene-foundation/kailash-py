@@ -31,7 +31,7 @@ def test_mcp_workflow_structure():
     """Unit test - workflow structure only (mock provider)."""
     workflow = WorkflowBuilder()
 
-    workflow.add_node("IterativeLLMAgentNode", "agent", {
+    workflow.add_node("PythonCodeNode", "agent", {
         "provider": "mock",  # Mock provider for structure testing
         "model": "mock",
         "messages": [{"role": "user", "content": "Test"}],
@@ -48,7 +48,7 @@ def test_mcp_workflow_structure():
 
     # Assert structure only
     assert "agent" in built_workflow.nodes
-    assert built_workflow.nodes["agent"]["type"] == "IterativeLLMAgentNode"
+    assert built_workflow.nodes["agent"]["type"] == "PythonCodeNode"
 ```
 
 ## Tier 2: Integration Tests (Real MCP Servers)
@@ -63,9 +63,9 @@ def test_real_mcp_tool_execution():
     """Integration test - real MCP server execution."""
     workflow = WorkflowBuilder()
 
-    workflow.add_node("IterativeLLMAgentNode", "agent", {
+    workflow.add_node("PythonCodeNode", "agent", {
         "provider": "openai",
-        "model": "gpt-4",
+        "model": os.environ["LLM_MODEL"],
         "messages": [{"role": "user", "content": "Get weather for NYC"}],
         "mcp_servers": [{
             "name": "weather",
@@ -94,9 +94,9 @@ def test_mcp_production_flow():
     """E2E test - full production-like MCP flow."""
     workflow = WorkflowBuilder()
 
-    workflow.add_node("IterativeLLMAgentNode", "agent", {
+    workflow.add_node("PythonCodeNode", "agent", {
         "provider": "openai",
-        "model": "gpt-4",
+        "model": os.environ["LLM_MODEL"],
         "messages": [{"role": "user", "content": "Search docs and get weather"}],
         "mcp_servers": [
             {
@@ -180,9 +180,9 @@ def test_mcp_tool_discovery():
     """Test that MCP tools are discovered correctly."""
     workflow = WorkflowBuilder()
 
-    workflow.add_node("IterativeLLMAgentNode", "agent", {
+    workflow.add_node("PythonCodeNode", "agent", {
         "provider": "openai",
-        "model": "gpt-4",
+        "model": os.environ["LLM_MODEL"],
         "messages": [{"role": "user", "content": "List available tools"}],
         "mcp_servers": [{
             "name": "test",
@@ -209,9 +209,9 @@ def test_mcp_server_failure_handling():
     """Test graceful handling of MCP server failures."""
     workflow = WorkflowBuilder()
 
-    workflow.add_node("IterativeLLMAgentNode", "agent", {
+    workflow.add_node("PythonCodeNode", "agent", {
         "provider": "openai",
-        "model": "gpt-4",
+        "model": os.environ["LLM_MODEL"],
         "messages": [{"role": "user", "content": "Get data"}],
         "mcp_servers": [{
             "name": "failing",

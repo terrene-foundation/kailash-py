@@ -28,13 +28,12 @@ from kailash.mcp_server import MCPServer
 server = MCPServer(name="my-server")
 
 # Register workflow as MCP tool
-@server.tool("summarize")
-def summarize_tool(text: str) -> str:
+@server.tool()
+def summarize(text: str) -> str:
     """Summarize the given text."""
-    # Execute workflow
     workflow = create_summary_workflow()
-    results = runtime.execute(workflow.build())
-    return results["summary"]["result"]
+    results, run_id = runtime.execute(workflow.build())
+    return results["summary"]
 
 # Run server (stdio transport by default)
 server.run()
@@ -47,10 +46,6 @@ server.run()
 - **[mcp-transports-quick](mcp-transports-quick.md)** - Transport configuration (stdio, SSE, HTTP)
 - **[mcp-structured-tools](mcp-structured-tools.md)** - Defining MCP tools
 - **[mcp-resources](mcp-resources.md)** - Exposing resources to agents
-
-### Platform Server
-
-- **[mcp-platform-server](mcp-platform-server.md)** - Unified kailash-mcp with contributor plugin system, security tiers
 
 ### Security & Operations
 
@@ -116,12 +111,13 @@ from kailash.workflow.builder import WorkflowBuilder
 
 server = MCPServer(name="workflow-server")
 
-@server.tool("process_data")
-def process_tool(input: str) -> dict:
+@server.tool()
+def process_data(input: str) -> dict:
+    """Process data through a workflow."""
     workflow = WorkflowBuilder()
     # Build workflow
-    results = runtime.execute(workflow.build())
-    return results["output"]["result"]
+    results, run_id = runtime.execute(workflow.build())
+    return results["output"]
 ```
 
 ### With Nexus (Multi-Channel with MCP)
@@ -130,8 +126,9 @@ def process_tool(input: str) -> dict:
 from nexus import Nexus
 
 # Nexus automatically creates MCP channel
-nexus = Nexus(workflows)
-nexus.run()  # Includes MCP server
+app = Nexus()
+app.register("my_workflow", workflow.build())
+app.start()  # Includes MCP server
 ```
 
 ### With DataFlow (Database Access)
@@ -143,9 +140,9 @@ from dataflow import DataFlow
 server = MCPServer(name="db-server")
 db = DataFlow(...)
 
-@server.resource("users")
+@server.resource("users://list")
 def get_users():
-    # Expose database via MCP resource
+    """Expose database via MCP resource."""
     return db.query_users()
 ```
 
@@ -153,12 +150,13 @@ def get_users():
 
 ```python
 from kailash.mcp_server import MCPServer
-from kaizen.base import BaseAgent
+from kaizen.core.base_agent import BaseAgent
 
 server = MCPServer(name="agent-server")
 
-@server.tool("analyze")
-def analyze_tool(text: str) -> str:
+@server.tool()
+def analyze(text: str) -> str:
+    """Analyze text using an AI agent."""
     agent = AnalysisAgent()
     return agent(text=text).result
 ```
@@ -202,4 +200,4 @@ For MCP-specific questions, invoke:
 
 - `mcp-specialist` - MCP server implementation
 - `testing-specialist` - MCP testing strategies
-- `framework-advisor` - MCP integration architecture
+- ``decide-framework` skill` - MCP integration architecture

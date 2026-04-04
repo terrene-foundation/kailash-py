@@ -20,14 +20,14 @@ workflow = WorkflowBuilder()
 # Valid: All required parameters
 workflow.add_node("LLMNode", "llm1", {
     "provider": "openai",
-    "model": "gpt-4",
+    "model": os.environ["LLM_MODEL"],
     "prompt": "Hello"
 })
 
 # Invalid: Missing required 'prompt'
 # workflow.add_node("LLMNode", "llm2", {
 #     "provider": "openai",
-#     "model": "gpt-4"
+#     "model": os.environ["LLM_MODEL"]
 # })  # Error!
 
 # Validate at build time

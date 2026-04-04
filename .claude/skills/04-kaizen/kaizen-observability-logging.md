@@ -228,7 +228,7 @@ for agent in agents:
 # Rich context for debugging
 manager.info("LLM API call", context={
     "provider": "openai",
-    "model": "gpt-4",
+    "model": os.environ["LLM_MODEL"],
     "temperature": 0.7,
     "max_tokens": 1000,
     "prompt_length": 150,

@@ -1,6 +1,6 @@
 """DataFlow Audit Events Module."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
@@ -40,7 +40,7 @@ class DataFlowAuditEvent:
         record_id: Optional[Any] = None,  # Accept record_id as alias
     ):
         self.event_type = event_type
-        self.timestamp = timestamp or datetime.utcnow()
+        self.timestamp = timestamp or datetime.now(UTC)
         self.user_id = user_id
         # Handle both entity_type and model_name
         self.entity_type = entity_type or model_name
@@ -92,7 +92,7 @@ class DataFlowAuditEvent:
         if isinstance(timestamp_str, str):
             timestamp = datetime.fromisoformat(timestamp_str)
         else:
-            timestamp = timestamp_str or datetime.utcnow()
+            timestamp = timestamp_str or datetime.now(UTC)
 
         return cls(
             event_type=event_type,

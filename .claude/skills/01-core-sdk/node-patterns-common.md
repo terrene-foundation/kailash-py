@@ -18,7 +18,7 @@ Copy-paste ready templates for the most frequently used Kailash SDK nodes with w
 - **CSVReaderNode**: Read CSV files
 - **JSONWriterNode**: Write JSON output
 - **HTTPRequestNode**: API calls (GET/POST)
-- **LLMAgentNode**: AI/LLM integration
+- **PythonCodeNode**: Custom Python logic (including LLM API calls)
 - **SwitchNode**: Conditional routing
 
 ## Core Pattern
@@ -161,12 +161,10 @@ result = {'text': text, 'task': 'analyze'}
 """
 })
 
-# LLM processing
-workflow.add_node("LLMAgentNode", "llm", {
-    "model": "gpt-3.5-turbo",
-    "system_prompt": "You are a business analyst. Analyze the given text.",
-    "temperature": 0.1,
-    "max_tokens": 200
+# LLM processing (use Kaizen agents for production; PythonCodeNode for quick prototyping)
+workflow.add_node("PythonCodeNode", "llm", {
+    "code": "import os; from openai import OpenAI; client = OpenAI(); resp = client.chat.completions.create(model=os.environ['LLM_MODEL'], messages=[{'role': 'system', 'content': 'You are a business analyst. Analyze the given text.'}, {'role': 'user', 'content': text}], temperature=0.1, max_tokens=200); result = {'response': resp.choices[0].message.content}",
+    "input_variables": ["text"]
 })
 
 # Post-process
@@ -215,8 +213,8 @@ workflow.add_node("PythonCodeNode", "low_handler", {
 })
 
 workflow.add_connection("source", "result", "router", "data")
-workflow.add_connection("router", "true", "high_handler", "score")
-workflow.add_connection("router", "false", "low_handler", "score")
+workflow.add_connection("router", "true_output", "high_handler", "score")
+workflow.add_connection("router", "false_output", "low_handler", "score")
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())

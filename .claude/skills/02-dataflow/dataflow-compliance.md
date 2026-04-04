@@ -35,13 +35,13 @@ workflow.add_node("UserUpdateNode", "mark_deleted", {
 })
 
 # 2. Anonymize related data
-workflow.add_node("DatabaseExecuteNode", "anonymize_logs", {
+workflow.add_node("SQLDatabaseNode", "anonymize_logs", {
     "query": "UPDATE audit_logs SET user_email = '[REDACTED]' WHERE user_id = ?",
     "parameters": ["{{input.user_id}}"]
 })
 
 # 3. Delete from external systems
-workflow.add_node("APICallNode", "delete_external", {
+workflow.add_node("HTTPRequestNode", "delete_external", {
     "url": "https://analytics.example.com/users/{{input.user_id}}",
     "method": "DELETE"
 })
@@ -51,6 +51,5 @@ workflow.add_connection("anonymize_logs", "result", "delete_external", "trigger"
 ```
 
 ## Documentation
-
 
 <!-- Trigger Keywords: GDPR dataflow, data compliance, right to be forgotten, data privacy -->

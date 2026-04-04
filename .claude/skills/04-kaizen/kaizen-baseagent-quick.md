@@ -17,8 +17,8 @@ from dataclasses import dataclass
 @dataclass
 class MyConfig:
     """Domain-specific configuration (NOT BaseAgentConfig)."""
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.7
     max_tokens: int = 1000
     # Add custom domain fields as needed
@@ -92,7 +92,7 @@ from dotenv import load_dotenv
 load_dotenv()  # Load API keys from .env
 
 # Create agent
-config = MyConfig(llm_provider="openai", model="gpt-4")
+config = MyConfig(llm_provider=os.environ.get("LLM_PROVIDER", "openai"), model=os.environ["LLM_MODEL"])
 agent = MyAgent(config)
 
 # Execute
@@ -107,8 +107,8 @@ print(f"Reasoning: {result['reasoning']}")
 ```python
 @dataclass
 class MyConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     max_turns: int = 10  # Enable BufferMemory
 
 agent = MyAgent(config)
@@ -153,8 +153,8 @@ from dataclasses import dataclass
 
 @dataclass
 class AsyncConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     use_async_llm: bool = True  # ← Enable async mode
 
 agent = MyAgent(AsyncConfig())

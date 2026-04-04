@@ -18,13 +18,13 @@ from kailash.workflow.builder import WorkflowBuilder
 workflow = WorkflowBuilder()
 
 # 1. Create task
-workflow.add_node("DatabaseExecuteNode", "create_task", {
+workflow.add_node("SQLDatabaseNode", "create_task", {
     "query": "INSERT INTO tasks (title, description, status) VALUES (?, ?, 'pending')",
     "parameters": ["{{input.title}}", "{{input.description}}"]
 })
 
 # 2. Notify approver
-workflow.add_node("APICallNode", "notify_approver", {
+workflow.add_node("HTTPRequestNode", "notify_approver", {
     "url": "https://api.slack.com/messages",
     "method": "POST",
     "body": {"text": "New task needs approval: {{input.title}}"}
@@ -37,7 +37,7 @@ workflow.add_node("WaitForEventNode", "wait_approval", {
 })
 
 # 4. Update status
-workflow.add_node("DatabaseExecuteNode", "update_status", {
+workflow.add_node("SQLDatabaseNode", "update_status", {
     "query": "UPDATE tasks SET status = 'approved' WHERE id = ?",
     "parameters": ["{{create_task.task_id}}"]
 })

@@ -11,6 +11,7 @@
 Kaizen provides first-class support for structured outputs across multiple providers (OpenAI, Google/Gemini, Azure AI Foundry) with comprehensive type introspection, enabling 100% reliable JSON schema compliance. The framework supports all 10 Python typing patterns with intelligent strict mode validation and automatic fallback for incompatible types.
 
 **Multi-Provider Support (v0.8.2)**: All providers receive the same OpenAI-style `response_format` configuration. Each provider auto-translates to its native parameters:
+
 - **OpenAI**: Uses `response_format` directly
 - **Google/Gemini**: Translates to `response_mime_type` + `response_schema`
 - **Azure AI Foundry**: Translates to `JsonSchemaFormat`
@@ -38,8 +39,8 @@ class QASignature(Signature):
 
 # Structured outputs auto-configured - NO provider_config needed!
 config = BaseAgentConfig(
-    llm_provider="openai",
-    model="gpt-4o-2024-08-06"
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"]
 )
 
 agent = BaseAgent(config=config, signature=QASignature())
@@ -51,12 +52,14 @@ print(result['confidence'])   # Always present, always float
 ```
 
 **How Auto-Configuration Works** (from `workflow_generator.py`):
+
 - When a signature is provided and no `provider_config` is set
 - WorkflowGenerator automatically calls `create_structured_output_config()`
 - Uses strict mode for OpenAI (100% schema compliance)
 - Providers that don't support structured outputs (Ollama, Anthropic) use prompt-based schema enforcement
 
 **When to Use Manual Configuration**:
+
 - Force legacy JSON mode (`strict=False`) instead of strict schema mode
 - Override auto-generated schema with a custom one
 - Disable structured outputs entirely (rare)
@@ -82,8 +85,8 @@ class ProductAnalysisSignature(Signature):
 
 # Create structured output config (strict mode)
 config = BaseAgentConfig(
-    llm_provider="openai",
-    model="gpt-4o-2024-08-06",
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"],
     provider_config=create_structured_output_config(
         signature=ProductAnalysisSignature(),
         strict=True,
@@ -119,13 +122,14 @@ provider_config = create_structured_output_config(
 )
 
 config = BaseAgentConfig(
-    llm_provider="openai",
-    model="gpt-4o-2024-08-06",
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"],
     provider_config=provider_config
 )
 ```
 
 **Generated Format:**
+
 ```python
 {
     "type": "json_schema",
@@ -147,11 +151,13 @@ config = BaseAgentConfig(
 **70-85% reliability** with older models or incompatible types
 
 **When to use:**
+
 - Using older OpenAI models (gpt-3.5-turbo, gpt-4, etc.)
 - Signature has types incompatible with strict mode (Dict[str, Any], Union)
 - You want fallback compatibility across model versions
 
 **How it works:**
+
 - Returns `{"type": "json_object"}` only (no schema parameter)
 - Schema enforcement happens via system prompt automatically
 - OpenAI returns any valid JSON (not 100% guaranteed to match schema)
@@ -165,13 +171,14 @@ provider_config = create_structured_output_config(
 )
 
 config = BaseAgentConfig(
-    llm_provider="openai",
-    model="gpt-4",  # Works with older models
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"],  # Works with older models
     provider_config=provider_config
 )
 ```
 
 **Generated Format:**
+
 ```python
 {
     "type": "json_object"  # Schema enforcement via system prompt
@@ -199,12 +206,14 @@ print(result['confidence'])    # 0.95
 ```
 
 **Key Points:**
+
 - Dict responses are detected automatically by `parse_result()` in both strategies
 - No code changes needed - transparent to users
 - Works with both strict mode and legacy mode
 - Both string responses (traditional) and dict responses (structured outputs) work seamlessly
 
 **Comparison:**
+
 ```python
 # Traditional (string response, needs parsing)
 response = '{"category": "..."}'  # String
@@ -321,8 +330,8 @@ from kaizen.core.config import BaseAgentConfig
 
 # Option 1: Pass provider_config directly to BaseAgentConfig
 config = BaseAgentConfig(
-    llm_provider="openai",
-    model="gpt-4o-2024-08-06",
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"],
     provider_config={
         "type": "json_schema",
         "json_schema": {
@@ -356,8 +365,8 @@ provider_config = create_structured_output_config(
 )
 
 config = BaseAgentConfig(
-    llm_provider="openai",
-    model="gpt-4o-2024-08-06",
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"],
     provider_config=provider_config
 )
 
@@ -371,11 +380,13 @@ agent = BaseAgent(config=config, signature=MySignature())
 ### OpenAI Structured Outputs (Strict Mode)
 
 **Supported Models** (strict=True):
+
 - `gpt-4o-2024-08-06` (recommended)
 - `gpt-4o-mini-2024-07-18`
 - Newer models released after August 2024
 
 **Features**:
+
 - 100% schema compliance guaranteed
 - Automatic validation and error handling
 - Supports complex nested objects, arrays, enums
@@ -384,11 +395,13 @@ agent = BaseAgent(config=config, signature=MySignature())
 ### Legacy JSON Object Mode
 
 **Supported Models** (strict=False):
+
 - `gpt-4` / `gpt-4-turbo`
 - `gpt-3.5-turbo`
 - Any model with JSON mode support
 
 **Features**:
+
 - Best-effort schema compliance (70-85%)
 - May produce extra fields or incorrect types
 - Requires additional validation in application code
@@ -396,24 +409,27 @@ agent = BaseAgent(config=config, signature=MySignature())
 ### Google Gemini Structured Outputs (v0.8.2)
 
 **Supported Models**:
+
 - `gemini-2.0-flash` (recommended)
 - `gemini-1.5-pro`
 - `gemini-1.5-flash`
 
 **Features**:
+
 - Auto-translates OpenAI-style `response_format` to native parameters
 - Supports both `json_schema` and `json_object` modes
 - Translation: `response_mime_type="application/json"` + `response_schema`
 
 **Usage**:
+
 ```python
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen.core.structured_output import create_structured_output_config
 
 config = BaseAgentConfig(
-    llm_provider="google",  # or "gemini"
-    model="gemini-2.0-flash",
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),  # or "gemini"
+    model=os.environ["LLM_MODEL"],
     provider_config=create_structured_output_config(
         signature=MySignature(),
         strict=True,
@@ -428,20 +444,23 @@ result = agent.run(input_text="...")  # Returns structured dict
 ### Azure AI Foundry Structured Outputs (v0.8.2)
 
 **Supported Models**:
+
 - `gpt-4o` (recommended)
 - `gpt-4o-mini`
 - Other Azure-hosted OpenAI models
 
 **Features**:
+
 - Auto-translates OpenAI-style `response_format` to Azure's `JsonSchemaFormat`
 - Full `json_schema` support with strict mode
 - Enterprise-grade reliability and compliance
 
 **Usage**:
+
 ```python
 config = BaseAgentConfig(
     llm_provider="azure",
-    model="gpt-4o",
+    model=os.environ["LLM_MODEL"],
     provider_config=create_structured_output_config(
         signature=MySignature(),
         strict=True,
@@ -452,13 +471,13 @@ config = BaseAgentConfig(
 
 ### Provider Support Matrix (v0.8.2)
 
-| Provider | `json_schema` (Strict) | `json_object` (Legacy) | Auto-Translation |
-|----------|------------------------|------------------------|------------------|
-| **OpenAI** | ✅ Full support | ✅ Full support | N/A (native) |
-| **Google/Gemini** | ✅ Full support | ✅ Full support | `response_mime_type` + `response_schema` |
-| **Azure AI Foundry** | ✅ Full support | ✅ Full support | `JsonSchemaFormat` |
-| **Ollama** | ❌ Not supported | ❌ Not supported | N/A |
-| **Anthropic** | ❌ Not supported | ❌ Not supported | N/A |
+| Provider             | `json_schema` (Strict) | `json_object` (Legacy) | Auto-Translation                         |
+| -------------------- | ---------------------- | ---------------------- | ---------------------------------------- |
+| **OpenAI**           | ✅ Full support        | ✅ Full support        | N/A (native)                             |
+| **Google/Gemini**    | ✅ Full support        | ✅ Full support        | `response_mime_type` + `response_schema` |
+| **Azure AI Foundry** | ✅ Full support        | ✅ Full support        | `JsonSchemaFormat`                       |
+| **Ollama**           | ❌ Not supported       | ❌ Not supported       | N/A                                      |
+| **Anthropic**        | ❌ Not supported       | ❌ Not supported       | N/A                                      |
 
 ---
 
@@ -468,18 +487,18 @@ config = BaseAgentConfig(
 
 Kaizen's TypeIntrospector provides comprehensive runtime type checking and JSON schema generation for all Python typing constructs:
 
-| Python Type | JSON Schema | Runtime Validation | Strict Mode Compatible |
-|-------------|-------------|-------------------|----------------------|
-| `str` | `{"type": "string"}` | ✅ | ✅ |
-| `int` | `{"type": "integer"}` | ✅ | ✅ |
-| `float` | `{"type": "number"}` | ✅ | ✅ |
-| `bool` | `{"type": "boolean"}` | ✅ | ✅ |
-| `Literal["A", "B"]` | `{"type": "string", "enum": ["A", "B"]}` | ✅ | ✅ |
-| `Union[str, int]` | `{"oneOf": [...]}` | ✅ | ⚠️ Not compatible |
-| `Optional[str]` | `{"type": "string"}` (not required) | ✅ | ✅ |
-| `List[str]` | `{"type": "array", "items": {"type": "string"}}` | ✅ | ✅ |
-| `Dict[str, int]` | `{"type": "object", "additionalProperties": {...}}` | ✅ | ⚠️ Not compatible |
-| `TypedDict` | `{"type": "object", "properties": {...}}` | ✅ | ✅ |
+| Python Type         | JSON Schema                                         | Runtime Validation | Strict Mode Compatible |
+| ------------------- | --------------------------------------------------- | ------------------ | ---------------------- |
+| `str`               | `{"type": "string"}`                                | ✅                 | ✅                     |
+| `int`               | `{"type": "integer"}`                               | ✅                 | ✅                     |
+| `float`             | `{"type": "number"}`                                | ✅                 | ✅                     |
+| `bool`              | `{"type": "boolean"}`                               | ✅                 | ✅                     |
+| `Literal["A", "B"]` | `{"type": "string", "enum": ["A", "B"]}`            | ✅                 | ✅                     |
+| `Union[str, int]`   | `{"oneOf": [...]}`                                  | ✅                 | ⚠️ Not compatible      |
+| `Optional[str]`     | `{"type": "string"}` (not required)                 | ✅                 | ✅                     |
+| `List[str]`         | `{"type": "array", "items": {"type": "string"}}`    | ✅                 | ✅                     |
+| `Dict[str, int]`    | `{"type": "object", "additionalProperties": {...}}` | ✅                 | ⚠️ Not compatible      |
+| `TypedDict`         | `{"type": "object", "properties": {...}}`           | ✅                 | ✅                     |
 
 ### TypeIntrospector Class
 
@@ -512,10 +531,12 @@ compatible, reason = TypeIntrospector.is_strict_mode_compatible(type_annotation)
 OpenAI's strict mode has specific constraints. Kaizen automatically validates types and provides actionable guidance:
 
 **Incompatible Types**:
+
 - `Union[str, int]` - Produces `oneOf` which is not allowed
 - `Dict[str, Any]` - Requires `additionalProperties: true` which is not allowed
 
 **Auto-Fallback** (default behavior):
+
 ```python
 from kaizen.core.structured_output import create_structured_output_config
 
@@ -536,6 +557,7 @@ config = create_structured_output_config(
 ```
 
 **Strict Validation** (raise errors):
+
 ```python
 # Disable auto-fallback to get validation errors
 config = create_structured_output_config(
@@ -557,17 +579,17 @@ config = create_structured_output_config(
 
 Kaizen automatically converts Python types to JSON schema types:
 
-| Python Type | JSON Schema Type | Notes |
-|-------------|------------------|-------|
-| `str` | `"string"` | Basic string type |
-| `int` | `"integer"` | Whole numbers |
-| `float` | `"number"` | Decimal numbers |
-| `bool` | `"boolean"` | True/False |
-| `dict` | `"object"` | Nested objects (generic) |
-| `list` | `"array"` | Arrays of items (generic) |
-| `List[str]` | `{"type": "array", "items": {"type": "string"}}` | Typed arrays |
-| `Optional[str]` | Not in `required` | Optional fields |
-| `Literal["A", "B"]` | `{"type": "string", "enum": ["A", "B"]}` | Enum-like constraints |
+| Python Type         | JSON Schema Type                                 | Notes                     |
+| ------------------- | ------------------------------------------------ | ------------------------- |
+| `str`               | `"string"`                                       | Basic string type         |
+| `int`               | `"integer"`                                      | Whole numbers             |
+| `float`             | `"number"`                                       | Decimal numbers           |
+| `bool`              | `"boolean"`                                      | True/False                |
+| `dict`              | `"object"`                                       | Nested objects (generic)  |
+| `list`              | `"array"`                                        | Arrays of items (generic) |
+| `List[str]`         | `{"type": "array", "items": {"type": "string"}}` | Typed arrays              |
+| `Optional[str]`     | Not in `required`                                | Optional fields           |
+| `Literal["A", "B"]` | `{"type": "string", "enum": ["A", "B"]}`         | Enum-like constraints     |
 
 ### Complex Type Example
 
@@ -680,8 +702,8 @@ class CustomAgent(BaseAgent):
 
 ```python
 config = BaseAgentConfig(
-    llm_provider="openai",
-    model="gpt-4o-2024-08-06",  # Use supported model
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"],  # Use supported model
     provider_config=create_structured_output_config(signature, strict=True)
 )
 ```
@@ -701,6 +723,7 @@ config = BaseAgentConfig(
 Create OpenAI-compatible structured output configuration with intelligent validation.
 
 **Signature:**
+
 ```python
 def create_structured_output_config(
     signature: Any,
@@ -711,18 +734,22 @@ def create_structured_output_config(
 ```
 
 **Parameters:**
+
 - `signature` (Signature): Kaizen signature instance to convert to JSON schema
 - `strict` (bool): Use strict mode (100% compliance) vs legacy mode (best-effort). Default: `True`
 - `name` (str): Schema name for OpenAI API. Default: `"response"`
 - `auto_fallback` (bool): Automatically fall back to `strict=False` if types are incompatible with strict mode. Default: `True`
 
 **Returns:**
+
 - `Dict[str, Any]`: Provider config dict for BaseAgentConfig
 
 **Raises:**
+
 - `ValueError`: If `strict=True` but signature has incompatible types and `auto_fallback=False`
 
 **Example:**
+
 ```python
 from kaizen.core.structured_output import create_structured_output_config
 
@@ -747,18 +774,22 @@ provider_config = create_structured_output_config(
 Convert signature to JSON schema dict.
 
 **Signature:**
+
 ```python
 @staticmethod
 def signature_to_json_schema(signature: Any) -> Dict[str, Any]
 ```
 
 **Parameters:**
+
 - `signature` (Signature): Kaizen signature instance
 
 **Returns:**
+
 - `Dict[str, Any]`: JSON schema dict with properties, required fields, and type mappings
 
 **Example:**
+
 ```python
 from kaizen.core.structured_output import StructuredOutputGenerator
 
@@ -775,6 +806,7 @@ print(schema)
    - Guarantees 100% schema compliance when types are compatible
    - Auto-fallback provides graceful degradation for incompatible types
    - Clear warnings guide you to fix type issues
+
    ```python
    config = create_structured_output_config(
        signature,
@@ -787,6 +819,7 @@ print(schema)
    - ✅ Use: `Literal`, `Optional`, `List[T]`, `TypedDict`, basic types
    - ⚠️ Avoid: `Union[T, U]` (except `Optional`), `Dict[str, Any]`
    - Use TypeIntrospector to validate compatibility:
+
    ```python
    compatible, reason = TypeIntrospector.is_strict_mode_compatible(field_type)
    if not compatible:
@@ -846,8 +879,8 @@ class SupportTicketSignature(Signature):
 
 # Create agent with structured outputs
 config = BaseAgentConfig(
-    llm_provider="openai",
-    model="gpt-4o-2024-08-06",
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"],
     provider_config=create_structured_output_config(
         signature=SupportTicketSignature(),
         strict=True,
@@ -899,8 +932,8 @@ sig = QuarterlyReportSignature()
 print(f"Total fields: {len(sig.output_fields)}")  # 8 fields (2 base + 3 financial + 3 quarterly)
 
 config = BaseAgentConfig(
-    llm_provider="openai",
-    model="gpt-4o-2024-08-06",
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"],
     provider_config=create_structured_output_config(sig, strict=True)
 )
 
@@ -936,12 +969,14 @@ agent = CustomPromptAgent(config=config, signature=signature)
 ```
 
 **How It Works**:
+
 1. BaseAgent passes `_generate_system_prompt` method as callback to WorkflowGenerator
 2. WorkflowGenerator calls the callback when building workflows
 3. Your override is used instead of the default signature-based prompt
 4. No circular dependencies - clean callback pattern
 
 **Use Cases**:
+
 - Domain-specific instructions (medical, legal, financial)
 - Compliance requirements (disclaimers, safety warnings)
 - Custom formatting preferences
@@ -952,6 +987,7 @@ agent = CustomPromptAgent(config=config, signature=signature)
 ## Version History
 
 ### v0.6.5 (Current)
+
 - ✅ TypeIntrospector: Comprehensive type introspection for all 10 Python typing patterns
 - ✅ Intelligent strict mode validation with auto-fallback for incompatible types
 - ✅ Extension point callback pattern for custom system prompts
@@ -960,12 +996,14 @@ agent = CustomPromptAgent(config=config, signature=signature)
 - ✅ Zero breaking changes (100% backward compatible)
 
 ### v0.6.3
+
 - ✅ OpenAI Structured Outputs API support (strict mode)
 - ✅ Signature inheritance field merging (MERGE not REPLACE)
 - ✅ provider_config nested dict preservation
-- ✅ LLMAgentNode provider_config parameter support
+- ✅ Kaizen agent provider_config parameter support
 
 ### v0.6.2 (Legacy)
+
 - ❌ No OpenAI Structured Outputs support
 - ❌ Signature inheritance replaced parent fields
 - ❌ provider_config blocked by workflow validation

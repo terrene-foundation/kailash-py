@@ -1,73 +1,81 @@
-# Zero-Tolerance Enforcement Rules
+# Zero-Tolerance Rules
 
 ## Scope
 
-These rules apply to ALL sessions, ALL agents, ALL code changes, ALL phases. They are ABSOLUTE and NON-NEGOTIABLE. There is NO flexibility on any of these rules.
+ALL sessions, ALL agents, ALL code, ALL phases. ABSOLUTE and NON-NEGOTIABLE.
 
-## ABSOLUTE RULE 1: Pre-Existing Failures MUST Be Resolved
+## Rule 1: Pre-Existing Failures MUST Be Resolved Immediately
 
-When tests, red team validation, code review, or any analysis reveals a pre-existing failure:
+If you found it, you own it. Fix it in THIS run — do not report, log, or defer.
 
-**YOU MUST FIX IT.** Period.
-
-"It was not introduced in this session" is NOT an acceptable response. If you found it, you own it.
-
-**Required response to ANY pre-existing failure:**
-
-1. Diagnose the root cause
+1. Diagnose root cause
 2. Implement the fix
-3. Write a regression test that fails without the fix and passes with it
-4. Verify the fix with `pytest`
-5. Include the fix in the current commit or a dedicated fix commit
+3. Write a regression test
+4. Verify with `pytest`
+5. Include in current or dedicated commit
 
 **BLOCKED responses:**
 
-- "This is a pre-existing issue, not introduced in this session"
-- "This failure exists in the current codebase and is outside the scope of this change"
-- "Noting this as a known issue for future resolution"
-- ANY response that acknowledges a failure without fixing it
+- "Pre-existing issue, not introduced in this session"
+- "Outside the scope of this change"
+- "Known issue for future resolution"
+- "Reporting this for future attention"
+- ANY acknowledgement, logging, or documentation without an actual fix
 
-**The only acceptable exception:** The user explicitly says "skip this issue" or "ignore this for now."
+**Exception:** User explicitly says "skip this issue."
 
-## ABSOLUTE RULE 2: No Stubs, Placeholders, or Deferred Implementation — EVER
+## Rule 2: No Stubs, Placeholders, or Deferred Implementation
 
-Stubs are BLOCKED. No approval process. No exceptions. The validate-workflow hook exits with code 2 (BLOCK) on detection.
+Production code MUST NOT contain:
 
-Full detection patterns and enforcement: see `rules/no-stubs.md`.
+- `TODO`, `FIXME`, `HACK`, `STUB`, `XXX` markers
+- `raise NotImplementedError`
+- `pass # placeholder`, empty function bodies
+- `return None # not implemented`
 
-## ABSOLUTE RULE 3: No Naive Fallbacks or Error Hiding
+**No simulated/fake data:**
 
-Hiding errors behind `except: pass`, `return None`, or silent discards is BLOCKED.
+- `simulated_data`, `fake_response`, `dummy_value`
+- Hardcoded mock responses pretending to be real API calls
+- `return {"status": "ok"}` as placeholder for real logic
 
-Full detection patterns and acceptable exceptions: see `rules/no-stubs.md` Section 3.
+**Frontend mock data is a stub:**
 
-## ABSOLUTE RULE 4: No Workarounds for Core SDK Issues
+- `MOCK_*`, `FAKE_*`, `DUMMY_*`, `SAMPLE_*` constants
+- `generate*()` / `mock*()` functions producing synthetic data
+- `Math.random()` used for display data
 
-When you encounter a bug in the SDK:
+**Why:** Frontend mock data is invisible to Python detection but has the same effect — users see fake data presented as real.
 
-**DO NOT work around it. DO NOT re-implement it naively.**
+## Rule 3: No Silent Fallbacks or Error Hiding
 
-File a GitHub issue on the SDK repository (`terrene-foundation/kailash-py`) with a minimal reproduction. Use a supported alternative pattern if one exists.
+- `except: pass` (bare except with pass) — BLOCKED
+- `catch(e) {}` (empty catch) — BLOCKED
+- `except Exception: return None` without logging — BLOCKED
 
-**BLOCKED:** Naive re-implementations, post-processing to "fix" SDK output, downgrading to avoid bugs.
+**Acceptable:** `except: pass` in hooks/cleanup where failure is expected.
 
-## ABSOLUTE RULE 5: Version Consistency on Release
+## Rule 4: No Workarounds for Core SDK Issues
 
-When releasing ANY package, ALL version locations MUST be updated atomically:
+This is a BUILD repo. You have the source. Fix bugs directly.
+
+**BLOCKED:** Naive re-implementations, post-processing, downgrading.
+
+## Rule 5: Version Consistency on Release
+
+ALL version locations updated atomically:
 
 1. `pyproject.toml` → `version = "X.Y.Z"`
 2. `src/{package}/__init__.py` → `__version__ = "X.Y.Z"`
 
-The session-start hook checks this automatically. **A release with mismatched versions is BLOCKED.**
+## Rule 6: Implement Fully
 
-## Enforcement
+- ALL methods, not just the happy path
+- If an endpoint exists, it returns real data
+- If a service is referenced, it is functional
+- Never leave "will implement later" comments
+- If you cannot implement: ask the user what it should do, then do it. If user says "remove it," delete the function.
 
-1. **validate-workflow.js hook** — BLOCKS stubs and error hiding in production code
-2. **user-prompt-rules-reminder.js hook** — Injects zero-tolerance reminders every message
-3. **session-start.js hook** — Checks package freshness and COC sync status
-4. **intermediate-reviewer agent** — Validates compliance during code review
-5. **security-reviewer agent** — Validates compliance during security review
+**Test files excluded:** `test_*`, `*_test.*`, `*.test.*`, `*.spec.*`, `__tests__/`
 
-## Language Policy
-
-Every "MUST" means "MUST." Every "BLOCKED" means the operation WILL NOT proceed. Every "NO" means "NO."
+**Iterative TODOs:** Permitted when actively tracked.

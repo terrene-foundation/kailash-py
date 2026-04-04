@@ -20,7 +20,11 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
+<<<<<<< HEAD
 from dataflow.fabric.consumers import ConsumerRegistry
+=======
+from dataflow.fabric.context import PipelineContext
+>>>>>>> 592b276a
 from dataflow.fabric.products import ProductRegistration
 
 logger = logging.getLogger(__name__)
@@ -145,6 +149,7 @@ class FabricServingLayer:
             if request and hasattr(request, "query_params"):
                 params = dict(request.query_params)
 
+<<<<<<< HEAD
             # Extract consumer param before passing to product logic
             consumer_name = params.pop("consumer", None)
 
@@ -167,6 +172,12 @@ class FabricServingLayer:
                             f"'{name}' but no adapter function is registered."
                         ),
                     }
+=======
+            # Parse refresh flag — ?refresh=true bypasses cache
+            refresh = params.pop("refresh", "false")
+            if isinstance(refresh, str):
+                refresh = refresh.lower() == "true"
+>>>>>>> 592b276a
 
             # Build cache key
             if product.mode.value == "parameterized" and params:
@@ -198,6 +209,43 @@ class FabricServingLayer:
                             "_status": 400,
                             "error": "limit must be a positive integer",
                         }
+
+            # Refresh: bypass cache and execute fresh
+            if refresh:
+                try:
+                    source_adapters = {
+                        src_name: src_info["adapter"]
+                        for src_name, src_info in self._sources.items()
+                        if "adapter" in src_info
+                    }
+                    ctx = PipelineContext(
+                        express=self._express,
+                        sources=source_adapters,
+                        products_cache={},
+                    )
+                    result = await self._pipeline.execute_product(
+                        product_name=name,
+                        product_fn=product.fn,
+                        context=ctx,
+                        params=params if params else None,
+                    )
+                    return {
+                        "_status": 200,
+                        "_headers": {
+                            _HEADER_FRESHNESS: "fresh",
+                            _HEADER_PIPELINE_MS: str(int(result.duration_ms)),
+                            _HEADER_MODE: product.mode.value,
+                        },
+                        "data": result.data,
+                    }
+                except Exception as e:
+                    logger.error(
+                        "Refresh execution failed for product '%s': %s", name, e
+                    )
+                    return {
+                        "_status": 500,
+                        "error": "Product refresh failed",
+                    }
 
             # Try to get cached data
             cached = self._pipeline.get_cached(name)
@@ -259,7 +307,31 @@ class FabricServingLayer:
                     "data": {"status": "warming", "product": name},
                 }
 
-            # Virtual or parameterized with no cache — return empty
+            # Virtual products execute inline — they never cache (#245)
+            if product.mode.value == "virtual":
+                source_adapters = {
+                    n: info["adapter"]
+                    for n, info in self._sources.items()
+                    if isinstance(info, dict) and "adapter" in info
+                }
+                ctx = PipelineContext(
+                    express=self._express,
+                    sources=source_adapters,
+                    products_cache={},
+                )
+                result = await self._pipeline.execute_product(
+                    name, product.fn, ctx
+                )
+                return {
+                    "_status": 200,
+                    "_headers": {
+                        _HEADER_FRESHNESS: "fresh",
+                        _HEADER_MODE: "virtual",
+                    },
+                    "data": result.data,
+                }
+
+            # Parameterized with no cache — return empty
             return {
                 "_status": 200,
                 "_headers": {
@@ -294,6 +366,7 @@ class FabricServingLayer:
                     results[name] = {"error": f"Product '{name}' not found"}
                     continue
 
+                product = self._products[name]
                 cached = self._pipeline.get_cached(name)
                 if cached is not None:
                     data_bytes, metadata = cached
@@ -306,6 +379,25 @@ class FabricServingLayer:
                     results[name] = {
                         "data": data,
                         "cached_at": metadata.get("cached_at", ""),
+                    }
+                elif product.mode.value == "virtual":
+                    # Virtual products execute inline — never cached (#245)
+                    source_adapters = {
+                        n: info["adapter"]
+                        for n, info in self._sources.items()
+                        if isinstance(info, dict) and "adapter" in info
+                    }
+                    ctx = PipelineContext(
+                        express=self._express,
+                        sources=source_adapters,
+                        products_cache={},
+                    )
+                    pipe_result = await self._pipeline.execute_product(
+                        name, product.fn, ctx
+                    )
+                    results[name] = {
+                        "data": pipe_result.data,
+                        "status": "fresh",
                     }
                 else:
                     results[name] = {"data": None, "status": "cold"}
