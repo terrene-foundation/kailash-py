@@ -16,7 +16,7 @@ Comprehensive reference for all 110+ workflow nodes in Kailash SDK, organized by
 | Category          | File                                                          | Key Nodes                                                                            |
 | ----------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | AI & ML           | [nodes-ai-reference](nodes-ai-reference.md)                   | LLMNode, AnthropicNode, OpenAINode, VisionNode, AudioNode, EmbeddingNode, OllamaNode |
-| API & Integration | [nodes-api-reference](nodes-api-reference.md)                 | APICallNode, HTTPRequestNode, WebhookNode, GraphQLNode                               |
+| API & Integration | [nodes-api-reference](nodes-api-reference.md)                 | HTTPRequestNode, WebhookNode, GraphQLNode                                            |
 | Code Execution    | [nodes-code-reference](nodes-code-reference.md)               | PythonCodeNode, JavaScriptNode, BashNode                                             |
 | Data Processing   | [nodes-data-reference](nodes-data-reference.md)               | CSVReaderNode, JSONParserNode, DataValidatorNode, FilterNode, MapNode                |
 | Database          | [nodes-database-reference](nodes-database-reference.md)       | SQLQueryNode, AsyncSQLNode, DatabaseReadNode (+ DataFlow auto-generated)             |
@@ -34,7 +34,7 @@ Comprehensive reference for all 110+ workflow nodes in Kailash SDK, organized by
 | Text generation     | LLMNode, OpenAINode, AnthropicNode               |
 | Vision / Audio      | VisionNode, AudioNode                            |
 | Local LLMs          | OllamaNode                                       |
-| REST APIs           | APICallNode, HTTPRequestNode                     |
+| REST APIs           | HTTPRequestNode                                  |
 | Webhooks / GraphQL  | WebhookNode, GraphQLNode                         |
 | Custom Python logic | PythonCodeNode (most flexible)                   |
 | Database CRUD       | DataFlow auto-generated nodes (not raw DB nodes) |

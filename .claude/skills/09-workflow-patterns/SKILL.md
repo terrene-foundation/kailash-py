@@ -49,7 +49,7 @@ workflow.add_connection("transform", "output", "load", "data")
 ```python
 workflow.add_node("Embed", "embed", {"model": "text-embedding-ada-002"})
 workflow.add_node("Search", "search", {"index": "vectors"})
-workflow.add_node("Generate", "generate", {"model": "gpt-4"})
+workflow.add_node("Generate", "generate", {"model": os.environ["LLM_MODEL"]})
 ```
 
 ## Pattern Structure

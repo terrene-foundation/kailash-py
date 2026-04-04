@@ -17,28 +17,28 @@ pip install kailash-kaizen>=2.0.0 # For governed Kaizen agents
 
 ## Skill Files
 
-| Skill                                                 | Use When                                    |
-| ----------------------------------------------------- | ------------------------------------------- |
-| [pact-quickstart](pact-quickstart.md)                 | Getting started, first GovernanceEngine     |
-| [pact-governance-engine](pact-governance-engine.md)   | Engine API, verify_action, compute_envelope |
-| [pact-dtr-addressing](pact-dtr-addressing.md)         | D/T/R grammar, Address parsing              |
-| [pact-envelopes](pact-envelopes.md)                   | Three-layer model, monotonic tightening     |
-| [pact-access-enforcement](pact-access-enforcement.md) | 5-step algorithm, clearance, bridges, KSPs  |
-| [pact-governed-agents](pact-governed-agents.md)       | PactGovernedAgent, @governed_tool           |
-| [pact-kaizen-integration](pact-kaizen-integration.md) | Wrapping Kaizen agents with governance      |
+| Skill                                                 | Use When                                        |
+| ----------------------------------------------------- | ----------------------------------------------- |
+| [pact-quickstart](pact-quickstart.md)                 | Getting started, first GovernanceEngine         |
+| [pact-governance-engine](pact-governance-engine.md)   | Engine API, verify_action, compute_envelope     |
+| [pact-dtr-addressing](pact-dtr-addressing.md)         | D/T/R grammar, Address parsing                  |
+| [pact-envelopes](pact-envelopes.md)                   | Three-layer model, monotonic tightening         |
+| [pact-access-enforcement](pact-access-enforcement.md) | 5-step algorithm, clearance, bridges, KSPs      |
+| [pact-governed-agents](pact-governed-agents.md)       | PactGovernedAgent, @governed_tool               |
+| [pact-kaizen-integration](pact-kaizen-integration.md) | Wrapping Kaizen agents with governance          |
 | [pact-mcp-governance](pact-mcp-governance.md)         | MCP tool governance: enforce, audit, middleware |
 
 ## Key Types
 
 ```python
 from pact.governance import GovernanceEngine, GovernanceVerdict
-from pact.governance.config import (
+from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig, OrgDefinition,
     TrustPostureLevel, VerificationLevel,
     ConfidentialityLevel,
 )
-from pact.governance.agent import PactGovernedAgent
-from pact.governance.audit import AuditChain
+from kailash.trust.pact.agent import PactGovernedAgent
+from kailash.trust.pact.audit import AuditChain
 
 # MCP governance
 from pact.mcp import (

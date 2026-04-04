@@ -43,8 +43,8 @@ class SummarizeSignature(Signature):
 # Define configuration
 @dataclass
 class SummaryConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ["LLM_MODEL"]
     temperature: float = 0.7
 
 # Create agent with signature
@@ -415,8 +415,9 @@ from nexus import Nexus
 
 # Deploy agents via API/CLI/MCP
 agent_workflow = create_agent_workflow()
-nexus = Nexus([agent_workflow])
-nexus.run()  # Agents available via all channels
+app = Nexus()
+app.register("agent", agent_workflow.build())
+app.start()  # Agents available via all channels
 ```
 
 ### With Core SDK (Custom Workflows)
