@@ -421,11 +421,42 @@ class WorkflowAPI:
             await asyncio.sleep(0.001)
 
             # ========================================
-            # EXECUTE WORKFLOW
+            # EXECUTE WORKFLOW (directly, not via _execute_sync)
             # ========================================
-            # For now, execute synchronously
-            # Future enhancement: Stream intermediate results
-            result = await self._execute_sync(request)
+            # Execute the workflow directly so errors propagate with
+            # their original message instead of being wrapped in HTTPException.
+            start_time = time.time()
+
+            from kailash.runtime.async_local import AsyncLocalRuntime
+
+            if isinstance(self.runtime, AsyncLocalRuntime):
+                async_result = await self.runtime.execute_workflow_async(
+                    self.workflow_graph,
+                    inputs=request.get_inputs(),
+                )
+                results = (
+                    async_result[0] if isinstance(async_result, tuple) else async_result
+                )
+            elif self.runtime is not None:
+                results = await asyncio.to_thread(
+                    self.runtime.execute,
+                    self.workflow_graph,
+                    parameters=request.get_inputs(),
+                )
+            else:
+                raise RuntimeError("No runtime configured for workflow execution")
+
+            if isinstance(results, tuple):
+                results = results[0] if results else {}
+
+            execution_time = time.time() - start_time
+
+            result = WorkflowResponse(
+                outputs=results,
+                execution_time=execution_time,
+                workflow_id=self.workflow_id,
+                version=self.version,
+            )
 
             # ========================================
             # COMPLETE EVENT
@@ -453,7 +484,7 @@ class WorkflowAPI:
             yield f"id: {event_id}\n"
             yield "event: error\n"
             error_data = {
-                "error": "Execution failed",
+                "error": str(e),
                 "timestamp": time.time(),
             }
             yield f"data: {json.dumps(error_data)}\n\n"
