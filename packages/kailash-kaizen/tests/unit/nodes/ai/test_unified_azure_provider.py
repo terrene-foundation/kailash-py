@@ -318,7 +318,7 @@ class TestUnifiedAzureProviderProviderInfo:
         provider = UnifiedAzureProvider()
         source = provider.get_detection_source()
 
-        assert source in ("pattern", "default", "explicit", "error_fallback")
+        assert source in ("pattern", "default", "explicit")
 
     def test_supports_chat(self, monkeypatch):
         """Should indicate chat support."""
@@ -338,27 +338,12 @@ class TestUnifiedAzureProviderProviderInfo:
 
 
 class TestUnifiedAzureProviderErrorHandling:
-    """Tests for error-based backend correction."""
+    """Tests for error handling (no silent backend switching)."""
 
-    @patch("openai.AzureOpenAI")
-    def test_error_triggers_backend_switch(self, mock_openai_class, monkeypatch):
-        """Should switch backends on specific error signatures."""
-        monkeypatch.setenv("AZURE_ENDPOINT", "https://custom.proxy.com")
+    def test_no_handle_error_method(self, monkeypatch):
+        """handle_error method should no longer exist on the provider."""
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
         monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
-        # First call fails with audience error (indicates AI Foundry)
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = Exception(
-            "audience is incorrect (https://cognitiveservices.azure.com)"
-        )
-        mock_openai_class.return_value = mock_client
-
         provider = UnifiedAzureProvider()
-
-        # Should switch to AI Foundry based on error
-        new_backend = provider.handle_error(
-            Exception("audience is incorrect (https://cognitiveservices.azure.com)")
-        )
-
-        assert new_backend == "azure_ai_foundry"
-        assert provider.get_detection_source() == "error_fallback"
+        assert not hasattr(provider, "handle_error")

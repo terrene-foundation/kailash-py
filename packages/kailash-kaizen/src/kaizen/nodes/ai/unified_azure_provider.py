@@ -38,17 +38,17 @@ class UnifiedAzureProvider(UnifiedAIProvider):
     - Feature gap detection with clear error messages
     - Automatic parameter filtering for reasoning models (o1, o3, GPT-5)
     - Structured output support with api_version handling
-    - Error-based backend correction for custom endpoints
 
-    Environment Variables:
-        AZURE_ENDPOINT: Unified endpoint URL (recommended)
-        AZURE_API_KEY: Unified API key (recommended)
+    Environment Variables (canonical -- recommended):
+        AZURE_ENDPOINT: Endpoint URL
+        AZURE_API_KEY: API key
         AZURE_BACKEND: Explicit backend override ('openai' or 'foundry')
         AZURE_API_VERSION: API version (default: 2024-10-21)
         AZURE_DEPLOYMENT: Default deployment name
 
-        Legacy (backward compatible):
+    Legacy (still supported, emit DeprecationWarning):
         AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY
+        AZURE_OPENAI_API_VERSION
         AZURE_AI_INFERENCE_ENDPOINT, AZURE_AI_INFERENCE_API_KEY
 
     Examples:
@@ -156,7 +156,7 @@ class UnifiedAzureProvider(UnifiedAIProvider):
         Get how the backend was detected.
 
         Returns:
-            "explicit", "pattern", "default", "error_fallback", or None
+            "explicit", "pattern", "default", or None
         """
         return self._detector.detection_source
 
@@ -221,32 +221,6 @@ class UnifiedAzureProvider(UnifiedAIProvider):
         if self._registry:
             self._registry.check_model_requirements(model)
 
-    def handle_error(self, error: Exception) -> Optional[str]:
-        """
-        Handle an error that may indicate wrong backend detection.
-
-        This enables automatic backend correction when the initial detection
-        was incorrect (e.g., for custom domains or proxies).
-
-        Args:
-            error: The exception from a failed API call
-
-        Returns:
-            New backend type if correction was made, None otherwise
-        """
-        new_backend = self._detector.handle_error(error)
-
-        if new_backend and new_backend != self._active_backend:
-            logger.info(
-                f"Switching backend from {self._active_backend} to {new_backend} "
-                f"based on error: {str(error)[:100]}"
-            )
-            self._active_backend = new_backend
-            self._registry = AzureCapabilityRegistry(new_backend)
-            return new_backend
-
-        return None
-
     def chat(self, messages: List[Dict], **kwargs) -> Dict[str, Any]:
         """
         Generate a chat completion using the appropriate Azure backend.
@@ -278,17 +252,7 @@ class UnifiedAzureProvider(UnifiedAIProvider):
             self.check_model_requirements(model)
 
         backend = self._get_backend()
-
-        try:
-            return backend.chat(messages, **kwargs)
-        except Exception as e:
-            # Try error-based backend correction
-            new_backend = self.handle_error(e)
-            if new_backend:
-                # Retry with corrected backend
-                backend = self._get_backend()
-                return backend.chat(messages, **kwargs)
-            raise
+        return backend.chat(messages, **kwargs)
 
     async def chat_async(self, messages: List[Dict], **kwargs) -> Dict[str, Any]:
         """
@@ -306,15 +270,7 @@ class UnifiedAzureProvider(UnifiedAIProvider):
             self.check_model_requirements(model)
 
         backend = self._get_backend()
-
-        try:
-            return await backend.chat_async(messages, **kwargs)
-        except Exception as e:
-            new_backend = self.handle_error(e)
-            if new_backend:
-                backend = self._get_backend()
-                return await backend.chat_async(messages, **kwargs)
-            raise
+        return await backend.chat_async(messages, **kwargs)
 
     def embed(self, texts: List[str], **kwargs) -> List[List[float]]:
         """

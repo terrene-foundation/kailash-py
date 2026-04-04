@@ -108,37 +108,40 @@ class AzureOpenAIBackend(AzureBackend):
     - Structured outputs (json_schema)
     - Reasoning models (o1, o3, GPT-5) with automatic parameter filtering
 
-    Environment Variables:
-        AZURE_OPENAI_ENDPOINT: Azure OpenAI endpoint URL
-        AZURE_OPENAI_API_KEY: API key
+    Environment Variables (canonical -- recommended):
+        AZURE_ENDPOINT: Endpoint URL
+        AZURE_API_KEY: API key
         AZURE_API_VERSION: API version (default: 2024-10-21)
         AZURE_DEPLOYMENT: Default deployment name
 
-        Alternative unified variables:
-        AZURE_ENDPOINT: Unified endpoint URL
-        AZURE_API_KEY: Unified API key
+    Legacy (still supported, emit DeprecationWarning):
+        AZURE_OPENAI_ENDPOINT -> use AZURE_ENDPOINT
+        AZURE_OPENAI_API_KEY -> use AZURE_API_KEY
+        AZURE_OPENAI_API_VERSION -> use AZURE_API_VERSION
     """
 
     def __init__(self):
         """Initialize Azure OpenAI backend."""
+        from .azure_detection import resolve_azure_env
+
         self._client = None
         self._async_client = None
-        self._endpoint = self._get_endpoint()
-        self._api_key = self._get_api_key()
+        self._endpoint = resolve_azure_env(
+            "AZURE_ENDPOINT",
+            "AZURE_OPENAI_ENDPOINT",
+        )
+        self._api_key = resolve_azure_env(
+            "AZURE_API_KEY",
+            "AZURE_OPENAI_API_KEY",
+        )
         self._api_version = (
-            os.getenv("AZURE_OPENAI_API_VERSION")
-            or os.getenv("AZURE_API_VERSION")
+            resolve_azure_env(
+                "AZURE_API_VERSION",
+                "AZURE_OPENAI_API_VERSION",
+            )
             or DEFAULT_API_VERSION
         )
         self._deployment = os.getenv("AZURE_DEPLOYMENT")
-
-    def _get_endpoint(self) -> Optional[str]:
-        """Get endpoint from environment variables."""
-        return os.getenv("AZURE_OPENAI_ENDPOINT") or os.getenv("AZURE_ENDPOINT")
-
-    def _get_api_key(self) -> Optional[str]:
-        """Get API key from environment variables."""
-        return os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("AZURE_API_KEY")
 
     def is_configured(self) -> bool:
         """Check if Azure OpenAI is configured."""
@@ -373,31 +376,31 @@ class AzureAIFoundryBackend(AzureBackend):
     - Embeddings
     - Vision (model-dependent)
 
-    Environment Variables:
-        AZURE_AI_INFERENCE_ENDPOINT: AI Foundry endpoint URL
-        AZURE_AI_INFERENCE_API_KEY: API key
+    Environment Variables (canonical -- recommended):
+        AZURE_ENDPOINT: Endpoint URL
+        AZURE_API_KEY: API key
 
-        Alternative unified variables:
-        AZURE_ENDPOINT: Unified endpoint URL
-        AZURE_API_KEY: Unified API key
+    Legacy (still supported, emit DeprecationWarning):
+        AZURE_AI_INFERENCE_ENDPOINT -> use AZURE_ENDPOINT
+        AZURE_AI_INFERENCE_API_KEY -> use AZURE_API_KEY
     """
 
     def __init__(self):
         """Initialize Azure AI Foundry backend."""
+        from .azure_detection import resolve_azure_env
+
         self._sync_chat_client = None
         self._async_chat_client = None
         self._sync_embed_client = None
         self._async_embed_client = None
-        self._endpoint = self._get_endpoint()
-        self._api_key = self._get_api_key()
-
-    def _get_endpoint(self) -> Optional[str]:
-        """Get endpoint from environment variables."""
-        return os.getenv("AZURE_AI_INFERENCE_ENDPOINT") or os.getenv("AZURE_ENDPOINT")
-
-    def _get_api_key(self) -> Optional[str]:
-        """Get API key from environment variables."""
-        return os.getenv("AZURE_AI_INFERENCE_API_KEY") or os.getenv("AZURE_API_KEY")
+        self._endpoint = resolve_azure_env(
+            "AZURE_ENDPOINT",
+            "AZURE_AI_INFERENCE_ENDPOINT",
+        )
+        self._api_key = resolve_azure_env(
+            "AZURE_API_KEY",
+            "AZURE_AI_INFERENCE_API_KEY",
+        )
 
     def is_configured(self) -> bool:
         """Check if Azure AI Foundry is configured."""

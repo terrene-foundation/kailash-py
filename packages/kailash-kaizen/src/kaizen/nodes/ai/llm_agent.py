@@ -760,12 +760,6 @@ class LLMAgentNode(Node):
         if response_format and isinstance(response_format, dict):
             generation_config["response_format"] = response_format
 
-        # Read provider_config separately (provider-specific settings like api_version)
-        # These are NOT response_format — they're passed to the provider backend
-        provider_config = self.config.get(
-            "provider_config", kwargs.get("provider_config", {})
-        )
-
         streaming = kwargs.get("streaming", False)
         timeout = kwargs.get("timeout", 120)
         max_retries = kwargs.get("max_retries", 3)
