@@ -77,7 +77,7 @@ def accuracy_reward(completions: list[str], prompts: list[str], **kwargs) -> lis
 
 ### Config Validation Pattern
 
-All config classes are `@dataclass(frozen=True)` with `__post_init__` validation:
+Method-specific config classes (LoRAConfig, SFTConfig, DPOConfig, KTOConfig, ORPOConfig, GRPOConfig, RLOOConfig, OnlineDPOConfig, ServingConfig, EvalConfig) are `@dataclass(frozen=True)` with `__post_init__` validation. AlignmentConfig and OnPremConfig are mutable dataclasses.
 
 - `_validate_finite()` for NaN/Inf rejection
 - `_validate_positive()` for positive-only fields
@@ -109,11 +109,11 @@ Set `AlignmentConfig.loss_type` to use DPO variants without new trainer code:
 ### Bounded Registries (R3 Red Team)
 
 - AdapterRegistry: `max_adapters=10,000`, `max_versions_per_adapter=1,000` — prevents OOM from unbounded growth
-- Exceeding bounds raises `RegistryCapacityError`
+- Exceeding bounds raises `AlignmentError`
 
 ### Shell/Subprocess Hardening (R3 Red Team)
 
-- Generated shell scripts (launch*vllm.sh) sanitize adapter_name: regex `[^\w.:-]` replaced with `*`
+- Generated shell scripts (launch\*vllm.sh) sanitize adapter*name: regex `[^\w.:-]` replaced with `*`
 - Subprocess calls use `--` separator before path arguments (prevents flag injection)
 - `_convert_hf_to_gguf` and `_quantize_gguf` pass model_path via `shell=False` list form
 

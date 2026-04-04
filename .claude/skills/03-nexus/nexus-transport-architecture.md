@@ -66,7 +66,6 @@ Creates FastAPI routes from registered handlers:
 from nexus.transports.http import HTTPTransport
 
 transport = HTTPTransport(
-    host="0.0.0.0",
     port=8000,
     cors_origins=["*"],
 )
@@ -94,8 +93,8 @@ handler_def = HandlerDef(
     name="greet",
     func=greet_function,
     params=[
-        HandlerParam(name="name", type=str, default=None, required=True),
-        HandlerParam(name="greeting", type=str, default="Hello", required=False),
+        HandlerParam(name="name", param_type="string", default=None, required=True),
+        HandlerParam(name="greeting", param_type="string", default="Hello", required=False),
     ],
     description="Greet a user",
     tags=["greeting"],
@@ -118,7 +117,7 @@ async def upload(file: NexusFile, name: str = "untitled") -> dict:
     # - HTTP: multipart upload -> NexusFile.from_upload_file()
     # - CLI: file path -> NexusFile.from_path()
     # - MCP: base64 string -> NexusFile.from_base64()
-    return {"size": len(file.data), "name": name}
+    return {"size": file.size, "name": name}
 ```
 
 ## Custom Transport
@@ -134,7 +133,7 @@ class WebSocketTransport(Transport):
 
     async def start(self, registry: HandlerRegistry) -> None:
         # Read all handlers and set up WS dispatch
-        for handler_def in registry.handlers.values():
+        for handler_def in registry.list_handlers():
             self._register_ws_handler(handler_def)
         self._running = True
 

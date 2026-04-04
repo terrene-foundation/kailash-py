@@ -18,13 +18,13 @@ from kailash.workflow.builder import WorkflowBuilder
 workflow = WorkflowBuilder()
 
 # 1. Create shipment
-workflow.add_node("DatabaseExecuteNode", "create_shipment", {
+workflow.add_node("SQLDatabaseNode", "create_shipment", {
     "query": "INSERT INTO shipments (origin, destination, status) VALUES (?, ?, 'pending')",
     "parameters": ["{{input.origin}}", "{{input.destination}}"]
 })
 
 # 2. Calculate optimal route
-workflow.add_node("APICallNode", "route_optimization", {
+workflow.add_node("HTTPRequestNode", "route_optimization", {
     "url": "https://api.routingengine.com/optimize",
     "method": "POST",
     "body": {"origin": "{{input.origin}}", "destination": "{{input.destination}}"}
@@ -37,7 +37,7 @@ workflow.add_node("DatabaseQueryNode", "find_driver", {
 })
 
 # 4. Update shipment with route
-workflow.add_node("DatabaseExecuteNode", "update_shipment", {
+workflow.add_node("SQLDatabaseNode", "update_shipment", {
     "query": "UPDATE shipments SET driver_id = ?, route = ?, status = 'in_transit' WHERE id = ?",
     "parameters": ["{{find_driver.id}}", "{{route_optimization.route}}", "{{create_shipment.id}}"]
 })
@@ -49,7 +49,7 @@ workflow.add_node("LoopNode", "track_location", {
 })
 
 # 6. Update delivery status
-workflow.add_node("DatabaseExecuteNode", "mark_delivered", {
+workflow.add_node("SQLDatabaseNode", "mark_delivered", {
     "query": "UPDATE shipments SET status = 'delivered', delivered_at = NOW() WHERE id = ?",
     "parameters": ["{{create_shipment.id}}"]
 })

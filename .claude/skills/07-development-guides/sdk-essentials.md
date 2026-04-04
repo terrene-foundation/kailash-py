@@ -79,13 +79,13 @@ workflow.add_connection("api_call", "response", "transform", "response")
 
 ### 4. Quick AI Integration
 
+For LLM integration, use **Kaizen agents** (see `skills/04-kaizen/`). For quick prototyping in workflows:
+
 ```python
 workflow = WorkflowBuilder()
 
-workflow.add_node("LLMAgentNode", "ai", {
-    "provider": "ollama",
-    "model": "llama3.2",
-    "messages": [{"role": "user", "content": "Summarize this data"}]
+workflow.add_node("PythonCodeNode", "ai", {
+    "code": "import os; from openai import OpenAI; client = OpenAI(); resp = client.chat.completions.create(model=os.environ.get('LLM_MODEL', 'gpt-4'), messages=[{'role': 'user', 'content': 'Summarize this data'}]); result = {'response': resp.choices[0].message.content}"
 })
 
 workflow.add_node("PythonCodeNode", "format", {

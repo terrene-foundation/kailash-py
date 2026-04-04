@@ -24,26 +24,26 @@ workflow.add_node("DatabaseQueryNode", "get_item", {
 })
 
 # 2. Run quality tests
-workflow.add_node("APICallNode", "quality_test", {
+workflow.add_node("HTTPRequestNode", "quality_test", {
     "url": "{{sensors.quality_api}}",
     "method": "POST",
     "body": {"item_id": "{{get_item.id}}"}
 })
 
 # 3. Evaluate results
-workflow.add_node("ConditionalNode", "check_quality", {
+workflow.add_node("SwitchNode", "check_quality", {
     "condition": "{{quality_test.score}} >= 95",
     "true_branch": "approve",
     "false_branch": "reject"
 })
 
 # 4. Update inventory
-workflow.add_node("DatabaseExecuteNode", "approve", {
+workflow.add_node("SQLDatabaseNode", "approve", {
     "query": "UPDATE production_items SET status = 'approved', quality_score = ? WHERE id = ?",
     "parameters": ["{{quality_test.score}}", "{{get_item.id}}"]
 })
 
-workflow.add_node("DatabaseExecuteNode", "reject", {
+workflow.add_node("SQLDatabaseNode", "reject", {
     "query": "UPDATE production_items SET status = 'rejected', rejection_reason = ? WHERE id = ?",
     "parameters": ["{{quality_test.failure_reason}}", "{{get_item.id}}"]
 })

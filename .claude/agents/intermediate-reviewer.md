@@ -40,6 +40,17 @@ You are an intermediate review specialist focused on critiquing documents at cri
 - [ ] Foundation IP ownership correctly stated (all open-source IP fully transferred, no commercial entity relationship)
 - [ ] CARE planes: Trust Plane + Execution Plane (not operational/governance)
 
+### Agent Reasoning (rules/agent-reasoning.md)
+- [ ] No deterministic routing anti-patterns in agent code (keyword matching, regex classification, dispatch tables)
+- [ ] Tools are dumb data endpoints — no decision logic in tool functions
+- [ ] LLM does all routing, classification, extraction, and evaluation
+
+### Stub Detection (rules/no-stubs.md)
+- [ ] No TODO, FIXME, HACK, STUB, XXX markers in production code
+- [ ] No raise NotImplementedError or empty function bodies
+- [ ] No MOCK_*, FAKE_*, DUMMY_*, SAMPLE_* constants in frontend code
+- [ ] No simulated_data, fake_response, or placeholder return values
+
 ### What's Missing?
 1. [Overlooked content or gap]
 2. [Missing cross-reference]

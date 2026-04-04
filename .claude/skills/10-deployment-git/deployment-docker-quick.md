@@ -53,7 +53,7 @@ from kailash.workflow.builder import WorkflowBuilder
 workflow = WorkflowBuilder()
 workflow.add_node("LLMNode", "chat", {
     "provider": "openai",
-    "model": os.environ.get("LLM_MODEL", "gpt-4"),
+    "model": os.environ.get("LLM_MODEL", ""),
     "prompt": "{{input.message}}"
 })
 

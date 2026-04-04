@@ -27,8 +27,8 @@ class QAConfig:
     NOT BaseAgentConfig - BaseAgent extracts what it needs.
     """
     # BaseAgent extracts these automatically:
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.7
     max_tokens: int = 1000
 
@@ -62,7 +62,7 @@ BaseAgent looks for these fields in your domain config:
 ```python
 # Core fields (extracted automatically)
 llm_provider: str     # "openai", "anthropic", "ollama", "mock"
-model: str            # Model name (e.g., "gpt-4")
+model: str            # Model name (from LLM_MODEL env var)
 temperature: float    # Sampling temperature (0.0-1.0)
 max_tokens: int       # Maximum tokens to generate
 
@@ -83,8 +83,8 @@ provider_config: dict # Provider-specific configuration
 @dataclass
 class BasicConfig:
     """Minimal configuration for simple agents."""
-    llm_provider: str = "openai"
-    model: str = "gpt-3.5-turbo"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.7
 
 agent = SimpleQAAgent(BasicConfig())
@@ -97,8 +97,8 @@ agent = SimpleQAAgent(BasicConfig())
 class ProductionConfig:
     """Production-ready configuration with all features."""
     # Core LLM settings
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.3  # Lower for consistency
     max_tokens: int = 2000
 
@@ -122,7 +122,7 @@ class ProductionConfig:
 class DevConfig:
     """Development configuration with debugging."""
     llm_provider: str = "mock"  # No API calls
-    model: str = "gpt-3.5-turbo"
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.7
     max_tokens: int = 500
 
@@ -144,7 +144,7 @@ load_dotenv()
 class EnvConfig:
     """Configuration from environment variables."""
     llm_provider: str = os.getenv("LLM_PROVIDER", "openai")
-    model: str = os.getenv("LLM_MODEL", "gpt-4")
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.7"))
     max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "1000"))
 
@@ -158,14 +158,14 @@ class EnvConfig:
 @dataclass
 class MultiProviderConfig:
     """Support multiple LLM providers."""
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.7
     max_tokens: int = 1000
 
     # Fallback provider
     fallback_provider: str = "anthropic"
-    fallback_model: str = "claude-3-opus-20240229"
+    fallback_model: str = os.environ.get("LLM_MODEL", "")
 
     # Provider-specific settings
     provider_config: dict = None
@@ -189,8 +189,8 @@ from kaizen.llm.routing.fallback import FallbackRouter, FallbackRejectedError
 
 # Basic usage with fallback chain
 router = FallbackRouter(
-    primary_model="gpt-4",
-    fallback_chain=["claude-3-opus", "gemini-pro"],
+    primary_model=os.environ["LLM_MODEL"],
+    fallback_chain=[os.environ.get("LLM_FALLBACK_MODEL", "")],
 )
 
 # Safety: on_fallback callback fires BEFORE each fallback attempt
@@ -200,8 +200,8 @@ def check_fallback(event):
         raise FallbackRejectedError("Cannot downgrade for critical task")
 
 router = FallbackRouter(
-    primary_model="gpt-4",
-    fallback_chain=["claude-3-opus"],
+    primary_model=os.environ["LLM_MODEL"],
+    fallback_chain=[os.environ.get("LLM_FALLBACK_MODEL", "")],
     on_fallback=check_fallback,  # Fires before each fallback
 )
 ```
@@ -219,8 +219,8 @@ router = FallbackRouter(
 ```python
 @dataclass
 class MemoryEnabledConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     max_turns: int = 10  # Enable BufferMemory, keep last 10 turns
 
 agent = MemoryAgent(MemoryEnabledConfig())
@@ -236,8 +236,8 @@ result2 = agent.ask("What's my name?", session_id="user123")
 ```python
 @dataclass
 class NoMemoryConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     max_turns: int = 0  # Disable memory (default)
 
 agent = StatelessAgent(NoMemoryConfig())
@@ -250,8 +250,8 @@ agent = StatelessAgent(NoMemoryConfig())
 ```python
 @dataclass
 class OpenAIConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.7
     max_tokens: int = 1000
 
@@ -272,8 +272,8 @@ class OpenAIConfig:
 ```python
 @dataclass
 class AnthropicConfig:
-    llm_provider: str = "anthropic"
-    model: str = "claude-3-opus-20240229"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.7
     max_tokens: int = 2000
 
@@ -317,7 +317,7 @@ class AzureConfig:
         export AZURE_AI_INFERENCE_API_KEY="your-key"
     """
     llm_provider: str = "azure"
-    model: str = "gpt-4o"  # Or any deployed model
+    model: str = os.environ.get("LLM_MODEL", "")  # Or any deployed model
     temperature: float = 0.7
     max_tokens: int = 1000
 
@@ -374,8 +374,8 @@ class GoogleGeminiConfig:
     Install dependency:
         pip install kailash-kaizen[google]
     """
-    llm_provider: str = "google"  # Or "gemini" (alias)
-    model: str = "gemini-2.0-flash"  # Fast, efficient model
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")  # Or "gemini" (alias)
+    model: str = os.environ.get("LLM_MODEL", "") # Fast, efficient model
     temperature: float = 0.7
     max_tokens: int = 1000
 
@@ -405,7 +405,7 @@ provider = GoogleGeminiProvider()
 # Chat
 response = provider.chat(
     messages=[{"role": "user", "content": "Hello!"}],
-    model="gemini-2.0-flash"
+    model=os.environ["LLM_MODEL"]
 )
 
 # Vision (multimodal)
@@ -421,7 +421,7 @@ response = provider.chat(
             {"type": "image", "base64": image_b64, "media_type": "image/png"}
         ]
     }],
-    model="gemini-2.0-flash"
+    model=os.environ["LLM_MODEL"]
 )
 
 # Embeddings
@@ -432,7 +432,7 @@ embeddings = provider.embed(
 # Returns: [[0.01, -0.02, ...]] (768-dim vectors)
 
 # Async
-response = await provider.chat_async(messages=[...], model="gemini-2.0-flash")
+response = await provider.chat_async(messages=[...], model=os.environ["LLM_MODEL"])
 embeddings = await provider.embed_async(texts=[...], model="text-embedding-004")
 ```
 
@@ -445,8 +445,8 @@ from typing import Optional
 
 @dataclass
 class ValidatedConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.7
     max_tokens: int = 1000
     timeout: int = 30
@@ -478,8 +478,8 @@ class ValidatedConfig:
 @dataclass
 class BaseConfig:
     """Base configuration shared across agents."""
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.7
     max_tokens: int = 1000
 

@@ -79,7 +79,7 @@ CARE (Philosophy: What is the human for?)
        |-- COL (Learners) — development
 ```
 
-CARE, EATP, and CO are peers inheriting from CARE as parent philosophy. They solve different problems and connect deeply:
+EATP and CO both inherit from CARE as parent philosophy; together they form the CARE-EATP-CO trinity. They solve different problems and connect deeply:
 
 - CO Layer 3 (Guardrails) ↔ EATP Constraint Envelopes
 - CO Layer 4 (Instructions) ↔ EATP Trust Postures / Verification Gradient

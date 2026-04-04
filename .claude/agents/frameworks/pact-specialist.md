@@ -52,10 +52,10 @@ Expert in PACT (Principled Architecture for Constrained Trust) governance framew
 Every entity has a positional address: Department/Team/Role. Grammar rule: every Department or Team MUST be immediately followed by exactly one Role.
 
 ```python
-from pact.governance.addressing import Address
+from kailash.trust.pact.addressing import Address
 
-addr = Address.parse("Engineering-CTO-Backend-TechLead-DevTeam-SeniorDev")
-# D1(Engineering)-R1(CTO)-D2(Backend)-R2(TechLead)-T1(DevTeam)-R3(SeniorDev)
+addr = Address.parse("D1-R1-D2-R2-T1-R3")
+# D1-R1-D2-R2-T1-R3 (segment notation: Dept1-Head-SubDept-Lead-Team-Member)
 ```
 
 ### Three-Layer Envelope Model
@@ -81,12 +81,13 @@ EffectiveEnvelope (computed -- can only be tighter)
 Single entry point for all governance decisions. Thread-safe, fail-closed, audit-by-default.
 
 ```python
-from pact.governance import GovernanceEngine, load_org_yaml
-from pact.governance.config import ConstraintEnvelopeConfig
+from kailash.trust.pact.engine import GovernanceEngine
+from kailash.trust.pact.yaml_loader import load_org_yaml
+from kailash.trust.pact.config import ConstraintEnvelopeConfig
 
-org = load_org_yaml("org.yaml")
-engine = GovernanceEngine(org)
-verdict = engine.verify_action("Eng-CTO-Backend-Lead", "deploy", {"cost": 500})
+loaded = load_org_yaml("org.yaml")
+engine = GovernanceEngine(loaded.org_definition)
+verdict = engine.verify_action("D1-R1-D2-R1", "deploy", {"cost": 500})
 # GovernanceVerdict(level="auto_approved", reason="...")
 ```
 

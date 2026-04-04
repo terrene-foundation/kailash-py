@@ -1,3 +1,11 @@
+---
+paths:
+  - "deploy/**"
+  - ".github/workflows/**"
+  - "pyproject.toml"
+  - "CHANGELOG.md"
+---
+
 # SDK Release Rules
 
 ## Scope

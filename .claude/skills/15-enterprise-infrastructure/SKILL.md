@@ -69,8 +69,16 @@ The user's workflow code is identical at all levels.
 
 ### Source Code Layout
 
-| Package                                           | Purpose                                                    |
-| ------------------------------------------------- | ---------------------------------------------------------- |
+| Module          | Path                                             | Purpose                         |
+| --------------- | ------------------------------------------------ | ------------------------------- |
+| Connection      | `src/kailash/db/connection.py`                   | ConnectionManager, transactions |
+| Dialect         | `src/kailash/db/dialect.py`                      | SQL dialect portability         |
+| Store Factory   | `src/kailash/infrastructure/factory.py`          | StoreFactory singleton          |
+| Task Queue      | `src/kailash/infrastructure/task_queue.py`       | Persistent task queue           |
+| Worker Registry | `src/kailash/infrastructure/worker_registry.py`  | Worker lifecycle                |
+| Idempotency     | `src/kailash/infrastructure/idempotency.py`      | Idempotent execution            |
+| Event Store     | `src/kailash/infrastructure/event_store.py`      | Event sourcing backend          |
+| Checkpoint      | `src/kailash/infrastructure/checkpoint_store.py` | Execution checkpoints           |
 
 ## Critical Rules
 

@@ -20,7 +20,6 @@ Complete reference for data transformation and processing nodes.
 from kailash.nodes.transform import (
     FilterNode,
     DataTransformer,
-    AggregationNode,
     TextSplitterNode
 )
 ```
@@ -28,6 +27,7 @@ from kailash.nodes.transform import (
 ## Filter Node
 
 ### FilterNode
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -42,6 +42,7 @@ workflow.add_node("FilterNode", "filter", {
 ## Data Transformer
 
 ### DataTransformer
+
 ```python
 workflow.add_node("DataTransformer", "transform", {
     "transformations": [
@@ -52,23 +53,10 @@ workflow.add_node("DataTransformer", "transform", {
 })
 ```
 
-## Aggregation
-
-### AggregationNode
-```python
-workflow.add_node("AggregationNode", "aggregate", {
-    "group_by": ["category"],
-    "aggregations": [
-        {"field": "price", "operation": "sum"},
-        {"field": "quantity", "operation": "avg"}
-    ],
-    "data": []  # From previous node
-})
-```
-
 ## Text Processing
 
 ### TextSplitterNode
+
 ```python
 workflow.add_node("TextSplitterNode", "splitter", {
     "chunk_size": 1000,
@@ -84,5 +72,4 @@ workflow.add_node("TextSplitterNode", "splitter", {
 
 ## Documentation
 
-
-<!-- Trigger Keywords: transform node, DataTransformer, data transform, filter data, map node, FilterNode, AggregationNode -->
+<!-- Trigger Keywords: transform node, DataTransformer, data transform, filter data, map node, FilterNode -->

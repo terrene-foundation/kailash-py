@@ -31,7 +31,7 @@ kailash-ml
     model_registry.py   <- [P0] staging->shadow->production->archived lifecycle
     training_pipeline.py <- [P0] sklearn/lightgbm/Lightning, FeatureSchema-driven
     inference_server.py <- [P0] REST via kailash-nexus, caching, batch
-    drift_monitor.py    <- [P0] KS/chi2/PSI/jensen_shannon, scheduled monitoring
+    drift_monitor.py    <- [P0] KS/PSI, scheduled monitoring
     experiment_tracker.py <- [P0] MLflow-compatible run tracking
     hyperparameter_search.py <- [P1] grid/random/bayesian/successive_halving
     automl_engine.py    <- [P1] agent-infused, LLM guardrails, cost tracking

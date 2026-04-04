@@ -1,3 +1,8 @@
+---
+paths:
+  - "src/kailash/trust/**"
+---
+
 # EATP SDK Rules
 
 ## Scope

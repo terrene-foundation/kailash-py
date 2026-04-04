@@ -1,3 +1,9 @@
+---
+paths:
+  - "src/kailash/trust/plane/**"
+  - "src/kailash/trust/_locking.py"
+---
+
 # Trust-Plane Security Rules
 
 ## Scope
@@ -17,7 +23,7 @@ Violations during code review by intermediate-reviewer are BLOCK-level findings.
 
 ```python
 # DO:
-from kailash.trust._locking import safe_read_json, safe_open
+from kailash.trust._locking import safe_read_json, atomic_write, validate_id
 data = safe_read_json(path)
 
 # DO NOT:
@@ -26,7 +32,7 @@ with open(path) as f:           # Follows symlinks — attacker redirects to arb
 data = json.loads(path.read_text())  # No symlink protection, no fd safety
 ```
 
-**Why**: `safe_read_json()` and `safe_open()` use `O_NOFOLLOW` to prevent symlink attacks. Bare `open()` and `Path.read_text()` bypass all protections.
+**Why**: `safe_read_json()` uses `O_NOFOLLOW` to prevent symlink attacks. For writes, use `atomic_write()` (see Rule 7). Bare `open()` and `Path.read_text()` bypass all protections.
 
 ### 2. `validate_id()` on Every Externally-Sourced Record ID
 

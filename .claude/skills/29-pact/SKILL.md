@@ -31,14 +31,23 @@ pip install kailash-kaizen>=2.0.0 # For governed Kaizen agents
 ## Key Types
 
 ```python
-from pact.governance import GovernanceEngine, GovernanceVerdict
-from pact.governance.config import (
+# Flat imports via pact package (recommended)
+from pact import (
+    GovernanceEngine, GovernanceVerdict,
     ConstraintEnvelopeConfig, OrgDefinition,
     TrustPostureLevel, VerificationLevel,
-    ConfidentialityLevel,
+    PactGovernedAgent,
+    AuditChain,
+    Address, PactError,
 )
-from pact.governance.agent import PactGovernedAgent
-from pact.governance.audit import AuditChain
+from kailash.trust import ConfidentialityLevel
+
+# Or canonical imports from kailash.trust.pact
+from kailash.trust.pact import GovernanceEngine, GovernanceVerdict, Address
+from kailash.trust.pact.config import (
+    ConstraintEnvelopeConfig, OrgDefinition,
+    TrustPostureLevel, VerificationLevel,
+)
 
 # MCP governance
 from pact.mcp import (

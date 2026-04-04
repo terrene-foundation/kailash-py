@@ -1,7 +1,7 @@
 ---
 name: gold-standards-validator
 description: "Terrene naming and licensing validator. Use for compliance checks on terminology, naming, or cross-references."
-tools: Read, Glob, Grep, LS
+tools: Read, Glob, Grep, Bash
 model: opus
 ---
 

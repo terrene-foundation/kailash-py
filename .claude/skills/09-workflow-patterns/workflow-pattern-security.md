@@ -34,7 +34,7 @@ workflow.add_node("TransformNode", "verify_password", {
 })
 
 # 3. Check authorization
-workflow.add_node("ConditionalNode", "check_auth", {
+workflow.add_node("SwitchNode", "check_auth", {
     "condition": "{{verify_password.match}} == true",
     "true_branch": "generate_token",
     "false_branch": "audit_failure"
@@ -47,12 +47,12 @@ workflow.add_node("TransformNode", "generate_token", {
 })
 
 # 5. Audit log
-workflow.add_node("DatabaseExecuteNode", "audit_success", {
+workflow.add_node("SQLDatabaseNode", "audit_success", {
     "query": "INSERT INTO audit_log (user_id, action, timestamp) VALUES (?, 'login', NOW())",
     "parameters": ["{{check_user.id}}"]
 })
 
-workflow.add_node("DatabaseExecuteNode", "audit_failure", {
+workflow.add_node("SQLDatabaseNode", "audit_failure", {
     "query": "INSERT INTO audit_log (email, action, timestamp) VALUES (?, 'failed_login', NOW())",
     "parameters": ["{{input.email}}"]
 })
@@ -65,6 +65,5 @@ workflow.add_connection("check_auth", "output_false", "audit_failure", "trigger"
 ```
 
 ## Documentation
-
 
 <!-- Trigger Keywords: security workflow, authentication, encryption workflow, audit trail, user auth -->

@@ -177,8 +177,8 @@ class QASignature(Signature):
 
 @dataclass
 class QAConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-3.5-turbo"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
 
 class QAAgent(BaseAgent):
     def __init__(self, config: QAConfig):
@@ -234,9 +234,9 @@ agent = QAAgent(config)
 
 # Core SDK workflow for orchestration
 workflow = WorkflowBuilder()
-workflow.add_node("LLMAgentNode", "ai_process", {
-    "provider": "openai",
-    "model": "gpt-4"
+workflow.add_node("PythonCodeNode", "ai_process", {
+    "code": "import os; from openai import OpenAI; client = OpenAI(); resp = client.chat.completions.create(model=os.environ['LLM_MODEL'], messages=messages); result = {'response': resp.choices[0].message.content}",
+    "input_variables": ["messages"]
 })
 ```
 
@@ -291,12 +291,12 @@ After choosing your framework, choose your abstraction layer. See `rules/framewo
 
 **Rule of thumb**: Start with the Engine layer. Drop to Primitives only when the Engine can't express your need.
 
-| Framework | Start here (Engine) | Drop to this (Primitives) when... |
-|-----------|--------------------|------------------------------------|
-| DataFlow | `db.express.*` | Multi-step workflows, custom transactions |
-| Nexus | `Nexus()` | Custom protocols, non-standard channels |
-| Kaizen | `Delegate` | Custom execution loops, non-TAOD agents |
-| PACT | `GovernanceEngine` | Custom envelope patterns |
+| Framework | Start here (Engine) | Drop to this (Primitives) when...         |
+| --------- | ------------------- | ----------------------------------------- |
+| DataFlow  | `db.express.*`      | Multi-step workflows, custom transactions |
+| Nexus     | `Nexus()`           | Custom protocols, non-standard channels   |
+| Kaizen    | `Delegate`          | Custom execution loops, non-TAOD agents   |
+| PACT      | `GovernanceEngine`  | Custom envelope patterns                  |
 
 ## Documentation References
 

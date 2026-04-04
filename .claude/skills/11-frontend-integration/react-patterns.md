@@ -17,15 +17,21 @@ description: "React and Next.js implementation patterns for Kailash SDK integrat
 ### Nexus API Client
 
 ```typescript
-import axios from 'axios';
+import axios from "axios";
 
 const nexusClient = axios.create({
-  baseURL: 'http://localhost:8000',
-  headers: { 'Content-Type': 'application/json' }
+  baseURL: "http://localhost:8000",
+  headers: { "Content-Type": "application/json" },
 });
 
-async function executeWorkflow(workflowId: string, params: Record<string, any>) {
-  const { data } = await nexusClient.post(`/workflows/${workflowId}/execute`, params);
+async function executeWorkflow(
+  workflowId: string,
+  params: Record<string, any>,
+) {
+  const { data } = await nexusClient.post(
+    `/workflows/${workflowId}/execute`,
+    params,
+  );
   return data;
 }
 ```
@@ -77,7 +83,7 @@ function KaizenChatInterface() {
 ### Custom Node Implementation
 
 ```typescript
-import { Handle, Position } from 'reactflow';
+import { Handle, Position } from '@xyflow/react';
 
 interface KaizenNodeProps {
   data: {
@@ -120,7 +126,7 @@ const nodeTypes = {
 ### Performance Optimization
 
 ```typescript
-import { useNodesState, useEdgesState } from 'reactflow';
+import { useNodesState, useEdgesState } from '@xyflow/react';
 
 function WorkflowCanvas() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -251,18 +257,18 @@ const vscode = acquireVsCodeApi();
 // React → VS Code
 function saveWorkflow(workflow: Workflow) {
   vscode.postMessage({
-    type: 'saveWorkflow',
-    workflow
+    type: "saveWorkflow",
+    workflow,
   });
 }
 
 // VS Code → React
 useEffect(() => {
-  window.addEventListener('message', (event) => {
+  window.addEventListener("message", (event) => {
     const message = event.data;
 
     switch (message.type) {
-      case 'loadWorkflow':
+      case "loadWorkflow":
         setNodes(message.workflow.nodes);
         setEdges(message.workflow.edges);
         break;
@@ -308,17 +314,19 @@ function WorkflowExecutor({ workflow }: { workflow: WorkflowDefinition }) {
 
 ```typescript
 function useWorkflowExecution(executionId: string) {
-  const [status, setStatus] = useState<ExecutionStatus>('pending');
+  const [status, setStatus] = useState<ExecutionStatus>("pending");
   const [logs, setLogs] = useState<string[]>([]);
 
   useEffect(() => {
-    const ws = new WebSocket(`ws://localhost:8000/ws/executions/${executionId}`);
+    const ws = new WebSocket(
+      `ws://localhost:8000/ws/executions/${executionId}`,
+    );
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
 
-      if (data.type === 'status') setStatus(data.status);
-      if (data.type === 'log') setLogs(prev => [...prev, data.message]);
+      if (data.type === "status") setStatus(data.status);
+      if (data.type === "log") setLogs((prev) => [...prev, data.message]);
     };
 
     return () => ws.close();
@@ -375,7 +383,9 @@ interface WorkflowNode {
 }
 
 // Avoid 'any' - use generics or unknown
-function executeWorkflow<T extends Record<string, any>>(params: T): Promise<WorkflowResult> {
+function executeWorkflow<T extends Record<string, any>>(
+  params: T,
+): Promise<WorkflowResult> {
   // ...
 }
 ```

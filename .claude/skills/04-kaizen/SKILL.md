@@ -43,8 +43,8 @@ class SummarizeSignature(Signature):
 # Define configuration
 @dataclass
 class SummaryConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.7
 
 # Create agent with signature
@@ -85,10 +85,10 @@ router = Pipeline.router(
 
 # Blackboard: Iterative problem-solving
 blackboard = Pipeline.blackboard(
-    agents=[solver, analyzer, optimizer],
+    specialists=[solver, analyzer, optimizer],
     controller=controller,
-    max_iterations=10,
-    discovery_mode="a2a"
+    max_iterations=5,
+    selection_mode="semantic"
 )
 ```
 
@@ -434,8 +434,9 @@ from nexus import Nexus
 
 # Deploy agents via API/CLI/MCP
 agent_workflow = create_agent_workflow()
-nexus = Nexus([agent_workflow])
-nexus.run()  # Agents available via all channels
+app = Nexus()
+app.register("agent", agent_workflow.build())
+app.start()  # Agents available via all channels
 ```
 
 ### With Core SDK (Custom Workflows)
@@ -494,11 +495,11 @@ workflow.add_node("KaizenAgent", "agent1", {
 
 ## Related Skills
 
-- **[01-core-sdk](../../01-core-sdk/SKILL.md)** - Core workflow patterns
-- **[02-dataflow](../dataflow/SKILL.md)** - Database integration
-- **[03-nexus](../nexus/SKILL.md)** - Multi-channel deployment
+- **[01-core-sdk](../01-core-sdk/SKILL.md)** - Core workflow patterns
+- **[02-dataflow](../02-dataflow/SKILL.md)** - Database integration
+- **[03-nexus](../03-nexus/SKILL.md)** - Multi-channel deployment
 - **[05-kailash-mcp](../05-kailash-mcp/SKILL.md)** - MCP server integration
-- **[17-gold-standards](../../17-gold-standards/SKILL.md)** - Best practices
+- **[17-gold-standards](../17-gold-standards/SKILL.md)** - Best practices
 
 ## Support
 

@@ -56,38 +56,38 @@ from kailash.runtime.local import LocalRuntime
 
 # Multi-node workflow with connections
 workflow = WorkflowBuilder()
-workflow.add_node("User_Create", "create_user", {
-    "data": {"name": "John", "email": "john@example.com"}
+workflow.add_node("UserCreateNode", "create_user", {
+    "name": "John", "email": "john@example.com"
 })
 
 # Execute with context manager (recommended for resource cleanup)
 with LocalRuntime() as runtime:
     results, run_id = runtime.execute(workflow.build())
-    user_id = results["create_user"]["result"]  # Access pattern
+    user_id = results["create_user"]  # Access by node_id
 ```
 
 ## Generated Nodes (11 per model)
 
 Each `@db.model` class generates:
 
-1. `{Model}_Create` - Create single record
-2. `{Model}_Read` - Read by ID
-3. `{Model}_Update` - Update record
-4. `{Model}_Delete` - Delete record
-5. `{Model}_List` - List with filters
-6. `{Model}_Upsert` - Insert or update (atomic)
-7. `{Model}_Count` - Efficient COUNT(\*) queries
-8. `{Model}_BulkCreate` - Bulk insert
-9. `{Model}_BulkUpdate` - Bulk update
-10. `{Model}_BulkDelete` - Bulk delete
-11. `{Model}_BulkUpsert` - Bulk upsert
+1. `{Model}CreateNode` - Create single record
+2. `{Model}ReadNode` - Read by ID
+3. `{Model}UpdateNode` - Update record
+4. `{Model}DeleteNode` - Delete record
+5. `{Model}ListNode` - List with filters
+6. `{Model}UpsertNode` - Insert or update (atomic)
+7. `{Model}CountNode` - Efficient COUNT(\*) queries
+8. `{Model}BulkCreateNode` - Bulk insert
+9. `{Model}BulkUpdateNode` - Bulk update
+10. `{Model}BulkDeleteNode` - Bulk delete
+11. `{Model}BulkUpsertNode` - Bulk upsert
 
 ## Critical Rules
 
 - ✅ String IDs preserved (no UUID conversion)
 - ✅ Deferred schema operations (safe for Docker/FastAPI)
 - ✅ Multi-instance isolation (one DataFlow per database)
-- ✅ Result access: `results["node_id"]["result"]`
+- ✅ Result access: `results["node_id"]` (keyed by node_id, value is the node output)
 - ❌ NEVER use truthiness checks on filter/data parameters (empty dict `{}` is falsy)
 - ❌ ALWAYS use key existence checks: `if "filter" in kwargs` instead of `if kwargs.get("filter")`
 - ❌ NEVER use direct SQL when DataFlow nodes exist
@@ -176,16 +176,21 @@ Each `@db.model` class generates:
 ```python
 from dataflow import DataFlow
 from nexus import Nexus
+from kailash.workflow.builder import WorkflowBuilder
 
-db = DataFlow(connection_string="...")
+db = DataFlow("sqlite:///app.db", auto_migrate=True)
 @db.model
 class User:
     id: str
     name: str
 
-# Auto-generates API + CLI + MCP
-nexus = Nexus(db.get_workflows())
-nexus.run()  # Instant multi-channel platform
+# Build a workflow using generated nodes, then register with Nexus
+workflow = WorkflowBuilder()
+workflow.add_node("UserCreateNode", "create_user", {"name": "Alice"})
+
+app = Nexus()
+app.register("create_user", workflow.build())
+app.start()
 ```
 
 ### With Core SDK (Custom Workflows)
@@ -194,10 +199,10 @@ nexus.run()  # Instant multi-channel platform
 from dataflow import DataFlow
 from kailash.workflow.builder import WorkflowBuilder
 
-db = DataFlow(connection_string="...")
+db = DataFlow("sqlite:///app.db", auto_migrate=True)
 # Use db-generated nodes in custom workflows
 workflow = WorkflowBuilder()
-workflow.add_node("User_Create", "user1", {...})
+workflow.add_node("UserCreateNode", "user1", {"name": "Alice", "email": "alice@example.com"})
 ```
 
 ## When to Use This Skill

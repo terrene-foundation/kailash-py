@@ -160,8 +160,9 @@ When an agent needs to perform multi-step reasoning, use ReAct patterns or multi
 
 ```python
 # DO: ReAct agent reasons about each step
-agent = ReActAgent(config=config, tools="all")
-result = agent.solve("Investigate why revenue dropped last quarter")
+from kaizen_agents.agents.specialized.react import ReActAgent
+agent = ReActAgent(config=config)
+result = agent.run(task="Investigate why revenue dropped last quarter")
 # Agent autonomously: searches data, reads reports, correlates, concludes
 
 # DO NOT: Code loop with hardcoded steps
@@ -179,7 +180,7 @@ When routing between multiple agents, the router MUST use LLM reasoning to selec
 
 ```python
 # DO: LLM-based routing via Pipeline.router()
-from kaizen.orchestration.pipeline import Pipeline
+from kaizen_agents.patterns.pipeline import Pipeline
 router = Pipeline.router(agents=[billing_agent, tech_agent, sales_agent])
 result = router.run(query=user_message)
 # LLM examines A2A capability cards and reasons about best match

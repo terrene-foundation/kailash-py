@@ -107,7 +107,7 @@ What task are you doing?
   ├─ Custom Python logic → PythonCodeNode
   ├─ LLM/AI tasks → LLMNode, OpenAINode, AnthropicNode
   ├─ Database operations → DataFlow auto-generated nodes
-  ├─ HTTP API calls → APICallNode
+  ├─ HTTP API calls → HTTPRequestNode
   ├─ File reading → FileReaderNode
   ├─ Conditional routing → SwitchNode
   └─ Not sure? → Check nodes-quick-index

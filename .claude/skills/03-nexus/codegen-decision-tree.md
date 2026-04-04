@@ -596,8 +596,8 @@ from kailash.runtime import AsyncLocalRuntime
 
 @dataclass
 class AgentConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.7
     max_tokens: int = 2000
     max_turns: int = 10
@@ -652,7 +652,7 @@ app = Nexus(api_port=8000, mcp_port=3001, auto_discovery=False)
 
 config = AgentConfig(
     llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
-    model=os.environ.get("LLM_MODEL", "gpt-4")
+    model=os.environ.get("LLM_MODEL", "")
 )
 
 chat_agent = ChatAgent(config)

@@ -157,12 +157,13 @@ class AdvancedCustomNode(Node):
 
 ## Related Patterns
 
-- **Node development**: [`custom-node-guide`](../../06-cheatsheets/custom-node-guide.md)
+- **Node patterns**: [`01-core-sdk SKILL.md`](../../01-core-sdk/SKILL.md)
 - **Gold standard**: [`gold-custom-nodes`](../../17-gold-standards/gold-custom-nodes.md)
 
 ## When to Escalate
 
 Use `pattern-expert` when:
+
 - Complex custom node architecture
 - Performance optimization
 - Advanced parameter handling

@@ -12,8 +12,6 @@ model: opus
 Zero-config database framework specialist for Kailash DataFlow implementation. Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
 
 > **Note**: `auto_migrate=True` now works correctly in Docker/FastAPI environments. No event loop issues!
->
-> **Note**: The parameters `existing_schema_mode`, `enable_model_persistence`, and `skip_migration` have been **removed** in the current version. The simple `auto_migrate=True` (default) handles all use cases.
 
 ## Skills Quick Reference
 

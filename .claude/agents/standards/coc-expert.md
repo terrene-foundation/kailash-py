@@ -58,8 +58,8 @@ Raw model capability is becoming a commodity. Your institutional knowledge is th
 **Solves**: Generalist AI producing generalist output.
 **Principle**: Route tasks to specialized expert agents, each configured with deep domain knowledge.
 
-- 30 agent definitions across 7 development phases (analysis, planning, implementation, testing, deployment, release, frontend)
-- Key specialists: deep-analyst, security-reviewer, framework specialists (dataflow, nexus, kaizen, mcp)
+- 37 agent definitions across 7 development phases (analysis, planning, implementation, testing, deployment, release, frontend)
+- Key specialists: deep-analyst, security-reviewer, framework specialists (dataflow, nexus, kaizen, mcp, pact, align, ml)
 - Mirrors how effective engineering organizations work: route database work to the database specialist
 
 #### Layer 2: Context - The Library
@@ -68,7 +68,7 @@ Raw model capability is becoming a commodity. Your institutional knowledge is th
 **Principle**: Replace stale training data with your living institutional handbook.
 
 - Progressive disclosure hierarchy: CLAUDE.md → SKILL.md index → Topic files → Full SDK docs
-- 28 skill directories with 100+ files
+- 34 skill directories with 100+ files
 - Two governing principles:
   - **Framework-First**: Never code from scratch; always check frameworks first (140+ production-ready nodes)
   - **Single Source of Truth**: Each piece of institutional knowledge lives in exactly one place
@@ -79,8 +79,8 @@ Raw model capability is becoming a commodity. Your institutional knowledge is th
 **Solves**: AI following instructions "most of the time" (not all of the time).
 **Principle**: Deterministic enforcement, not probabilistic compliance.
 
-- **Tier 1: Rules** (9 files) - Soft enforcement; AI interprets and follows
-- **Tier 2: Hooks** (9 scripts) - Hard enforcement; deterministic scripts outside the model's context
+- **Tier 1: Rules** (29 files) - Soft enforcement; AI interprets and follows
+- **Tier 2: Hooks** (11 scripts) - Hard enforcement; deterministic scripts outside the model's context
 - **Anti-amnesia hook** (`user-prompt-rules-reminder.js`): The single most important mechanism. Fires on every user message, re-injects critical rules, survives context window compression.
 - **Defense in depth**: Critical rules have 5-8 independent enforcement layers
 - This is the Trust Plane applied to development
@@ -90,9 +90,9 @@ Raw model capability is becoming a commodity. Your institutional knowledge is th
 **Solves**: Lack of procedural discipline (AI tackles hardest part first, writes code before confirming approach).
 **Principle**: Structured methodology with approval gates between phases.
 
-- Seven-phase workflow: Analysis → Planning → Implementation → Testing → Deployment → Release → Final
+- Five-phase workflow: /analyze, /todos, /implement, /redteam, /codify
 - Quality gates at 4 points: Planning, Implementation, Pre-commit, Pre-push
-- 20 slash commands (13 framework + 7 workspace phase) for context-efficient invocation
+- 26 slash commands for context-efficient invocation
 - **Evidence-based completion**: AI cannot state "I implemented the feature" without file-and-line proof
 - **Mandatory delegation**: Code review after every file change. Security review before every commit. Not suggestions - requirements.
 
@@ -130,7 +130,7 @@ COC inherits from CARE through CO. CARE → CO → COC. The mapping is direct:
 | Genesis Record (initial trust anchor)  | `session-start.js`                           |
 | Trust Lineage Chain (traceability)     | Mandatory review gates                       |
 | Audit Anchors (proof of compliance)    | Hook enforcement (exit code 2 blocks action) |
-| Operating Envelope (boundaries)        | 9 rule files + 9 hook scripts                |
+| Operating Envelope (boundaries)        | 29 rule files + 11 hook scripts              |
 
 The developer's unique contribution is not the code generated in any single session. It is the institutional context they build and maintain across all sessions.
 

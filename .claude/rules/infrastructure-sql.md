@@ -1,3 +1,9 @@
+---
+paths:
+  - "src/kailash/db/**"
+  - "src/kailash/infrastructure/**"
+---
+
 # Infrastructure SQL Rules
 
 ## Scope

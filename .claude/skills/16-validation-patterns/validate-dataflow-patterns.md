@@ -26,7 +26,7 @@ class User:
 # Auto-generates 11 nodes: UserCreateNode, UserReadNode, UserUpsertNode, UserCountNode, etc.
 
 # ❌ WRONG: Manual node creation for database ops
-# workflow.add_node("DatabaseExecuteNode", "create_user", {
+# workflow.add_node("SQLDatabaseNode", "create_user", {
 #     "query": "INSERT INTO users..."
 # })
 ```

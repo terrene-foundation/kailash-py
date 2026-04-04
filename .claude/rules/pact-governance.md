@@ -1,8 +1,14 @@
+---
+paths:
+  - "packages/kailash-pact/**"
+  - "src/kailash/trust/pact/**"
+---
+
 # PACT Governance Rules
 
 ## Scope
 
-These rules apply when editing `packages/kailash-pact/**` files.
+These rules apply when editing `packages/kailash-pact/**` and `src/kailash/trust/pact/**` files.
 
 These rules supplement `.claude/rules/security.md` and `.claude/rules/trust-plane-security.md`. All three apply to PACT governance files.
 Violations during code review by intermediate-reviewer are BLOCK-level findings.
@@ -48,12 +54,12 @@ Every Department or Team MUST be immediately followed by exactly one Role in any
 
 ```python
 # DO:
-address = Address(org="acme", dept="engineering", role="developer")
-address = Address(org="acme", dept="engineering", team="backend", role="senior")
+addr = Address.parse("D1-R1")          # D(dept) immediately followed by R(role)
+addr = Address.parse("D1-T1-R1")       # D(dept)-T(team)-R(role) with team segment
 
 # DO NOT:
-address = Address(org="acme", dept="engineering")          # Missing Role
-address = Address(org="acme", dept="engineering", team="backend")  # Missing Role after Team
+addr = Address.parse("D1")             # Missing Role — ambiguous
+addr = Address.parse("D1-T1")          # Missing Role after Team — ambiguous
 ```
 
 **Why**: The D/T/R grammar ensures every address resolves to a concrete governance envelope. An address without a terminal Role is ambiguous — it could match multiple envelopes with different constraints.
@@ -180,6 +186,27 @@ class GovernanceEngine:
 
 **Why**: `GovernanceEngine` is shared across agent threads. Without locking, concurrent envelope updates and reads can produce torn reads (partially updated envelopes) or lost updates. Both lead to incorrect governance decisions.
 
+### 9. Bridge Consent and Scope Validation
+
+When `require_bilateral_consent=True`, both endpoint roles must call `consent_bridge()` before `create_bridge()`. Bridge scope (`max_classification`, `operational_scope`) MUST NOT exceed either endpoint's envelope. Roles without envelopes MUST be rejected (fail-closed) for non-PUBLIC bridges.
+
+**Why**: Without scope validation, a bridge could grant SECRET access to a role with no clearance. Without consent, bridges can be imposed unilaterally.
+
+### 10. Validate Addresses on All Public Methods
+
+`consent_bridge()`, `register_compliance_role()`, and similar methods that accept role addresses MUST validate the address exists in `self._compiled_org.nodes` before proceeding.
+
+```python
+# DO:
+if role_address not in self._compiled_org.nodes:
+    raise PactError(f"Address '{role_address}' not in org", details={...})
+
+# DO NOT:
+self._compliance_role = role_address  # Phantom address accepted
+```
+
+**Why**: Phantom addresses bypass LCA verification — a non-existent compliance role could approve any bridge.
+
 ## MUST NOT Rules
 
 ### 1. MUST NOT Expose GovernanceEngine to Agent Code
@@ -223,9 +250,9 @@ All governance errors MUST inherit from `PactError` with structured `.details`.
 
 ```python
 # DO:
-from pact.exceptions import PactError, GovernanceViolationError
+from pact.exceptions import PactError
 
-raise GovernanceViolationError(
+raise PactError(
     "Budget exceeded",
     details={"max_cost": 100.0, "attempted_cost": 150.0, "agent": "agent-001"}
 )
@@ -236,27 +263,6 @@ raise Exception("something went wrong")  # Bare exception — uncatchable by gov
 ```
 
 **Why**: Governance errors carry structured context (`details` dict) that audit systems, dashboards, and parent agents consume. Bare exceptions lose this context and cannot be distinguished from unrelated errors in `except` handlers.
-
-### 9. Bridge Consent and Scope Validation
-
-When `require_bilateral_consent=True`, both endpoint roles must call `consent_bridge()` before `create_bridge()`. Bridge scope (`max_classification`, `operational_scope`) MUST NOT exceed either endpoint's envelope. Roles without envelopes MUST be rejected (fail-closed) for non-PUBLIC bridges.
-
-**Why**: Without scope validation, a bridge could grant SECRET access to a role with no clearance. Without consent, bridges can be imposed unilaterally.
-
-### 10. Validate Addresses on All Public Methods
-
-`consent_bridge()`, `register_compliance_role()`, and similar methods that accept role addresses MUST validate the address exists in `self._compiled_org.nodes` before proceeding.
-
-```python
-# DO:
-if role_address not in self._compiled_org.nodes:
-    raise PactError(f"Address '{role_address}' not in org", details={...})
-
-# DO NOT:
-self._compliance_role = role_address  # Phantom address accepted
-```
-
-**Why**: Phantom addresses bypass LCA verification — a non-existent compliance role could approve any bridge.
 
 ## Cross-References
 

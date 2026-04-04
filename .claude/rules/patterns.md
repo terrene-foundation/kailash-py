@@ -176,10 +176,11 @@ delegate = Delegate(model=os.environ["OPENAI_PROD_MODEL"])
 # async for event in delegate.run("task"): ...
 
 # BaseAgent (for custom logic only)
-from kaizen.core import BaseAgent, Signature, InputField, OutputField
+from kaizen.core.base_agent import BaseAgent
+from kaizen.signatures import Signature, InputField, OutputField
 
 # Register agents in AgentRegistry for scale
-from kaizen.core.registry import AgentRegistry
+from kaizen_agents.patterns.registry import AgentRegistry
 registry = AgentRegistry()
 registry.register(agent)
 ```

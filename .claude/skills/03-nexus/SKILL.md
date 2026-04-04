@@ -25,12 +25,15 @@ Nexus transforms workflows into a complete platform with:
 ```python
 from nexus import Nexus
 
-# Define workflow
-workflow = create_my_workflow()
+# Create Nexus instance (zero-config)
+app = Nexus()
 
-# Deploy to all channels at once
-nexus = Nexus([workflow])
-nexus.run(port=8000)
+# Register workflows
+workflow = create_my_workflow()
+app.register("my_workflow", workflow.build())
+
+# Start the platform (blocks until Ctrl+C)
+app.start()
 
 # Now available via:
 # - HTTP API: POST http://localhost:8000/api/workflow/{workflow_id}
@@ -145,35 +148,35 @@ Use Nexus when you need to:
 ```python
 from nexus import Nexus
 from dataflow import DataFlow
+from kailash.workflow.builder import WorkflowBuilder
 
 # Define models
-db = DataFlow(...)
+db = DataFlow("sqlite:///app.db", auto_migrate=True)
 @db.model
 class User:
     id: str
     name: str
 
-# Auto-generates CRUD endpoints for all models
-nexus = Nexus(db.get_workflows())
-nexus.run()
+# Build workflows using generated nodes, register with Nexus
+app = Nexus()
 
-# GET  /api/User/list
-# POST /api/User/create
-# GET  /api/User/read/{id}
-# PUT  /api/User/update/{id}
-# DELETE /api/User/delete/{id}
+create_wf = WorkflowBuilder()
+create_wf.add_node("UserCreateNode", "create", {"name": "placeholder"})
+app.register("user_create", create_wf.build())
+
+app.start()
 ```
 
 ### With Kaizen (Agent Platform)
 
 ```python
 from nexus import Nexus
-from kaizen.base import BaseAgent
 
 # Deploy agents via all channels
 agent_workflow = create_agent_workflow()
-nexus = Nexus([agent_workflow])
-nexus.run()
+app = Nexus()
+app.register("agent", agent_workflow.build())
+app.start()
 
 # Agents accessible via API, CLI, and MCP
 ```
@@ -185,14 +188,11 @@ from nexus import Nexus
 from kailash.workflow.builder import WorkflowBuilder
 
 # Deploy custom workflows
-workflows = [
-    create_workflow_1(),
-    create_workflow_2(),
-    create_workflow_3(),
-]
-
-nexus = Nexus(workflows)
-nexus.run(port=8000)
+app = Nexus()
+app.register("workflow_1", create_workflow_1().build())
+app.register("workflow_2", create_workflow_2().build())
+app.register("workflow_3", create_workflow_3().build())
+app.start()
 ```
 
 ### Standalone Platform
@@ -200,18 +200,13 @@ nexus.run(port=8000)
 ```python
 from nexus import Nexus
 
-# Complete platform from workflows
-nexus = Nexus(
-    workflows=[...],
-    plugins=[custom_plugin],
-    health_checks=True,
-    monitoring=True
+# Complete platform with enterprise features
+app = Nexus(
+    enable_monitoring=True,
+    enable_auth=True,
 )
-nexus.run(
-    host="0.0.0.0",
-    port=8000,
-    workers=4
-)
+app.register("my_workflow", workflow.build())
+app.start()
 ```
 
 ## Critical Rules
@@ -231,20 +226,21 @@ nexus.run(
 ### Development
 
 ```python
-nexus = Nexus(workflows)
-nexus.run(port=8000)  # Single process, hot reload
+app = Nexus()
+app.register("my_workflow", workflow.build())
+app.start()  # Single process, default port 8000
 ```
 
 ### Production (Docker)
 
 ```python
-from kailash.runtime import AsyncLocalRuntime
-
-nexus = Nexus(
-    workflows,
-    runtime_factory=lambda: AsyncLocalRuntime()
+app = Nexus(
+    api_port=8000,
+    enable_auth=True,
+    enable_monitoring=True,
 )
-nexus.run(host="0.0.0.0", port=8000, workers=4)
+app.register("my_workflow", workflow.build())
+app.start()
 ```
 
 ### With Load Balancer
@@ -267,11 +263,11 @@ docker-compose up --scale nexus=3
 
 ## Related Skills
 
-- **[01-core-sdk](../../01-core-sdk/SKILL.md)** - Core workflow patterns
-- **[02-dataflow](../dataflow/SKILL.md)** - Auto CRUD API generation
-- **[04-kaizen](../kaizen/SKILL.md)** - AI agent deployment
+- **[01-core-sdk](../01-core-sdk/SKILL.md)** - Core workflow patterns
+- **[02-dataflow](../02-dataflow/SKILL.md)** - Auto CRUD API generation
+- **[04-kaizen](../04-kaizen/SKILL.md)** - AI agent deployment
 - **[05-kailash-mcp](../05-kailash-mcp/SKILL.md)** - MCP channel details
-- **[17-gold-standards](../../17-gold-standards/SKILL.md)** - Best practices
+- **[17-gold-standards](../17-gold-standards/SKILL.md)** - Best practices
 
 ## Support
 

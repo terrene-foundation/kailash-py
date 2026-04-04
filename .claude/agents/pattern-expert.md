@@ -158,7 +158,7 @@ See skill: `production-readiness-patterns` for full code examples.
 
 - **[nodes-quick-index](../../.claude/skills/08-nodes-reference/nodes-quick-index.md)** - Quick node lookup
 - **[nodes-data-reference](../../.claude/skills/08-nodes-reference/nodes-data-reference.md)** - Data nodes
-- **[nodes-ai-reference](../../.claude/skills/08-nodes-reference/nodes-ai-reference.md)** - AI nodes
+- **[04-kaizen SKILL.md](../../.claude/skills/04-kaizen/SKILL.md)** - AI/LLM agent patterns
 
 ### Error Resolution
 

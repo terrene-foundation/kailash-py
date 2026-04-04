@@ -10,6 +10,7 @@ Comprehensive testing approach for Kailash applications using the 3-tier testing
 ## Overview
 
 Kailash testing philosophy:
+
 - **3-Tier Strategy**: Unit, Integration, End-to-End
 - **Real infrastructure recommended Policy**: Tiers 2-3 use real infrastructure
 - **Real Database Testing**: Actual PostgreSQL/SQLite
@@ -19,6 +20,7 @@ Kailash testing philosophy:
 ## Reference Documentation
 
 ### Core Strategy
+
 - **[test-3tier-strategy](test-3tier-strategy.md)** - Complete 3-tier testing guide
   - Tier 1: Unit Tests (mocking allowed)
   - Tier 2: Integration Tests (Real infrastructure recommended)
@@ -30,6 +32,7 @@ Kailash testing philosophy:
 ## 3-Tier Testing Strategy
 
 ### Tier 1: Unit Tests
+
 **Scope**: Individual functions and classes
 **Mocking**: ✅ Allowed
 **Speed**: Fast (< 1s per test)
@@ -45,6 +48,7 @@ def test_workflow_builder():
 ```
 
 ### Tier 2: Integration Tests
+
 **Scope**: Component integration (workflows, database, APIs)
 **Mocking**: ❌ Real infrastructure recommended
 **Speed**: Medium (1-10s per test)
@@ -61,6 +65,7 @@ def test_dataflow_crud(db: DataFlow):
 ```
 
 ### Tier 3: End-to-End Tests
+
 **Scope**: Complete user workflows
 **Mocking**: ❌ Real infrastructure recommended
 **Speed**: Slow (10s+ per test)
@@ -83,6 +88,7 @@ def test_user_registration_flow(nexus: Nexus):
 ### Why No Mocking in Tiers 2-3?
 
 **Real Issues Found**:
+
 - Database constraint violations
 - API timeout problems
 - Race conditions
@@ -91,6 +97,7 @@ def test_user_registration_flow(nexus: Nexus):
 - LLM token limits
 
 **Mocking Hides**:
+
 - Real-world latency
 - Actual error conditions
 - Integration bugs
@@ -99,6 +106,7 @@ def test_user_registration_flow(nexus: Nexus):
 ### What to Use Instead
 
 **Real Infrastructure**:
+
 - Test databases (Docker containers)
 - Test API endpoints
 - Test LLM accounts (with caching)
@@ -107,16 +115,17 @@ def test_user_registration_flow(nexus: Nexus):
 ## Test Organization
 
 ### Directory Structure
+
 ```
 tests/
-  tier1_unit/
+  unit/
     test_workflow_builder.py
     test_node_logic.py
-  tier2_integration/
+  integration/
     test_dataflow_crud.py
     test_workflow_execution.py
     test_api_integration.py
-  tier3_e2e/
+  e2e/
     test_user_flows.py
     test_production_scenarios.py
   conftest.py  # Shared fixtures
@@ -147,6 +156,7 @@ def runtime():
 ## Testing Different Components
 
 ### Testing Workflows
+
 ```python
 def test_workflow_execution(runtime):
     """Tier 2: Integration test with real execution."""
@@ -160,6 +170,7 @@ def test_workflow_execution(runtime):
 ```
 
 ### Testing DataFlow
+
 ```python
 def test_dataflow_operations(db: DataFlow):
     """Tier 2: Test with real database."""
@@ -180,6 +191,7 @@ def test_dataflow_operations(db: DataFlow):
 ```
 
 ### Testing Nexus
+
 ```python
 def test_nexus_api(nexus_server):
     """Tier 3: E2E test with real HTTP."""
@@ -195,6 +207,7 @@ def test_nexus_api(nexus_server):
 ```
 
 ### Testing Kaizen Agents
+
 ```python
 def test_agent_execution():
     """Tier 2: Test with real LLM (cached)."""
@@ -223,23 +236,25 @@ def test_agent_execution():
 ## Running Tests
 
 ### Local Development
+
 ```bash
 # Run all tests
 pytest
 
 # Run by tier
-pytest tests/tier1_unit/
-pytest tests/tier2_integration/
-pytest tests/tier3_e2e/
+pytest tests/unit/
+pytest tests/integration/
+pytest tests/e2e/
 
 # Run with coverage
 pytest --cov=app --cov-report=html
 ```
 
 ### CI/CD
+
 ```bash
 # Fast CI (Tier 1 only)
-pytest tests/tier1_unit/
+pytest tests/unit/
 
 # Full CI (all tiers)
 docker-compose up -d  # Start test infrastructure
@@ -250,6 +265,7 @@ docker-compose down
 ## When to Use This Skill
 
 Use this skill when you need to:
+
 - Understand Kailash testing philosophy
 - Set up test infrastructure
 - Write integration tests
@@ -262,6 +278,7 @@ Use this skill when you need to:
 ## Best Practices
 
 ### Test Quality
+
 - Write descriptive test names
 - Use AAA pattern (Arrange, Act, Assert)
 - Test both success and failure cases
@@ -269,12 +286,14 @@ Use this skill when you need to:
 - Use fixtures for setup/teardown
 
 ### Performance
+
 - Use test database containers
 - Cache expensive operations
 - Run tests in parallel (when safe)
 - Skip slow tests in development (mark with @pytest.mark.slow)
 
 ### Maintenance
+
 - Keep tests close to code
 - Update tests with code changes
 - Review test coverage regularly
@@ -290,6 +309,7 @@ Use this skill when you need to:
 ## Support
 
 For testing help, invoke:
+
 - `testing-specialist` - Testing strategies and patterns
 - `tdd-implementer` - Test-driven development
 - `dataflow-specialist` - DataFlow testing patterns

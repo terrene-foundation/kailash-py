@@ -1,3 +1,8 @@
+---
+paths:
+  - "packages/kailash-dataflow/**"
+---
+
 # DataFlow Pool Configuration Rules
 
 ## Scope

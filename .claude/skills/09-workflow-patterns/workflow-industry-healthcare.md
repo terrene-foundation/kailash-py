@@ -18,7 +18,7 @@ from kailash.workflow.builder import WorkflowBuilder
 workflow = WorkflowBuilder()
 
 # 1. Authenticate user
-workflow.add_node("APICallNode", "authenticate", {
+workflow.add_node("HTTPRequestNode", "authenticate", {
     "url": "{{secrets.auth_endpoint}}",
     "method": "POST"
 })
@@ -42,7 +42,7 @@ workflow.add_node("TransformNode", "decrypt", {
 })
 
 # 5. Audit log
-workflow.add_node("DatabaseExecuteNode", "audit", {
+workflow.add_node("SQLDatabaseNode", "audit", {
     "query": "INSERT INTO hipaa_audit_log (staff_id, patient_id, action, timestamp) VALUES (?, ?, 'record_access', NOW())",
     "parameters": ["{{authenticate.user_id}}", "{{input.patient_id}}"]
 })

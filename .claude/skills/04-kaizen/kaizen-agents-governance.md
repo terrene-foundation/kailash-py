@@ -19,7 +19,7 @@ If the operation requires an LLM call, it belongs in `kaizen-agents`. If determi
 ```python
 from kaizen_agents.supervisor import GovernedSupervisor
 
-supervisor = GovernedSupervisor(model="claude-sonnet-4-6", budget_usd=10.0)
+supervisor = GovernedSupervisor(model=os.environ["LLM_MODEL"], budget_usd=10.0)
 result = await supervisor.run("Analyze this codebase")
 # result: SupervisorResult (frozen=True)
 ```
@@ -30,7 +30,7 @@ Defaults: empty tools, $1 budget, PUBLIC clearance, default-deny for all tools.
 
 ```python
 supervisor = GovernedSupervisor(
-    model="claude-sonnet-4-6",
+    model=os.environ["LLM_MODEL"],
     budget_usd=10.0,
     tools=["read_file", "grep", "write_report"],
     data_clearance="restricted",       # PUBLIC | INTERNAL | RESTRICTED | CONFIDENTIAL | SECRET

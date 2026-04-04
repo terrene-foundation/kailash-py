@@ -10,7 +10,7 @@ description: "Complete GovernanceEngine API reference -- decision, query, mutati
 ## Constructor
 
 ```python
-from pact.governance.engine import GovernanceEngine
+from kailash.trust.pact.engine import GovernanceEngine
 
 engine = GovernanceEngine(
     org,                        # OrgDefinition | CompiledOrg
@@ -106,8 +106,8 @@ effective = engine.compute_envelope(
 5-step access enforcement for knowledge items.
 
 ```python
-from pact.governance.knowledge import KnowledgeItem
-from pact.governance.config import ConfidentialityLevel, TrustPostureLevel
+from kailash.trust.pact.knowledge import KnowledgeItem
+from kailash.trust.pact.config import ConfidentialityLevel, TrustPostureLevel
 
 item = KnowledgeItem(
     item_id="doc-secret",
@@ -161,7 +161,7 @@ All mutations are thread-safe and emit EATP audit anchors.
 ### Envelopes
 
 ```python
-from pact.governance.envelopes import RoleEnvelope, TaskEnvelope
+from kailash.trust.pact.envelopes import RoleEnvelope, TaskEnvelope
 
 engine.set_role_envelope(RoleEnvelope(
     id="env-1",
@@ -182,7 +182,7 @@ engine.set_task_envelope(TaskEnvelope(
 ### Clearance
 
 ```python
-from pact.governance.clearance import RoleClearance, VettingStatus
+from kailash.trust.pact.clearance import RoleClearance, VettingStatus
 
 engine.grant_clearance(
     role_address="D1-R1-T1-R1",
@@ -200,7 +200,7 @@ engine.revoke_clearance(role_address="D1-R1-T1-R1")
 ### Access Policies
 
 ```python
-from pact.governance.access import KnowledgeSharePolicy, PactBridge
+from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
 
 engine.create_ksp(KnowledgeSharePolicy(
     id="ksp-1",

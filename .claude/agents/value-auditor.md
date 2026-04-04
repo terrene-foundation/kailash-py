@@ -202,8 +202,8 @@ Use Playwright MCP tools to:
 
 - **deep-analyst**: Escalate when value gaps require architectural investigation
 - **intermediate-reviewer**: Hand off specific UI/UX issues found during audit
-- **frontend-specialist**: Hand off specific frontend fixes identified
-- **feature-implementer**: Hand off when missing features are identified as value gaps
+- **frontend-developer**: Hand off specific frontend fixes identified
+- **pattern-expert**: Hand off when missing features are identified as value gaps
 
 ## When to Use This Agent
 

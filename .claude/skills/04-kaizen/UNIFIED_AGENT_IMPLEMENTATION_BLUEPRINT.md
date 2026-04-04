@@ -55,14 +55,14 @@ This module implements the unified Agent class that replaces the need for
 
 Examples:
     # Zero-config (Layer 1)
-    >>> agent = Agent(model="gpt-4")
+    >>> agent = Agent(model=os.environ["LLM_MODEL"])
     >>> result = agent.run("What is AI?")
 
     # Configured (Layer 2)
-    >>> agent = Agent(model="gpt-4", agent_type="react", memory_turns=20)
+    >>> agent = Agent(model=os.environ["LLM_MODEL"], agent_type="react", memory_turns=20)
 
     # Expert override (Layer 3)
-    >>> agent = Agent(model="gpt-4", memory=CustomMemory())
+    >>> agent = Agent(model=os.environ["LLM_MODEL"], memory=CustomMemory())
 
 Architecture:
     Agent wraps BaseAgent and provides:
@@ -123,18 +123,18 @@ class Agent:
         - Google A2A: Capability card generation
 
     Three usage layers:
-        1. Zero-config: agent = Agent(model="gpt-4")
-        2. Configuration: agent = Agent(model="gpt-4", agent_type="react")
-        3. Expert override: agent = Agent(model="gpt-4", memory=CustomMemory())
+        1. Zero-config: agent = Agent(model=os.environ["LLM_MODEL"])
+        2. Configuration: agent = Agent(model=os.environ["LLM_MODEL"], agent_type="react")
+        3. Expert override: agent = Agent(model=os.environ["LLM_MODEL"], memory=CustomMemory())
 
     Examples:
         # Layer 1: Zero-config
-        >>> agent = Agent(model="gpt-4")
+        >>> agent = Agent(model=os.environ["LLM_MODEL"])
         >>> result = agent.run("Explain quantum computing")
 
         # Layer 2: Configured
         >>> agent = Agent(
-        ...     model="gpt-4",
+        ...     model=os.environ["LLM_MODEL"],
         ...     agent_type="react",
         ...     memory_turns=20,
         ...     tools=["read_file", "http_get"],
@@ -143,7 +143,7 @@ class Agent:
 
         # Layer 3: Expert
         >>> agent = Agent(
-        ...     model="gpt-4",
+        ...     model=os.environ["LLM_MODEL"],
         ...     memory=RedisMemory(),
         ...     tools="all"  # Enable tools via MCP
         ...     hook_manager=DatadogHooks()
@@ -1115,15 +1115,15 @@ class TestLayer1ZeroConfig:
 
     def test_agent_creation_minimal(self):
         """Test agent creation with minimal parameters."""
-        agent = Agent(model="gpt-4")
+        agent = Agent(model=os.environ["LLM_MODEL"])
 
-        assert agent.model == "gpt-4"
-        assert agent.provider == "openai"
+        assert agent.model == os.environ["LLM_MODEL"]
+        assert agent.provider == os.environ.get("LLM_PROVIDER", "openai")
         assert agent.agent_id is not None
 
     def test_default_features_enabled(self):
         """Test all default features are enabled."""
-        agent = Agent(model="gpt-4")
+        agent = Agent(model=os.environ["LLM_MODEL"])
 
         features = agent.get_features()
 
@@ -1134,7 +1134,7 @@ class TestLayer1ZeroConfig:
 
     def test_run_method_exists(self):
         """Test run method is available."""
-        agent = Agent(model="gpt-4")
+        agent = Agent(model=os.environ["LLM_MODEL"])
 
         assert hasattr(agent, "run")
         assert callable(agent.run)
@@ -1144,14 +1144,14 @@ class TestLayer2Configuration:
 
     def test_agent_type_simple(self):
         """Test simple agent type configuration."""
-        agent = Agent(model="gpt-4", agent_type="simple")
+        agent = Agent(model=os.environ["LLM_MODEL"], agent_type="simple")
 
         assert agent._agent_type == "simple"
         assert agent._max_cycles == 1
 
     def test_agent_type_react(self):
         """Test ReAct agent type configuration."""
-        agent = Agent(model="gpt-4", agent_type="react")
+        agent = Agent(model=os.environ["LLM_MODEL"], agent_type="react")
 
         assert agent._agent_type == "react"
         assert agent._tools_config["enabled"] is True
@@ -1160,7 +1160,7 @@ class TestLayer2Configuration:
     def test_memory_configuration(self):
         """Test memory configuration options."""
         agent = Agent(
-            model="gpt-4",
+            model=os.environ["LLM_MODEL"],
             memory_turns=20,
             memory_type="persistent"
         )
@@ -1171,7 +1171,7 @@ class TestLayer2Configuration:
     def test_tools_configuration(self):
         """Test tools configuration options."""
         agent = Agent(
-            model="gpt-4",
+            model=os.environ["LLM_MODEL"],
             tools=["read_file", "http_get"]
         )
 
@@ -1181,7 +1181,7 @@ class TestLayer2Configuration:
     def test_disable_features(self):
         """Test disabling features."""
         agent = Agent(
-            model="gpt-4",
+            model=os.environ["LLM_MODEL"],
             memory=False,
             tools=False,
             observability=False,
@@ -1201,14 +1201,14 @@ class TestLayer3ExpertOverride:
     def test_custom_memory(self):
         """Test custom memory override."""
         custom_memory = BufferMemory(max_turns=50)
-        agent = Agent(model="gpt-4", memory=custom_memory)
+        agent = Agent(model=os.environ["LLM_MODEL"], memory=custom_memory)
 
         assert agent._memory is custom_memory
 
     def test_custom_tool_registry(self):
         """Test custom tool registry override."""
         custom_
-        agent = Agent(model="gpt-4", tools="all"  # Enable tools via MCP
+        agent = Agent(model=os.environ["LLM_MODEL"], tools="all"  # Enable tools via MCP
 
         assert agent._tool_registry is custom_registry
 

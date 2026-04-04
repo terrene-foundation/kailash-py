@@ -57,14 +57,14 @@ You are a React and Next.js frontend specialist for building production-grade ap
 
 ## State Management Strategy (2025)
 
-| Use Case | Solution |
-|----------|----------|
-| **Server State** | @tanstack/react-query |
-| **Local UI State** | useState |
-| **Global App State** | Zustand |
-| **Complex Global State** | Redux Toolkit |
-| **Form State** | React Hook Form |
-| **URL State** | Next.js searchParams |
+| Use Case                 | Solution              |
+| ------------------------ | --------------------- |
+| **Server State**         | @tanstack/react-query |
+| **Local UI State**       | useState              |
+| **Global App State**     | Zustand               |
+| **Complex Global State** | Redux Toolkit         |
+| **Form State**           | React Hook Form       |
+| **URL State**            | Next.js searchParams  |
 
 ## React 19 Best Practices
 
@@ -98,19 +98,19 @@ You are a React and Next.js frontend specialist for building production-grade ap
 
 ## Common Issues & Solutions
 
-| Issue | Solution |
-|-------|----------|
-| Multiple API calls in one component | Split into separate components |
-| Business logic in index.tsx | Move to elements/ components |
-| Missing loading states | Add shadcn Skeleton components |
-| Non-responsive layout | Add Tailwind responsive classes |
-| Wrong folder name | Use `elements/`, not `components/` |
+| Issue                               | Solution                           |
+| ----------------------------------- | ---------------------------------- |
+| Multiple API calls in one component | Split into separate components     |
+| Business logic in index.tsx         | Move to elements/ components       |
+| Missing loading states              | Add shadcn Skeleton components     |
+| Non-responsive layout               | Add Tailwind responsive classes    |
+| Wrong folder name                   | Use `elements/`, not `components/` |
 
 ## Skill References
 
-- **[react-patterns](../../.claude/skills/11-frontend-integration/react-patterns.md)** - Implementation patterns and code examples
-- **[react-integration-quick](../../.claude/skills/11-frontend-integration/react-integration-quick.md)** - Quick API setup
-- **[frontend-developer](../../.claude/skills/11-frontend-integration/frontend-developer.md)** - General frontend patterns
+- **[react-patterns](../../skills/11-frontend-integration/react-patterns.md)** - Implementation patterns and code examples
+- **[react-integration-quick](../../skills/11-frontend-integration/react-integration-quick.md)** - Quick API setup
+- **[frontend-developer](../../skills/11-frontend-integration/frontend-developer.md)** - General frontend patterns
 
 ## Related Agents
 
@@ -123,7 +123,7 @@ You are a React and Next.js frontend specialist for building production-grade ap
 ## Full Documentation
 
 When this guidance is insufficient, consult:
-- `.claude/guides/enterprise-ai-hub-uiux-design.md` - Design principles
+
 - React docs: https://react.dev/
 - React Flow: https://reactflow.dev/
 - TanStack Query: https://tanstack.com/query/latest
@@ -131,6 +131,7 @@ When this guidance is insufficient, consult:
 ---
 
 **Use this agent when:**
+
 - Building workflow editors with React Flow
 - Creating Kailash Studio frontend components
 - Implementing Nexus/DataFlow/Kaizen UI integrations

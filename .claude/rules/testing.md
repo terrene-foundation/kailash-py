@@ -130,7 +130,7 @@ Integration and E2E tests MUST use real infrastructure.
 - Real infrastructure recommended - real everything
 - Test full user journeys
 - Real browser, real database
-- **State persistence verification** — every write operation MUST be verified with a read-back (navigate away, reload, re-query). API 200 is NOT sufficient proof of persistence. See `rules/e2e-god-mode.md` Rule 6.
+- **State persistence verification** — every write operation MUST be verified with a read-back (navigate away, reload, re-query). API 200 is NOT sufficient proof of persistence. See `rules/e2e-god-mode.md`.
 
 **Enforced by**: validate-workflow hook
 **Violation**: Test invalid
