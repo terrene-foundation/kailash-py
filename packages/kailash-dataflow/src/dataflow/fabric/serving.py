@@ -20,6 +20,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
+from dataflow.fabric.context import PipelineContext
 from dataflow.fabric.products import ProductRegistration
 
 logger = logging.getLogger(__name__)
@@ -224,7 +225,31 @@ class FabricServingLayer:
                     "data": {"status": "warming", "product": name},
                 }
 
-            # Virtual or parameterized with no cache — return empty
+            # Virtual products execute inline — they never cache (#245)
+            if product.mode.value == "virtual":
+                source_adapters = {
+                    n: info["adapter"]
+                    for n, info in self._sources.items()
+                    if isinstance(info, dict) and "adapter" in info
+                }
+                ctx = PipelineContext(
+                    express=self._express,
+                    sources=source_adapters,
+                    products_cache={},
+                )
+                result = await self._pipeline.execute_product(
+                    name, product.fn, ctx
+                )
+                return {
+                    "_status": 200,
+                    "_headers": {
+                        _HEADER_FRESHNESS: "fresh",
+                        _HEADER_MODE: "virtual",
+                    },
+                    "data": result.data,
+                }
+
+            # Parameterized with no cache — return empty
             return {
                 "_status": 200,
                 "_headers": {
@@ -259,6 +284,7 @@ class FabricServingLayer:
                     results[name] = {"error": f"Product '{name}' not found"}
                     continue
 
+                product = self._products[name]
                 cached = self._pipeline.get_cached(name)
                 if cached is not None:
                     data_bytes, metadata = cached
@@ -271,6 +297,25 @@ class FabricServingLayer:
                     results[name] = {
                         "data": data,
                         "cached_at": metadata.get("cached_at", ""),
+                    }
+                elif product.mode.value == "virtual":
+                    # Virtual products execute inline — never cached (#245)
+                    source_adapters = {
+                        n: info["adapter"]
+                        for n, info in self._sources.items()
+                        if isinstance(info, dict) and "adapter" in info
+                    }
+                    ctx = PipelineContext(
+                        express=self._express,
+                        sources=source_adapters,
+                        products_cache={},
+                    )
+                    pipe_result = await self._pipeline.execute_product(
+                        name, product.fn, ctx
+                    )
+                    results[name] = {
+                        "data": pipe_result.data,
+                        "status": "fresh",
                     }
                 else:
                     results[name] = {"data": None, "status": "cold"}
