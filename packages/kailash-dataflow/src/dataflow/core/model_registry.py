@@ -13,7 +13,7 @@ import threading
 import uuid
 import warnings
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -548,7 +548,7 @@ class ModelRegistry:
                             json.dumps(
                                 {
                                     "source": "model_registry",
-                                    "timestamp": datetime.utcnow().isoformat(),
+                                    "timestamp": datetime.now(UTC).isoformat(),
                                 }
                             ),
                         ],
@@ -583,7 +583,7 @@ class ModelRegistry:
                             json.dumps(
                                 {
                                     "source": "model_registry",
-                                    "timestamp": datetime.utcnow().isoformat(),
+                                    "timestamp": datetime.now(UTC).isoformat(),
                                 }
                             ),
                         ],
@@ -619,7 +619,7 @@ class ModelRegistry:
                             json.dumps(
                                 {
                                     "source": "model_registry",
-                                    "timestamp": datetime.utcnow().isoformat(),
+                                    "timestamp": datetime.now(UTC).isoformat(),
                                 }
                             ),
                         ],
