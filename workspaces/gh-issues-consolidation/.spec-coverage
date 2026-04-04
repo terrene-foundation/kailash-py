@@ -1,0 +1,50 @@
+# Spec Coverage — Red Team Round 1 (2026-04-04)
+
+## Coverage Matrix: 23 Issues → Implementation Status
+
+| Issue | Feature | Status | Evidence |
+|-------|---------|--------|----------|
+| #231 | Vacancy check + reject_bridge + cross-SDK | VERIFIED | engine.py:1217 is_vacant, reject_bridge:1264, 6 alignment items |
+| #232 | Parent tracker | VERIFIED | All child issues (#234-#241) resolved |
+| #233 | Prometheus /metrics + SSE streaming | VERIFIED | metrics.py, sse.py, sse_url() in events.py |
+| #234 | Per-node GovernanceCallback | VERIFIED | GovernanceCallback protocol, _DefaultGovernanceCallback |
+| #235 | Fresh supervisor per submit | VERIFIED | Caching removed (red team fix applied) |
+| #236 | ReadOnlyGovernanceView | VERIFIED | _ReadOnlyGovernanceView with __slots__ |
+| #237 | NaN guard on budget_consumed | VERIFIED | math.isfinite() guard (red team fix applied) |
+| #238 | HELD verdict distinct from BLOCKED | VERIFIED | is_held/is_blocked properties, GovernanceHeldError |
+| #239 | EnforcementMode enum | VERIFIED | ENFORCE/SHADOW/DISABLED with env guard |
+| #240 | Envelope adapter (5 dimensions) | VERIFIED | _adapt_envelope + _maximally_restrictive_defaults |
+| #241 | Degenerate envelope detection | VERIFIED | _detect_degenerate_envelopes at init |
+| #242 | Provenance[T] type | VERIFIED | provenance.py with validation |
+| #243 | Audit trail persistence | VERIFIED | EventStoreBackend + SQLite/PostgreSQL adapters |
+| #244 | Consumer adapter registry | VERIFIED | ConsumerRegistry + serving layer (red team fix applied) |
+| #245 | Virtual products inline | VERIFIED | serving.py virtual handler + batch handler |
+| #246 | Cache invalidation API | VERIFIED | invalidate() + invalidate_all() on PipelineExecutor |
+| #247 | ?refresh=true bypass | VERIFIED | refresh param in serving handler |
+| #248 | dev_mode pre-warming | VERIFIED | prewarm: bool parameter on start() |
+| #249 | FileSource directory scanning | VERIFIED | directory/pattern/selection config |
+| #250 | MCP tool generation | VERIFIED | mcp_integration.py with generate_mcp_tools |
+| #251 | Fabric-only mode | PARTIAL | FabricRuntime works without DB; DataFlow layer controls |
+| #252 | source_type rename | VERIFIED | Deprecation shim, 15 adapters updated |
+| #253 | ChangeDetector adapter fix | VERIFIED | Adapter extraction + _get_poll_interval fix |
+
+## Summary
+- VERIFIED: 22/23
+- PARTIAL: 1 (#251 — fabric-only works at runtime level, DataFlow constructor still accepts None)
+- MISSING: 0
+- WRONG: 0 (3 regressions found and FIXED in this round)
+
+## #232 Sub-Item Tracker
+Items from parent tracker NOT in child issues:
+- Tier 1 item 4 (input validation in submit): NOT IMPLEMENTED — low severity
+- Tier 2 item 9 (budget_allocated in WorkResult): NOT IMPLEMENTED — events field serves similar purpose
+- Tier 2 item 10 (audit_trail in WorkResult): NOT IMPLEMENTED — events + governance_verdicts fields serve similar purpose
+- Tier 3 item 12 (assessor validator factory): NOT IMPLEMENTED — Tier 3 "nice to have"
+
+## Security Findings
+- HIGH: serving.py consumer/refresh params need input validation (schema validation recommended)
+- MEDIUM: sse.py subscriber cleanup could use stronger deregistration pattern
+- 16 other files: PASS
+
+## Red Team Fix Applied
+3 regressions from merge reconciliation fixed and committed.

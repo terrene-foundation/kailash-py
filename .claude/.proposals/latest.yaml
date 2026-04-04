@@ -1,175 +1,54 @@
 source_repo: kailash-py
 codify_date: "2026-04-04"
-codify_session: "fix(coc): red team 62 CRITICALs + 103 HIGHs — verified all code examples against SDK source"
+codify_session: "feat(all): 23 GH issues — PACT hardening, governance, Nexus observability, DataFlow quality, Fabric engine"
 sdk_version: "2.4.1"
 coc_version: "1.0.0"
 
-# Context: 13 parallel red team agents audited all 421 skills against
-# actual SDK source code. Found 7 systemic patterns: phantom APIs/nodes,
-# wrong import paths, hardcoded model names, hollow stubs, stale rules,
-# broken cross-refs, token waste. Fixed in 3 convergence waves.
-# loom v1.4.0 sync-to-build was applied AFTER fixes — SKILL.md entry
-# points were re-applied; sub-skill fixes survived the sync intact.
+# Context: Consolidated 23 GH issues (#231-#253) across 5 workstreams.
+# Implemented in 4 sessions with parallel agent execution.
+# 12 PRs merged, ~6500 lines, ~180 new tests, 0 regressions.
+# Red team found 3 merge regressions — all fixed in convergence round.
+# 5 cross-SDK issues filed on kailash-rs (#173-#177).
 
 changes:
-  # === SKILL.md Entry Points (re-applied post-sync) ===
-  - file: skills/03-nexus/SKILL.md
-    action: modified
+  # === New Project Skills (Python-specific) ===
+  - file: skills/project/pact-enforcement-modes.md
+    action: created
     suggested_tier: coc-py
-    reason: "Nexus([workflow])/nexus.run() replaced with Nexus()/register()/start() — old pattern doesn't exist"
-    diff_lines: "+36 -42"
+    reason: "PACT enforcement modes (ENFORCE/SHADOW/DISABLED), envelope adapter mapping 5 dimensions, HELD verdict handling"
+    diff_lines: "+65"
 
-  - file: skills/04-kaizen/SKILL.md
-    action: modified
+  - file: skills/project/fabric-cache-consumers.md
+    action: created
     suggested_tier: coc-py
-    reason: "Hardcoded gpt-4 → os.environ, Nexus integration fixed to register()/start()"
-    diff_lines: "+5 -4"
+    reason: "Fabric cache control (invalidate/drain/refresh), consumer adapter registry, MCP tool generation, fabric-only mode"
+    diff_lines: "+75"
 
-  - file: skills/05-kailash-mcp/SKILL.md
-    action: modified
+  - file: skills/project/dataflow-provenance-audit.md
+    action: created
     suggested_tier: coc-py
-    reason: "@server.tool('name') → @server.tool(), fixed result access, Nexus/Kaizen imports"
-    diff_lines: "+18 -16"
+    reason: "Provenance[T] field-level source tracking with validation, audit trail persistence with SQLite/PostgreSQL backends"
+    diff_lines: "+70"
 
-  - file: skills/06-cheatsheets/SKILL.md
-    action: modified
-    suggested_tier: coc
-    reason: "Hardcoded gpt-4 → os.environ['LLM_MODEL']"
-    diff_lines: "+1 -1"
-
-  - file: skills/08-nodes-reference/SKILL.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "Removed phantom APICallNode, replaced with HTTPRequestNode"
-    diff_lines: "+2 -2"
-
-  - file: skills/09-workflow-patterns/SKILL.md
-    action: modified
-    suggested_tier: coc
-    reason: "Hardcoded gpt-4 → os.environ['LLM_MODEL']"
-    diff_lines: "+1 -1"
-
-  - file: skills/13-architecture-decisions/SKILL.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "APICallNode → HTTPRequestNode in node selection guide"
-    diff_lines: "+1 -1"
-
-  - file: skills/18-security-patterns/SKILL.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "APICallNode → HTTPRequestNode in security examples, removed 8 phantom file refs"
-    diff_lines: "+12 -6"
+  # === Existing Skill Updates Needed at loom/ ===
+  # These skills should be updated to reflect new capabilities:
 
   - file: skills/29-pact/SKILL.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "pact.governance.X → kailash.trust.pact.X (sub-modules don't exist)"
-    diff_lines: "+12 -12"
-
-  # === Sub-Skill Fixes (survived sync intact) ===
-
-  # Phantom node removals (APICallNode→HTTPRequestNode, DatabaseExecuteNode→SQLDatabaseNode,
-  # DataValidationNode→CodeValidationNode, ConditionalNode→SwitchNode) across 22 files:
-  - file: skills/09-workflow-patterns/*.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "Replaced 4 phantom node types with real equivalents across 13 workflow pattern files"
-    diff_lines: "+97 -97"
-
-  - file: skills/17-gold-standards/*.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "Phantom nodes replaced in gold-error-handling, gold-security, gold-documentation, gold-workflow-design"
-    diff_lines: "+15 -15"
-
-  # Hardcoded model names (60+ occurrences across 96 files):
-  - file: skills/04-kaizen/*.md
-    action: modified
+    action: needs_update
     suggested_tier: coc
-    reason: "All hardcoded 'gpt-4'/'gpt-3.5-turbo'/'claude-*' → os.environ['LLM_MODEL'] across 30+ Kaizen skills"
-    diff_lines: "+200 -350"
+    reason: "Add enforcement modes, per-node governance callback, HELD verdict handling, envelope adapter to PACT quick reference"
+    diff_lines: "~+30"
 
-  - file: skills/05-kailash-mcp/*.md
-    action: modified
+  - file: skills/02-dataflow/SKILL.md
+    action: needs_update
     suggested_tier: coc
-    reason: "IterativeLLMAgentNode→PythonCodeNode, hardcoded models→env vars across 6 MCP skills"
-    diff_lines: "+80 -120"
+    reason: "Add Provenance[T], audit persistence, consumer adapters, cache control to DataFlow quick reference"
+    diff_lines: "~+40"
 
-  # PACT import paths (pact.governance.X → kailash.trust.pact.X):
-  - file: skills/29-pact/*.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "All sub-module imports fixed + Source: path refs corrected across 7 PACT skills"
-    diff_lines: "+50 -50"
-
-  # EATP posture enum + import fixes:
-  - file: skills/26-eatp-reference/*.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "TrustPosture enum values corrected (4/5 wrong), import path kailash.trust.postures→posture"
-    diff_lines: "+30 -30"
-
-  # Core SDK fixes:
-  - file: skills/01-core-sdk/*.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "SwitchNode ports (true→true_output), async return value, phantom stubs→redirects, cycle-workflows rewritten"
-    diff_lines: "+60 -150"
-
-  - file: skills/08-nodes-reference/nodes-quick-index.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "Complete rewrite — removed ~25 phantom nodes, added real unlisted modules"
-    diff_lines: "+100 -150"
-
-  # Nexus sub-skill fixes:
-  - file: skills/03-nexus/nexus-troubleshooting.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "Removed 8 fabricated APIs (get_workflow_info, get_metrics, session_manager.extend_timeout, etc.)"
-    diff_lines: "+20 -40"
-
-  - file: skills/03-nexus/nexus-workflow-registration.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "Removed metadata= from 20+ register() calls (param doesn't exist)"
-    diff_lines: "+20 -30"
-
-  - file: skills/03-nexus/nexus-transport-architecture.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "Fixed HTTPTransport host param, HandlerParam type→param_type, registry.handlers→list_handlers()"
-    diff_lines: "+5 -5"
-
-  - file: skills/03-nexus/nexus-eventbus-phase2.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "Fixed subscribe_filtered signature, NexusFile.data→.size, BackgroundService.is_running→is_healthy"
-    diff_lines: "+8 -8"
-
-  # Frontend fixes:
-  - file: skills/11-frontend-integration/*.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "WorkflowAPI→Nexus, reactflow→@xyflow/react, removed fabricated streaming API"
-    diff_lines: "+30 -30"
-
-  - file: skills/12-testing-strategies/SKILL.md
-    action: modified
+  - file: skills/03-nexus/SKILL.md
+    action: needs_update
     suggested_tier: coc
-    reason: "Test directory names tier1_unit/→unit/, tier3_e2e/→e2e/"
-    diff_lines: "+6 -6"
-
-  - file: skills/15-enterprise-infrastructure/SKILL.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "Populated empty Source Code Layout table with 8 rows"
-    diff_lines: "+8 -0"
-
-  # === SDK Bug Found ===
-  # idempotency_store.py store_result() doesn't update expires_at
-  # Cached results expire at 5min claim TTL instead of configured 1hr
-  # This is a CODE bug, not an artifact issue — tracked separately
+    reason: "Add /metrics endpoint, SSE /events/stream, sse_url() to Nexus quick reference"
+    diff_lines: "~+15"
 
 status: pending_review
