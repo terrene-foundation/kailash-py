@@ -1,45 +1,47 @@
-# Session Notes — 2026-04-03 (Data Fabric Engine shipped, 3 packages released)
+# Session Notes — 2026-04-04 (23 GH Issues Sprint + Release)
 
 ### Read These Files First (in order)
 
-1. `workspaces/data-fabric-engine/.test-results` — final test counts (3957 passed, 0 failed)
-2. `workspaces/data-fabric-engine/04-validate/05-session2-redteam.md` — red team convergence report
-3. `packages/kailash-dataflow/CHANGELOG.md` — v1.6.0 release notes (Data Fabric Engine)
-4. `.claude/.proposals/latest.yaml` — 4 COC artifacts pending `/sync py` at loom/
-5. `.claude/skills/10-deployment-git/deployment-ci.md` — CI efficiency patterns codified
+1. `workspaces/gh-issues-consolidation/02-plans/01-implementation-plan.md` — full plan for 23 issues across 5 workstreams
+2. `workspaces/gh-issues-consolidation/.spec-coverage` — red team verification of all 23 issues against codebase
+3. `workspaces/gh-issues-consolidation/04-validate/01-redteam-convergence.md` — red team results (3 regressions found+fixed)
+4. `CHANGELOG.md` — release notes for v2.5.0 (all 4 packages)
+5. `deploy/deployment-config.md` — updated with lightweight tag convention (annotated tags don't trigger CI)
 
 ## Accomplished
 
-- **Released 3 packages to PyPI**: kailash 2.4.1, kailash-dataflow 1.6.0, kailash-nexus 1.7.2
-- **Completed TODOs 30-33, 37**: fabric extras, Tier 2 integration tests, reference app, README/CHANGELOG, Redis webhook nonces
-- **Red team converged** (2 rounds): ABC, source validation, NaN guard, Redis pipeline, regex module-level, fallback error handling
-- **CI optimization**: uv caching, path filtering, concurrency groups on all workflows, example-validation trimmed (3.8→3.11, Ollama removed), workflow_dispatch on all path-filtered workflows
-- **9 pre-existing test failures fixed**: 2 collection errors (psycopg2/mysql), 7 trust/PACT (audit count, vacancy enforcement, MCP import)
-- **GH issues #226-#228 closed**, all todos moved to completed/
-- **Codified**: dataflow-specialist agent (fabric knowledge), dataflow-fabric-engine skill (new), SKILL.md updated, CI efficiency patterns skill
-- **PR #229 merged** (Data Fabric Engine), **PR #230 merged** (release), tags pushed → PyPI published
+- **23 GH issues** (#231-#253) analyzed, planned, implemented, red-teamed, codified, released
+- **4 packages released**: kailash 2.5.0, kailash-pact 0.7.0, kailash-dataflow 1.7.0, kailash-nexus 1.8.0
+- **12 PRs** merged via PR #258 (implementation) and PR #260 (version bump)
+- **~6,500 lines** implementation + ~180 new tests across all packages
+- **5 cross-SDK issues** filed on kailash-rs (#173-#177)
+- **3 project skills** codified + upstream proposal at `.claude/.proposals/latest.yaml`
+- **FastAPI skill contamination** identified and filed as #259 (global COC skills show raw FastAPI instead of Nexus)
 
 ## Outstanding
 
-- [ ] `.claude/.proposals/latest.yaml` — 4 artifacts pending `/sync py` at loom/ to distribute to USE templates
-- [ ] Cross-SDK: esperie-enterprise/kailash-rs#143 tracks Rust Data Fabric equivalent (open, no implementation)
-- [ ] `deploy/deployment-config.md` version table is stale (still shows old versions) — cosmetic
-- [ ] `test-with-infrastructure.yml` runs Docker services but executes 0 tests — implement or remove
-- [ ] ~20 workspace/ files have historical `kailash[extra]` refs — intentionally not touched
+- [ ] **#254-#257** — 4 Kaizen/Azure issues (json_object format, provider_config dual purpose, cognitiveservices.azure.com detection, AZURE_OPENAI_API_VERSION env var). All in `packages/kailash-kaizen/`
+- [ ] **#259** — Fix FastAPI examples in global COC skills → replace with Nexus patterns. Fix at loom/ via `/sync`
+- [ ] **#251 PARTIAL** — Fabric-only mode works at FabricRuntime level but DataFlow constructor path not fully gated
+- [ ] **#232 sub-items** not in child issues: input validation in submit() (Tier 1), budget_allocated/audit_trail in WorkResult (Tier 2)
+- [ ] **Security recommendation**: serving.py consumer/refresh params need jsonschema validation (HIGH from red team)
+- [ ] **Worktree cleanup**: 11 worktrees in `.claude/worktrees/` — run `git worktree prune`
+- [ ] **`.proposals/latest.yaml`** — 6 changes pending `/sync py` at loom/
 
-## Oversight — Verify Before Starting
+### Oversight — Verify Before Starting
 
-- [ ] `pip install kailash==2.4.1 kailash-dataflow==1.6.0 kailash-nexus==1.7.2` succeeds from PyPI
-- [ ] `git tag -l | grep -E "v2.4.1|dataflow-v1.6.0|nexus-v1.7.2"` — all 3 tags exist
-- [ ] `gh issue list --state open` — should return 0
-- [ ] Branch is `main`, no stale feature branches
+- [ ] `pip install -e . && pip install -e packages/kailash-pact` — ensure editable installs current
+- [ ] `python -m pytest packages/kailash-pact/tests/unit/test_pact_engine.py -q` — 65+ tests pass
+- [ ] `git tag --sort=-creatordate | head -4` — shows v2.5.0, pact-v0.7.0, dataflow-v1.7.0, nexus-v1.8.0
+- [ ] PyPI: `pip install kailash==2.5.0 --dry-run` — version available
 
-## Oversight — Verify After Completing
+### Oversight — Verify After Completing
 
-- [ ] `uv run pytest tests/unit/ tests/trust/ --timeout=30 -q --tb=no` — 8470+ passed
-- [ ] `uv run pytest packages/kailash-dataflow/tests/unit/ packages/kailash-dataflow/tests/fabric/ --timeout=30 -q --tb=no` — 3945+ passed
-- [ ] No `NotImplementedError` in fabric: `grep -rn 'NotImplementedError' packages/kailash-dataflow/src/dataflow/fabric/`
+- [ ] All Kaizen Azure tests pass: `pytest packages/kailash-kaizen/tests/ -x`
+- [ ] No hardcoded model strings: `grep -rn '"gpt-4\|"claude-' packages/kailash-kaizen/src/`
+- [ ] Cross-SDK: file kailash-rs issues for any Azure fixes that apply to Rust
 
-## Blockers
+### Blockers
 
-None. All work complete. Next priorities: `/sync py` at loom/, Rust cross-SDK alignment.
+- `.proposals/latest.yaml` needs human to run `/sync py` at loom/ to distribute to USE template
+- #259 (FastAPI in skills) needs fixing at loom/ — affects kailash-rs agents generating wrong code

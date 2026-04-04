@@ -47,3 +47,19 @@
 
 - Lockstep: core SDK version bumps require framework dependency pin updates
 - SemVer: major (breaking), minor (features), patch (fixes)
+
+## Tag Convention
+
+**IMPORTANT**: Use lightweight tags (NOT annotated) for release triggers.
+
+```bash
+# CORRECT — lightweight tag triggers GitHub Actions reliably
+git tag v2.5.0
+git push origin v2.5.0
+
+# WRONG — annotated tag may NOT trigger publish-pypi.yml
+git tag v2.5.0 -m "Release message"
+```
+
+GitHub Actions `push.tags` webhook processing handles lightweight tags
+more reliably than annotated tags pushed after creation.
