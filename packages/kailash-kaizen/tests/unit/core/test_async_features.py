@@ -38,21 +38,19 @@ class TestBaseAgentConfigAsyncFeatures:
         assert config.use_async_llm is True
         assert config.llm_provider is None
 
-    def test_use_async_llm_rejects_non_openai_provider(self):
-        """Test use_async_llm rejects non-OpenAI providers."""
-        with pytest.raises(
-            ValueError, match="Async mode only supported for OpenAI provider"
-        ):
-            BaseAgentConfig(llm_provider="ollama", model="llama2", use_async_llm=True)
+    def test_use_async_llm_accepts_non_openai_provider(self):
+        """Async mode is supported for all providers with chat_async() methods."""
+        config = BaseAgentConfig(
+            llm_provider="ollama", model="llama2", use_async_llm=True
+        )
+        assert config.use_async_llm is True
 
-    def test_use_async_llm_rejects_anthropic_provider(self):
-        """Test use_async_llm rejects Anthropic provider."""
-        with pytest.raises(
-            ValueError, match="Async mode only supported for OpenAI provider"
-        ):
-            BaseAgentConfig(
-                llm_provider="anthropic", model="claude-3", use_async_llm=True
-            )
+    def test_use_async_llm_accepts_anthropic_provider(self):
+        """Async mode is supported for Anthropic (has chat_async)."""
+        config = BaseAgentConfig(
+            llm_provider="anthropic", model="claude-3", use_async_llm=True
+        )
+        assert config.use_async_llm is True
 
     def test_use_async_llm_type_validation(self):
         """Test use_async_llm must be boolean."""

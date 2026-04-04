@@ -9,11 +9,7 @@ This package provides clean, testable access control components:
 import os
 
 # Import core types first (avoiding circular imports)
-import sys
 from typing import Any, Dict, List
-
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Import core access control components directly
 import importlib.util

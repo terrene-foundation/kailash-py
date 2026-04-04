@@ -148,91 +148,83 @@ class TestUnifiedAzureProviderCapabilities:
 class TestUnifiedAzureProviderChat:
     """Tests for chat operations."""
 
-    @patch("openai.AzureOpenAI")
-    def test_chat_uses_detected_backend(self, mock_openai_class, monkeypatch):
-        """Should use the detected backend for chat."""
-        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_API_KEY", "test-key")
-
-        # Setup mock
-        mock_client = MagicMock()
+    @staticmethod
+    def _create_mock_response(content="Hello!", model="gpt-4o", response_id="test-id"):
+        """Create a standard mock chat completion response."""
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "Hello!"
+        mock_response.choices[0].message.content = content
         mock_response.choices[0].message.role = "assistant"
         mock_response.choices[0].message.tool_calls = None
         mock_response.choices[0].finish_reason = "stop"
-        mock_response.id = "test-id"
-        mock_response.model = "gpt-4o"
+        mock_response.id = response_id
+        mock_response.model = model
         mock_response.created = 1234567890
         mock_response.usage.prompt_tokens = 10
         mock_response.usage.completion_tokens = 5
         mock_response.usage.total_tokens = 15
-        mock_client.chat.completions.create.return_value = mock_response
-        mock_openai_class.return_value = mock_client
+        return mock_response
 
-        provider = UnifiedAzureProvider()
-        result = provider.chat([{"role": "user", "content": "Hi"}], model="gpt-4o")
+    @staticmethod
+    def _create_mock_openai_module(mock_client):
+        """Create a mock openai module with AzureOpenAI returning mock_client."""
+        mock_openai_class = MagicMock(return_value=mock_client)
+        mock_openai = MagicMock()
+        mock_openai.AzureOpenAI = mock_openai_class
+        return mock_openai, mock_openai_class
+
+    def test_chat_uses_detected_backend(self, monkeypatch):
+        """Should use the detected backend for chat."""
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
+
+        mock_client = MagicMock()
+        mock_response = self._create_mock_response()
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai, mock_openai_class = self._create_mock_openai_module(mock_client)
+
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            provider = UnifiedAzureProvider()
+            provider._openai_backend = None  # Force backend re-creation
+            result = provider.chat([{"role": "user", "content": "Hi"}], model="gpt-4o")
 
         assert result["content"] == "Hello!"
         assert result["metadata"]["provider"] == "azure_openai"
 
-    @patch("openai.AzureOpenAI")
-    def test_chat_filters_temperature_for_reasoning_models(
-        self, mock_openai_class, monkeypatch
-    ):
+    def test_chat_filters_temperature_for_reasoning_models(self, monkeypatch):
         """Should filter temperature for o1/o3/GPT-5 models."""
         monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
         monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         mock_client = MagicMock()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "Thought result"
-        mock_response.choices[0].message.role = "assistant"
-        mock_response.choices[0].message.tool_calls = None
-        mock_response.choices[0].finish_reason = "stop"
-        mock_response.id = "test-id"
-        mock_response.model = "o1-preview"
-        mock_response.created = 1234567890
-        mock_response.usage.prompt_tokens = 10
-        mock_response.usage.completion_tokens = 5
-        mock_response.usage.total_tokens = 15
-        mock_client.chat.completions.create.return_value = mock_response
-        mock_openai_class.return_value = mock_client
-
-        provider = UnifiedAzureProvider()
-        result = provider.chat(
-            [{"role": "user", "content": "Think about this"}],
-            model="o1-preview",
-            generation_config={"temperature": 0.7},
+        mock_response = self._create_mock_response(
+            content="Thought result", model="o1-preview"
         )
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai, _ = self._create_mock_openai_module(mock_client)
+
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            provider = UnifiedAzureProvider()
+            provider._openai_backend = None  # Force backend re-creation
+            result = provider.chat(
+                [{"role": "user", "content": "Think about this"}],
+                model="o1-preview",
+                generation_config={"temperature": 0.7},
+            )
 
         # Verify temperature was filtered
         call_kwargs = mock_client.chat.completions.create.call_args[1]
         assert "temperature" not in call_kwargs
 
-    @patch("openai.AzureOpenAI")
-    def test_chat_passes_response_format(self, mock_openai_class, monkeypatch):
+    def test_chat_passes_response_format(self, monkeypatch):
         """Should pass response_format for structured output."""
         monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
         monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         mock_client = MagicMock()
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = '{"name": "test"}'
-        mock_response.choices[0].message.role = "assistant"
-        mock_response.choices[0].message.tool_calls = None
-        mock_response.choices[0].finish_reason = "stop"
-        mock_response.id = "test-id"
-        mock_response.model = "gpt-4o"
-        mock_response.created = 1234567890
-        mock_response.usage.prompt_tokens = 10
-        mock_response.usage.completion_tokens = 5
-        mock_response.usage.total_tokens = 15
+        mock_response = self._create_mock_response(content='{"name": "test"}')
         mock_client.chat.completions.create.return_value = mock_response
-        mock_openai_class.return_value = mock_client
+        mock_openai, _ = self._create_mock_openai_module(mock_client)
 
         response_format = {
             "type": "json_schema",
@@ -246,12 +238,14 @@ class TestUnifiedAzureProviderChat:
             },
         }
 
-        provider = UnifiedAzureProvider()
-        result = provider.chat(
-            [{"role": "user", "content": "Extract name"}],
-            model="gpt-4o",
-            generation_config={"response_format": response_format},
-        )
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            provider = UnifiedAzureProvider()
+            provider._openai_backend = None  # Force backend re-creation
+            result = provider.chat(
+                [{"role": "user", "content": "Extract name"}],
+                model="gpt-4o",
+                generation_config={"response_format": response_format},
+            )
 
         # Verify response_format was passed
         call_kwargs = mock_client.chat.completions.create.call_args[1]

@@ -1,5 +1,7 @@
 """Unit tests for Perplexity AI provider."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from kaizen.nodes.ai.ai_providers import PerplexityProvider
@@ -683,8 +685,13 @@ class TestPerplexityProviderChat:
 
         messages = [{"role": "user", "content": "Hello"}]
 
-        with pytest.raises(RuntimeError, match="PERPLEXITY_API_KEY"):
-            provider.chat(messages)
+        # Provide a mock openai module so the import succeeds and the
+        # API key validation is reached (openai is an optional dependency).
+        mock_openai = MagicMock()
+
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            with pytest.raises(RuntimeError, match="PERPLEXITY_API_KEY"):
+                provider.chat(messages)
 
     def test_chat_raises_without_openai_library(self, monkeypatch):
         """Should raise RuntimeError when openai library not installed."""
@@ -721,8 +728,14 @@ class TestPerplexityProviderChatAsync:
 
         messages = [{"role": "user", "content": "Hello"}]
 
-        with pytest.raises(RuntimeError, match="PERPLEXITY_API_KEY"):
-            await provider.chat_async(messages)
+        # Provide a mock openai module so the import succeeds and the
+        # API key validation is reached (openai is an optional dependency).
+        mock_openai = MagicMock()
+        mock_openai.AsyncOpenAI = MagicMock()
+
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            with pytest.raises(RuntimeError, match="PERPLEXITY_API_KEY"):
+                await provider.chat_async(messages)
 
 
 class TestPerplexityProviderRegistry:

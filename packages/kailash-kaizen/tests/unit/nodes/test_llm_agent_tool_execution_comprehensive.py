@@ -155,7 +155,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
         """Test tool execution loop with single round."""
 
         # Create a mock provider that returns tool calls once
-        def mock_provider_response(provider, model, messages, tools, config):
+        def mock_provider_response(provider, model, messages, tools, config, **kwargs):
             # First call returns tool calls
             if len(messages) == 1:
                 return {
@@ -205,7 +205,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
         """Test tool execution loop with multiple rounds."""
         call_count = 0
 
-        def mock_provider_response(provider, model, messages, tools, config):
+        def mock_provider_response(provider, model, messages, tools, config, **kwargs):
             nonlocal call_count
             call_count += 1
 
@@ -263,7 +263,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
         """Test that tool execution loop respects max_rounds limit."""
 
         def mock_provider_always_returns_tools(
-            provider, model, messages, tools, config
+            provider, model, messages, tools, config, **kwargs
         ):
             # Always return tool calls
             return {
@@ -480,7 +480,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
         """Test that tool results are properly added to conversation."""
         messages_captured = []
 
-        def capture_messages(provider, model, messages, tools, config):
+        def capture_messages(provider, model, messages, tools, config, **kwargs):
             messages_captured.append(list(messages))  # Capture a copy
 
             if len(messages) == 1:
