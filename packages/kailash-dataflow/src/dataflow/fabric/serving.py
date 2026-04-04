@@ -20,6 +20,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
+from dataflow.fabric.context import PipelineContext
 from dataflow.fabric.products import ProductRegistration
 
 logger = logging.getLogger(__name__)
@@ -141,6 +142,11 @@ class FabricServingLayer:
             if request and hasattr(request, "query_params"):
                 params = dict(request.query_params)
 
+            # Parse refresh flag — ?refresh=true bypasses cache
+            refresh = params.pop("refresh", "false")
+            if isinstance(refresh, str):
+                refresh = refresh.lower() == "true"
+
             # Build cache key
             if product.mode.value == "parameterized" and params:
                 # Validate filter params
@@ -171,6 +177,43 @@ class FabricServingLayer:
                             "_status": 400,
                             "error": "limit must be a positive integer",
                         }
+
+            # Refresh: bypass cache and execute fresh
+            if refresh:
+                try:
+                    source_adapters = {
+                        src_name: src_info["adapter"]
+                        for src_name, src_info in self._sources.items()
+                        if "adapter" in src_info
+                    }
+                    ctx = PipelineContext(
+                        express=self._express,
+                        sources=source_adapters,
+                        products_cache={},
+                    )
+                    result = await self._pipeline.execute_product(
+                        product_name=name,
+                        product_fn=product.fn,
+                        context=ctx,
+                        params=params if params else None,
+                    )
+                    return {
+                        "_status": 200,
+                        "_headers": {
+                            _HEADER_FRESHNESS: "fresh",
+                            _HEADER_PIPELINE_MS: str(int(result.duration_ms)),
+                            _HEADER_MODE: product.mode.value,
+                        },
+                        "data": result.data,
+                    }
+                except Exception as e:
+                    logger.error(
+                        "Refresh execution failed for product '%s': %s", name, e
+                    )
+                    return {
+                        "_status": 500,
+                        "error": "Product refresh failed",
+                    }
 
             # Try to get cached data
             cached = self._pipeline.get_cached(name)
