@@ -533,6 +533,32 @@ class FabricRuntime:
             "cached_at": cached[1].get("cached_at") if cached else None,
         }
 
+    def invalidate(
+        self, product_name: str, params: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """Invalidate cached data for a specific product.
+
+        Args:
+            product_name: Name of the product to invalidate.
+            params: Optional parameters (for parameterized products).
+
+        Returns:
+            ``True`` if the cache entry existed and was removed.
+        """
+        if self._pipeline is None:
+            return False
+        return self._pipeline.invalidate(product_name, params)
+
+    def invalidate_all(self) -> int:
+        """Invalidate all cached product data.
+
+        Returns:
+            The number of cache entries that were cleared.
+        """
+        if self._pipeline is None:
+            return 0
+        return self._pipeline.invalidate_all()
+
     def last_trace(self, name: str) -> Dict[str, Any]:
         """Get the last pipeline trace for a product."""
         if self._health_manager is None:
