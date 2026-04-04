@@ -124,11 +124,18 @@ class FabricRuntime:
                 "fabric endpoints will be publicly accessible"
             )
 
-    async def start(self) -> None:
+    async def start(self, prewarm: bool = True) -> None:
         """Start the fabric runtime.
 
         This is called by ``db.start()`` and orchestrates the full startup
         sequence.
+
+        Args:
+            prewarm: Whether to pre-warm materialized products on startup.
+                Defaults to ``True``. When ``False``, the first request for
+                each product returns a 202 (warming) response. Independent
+                of ``dev_mode`` — pre-warming runs serially in dev mode and
+                in parallel otherwise.
         """
         if self._started:
             logger.warning("FabricRuntime already started")
@@ -159,14 +166,25 @@ class FabricRuntime:
         await self._leader.try_elect()
         await self._leader.start_heartbeat()
 
-        # 5. Pre-warm materialized products (leader only, skip in dev_mode)
-        if self._leader.is_leader and not self._dev_mode:
-            await self._prewarm_products()
+        # 5. Pre-warm materialized products (leader only)
+        if self._leader.is_leader and prewarm:
+            if self._dev_mode:
+                await self._prewarm_products_serial()
+            else:
+                await self._prewarm_products()
 
         # 6. Start change detection (leader only)
+        #    Extract adapter objects from source info dicts (#253).
+        #    ChangeDetector expects Dict[str, BaseSourceAdapter], but
+        #    self._sources is Dict[str, Dict[str, Any]].
         if self._leader.is_leader:
+            adapters = {
+                n: info["adapter"]
+                for n, info in self._sources.items()
+                if isinstance(info, dict) and "adapter" in info
+            }
             self._change_detector = ChangeDetector(
-                sources=self._sources,
+                sources=adapters,
                 products=self._products,
                 pipeline_executor=self._pipeline,
                 dev_mode=self._dev_mode,
@@ -312,6 +330,49 @@ class FabricRuntime:
                     context=ctx,
                 )
                 logger.debug("Pre-warmed product '%s'", name)
+            except Exception:
+                logger.exception("Failed to pre-warm product '%s'", name)
+
+    async def _prewarm_products_serial(self) -> None:
+        """Pre-warm all materialized products one at a time (dev mode).
+
+        Identical to ``_prewarm_products`` but executes products serially
+        to reduce resource usage during development. This avoids parallel
+        database connections and CPU spikes that are unnecessary in a
+        single-developer environment.
+        """
+        materialized = [
+            (name, product)
+            for name, product in self._products.items()
+            if product.mode.value == "materialized"
+        ]
+
+        if not materialized:
+            return
+
+        logger.debug(
+            "Pre-warming %d materialized products (serial, dev_mode)",
+            len(materialized),
+        )
+
+        for name, product in materialized:
+            try:
+                source_adapters = {
+                    n: info["adapter"]
+                    for n, info in self._sources.items()
+                    if "adapter" in info
+                }
+                ctx = PipelineContext(
+                    express=getattr(self._dataflow, "_express_dataflow", None),
+                    sources=source_adapters,
+                    products_cache=self._get_products_cache(),
+                )
+                await self._pipeline.execute_product(
+                    product_name=name,
+                    product_fn=product.fn,
+                    context=ctx,
+                )
+                logger.debug("Pre-warmed product '%s' (serial)", name)
             except Exception:
                 logger.exception("Failed to pre-warm product '%s'", name)
 
