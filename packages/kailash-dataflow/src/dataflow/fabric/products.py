@@ -56,6 +56,10 @@ class ProductRegistration:
             triggered by source changes.
         cache_miss: Strategy when a parameterized product has a cache miss
             (``"timeout"``, ``"async_202"``, or ``"inline"``).
+        consumers: Names of consumer adapters this product supports.
+            When a consumer is requested via ``?consumer=name``, the serving
+            layer validates the name appears in this list before applying
+            the transform.
     """
 
     name: str
@@ -69,6 +73,7 @@ class ProductRegistration:
     rate_limit: RateLimit = field(default_factory=RateLimit)
     write_debounce: timedelta = field(default_factory=lambda: timedelta(seconds=1))
     cache_miss: str = "timeout"
+    consumers: List[str] = field(default_factory=list)
 
 
 def register_product(
@@ -86,6 +91,7 @@ def register_product(
     rate_limit: Optional[RateLimit] = None,
     write_debounce: Optional[timedelta] = None,
     cache_miss: str = "timeout",
+    consumers: Optional[List[str]] = None,
 ) -> None:
     """Register a data product in the fabric engine.
 
@@ -107,6 +113,7 @@ def register_product(
         rate_limit: Rate-limiting config. Defaults to ``RateLimit()``.
         write_debounce: Debounce interval. Defaults to 1 second.
         cache_miss: Cache-miss strategy for parameterized products.
+        consumers: Names of consumer adapters this product supports.
 
     Raises:
         ValueError: On invalid mode, duplicate name, unresolvable
@@ -184,6 +191,7 @@ def register_product(
         rate_limit=rate_limit or RateLimit(),
         write_debounce=write_debounce or timedelta(seconds=1),
         cache_miss=cache_miss,
+        consumers=consumers or [],
     )
 
     products[name] = registration

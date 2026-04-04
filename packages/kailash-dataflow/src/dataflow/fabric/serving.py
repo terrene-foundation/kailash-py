@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from dataflow.fabric.context import PipelineContext
+from dataflow.fabric.consumers import ConsumerRegistry
 from dataflow.fabric.products import ProductRegistration
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ _HEADER_MODE = "X-Fabric-Mode"
 _HEADER_CONSISTENCY = "X-Fabric-Consistency"
 _HEADER_WRITE_TARGET = "X-Fabric-Write-Target"
 _HEADER_PRODUCTS_REFRESHING = "X-Fabric-Products-Refreshing"
+_HEADER_CONSUMER = "X-Fabric-Consumer"
 
 # Filter operator allowlist (TODO-35)
 ALLOWED_OPERATORS = {"$eq", "$ne", "$gt", "$gte", "$lt", "$lte", "$in", "$nin"}
@@ -67,6 +69,7 @@ class FabricServingLayer:
         sources: Dict[str, Any] = None,
         enable_writes: bool = False,
         on_product_refresh: Optional[Callable] = None,
+        consumer_registry: Optional[ConsumerRegistry] = None,
     ) -> None:
         self._products = products
         self._pipeline = pipeline_executor
@@ -74,6 +77,7 @@ class FabricServingLayer:
         self._sources = sources or {}
         self._enable_writes = enable_writes
         self._on_product_refresh = on_product_refresh
+        self._consumer_registry = consumer_registry or ConsumerRegistry()
 
     def get_routes(self) -> List[Dict[str, Any]]:
         """Generate route definitions for all products.
@@ -146,6 +150,28 @@ class FabricServingLayer:
             refresh = params.pop("refresh", "false")
             if isinstance(refresh, str):
                 refresh = refresh.lower() == "true"
+            # Extract consumer param before passing to product logic
+            consumer_name = params.pop("consumer", None)
+
+            # Validate consumer early — fail fast on unknown/unsupported
+            if consumer_name is not None:
+                if consumer_name not in product.consumers:
+                    return {
+                        "_status": 400,
+                        "error": (
+                            f"Consumer '{consumer_name}' is not supported by "
+                            f"product '{name}'. "
+                            f"Available consumers: {product.consumers}"
+                        ),
+                    }
+                if self._consumer_registry.get(consumer_name) is None:
+                    return {
+                        "_status": 400,
+                        "error": (
+                            f"Consumer '{consumer_name}' is declared on product "
+                            f"'{name}' but no adapter function is registered."
+                        ),
+                    }
 
             # Build cache key
             if product.mode.value == "parameterized" and params:
@@ -228,6 +254,10 @@ class FabricServingLayer:
                 except ImportError:
                     data = json.loads(data_bytes.decode("utf-8"))
 
+                # Apply consumer transform if requested
+                if consumer_name is not None:
+                    data = self._consumer_registry.transform(consumer_name, data)
+
                 cached_at = metadata.get("cached_at", "")
                 pipeline_ms = metadata.get("pipeline_ms", 0)
                 age_seconds = 0
@@ -244,15 +274,19 @@ class FabricServingLayer:
                 max_age = product.staleness.max_age.total_seconds()
                 freshness = "fresh" if age_seconds <= max_age else "stale"
 
+                headers = {
+                    _HEADER_FRESHNESS: freshness,
+                    _HEADER_AGE: str(age_seconds),
+                    _HEADER_CACHED_AT: cached_at,
+                    _HEADER_PIPELINE_MS: str(int(pipeline_ms)),
+                    _HEADER_MODE: product.mode.value,
+                }
+                if consumer_name is not None:
+                    headers[_HEADER_CONSUMER] = consumer_name
+
                 return {
                     "_status": 200,
-                    "_headers": {
-                        _HEADER_FRESHNESS: freshness,
-                        _HEADER_AGE: str(age_seconds),
-                        _HEADER_CACHED_AT: cached_at,
-                        _HEADER_PIPELINE_MS: str(int(pipeline_ms)),
-                        _HEADER_MODE: product.mode.value,
-                    },
+                    "_headers": headers,
                     "data": data,
                 }
 

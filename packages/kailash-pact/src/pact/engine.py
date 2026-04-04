@@ -46,7 +46,13 @@ __all__ = [
 class GovernanceHeldError(Exception):
     """Raised when a governance verdict is HELD and no on_held callback handles it."""
 
-    def __init__(self, verdict: Any, role: str, action: str, context: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        verdict: Any,
+        role: str,
+        action: str,
+        context: dict[str, Any] | None = None,
+    ) -> None:
         self.verdict = verdict
         self.role = role
         self.action = action
@@ -58,39 +64,56 @@ class GovernanceHeldError(Exception):
 class HeldActionCallback(Protocol):
     """Protocol for handling HELD verdicts. Return True to proceed, False to block."""
 
-    async def __call__(self, verdict: Any, role: str, action: str, context: dict[str, Any]) -> bool: ...
+    async def __call__(
+        self, verdict: Any, role: str, action: str, context: dict[str, Any]
+    ) -> bool: ...
 
 
 @runtime_checkable
 class GovernanceCallback(Protocol):
     """Protocol for per-node governance verification."""
 
-    async def __call__(self, role_address: str, action: str, context: dict[str, Any]) -> Any: ...
+    async def __call__(
+        self, role_address: str, action: str, context: dict[str, Any]
+    ) -> Any: ...
 
 
 class _DefaultGovernanceCallback:
     """Default per-node governance callback calling verify_action() per node."""
 
-    def __init__(self, governance: Any, on_held: HeldActionCallback | None = None) -> None:
+    def __init__(
+        self, governance: Any, on_held: HeldActionCallback | None = None
+    ) -> None:
         self._governance = governance
         self._on_held = on_held
 
-    async def __call__(self, role_address: str, action: str, context: dict[str, Any]) -> Any:
+    async def __call__(
+        self, role_address: str, action: str, context: dict[str, Any]
+    ) -> Any:
         from kailash.trust.pact.exceptions import PactError
 
-        verdict = self._governance.verify_action(role_address=role_address, action=action, context=context)
+        verdict = self._governance.verify_action(
+            role_address=role_address, action=action, context=context
+        )
 
         if verdict.is_held:
             if self._on_held is not None:
                 proceed = await self._on_held(verdict, role_address, action, context)
                 if proceed:
                     return verdict
-            raise GovernanceHeldError(verdict=verdict, role=role_address, action=action, context=context)
+            raise GovernanceHeldError(
+                verdict=verdict, role=role_address, action=action, context=context
+            )
 
         if verdict.is_blocked:
             raise PactError(
                 f"Governance BLOCKED: {verdict.reason}",
-                details={"level": verdict.level, "reason": verdict.reason, "role_address": role_address, "action": action},
+                details={
+                    "level": verdict.level,
+                    "reason": verdict.reason,
+                    "role_address": role_address,
+                    "action": action,
+                },
             )
 
         return verdict
@@ -408,7 +431,9 @@ class PactEngine:
     @property
     def governance_callback(self) -> GovernanceCallback:
         """The per-node governance callback."""
-        return _DefaultGovernanceCallback(governance=self._governance, on_held=self._on_held)
+        return _DefaultGovernanceCallback(
+            governance=self._governance, on_held=self._on_held
+        )
 
     @property
     def costs(self) -> CostTracker:
@@ -477,6 +502,13 @@ class PactEngine:
                 context=ctx,
             )
             cost_usd = supervisor_result.budget_consumed
+            # NaN/Inf/negative guard on budget_consumed (#237)
+            if not math.isfinite(cost_usd) or cost_usd < 0:
+                logger.error(
+                    "budget_consumed is invalid (%r) — recording as 0.0",
+                    cost_usd,
+                )
+                cost_usd = 0.0
             if cost_usd > 0:
                 self._costs.record(cost_usd, f"submit: {objective[:80]}")
 
@@ -663,12 +695,24 @@ class PactEngine:
             degenerate_warnings = check_degenerate_envelope(envelope)
             if degenerate_warnings:
                 if degenerate_count < 50:
-                    logger.warning("Degenerate envelope at '%s': %s", address, "; ".join(degenerate_warnings))
+                    logger.warning(
+                        "Degenerate envelope at '%s': %s",
+                        address,
+                        "; ".join(degenerate_warnings),
+                    )
                 degenerate_count += 1
         if degenerate_count > 50:
-            logger.warning("... and %d more degenerate envelopes (total: %d)", degenerate_count - 50, degenerate_count)
+            logger.warning(
+                "... and %d more degenerate envelopes (total: %d)",
+                degenerate_count - 50,
+                degenerate_count,
+            )
         elif degenerate_count > 0:
-            logger.warning("Found %d degenerate envelope(s) in org '%s'", degenerate_count, compiled_org.org_id)
+            logger.warning(
+                "Found %d degenerate envelope(s) in org '%s'",
+                degenerate_count,
+                compiled_org.org_id,
+            )
 
     @staticmethod
     def _create_governance_engine(
@@ -719,9 +763,8 @@ class PactEngine:
             A GovernedSupervisor instance, or None if kaizen-agents
             is not importable.
         """
-        if self._supervisor is not None:
-            return self._supervisor
-
+        # Fresh supervisor per submit() — no caching (#235)
+        # Budget must reflect self._costs.remaining at call time
         try:
             from kaizen_agents.supervisor import GovernedSupervisor
         except ImportError:
@@ -731,7 +774,7 @@ class PactEngine:
             )
             return None
 
-        supervisor = GovernedSupervisor(
+        return GovernedSupervisor(
             model=self._model or os.environ.get("DEFAULT_LLM_MODEL"),
             budget_usd=(
                 self._costs.remaining if self._costs.remaining is not None else 1.0
@@ -751,8 +794,6 @@ class PactEngine:
             ),
             cost_model=self._costs.cost_model,
         )
-        self._supervisor = supervisor
-        return supervisor
 
 
 def _org_def_from_dict(data: dict[str, Any]) -> Any:
@@ -845,12 +886,23 @@ class _ReadOnlyGovernanceView:
 
     def __getattr__(self, name: str) -> Any:
         _BLOCKED = {
-            "update_envelope", "modify_envelope", "set_role_envelope",
-            "grant_clearance", "revoke_clearance", "register_vacancy",
-            "register_tool", "compile_org", "set_compliance_role",
-            "create_bridge", "approve_bridge", "consent_bridge",
-            "register_compliance_role", "designate_interim", "revoke_interim",
-            "register_ksp", "revoke_ksp",
+            "update_envelope",
+            "modify_envelope",
+            "set_role_envelope",
+            "grant_clearance",
+            "revoke_clearance",
+            "register_vacancy",
+            "register_tool",
+            "compile_org",
+            "set_compliance_role",
+            "create_bridge",
+            "approve_bridge",
+            "consent_bridge",
+            "register_compliance_role",
+            "designate_interim",
+            "revoke_interim",
+            "register_ksp",
+            "revoke_ksp",
         }
         if name in _BLOCKED:
             raise AttributeError(

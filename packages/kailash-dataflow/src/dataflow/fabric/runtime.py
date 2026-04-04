@@ -31,6 +31,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from dataflow.fabric.change_detector import ChangeDetector
+from dataflow.fabric.consumers import ConsumerFn, ConsumerRegistry
 from dataflow.fabric.context import FabricContext, PipelineContext
 from dataflow.fabric.leader import LeaderElector
 from dataflow.fabric.pipeline import PipelineExecutor
@@ -83,6 +84,9 @@ class FabricRuntime:
         self._enable_writes = enable_writes
         self._tenant_extractor = tenant_extractor
         self._nexus = nexus
+
+        # Consumer adapter registry
+        self._consumer_registry = ConsumerRegistry()
 
         # Validate parameter combinations (TODO-38)
         self._validate_params()
@@ -206,6 +210,7 @@ class FabricRuntime:
             sources=self._sources,
             enable_writes=self._enable_writes,
             on_product_refresh=self._on_source_change,
+            consumer_registry=self._consumer_registry,
         )
 
         # 9. Subscribe to DataFlow event bus for model writes (TODO-18)
@@ -568,6 +573,24 @@ class FabricRuntime:
                 self._sources, self._products, self._pipeline, self._started_at
             )
         return self._health_manager.get_trace(name)
+
+    def register_consumer(self, name: str, fn: ConsumerFn) -> None:
+        """Register a consumer adapter function.
+
+        Consumer functions are pure data transforms: canonical product
+        data in, consumer-specific view out. They are applied by the
+        serving layer when the ``?consumer=`` query parameter is present.
+
+        Args:
+            name: Unique consumer identifier.
+            fn: Pure function ``(dict) -> dict``.
+        """
+        self._consumer_registry.register(name, fn)
+
+    @property
+    def consumer_registry(self) -> ConsumerRegistry:
+        """Return the consumer adapter registry."""
+        return self._consumer_registry
 
     @property
     def serving(self) -> Optional[FabricServingLayer]:
