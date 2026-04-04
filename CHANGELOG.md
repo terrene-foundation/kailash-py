@@ -15,6 +15,46 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [2.5.0] - 2026-04-04
+
+**Multi-Package Release** — kailash 2.5.0, kailash-pact 0.7.0, kailash-dataflow 1.7.0, kailash-nexus 1.8.0
+
+Consolidated 23 GitHub issues (#231-#253) across 5 workstreams.
+
+#### Added
+
+- PACT: Enforcement modes ENFORCE/SHADOW/DISABLED with env var guard (#239)
+- PACT: Per-node GovernanceCallback protocol (#234)
+- PACT: HELD verdict distinct from BLOCKED with HeldActionCallback (#238)
+- PACT: Envelope-to-execution adapter mapping 5 PACT dimensions (#240)
+- PACT: Degenerate envelope detection at init (#241)
+- Governance: reject_bridge() with vacancy check (#231)
+- Nexus: Prometheus /metrics endpoint (optional dependency) (#233)
+- Nexus: SSE /events/stream with filtered subscriptions (#233)
+- DataFlow: Provenance[T] field-level source tracking (#242)
+- DataFlow: Audit trail persistence — SQLite + PostgreSQL (#243)
+- DataFlow: Consumer adapter registry for product transforms (#244)
+- Fabric: Cache invalidation API (#246)
+- Fabric: ?refresh=true cache bypass (#247)
+- Fabric: MCP tool generation from products (#250)
+- Fabric: FileSourceAdapter directory scanning (#249)
+- Fabric: Fabric-only mode without database (#251)
+
+#### Fixed
+
+- PACT: Stale supervisor budget — fresh per submit() (#235)
+- PACT: Mutable GovernanceEngine → ReadOnlyGovernanceView (#236)
+- PACT: NaN guard on budget_consumed (#237)
+- Governance: Vacant roles blocked from bridge approval (#231)
+- Fabric: Virtual products execute inline instead of returning None (#245)
+- Fabric: dev_mode pre-warming with prewarm parameter (#248)
+- Fabric: ChangeDetector dict-vs-adapter crash (#253)
+
+#### Changed
+
+- DataFlow: BaseAdapter.database_type → source_type with deprecation shim (#252)
+- DataFlow: datetime.utcnow() → datetime.now(UTC) in audit code
+
 ### [2.4.1] - 2026-04-03
 
 **Patch Release** — kailash 2.4.1
