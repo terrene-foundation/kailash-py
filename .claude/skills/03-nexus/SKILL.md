@@ -29,8 +29,9 @@ from nexus import Nexus
 workflow = create_my_workflow()
 
 # Deploy to all channels at once
-nexus = Nexus([workflow])
-nexus.run(port=8000)
+app = Nexus()
+app.register("my_workflow", workflow.build())
+app.start()
 
 # Now available via:
 # - HTTP API: POST http://localhost:8000/api/workflow/{workflow_id}
@@ -81,11 +82,6 @@ nexus.run(port=8000)
 - **[nexus-auth-plugin](nexus-auth-plugin.md)** - NexusAuthPlugin unified auth (JWT, RBAC, SSO, rate limiting, tenant, audit)
 - **[golden-patterns-catalog](golden-patterns-catalog.md)** - Top 7 production-validated codegen patterns
 - **[codegen-decision-tree](codegen-decision-tree.md)** - Decision tree, anti-patterns, scaffolding templates
-
-### Transport & Event System
-
-- **[nexus-transport-architecture](nexus-transport-architecture.md)** - Transport ABC, HTTPTransport, MCPTransport, HandlerRegistry
-- **[nexus-eventbus-phase2](nexus-eventbus-phase2.md)** - EventBus (janus.Queue), Phase 2 APIs, DataFlow bridge, NexusFile
 
 ## Key Concepts
 
@@ -154,8 +150,10 @@ class User:
     name: str
 
 # Auto-generates CRUD endpoints for all models
-nexus = Nexus(db.get_workflows())
-nexus.run()
+app = Nexus()
+for name, wf in db.get_workflows().items():
+    app.register(name, wf)
+app.start()
 
 # GET  /api/User/list
 # POST /api/User/create
@@ -168,12 +166,13 @@ nexus.run()
 
 ```python
 from nexus import Nexus
-from kaizen.base import BaseAgent
+from kaizen.core.base_agent import BaseAgent
 
 # Deploy agents via all channels
 agent_workflow = create_agent_workflow()
-nexus = Nexus([agent_workflow])
-nexus.run()
+app = Nexus()
+app.register("agent", agent_workflow.build())
+app.start()
 
 # Agents accessible via API, CLI, and MCP
 ```
@@ -185,14 +184,11 @@ from nexus import Nexus
 from kailash.workflow.builder import WorkflowBuilder
 
 # Deploy custom workflows
-workflows = [
-    create_workflow_1(),
-    create_workflow_2(),
-    create_workflow_3(),
-]
-
-nexus = Nexus(workflows)
-nexus.run(port=8000)
+app = Nexus()
+app.register("workflow_1", create_workflow_1().build())
+app.register("workflow_2", create_workflow_2().build())
+app.register("workflow_3", create_workflow_3().build())
+app.start()
 ```
 
 ### Standalone Platform
@@ -201,17 +197,10 @@ nexus.run(port=8000)
 from nexus import Nexus
 
 # Complete platform from workflows
-nexus = Nexus(
-    workflows=[...],
-    plugins=[custom_plugin],
-    health_checks=True,
-    monitoring=True
-)
-nexus.run(
-    host="0.0.0.0",
-    port=8000,
-    workers=4
-)
+app = Nexus()
+app.register("workflow_a", workflow_a.build())
+app.register("workflow_b", workflow_b.build())
+app.start()
 ```
 
 ## Critical Rules
@@ -231,20 +220,19 @@ nexus.run(
 ### Development
 
 ```python
-nexus = Nexus(workflows)
-nexus.run(port=8000)  # Single process, hot reload
+app = Nexus()
+app.register("my_workflow", workflow.build())
+app.start()  # Single process, hot reload
 ```
 
 ### Production (Docker)
 
 ```python
-from kailash.runtime import AsyncLocalRuntime
+from nexus import Nexus
 
-nexus = Nexus(
-    workflows,
-    runtime_factory=lambda: AsyncLocalRuntime()
-)
-nexus.run(host="0.0.0.0", port=8000, workers=4)
+app = Nexus()
+app.register("my_workflow", workflow.build())
+app.start()  # Uses AsyncLocalRuntime by default (correct for Docker)
 ```
 
 ### With Load Balancer
@@ -278,5 +266,5 @@ docker-compose up --scale nexus=3
 For Nexus-specific questions, invoke:
 
 - `nexus-specialist` - Nexus implementation and deployment
-- `deployment-specialist` - Production deployment patterns
-- `framework-advisor` - When to use Nexus vs other approaches
+- `release-specialist` - Production deployment patterns
+- ``decide-framework` skill` - When to use Nexus vs other approaches

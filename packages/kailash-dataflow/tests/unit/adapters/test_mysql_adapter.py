@@ -58,11 +58,11 @@ class TestMySQLAdapter:
 
         assert dialect == "mysql"
 
-    def test_database_type(self):
-        """Test database type property."""
+    def test_source_type(self):
+        """Test source type property."""
         adapter = MySQLAdapter("mysql://test:test@localhost:3306/testdb")
 
-        assert adapter.database_type == "mysql"
+        assert adapter.source_type == "mysql"
 
     def test_default_port(self):
         """Test default port property."""

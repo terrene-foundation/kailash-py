@@ -35,6 +35,7 @@ from .configuration import (
 )
 from .core.config import DataFlowConfig, LoggingConfig, mask_sensitive
 from .core.engine import DataFlow
+from .core.provenance import Provenance, ProvenanceMetadata, SourceType
 from .features.express import SyncExpress
 from .engine import (
     DataFlowEngine,
@@ -144,6 +145,10 @@ __all__ = [
     "range_validator",
     "pattern_validator",
     "phone_validator",
+    # Issue #242: Field-level provenance
+    "Provenance",
+    "ProvenanceMetadata",
+    "SourceType",
     # Issue #83: Data classification
     "DataClassification",
     "RetentionPolicy",

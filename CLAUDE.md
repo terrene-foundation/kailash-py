@@ -30,16 +30,16 @@ See `rules/env-models.md` for full details.
 
 When you discover a missing feature, endpoint, or record — **implement or create it**. Do not note it as a gap and move on. The only acceptable skip is explicit user instruction.
 
-See `rules/e2e-god-mode.md` and `rules/no-stubs.md` for enforcement details.
+See `rules/e2e-god-mode.md` and `rules/zero-tolerance.md` for enforcement details.
 
 ### 4. Zero Tolerance
 
-Pre-existing failures MUST be fixed, not reported. Stubs are BLOCKED. Naive fallbacks are BLOCKED. SDK bugs get GitHub issues, not workarounds. See `rules/zero-tolerance.md`.
+Pre-existing failures MUST be fixed, not reported. Stubs are BLOCKED. Naive fallbacks are BLOCKED. SDK bugs get deep-dived and fixed directly (this IS the SDK). See `rules/zero-tolerance.md`.
 
-### 5. Mandatory Reviews
+### 5. Recommended Reviews
 
-- **Code review** (intermediate-reviewer) after EVERY file change — see `rules/agents.md` Rule 1
-- **Security review** (security-reviewer) before EVERY commit — NO exceptions — see `rules/agents.md` Rule 2
+- **Code review** (reviewer) after file changes — see `rules/agents.md`
+- **Security review** (security-reviewer) before commits — see `rules/agents.md`
 - **NO MOCKING** in Tier 2/3 tests — use real infrastructure — see `rules/testing.md`
 
 ### 6. LLM-First Agent Reasoning
@@ -77,8 +77,6 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 | E2E god-mode testing                  | `rules/e2e-god-mode.md`         | `tests/e2e/**`, `**/*e2e*`, `**/*playwright*`                         |
 | API keys & model names                | `rules/env-models.md`           | `**/*.py`, `**/*.ts`, `**/*.js`, `.env*`                              |
 | Git commits, branches, PRs            | `rules/git.md`                  | Global                                                                |
-| Branch protection & PR workflow       | `rules/branch-protection.md`    | Global                                                                |
-| No stubs, TODOs, or placeholders      | `rules/no-stubs.md`             | Global                                                                |
 | Kailash SDK execution patterns        | `rules/patterns.md`             | `**/*.py`, `**/*.ts`, `**/*.js`                                       |
 | Security (secrets, injection)         | `rules/security.md`             | Global                                                                |
 | 3-tier testing, no mocking Tiers 2-3  | `rules/testing.md`              | `tests/**`, `**/*test*`, `**/*spec*`, `conftest.py`                   |
@@ -90,12 +88,9 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 
 ## Agents
 
-### Analysis & Planning
+### Analysis (`agents/analysis/`)
 
-- **deep-analyst** — Failure analysis, complexity assessment
-- **requirements-analyst** — Requirements breakdown, ADR creation
-- **sdk-navigator** — Find patterns before coding
-- **framework-advisor** — Choose Core SDK, DataFlow, Nexus, or Kaizen
+- **analyst** — Failure point analysis, risk assessment, requirements breakdown, ADRs
 
 ### Framework Specialists (`agents/frameworks/`)
 
@@ -103,49 +98,48 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 - **nexus-specialist** — Multi-channel platform (API/CLI/MCP)
 - **kaizen-specialist** — AI agents, signatures, multi-agent coordination
 - **mcp-specialist** — MCP server implementation
-- **infrastructure-specialist** — Progressive infrastructure (Level 0/1/2), dialect-portable SQL, task queues, idempotency
-- **pact-specialist** — Organizational governance (D/T/R, envelopes, clearance, governed agents)
+- **pact-specialist** — Organizational governance (D/T/R, envelopes, clearance)
 
-### Core Implementation
+### Implementation (`agents/implementation/`)
 
 - **pattern-expert** — Workflow patterns, nodes, parameters
 - **tdd-implementer** — Test-first development
-- **intermediate-reviewer** — Code review after changes (MANDATORY)
-- **gold-standards-validator** — Compliance checking
 - **build-fix** — Fix build/type errors with minimal changes
-- **security-reviewer** — Security audit before commits (MANDATORY)
 
-### Frontend & Design (`agents/frontend/`)
+### Quality (`agents/quality/`)
+
+- **reviewer** — Code review, doc validation, cross-reference accuracy
+- **gold-standards-validator** — Compliance checking
+- **security-reviewer** — Security audit before commits
+
+### Frontend (`agents/frontend/`)
 
 - **react-specialist** — React/Next.js frontends
 - **flutter-specialist** — Flutter mobile/desktop apps
-- **frontend-developer** — Responsive UI components
 - **uiux-designer** — Enterprise UI/UX design
-- **ai-ux-designer** — AI interaction patterns
 
-### Testing & QA
+### Testing (`agents/testing/`)
 
-- **testing-specialist** — 3-tier strategy with real infrastructure
-- **documentation-validator** — Test code examples
-- **e2e-runner** — Playwright E2E test generation
-- **value-auditor** — Enterprise demo QA from buyer perspective
+- **testing-specialist** — 3-tier strategy with real infrastructure, Playwright E2E
 
-### Release & Operations (`agents/management/`)
+### Release (`agents/release/`)
 
-- **git-release-specialist** — Git workflows, CI, releases
-- **deployment-specialist** — SDK release, PyPI publishing, CI/CD management
+- **release-specialist** — CI/CD, PyPI publishing, deployment, version management
+
+### Management (`agents/management/`)
+
 - **todo-manager** — Project task tracking
 - **gh-manager** — GitHub issue/project management
 
-### Standards (`agents/standards/`)
+### Other
 
-- **care-expert** — CARE governance framework
-- **coc-expert** — COC development methodology
-- **eatp-expert** — EATP trust protocol
+- **claude-code-architect** — CC artifact quality auditing
+- **open-source-strategist** — Licensing, community building
+- **value-auditor** — Enterprise demo QA from buyer perspective
 
 ## Skills Navigation
 
-For SDK implementation patterns, see `.claude/skills/` — organized by framework (`01-core-sdk` through `05-kailash-mcp`), enterprise infrastructure (`15-enterprise-infrastructure`), and topic (`06-cheatsheets` through `28-coc-reference`).
+For SDK implementation patterns, see `.claude/skills/` — organized by framework (`01-core-sdk` through `05-kailash-mcp`), references (`06-cheatsheets` through `09-workflow-patterns`), operations/quality (`10-deployment-git` through `18-security-patterns`), frontend/UX (`19-flutter-patterns` through `25-ai-interaction-patterns`), and standards (`26-eatp-reference` through `31-error-troubleshooting`, `co-reference/`).
 
 ## Critical Execution Rules
 
@@ -174,14 +168,14 @@ workflow.add_node("NodeType", "node_id", {"param": "value"})
 
 ## Kailash Platform
 
-| Framework    | Purpose                                 | Install                        |
-| ------------ | --------------------------------------- | ------------------------------ |
-| **Core SDK** | Workflow orchestration, 140+ nodes      | `pip install kailash`          |
-| **DataFlow** | Zero-config database operations         | `pip install kailash-dataflow` |
-| **Nexus**    | Multi-channel deployment (API+CLI+MCP)  | `pip install kailash-nexus`    |
-| **Kaizen**   | AI agent framework                      | `pip install kailash-kaizen`   |
-| **PACT**     | Organizational governance (D/T/R)       | `pip install kailash-pact`     |
-| **ML**       | ML lifecycle (9 engines, polars-native) | `pip install kailash-ml`       |
-| **Align**    | LLM fine-tuning & serving pipeline      | `pip install kailash-align`    |
+| Framework    | Purpose                                  | Install                        |
+| ------------ | ---------------------------------------- | ------------------------------ |
+| **Core SDK** | Workflow orchestration, 140+ nodes       | `pip install kailash`          |
+| **DataFlow** | Zero-config database operations          | `pip install kailash-dataflow` |
+| **Nexus**    | Multi-channel deployment (API+CLI+MCP)   | `pip install kailash-nexus`    |
+| **Kaizen**   | AI agent framework                       | `pip install kailash-kaizen`   |
+| **PACT**     | Organizational governance (D/T/R)        | `pip install kailash-pact`     |
+| **ML**       | ML lifecycle (13 engines, polars-native) | `pip install kailash-ml`       |
+| **Align**    | LLM fine-tuning & serving pipeline       | `pip install kailash-align`    |
 
 `pip install kailash` includes all standard dependencies (trust, server, HTTP, database, monitoring, data). Sub-packages add framework-specific functionality. Only vendor-specific secret backends (Vault, AWS, Azure, LDAP) remain as optional extras.

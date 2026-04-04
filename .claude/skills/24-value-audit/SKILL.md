@@ -14,7 +14,7 @@ Enterprise demo QA methodology that goes beyond functional testing to evaluate w
 | [value-audit-methodology.md](value-audit-methodology.md)   | Full audit methodology, Five Questions framework, 3-level evaluation        | Running a complete value audit                  |
 | [demo-readiness-checklist.md](demo-readiness-checklist.md) | Pre-demo verification with pass/fail criteria                               | Quick readiness check before a demo             |
 | [value-flow-patterns.md](value-flow-patterns.md)           | Common value flow patterns for enterprise AI platforms, anti-patterns       | Analyzing or designing value flows              |
-| [full-demo-audit.md](full-demo-audit.md)                   | Combined technical + value audit orchestration (e2e-runner + value-auditor) | Running both technical and value QA in sequence |
+| [full-demo-audit.md](full-demo-audit.md)                   | Combined technical + value audit orchestration (testing-specialist + value-auditor) | Running both technical and value QA in sequence |
 
 ## Core Concept
 

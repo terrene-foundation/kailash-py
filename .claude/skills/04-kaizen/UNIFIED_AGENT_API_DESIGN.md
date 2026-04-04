@@ -44,13 +44,13 @@ from kaizen_agents.agents import (
 from kaizen import Agent
 
 # Dead simple (everything just works)
-agent = Agent(model="gpt-4")
+agent = Agent(model=os.environ["LLM_MODEL"])
 result = agent.run("What is AI?")
 
 # Specialized behavior through configuration
-agent = Agent(model="gpt-4", agent_type="react")
-agent = Agent(model="gpt-4", agent_type="rag")
-agent = Agent(model="gpt-4", workflow="supervisor_worker")
+agent = Agent(model=os.environ["LLM_MODEL"], agent_type="react")
+agent = Agent(model=os.environ["LLM_MODEL"], agent_type="rag")
+agent = Agent(model=os.environ["LLM_MODEL"], workflow="supervisor_worker")
 ```
 
 ### Key Principles
@@ -67,28 +67,29 @@ agent = Agent(model="gpt-4", workflow="supervisor_worker")
 
 ### A. Agent Feature Set (Core Behavior)
 
-| Feature | Current Implementation | Unified Approach | Priority |
-|---------|----------------------|------------------|----------|
-| **Base Execution** | BaseAgent | `Agent(model="gpt-4")` | CRITICAL |
-| **Simple Q&A** | SimpleQAAgent | `agent_type="simple"` | CRITICAL |
-| **Chain of Thought** | ChainOfThoughtAgent | `agent_type="cot"` | HIGH |
-| **ReAct (Reason+Act)** | ReActAgent | `agent_type="react"` | HIGH |
-| **RAG Research** | RAGResearchAgent | `agent_type="rag"` | HIGH |
-| **Autonomous** | BaseAutonomousAgent | `agent_type="autonomous"` | HIGH |
-| **Vision Processing** | VisionAgent | `multimodal=["vision"]` | HIGH |
-| **Audio Processing** | TranscriptionAgent | `multimodal=["audio"]` | HIGH |
-| **Multi-Modal** | MultiModalAgent | `multimodal=["vision", "audio"]` | HIGH |
-| **Code Generation** | CodeGenerationAgent | `agent_type="cot"` + tools | MEDIUM |
-| **Memory-Enabled** | MemoryAgent | Enabled by default | MEDIUM |
-| **Streaming Chat** | StreamingChatAgent | `streaming=True` | MEDIUM |
-| **Batch Processing** | BatchProcessingAgent | `batch_mode=True` | LOW |
-| **Human Approval** | HumanApprovalAgent | `require_approval=True` | LOW |
-| **Resilient** | ResilientAgent | Enabled by default | LOW |
-| **Self-Reflection** | SelfReflectionAgent | `agent_type="reflection"` | LOW |
+| Feature                | Current Implementation | Unified Approach                       | Priority |
+| ---------------------- | ---------------------- | -------------------------------------- | -------- |
+| **Base Execution**     | BaseAgent              | `Agent(model=os.environ["LLM_MODEL"])` | CRITICAL |
+| **Simple Q&A**         | SimpleQAAgent          | `agent_type="simple"`                  | CRITICAL |
+| **Chain of Thought**   | ChainOfThoughtAgent    | `agent_type="cot"`                     | HIGH     |
+| **ReAct (Reason+Act)** | ReActAgent             | `agent_type="react"`                   | HIGH     |
+| **RAG Research**       | RAGResearchAgent       | `agent_type="rag"`                     | HIGH     |
+| **Autonomous**         | BaseAutonomousAgent    | `agent_type="autonomous"`              | HIGH     |
+| **Vision Processing**  | VisionAgent            | `multimodal=["vision"]`                | HIGH     |
+| **Audio Processing**   | TranscriptionAgent     | `multimodal=["audio"]`                 | HIGH     |
+| **Multi-Modal**        | MultiModalAgent        | `multimodal=["vision", "audio"]`       | HIGH     |
+| **Code Generation**    | CodeGenerationAgent    | `agent_type="cot"` + tools             | MEDIUM   |
+| **Memory-Enabled**     | MemoryAgent            | Enabled by default                     | MEDIUM   |
+| **Streaming Chat**     | StreamingChatAgent     | `streaming=True`                       | MEDIUM   |
+| **Batch Processing**   | BatchProcessingAgent   | `batch_mode=True`                      | LOW      |
+| **Human Approval**     | HumanApprovalAgent     | `require_approval=True`                | LOW      |
+| **Resilient**          | ResilientAgent         | Enabled by default                     | LOW      |
+| **Self-Reflection**    | SelfReflectionAgent    | `agent_type="reflection"`              | LOW      |
 
 **Analysis**: 16 agent types → 1 unified `Agent` class with configuration parameters
 
 **Consolidation Strategy**:
+
 - **agent_type**: Controls execution pattern (simple, cot, react, rag, autonomous, reflection)
 - **multimodal**: List of modalities (vision, audio, document)
 - **streaming**: Boolean for streaming mode
@@ -99,21 +100,22 @@ agent = Agent(model="gpt-4", workflow="supervisor_worker")
 
 ### B. Tooling Feature Set (Infrastructure)
 
-| Feature | Components | Default State | User Control | Expert Override |
-|---------|-----------|--------------|--------------|-----------------|
-| **Memory System** | BufferMemory, PersistentBufferMemory, SummaryMemory, VectorMemory, KnowledgeGraphMemory, SharedMemoryPool | ✅ Enabled (BufferMemory, 10 turns) | `memory_turns=20`<br>`memory_type="persistent"` | `memory=CustomMemory()` |
-| **Tool Calling** | ToolRegistry, ToolExecutor, 12 builtin tools | ✅ Enabled (all builtin) | `tools=["read_file", "http_get"]`<br>`tools=False` | `tools="all"  # Enable tools via MCP
-| **Observability** | HookManager, Tracing, Metrics, Logging, Audit | ✅ Enabled (auto-start) | `observability=False`<br>`tracing_only=True` | `hook_manager=CustomHooks()` |
-| **Checkpointing** | StateManager, FilesystemStorage | ✅ Enabled (every 5 steps) | `checkpoint_frequency=10`<br>`checkpointing=False` | `state_manager=CustomStateManager()` |
-| **Cost Tracking** | Budget monitoring, warnings | ✅ Enabled ($1.00 limit) | `budget_limit_usd=5.0`<br>`budget_limit_usd=None` | Always enabled (safety) |
-| **Permission System** | ExecutionContext, approval workflows | ✅ Enabled (danger-level based) | `auto_approve_safe=True`<br>`require_approval=True` | `approval_callback=custom_func` |
-| **Control Protocol** | CLITransport, WebSocketTransport | ⚠️ Opt-in | `interactive=True` | `control_protocol=CustomProtocol()` |
-| **MCP Integration** | MCPClient, tool discovery | ⚠️ Opt-in | `mcp_servers=["server1"]` | `mcp_client=CustomClient()` |
-| **Google A2A** | Capability cards, semantic matching | ✅ Auto-generated | N/A (always on) | N/A |
+| Feature               | Components                                                                                                | Default State                       | User Control                                        | Expert Override                      |
+| --------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------- | --------------------------------------------------- | ------------------------------------ |
+| **Memory System**     | BufferMemory, PersistentBufferMemory, SummaryMemory, VectorMemory, KnowledgeGraphMemory, SharedMemoryPool | ✅ Enabled (BufferMemory, 10 turns) | `memory_turns=20`<br>`memory_type="persistent"`     | `memory=CustomMemory()`              |
+| **Tool Calling**      | ToolRegistry, ToolExecutor, 12 builtin tools                                                              | ✅ Enabled (all builtin)            | `tools=["read_file", "http_get"]`<br>`tools=False`  | `tools="all" # Enable tools via MCP  |
+| **Observability**     | HookManager, Tracing, Metrics, Logging, Audit                                                             | ✅ Enabled (auto-start)             | `observability=False`<br>`tracing_only=True`        | `hook_manager=CustomHooks()`         |
+| **Checkpointing**     | StateManager, FilesystemStorage                                                                           | ✅ Enabled (every 5 steps)          | `checkpoint_frequency=10`<br>`checkpointing=False`  | `state_manager=CustomStateManager()` |
+| **Cost Tracking**     | Budget monitoring, warnings                                                                               | ✅ Enabled ($1.00 limit)            | `budget_limit_usd=5.0`<br>`budget_limit_usd=None`   | Always enabled (safety)              |
+| **Permission System** | ExecutionContext, approval workflows                                                                      | ✅ Enabled (danger-level based)     | `auto_approve_safe=True`<br>`require_approval=True` | `approval_callback=custom_func`      |
+| **Control Protocol**  | CLITransport, WebSocketTransport                                                                          | ⚠️ Opt-in                           | `interactive=True`                                  | `control_protocol=CustomProtocol()`  |
+| **MCP Integration**   | MCPClient, tool discovery                                                                                 | ⚠️ Opt-in                           | `mcp_servers=["server1"]`                           | `mcp_client=CustomClient()`          |
+| **Google A2A**        | Capability cards, semantic matching                                                                       | ✅ Auto-generated                   | N/A (always on)                                     | N/A                                  |
 
 **Analysis**: 9 infrastructure features
 
 **Default Philosophy**:
+
 - **Everything production-ready is ON by default** (memory, tools, observability, checkpointing, cost tracking)
 - **Experimental features are OPT-IN** (control protocol, MCP)
 - **Users disable what they don't need**, not enable what they do
@@ -122,21 +124,22 @@ agent = Agent(model="gpt-4", workflow="supervisor_worker")
 
 ### C. UX Feature Set (Developer Experience)
 
-| Feature | Implementation | Default State | User Control |
-|---------|---------------|--------------|--------------|
-| **Rich Console Output** | Startup banner, progress bars, feature summary | ✅ Enabled | `rich_output=False`<br>`verbosity="quiet"` |
-| **Streaming Responses** | Token-by-token output | ⚠️ Opt-in | `streaming=True` |
-| **Cost Warnings** | Budget alerts at 75%, 90%, 100% | ✅ Enabled | `budget_warnings=False` |
-| **Error Handling** | Automatic retries, fallback strategies | ✅ Enabled | `retry_count=3`<br>`fallback_strategy="none"` |
-| **Result Extraction** | `extract_list()`, `extract_dict()`, `extract_float()`, `extract_str()` | ✅ Enabled | N/A (always available) |
-| **Memory Helpers** | `write_to_memory()` | ✅ Enabled | N/A (always available) |
-| **Config Auto-Conversion** | Domain config → BaseAgentConfig | ✅ Enabled | N/A (transparent) |
-| **Performance Metrics** | Execution time, token usage, cost | ✅ Enabled | `metrics=False` |
-| **Progress Reporting** | Step-by-step updates | ✅ Enabled (verbose) | `progress_reporting=False` |
+| Feature                    | Implementation                                                         | Default State        | User Control                                  |
+| -------------------------- | ---------------------------------------------------------------------- | -------------------- | --------------------------------------------- |
+| **Rich Console Output**    | Startup banner, progress bars, feature summary                         | ✅ Enabled           | `rich_output=False`<br>`verbosity="quiet"`    |
+| **Streaming Responses**    | Token-by-token output                                                  | ⚠️ Opt-in            | `streaming=True`                              |
+| **Cost Warnings**          | Budget alerts at 75%, 90%, 100%                                        | ✅ Enabled           | `budget_warnings=False`                       |
+| **Error Handling**         | Automatic retries, fallback strategies                                 | ✅ Enabled           | `retry_count=3`<br>`fallback_strategy="none"` |
+| **Result Extraction**      | `extract_list()`, `extract_dict()`, `extract_float()`, `extract_str()` | ✅ Enabled           | N/A (always available)                        |
+| **Memory Helpers**         | `write_to_memory()`                                                    | ✅ Enabled           | N/A (always available)                        |
+| **Config Auto-Conversion** | Domain config → BaseAgentConfig                                        | ✅ Enabled           | N/A (transparent)                             |
+| **Performance Metrics**    | Execution time, token usage, cost                                      | ✅ Enabled           | `metrics=False`                               |
+| **Progress Reporting**     | Step-by-step updates                                                   | ✅ Enabled (verbose) | `progress_reporting=False`                    |
 
 **Analysis**: 9 UX features
 
 **Philosophy**:
+
 - **Make the right thing easy** - Rich output and helpful defaults
 - **Don't clutter code** - Auto-conversion, extraction helpers
 - **Safety by default** - Cost warnings, error handling
@@ -153,7 +156,7 @@ agent = Agent(model="gpt-4", workflow="supervisor_worker")
 from kaizen import Agent
 
 # DEAD SIMPLE - Everything just works
-agent = Agent(model="gpt-4")
+agent = Agent(model=os.environ["LLM_MODEL"])
 result = agent.run("Explain quantum computing")
 
 print(result['answer'])
@@ -175,6 +178,7 @@ print(result['answer'])
 ```
 
 **Features enabled by default**:
+
 - ✅ Memory: 10 turns, buffer backend
 - ✅ Tools: All 12 builtin tools registered
 - ✅ Observability: Jaeger tracing, Prometheus metrics, structured logging
@@ -195,7 +199,7 @@ from kaizen import Agent
 
 # CONFIGURE BEHAVIOR
 agent = Agent(
-    model="gpt-4",
+    model=os.environ["LLM_MODEL"],
     agent_type="react",           # ReAct pattern (reasoning + acting)
 
     # Memory settings
@@ -223,6 +227,7 @@ result = agent.run("Research AI trends and create a report")
 **Configuration Categories**:
 
 #### Agent Behavior
+
 - `agent_type`: "simple" | "cot" | "react" | "rag" | "autonomous" | "reflection"
 - `workflow`: "supervisor_worker" | "consensus" | "debate" | "sequential" | "handoff"
 - `multimodal`: ["vision"] | ["audio"] | ["vision", "audio", "document"]
@@ -230,23 +235,27 @@ result = agent.run("Research AI trends and create a report")
 - `temperature`: float (LLM creativity)
 
 #### Memory Configuration
+
 - `memory_turns`: int (conversation history length)
 - `memory_type`: "buffer" | "persistent" | "summary" | "vector" | "knowledge_graph"
 - `memory_backend`: "file" | "sqlite" | "postgresql"
 - `shared_memory`: SharedMemoryPool (for multi-agent)
 
 #### Tool Configuration
+
 - `tools`: "all" | List[str] | False
 - `auto_approve_safe`: bool (auto-approve SAFE tools)
 - `require_approval`: bool (approve all tools)
 
 #### Infrastructure
+
 - `budget_limit_usd`: float | None
 - `checkpoint_frequency`: int (steps between checkpoints)
 - `observability`: bool (enable/disable all)
 - `tracing_only`: bool (only tracing, no metrics/logs)
 
 #### UX Settings
+
 - `rich_output`: bool
 - `verbosity`: "quiet" | "normal" | "verbose"
 - `streaming`: bool
@@ -269,7 +278,7 @@ from my_custom import (
 
 # EXPERT CUSTOMIZATION
 agent = Agent(
-    model="gpt-4",
+    model=os.environ["LLM_MODEL"],
     agent_type="react",
 
     # Custom memory implementation
@@ -307,6 +316,7 @@ agent = Agent(
 ```
 
 **Expert Override Points**:
+
 - `memory`: BaseMemory → Custom memory implementation
 - `tool_registry`: ToolRegistry → Custom tool system
 - `hook_manager`: HookManager → Custom observability
@@ -393,27 +403,27 @@ AGENT_TYPE_PRESETS = {
 
 ```python
 # Simple Q&A (single inference)
-agent = Agent(model="gpt-4", agent_type="simple")
+agent = Agent(model=os.environ["LLM_MODEL"], agent_type="simple")
 result = agent.run("What is the capital of France?")
 
 # Chain of Thought (step-by-step reasoning)
-agent = Agent(model="gpt-4", agent_type="cot")
+agent = Agent(model=os.environ["LLM_MODEL"], agent_type="cot")
 result = agent.run("Solve: If a train leaves at 2pm going 60mph...")
 
 # ReAct (reasoning + action with tools)
-agent = Agent(model="gpt-4", agent_type="react")
+agent = Agent(model=os.environ["LLM_MODEL"], agent_type="react")
 result = agent.run("Research latest AI papers and summarize findings")
 
 # RAG (retrieval-augmented generation)
-agent = Agent(model="gpt-4", agent_type="rag")
+agent = Agent(model=os.environ["LLM_MODEL"], agent_type="rag")
 result = agent.run("What does our documentation say about error handling?")
 
 # Autonomous (long-running with checkpoints)
-agent = Agent(model="gpt-4", agent_type="autonomous", max_cycles=50)
+agent = Agent(model=os.environ["LLM_MODEL"], agent_type="autonomous", max_cycles=50)
 result = agent.run("Build a complete data pipeline from API to dashboard")
 
 # Self-Reflection (iterative improvement)
-agent = Agent(model="gpt-4", agent_type="reflection")
+agent = Agent(model=os.environ["LLM_MODEL"], agent_type="reflection")
 result = agent.run("Write a blog post and improve it 3 times")
 ```
 
@@ -449,13 +459,13 @@ pattern = SupervisorWorkerPattern(
 from kaizen import Agent
 
 # Create workers
-researcher = Agent(model="gpt-4", agent_type="react", agent_id="researcher")
-analyst = Agent(model="gpt-4", agent_type="cot", agent_id="analyst")
-writer = Agent(model="gpt-4", agent_type="simple", agent_id="writer")
+researcher = Agent(model=os.environ["LLM_MODEL"], agent_type="react", agent_id="researcher")
+analyst = Agent(model=os.environ["LLM_MODEL"], agent_type="cot", agent_id="analyst")
+writer = Agent(model=os.environ["LLM_MODEL"], agent_type="simple", agent_id="writer")
 
 # Create supervisor with workflow
 supervisor = Agent(
-    model="gpt-4",
+    model=os.environ["LLM_MODEL"],
     agent_type="react",
     workflow="supervisor_worker",
     workers=[researcher, analyst, writer],
@@ -522,28 +532,28 @@ WORKFLOW_PRESETS = {
 
 ### Decision Framework: What's ON by default?
 
-| Category | Feature | Default State | Reasoning |
-|----------|---------|--------------|-----------|
-| **SAFETY** | Cost tracking ($1 limit) | ✅ ON | Prevent accidental overspending |
-| **SAFETY** | Error handling (3 retries) | ✅ ON | Resilience against transient failures |
-| **SAFETY** | Tool approval (danger-level) | ✅ ON | Prevent destructive operations |
-| **PRODUCTIVITY** | Memory (10 turns, buffer) | ✅ ON | Conversations require context |
-| **PRODUCTIVITY** | Tools (12 builtin) | ✅ ON | Agents need capabilities |
-| **PRODUCTIVITY** | Result extraction helpers | ✅ ON | Defensive parsing prevents errors |
-| **OBSERVABILITY** | Tracing | ✅ ON | Debug issues in production |
-| **OBSERVABILITY** | Metrics | ✅ ON | Monitor performance |
-| **OBSERVABILITY** | Logging | ✅ ON | Audit trails |
-| **RESILIENCE** | Checkpointing (every 5 steps) | ✅ ON | Resume from failures |
-| **RESILIENCE** | State persistence | ✅ ON | Long-running agents |
-| **UX** | Rich console output | ✅ ON | Better developer experience |
-| **UX** | Progress reporting | ✅ ON | Visibility into execution |
-| **UX** | Cost warnings (75%, 90%) | ✅ ON | Early alerts |
-| **INTEGRATION** | Google A2A capability cards | ✅ ON | Multi-agent coordination |
-| **EXPERIMENTAL** | Control protocol | ⚠️ OFF | Opt-in for interactive |
-| **EXPERIMENTAL** | MCP integration | ⚠️ OFF | Opt-in for MCP servers |
-| **EXPERIMENTAL** | Streaming | ⚠️ OFF | Opt-in for real-time |
-| **OPTIONAL** | Batch mode | ⚠️ OFF | Specialized use case |
-| **OPTIONAL** | Human approval (all tools) | ⚠️ OFF | Too restrictive for default |
+| Category          | Feature                       | Default State | Reasoning                             |
+| ----------------- | ----------------------------- | ------------- | ------------------------------------- |
+| **SAFETY**        | Cost tracking ($1 limit)      | ✅ ON         | Prevent accidental overspending       |
+| **SAFETY**        | Error handling (3 retries)    | ✅ ON         | Resilience against transient failures |
+| **SAFETY**        | Tool approval (danger-level)  | ✅ ON         | Prevent destructive operations        |
+| **PRODUCTIVITY**  | Memory (10 turns, buffer)     | ✅ ON         | Conversations require context         |
+| **PRODUCTIVITY**  | Tools (12 builtin)            | ✅ ON         | Agents need capabilities              |
+| **PRODUCTIVITY**  | Result extraction helpers     | ✅ ON         | Defensive parsing prevents errors     |
+| **OBSERVABILITY** | Tracing                       | ✅ ON         | Debug issues in production            |
+| **OBSERVABILITY** | Metrics                       | ✅ ON         | Monitor performance                   |
+| **OBSERVABILITY** | Logging                       | ✅ ON         | Audit trails                          |
+| **RESILIENCE**    | Checkpointing (every 5 steps) | ✅ ON         | Resume from failures                  |
+| **RESILIENCE**    | State persistence             | ✅ ON         | Long-running agents                   |
+| **UX**            | Rich console output           | ✅ ON         | Better developer experience           |
+| **UX**            | Progress reporting            | ✅ ON         | Visibility into execution             |
+| **UX**            | Cost warnings (75%, 90%)      | ✅ ON         | Early alerts                          |
+| **INTEGRATION**   | Google A2A capability cards   | ✅ ON         | Multi-agent coordination              |
+| **EXPERIMENTAL**  | Control protocol              | ⚠️ OFF        | Opt-in for interactive                |
+| **EXPERIMENTAL**  | MCP integration               | ⚠️ OFF        | Opt-in for MCP servers                |
+| **EXPERIMENTAL**  | Streaming                     | ⚠️ OFF        | Opt-in for real-time                  |
+| **OPTIONAL**      | Batch mode                    | ⚠️ OFF        | Specialized use case                  |
+| **OPTIONAL**      | Human approval (all tools)    | ⚠️ OFF        | Too restrictive for default           |
 
 ### Philosophy
 
@@ -564,7 +574,7 @@ WORKFLOW_PRESETS = {
    ```python
    # Minimal agent (disable everything optional)
    agent = Agent(
-       model="gpt-4",
+       model=os.environ["LLM_MODEL"],
        memory=False,
        tools=False,
        observability=False,
@@ -602,14 +612,14 @@ class Agent:
 
     Examples:
         # Dead simple
-        >>> agent = Agent(model="gpt-4")
+        >>> agent = Agent(model=os.environ["LLM_MODEL"])
         >>> result = agent.run("What is AI?")
 
         # Configured behavior
-        >>> agent = Agent(model="gpt-4", agent_type="react", memory_turns=20)
+        >>> agent = Agent(model=os.environ["LLM_MODEL"], agent_type="react", memory_turns=20)
 
         # Expert customization
-        >>> agent = Agent(model="gpt-4", memory=CustomMemory())
+        >>> agent = Agent(model=os.environ["LLM_MODEL"], memory=CustomMemory())
     """
 
     def __init__(
@@ -675,7 +685,7 @@ class Agent:
         Initialize Agent with smart defaults and optional customization.
 
         Args:
-            model: LLM model name (e.g., "gpt-4", "gpt-3.5-turbo")
+            model: LLM model name (from os.environ["LLM_MODEL"])
             provider: LLM provider ("openai", "anthropic", "ollama")
             agent_id: Unique identifier (auto-generated if not provided)
 
@@ -1002,19 +1012,20 @@ WORKFLOW_PRESETS = {
 # EXISTING CODE (still works)
 from kaizen_agents.agents import SimpleQAAgent, ReActAgent
 
-agent = SimpleQAAgent(llm_provider="openai", model="gpt-4")
+agent = SimpleQAAgent(llm_provider=os.environ.get("LLM_PROVIDER", "openai"), model=os.environ["LLM_MODEL"])
 result = agent.ask("What is AI?")  # ✅ Still works
 
 # NEW CODE (recommended)
 from kaizen import Agent
 
-agent = Agent(model="gpt-4", agent_type="simple")
+agent = Agent(model=os.environ["LLM_MODEL"], agent_type="simple")
 result = agent.run("What is AI?")  # ✅ New way
 ```
 
 ### Implementation Phases
 
 #### Phase 1: Agent Class Creation (Week 1-2)
+
 - Implement `Agent` class with smart defaults
 - Add agent_type presets
 - Add workflow integration
@@ -1024,6 +1035,7 @@ result = agent.run("What is AI?")  # ✅ New way
 **Deliverable**: Working `Agent` class, all tests passing
 
 #### Phase 2: Documentation & Examples (Week 3)
+
 - Update documentation to showcase `Agent` class
 - Create migration guide (before/after examples)
 - Add 20+ examples using `Agent` class
@@ -1032,6 +1044,7 @@ result = agent.run("What is AI?")  # ✅ New way
 **Deliverable**: Complete documentation, all examples work
 
 #### Phase 3: Soft Deprecation (Week 4)
+
 - Mark specialized classes as "legacy" in docs
 - Add deprecation warnings (but keep working)
 - Steer new users to `Agent` class
@@ -1040,6 +1053,7 @@ result = agent.run("What is AI?")  # ✅ New way
 **Deliverable**: Migration path documented, warnings in place
 
 #### Phase 4: Long-Term Support (Months 2-6)
+
 - Maintain both APIs in parallel
 - Specialized classes call `Agent` internally (refactor)
 - Reduce duplication progressively
@@ -1048,6 +1062,7 @@ result = agent.run("What is AI?")  # ✅ New way
 **Deliverable**: Dual API support, reduced maintenance burden
 
 #### Phase 5: Full Migration (Month 7+)
+
 - Optional: Remove specialized classes (breaking change)
 - Or: Keep as thin wrappers forever (no breaking change)
 - Decision based on user feedback
@@ -1061,14 +1076,15 @@ result = agent.run("What is AI?")  # ✅ New way
 ### Example 1: Simple Q&A
 
 **BEFORE (Current)**:
+
 ```python
 from kaizen_agents.agents import SimpleQAAgent
 from dataclasses import dataclass
 
 @dataclass
 class QAConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.7
 
 config = QAConfig()
@@ -1084,16 +1100,17 @@ print(answer)
 ```
 
 **AFTER (Unified)**:
+
 ```python
 from kaizen import Agent
 
 # Dead simple
-agent = Agent(model="gpt-4")
+agent = Agent(model=os.environ["LLM_MODEL"])
 result = agent.run("What is AI?")
 print(result['answer'])
 
 # Or with configuration
-agent = Agent(model="gpt-4", temperature=0.7)
+agent = Agent(model=os.environ["LLM_MODEL"], temperature=0.7)
 ```
 
 **Lines of code**: 18 → 4 (78% reduction)
@@ -1103,6 +1120,7 @@ agent = Agent(model="gpt-4", temperature=0.7)
 ### Example 2: ReAct with Tools
 
 **BEFORE (Current)**:
+
 ```python
 from kaizen_agents.agents import ReActAgent
 # Tools auto-configured via MCP
@@ -1111,8 +1129,8 @@ from dataclasses import dataclass
 
 @dataclass
 class ReActConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     max_cycles: int = 10
     temperature: float = 0.7
 
@@ -1137,11 +1155,12 @@ print(answer)
 ```
 
 **AFTER (Unified)**:
+
 ```python
 from kaizen import Agent
 
 # Everything enabled by default
-agent = Agent(model="gpt-4", agent_type="react")
+agent = Agent(model=os.environ["LLM_MODEL"], agent_type="react")
 result = agent.run("Research AI trends and create report")
 print(result['answer'])
 ```
@@ -1153,6 +1172,7 @@ print(result['answer'])
 ### Example 3: Multi-Agent Workflow
 
 **BEFORE (Current)**:
+
 ```python
 from kaizen_agents.agents import SimpleQAAgent
 from kaizen_agents.agents.coordination import SupervisorWorkerPattern
@@ -1163,30 +1183,30 @@ pool = SharedMemoryPool()
 
 # Create workers
 researcher = SimpleQAAgent(
-    llm_provider="openai",
-    model="gpt-4",
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"],
     shared_memory=pool,
     agent_id="researcher"
 )
 
 analyst = SimpleQAAgent(
-    llm_provider="openai",
-    model="gpt-4",
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"],
     shared_memory=pool,
     agent_id="analyst"
 )
 
 writer = SimpleQAAgent(
-    llm_provider="openai",
-    model="gpt-4",
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"],
     shared_memory=pool,
     agent_id="writer"
 )
 
 # Create supervisor
 supervisor = SimpleQAAgent(
-    llm_provider="openai",
-    model="gpt-4",
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"],
     agent_id="supervisor"
 )
 
@@ -1203,17 +1223,18 @@ result = pattern.execute("Research, analyze, and write report on AI")
 ```
 
 **AFTER (Unified)**:
+
 ```python
 from kaizen import Agent
 
 # Create workers
-researcher = Agent(model="gpt-4", agent_type="react", agent_id="researcher")
-analyst = Agent(model="gpt-4", agent_type="cot", agent_id="analyst")
-writer = Agent(model="gpt-4", agent_type="simple", agent_id="writer")
+researcher = Agent(model=os.environ["LLM_MODEL"], agent_type="react", agent_id="researcher")
+analyst = Agent(model=os.environ["LLM_MODEL"], agent_type="cot", agent_id="analyst")
+writer = Agent(model=os.environ["LLM_MODEL"], agent_type="simple", agent_id="writer")
 
 # Create supervisor with workflow
 supervisor = Agent(
-    model="gpt-4",
+    model=os.environ["LLM_MODEL"],
     workflow="supervisor_worker",
     workers=[researcher, analyst, writer]
 )
@@ -1229,21 +1250,22 @@ result = supervisor.run("Research, analyze, and write report on AI")
 ### Example 4: Vision + Audio Multi-Modal
 
 **BEFORE (Current)**:
+
 ```python
 from kaizen_agents.agents import VisionAgent, TranscriptionAgent, MultiModalAgent
 from kaizen_agents.agents.multi_modal import VisionAgentConfig, TranscriptionAgentConfig
 
 # Create vision agent
 vision_config = VisionAgentConfig(
-    llm_provider="openai",
-    model="gpt-4-vision",
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"],
     vision_provider="openai_vision"
 )
 vision_agent = VisionAgent(config=vision_config)
 
 # Create audio agent
 audio_config = TranscriptionAgentConfig(
-    llm_provider="openai",
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
     audio_provider="whisper"
 )
 audio_agent = TranscriptionAgent(config=audio_config)
@@ -1252,8 +1274,8 @@ audio_agent = TranscriptionAgent(config=audio_config)
 multi_modal = MultiModalAgent(
     vision_agent=vision_agent,
     transcription_agent=audio_agent,
-    llm_provider="openai",
-    model="gpt-4"
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"]
 )
 
 # Process
@@ -1265,12 +1287,13 @@ result = multi_modal.process(
 ```
 
 **AFTER (Unified)**:
+
 ```python
 from kaizen import Agent
 
 # Single agent with multimodal capabilities
 agent = Agent(
-    model="gpt-4",
+    model=os.environ["LLM_MODEL"],
     multimodal=["vision", "audio"]
 )
 
@@ -1295,7 +1318,7 @@ from kaizen import Agent
 # LAYER 1: Zero-Config (Dead Simple)
 # ====================================
 
-agent = Agent(model="gpt-4")
+agent = Agent(model=os.environ["LLM_MODEL"])
 result = agent.run("What is machine learning?")
 
 # What you get automatically:
@@ -1311,7 +1334,7 @@ result = agent.run("What is machine learning?")
 # ====================================
 
 agent = Agent(
-    model="gpt-4",
+    model=os.environ["LLM_MODEL"],
     agent_type="react",           # ReAct pattern
     memory_turns=20,              # 20 conversation turns
     memory_type="persistent",     # SQLite persistence
@@ -1336,7 +1359,7 @@ from my_custom import (
 )
 
 agent = Agent(
-    model="gpt-4",
+    model=os.environ["LLM_MODEL"],
     agent_type="autonomous",
 
     # Expert overrides
@@ -1372,6 +1395,7 @@ result = agent.run("Build complete data pipeline")
 ### Week 1-2: Core Implementation
 
 **Tasks**:
+
 1. Create `Agent` class in `src/kaizen/core/agents.py`
 2. Implement smart defaults system
 3. Implement agent_type preset application
@@ -1381,6 +1405,7 @@ result = agent.run("Build complete data pipeline")
 7. Write 20+ integration tests (Tier 2)
 
 **Deliverables**:
+
 - Working `Agent` class
 - 100% test coverage
 - All presets working
@@ -1388,6 +1413,7 @@ result = agent.run("Build complete data pipeline")
 ### Week 3: Documentation
 
 **Tasks**:
+
 1. Update README with `Agent` class
 2. Create migration guide (before/after)
 3. Update all quickstart docs
@@ -1396,6 +1422,7 @@ result = agent.run("Build complete data pipeline")
 6. Create decision tree (when to use what)
 
 **Deliverables**:
+
 - Complete documentation
 - Migration guide
 - 20+ working examples
@@ -1403,6 +1430,7 @@ result = agent.run("Build complete data pipeline")
 ### Week 4: Integration
 
 **Tasks**:
+
 1. Export `Agent` from `kaizen/__init__.py`
 2. Add deprecation warnings to specialized classes
 3. Update specialized classes to call `Agent` internally
@@ -1411,6 +1439,7 @@ result = agent.run("Build complete data pipeline")
 6. Performance testing and optimization
 
 **Deliverables**:
+
 - `Agent` exported and available
 - Deprecation warnings in place
 - Migration tooling ready
@@ -1418,6 +1447,7 @@ result = agent.run("Build complete data pipeline")
 ### Month 2-6: Adoption
 
 **Tasks**:
+
 1. Monitor user adoption
 2. Collect feedback
 3. Iterate on API based on feedback
@@ -1426,6 +1456,7 @@ result = agent.run("Build complete data pipeline")
 6. Performance optimization
 
 **Deliverables**:
+
 - High adoption rate
 - Positive feedback
 - Optimized performance
@@ -1478,6 +1509,7 @@ A **unified Agent API** that makes Kaizen the **simplest AI agent framework** wh
 ### Why This Matters
 
 **Current Reality**:
+
 - 16 agent classes to choose from
 - 30+ features scattered across modules
 - Decision paralysis for new users
@@ -1485,6 +1517,7 @@ A **unified Agent API** that makes Kaizen the **simplest AI agent framework** wh
 - Hidden capabilities (users don't know what's available)
 
 **Future State**:
+
 - 1 agent class with smart defaults
 - All features available out-of-the-box
 - Clear mental model (3 layers)
@@ -1506,6 +1539,7 @@ A **unified Agent API** that makes Kaizen the **simplest AI agent framework** wh
 **Status**: READY FOR REVIEW
 
 **Files Referenced**:
+
 - `./repos/dev/kailash_kaizen/kaizen/__init__.py`
 - `./repos/dev/kailash_kaizen/kaizen/core/base_agent.py`
 - `./repos/dev/kailash_kaizen/kaizen/agents/__init__.py`

@@ -43,8 +43,8 @@ class SummarizeSignature(Signature):
 # Define configuration
 @dataclass
 class SummaryConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ["LLM_MODEL"]
     temperature: float = 0.7
 
 # Create agent with signature
@@ -255,25 +255,6 @@ For in-depth documentation, see `packages/kailash-kaizen/docs/`:
   - `PlanExecutor` with gradient rules (G1-G8)
   - 7 typed modifications with batch-atomic application
 
-### ML Integration (kailash-ml)
-
-- **[kaizen-ml-integration](kaizen-ml-integration.md)** - 9 ML engines (FeatureStore, ModelRegistry, TrainingPipeline, InferenceServer, DriftMonitor, HyperparameterSearch, AutoMLEngine, DataExplorer, FeatureEngineer)
-  - Quality tiers: P0 (5 engines), P1 (2 engines), P2 (2 @experimental engines)
-  - Polars-native data with 8 interop converters (sklearn, LightGBM, HuggingFace, pandas, Arrow)
-  - AutoMLEngine with 5 optional LLM guardrails via `AgentInfusionProtocol`
-  - DataFlow-backed FeatureStore with point-in-time queries (see also `skills/02-dataflow/dataflow-ml-integration.md`)
-
-### Alignment & Fine-Tuning (kailash-align)
-
-- **[kaizen-align-serving](kaizen-align-serving.md)** - LLM fine-tuning, evaluation, and serving pipeline
-  - `AdapterRegistry` (composition over ModelRegistry, LoRA/QLoRA lifecycle tracking)
-  - `AlignmentPipeline` (TRL wrapper: SFT then DPO chaining)
-  - `AlignmentEvaluator` (lm-eval-harness, `[eval]` optional extra)
-  - `AlignmentServing` (GGUF via llama-cpp-python, Ollama deploy, vLLM config, BYOG)
-  - `AdapterMerger` (PEFT merge_and_unload)
-  - `KaizenModelBridge` (create_delegate for Ollama/vLLM -- budget note: use max_turns not budget_usd for local models)
-  - `OnPremModelCache` (air-gap support, kailash-align-prepare CLI)
-
 ### v1.0 Developer Guides
 
 Located in the package source:
@@ -434,8 +415,9 @@ from nexus import Nexus
 
 # Deploy agents via API/CLI/MCP
 agent_workflow = create_agent_workflow()
-nexus = Nexus([agent_workflow])
-nexus.run()  # Agents available via all channels
+app = Nexus()
+app.register("agent", agent_workflow.build())
+app.start()  # Agents available via all channels
 ```
 
 ### With Core SDK (Custom Workflows)
@@ -506,4 +488,4 @@ For Kaizen-specific questions, invoke:
 
 - `kaizen-specialist` - Kaizen framework implementation
 - `testing-specialist` - Agent testing strategies
-- `framework-advisor` - When to use Kaizen vs other frameworks
+- ``decide-framework` skill` - When to use Kaizen vs other frameworks

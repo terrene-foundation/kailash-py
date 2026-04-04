@@ -243,7 +243,6 @@ def register_from_config(app, config_file="workflows.yaml"):
         app.register(
             wf_config['name'],
             workflow.build(),
-            metadata=wf_config.get('metadata', {})
         )
 ```
 
@@ -257,18 +256,10 @@ class WorkflowVersionManager:
         self.app = nexus_app
         self.versions = {}
 
-    def register_version(self, name, workflow, version, metadata=None):
+    def register_version(self, name, workflow, version):
         versioned_name = f"{name}:v{version}"
 
-        # Enhanced metadata
-        version_metadata = {
-            "version": version,
-            "workflow_name": name,
-            "registered_at": datetime.now().isoformat(),
-            **(metadata or {})
-        }
-
-        self.app.register(versioned_name, workflow.build(), metadata=version_metadata)
+        self.app.register(versioned_name, workflow.build())
 
         # Track versions
         if name not in self.versions:
@@ -278,8 +269,8 @@ class WorkflowVersionManager:
         # Register as latest
         latest = max(self.versions[name])
         if version == latest:
-            self.app.register(f"{name}:latest", workflow.build(), metadata=version_metadata)
-            self.app.register(name, workflow.build(), metadata=version_metadata)
+            self.app.register(f"{name}:latest", workflow.build())
+            self.app.register(name, workflow.build())
 
     def rollback(self, name, target_version):
         versioned_workflow = self.app.workflows.get(f"{name}:v{target_version}")
@@ -303,15 +294,15 @@ class BlueGreenDeployment:
         self.app = nexus_app
         self.deployments = {}
 
-    def deploy_blue(self, name, workflow, metadata=None):
+    def deploy_blue(self, name, workflow):
         blue_name = f"{name}-blue"
-        self.app.register(blue_name, workflow.build(), metadata=metadata)
+        self.app.register(blue_name, workflow.build())
         print(f"Blue deployed: {blue_name}")
         return blue_name
 
-    def deploy_green(self, name, workflow, metadata=None):
+    def deploy_green(self, name, workflow):
         green_name = f"{name}-green"
-        self.app.register(green_name, workflow.build(), metadata=metadata)
+        self.app.register(green_name, workflow.build())
         print(f"Green deployed: {green_name}")
         return green_name
 
@@ -321,7 +312,7 @@ class BlueGreenDeployment:
 
         if target_name in self.app.workflows:
             target_workflow = self.app.workflows[target_name]
-            self.app.register(name, target_workflow.workflow, metadata=target_workflow.metadata)
+            self.app.register(name, target_workflow.workflow)
             print(f"Traffic switched to {target_environment}")
             return True
         return False
@@ -365,11 +356,10 @@ class WorkflowLifecycleManager:
             except Exception as e:
                 print(f"Hook error: {e}")
 
-    def register_with_lifecycle(self, name, workflow, metadata=None):
+    def register_with_lifecycle(self, name, workflow):
         context = {
             "name": name,
             "workflow": workflow,
-            "metadata": metadata,
             "timestamp": time.time()
         }
 
@@ -377,7 +367,7 @@ class WorkflowLifecycleManager:
         self.trigger_hooks("pre_register", context)
 
         # Register
-        self.app.register(name, workflow.build(), metadata=metadata)
+        self.app.register(name, workflow.build())
 
         # Post-registration hooks
         context["registered"] = True
@@ -402,11 +392,11 @@ lifecycle.register_with_lifecycle("my-workflow", workflow)
 ## Conditional Registration
 
 ```python
-def conditional_register(app, name, workflow_factory, condition_func, metadata=None):
+def conditional_register(app, name, workflow_factory, condition_func):
     """Register only if condition is met"""
     if condition_func():
         workflow = workflow_factory()
-        app.register(name, workflow.build(), metadata=metadata)
+        app.register(name, workflow.build())
         print(f"Registered: {name}")
         return True
     else:
@@ -426,7 +416,6 @@ conditional_register(
     "production-api",
     create_production_workflow,
     is_production,
-    metadata={"environment": "production"}
 )
 ```
 
@@ -453,7 +442,7 @@ class WorkflowValidator:
         return {"errors": errors, "warnings": warnings}
 
     @staticmethod
-    def safe_register(app, name, workflow, metadata=None, strict=False):
+    def safe_register(app, name, workflow, strict=False):
         """Register with validation"""
         result = WorkflowValidator.validate_workflow(workflow, name)
 
@@ -471,7 +460,7 @@ class WorkflowValidator:
             return False
 
         # Register if valid
-        app.register(name, workflow.build(), metadata=metadata)
+        app.register(name, workflow.build())
         print(f"Validated and registered: {name}")
         return True
 
@@ -484,11 +473,10 @@ validator.safe_register(app, "my-workflow", workflow)
 
 1. **Always call .build()** before registration
 2. **Use descriptive names** for workflows
-3. **Add metadata** for documentation and discovery
-4. **Validate workflows** before registration
-5. **Use versioning** for production deployments
-6. **Implement lifecycle hooks** for monitoring
-7. **Test registration** in development environment
+3. **Validate workflows** before registration
+4. **Use versioning** for production deployments
+5. **Implement lifecycle hooks** for monitoring
+6. **Test registration** in development environment
 
 ## Common Issues
 
@@ -524,7 +512,6 @@ app.register(name, workflow.build())  # Correct
 
 **Current Limitations:**
 
-- ❌ No metadata parameter (use workaround with `_workflow_metadata`)
 - ❌ Auto-discovery can block with DataFlow (use `auto_discovery=False`)
 - ✅ Versioning and lifecycle management require custom implementation
 

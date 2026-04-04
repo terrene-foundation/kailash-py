@@ -140,6 +140,6 @@ Use this skill **PROACTIVELY** when:
 For UI/UX design questions, invoke:
 
 - `uiux-designer` - Design analysis and recommendations
-- `frontend-developer` - Implementation guidance
+- `react-specialist` - Implementation guidance
 - `flutter-specialist` - Flutter/Material Design implementation
 - `react-specialist` - React component implementation

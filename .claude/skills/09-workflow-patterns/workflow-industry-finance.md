@@ -18,20 +18,20 @@ from kailash.workflow.builder import WorkflowBuilder
 workflow = WorkflowBuilder()
 
 # 1. Validate payment details
-workflow.add_node("DataValidationNode", "validate", {
+workflow.add_node("CodeValidationNode", "validate", {
     "input": "{{input.payment}}",
     "schema": {"amount": "decimal", "card_number": "credit_card"}
 })
 
 # 2. Fraud check
-workflow.add_node("APICallNode", "fraud_check", {
+workflow.add_node("HTTPRequestNode", "fraud_check", {
     "url": "https://api.fraudcheck.com/analyze",
     "method": "POST",
     "body": "{{validate.valid_data}}"
 })
 
 # 3. Risk assessment
-workflow.add_node("ConditionalNode", "assess_risk", {
+workflow.add_node("SwitchNode", "assess_risk", {
     "condition": "{{fraud_check.risk_score}}",
     "branches": {
         "low": "process_payment",
@@ -41,14 +41,14 @@ workflow.add_node("ConditionalNode", "assess_risk", {
 })
 
 # 4. Process payment
-workflow.add_node("APICallNode", "process_payment", {
+workflow.add_node("HTTPRequestNode", "process_payment", {
     "url": "https://api.paymentgateway.com/charge",
     "method": "POST",
     "body": "{{validate.valid_data}}"
 })
 
 # 5. Record transaction
-workflow.add_node("DatabaseExecuteNode", "record", {
+workflow.add_node("SQLDatabaseNode", "record", {
     "query": "INSERT INTO transactions (amount, status, timestamp) VALUES (?, ?, NOW())",
     "parameters": ["{{input.amount}}", "completed"]
 })

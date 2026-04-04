@@ -13,24 +13,27 @@ description: "React + Kailash SDK integration. Use when asking 'react integratio
 ## Quick Setup
 
 ### 1. Backend API (Python)
+
 ```python
-from kailash.api.workflow_api import WorkflowAPI
+from nexus import Nexus
 from kailash.workflow.builder import WorkflowBuilder
 
 # Create workflow
 workflow = WorkflowBuilder()
 workflow.add_node("LLMNode", "chat", {
     "provider": "openai",
-    "model": "gpt-4",
+    "model": os.environ["LLM_MODEL"],
     "prompt": "{{input.message}}"
 })
 
-# Deploy as API
-api = WorkflowAPI(workflow.build())
-api.run(port=8000)  # POST /execute
+# Deploy as API via Nexus
+app = Nexus()
+app.register("chat", workflow.build())
+app.start(port=8000)  # POST /execute
 ```
 
 ### 2. React Frontend
+
 ```typescript
 // src/api/workflow.ts
 export async function executeWorkflow(message: string) {
@@ -73,25 +76,26 @@ export function Chat() {
 ## Streaming Responses
 
 ```typescript
-// Backend (Python)
-api = WorkflowAPI(workflow.build(), streaming=True)
+// Frontend (React) — streaming via WebSocket
+function useWorkflowStream(executionId: string) {
+  const [chunks, setChunks] = useState<string[]>([]);
 
-// Frontend (React)
-async function streamWorkflow(message: string) {
-  const response = await fetch('http://localhost:8000/stream', {
-    method: 'POST',
-    body: JSON.stringify({inputs: {message}})
-  });
+  useEffect(() => {
+    const ws = new WebSocket(
+      `ws://localhost:8000/ws/executions/${executionId}`,
+    );
 
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === "chunk") {
+        setChunks((prev) => [...prev, data.content]);
+      }
+    };
 
-  while (true) {
-    const {done, value} = await reader.read();
-    if (done) break;
-    const chunk = decoder.decode(value);
-    console.log(chunk);  // Update UI incrementally
-  }
+    return () => ws.close();
+  }, [executionId]);
+
+  return chunks;
 }
 ```
 

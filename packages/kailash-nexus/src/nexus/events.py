@@ -173,6 +173,14 @@ class EventBus:
         """Total number of active subscribers."""
         return len(self._subscribers) + len(self._filtered_subscribers)
 
+    @staticmethod
+    def sse_url() -> str:
+        """Return the SSE streaming endpoint path.
+
+        Matches the kailash-rs ``EventBus::sse_url()`` interface.
+        """
+        return "/events/stream"
+
     def get_history(
         self,
         session_id: Optional[str] = None,

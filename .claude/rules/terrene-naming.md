@@ -1,8 +1,12 @@
+---
+paths:
+  - "**/*.md"
+  - "**/README*"
+  - "**/LICENSE*"
+  - "**/CLAUDE.md"
+---
+
 # Terrene Foundation Naming
-
-## Scope
-
-These rules apply to ALL new content and edits in this repository.
 
 ## Rules
 

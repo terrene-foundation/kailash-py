@@ -162,9 +162,15 @@ class FileSourceAdapter(BaseSourceAdapter):
     Reads local files with automatic extension-based parsing and optional
     watchdog-based change monitoring.
 
+    Supports two modes:
+
+    - **Single file**: ``config.path`` set — reads one specific file.
+    - **Directory scanning**: ``config.directory`` + ``config.pattern`` set —
+      scans for the latest matching file by name or mtime.
+
     Args:
         name: Unique source name.
-        config: ``FileSourceConfig`` with path, watch, and parser fields.
+        config: ``FileSourceConfig`` with path/directory, watch, and parser fields.
     """
 
     def __init__(self, name: str, config: FileSourceConfig, **kwargs: Any) -> None:
@@ -172,6 +178,7 @@ class FileSourceAdapter(BaseSourceAdapter):
         self.config = config
         self._resolved_path: Optional[Path] = None
         self._base_dir: Optional[Path] = None
+        self._watch_dir: Optional[Path] = None
         self._last_mtime: float = 0.0
         self._file_changed: bool = False
         self._observer: Any = None  # watchdog.observers.Observer
@@ -182,7 +189,7 @@ class FileSourceAdapter(BaseSourceAdapter):
     # ------------------------------------------------------------------
 
     @property
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         return "file"
 
     def supports_feature(self, feature: str) -> bool:
@@ -197,14 +204,24 @@ class FileSourceAdapter(BaseSourceAdapter):
         """Resolve the file path, verify readability, and optionally start a watchdog."""
         self.config.validate()
 
-        # Resolve and validate the path (M4 security)
-        self._base_dir = Path(self.config.path).resolve().parent
-        self._resolved_path = _validate_file_path(self.config.path, self._base_dir)
+        if self.config.directory:
+            # Directory scanning mode
+            self._watch_dir = Path(self.config.directory).resolve()
+            if not self._watch_dir.is_dir():
+                raise FileNotFoundError(
+                    f"Source directory does not exist: {self._watch_dir}"
+                )
+            self._base_dir = self._watch_dir
+            self._resolved_path = self._resolve_latest()
+        else:
+            # Single-file mode (original behaviour)
+            self._base_dir = Path(self.config.path).resolve().parent
+            self._resolved_path = _validate_file_path(self.config.path, self._base_dir)
 
-        if not self._resolved_path.exists():
-            raise FileNotFoundError(
-                f"Source file does not exist: {self._resolved_path}"
-            )
+            if not self._resolved_path.exists():
+                raise FileNotFoundError(
+                    f"Source file does not exist: {self._resolved_path}"
+                )
 
         if not os.access(self._resolved_path, os.R_OK):
             raise PermissionError(f"Source file is not readable: {self._resolved_path}")
@@ -218,10 +235,11 @@ class FileSourceAdapter(BaseSourceAdapter):
             self._start_watchdog()
 
         logger.info(
-            "FileSourceAdapter '%s' connected to '%s' (watch=%s)",
+            "FileSourceAdapter '%s' connected to '%s' (watch=%s, dir_mode=%s)",
             self.name,
             self._resolved_path,
             self.config.watch,
+            self._watch_dir is not None,
         )
 
     async def _disconnect(self) -> None:
@@ -237,6 +255,10 @@ class FileSourceAdapter(BaseSourceAdapter):
     async def detect_change(self) -> bool:
         """Detect file changes via mtime comparison (sub-millisecond).
 
+        In directory mode, re-scans the directory and checks whether the
+        latest matching file has changed (different file selected, or the
+        same file was modified).
+
         If the watchdog has signalled a change, this returns ``True``
         immediately and resets the flag.  Otherwise it stats the file and
         compares the modification time.
@@ -250,10 +272,30 @@ class FileSourceAdapter(BaseSourceAdapter):
         # Fast path: watchdog already detected a change
         if self._file_changed:
             self._file_changed = False
+            if self._watch_dir is not None:
+                try:
+                    new_latest = self._resolve_latest()
+                except FileNotFoundError:
+                    return False
+                if new_latest != self._resolved_path:
+                    self._resolved_path = new_latest
+                    self._last_mtime = new_latest.stat().st_mtime
+                    return True
             self._last_mtime = self._resolved_path.stat().st_mtime
             return True
 
-        # Poll mtime
+        # Directory mode: re-scan for new files
+        if self._watch_dir is not None:
+            try:
+                new_latest = self._resolve_latest()
+            except FileNotFoundError:
+                return False
+            if new_latest != self._resolved_path:
+                self._resolved_path = new_latest
+                self._last_mtime = new_latest.stat().st_mtime
+                return True
+
+        # Poll mtime on the current file
         try:
             current_mtime = self._resolved_path.stat().st_mtime
         except FileNotFoundError:
@@ -470,6 +512,43 @@ class FileSourceAdapter(BaseSourceAdapter):
         """Called from the watchdog thread via ``run_coroutine_threadsafe``."""
         self._file_changed = True
         logger.debug("File change detected via watchdog for adapter '%s'", self.name)
+
+    # ------------------------------------------------------------------
+    # Directory scanning
+    # ------------------------------------------------------------------
+
+    def _resolve_latest(self) -> Path:
+        """Find the latest file matching the configured glob pattern.
+
+        Uses ``config.selection`` to choose between lexicographic ordering
+        (``latest_name``) and modification time (``latest_mtime``).
+
+        Returns:
+            The resolved ``Path`` to the selected file.
+
+        Raises:
+            FileNotFoundError: If no files match the pattern.
+        """
+        if self._watch_dir is None:
+            raise RuntimeError("_resolve_latest called outside directory mode")
+
+        matches = sorted(self._watch_dir.glob(self.config.pattern))
+        # Filter out directories — only regular files
+        matches = [m for m in matches if m.is_file()]
+
+        if not matches:
+            raise FileNotFoundError(
+                f"No files matching '{self.config.pattern}' " f"in {self._watch_dir}"
+            )
+
+        if self.config.selection == "latest_name":
+            return matches[-1]  # Lexicographic sort -> latest date in name
+        elif self.config.selection == "latest_mtime":
+            return max(matches, key=lambda p: p.stat().st_mtime)
+        else:
+            # Validation in config.validate() prevents reaching here, but
+            # defensive coding in case of direct construction.
+            raise ValueError(f"Unknown selection strategy: {self.config.selection!r}")
 
     # ------------------------------------------------------------------
     # Internal helpers

@@ -72,8 +72,8 @@ class MongoDBAdapter(BaseAdapter):
         return "document"
 
     @property
-    def database_type(self) -> str:
-        """Get specific database type identifier.
+    def source_type(self) -> str:
+        """Get specific source type identifier.
 
         Returns:
             str: "mongodb"

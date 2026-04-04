@@ -2,7 +2,6 @@
 
 You are an expert in Kailash SDK feature discovery. Guide users through discovering and understanding SDK capabilities.
 
-
 ## Core Responsibilities
 
 ### 1. SDK Capabilities Overview
@@ -29,7 +28,7 @@ available_nodes = NodeRegistry.list_nodes()  # Returns 80+ node types
 # Core node categories:
 # - Data: CSVReaderNode, SQLReaderNode, FileReaderNode
 # - API: HTTPRequestNode, RestClientNode
-# - AI: LLMAgentNode, IterativeLLMAgentNode
+# - AI: Use Kaizen agents (see skills/04-kaizen/) — no built-in LLM workflow nodes
 # - Logic: SwitchNode, MergeNode, IfNode
 # - Transform: DataTransformerNode, JSONTransformerNode
 # - Code: PythonCodeNode

@@ -108,7 +108,7 @@ class PatientJourney(Journey):
 # 3. Run the Journey
 async def main():
     config = JourneyConfig(
-        intent_detection_model="gpt-4o-mini",
+        intent_detection_model=os.environ["LLM_MODEL"],
         intent_confidence_threshold=0.75
     )
 
@@ -153,15 +153,15 @@ class MyJourney(Journey):
 
 ### Pathway Configuration
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `__signature__` | Type[Signature] | Type-safe I/O contract |
-| `__agents__` | List[str] | Agent IDs to execute |
-| `__pipeline__` | str | Pipeline pattern: "sequential", "parallel", "router", "ensemble" |
-| `__accumulate__` | List[str] | Fields to persist across pathways |
-| `__next__` | str | Default next pathway |
-| `__guidelines__` | List[str] | Additional guidelines (merged with signature) |
-| `__return_behavior__` | ReturnBehavior | ReturnToPrevious or ReturnToSpecific |
+| Attribute             | Type            | Description                                                      |
+| --------------------- | --------------- | ---------------------------------------------------------------- |
+| `__signature__`       | Type[Signature] | Type-safe I/O contract                                           |
+| `__agents__`          | List[str]       | Agent IDs to execute                                             |
+| `__pipeline__`        | str             | Pipeline pattern: "sequential", "parallel", "router", "ensemble" |
+| `__accumulate__`      | List[str]       | Fields to persist across pathways                                |
+| `__next__`            | str             | Default next pathway                                             |
+| `__guidelines__`      | List[str]       | Additional guidelines (merged with signature)                    |
+| `__return_behavior__` | ReturnBehavior  | ReturnToPrevious or ReturnToSpecific                             |
 
 ### Transitions
 
@@ -200,6 +200,7 @@ accumulator.configure_field("total_attempts", MergeStrategy.SUM)
 ```
 
 **Available Strategies:**
+
 - `REPLACE` (default): New value replaces old
 - `APPEND`: Append to list
 - `MERGE_DICT`: Merge dictionaries
@@ -242,7 +243,7 @@ adapter = JourneyNexusAdapter(
 # Deploy to Nexus
 nexus = Nexus(title="Healthcare Platform", enable_api=True)
 deploy_journey_to_nexus(nexus, adapter, "patient_journey")
-nexus.run()
+app.start()
 
 # Access via:
 # - API: POST /workflows/patient_journey {"session_id": "...", "message": "..."}
@@ -268,6 +269,7 @@ async def track_transition(context):
 ```
 
 **Available Events:**
+
 - `PRE_SESSION_START`, `POST_SESSION_START`
 - `PRE_PATHWAY_EXECUTE`, `POST_PATHWAY_EXECUTE`
 - `PRE_TRANSITION`, `POST_TRANSITION`
@@ -288,6 +290,7 @@ examples/journey/healthcare_referral/
 ```
 
 Run the demo:
+
 ```bash
 cd kailash-kaizen
 python -m examples.journey.healthcare_referral.main --mode demo
@@ -326,7 +329,7 @@ from kaizen_agents.journey import JourneyConfig
 
 config = JourneyConfig(
     # Intent Detection
-    intent_detection_model="gpt-4o-mini",    # LLM for intent classification
+    intent_detection_model=os.environ["LLM_MODEL"],    # LLM for intent classification
     intent_confidence_threshold=0.75,         # Minimum confidence
     intent_cache_ttl_seconds=300,             # Cache TTL
 
@@ -347,6 +350,7 @@ config = JourneyConfig(
 ## Common Patterns
 
 ### Pattern 1: Detour and Return
+
 ```python
 class MyJourney(Journey):
     __transitions__ = [
@@ -361,6 +365,7 @@ class MyJourney(Journey):
 ```
 
 ### Pattern 2: Conditional Escalation
+
 ```python
 class MyJourney(Journey):
     __transitions__ = [
@@ -374,6 +379,7 @@ class MyJourney(Journey):
 ```
 
 ### Pattern 3: Context-Aware Booking
+
 ```python
 class BookingPath(Pathway):
     __accumulate__ = ["rejected_doctors"]  # Track rejections
@@ -384,21 +390,21 @@ class BookingPath(Pathway):
 
 ## Related Skills
 
-- **[kaizen-signatures.md](kaizen-signatures.md)** - Layer 2 Signatures with __intent__, __guidelines__
+- **[kaizen-signatures.md](kaizen-signatures.md)** - Layer 2 Signatures with **intent**, **guidelines**
 - **[kaizen-supervisor-worker.md](kaizen-supervisor-worker.md)** - Layer 4 multi-agent patterns
 - **[kaizen-baseagent-quick.md](kaizen-baseagent-quick.md)** - Layer 3 BaseAgent
 
 ## Files Reference
 
-| File | Description |
-|------|-------------|
-| `kaizen/journey/__init__.py` | Public exports |
-| `kaizen/journey/core.py` | Journey, Pathway, metaclasses |
-| `kaizen/journey/transitions.py` | Transition, triggers |
-| `kaizen/journey/intent.py` | IntentDetector, caching |
-| `kaizen/journey/manager.py` | PathwayManager |
-| `kaizen/journey/context.py` | ContextAccumulator |
-| `kaizen/journey/state.py` | StateManager, backends |
-| `kaizen/journey/nexus.py` | Nexus integration |
-| `kaizen/journey/behaviors.py` | Return behaviors |
-| `kaizen/journey/errors.py` | Journey exceptions |
+| File                            | Description                   |
+| ------------------------------- | ----------------------------- |
+| `kaizen/journey/__init__.py`    | Public exports                |
+| `kaizen/journey/core.py`        | Journey, Pathway, metaclasses |
+| `kaizen/journey/transitions.py` | Transition, triggers          |
+| `kaizen/journey/intent.py`      | IntentDetector, caching       |
+| `kaizen/journey/manager.py`     | PathwayManager                |
+| `kaizen/journey/context.py`     | ContextAccumulator            |
+| `kaizen/journey/state.py`       | StateManager, backends        |
+| `kaizen/journey/nexus.py`       | Nexus integration             |
+| `kaizen/journey/behaviors.py`   | Return behaviors              |
+| `kaizen/journey/errors.py`      | Journey exceptions            |

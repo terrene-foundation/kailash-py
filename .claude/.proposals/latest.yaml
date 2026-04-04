@@ -1,54 +1,54 @@
 source_repo: kailash-py
-codify_date: "2026-04-03"
-codify_session: "feat(dataflow): Data Fabric Engine — external sources, derived products, fabric runtime"
-sdk_version: "2.4.0"
+codify_date: "2026-04-04"
+codify_session: "feat(all): 23 GH issues — PACT hardening, governance, Nexus observability, DataFlow quality, Fabric engine"
+sdk_version: "2.4.1"
 coc_version: "1.0.0"
 
-changes:
-  - file: agents/frameworks/dataflow-specialist.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "Added Data Fabric Engine knowledge — db.source(), @db.product(), db.start(), source adapters, webhook receiver, layer preference, decision matrix"
-    diff_lines: "+25 -5"
+# Context: Consolidated 23 GH issues (#231-#253) across 5 workstreams.
+# Implemented in 4 sessions with parallel agent execution.
+# 12 PRs merged, ~6500 lines, ~180 new tests, 0 regressions.
+# Red team found 3 merge regressions — all fixed in convergence round.
+# 5 cross-SDK issues filed on kailash-rs (#173-#177).
 
-  - file: skills/02-dataflow/dataflow-fabric-engine.md
+changes:
+  # === New Project Skills (Python-specific) ===
+  - file: skills/project/pact-enforcement-modes.md
     action: created
     suggested_tier: coc-py
-    reason: "New skill for Data Fabric Engine — source types, product modes, runtime params, webhooks, MockSource testing, observability, security, optional extras"
-    diff_lines: "+280 -0"
+    reason: "PACT enforcement modes (ENFORCE/SHADOW/DISABLED), envelope adapter mapping 5 dimensions, HELD verdict handling"
+    diff_lines: "+65"
+
+  - file: skills/project/fabric-cache-consumers.md
+    action: created
+    suggested_tier: coc-py
+    reason: "Fabric cache control (invalidate/drain/refresh), consumer adapter registry, MCP tool generation, fabric-only mode"
+    diff_lines: "+75"
+
+  - file: skills/project/dataflow-provenance-audit.md
+    action: created
+    suggested_tier: coc-py
+    reason: "Provenance[T] field-level source tracking with validation, audit trail persistence with SQLite/PostgreSQL backends"
+    diff_lines: "+70"
+
+  # === Existing Skill Updates Needed at loom/ ===
+  # These skills should be updated to reflect new capabilities:
+
+  - file: skills/29-pact/SKILL.md
+    action: needs_update
+    suggested_tier: coc
+    reason: "Add enforcement modes, per-node governance callback, HELD verdict handling, envelope adapter to PACT quick reference"
+    diff_lines: "~+30"
 
   - file: skills/02-dataflow/SKILL.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "Added Data Fabric Engine section with link to new skill, updated description to include fabric trigger keywords"
-    diff_lines: "+5 -1"
-
-  - file: skills/10-deployment-git/deployment-ci.md
-    action: modified
+    action: needs_update
     suggested_tier: coc
-    reason: "Added CI Efficiency Patterns section — concurrency groups, path filtering + workflow_dispatch pairing, uv caching, matrix version alignment, heavy download avoidance"
-    diff_lines: "+55 -0"
+    reason: "Add Provenance[T], audit persistence, consumer adapters, cache control to DataFlow quick reference"
+    diff_lines: "~+40"
+
+  - file: skills/03-nexus/SKILL.md
+    action: needs_update
+    suggested_tier: coc
+    reason: "Add /metrics endpoint, SSE /events/stream, sse_url() to Nexus quick reference"
+    diff_lines: "~+15"
 
 status: pending_review
-
-notes: |
-  Session 19 — Data Fabric Engine completion + codification:
-
-  IMPLEMENTED (TODOs 30-33, 37):
-  - TODO-30: fabric/cloud/streaming/fabric-all optional extras in pyproject.toml
-  - TODO-31: 7 Tier 2 integration tests (no mocking, real infrastructure)
-  - TODO-32: Reference app at examples/fabric_reference/
-  - TODO-33: README.md fabric section + CHANGELOG.md [Unreleased] entry
-  - TODO-37: Redis-backed webhook nonce storage (SADD+TTL) with in-memory dev fallback
-
-  RED TEAM (converged in 2 rounds):
-  - Round 1: 1C + 2H + 3M fixed (ABC, source validation, NaN guard, Redis pipeline, parquet)
-  - Round 2: 2M fixed (regex module-level, Redis fallback error handling)
-  - 3957 tests passing, 0 regressions
-
-  CODIFIED:
-  - dataflow-specialist agent: fabric engine knowledge (377 lines, under 400 limit)
-  - dataflow-fabric-engine skill: comprehensive reference (source types, product modes, runtime, webhooks, testing, security)
-  - SKILL.md: updated with fabric section + trigger keywords
-
-  All 3 artifacts are coc-py tier (Python SDK specific).

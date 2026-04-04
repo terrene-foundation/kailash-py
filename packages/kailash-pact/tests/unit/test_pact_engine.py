@@ -20,6 +20,7 @@ Covers:
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 from pathlib import Path
 from typing import Any
@@ -139,14 +140,48 @@ class TestPactEngineConstruction:
 class TestPactEngineProperties:
     """PactEngine property access."""
 
-    def test_governance_property_returns_engine(
+    def test_governance_property_returns_read_only_view(
         self, engine_from_yaml: PactEngine
     ) -> None:
-        """The governance property should return the underlying GovernanceEngine."""
-        from kailash.trust.pact.engine import GovernanceEngine
+        """The governance property should return a _ReadOnlyGovernanceView."""
+        from pact.engine import _ReadOnlyGovernanceView
 
         gov = engine_from_yaml.governance
-        assert isinstance(gov, GovernanceEngine)
+        assert isinstance(gov, _ReadOnlyGovernanceView)
+
+    def test_governance_read_only_proxies_org_name(
+        self, engine_from_yaml: PactEngine
+    ) -> None:
+        """Read-only governance view should proxy org_name."""
+        gov = engine_from_yaml.governance
+        assert gov.org_name == "Minimal Test Org"
+
+    def test_governance_read_only_blocks_mutations(
+        self, engine_from_yaml: PactEngine
+    ) -> None:
+        """Read-only governance view should block mutating methods."""
+        gov = engine_from_yaml.governance
+        with pytest.raises(AttributeError, match="does not expose"):
+            gov.set_role_envelope(None)
+        with pytest.raises(AttributeError, match="does not expose"):
+            gov.grant_clearance("D1-R1", None)
+
+    def test_governance_read_only_blocks_setattr(
+        self, engine_from_yaml: PactEngine
+    ) -> None:
+        """Read-only governance view should block attribute setting."""
+        gov = engine_from_yaml.governance
+        with pytest.raises(AttributeError):
+            gov.custom_attr = "injected"
+
+    def test_admin_governance_returns_mutable_engine(
+        self, engine_from_yaml: PactEngine
+    ) -> None:
+        """_admin_governance should return the mutable GovernanceEngine."""
+        from kailash.trust.pact.engine import GovernanceEngine
+
+        admin_gov = engine_from_yaml._admin_governance
+        assert isinstance(admin_gov, GovernanceEngine)
 
     def test_costs_property_returns_tracker(self, engine_from_yaml: PactEngine) -> None:
         """The costs property should return a CostTracker."""
@@ -511,3 +546,270 @@ class TestWorkSubmission:
         sub = WorkSubmission(objective="Task", role="D1-R1")
         with pytest.raises(AttributeError):
             sub.objective = "Changed"  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# PR 1A: Security Fix Tests
+# ---------------------------------------------------------------------------
+
+
+class TestNanGuardBudgetConsumed:
+    """NaN guard on budget_consumed in submit() (#237)."""
+
+    def test_nan_budget_consumed_recorded_as_zero(
+        self, minimal_yaml_path: Path
+    ) -> None:
+        """NaN budget_consumed should be sanitized to 0.0 (not recorded)."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        engine = PactEngine(org=str(minimal_yaml_path), budget_usd=100.0)
+        # Mock supervisor that returns NaN budget_consumed
+        mock_supervisor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.budget_consumed = float("nan")
+        mock_result.success = True
+        mock_result.results = {}
+        mock_result.events = []
+        mock_supervisor.run = AsyncMock(return_value=mock_result)
+
+        with patch.object(
+            engine, "_get_or_create_supervisor", return_value=mock_supervisor
+        ):
+            result = engine.submit_sync("Test", role="D1-R1")
+
+        # Cost should NOT have been recorded (NaN sanitized to 0.0)
+        assert engine.costs.spent == 0.0
+
+    def test_inf_budget_consumed_recorded_as_zero(
+        self, minimal_yaml_path: Path
+    ) -> None:
+        """Inf budget_consumed should be sanitized to 0.0."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        engine = PactEngine(org=str(minimal_yaml_path), budget_usd=100.0)
+        mock_supervisor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.budget_consumed = float("inf")
+        mock_result.success = True
+        mock_result.results = {}
+        mock_result.events = []
+        mock_supervisor.run = AsyncMock(return_value=mock_result)
+
+        with patch.object(
+            engine, "_get_or_create_supervisor", return_value=mock_supervisor
+        ):
+            result = engine.submit_sync("Test", role="D1-R1")
+
+        assert engine.costs.spent == 0.0
+
+    def test_negative_budget_consumed_recorded_as_zero(
+        self, minimal_yaml_path: Path
+    ) -> None:
+        """Negative budget_consumed should be sanitized to 0.0."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        engine = PactEngine(org=str(minimal_yaml_path), budget_usd=100.0)
+        mock_supervisor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.budget_consumed = -5.0
+        mock_result.success = True
+        mock_result.results = {}
+        mock_result.events = []
+        mock_supervisor.run = AsyncMock(return_value=mock_result)
+
+        with patch.object(
+            engine, "_get_or_create_supervisor", return_value=mock_supervisor
+        ):
+            result = engine.submit_sync("Test", role="D1-R1")
+
+        assert engine.costs.spent == 0.0
+
+    def test_valid_budget_consumed_recorded(self, minimal_yaml_path: Path) -> None:
+        """Valid positive budget_consumed should be recorded normally."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        engine = PactEngine(org=str(minimal_yaml_path), budget_usd=100.0)
+        mock_supervisor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.budget_consumed = 5.0
+        mock_result.success = True
+        mock_result.results = {}
+        mock_result.events = []
+        mock_supervisor.run = AsyncMock(return_value=mock_result)
+
+        with patch.object(
+            engine, "_get_or_create_supervisor", return_value=mock_supervisor
+        ):
+            result = engine.submit_sync("Test", role="D1-R1")
+
+        assert engine.costs.spent == 5.0
+
+    def test_zero_budget_consumed_not_recorded(self, minimal_yaml_path: Path) -> None:
+        """Zero budget_consumed should not trigger a cost record."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        engine = PactEngine(org=str(minimal_yaml_path), budget_usd=100.0)
+        mock_supervisor = MagicMock()
+        mock_result = MagicMock()
+        mock_result.budget_consumed = 0.0
+        mock_result.success = True
+        mock_result.results = {}
+        mock_result.events = []
+        mock_supervisor.run = AsyncMock(return_value=mock_result)
+
+        with patch.object(
+            engine, "_get_or_create_supervisor", return_value=mock_supervisor
+        ):
+            result = engine.submit_sync("Test", role="D1-R1")
+
+        assert engine.costs.spent == 0.0
+        assert len(engine.costs.history) == 0
+
+
+class TestFreshSupervisorPerSubmit:
+    """Supervisor recreation per submit() (#235)."""
+
+    def test_supervisor_gets_remaining_budget(self, minimal_yaml_path: Path) -> None:
+        """Each submit() should create a supervisor with current remaining budget."""
+        from unittest.mock import AsyncMock, MagicMock, patch, call
+
+        engine = PactEngine(org=str(minimal_yaml_path), budget_usd=100.0)
+
+        # Track budgets passed to GovernedSupervisor
+        created_budgets: list[float] = []
+
+        mock_result = MagicMock()
+        mock_result.budget_consumed = 40.0
+        mock_result.success = True
+        mock_result.results = {}
+        mock_result.events = []
+
+        def mock_create_supervisor() -> MagicMock:
+            remaining = engine.costs.remaining
+            created_budgets.append(remaining)
+            supervisor = MagicMock()
+            supervisor.run = AsyncMock(return_value=mock_result)
+            return supervisor
+
+        with patch.object(
+            engine, "_get_or_create_supervisor", side_effect=mock_create_supervisor
+        ):
+            # First submit -- budget should be 100.0
+            engine.submit_sync("First task", role="D1-R1")
+            # Second submit -- budget should be 60.0 (100 - 40)
+            mock_result.budget_consumed = 20.0
+            engine.submit_sync("Second task", role="D1-R1")
+
+        assert created_budgets[0] == 100.0
+        assert created_budgets[1] == 60.0
+
+
+class TestReadOnlyGovernanceView:
+    """ReadOnlyGovernanceView wrapper (#236)."""
+
+    def test_proxies_read_only_methods(self, engine_from_yaml: PactEngine) -> None:
+        """Read-only view should proxy read-only methods."""
+        gov = engine_from_yaml.governance
+        # org_name is a read-only property
+        assert gov.org_name == "Minimal Test Org"
+        # get_org returns the compiled org
+        org = gov.get_org()
+        assert org is not None
+        # verify_action should be callable
+        verdict = gov.verify_action(
+            role_address="D1-R1",
+            action="submit",
+            context={},
+        )
+        assert verdict is not None
+
+    def test_blocks_all_mutating_methods(self, engine_from_yaml: PactEngine) -> None:
+        """Read-only view should block all listed mutating methods."""
+        gov = engine_from_yaml.governance
+        blocked_methods = [
+            "set_role_envelope",
+            "grant_clearance",
+            "create_bridge",
+            "approve_bridge",
+            "consent_bridge",
+            "register_compliance_role",
+            "designate_interim",
+            "revoke_interim",
+            "register_ksp",
+            "revoke_ksp",
+        ]
+        for method_name in blocked_methods:
+            with pytest.raises(AttributeError, match="does not expose"):
+                getattr(gov, method_name)
+
+    def test_repr_includes_org_name(self, engine_from_yaml: PactEngine) -> None:
+        """Read-only view repr should include org name."""
+        gov = engine_from_yaml.governance
+        assert "Minimal Test Org" in repr(gov)
+
+    def test_cannot_inject_attributes(self, engine_from_yaml: PactEngine) -> None:
+        """Read-only view should prevent attribute injection via __slots__."""
+        gov = engine_from_yaml.governance
+        with pytest.raises(AttributeError):
+            gov.injected_attr = "malicious"
+
+    def test_admin_governance_is_mutable(self, engine_from_yaml: PactEngine) -> None:
+        """_admin_governance should return the real GovernanceEngine."""
+        from kailash.trust.pact.engine import GovernanceEngine
+
+        admin = engine_from_yaml._admin_governance
+        assert isinstance(admin, GovernanceEngine)
+        # Should be able to call set_role_envelope (it exists on the real engine)
+        assert hasattr(admin, "set_role_envelope")
+
+
+class TestDegenerateEnvelopeDetection:
+    """Degenerate envelope detection at init (#241)."""
+
+    def test_no_warnings_for_minimal_org(
+        self, minimal_yaml_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Minimal org without envelopes should produce no degenerate warnings."""
+        with caplog.at_level(logging.WARNING, logger="pact.engine"):
+            engine = PactEngine(org=str(minimal_yaml_path))
+        degenerate_msgs = [r for r in caplog.records if "egenerate" in r.message]
+        assert len(degenerate_msgs) == 0
+
+    def test_degenerate_detection_runs_at_init(self, minimal_yaml_path: Path) -> None:
+        """_detect_degenerate_envelopes should be called during __init__."""
+        from unittest.mock import patch
+
+        with patch.object(PactEngine, "_detect_degenerate_envelopes") as mock_detect:
+            engine = PactEngine(org=str(minimal_yaml_path))
+            mock_detect.assert_called_once()
+
+
+class TestModelEnvVar:
+    """Remove hardcoded model (#C2) -- model from env var."""
+
+    def test_model_from_constructor_takes_precedence(
+        self, minimal_yaml_path: Path
+    ) -> None:
+        """Constructor model param should be used when provided."""
+        engine = PactEngine(org=str(minimal_yaml_path), model="test-model-1")
+        assert engine.model == "test-model-1"
+
+    def test_model_none_when_not_set(self, minimal_yaml_path: Path) -> None:
+        """Model should be None when neither constructor nor env var is set."""
+        import os
+        from unittest.mock import patch
+
+        with patch.dict(os.environ, {}, clear=True):
+            engine = PactEngine(org=str(minimal_yaml_path))
+            assert engine.model is None
+
+    def test_no_hardcoded_model_in_supervisor(self, minimal_yaml_path: Path) -> None:
+        """_get_or_create_supervisor should not use hardcoded model strings."""
+        import inspect
+        from pact.engine import PactEngine
+
+        source = inspect.getsource(PactEngine._get_or_create_supervisor)
+        # The hardcoded string "claude-sonnet-4-6" should NOT appear
+        assert "claude-sonnet-4-6" not in source
+        # Should reference os.environ.get for the fallback
+        assert "os.environ.get" in source

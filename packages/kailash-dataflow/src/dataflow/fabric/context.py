@@ -154,8 +154,8 @@ class SourceHandle:
 
     @property
     def source_type(self) -> str:
-        """Adapter database_type identifier (e.g. ``"rest"``, ``"file"``)."""
-        return self._adapter.database_type
+        """Adapter source_type identifier (e.g. ``"rest"``, ``"file"``)."""
+        return self._adapter.source_type
 
     @property
     def healthy(self) -> bool:
@@ -605,7 +605,7 @@ class _MockSourceAdapter(BaseSourceAdapter):
         self.is_connected = True
 
     @property
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         return "mock"
 
     async def _connect(self) -> None:

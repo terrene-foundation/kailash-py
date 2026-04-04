@@ -20,7 +20,7 @@ PACT uses a three-layer envelope model to constrain agent actions across five di
 All dimensions use Pydantic models with `frozen=True` (immutable after creation).
 
 ```python
-from pact.governance.config import (
+from kailash.trust.pact.config import (
     ConstraintEnvelopeConfig,
     FinancialConstraintConfig,
     OperationalConstraintConfig,
@@ -76,7 +76,7 @@ envelope = ConstraintEnvelopeConfig(
 Standing operating boundary set by a supervisor for a direct report.
 
 ```python
-from pact.governance.envelopes import RoleEnvelope
+from kailash.trust.pact.envelopes import RoleEnvelope
 
 role_env = RoleEnvelope(
     id="env-analyst-1",
@@ -95,7 +95,7 @@ engine.set_role_envelope(role_env)
 Ephemeral narrowing for a specific task. Auto-expires.
 
 ```python
-from pact.governance.envelopes import TaskEnvelope
+from kailash.trust.pact.envelopes import TaskEnvelope
 from datetime import datetime, UTC, timedelta
 
 task_env = TaskEnvelope(
@@ -124,7 +124,7 @@ Per-dimension rules follow XACML deny-overrides:
 | Communication | Set intersection of channels; `internal_only = a OR b`                       |
 
 ```python
-from pact.governance.envelopes import intersect_envelopes
+from kailash.trust.pact.envelopes import intersect_envelopes
 
 effective = intersect_envelopes(parent_envelope, child_envelope)
 # Result is the most restrictive combination of both
@@ -135,7 +135,7 @@ effective = intersect_envelopes(parent_envelope, child_envelope)
 Walks the accountability chain from root to role, intersecting all ancestor `RoleEnvelope`s, then applies any active `TaskEnvelope`.
 
 ```python
-from pact.governance.envelopes import compute_effective_envelope
+from kailash.trust.pact.envelopes import compute_effective_envelope
 
 effective = compute_effective_envelope(
     role_address="D1-R1-T1-R1",
@@ -150,7 +150,7 @@ effective = compute_effective_envelope(
 Before setting a child envelope, validate it does not exceed the parent:
 
 ```python
-from pact.governance.envelopes import RoleEnvelope, MonotonicTighteningError
+from kailash.trust.pact.envelopes import RoleEnvelope, MonotonicTighteningError
 
 try:
     RoleEnvelope.validate_tightening(
@@ -210,8 +210,8 @@ All numeric fields reject `NaN` and `Inf` values via `@field_validator` on Pydan
 ## Default Envelopes by Posture
 
 ```python
-from pact.governance.envelopes import default_envelope_for_posture
-from pact.governance.config import TrustPostureLevel
+from kailash.trust.pact.envelopes import default_envelope_for_posture
+from kailash.trust.pact.config import TrustPostureLevel
 
 env = default_envelope_for_posture(TrustPostureLevel.SUPERVISED)
 # max_spend_usd=100.0, allowed_actions=["read", "write"], internal_only=True
@@ -228,7 +228,7 @@ env = default_envelope_for_posture(TrustPostureLevel.SUPERVISED)
 ## Degenerate Envelope Detection
 
 ```python
-from pact.governance.envelopes import check_degenerate_envelope
+from kailash.trust.pact.envelopes import check_degenerate_envelope
 
 warnings = check_degenerate_envelope(effective_envelope)
 # ["Operational: no allowed actions -- agent cannot perform any operations"]

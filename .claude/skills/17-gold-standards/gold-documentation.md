@@ -13,6 +13,7 @@ description: "Gold standard for documentation. Use when asking 'documentation st
 ## Documentation Principles
 
 ### 1. Code-Level Documentation
+
 ```python
 def process_payment(amount: float, customer_id: str) -> dict:
     """Process a payment for a customer.
@@ -41,6 +42,7 @@ def process_payment(amount: float, customer_id: str) -> dict:
 ```
 
 ### 2. Workflow Documentation
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -48,18 +50,18 @@ from kailash.workflow.builder import WorkflowBuilder
 workflow = WorkflowBuilder()
 
 # Step 1: Validate payment details
-workflow.add_node("DataValidationNode", "validate_payment", {
+workflow.add_node("CodeValidationNode", "validate_payment", {
     "schema": {"amount": "decimal > 0", "card": "credit_card"}
 })
 
 # Step 2: Process with payment gateway
-workflow.add_node("APICallNode", "charge_card", {
+workflow.add_node("HTTPRequestNode", "charge_card", {
     "url": "https://api.stripe.com/charges"
     # Creates charge with validated payment details
 })
 
 # Step 3: Record transaction in database
-workflow.add_node("DatabaseExecuteNode", "record_transaction", {
+workflow.add_node("SQLDatabaseNode", "record_transaction", {
     "query": "INSERT INTO transactions ..."
 })
 
@@ -68,7 +70,8 @@ workflow.add_connection("charge_card", "result", "record_transaction", "transact
 ```
 
 ### 3. README Structure
-```markdown
+
+````markdown
 # Project Name
 
 Brief description of what this project does.
@@ -78,6 +81,7 @@ Brief description of what this project does.
 ```bash
 pip install package-name
 ```
+````
 
 ## Quick Start
 
@@ -106,7 +110,8 @@ See [examples/](examples/) directory.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
-```
+
+````
 
 ### 4. Inline Comments
 ```python
@@ -118,7 +123,7 @@ delay = 2 ** retry_count
 # ❌ BAD: Stating the obvious
 # Increment the counter by 1
 counter += 1
-```
+````
 
 ## Documentation Checklist
 

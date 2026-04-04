@@ -38,13 +38,13 @@ Result: 30 minutes deciding which class to use
 from kaizen import Agent
 
 # Dead simple (2 lines)
-agent = Agent(model="gpt-4")
+agent = Agent(model=os.environ["LLM_MODEL"])
 result = agent.run("What is AI?")
 
 # Specialized (configuration, not class hierarchy)
-agent = Agent(model="gpt-4", agent_type="react")     # ReAct pattern
-agent = Agent(model="gpt-4", agent_type="rag")       # RAG pattern
-agent = Agent(model="gpt-4", multimodal=["vision"])  # Vision processing
+agent = Agent(model=os.environ["LLM_MODEL"], agent_type="react")     # ReAct pattern
+agent = Agent(model=os.environ["LLM_MODEL"], agent_type="rag")       # RAG pattern
+agent = Agent(model=os.environ["LLM_MODEL"], multimodal=["vision"])  # Vision processing
 
 Result: 2 minutes to first working agent
 ```
@@ -69,7 +69,7 @@ Result: 2 minutes to first working agent
 
 ### Layer 1: Zero-Config (99% of users)
 ```python
-agent = Agent(model="gpt-4")
+agent = Agent(model=os.environ["LLM_MODEL"])
 result = agent.run("Explain quantum computing")
 ```
 **What you get automatically**:
@@ -83,7 +83,7 @@ result = agent.run("Explain quantum computing")
 ### Layer 2: Configuration (Power users)
 ```python
 agent = Agent(
-    model="gpt-4",
+    model=os.environ["LLM_MODEL"],
     agent_type="react",        # ReAct pattern
     memory_turns=20,           # 20 conversation turns
     tools=["read_file", "http_get"],  # Subset
@@ -94,7 +94,7 @@ agent = Agent(
 ### Layer 3: Expert Override (1% of users)
 ```python
 agent = Agent(
-    model="gpt-4",
+    model=os.environ["LLM_MODEL"],
     memory=CustomMemory(),           # Replace memory system
     tools="all"  # Enable tools via MCP
     hook_manager=CustomHooks()       # Replace observability
@@ -146,12 +146,12 @@ agent = Agent(
 ```python
 # OLD (still works)
 from kaizen_agents.agents import SimpleQAAgent
-agent = SimpleQAAgent(llm_provider="openai", model="gpt-4")
+agent = SimpleQAAgent(llm_provider=os.environ.get("LLM_PROVIDER", "openai"), model=os.environ["LLM_MODEL"])
 result = agent.ask("What is AI?")  # ✅ Still works
 
 # NEW (recommended)
 from kaizen import Agent
-agent = Agent(model="gpt-4")
+agent = Agent(model=os.environ["LLM_MODEL"])
 result = agent.run("What is AI?")  # ✅ New way
 ```
 
@@ -178,8 +178,8 @@ from dataclasses import dataclass
 
 @dataclass
 class QAConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     temperature: float = 0.7
 
 config = QAConfig()
@@ -198,7 +198,7 @@ print(answer)
 ```python
 from kaizen import Agent
 
-agent = Agent(model="gpt-4")
+agent = Agent(model=os.environ["LLM_MODEL"])
 result = agent.run("What is AI?")
 print(result['answer'])
 ```
@@ -214,8 +214,8 @@ from dataclasses import dataclass
 
 @dataclass
 class ReActConfig:
-    llm_provider: str = "openai"
-    model: str = "gpt-4"
+    llm_provider: str = os.environ.get("LLM_PROVIDER", "openai")
+    model: str = os.environ.get("LLM_MODEL", "")
     max_cycles: int = 10
     temperature: float = 0.7
 
@@ -240,7 +240,7 @@ print(answer)
 ```python
 from kaizen import Agent
 
-agent = Agent(model="gpt-4", agent_type="react")
+agent = Agent(model=os.environ["LLM_MODEL"], agent_type="react")
 result = agent.run("Research AI trends")
 print(result['answer'])
 ```
@@ -276,7 +276,7 @@ User needs an agent
     ↓
 from kaizen import Agent
     ↓
-agent = Agent(model="gpt-4")
+agent = Agent(model=os.environ["LLM_MODEL"])
     ↓
 Start coding immediately
     ↓

@@ -57,7 +57,7 @@ class DatabaseSourceAdapter(BaseSourceAdapter):
         self._MAX_TRACKED_TABLES = 1000
 
     @property
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         return "database"
 
     async def _connect(self) -> None:

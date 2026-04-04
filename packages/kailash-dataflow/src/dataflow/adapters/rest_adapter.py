@@ -61,7 +61,7 @@ class RestSourceAdapter(BaseSourceAdapter):
     # ------------------------------------------------------------------
 
     @property
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         return "rest"
 
     # ------------------------------------------------------------------

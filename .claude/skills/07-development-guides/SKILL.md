@@ -150,5 +150,5 @@ Use this skill when you need:
 For development guide questions, invoke:
 - `pattern-expert` - Implementation patterns and workflows
 - `testing-specialist` - Testing strategies and best practices
-- `deployment-specialist` - Production deployment guidance
+- `release-specialist` - Production deployment guidance
 - `mcp-specialist` - MCP server development

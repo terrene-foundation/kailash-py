@@ -445,6 +445,159 @@ class TestCreateBridgeLCA:
 # ---------------------------------------------------------------------------
 
 
+class TestApproveBridgeVacancy:
+    """Test that approve_bridge() blocks vacant approvers."""
+
+    def test_approve_bridge_with_vacant_approver_raises(self) -> None:
+        """Approving a bridge with a vacant LCA role raises PactError."""
+        org = _make_compiled_org()
+        # Make VP Eng (D1-R1, the LCA) vacant
+        org.nodes["D1-R1"] = OrgNode(
+            address="D1-R1",
+            node_type=NodeType.ROLE,
+            name="VP Eng",
+            node_id="vp-eng",
+            parent_address="D1",
+            is_vacant=True,
+        )
+        engine = GovernanceEngine(org)
+        with pytest.raises(PactError, match="vacant role"):
+            engine.approve_bridge(
+                source_address="D1-R1-T1-R1",
+                target_address="D1-R1-T2-R1",
+                approver_address="D1-R1",
+            )
+
+    def test_approve_bridge_with_non_vacant_approver_succeeds(self) -> None:
+        """Approving a bridge with a non-vacant LCA role succeeds."""
+        engine = GovernanceEngine(_make_compiled_org())
+        approval = engine.approve_bridge(
+            source_address="D1-R1-T1-R1",
+            target_address="D1-R1-T2-R1",
+            approver_address="D1-R1",
+        )
+        assert isinstance(approval, BridgeApproval)
+        assert approval.approved_by == "D1-R1"
+
+
+# ---------------------------------------------------------------------------
+# reject_bridge() tests
+# ---------------------------------------------------------------------------
+
+
+class TestRejectBridge:
+    """Test reject_bridge() -- LCA validation and vacancy checks."""
+
+    def test_reject_bridge_success(self) -> None:
+        """Approve then reject a bridge -- approval is removed."""
+        engine = GovernanceEngine(_make_compiled_org())
+        engine.approve_bridge(
+            source_address="D1-R1-T1-R1",
+            target_address="D1-R1-T2-R1",
+            approver_address="D1-R1",
+        )
+        result = engine.reject_bridge(
+            source_address="D1-R1-T1-R1",
+            target_address="D1-R1-T2-R1",
+            rejector_address="D1-R1",
+        )
+        assert result is True
+        # Verify approval is gone -- creating a bridge should now fail
+        bridge = PactBridge(
+            id="bridge-after-reject",
+            role_a_address="D1-R1-T1-R1",
+            role_b_address="D1-R1-T2-R1",
+            bridge_type="standing",
+            max_classification=ConfidentialityLevel.CONFIDENTIAL,
+        )
+        with pytest.raises(PactError, match="Bridge requires approval from LCA"):
+            engine.create_bridge(bridge)
+
+    def test_reject_bridge_with_vacant_rejector_raises(self) -> None:
+        """Rejecting a bridge with a vacant LCA role raises PactError."""
+        org = _make_compiled_org()
+        # Make VP Eng (D1-R1, the LCA) vacant
+        org.nodes["D1-R1"] = OrgNode(
+            address="D1-R1",
+            node_type=NodeType.ROLE,
+            name="VP Eng",
+            node_id="vp-eng",
+            parent_address="D1",
+            is_vacant=True,
+        )
+        engine = GovernanceEngine(org)
+        with pytest.raises(PactError, match="vacant role"):
+            engine.reject_bridge(
+                source_address="D1-R1-T1-R1",
+                target_address="D1-R1-T2-R1",
+                rejector_address="D1-R1",
+            )
+
+    def test_reject_bridge_with_non_lca_raises(self) -> None:
+        """Rejecting a bridge with a non-LCA role raises PactError."""
+        engine = GovernanceEngine(_make_compiled_org())
+        with pytest.raises(PactError, match="Bridge rejection must come from the LCA"):
+            engine.reject_bridge(
+                source_address="D1-R1-T1-R1",
+                target_address="D1-R1-T2-R1",
+                rejector_address="D1-R1-T1-R1",  # Not the LCA
+            )
+
+    def test_reject_bridge_no_approval_returns_false(self) -> None:
+        """Rejecting a bridge with no existing approval returns False."""
+        engine = GovernanceEngine(_make_compiled_org())
+        result = engine.reject_bridge(
+            source_address="D1-R1-T1-R1",
+            target_address="D1-R1-T2-R1",
+            rejector_address="D1-R1",
+        )
+        assert result is False
+
+    def test_reject_bridge_emits_audit(self) -> None:
+        """reject_bridge emits an audit anchor."""
+        from kailash.trust.pact.audit import AuditChain
+
+        audit_chain = AuditChain(chain_id="test-audit")
+        engine = GovernanceEngine(_make_compiled_org(), audit_chain=audit_chain)
+        initial_length = audit_chain.length
+
+        engine.reject_bridge(
+            source_address="D1-R1-T1-R1",
+            target_address="D1-R1-T2-R1",
+            rejector_address="D1-R1",
+        )
+
+        assert audit_chain.length > initial_length
+        latest = audit_chain.latest
+        assert latest is not None
+        assert latest.action == "bridge_rejected"
+
+
+# ---------------------------------------------------------------------------
+# designate_acting_occupant vacancy guard tests
+# ---------------------------------------------------------------------------
+
+
+class TestDesignateActingOccupantOnFilledRole:
+    """Test that designate_acting_occupant() rejects filled roles."""
+
+    def test_designate_acting_occupant_on_filled_role_raises(self) -> None:
+        """Designating an acting occupant on a non-vacant role raises PactError."""
+        engine = GovernanceEngine(_make_compiled_org())
+        # D1-R1 is not vacant in the standard org
+        with pytest.raises(PactError, match="is not vacant"):
+            engine.designate_acting_occupant(
+                vacant_role="D1-R1",
+                acting_role="D1-R1-T1-R1",
+                designated_by="R1",
+            )
+
+
+# ---------------------------------------------------------------------------
+# BridgeApproval serialization tests
+# ---------------------------------------------------------------------------
+
+
 class TestBridgeApprovalSerialization:
     """Test BridgeApproval to_dict() / from_dict() round-trip."""
 

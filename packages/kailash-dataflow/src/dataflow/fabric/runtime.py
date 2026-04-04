@@ -31,6 +31,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from dataflow.fabric.change_detector import ChangeDetector
+from dataflow.fabric.consumers import ConsumerFn, ConsumerRegistry
 from dataflow.fabric.context import FabricContext, PipelineContext
 from dataflow.fabric.leader import LeaderElector
 from dataflow.fabric.pipeline import PipelineExecutor
@@ -84,6 +85,9 @@ class FabricRuntime:
         self._tenant_extractor = tenant_extractor
         self._nexus = nexus
 
+        # Consumer adapter registry
+        self._consumer_registry = ConsumerRegistry()
+
         # Validate parameter combinations (TODO-38)
         self._validate_params()
 
@@ -124,11 +128,18 @@ class FabricRuntime:
                 "fabric endpoints will be publicly accessible"
             )
 
-    async def start(self) -> None:
+    async def start(self, prewarm: bool = True) -> None:
         """Start the fabric runtime.
 
         This is called by ``db.start()`` and orchestrates the full startup
         sequence.
+
+        Args:
+            prewarm: Whether to pre-warm materialized products on startup.
+                Defaults to ``True``. When ``False``, the first request for
+                each product returns a 202 (warming) response. Independent
+                of ``dev_mode`` — pre-warming runs serially in dev mode and
+                in parallel otherwise.
         """
         if self._started:
             logger.warning("FabricRuntime already started")
@@ -159,14 +170,25 @@ class FabricRuntime:
         await self._leader.try_elect()
         await self._leader.start_heartbeat()
 
-        # 5. Pre-warm materialized products (leader only, skip in dev_mode)
-        if self._leader.is_leader and not self._dev_mode:
-            await self._prewarm_products()
+        # 5. Pre-warm materialized products (leader only)
+        if self._leader.is_leader and prewarm:
+            if self._dev_mode:
+                await self._prewarm_products_serial()
+            else:
+                await self._prewarm_products()
 
         # 6. Start change detection (leader only)
+        #    Extract adapter objects from source info dicts (#253).
+        #    ChangeDetector expects Dict[str, BaseSourceAdapter], but
+        #    self._sources is Dict[str, Dict[str, Any]].
         if self._leader.is_leader:
+            adapters = {
+                n: info["adapter"]
+                for n, info in self._sources.items()
+                if isinstance(info, dict) and "adapter" in info
+            }
             self._change_detector = ChangeDetector(
-                sources=self._sources,
+                sources=adapters,
                 products=self._products,
                 pipeline_executor=self._pipeline,
                 dev_mode=self._dev_mode,
@@ -188,6 +210,7 @@ class FabricRuntime:
             sources=self._sources,
             enable_writes=self._enable_writes,
             on_product_refresh=self._on_source_change,
+            consumer_registry=self._consumer_registry,
         )
 
         # 9. Subscribe to DataFlow event bus for model writes (TODO-18)
@@ -312,6 +335,49 @@ class FabricRuntime:
                     context=ctx,
                 )
                 logger.debug("Pre-warmed product '%s'", name)
+            except Exception:
+                logger.exception("Failed to pre-warm product '%s'", name)
+
+    async def _prewarm_products_serial(self) -> None:
+        """Pre-warm all materialized products one at a time (dev mode).
+
+        Identical to ``_prewarm_products`` but executes products serially
+        to reduce resource usage during development. This avoids parallel
+        database connections and CPU spikes that are unnecessary in a
+        single-developer environment.
+        """
+        materialized = [
+            (name, product)
+            for name, product in self._products.items()
+            if product.mode.value == "materialized"
+        ]
+
+        if not materialized:
+            return
+
+        logger.debug(
+            "Pre-warming %d materialized products (serial, dev_mode)",
+            len(materialized),
+        )
+
+        for name, product in materialized:
+            try:
+                source_adapters = {
+                    n: info["adapter"]
+                    for n, info in self._sources.items()
+                    if "adapter" in info
+                }
+                ctx = PipelineContext(
+                    express=getattr(self._dataflow, "_express_dataflow", None),
+                    sources=source_adapters,
+                    products_cache=self._get_products_cache(),
+                )
+                await self._pipeline.execute_product(
+                    product_name=name,
+                    product_fn=product.fn,
+                    context=ctx,
+                )
+                logger.debug("Pre-warmed product '%s' (serial)", name)
             except Exception:
                 logger.exception("Failed to pre-warm product '%s'", name)
 
@@ -472,6 +538,32 @@ class FabricRuntime:
             "cached_at": cached[1].get("cached_at") if cached else None,
         }
 
+    def invalidate(
+        self, product_name: str, params: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """Invalidate cached data for a specific product.
+
+        Args:
+            product_name: Name of the product to invalidate.
+            params: Optional parameters (for parameterized products).
+
+        Returns:
+            ``True`` if the cache entry existed and was removed.
+        """
+        if self._pipeline is None:
+            return False
+        return self._pipeline.invalidate(product_name, params)
+
+    def invalidate_all(self) -> int:
+        """Invalidate all cached product data.
+
+        Returns:
+            The number of cache entries that were cleared.
+        """
+        if self._pipeline is None:
+            return 0
+        return self._pipeline.invalidate_all()
+
     def last_trace(self, name: str) -> Dict[str, Any]:
         """Get the last pipeline trace for a product."""
         if self._health_manager is None:
@@ -481,6 +573,24 @@ class FabricRuntime:
                 self._sources, self._products, self._pipeline, self._started_at
             )
         return self._health_manager.get_trace(name)
+
+    def register_consumer(self, name: str, fn: ConsumerFn) -> None:
+        """Register a consumer adapter function.
+
+        Consumer functions are pure data transforms: canonical product
+        data in, consumer-specific view out. They are applied by the
+        serving layer when the ``?consumer=`` query parameter is present.
+
+        Args:
+            name: Unique consumer identifier.
+            fn: Pure function ``(dict) -> dict``.
+        """
+        self._consumer_registry.register(name, fn)
+
+    @property
+    def consumer_registry(self) -> ConsumerRegistry:
+        """Return the consumer adapter registry."""
+        return self._consumer_registry
 
     @property
     def serving(self) -> Optional[FabricServingLayer]:
@@ -497,3 +607,13 @@ class FabricRuntime:
     @property
     def is_leader(self) -> bool:
         return self._leader.is_leader if self._leader else False
+
+    def get_mcp_tools(self) -> List[Dict[str, Any]]:
+        """Generate MCP tool definitions for all registered products.
+
+        Returns a list of MCP-compatible tool definition dicts that can be
+        registered with a kailash-mcp server or any MCP-compatible runtime.
+        """
+        from dataflow.fabric.mcp_integration import generate_mcp_tools
+
+        return generate_mcp_tools(self._products)

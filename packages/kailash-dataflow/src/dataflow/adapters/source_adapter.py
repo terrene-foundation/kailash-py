@@ -409,7 +409,7 @@ class BaseSourceAdapter(BaseAdapter):
         return {
             "healthy": self.healthy,
             "source_name": self.name,
-            "source_type": self.database_type,
+            "source_type": self.source_type,
             "state": self._state.value,
             "circuit_breaker": self._circuit_breaker.state.value,
             "consecutive_failures": self._circuit_breaker.failure_count,

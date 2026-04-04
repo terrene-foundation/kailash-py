@@ -5,217 +5,61 @@ description: "Comprehensive node reference documentation for all 110+ Kailash SD
 
 # Kailash Nodes - Complete Reference
 
-Comprehensive reference documentation for all 110+ workflow nodes in Kailash SDK, organized by category.
+Comprehensive reference for all 110+ workflow nodes in Kailash SDK, organized by category.
 
-## Overview
+## Quick Access
 
-Complete node catalog covering:
-- **AI Nodes**: LLM, vision, audio, embeddings
-- **API Nodes**: HTTP, webhooks, GraphQL
-- **Code Nodes**: Python, JavaScript execution
-- **Data Nodes**: Processing, transformation, validation
-- **Database Nodes**: CRUD, queries, transactions
-- **File Nodes**: Reading, writing, manipulation
-- **Logic Nodes**: Conditionals, loops, routing
-- **Monitoring Nodes**: Logging, metrics, alerts
-- **Admin Nodes**: System management
-- **Transaction Nodes**: ACID operations
-- **Transform Nodes**: Data transformation
-
-## Node Reference Documentation
-
-### Quick Access
 - **[nodes-quick-index](nodes-quick-index.md)** - Quick node lookup index
 
-### By Category
+## By Category
 
-#### AI & Machine Learning
-- **[nodes-ai-reference](nodes-ai-reference.md)** - AI and LLM nodes
-  - LLMNode, AnthropicNode, OpenAINode
-  - VisionNode, AudioNode
-  - EmbeddingNode, ClassificationNode
-  - OllamaNode (local LLMs)
+| Category          | File                                                          | Key Nodes                                                                            |
+| ----------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| AI & ML           | [nodes-ai-reference](nodes-ai-reference.md)                   | LLMNode, AnthropicNode, OpenAINode, VisionNode, AudioNode, EmbeddingNode, OllamaNode |
+| API & Integration | [nodes-api-reference](nodes-api-reference.md)                 | HTTPRequestNode, WebhookNode, GraphQLNode                                            |
+| Code Execution    | [nodes-code-reference](nodes-code-reference.md)               | PythonCodeNode, JavaScriptNode, BashNode                                             |
+| Data Processing   | [nodes-data-reference](nodes-data-reference.md)               | CSVReaderNode, JSONParserNode, DataValidatorNode, FilterNode, MapNode                |
+| Database          | [nodes-database-reference](nodes-database-reference.md)       | SQLQueryNode, AsyncSQLNode, DatabaseReadNode (+ DataFlow auto-generated)             |
+| File Operations   | [nodes-file-reference](nodes-file-reference.md)               | FileReaderNode, FileWriterNode, FileWatcherNode, ZipNode                             |
+| Logic & Control   | [nodes-logic-reference](nodes-logic-reference.md)             | SwitchNode, IfElseNode, LoopNode, MergeNode, SplitNode, CycleNode                    |
+| Monitoring        | [nodes-monitoring-reference](nodes-monitoring-reference.md)   | LoggerNode, MetricsNode, AlertNode, HealthCheckNode                                  |
+| Admin             | [nodes-admin-reference](nodes-admin-reference.md)             | ConfigNode, SecretManagerNode, SchedulerNode, CacheNode                              |
+| Transactions      | [nodes-transaction-reference](nodes-transaction-reference.md) | TransactionBeginNode, SagaNode, TwoPhaseCommitNode                                   |
+| Transform         | [nodes-transform-reference](nodes-transform-reference.md)     | MapperNode, AggregatorNode, EnrichNode, NormalizeNode                                |
 
-#### API & Integration
-- **[nodes-api-reference](nodes-api-reference.md)** - API integration nodes
-  - APICallNode, HTTPRequestNode
-  - WebhookNode, GraphQLNode
-  - RESTClientNode, SOAPNode
+## Node Selection by Use Case
 
-#### Code Execution
-- **[nodes-code-reference](nodes-code-reference.md)** - Code execution nodes
-  - PythonCodeNode (primary)
-  - JavaScriptNode, BashNode
-  - CodeEvalNode, ScriptNode
-
-#### Data Processing
-- **[nodes-data-reference](nodes-data-reference.md)** - Data processing nodes
-  - CSVReaderNode, CSVWriterNode
-  - JSONParserNode, XMLParserNode
-  - DataValidatorNode, DataTransformNode
-  - FilterNode, MapNode, ReduceNode
-
-#### Database Operations
-- **[nodes-database-reference](nodes-database-reference.md)** - Database nodes
-  - SQLQueryNode, AsyncSQLNode
-  - DatabaseReadNode, DatabaseWriteNode
-  - TransactionNode, BulkInsertNode
-  - (Plus DataFlow auto-generated nodes)
-
-#### File Operations
-- **[nodes-file-reference](nodes-file-reference.md)** - File system nodes
-  - FileReaderNode, FileWriterNode
-  - DirectoryReaderNode, DirectoryCreatorNode
-  - FileWatcherNode, FileCopyNode
-  - ZipNode, UnzipNode
-
-#### Logic & Control Flow
-- **[nodes-logic-reference](nodes-logic-reference.md)** - Logic and routing nodes
-  - SwitchNode (conditional routing)
-  - IfElseNode, LoopNode
-  - MergeNode, SplitNode
-  - DelayNode, TimeoutNode
-  - CycleNode (cyclic workflows)
-
-#### Monitoring & Observability
-- **[nodes-monitoring-reference](nodes-monitoring-reference.md)** - Monitoring nodes
-  - LoggerNode, MetricsNode
-  - AlertNode, HealthCheckNode
-  - TracingNode, AuditNode
-
-#### Admin & Management
-- **[nodes-admin-reference](nodes-admin-reference.md)** - Admin nodes
-  - ConfigNode, SecretManagerNode
-  - EnvironmentNode, SchedulerNode
-  - CacheNode, QueueNode
-
-#### Transactions
-- **[nodes-transaction-reference](nodes-transaction-reference.md)** - Transaction nodes
-  - TransactionBeginNode, TransactionCommitNode
-  - SagaNode, CompensateNode
-  - TwoPhaseCommitNode
-
-#### Data Transformation
-- **[nodes-transform-reference](nodes-transform-reference.md)** - Transform nodes
-  - MapperNode, AggregatorNode
-  - EnrichNode, NormalizeNode
-  - FormatNode, ConvertNode
-
-## Node Selection Guide
-
-### By Use Case
-
-**AI & LLM Tasks** → Use AI nodes (`nodes-ai-reference`)
-- Text generation: LLMNode, OpenAINode, AnthropicNode
-- Vision: VisionNode
-- Audio: AudioNode
-- Local LLMs: OllamaNode
-
-**API Integration** → Use API nodes (`nodes-api-reference`)
-- REST APIs: APICallNode, HTTPRequestNode
-- Webhooks: WebhookNode
-- GraphQL: GraphQLNode
-
-**Custom Logic** → Use Code nodes (`nodes-code-reference`)
-- Python: PythonCodeNode (recommended)
-- JavaScript: JavaScriptNode
-- Shell: BashNode
-
-**Database Work** → Use Database nodes (`nodes-database-reference`)
-- SQL queries: SQLQueryNode, AsyncSQLNode
-- CRUD with DataFlow: Auto-generated nodes
-
-**File Operations** → Use File nodes (`nodes-file-reference`)
-- Reading files: FileReaderNode
-- Bulk operations: DirectoryReaderNode
-- File watching: FileWatcherNode
-
-**Conditional Logic** → Use Logic nodes (`nodes-logic-reference`)
-- Simple conditions: SwitchNode
-- Complex routing: IfElseNode
-- Loops: LoopNode, CycleNode
-
-**Data Processing** → Use Data nodes (`nodes-data-reference`)
-- CSV: CSVReaderNode, CSVWriterNode
-- JSON: JSONParserNode
-- Validation: DataValidatorNode
-
-**Monitoring** → Use Monitoring nodes (`nodes-monitoring-reference`)
-- Logging: LoggerNode
-- Metrics: MetricsNode
-- Alerts: AlertNode
+| Task                | Recommended Node                                 |
+| ------------------- | ------------------------------------------------ |
+| Text generation     | LLMNode, OpenAINode, AnthropicNode               |
+| Vision / Audio      | VisionNode, AudioNode                            |
+| Local LLMs          | OllamaNode                                       |
+| REST APIs           | HTTPRequestNode                                  |
+| Webhooks / GraphQL  | WebhookNode, GraphQLNode                         |
+| Custom Python logic | PythonCodeNode (most flexible)                   |
+| Database CRUD       | DataFlow auto-generated nodes (not raw DB nodes) |
+| CSV / JSON / XML    | CSVReaderNode, JSONParserNode, XMLParserNode     |
+| File read / write   | FileReaderNode, FileWriterNode                   |
+| Conditional routing | SwitchNode, IfElseNode                           |
+| Loops / cycles      | LoopNode, CycleNode                              |
+| Logging / metrics   | LoggerNode, MetricsNode                          |
 
 ## Critical Node Patterns
 
-All nodes follow the **canonical 4-parameter pattern** from `/01-core-sdk`.
+All nodes follow the **canonical 4-parameter pattern** from `/01-core-sdk`:
 
-### Usage Example
 ```python
-# See /01-core-sdk for pattern details
-workflow.add_node("PythonCodeNode", "node1", {
-    "code": "result = input_data * 2"
-})
+workflow.add_node("PythonCodeNode", "node1", {"code": "result = input_data * 2"})
 workflow.add_connection("node1", "result", "node2", "input_data")
-```
-
-### Common Nodes
-- **PythonCodeNode**: Most flexible, use for custom logic
-- **SwitchNode**: Conditional routing based on values
-- **CSVReaderNode**: Reading CSV files
-- **APICallNode**: HTTP API calls
-- **LoggerNode**: Debug and production logging
-
-## When to Use This Skill
-
-## Quick Patterns
-
-### Common Node Usage
-```python
-# AI/LLM Node
-workflow.add_node("LLMNode", "chat", {"model": "gpt-4", "prompt": "..."})
-
-# API Call
-workflow.add_node("HTTPRequest", "api", {"url": "...", "method": "POST"})
-
-# Python Code
-workflow.add_node("PythonCodeNode", "transform", {"code": "..."})
-```
-
-### Database Node
-```python
-# DataFlow auto-generates these - don't use raw DB nodes
-from dataflow import DataFlow
-db = DataFlow("sqlite:///app.db")
-# Creates: CreateUser, ReadUser, UpdateUser, DeleteUser, etc.
-```
-
-### Conditional Logic
-```python
-workflow.add_node("SwitchNode", "router", {
-    "conditions": [
-        {"name": "path_a", "condition": "$input.type == 'A'"},
-        {"name": "path_b", "condition": "$input.type == 'B'"}
-    ]
-})
 ```
 
 ## CRITICAL Gotchas
 
-| Rule | Why |
-|------|-----|
-| ❌ NEVER use raw database nodes | Use DataFlow instead |
-| ✅ ALWAYS use string-based node IDs | Variables cause issues |
-| ❌ NEVER forget `.build()` | Required before execution |
-
-## When to Use This Skill
-
-Use this skill when you need to:
-- Find the right node for a task
-- Understand node capabilities
-- Look up node parameters
-- See node usage examples
-- Compare similar nodes
-- Explore available nodes by category
+| Rule                             | Why                       |
+| -------------------------------- | ------------------------- |
+| NEVER use raw database nodes     | Use DataFlow instead      |
+| ALWAYS use string-based node IDs | Variables cause issues    |
+| NEVER forget `.build()`          | Required before execution |
 
 ## Related Skills
 
@@ -226,7 +70,5 @@ Use this skill when you need to:
 
 ## Support
 
-For node-related questions, invoke:
 - `pattern-expert` - Node pattern recommendations
-- `sdk-navigator` - Find specific nodes
 - `dataflow-specialist` - DataFlow-generated nodes

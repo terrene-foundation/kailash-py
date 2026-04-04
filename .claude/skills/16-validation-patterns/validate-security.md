@@ -40,7 +40,7 @@ workflow.add_node("DatabaseQueryNode", "query", {
 
 ```python
 # ✅ CORRECT: Validate inputs
-workflow.add_node("DataValidationNode", "validate", {
+workflow.add_node("CodeValidationNode", "validate", {
     "input": "{{input.data}}",
     "schema": {"email": "email", "age": "integer"}
 })

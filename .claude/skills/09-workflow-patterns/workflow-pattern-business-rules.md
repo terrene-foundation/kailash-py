@@ -24,7 +24,7 @@ workflow.add_node("DatabaseQueryNode", "load_customer", {
 })
 
 # 2. Check membership tier
-workflow.add_node("ConditionalNode", "check_tier", {
+workflow.add_node("SwitchNode", "check_tier", {
     "condition": "{{load_customer.tier}}",
     "branches": {
         "gold": "gold_discount",
@@ -50,7 +50,7 @@ workflow.add_node("TransformNode", "bronze_discount", {
 })
 
 # 4. Apply additional rules
-workflow.add_node("ConditionalNode", "check_bulk", {
+workflow.add_node("SwitchNode", "check_bulk", {
     "condition": "{{input.quantity}} > 10",
     "true_branch": "bulk_discount",
     "false_branch": "final_price"

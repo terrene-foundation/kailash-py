@@ -92,7 +92,7 @@ class SQLiteAdapter(DatabaseAdapter):
     """SQLite database adapter."""
 
     @property
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         return "sqlite"
 
     @property

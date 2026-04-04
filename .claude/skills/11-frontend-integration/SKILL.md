@@ -10,6 +10,7 @@ Guides for integrating Kailash workflows with frontend frameworks including Reac
 ## Overview
 
 Frontend integration patterns for:
+
 - React applications with Kailash workflows
 - Flutter mobile/desktop apps with Kailash
 - API client setup and configuration
@@ -19,6 +20,7 @@ Frontend integration patterns for:
 ## Reference Documentation
 
 ### React Integration
+
 - **[react-integration-quick](react-integration-quick.md)** - React integration quick start
   - Setup with Nexus API
   - React Query integration
@@ -28,6 +30,7 @@ Frontend integration patterns for:
   - Real-time updates
 
 ### Flutter Integration
+
 - **[flutter-integration-quick](flutter-integration-quick.md)** - Flutter integration quick start
   - HTTP client setup
   - Dart models
@@ -36,6 +39,7 @@ Frontend integration patterns for:
   - Platform-specific code
 
 ### General Frontend
+
 - **[frontend-developer](frontend-developer.md)** - Frontend development guide
   - Architecture patterns
   - API integration
@@ -46,20 +50,23 @@ Frontend integration patterns for:
 ## Integration Patterns
 
 ### React + Nexus
+
 ```typescript
-import { useQuery } from '@tanstack/react-query';
+import { useQuery } from "@tanstack/react-query";
 
 // Call Kailash workflow via Nexus API
 const { data, isLoading, error } = useQuery({
-  queryKey: ['workflow', workflowId],
-  queryFn: () => fetch(`/api/workflow/${workflowId}`, {
-    method: 'POST',
-    body: JSON.stringify({ input: 'data' })
-  }).then(res => res.json())
+  queryKey: ["workflow", workflowId],
+  queryFn: () =>
+    fetch(`/api/workflow/${workflowId}`, {
+      method: "POST",
+      body: JSON.stringify({ input: "data" }),
+    }).then((res) => res.json()),
 });
 ```
 
 ### Flutter + Nexus
+
 ```dart
 import 'package:http/http.dart' as http;
 
@@ -78,6 +85,7 @@ Future<Map<String, dynamic>> executeWorkflow(String workflowId, Map<String, dyna
 ### Recommended Stack
 
 **React Applications:**
+
 - **API Layer**: Nexus (multi-channel platform)
 - **State Management**: React Query / Zustand
 - **HTTP Client**: Fetch API / Axios
@@ -85,6 +93,7 @@ Future<Map<String, dynamic>> executeWorkflow(String workflowId, Map<String, dyna
 - **UI Framework**: Shadcn, Material-UI, or custom
 
 **Flutter Applications:**
+
 - **API Layer**: Nexus (multi-channel platform)
 - **State Management**: Riverpod / Bloc
 - **HTTP Client**: http package / Dio
@@ -108,6 +117,7 @@ PostgreSQL/SQLite
 ## When to Use This Skill
 
 Use this skill when you need to:
+
 - Integrate React with Kailash workflows
 - Build Flutter apps with Kailash backend
 - Set up API clients for Kailash
@@ -119,6 +129,7 @@ Use this skill when you need to:
 ## Best Practices
 
 ### API Integration
+
 - ✅ Use Nexus for auto-generated APIs
 - ✅ Implement proper error handling
 - ✅ Use type-safe clients (TypeScript/Dart)
@@ -128,6 +139,7 @@ Use this skill when you need to:
 - ❌ NEVER skip input validation
 
 ### State Management
+
 - ✅ Use React Query for server state (React)
 - ✅ Use Riverpod/Bloc for app state (Flutter)
 - ✅ Implement optimistic updates
@@ -135,6 +147,7 @@ Use this skill when you need to:
 - ❌ NEVER store sensitive data in client state
 
 ### Performance
+
 - ✅ Implement pagination for large datasets
 - ✅ Use debouncing for search/filter
 - ✅ Cache API responses
@@ -150,7 +163,8 @@ Use this skill when you need to:
 ## Support
 
 For frontend integration help, invoke:
+
 - `react-specialist` - React integration patterns
 - `flutter-specialist` - Flutter integration patterns
-- `frontend-developer` - Frontend architecture
+- `react-specialist` - Frontend architecture
 - `nexus-specialist` - API configuration

@@ -84,6 +84,8 @@ class WorkResult:
     cost_usd: float = 0.0
     events: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
+    governance_shadow: bool = False
+    governance_verdicts: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a plain dict for transport or storage.
@@ -97,6 +99,8 @@ class WorkResult:
             "cost_usd": self.cost_usd,
             "events": list(self.events),
             "error": self.error,
+            "governance_shadow": self.governance_shadow,
+            "governance_verdicts": list(self.governance_verdicts),
         }
 
     @classmethod
@@ -118,4 +122,6 @@ class WorkResult:
             cost_usd=_validated_cost(float(data.get("cost_usd", 0.0))),
             events=list(data.get("events", [])),
             error=data.get("error"),
+            governance_shadow=data.get("governance_shadow", False),
+            governance_verdicts=list(data.get("governance_verdicts", [])),
         )
