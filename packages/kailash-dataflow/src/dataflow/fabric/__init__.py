@@ -32,6 +32,7 @@ from dataflow.adapters.source_adapter import (
     CircuitBreakerConfig,
     SourceState,
 )
+from dataflow.fabric.consumers import ConsumerFn, ConsumerRegistry
 from dataflow.fabric.config import (
     ApiKeyAuth,
     BasicAuth,
@@ -49,6 +50,9 @@ from dataflow.fabric.config import (
 )
 
 __all__ = [
+    # Consumer adapters
+    "ConsumerFn",
+    "ConsumerRegistry",
     # Adapter base
     "BaseSourceAdapter",
     "SourceState",
