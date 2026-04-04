@@ -168,6 +168,10 @@ class BaseAgentConfig:
 
         # Validate temperature
         if self.temperature is not None:
+            import math
+
+            if not math.isfinite(self.temperature):
+                raise ValueError("temperature must be a finite number")
             if self.temperature < 0.0:
                 raise ValueError("temperature must be >= 0.0")
             if self.temperature > 2.0:
@@ -177,6 +181,15 @@ class BaseAgentConfig:
         if self.max_tokens is not None:
             if self.max_tokens <= 0:
                 raise ValueError("max_tokens must be positive")
+
+        # Validate budget_limit_usd (NaN/Inf would bypass all budget comparisons)
+        if self.budget_limit_usd is not None:
+            import math
+
+            if not math.isfinite(self.budget_limit_usd):
+                raise ValueError("budget_limit_usd must be a finite number")
+            if self.budget_limit_usd < 0:
+                raise ValueError("budget_limit_usd must be >= 0")
 
         # Validate strategy_type
         valid_strategies = ["single_shot", "multi_cycle"]
