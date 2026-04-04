@@ -21,6 +21,7 @@ Created: 2025-10-01
 
 import asyncio
 import logging
+import os
 from typing import Any, Callable, Dict, List, Optional
 
 from kailash.workflow.builder import WorkflowBuilder
@@ -267,7 +268,7 @@ class WorkflowGenerator:
         # Create LLMAgentNode with signature-based configuration
         node_config = {
             "provider": llm_provider or "openai",
-            "model": model or "gpt-4",
+            "model": model or os.environ.get("DEFAULT_LLM_MODEL", "gpt-4"),
             "system_prompt": self._get_system_prompt(),
             "generation_config": generation_config,
         }
@@ -398,7 +399,7 @@ class WorkflowGenerator:
         # Create simple LLMAgentNode configuration (no signature)
         node_config = {
             "provider": self.config.llm_provider or "openai",
-            "model": self.config.model or "gpt-4",
+            "model": self.config.model or os.environ.get("DEFAULT_LLM_MODEL", "gpt-4"),
             "generation_config": generation_config,
         }
 

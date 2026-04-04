@@ -10,6 +10,7 @@ This module contains the foundational classes and interfaces for the Kaizen fram
 
 from .agents import Agent, AgentManager
 from .config import KaizenConfig, MemoryProvider, OptimizationEngine
+from .structured_output import StructuredOutput
 
 # PERFORMANCE OPTIMIZED: Use lightweight imports for <100ms startup
 from .framework import Kaizen

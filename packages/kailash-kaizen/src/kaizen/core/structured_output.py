@@ -396,3 +396,85 @@ def create_structured_output_config(
         # Legacy format (prompt-based, best-effort)
         # OpenAI expects only {"type": "json_object"} without schema key
         return {"type": "json_object"}
+
+
+class StructuredOutput:
+    """High-level helper for explicit structured output configuration.
+
+    Wraps ``create_structured_output_config`` with a fluent API that
+    translates to provider-specific ``response_format`` dicts.
+
+    Usage::
+
+        from kaizen.core.structured_output import StructuredOutput
+
+        so = StructuredOutput.from_signature(MySig)
+        config = BaseAgentConfig(
+            response_format=so.for_provider("azure"),
+            structured_output_mode="explicit",
+        )
+        # For Azure, append to system prompt:
+        # system_prompt = base_prompt + so.prompt_hint()
+    """
+
+    def __init__(self, schema: Dict[str, Any], name: str = "response"):
+        self._schema = schema
+        self._name = name
+
+    @classmethod
+    def from_signature(
+        cls, signature: Any, name: str | None = None
+    ) -> "StructuredOutput":
+        """Generate structured output config from a Kaizen signature.
+
+        Args:
+            signature: A Kaizen Signature instance.
+            name: Schema name (defaults to the signature class name).
+
+        Returns:
+            A StructuredOutput instance ready for ``for_provider()``.
+        """
+        resolved_name = name or getattr(signature.__class__, "__name__", "response")
+        schema = StructuredOutputGenerator.signature_to_json_schema(signature)
+        return cls(schema=schema, name=resolved_name)
+
+    def for_provider(self, provider: str) -> Dict[str, Any]:
+        """Translate to provider-specific ``response_format`` dict.
+
+        Args:
+            provider: One of ``"openai"``, ``"azure"``, ``"google"``,
+                ``"gemini"``, or ``"anthropic"``.
+
+        Returns:
+            Dict suitable for ``BaseAgentConfig.response_format``.
+        """
+        provider_lower = provider.lower()
+
+        if provider_lower == "openai":
+            strict_schema = _make_all_properties_required(
+                json.loads(json.dumps(self._schema))  # deep copy
+            )
+            return {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": self._name,
+                    "strict": True,
+                    "schema": strict_schema,
+                },
+            }
+
+        # Azure, Google/Gemini, and others use json_object (legacy mode)
+        return {"type": "json_object"}
+
+    def prompt_hint(self) -> str:
+        """Return a prompt instruction containing 'json' for Azure compatibility.
+
+        Azure requires the word 'json' in messages when using
+        ``response_format.type == "json_object"``. Append this to your
+        system prompt when targeting Azure.
+        """
+        return "\n\nRespond with a JSON object containing the output fields."
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the raw JSON schema dict."""
+        return dict(self._schema)
