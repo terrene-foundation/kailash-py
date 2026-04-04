@@ -255,16 +255,47 @@ class RestSourceConfig(BaseSourceConfig):
 
 @dataclass
 class FileSourceConfig(BaseSourceConfig):
-    """Configuration for local file sources."""
+    """Configuration for local file sources.
+
+    Supports two modes:
+
+    - **Single file** (``path`` set): reads and watches one specific file.
+    - **Directory scanning** (``directory`` + ``pattern`` set): scans a
+      directory for files matching a glob pattern and selects the latest
+      by name (lexicographic) or modification time.
+
+    Exactly one of ``path`` or ``directory`` must be set.
+    """
 
     path: str = ""
+    directory: str = ""
+    pattern: str = ""
+    selection: str = "latest_name"  # "latest_name" | "latest_mtime"
     watch: bool = True
     parser: Optional[str] = None  # "json" | "yaml" | "csv" | "xlsx" | auto-detect
 
     def validate(self) -> None:
         super().validate()
-        if not self.path:
-            raise ValueError("FileSourceConfig.path must not be empty")
+        has_path = bool(self.path)
+        has_directory = bool(self.directory)
+
+        if has_path and has_directory:
+            raise ValueError(
+                "FileSourceConfig: set either 'path' or 'directory', not both"
+            )
+        if not has_path and not has_directory:
+            raise ValueError(
+                "FileSourceConfig: either 'path' or 'directory' must be set"
+            )
+        if has_directory and not self.pattern:
+            raise ValueError(
+                "FileSourceConfig: 'pattern' is required when using 'directory' mode"
+            )
+        if self.selection not in ("latest_name", "latest_mtime"):
+            raise ValueError(
+                f"FileSourceConfig.selection must be 'latest_name' or "
+                f"'latest_mtime', got: {self.selection!r}"
+            )
 
 
 @dataclass
