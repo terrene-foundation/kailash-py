@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-pact"
-version = "0.6.0"
+version = "0.7.0"
 description = "PACT governance framework — D/T/R accountability grammar, operating envelopes, knowledge clearance, and verification gradient for AI agent organizations"
 requires-python = ">=3.11"
 license = "Apache-2.0"
