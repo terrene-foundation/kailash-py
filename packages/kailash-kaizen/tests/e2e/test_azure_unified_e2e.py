@@ -109,7 +109,7 @@ class TestAzureUnifiedE2EStructuredOutput:
             llm_provider="azure",
             model=azure_model,
             temperature=0.0,
-            provider_config={"response_format": response_format},
+            response_format=response_format,
         )
 
         agent = BaseAgent(config=config, signature=ExtractUserSignature())

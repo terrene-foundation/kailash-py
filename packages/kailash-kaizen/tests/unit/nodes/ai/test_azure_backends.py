@@ -6,6 +6,7 @@ Tests the AzureBackend ABC and its concrete implementations:
 """
 
 import os
+import warnings
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -69,18 +70,20 @@ class TestAzureOpenAIBackend:
 
     # Configuration Tests
 
-    def test_is_configured_with_all_env_vars(self, monkeypatch):
-        """Should return True when all required env vars are set."""
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
+    def test_is_configured_with_canonical_env_vars(self, monkeypatch):
+        """Should return True when canonical env vars are set."""
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         backend = AzureOpenAIBackend()
         assert backend.is_configured() is True
 
-    def test_is_configured_with_unified_env_vars(self, monkeypatch):
-        """Should accept unified AZURE_ENDPOINT if it's an OpenAI URL."""
+    def test_is_configured_with_legacy_env_vars(self, monkeypatch):
+        """Should accept legacy AZURE_OPENAI_* vars with deprecation warning."""
         monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
         monkeypatch.setenv("AZURE_API_KEY", "test-key")
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
 
         backend = AzureOpenAIBackend()
         assert backend.is_configured() is True
@@ -89,14 +92,14 @@ class TestAzureOpenAIBackend:
         """Should return False without endpoint."""
         monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
         monkeypatch.delenv("AZURE_ENDPOINT", raising=False)
-        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         backend = AzureOpenAIBackend()
         assert backend.is_configured() is False
 
     def test_not_configured_without_api_key(self, monkeypatch):
         """Should return False without API key."""
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
         monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("AZURE_API_KEY", raising=False)
 
@@ -105,8 +108,8 @@ class TestAzureOpenAIBackend:
 
     def test_get_backend_type(self, monkeypatch):
         """Should return 'azure_openai'."""
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         backend = AzureOpenAIBackend()
         assert backend.get_backend_type() == "azure_openai"
@@ -115,8 +118,8 @@ class TestAzureOpenAIBackend:
 
     def test_uses_env_api_version(self, monkeypatch):
         """Should use AZURE_API_VERSION from environment."""
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
         monkeypatch.setenv("AZURE_API_VERSION", "2025-01-01-preview")
 
         backend = AzureOpenAIBackend()
@@ -124,19 +127,41 @@ class TestAzureOpenAIBackend:
 
     def test_uses_default_api_version(self, monkeypatch):
         """Should use default API version when env var not set."""
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
         monkeypatch.delenv("AZURE_API_VERSION", raising=False)
+        monkeypatch.delenv("AZURE_OPENAI_API_VERSION", raising=False)
 
         backend = AzureOpenAIBackend()
         assert backend._api_version == "2024-10-21"
+
+    def test_legacy_env_vars_emit_deprecation_warning(self, monkeypatch):
+        """Legacy AZURE_OPENAI_* env vars should emit DeprecationWarning."""
+        monkeypatch.delenv("AZURE_ENDPOINT", raising=False)
+        monkeypatch.delenv("AZURE_API_KEY", raising=False)
+        monkeypatch.delenv("AZURE_API_VERSION", raising=False)
+        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2025-04-01-preview")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            AzureOpenAIBackend()
+
+        deprecation_warnings = [
+            x for x in w if issubclass(x.category, DeprecationWarning)
+        ]
+        messages = [str(x.message) for x in deprecation_warnings]
+        assert any("AZURE_OPENAI_ENDPOINT" in m for m in messages)
+        assert any("AZURE_OPENAI_API_KEY" in m for m in messages)
+        assert any("AZURE_OPENAI_API_VERSION" in m for m in messages)
 
     # Reasoning Model Parameter Filtering Tests
 
     def test_filters_temperature_for_o1_models(self, monkeypatch):
         """Should filter temperature for o1 models."""
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         backend = AzureOpenAIBackend()
 
@@ -148,8 +173,8 @@ class TestAzureOpenAIBackend:
 
     def test_filters_temperature_for_o3_models(self, monkeypatch):
         """Should filter temperature for o3 models."""
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         backend = AzureOpenAIBackend()
 
@@ -161,8 +186,8 @@ class TestAzureOpenAIBackend:
 
     def test_filters_temperature_for_gpt5_models(self, monkeypatch):
         """Should filter temperature for GPT-5 models."""
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         backend = AzureOpenAIBackend()
 
@@ -173,8 +198,8 @@ class TestAzureOpenAIBackend:
 
     def test_preserves_params_for_standard_models(self, monkeypatch):
         """Should preserve all params for standard models."""
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         backend = AzureOpenAIBackend()
 
@@ -187,8 +212,8 @@ class TestAzureOpenAIBackend:
 
     def test_translates_max_tokens_for_reasoning_models(self, monkeypatch):
         """Should translate max_tokens to max_completion_tokens for reasoning models."""
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         backend = AzureOpenAIBackend()
 
@@ -227,8 +252,8 @@ class TestAzureOpenAIBackend:
 
     def test_chat_creates_client(self, monkeypatch):
         """Should create Azure OpenAI client on first chat call."""
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         mock_client = MagicMock()
         mock_response = self._create_mock_chat_response()
@@ -248,8 +273,8 @@ class TestAzureOpenAIBackend:
 
     def test_chat_passes_deployment(self, monkeypatch):
         """Should pass deployment/model to API."""
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
         monkeypatch.setenv("AZURE_DEPLOYMENT", "my-gpt4-deployment")
 
         mock_client = MagicMock()
@@ -272,8 +297,8 @@ class TestAzureOpenAIBackend:
 
     def test_chat_returns_standardized_response(self, monkeypatch):
         """Should return standardized response format."""
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         mock_client = MagicMock()
         mock_response = self._create_mock_chat_response(
@@ -302,38 +327,41 @@ class TestAzureAIFoundryBackend:
 
     # Configuration Tests
 
-    def test_is_configured_with_inference_env_vars(self, monkeypatch):
-        """Should return True with AZURE_AI_INFERENCE_* vars."""
-        monkeypatch.setenv(
-            "AZURE_AI_INFERENCE_ENDPOINT", "https://test.inference.ai.azure.com"
-        )
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
-
-        backend = AzureAIFoundryBackend()
-        assert backend.is_configured() is True
-
-    def test_is_configured_with_unified_env_vars(self, monkeypatch):
-        """Should accept unified AZURE_ENDPOINT if it's an AI Foundry URL."""
+    def test_is_configured_with_canonical_env_vars(self, monkeypatch):
+        """Should return True with canonical AZURE_ENDPOINT + AZURE_API_KEY."""
         monkeypatch.setenv("AZURE_ENDPOINT", "https://test.inference.ai.azure.com")
         monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         backend = AzureAIFoundryBackend()
         assert backend.is_configured() is True
 
+    def test_is_configured_with_legacy_inference_vars(self, monkeypatch):
+        """Should accept legacy AZURE_AI_INFERENCE_* vars with deprecation warning."""
+        monkeypatch.delenv("AZURE_ENDPOINT", raising=False)
+        monkeypatch.delenv("AZURE_API_KEY", raising=False)
+        monkeypatch.setenv(
+            "AZURE_AI_INFERENCE_ENDPOINT", "https://test.inference.ai.azure.com"
+        )
+        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            backend = AzureAIFoundryBackend()
+
+        assert backend.is_configured() is True
+
     def test_not_configured_without_endpoint(self, monkeypatch):
         """Should return False without endpoint."""
         monkeypatch.delenv("AZURE_AI_INFERENCE_ENDPOINT", raising=False)
         monkeypatch.delenv("AZURE_ENDPOINT", raising=False)
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         backend = AzureAIFoundryBackend()
         assert backend.is_configured() is False
 
     def test_not_configured_without_api_key(self, monkeypatch):
         """Should return False without API key."""
-        monkeypatch.setenv(
-            "AZURE_AI_INFERENCE_ENDPOINT", "https://test.inference.ai.azure.com"
-        )
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.inference.ai.azure.com")
         monkeypatch.delenv("AZURE_AI_INFERENCE_API_KEY", raising=False)
         monkeypatch.delenv("AZURE_API_KEY", raising=False)
 
@@ -342,22 +370,38 @@ class TestAzureAIFoundryBackend:
 
     def test_get_backend_type(self, monkeypatch):
         """Should return 'azure_ai_foundry'."""
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.inference.ai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
+
+        backend = AzureAIFoundryBackend()
+        assert backend.get_backend_type() == "azure_ai_foundry"
+
+    def test_legacy_env_vars_emit_deprecation_warning(self, monkeypatch):
+        """Legacy AZURE_AI_INFERENCE_* env vars should emit DeprecationWarning."""
+        monkeypatch.delenv("AZURE_ENDPOINT", raising=False)
+        monkeypatch.delenv("AZURE_API_KEY", raising=False)
         monkeypatch.setenv(
             "AZURE_AI_INFERENCE_ENDPOINT", "https://test.inference.ai.azure.com"
         )
         monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
 
-        backend = AzureAIFoundryBackend()
-        assert backend.get_backend_type() == "azure_ai_foundry"
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            AzureAIFoundryBackend()
+
+        deprecation_warnings = [
+            x for x in w if issubclass(x.category, DeprecationWarning)
+        ]
+        messages = [str(x.message) for x in deprecation_warnings]
+        assert any("AZURE_AI_INFERENCE_ENDPOINT" in m for m in messages)
+        assert any("AZURE_AI_INFERENCE_API_KEY" in m for m in messages)
 
     # Response Format Translation Tests
 
     def test_translates_json_schema_format(self, monkeypatch):
         """Should translate OpenAI json_schema to Azure JsonSchemaFormat."""
-        monkeypatch.setenv(
-            "AZURE_AI_INFERENCE_ENDPOINT", "https://test.inference.ai.azure.com"
-        )
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.inference.ai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         # Mock the JsonSchemaFormat class
         mock_json_schema_format = MagicMock()
@@ -392,10 +436,8 @@ class TestAzureAIFoundryBackend:
 
     def test_translates_json_object_format(self, monkeypatch):
         """Should translate json_object format to Azure format."""
-        monkeypatch.setenv(
-            "AZURE_AI_INFERENCE_ENDPOINT", "https://test.inference.ai.azure.com"
-        )
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.inference.ai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         # Mock the JsonSchemaFormat class
         mock_json_schema_format = MagicMock()
@@ -417,10 +459,8 @@ class TestAzureAIFoundryBackend:
 
     def test_returns_none_when_sdk_unavailable(self, monkeypatch):
         """Should return None when Azure SDK is not available."""
-        monkeypatch.setenv(
-            "AZURE_AI_INFERENCE_ENDPOINT", "https://test.inference.ai.azure.com"
-        )
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.inference.ai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         backend = AzureAIFoundryBackend()
 
@@ -436,10 +476,8 @@ class TestAzureAIFoundryBackend:
 
     def test_chat_creates_client(self, monkeypatch):
         """Should create ChatCompletionsClient on first chat call."""
-        monkeypatch.setenv(
-            "AZURE_AI_INFERENCE_ENDPOINT", "https://test.inference.ai.azure.com"
-        )
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.inference.ai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         # Create mocks
         mock_client_class = MagicMock()
@@ -488,10 +526,8 @@ class TestAzureAIFoundryBackend:
 
     def test_chat_returns_standardized_response(self, monkeypatch):
         """Should return standardized response format."""
-        monkeypatch.setenv(
-            "AZURE_AI_INFERENCE_ENDPOINT", "https://test.inference.ai.azure.com"
-        )
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.inference.ai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         # Create mocks
         mock_client_class = MagicMock()
@@ -547,12 +583,8 @@ class TestBackendInteroperability:
 
     def test_both_backends_have_same_interface(self, monkeypatch):
         """Both backends should implement the same methods."""
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
-        monkeypatch.setenv(
-            "AZURE_AI_INFERENCE_ENDPOINT", "https://test.inference.ai.azure.com"
-        )
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         openai_backend = AzureOpenAIBackend()
         foundry_backend = AzureAIFoundryBackend()
@@ -572,12 +604,8 @@ class TestBackendInteroperability:
 
     def test_backend_types_are_distinct(self, monkeypatch):
         """Backend types should be distinct identifiers."""
-        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://test.openai.azure.com")
-        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "test-key")
-        monkeypatch.setenv(
-            "AZURE_AI_INFERENCE_ENDPOINT", "https://test.inference.ai.azure.com"
-        )
-        monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "test-key")
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
         openai_backend = AzureOpenAIBackend()
         foundry_backend = AzureAIFoundryBackend()

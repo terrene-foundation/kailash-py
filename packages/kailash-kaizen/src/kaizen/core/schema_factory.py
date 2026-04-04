@@ -47,11 +47,9 @@ class SchemaFactory:
         # Adapt for OpenAI strict mode
         config = BaseAgentConfig(
             llm_provider="openai",
-            provider_config={
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {"strict": True}
-                }
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"strict": True}
             }
         )
 
@@ -110,9 +108,8 @@ class SchemaFactory:
         if config.llm_provider != "openai":
             return False
 
-        # Check provider_config for strict mode
-        provider_config = config.provider_config or {}
-        response_format = provider_config.get("response_format", {})
+        # Check response_format for strict mode (top-level config field)
+        response_format = config.response_format or {}
 
         # OpenAI strict mode format:
         # {"type": "json_schema", "json_schema": {"strict": True, ...}}

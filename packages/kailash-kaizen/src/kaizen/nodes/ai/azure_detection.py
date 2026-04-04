@@ -1,16 +1,52 @@
 """Azure backend detection for Unified Azure Provider.
 
 This module provides intelligent detection of whether to use Azure OpenAI Service
-or Azure AI Foundry based on endpoint URL patterns, with fallback mechanisms
-for error-based correction.
+or Azure AI Foundry based on endpoint URL patterns.
+
+Also provides ``resolve_azure_env`` -- a shared helper for resolving Azure
+environment variables with canonical-first, legacy-with-deprecation semantics.
 """
 
 import logging
 import os
 import re
+import warnings
 from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_azure_env(canonical: str, *legacy: str) -> Optional[str]:
+    """Resolve an Azure environment variable with canonical-first semantics.
+
+    Checks the canonical name first. If not set, checks each legacy name in
+    order and emits a :class:`DeprecationWarning` on the first match.
+
+    The warning uses ``stacklevel=3`` so it points at the caller's caller
+    (typically user code), not internal framework code.
+
+    Args:
+        canonical: The preferred environment variable name (e.g. ``AZURE_ENDPOINT``).
+        *legacy: Zero or more legacy names to check as fallbacks.
+
+    Returns:
+        The resolved value, or ``None`` if no variable is set.
+    """
+    value = os.getenv(canonical)
+    if value:
+        return value
+    for legacy_name in legacy:
+        value = os.getenv(legacy_name)
+        if value:
+            warnings.warn(
+                f"Environment variable {legacy_name} is deprecated. "
+                f"Use {canonical} instead.",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+            return value
+    return None
+
 
 # Endpoint patterns for Azure OpenAI Service
 AZURE_OPENAI_PATTERNS = [
@@ -33,36 +69,24 @@ class AzureBackendDetector:
     Intelligent Azure backend detection from endpoint URL.
 
     Detection Priority:
-    1. Explicit AZURE_BACKEND env var
+    1. Explicit ``AZURE_BACKEND`` env var
     2. Pattern matching on endpoint URL
     3. Default to Azure OpenAI (most common enterprise usage)
-    4. Error-based correction on API failure
 
-    Environment Variables:
-        AZURE_ENDPOINT: Unified endpoint URL (recommended)
-        AZURE_API_KEY: Unified API key
+    Environment Variables (canonical -- recommended):
+        AZURE_ENDPOINT: Endpoint URL
+        AZURE_API_KEY: API key
+        AZURE_API_VERSION: API version (default: 2024-10-21)
         AZURE_BACKEND: Explicit backend override ('openai' or 'foundry')
-        AZURE_OPENAI_API_VERSION: API version (standard Azure naming, preferred)
-        AZURE_API_VERSION: API version fallback (default: 2024-10-21)
+        AZURE_DEPLOYMENT: Deployment name
 
-        Legacy (backward compatible):
-        AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY
-        AZURE_AI_INFERENCE_ENDPOINT, AZURE_AI_INFERENCE_API_KEY
+    Legacy (still supported, emit DeprecationWarning):
+        AZURE_OPENAI_ENDPOINT -> use AZURE_ENDPOINT
+        AZURE_OPENAI_API_KEY -> use AZURE_API_KEY
+        AZURE_OPENAI_API_VERSION -> use AZURE_API_VERSION
+        AZURE_AI_INFERENCE_ENDPOINT -> use AZURE_ENDPOINT
+        AZURE_AI_INFERENCE_API_KEY -> use AZURE_API_KEY
     """
-
-    # Error signatures indicating wrong backend was used
-    FOUNDRY_ERROR_SIGNATURES = [
-        "audience is incorrect",
-        "token audience",
-        "invalid audience",
-    ]
-
-    OPENAI_ERROR_SIGNATURES = [
-        "deploymentnotfound",
-        "resource not found",
-        "the api deployment for this resource does not exist",
-        "model not found",
-    ]
 
     def __init__(self):
         """Initialize the detector."""
@@ -108,8 +132,9 @@ class AzureBackendDetector:
         self._detected_backend = "azure_openai"
         self._detection_source = "default"
         logger.warning(
-            f"Unknown Azure endpoint pattern: {endpoint}. "
-            "Defaulting to Azure OpenAI. Set AZURE_BACKEND=foundry to override."
+            f"Could not determine Azure backend from endpoint URL: {endpoint}. "
+            "Defaulting to Azure OpenAI. "
+            "Set AZURE_BACKEND=openai or AZURE_BACKEND=foundry to specify explicitly."
         )
         return "azure_openai", self._get_config("azure_openai")
 
@@ -137,76 +162,28 @@ class AzureBackendDetector:
 
         return None
 
-    def handle_error(self, error: Exception) -> Optional[str]:
-        """
-        Analyze error to detect if wrong backend was used.
-
-        This enables automatic fallback when the initial backend detection
-        was incorrect (e.g., for custom domains or proxies).
-
-        Args:
-            error: The exception from the failed API call
-
-        Returns:
-            Correct backend type if detected from error, None otherwise
-        """
-        error_str = str(error).lower()
-
-        # Check if error suggests we should switch to AI Foundry
-        if self._detected_backend == "azure_openai":
-            for sig in self.FOUNDRY_ERROR_SIGNATURES:
-                if sig in error_str:
-                    logger.info(
-                        f"Error signature '{sig}' suggests Azure AI Foundry endpoint. "
-                        "Switching backend."
-                    )
-                    self._detected_backend = "azure_ai_foundry"
-                    self._detection_source = "error_fallback"
-                    return "azure_ai_foundry"
-
-        # Check if error suggests we should switch to Azure OpenAI
-        elif self._detected_backend == "azure_ai_foundry":
-            for sig in self.OPENAI_ERROR_SIGNATURES:
-                if sig in error_str:
-                    logger.info(
-                        f"Error signature '{sig}' suggests Azure OpenAI endpoint. "
-                        "Switching backend."
-                    )
-                    self._detected_backend = "azure_openai"
-                    self._detection_source = "error_fallback"
-                    return "azure_openai"
-
-        # Error doesn't indicate wrong backend
-        return None
-
     def _get_endpoint(self) -> Optional[str]:
-        """
-        Get endpoint from environment variables.
+        """Get endpoint from environment variables.
 
-        Resolution priority:
-        1. AZURE_ENDPOINT (unified)
-        2. AZURE_OPENAI_ENDPOINT (legacy Azure OpenAI)
-        3. AZURE_AI_INFERENCE_ENDPOINT (legacy AI Foundry)
+        Resolution: AZURE_ENDPOINT (canonical) -> AZURE_OPENAI_ENDPOINT
+        -> AZURE_AI_INFERENCE_ENDPOINT (legacy, with deprecation warning).
         """
-        return (
-            os.getenv("AZURE_ENDPOINT")
-            or os.getenv("AZURE_OPENAI_ENDPOINT")
-            or os.getenv("AZURE_AI_INFERENCE_ENDPOINT")
+        return resolve_azure_env(
+            "AZURE_ENDPOINT",
+            "AZURE_OPENAI_ENDPOINT",
+            "AZURE_AI_INFERENCE_ENDPOINT",
         )
 
     def _get_api_key(self) -> Optional[str]:
-        """
-        Get API key from environment variables.
+        """Get API key from environment variables.
 
-        Resolution priority:
-        1. AZURE_API_KEY (unified)
-        2. AZURE_OPENAI_API_KEY (legacy Azure OpenAI)
-        3. AZURE_AI_INFERENCE_API_KEY (legacy AI Foundry)
+        Resolution: AZURE_API_KEY (canonical) -> AZURE_OPENAI_API_KEY
+        -> AZURE_AI_INFERENCE_API_KEY (legacy, with deprecation warning).
         """
-        return (
-            os.getenv("AZURE_API_KEY")
-            or os.getenv("AZURE_OPENAI_API_KEY")
-            or os.getenv("AZURE_AI_INFERENCE_API_KEY")
+        return resolve_azure_env(
+            "AZURE_API_KEY",
+            "AZURE_OPENAI_API_KEY",
+            "AZURE_AI_INFERENCE_API_KEY",
         )
 
     def _get_config(self, backend: str) -> dict:
@@ -223,8 +200,10 @@ class AzureBackendDetector:
             "endpoint": self._get_endpoint(),
             "api_key": self._get_api_key(),
             "api_version": (
-                os.getenv("AZURE_OPENAI_API_VERSION")
-                or os.getenv("AZURE_API_VERSION")
+                resolve_azure_env(
+                    "AZURE_API_VERSION",
+                    "AZURE_OPENAI_API_VERSION",
+                )
                 or "2024-10-21"
             ),
             "deployment": os.getenv("AZURE_DEPLOYMENT"),
@@ -275,7 +254,7 @@ class AzureBackendDetector:
         """
         Return how the backend was detected.
 
-        Values: "explicit", "pattern", "default", "error_fallback", or None
+        Values: "explicit", "pattern", "default", or None
         """
         return self._detection_source
 

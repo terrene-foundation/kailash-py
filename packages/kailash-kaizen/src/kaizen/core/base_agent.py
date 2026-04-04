@@ -1471,6 +1471,8 @@ class BaseAgent(Node):
             node_config["max_tokens"] = self.config.max_tokens
         if self.config.provider_config is not None:
             node_config["provider_config"] = self.config.provider_config
+        if self.config.response_format is not None:
+            node_config["response_format"] = self.config.response_format
 
         # Add the LLM agent node using string-based node name
         workflow.add_node("LLMAgentNode", "agent", node_config)
@@ -1592,63 +1594,13 @@ class BaseAgent(Node):
             ...         base_prompt = super()._generate_system_prompt()
             ...         return f"{base_prompt}\\n\\nAdditional context: Answer concisely."
         """
-        # Task 1.17: Implement extension point 3
-        # Generate prompt from signature fields
-        prompt_parts = []
+        from kaizen.core.prompt_utils import generate_prompt_from_signature
 
-        # 1. Start with signature description (docstring) - this is critical for
-        # format instructions, task descriptions, and behavioral guidance
-        if hasattr(self.signature, "description") and self.signature.description:
-            prompt_parts.append(self.signature.description)
-        elif hasattr(self.signature, "name") and self.signature.name:
-            prompt_parts.append(f"Task: {self.signature.name}")
-        else:
-            prompt_parts.append("You are a helpful AI assistant.")
+        # Get base prompt from shared utility (single source of truth for
+        # description, input/output listing, and field descriptions)
+        prompt_parts = [generate_prompt_from_signature(self.signature)]
 
-        # 2. Extract input/output field names
-        input_names = []
-        output_names = []
-
-        if hasattr(self.signature, "input_fields") and self.signature.input_fields:
-            input_names = list(self.signature.input_fields.keys())
-
-        if hasattr(self.signature, "output_fields") and self.signature.output_fields:
-            output_names = list(self.signature.output_fields.keys())
-
-        # 3. Add input/output summary
-        if input_names:
-            prompt_parts.append(f"\nInputs: {', '.join(input_names)}")
-        if output_names:
-            prompt_parts.append(f"Outputs: {', '.join(output_names)}")
-
-        # 4. Add field descriptions for richer context
-        if hasattr(self.signature, "input_fields") and self.signature.input_fields:
-            field_descs = []
-            for field_name, field_def in self.signature.input_fields.items():
-                if isinstance(field_def, dict) and field_def.get("desc"):
-                    field_descs.append(f"  - {field_name}: {field_def['desc']}")
-            if field_descs:
-                prompt_parts.append("\nInput Field Descriptions:")
-                prompt_parts.extend(field_descs)
-
-        if hasattr(self.signature, "output_fields") and self.signature.output_fields:
-            field_descs = []
-            for field_name, field_def in self.signature.output_fields.items():
-                if isinstance(field_def, dict) and field_def.get("desc"):
-                    field_type = field_def.get("type", str)
-                    type_name = (
-                        field_type.__name__
-                        if hasattr(field_type, "__name__")
-                        else str(field_type)
-                    )
-                    field_descs.append(
-                        f"  - {field_name} ({type_name}): {field_def['desc']}"
-                    )
-            if field_descs:
-                prompt_parts.append("\nOutput Field Descriptions:")
-                prompt_parts.extend(field_descs)
-
-        # Collect all discovered tools from cache
+        # Augment with MCP tool documentation (BaseAgent-specific addition)
         all_tools = []
         for server_tools in self._discovered_mcp_tools.values():
             all_tools.extend(server_tools)

@@ -165,7 +165,29 @@ class WorkflowGenerator:
         provider_config = (
             getattr(self.config, "provider_config", None)
             if hasattr(self.config, "provider_config")
-            else self.config.get("provider_config")
+            else (
+                self.config.get("provider_config")
+                if isinstance(self.config, dict)
+                else None
+            )
+        )
+        response_format = (
+            getattr(self.config, "response_format", None)
+            if hasattr(self.config, "response_format")
+            else (
+                self.config.get("response_format")
+                if isinstance(self.config, dict)
+                else None
+            )
+        )
+        structured_output_mode = (
+            getattr(self.config, "structured_output_mode", "auto")
+            if hasattr(self.config, "structured_output_mode")
+            else (
+                self.config.get("structured_output_mode", "auto")
+                if isinstance(self.config, dict)
+                else "auto"
+            )
         )
 
         if temperature is not None:
@@ -173,8 +195,13 @@ class WorkflowGenerator:
         if max_tokens is not None:
             generation_config["max_tokens"] = max_tokens
 
-        # Auto-configure structured outputs for OpenAI when signature present
-        # This ensures JSON schema compliance for signature output fields
+        # Structured output configuration
+        #
+        # response_format holds structured output config (json_object, json_schema).
+        # structured_output_mode controls behavior:
+        #   "off"      — no structured output, even if response_format is set
+        #   "explicit"  — use only what the user provided in response_format
+        #   "auto"      — auto-generate if not provided (deprecated behavior)
         #
         # NOTE: Use strict=False when prompt_generator is provided, as this indicates
         # the agent has custom system prompt (e.g., BaseAutonomousAgent with tool calling).
@@ -187,25 +214,43 @@ class WorkflowGenerator:
         providers_with_structured_output = ["openai", "google", "gemini", "azure"]
         effective_provider = llm_provider or "openai"
 
-        if (
-            not provider_config
-            and effective_provider in providers_with_structured_output
-            and self.signature
-        ):
-            from kaizen.core.structured_output import create_structured_output_config
+        if structured_output_mode == "off":
+            response_format = None
+        elif structured_output_mode == "explicit":
+            pass  # Only use what the user provided in response_format
+        elif structured_output_mode == "auto":
+            # Auto-generate if not provided (deprecated behavior)
+            if (
+                not response_format
+                and effective_provider in providers_with_structured_output
+                and self.signature
+            ):
+                import warnings
 
-            # Detect tool calling mode: custom prompt generator indicates autonomous agents
-            # with tool-aware system prompts (BaseAutonomousAgent._generate_system_prompt)
-            # Also, strict mode only works for OpenAI - other providers use it for schema guidance
-            use_strict_mode = (
-                self.prompt_generator is None and effective_provider == "openai"
-            )
+                from kaizen.core.structured_output import (
+                    create_structured_output_config,
+                )
 
-            provider_config = create_structured_output_config(
-                signature=self.signature,
-                strict=use_strict_mode,  # True for OpenAI without tools, False otherwise
-                name=f"{self.signature.__class__.__name__}",
-            )
+                # Detect tool calling mode: custom prompt generator indicates autonomous agents
+                # with tool-aware system prompts (BaseAutonomousAgent._generate_system_prompt)
+                # Also, strict mode only works for OpenAI - other providers use it for schema guidance
+                use_strict_mode = (
+                    self.prompt_generator is None and effective_provider == "openai"
+                )
+
+                response_format = create_structured_output_config(
+                    signature=self.signature,
+                    strict=use_strict_mode,  # True for OpenAI without tools, False otherwise
+                    name=f"{self.signature.__class__.__name__}",
+                )
+                warnings.warn(
+                    "Auto-generated structured output is deprecated. "
+                    "Set response_format explicitly on BaseAgentConfig. "
+                    "Example: BaseAgentConfig(response_format={'type': 'json_object'}, "
+                    "structured_output_mode='explicit')",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
 
         # Get optional per-request overrides
         api_key = (
@@ -234,23 +279,29 @@ class WorkflowGenerator:
             )
             node_config["credential_ref"] = credential_ref
 
-        # Add provider-specific config (preserve as nested dict for LLMAgentNode)
+        # Add structured output config
+        if response_format:
+            node_config["response_format"] = response_format
+
+        # Add provider-specific config separately (api_version, deployment, etc.)
         if provider_config:
             node_config["provider_config"] = provider_config
 
-            # Azure requires the word "json" in messages when using
-            # response_format.type == "json_object" or "json_schema".
-            # Append instruction if system prompt doesn't already mention it.
-            if isinstance(provider_config, dict) and provider_config.get("type") in (
-                "json_object",
-                "json_schema",
-            ):
-                system_prompt = node_config.get("system_prompt", "")
-                if "json" not in system_prompt.lower():
-                    node_config["system_prompt"] = (
-                        system_prompt
-                        + "\n\nRespond with a JSON object containing the output fields."
-                    )
+        # Azure requires the word "json" in messages when using
+        # response_format.type == "json_object" or "json_schema".
+        # Append instruction if system prompt doesn't already mention it.
+        # Removal deferred to Phase 4 (StructuredOutput.prompt_hint())
+        if (
+            response_format
+            and isinstance(response_format, dict)
+            and response_format.get("type") in ("json_object", "json_schema")
+        ):
+            system_prompt = node_config.get("system_prompt", "")
+            if "json" not in system_prompt.lower():
+                node_config["system_prompt"] = (
+                    system_prompt
+                    + "\n\nRespond with a JSON object containing the output fields."
+                )
 
         # Discover and add MCP tools if agent is provided
         # This enables autonomous agents to use tools via MCP client integration
@@ -415,8 +466,9 @@ class WorkflowGenerator:
         This is the fallback implementation when no custom prompt_generator
         callback is provided. It generates a prompt from signature fields.
 
-        Analyzes signature input/output fields to create an appropriate
-        system prompt for the LLM.
+        Delegates to shared prompt_utils for description, field listing,
+        and field descriptions (single source of truth), then appends
+        JSON formatting instructions when structured outputs are not in use.
 
         Returns:
             str: System prompt
@@ -426,71 +478,55 @@ class WorkflowGenerator:
             >>> print(prompt)
             Task: Given question, produce answer.
         """
+        from kaizen.core.prompt_utils import (
+            generate_prompt_from_signature,
+            json_prompt_suffix,
+        )
+
         if not self.signature:
             return "You are a helpful AI assistant."
 
-        # Start with signature description if available
-        parts = []
+        # Get base prompt from shared utility (single source of truth for
+        # description, input/output listing, and field descriptions)
+        base_prompt = generate_prompt_from_signature(self.signature)
 
-        if hasattr(self.signature, "description") and self.signature.description:
-            parts.append(self.signature.description)
-        elif hasattr(self.signature, "name") and self.signature.name:
-            parts.append(f"Task: {self.signature.name}")
-
-        # Describe inputs
-        if hasattr(self.signature, "inputs") and self.signature.inputs:
-            input_list = ", ".join(self.signature.inputs)
-            parts.append(f"\nInputs: {input_list}")
-
-        # Describe outputs
-        if hasattr(self.signature, "outputs") and self.signature.outputs:
-            output_list = ", ".join(
-                self.signature.outputs
-                if isinstance(self.signature.outputs, list)
-                else [str(self.signature.outputs)]
-            )
-            parts.append(f"Outputs: {output_list}")
-
-        # Add field descriptions if available
-        if hasattr(self.signature, "input_fields") and self.signature.input_fields:
-            field_descs = []
-            for field_name, field_def in self.signature.input_fields.items():
-                if isinstance(field_def, dict) and "desc" in field_def:
-                    field_descs.append(f"  - {field_name}: {field_def['desc']}")
-            if field_descs:
-                parts.append("\nInput Field Descriptions:")
-                parts.extend(field_descs)
-
-        if hasattr(self.signature, "output_fields") and self.signature.output_fields:
-            field_descs = []
-            for field_name, field_def in self.signature.output_fields.items():
-                if isinstance(field_def, dict) and "desc" in field_def:
-                    field_type = field_def.get("type", str).__name__
-                    field_descs.append(
-                        f"  - {field_name} ({field_type}): {field_def['desc']}"
-                    )
-            if field_descs:
-                parts.append("\nOutput Field Descriptions:")
-                parts.extend(field_descs)
-
-        # Add JSON formatting instructions ONLY if not using OpenAI structured outputs
-        # When using strict mode, OpenAI API enforces the schema automatically
+        # Add JSON formatting instructions ONLY if not using structured outputs.
+        # When using strict mode, the provider API enforces the schema automatically.
         llm_provider = (
             getattr(self.config, "llm_provider", None)
             if hasattr(self.config, "llm_provider")
             else self.config.get("llm_provider")
         )
-        provider_config = (
-            getattr(self.config, "provider_config", None)
-            if hasattr(self.config, "provider_config")
-            else self.config.get("provider_config")
+        response_format = (
+            getattr(self.config, "response_format", None)
+            if hasattr(self.config, "response_format")
+            else (
+                self.config.get("response_format")
+                if isinstance(self.config, dict)
+                else None
+            )
+        )
+        structured_output_mode = (
+            getattr(self.config, "structured_output_mode", "auto")
+            if hasattr(self.config, "structured_output_mode")
+            else (
+                self.config.get("structured_output_mode", "auto")
+                if isinstance(self.config, dict)
+                else "auto"
+            )
         )
 
-        # Check if using structured outputs (OpenAI json_schema mode)
+        # Check if using structured outputs (json_schema mode via response_format)
         using_structured_outputs = False
-        if provider_config and isinstance(provider_config, dict):
-            using_structured_outputs = provider_config.get("type") == "json_schema"
-        elif llm_provider == "openai" and self.signature:
+        if structured_output_mode == "off":
+            using_structured_outputs = False
+        elif response_format and isinstance(response_format, dict):
+            using_structured_outputs = response_format.get("type") == "json_schema"
+        elif (
+            structured_output_mode == "auto"
+            and llm_provider == "openai"
+            and self.signature
+        ):
             # Will auto-configure structured outputs in generate_signature_workflow()
             using_structured_outputs = True
 
@@ -499,41 +535,6 @@ class WorkflowGenerator:
             and self.signature.output_fields
             and not using_structured_outputs
         ):
-            parts.append("\n---")
-            parts.append(
-                "\nIMPORTANT: You must respond with a valid JSON object containing exactly these fields:"
-            )
-            json_example = {}
-            for field_name, field_def in self.signature.output_fields.items():
-                field_type = field_def.get("type", str)
-                # Generate example values based on type
-                if field_type == str:
-                    json_example[field_name] = f"<your {field_name} here>"
-                elif field_type == float:
-                    json_example[field_name] = 0.0
-                elif field_type == int:
-                    json_example[field_name] = 0
-                elif field_type == bool:
-                    json_example[field_name] = False
-                elif field_type == list:
-                    json_example[field_name] = []
-                elif field_type == dict:
-                    json_example[field_name] = {}
-                else:
-                    json_example[field_name] = f"<{field_name}>"
+            base_prompt += json_prompt_suffix(self.signature.output_fields)
 
-            import json as json_module
-
-            parts.append(
-                f"\nExpected JSON format:\n```json\n{json_module.dumps(json_example, indent=2)}\n```"
-            )
-            parts.append(
-                "\nDo not include any explanation or text outside the JSON object."
-            )
-
-        # Join all parts
-        if parts:
-            return "\n".join(parts)
-
-        # Fallback
-        return "You are a helpful AI assistant."
+        return base_prompt if base_prompt else "You are a helpful AI assistant."

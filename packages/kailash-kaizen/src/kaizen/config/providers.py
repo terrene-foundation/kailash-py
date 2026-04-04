@@ -134,13 +134,26 @@ def check_ollama_available() -> bool:
 
 def check_azure_available() -> bool:
     """
-    Check if Azure AI Foundry is configured.
+    Check if Azure is configured.
+
+    Accepts both canonical (``AZURE_ENDPOINT``, ``AZURE_API_KEY``) and legacy
+    (``AZURE_AI_INFERENCE_*``, ``AZURE_OPENAI_*``) environment variables.
 
     Returns:
         bool: True if endpoint and API key are set
     """
-    endpoint = os.getenv("AZURE_AI_INFERENCE_ENDPOINT")
-    api_key = os.getenv("AZURE_AI_INFERENCE_API_KEY")
+    from kaizen.nodes.ai.azure_detection import resolve_azure_env
+
+    endpoint = resolve_azure_env(
+        "AZURE_ENDPOINT",
+        "AZURE_OPENAI_ENDPOINT",
+        "AZURE_AI_INFERENCE_ENDPOINT",
+    )
+    api_key = resolve_azure_env(
+        "AZURE_API_KEY",
+        "AZURE_OPENAI_API_KEY",
+        "AZURE_AI_INFERENCE_API_KEY",
+    )
     return bool(endpoint and api_key)
 
 
@@ -296,31 +309,40 @@ def get_azure_config(
     base_url: Optional[str] = None,
 ) -> ProviderConfig:
     """
-    Get Azure AI Foundry provider configuration.
+    Get Azure provider configuration.
+
+    Accepts both canonical (``AZURE_ENDPOINT``, ``AZURE_API_KEY``) and legacy
+    (``AZURE_AI_INFERENCE_*``, ``AZURE_OPENAI_*``) environment variables.
+    Legacy variables emit a :class:`DeprecationWarning`.
 
     Args:
         model: Optional model override (default: gpt-4o)
-        api_key: Optional API key override (default: reads from AZURE_AI_INFERENCE_API_KEY)
-        base_url: Optional endpoint override (default: reads from AZURE_AI_INFERENCE_ENDPOINT)
+        api_key: Optional API key override (default: reads from AZURE_API_KEY or legacy)
+        base_url: Optional endpoint override (default: reads from AZURE_ENDPOINT or legacy)
 
     Returns:
-        ProviderConfig for Azure AI Foundry
+        ProviderConfig for Azure
 
     Raises:
         ConfigurationError: If Azure credentials not available
     """
-    resolved_api_key = _validate_api_key(api_key) or os.getenv(
-        "AZURE_AI_INFERENCE_API_KEY"
+    from kaizen.nodes.ai.azure_detection import resolve_azure_env
+
+    resolved_api_key = _validate_api_key(api_key) or resolve_azure_env(
+        "AZURE_API_KEY",
+        "AZURE_OPENAI_API_KEY",
+        "AZURE_AI_INFERENCE_API_KEY",
     )
-    resolved_base_url = _validate_base_url(base_url) or os.getenv(
-        "AZURE_AI_INFERENCE_ENDPOINT"
+    resolved_base_url = _validate_base_url(base_url) or resolve_azure_env(
+        "AZURE_ENDPOINT",
+        "AZURE_OPENAI_ENDPOINT",
+        "AZURE_AI_INFERENCE_ENDPOINT",
     )
 
     if not resolved_api_key or not resolved_base_url:
         raise ConfigurationError(
-            "Azure AI Foundry not configured. Set AZURE_AI_INFERENCE_ENDPOINT "
-            "and AZURE_AI_INFERENCE_API_KEY environment variables, "
-            "or pass api_key and base_url parameters."
+            "Azure not configured. Set AZURE_ENDPOINT and AZURE_API_KEY "
+            "environment variables, or pass api_key and base_url parameters."
         )
 
     default_model = "gpt-4o"  # Common Azure deployment
@@ -543,7 +565,7 @@ def auto_detect_provider(
 
     Detection order (if preferred not specified):
     1. OpenAI (if OPENAI_API_KEY is set)
-    2. Azure AI Foundry (if AZURE_AI_INFERENCE_ENDPOINT is set)
+    2. Azure (if AZURE_ENDPOINT + AZURE_API_KEY, or legacy vars, are set)
     3. Anthropic (if ANTHROPIC_API_KEY is set)
     4. Google Gemini (if GOOGLE_API_KEY or GEMINI_API_KEY is set)
     5. Ollama (if running locally)
@@ -637,7 +659,7 @@ def auto_detect_provider(
     raise ConfigurationError(
         "No LLM provider available. Please configure one of:\n"
         "  1. Set OPENAI_API_KEY for OpenAI\n"
-        "  2. Set AZURE_AI_INFERENCE_ENDPOINT and AZURE_AI_INFERENCE_API_KEY for Azure\n"
+        "  2. Set AZURE_ENDPOINT and AZURE_API_KEY for Azure\n"
         "  3. Set ANTHROPIC_API_KEY for Anthropic\n"
         "  4. Set GOOGLE_API_KEY or GEMINI_API_KEY for Google Gemini\n"
         "  5. Set PERPLEXITY_API_KEY for Perplexity AI\n"

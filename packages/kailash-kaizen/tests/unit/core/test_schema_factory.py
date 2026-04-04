@@ -51,11 +51,9 @@ class TestSchemaFactory:
         config = BaseAgentConfig(
             llm_provider="openai",
             model="gpt-4o-mini",
-            provider_config={
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {"strict": True, "name": "test"},
-                }
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"strict": True, "name": "test"},
             },
         )
 
@@ -68,11 +66,9 @@ class TestSchemaFactory:
         config = BaseAgentConfig(
             llm_provider="anthropic",
             model="claude-3-5-sonnet-20241022",
-            provider_config={
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {"strict": True},
-                }
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"strict": True},
             },
         )
 
@@ -85,11 +81,9 @@ class TestSchemaFactory:
         config = BaseAgentConfig(
             llm_provider="openai",
             model="gpt-4o-mini",
-            provider_config={
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {"strict": False},
-                }
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"strict": False},
             },
         )
 
@@ -110,7 +104,7 @@ class TestSchemaFactory:
         config = BaseAgentConfig(
             llm_provider="openai",
             model="gpt-4o-mini",
-            provider_config={"response_format": {"type": "json_object"}},
+            response_format={"type": "json_object"},
         )
 
         result = SchemaFactory._is_openai_strict_mode(config)
@@ -167,11 +161,9 @@ class TestSchemaFactory:
         config = BaseAgentConfig(
             llm_provider="openai",
             model="gpt-4o-mini",
-            provider_config={
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {"strict": True, "name": "test"},
-                }
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"strict": True, "name": "test"},
             },
         )
 
@@ -187,7 +179,7 @@ class TestSchemaFactory:
         config = BaseAgentConfig(
             llm_provider="openai",
             model="gpt-4o-mini",
-            provider_config={"response_format": {"type": "json_object"}},
+            response_format={"type": "json_object"},
         )
 
         adapted = SchemaFactory.adapt_for_provider(SchemaWithOptional, config)
@@ -248,11 +240,9 @@ class TestSchemaFactory:
         config = BaseAgentConfig(
             llm_provider="openai",
             model="gpt-4o-mini",
-            provider_config={
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {"strict": True, "name": "test"},
-                }
+            response_format={
+                "type": "json_schema",
+                "json_schema": {"strict": True, "name": "test"},
             },
         )
 

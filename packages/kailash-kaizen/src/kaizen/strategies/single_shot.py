@@ -391,12 +391,11 @@ class SingleShotStrategy:
 
         # FIX: If using response_format with type=json_object (strict=False),
         # OpenAI requires "json" to be mentioned in messages
-        # Check if agent config has provider_config with type: json_object
-        if hasattr(agent, "config") and hasattr(agent.config, "provider_config"):
-            provider_config = agent.config.provider_config
+        if hasattr(agent, "config") and hasattr(agent.config, "response_format"):
+            response_format = agent.config.response_format
             if (
-                isinstance(provider_config, dict)
-                and provider_config.get("type") == "json_object"
+                isinstance(response_format, dict)
+                and response_format.get("type") == "json_object"
             ):
                 content += "\n\nPlease respond in JSON format."
 

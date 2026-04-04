@@ -2,6 +2,9 @@
 
 Tests the AzureBackendDetector class which auto-detects whether to use
 Azure OpenAI Service or Azure AI Foundry based on endpoint URL patterns.
+
+Also tests the resolve_azure_env() helper for canonical/legacy env var
+resolution with deprecation warnings.
 """
 
 import os
@@ -13,7 +16,88 @@ from kaizen.nodes.ai.azure_detection import (
     AZURE_AI_FOUNDRY_PATTERNS,
     AZURE_OPENAI_PATTERNS,
     AzureBackendDetector,
+    resolve_azure_env,
 )
+
+
+class TestResolveAzureEnv:
+    """Unit tests for the resolve_azure_env() helper."""
+
+    def test_returns_canonical_value(self, monkeypatch):
+        """Should return the canonical env var value when set."""
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://canonical.openai.azure.com")
+
+        result = resolve_azure_env("AZURE_ENDPOINT", "AZURE_OPENAI_ENDPOINT")
+        assert result == "https://canonical.openai.azure.com"
+
+    def test_returns_legacy_with_deprecation_warning(self, monkeypatch):
+        """Should return legacy value and emit DeprecationWarning."""
+        monkeypatch.delenv("AZURE_ENDPOINT", raising=False)
+        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://legacy.openai.azure.com")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = resolve_azure_env("AZURE_ENDPOINT", "AZURE_OPENAI_ENDPOINT")
+
+        assert result == "https://legacy.openai.azure.com"
+        assert len(w) == 1
+        assert issubclass(w[0].category, DeprecationWarning)
+        assert "AZURE_OPENAI_ENDPOINT" in str(w[0].message)
+        assert "AZURE_ENDPOINT" in str(w[0].message)
+
+    def test_canonical_takes_precedence_over_legacy(self, monkeypatch):
+        """Canonical var should win when both are set, no warning emitted."""
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://canonical.openai.azure.com")
+        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://legacy.openai.azure.com")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = resolve_azure_env("AZURE_ENDPOINT", "AZURE_OPENAI_ENDPOINT")
+
+        assert result == "https://canonical.openai.azure.com"
+        assert len(w) == 0  # No deprecation warning
+
+    def test_returns_none_when_nothing_set(self, monkeypatch):
+        """Should return None when neither canonical nor legacy is set."""
+        monkeypatch.delenv("AZURE_ENDPOINT", raising=False)
+        monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
+
+        result = resolve_azure_env("AZURE_ENDPOINT", "AZURE_OPENAI_ENDPOINT")
+        assert result is None
+
+    def test_multiple_legacy_vars_checks_in_order(self, monkeypatch):
+        """Should check legacy vars in order and warn on the first match."""
+        monkeypatch.delenv("AZURE_ENDPOINT", raising=False)
+        monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
+        monkeypatch.setenv(
+            "AZURE_AI_INFERENCE_ENDPOINT", "https://foundry.inference.ai.azure.com"
+        )
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = resolve_azure_env(
+                "AZURE_ENDPOINT",
+                "AZURE_OPENAI_ENDPOINT",
+                "AZURE_AI_INFERENCE_ENDPOINT",
+            )
+
+        assert result == "https://foundry.inference.ai.azure.com"
+        assert len(w) == 1
+        assert "AZURE_AI_INFERENCE_ENDPOINT" in str(w[0].message)
+
+    def test_no_legacy_args(self, monkeypatch):
+        """Should work with zero legacy arguments."""
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://test.openai.azure.com")
+
+        result = resolve_azure_env("AZURE_ENDPOINT")
+        assert result == "https://test.openai.azure.com"
+
+    def test_no_legacy_args_returns_none(self, monkeypatch):
+        """Should return None when canonical not set and no legacy provided."""
+        monkeypatch.delenv("AZURE_ENDPOINT", raising=False)
+
+        result = resolve_azure_env("AZURE_ENDPOINT")
+        assert result is None
 
 
 class TestAzureBackendDetector:
@@ -28,7 +112,7 @@ class TestAzureBackendDetector:
             ("https://my-resource.openai.azure.com/", "azure_openai"),
             ("https://eastus.openai.azure.com", "azure_openai"),
             ("https://my-resource.privatelink.openai.azure.com", "azure_openai"),
-            ("https://MYRESOURCE.OPENAI.AZURE.COM", "azure_openai"),  # Case insensitive
+            ("https://MYRESOURCE.OPENAI.AZURE.COM", "azure_openai"),
         ],
     )
     def test_detects_azure_openai_patterns(self, monkeypatch, endpoint, expected):
@@ -81,7 +165,7 @@ class TestAzureBackendDetector:
         assert detector.detection_source == "default"
 
     def test_unknown_pattern_logs_warning(self, monkeypatch, caplog):
-        """Should log warning for unknown endpoint patterns."""
+        """Should log warning for unknown endpoint patterns with guidance."""
         monkeypatch.setenv("AZURE_ENDPOINT", "https://custom.endpoint.com")
         monkeypatch.setenv("AZURE_API_KEY", "test-key")
 
@@ -91,9 +175,10 @@ class TestAzureBackendDetector:
             detector = AzureBackendDetector()
             detector.detect()
 
+        assert "Could not determine Azure backend" in caplog.text
         assert (
-            "Unknown Azure endpoint pattern" in caplog.text
-            or detector.detection_source == "default"
+            "AZURE_BACKEND=openai" in caplog.text
+            or "AZURE_BACKEND=foundry" in caplog.text
         )
 
     # Explicit Override Tests
@@ -132,59 +217,10 @@ class TestAzureBackendDetector:
         with pytest.raises(ValueError, match="Invalid AZURE_BACKEND"):
             detector.detect()
 
-    # Error Fallback Tests
-
-    def test_error_triggers_fallback_to_foundry(self):
-        """Should detect AI Foundry from 'audience is incorrect' error signature."""
-        detector = AzureBackendDetector()
-        detector._detected_backend = "azure_openai"
-        detector._detection_source = "default"
-
-        error = Exception("audience is incorrect (https://cognitiveservices.azure.com)")
-        result = detector.handle_error(error)
-
-        assert result == "azure_ai_foundry"
-        assert detector.detection_source == "error_fallback"
-
-    def test_error_triggers_fallback_to_openai(self):
-        """Should detect Azure OpenAI from 'DeploymentNotFound' error signature."""
-        detector = AzureBackendDetector()
-        detector._detected_backend = "azure_ai_foundry"
-        detector._detection_source = "pattern"
-
-        error = Exception("DeploymentNotFound: The API deployment does not exist")
-        result = detector.handle_error(error)
-
-        assert result == "azure_openai"
-        assert detector.detection_source == "error_fallback"
-
-    def test_unrelated_error_no_fallback(self):
-        """Should not trigger fallback for unrelated errors."""
-        detector = AzureBackendDetector()
-        detector._detected_backend = "azure_openai"
-
-        # Rate limit error - not a backend detection issue
-        error = Exception("Rate limit exceeded")
-        result = detector.handle_error(error)
-
-        assert result is None
-        assert detector._detected_backend == "azure_openai"
-
-    def test_auth_error_no_fallback(self):
-        """Should not trigger fallback for authentication errors."""
-        detector = AzureBackendDetector()
-        detector._detected_backend = "azure_openai"
-
-        error = Exception("401 Unauthorized: Invalid API key")
-        result = detector.handle_error(error)
-
-        assert result is None
-
     # Configuration Resolution Tests
 
     def test_no_config_returns_none(self, monkeypatch):
         """Should return None when no Azure configuration is available."""
-        # Clear all Azure-related env vars
         for var in [
             "AZURE_ENDPOINT",
             "AZURE_API_KEY",
@@ -207,8 +243,10 @@ class TestAzureBackendDetector:
         monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://legacy.openai.azure.com")
         monkeypatch.setenv("AZURE_OPENAI_API_KEY", "legacy-key")
 
-        detector = AzureBackendDetector()
-        backend, config = detector.detect()
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            detector = AzureBackendDetector()
+            backend, config = detector.detect()
 
         assert backend == "azure_openai"
         assert config["endpoint"] == "https://legacy.openai.azure.com"
@@ -220,14 +258,16 @@ class TestAzureBackendDetector:
         )
         monkeypatch.setenv("AZURE_AI_INFERENCE_API_KEY", "legacy-key")
 
-        detector = AzureBackendDetector()
-        backend, config = detector.detect()
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always")
+            detector = AzureBackendDetector()
+            backend, config = detector.detect()
 
         assert backend == "azure_ai_foundry"
         assert config["endpoint"] == "https://legacy.inference.ai.azure.com"
 
-    def test_unified_takes_precedence_over_legacy(self, monkeypatch):
-        """Unified AZURE_ENDPOINT should take precedence over legacy vars."""
+    def test_canonical_takes_precedence_over_legacy(self, monkeypatch):
+        """Canonical AZURE_ENDPOINT should take precedence over legacy vars."""
         monkeypatch.setenv("AZURE_ENDPOINT", "https://unified.openai.azure.com")
         monkeypatch.setenv("AZURE_API_KEY", "unified-key")
         monkeypatch.setenv(
@@ -238,33 +278,72 @@ class TestAzureBackendDetector:
         detector = AzureBackendDetector()
         backend, config = detector.detect()
 
-        # Should use unified endpoint, which is Azure OpenAI
         assert backend == "azure_openai"
         assert config["endpoint"] == "https://unified.openai.azure.com"
 
+    def test_legacy_vars_emit_deprecation_warning(self, monkeypatch):
+        """Legacy env vars should emit DeprecationWarning."""
+        monkeypatch.delenv("AZURE_ENDPOINT", raising=False)
+        monkeypatch.delenv("AZURE_API_KEY", raising=False)
+        monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://legacy.openai.azure.com")
+        monkeypatch.setenv("AZURE_OPENAI_API_KEY", "legacy-key")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            detector = AzureBackendDetector()
+            detector.detect()
+
+        deprecation_warnings = [
+            x for x in w if issubclass(x.category, DeprecationWarning)
+        ]
+        assert len(deprecation_warnings) >= 1
+        messages = [str(x.message) for x in deprecation_warnings]
+        assert any("AZURE_OPENAI_ENDPOINT" in m for m in messages)
+
     # API Version Tests
 
-    def test_api_version_from_env(self, monkeypatch):
-        """Should include API version from environment variable."""
+    def test_api_version_from_canonical_env(self, monkeypatch):
+        """Should read API version from canonical AZURE_API_VERSION."""
         monkeypatch.setenv("AZURE_ENDPOINT", "https://my.openai.azure.com")
         monkeypatch.setenv("AZURE_API_KEY", "test-key")
         monkeypatch.setenv("AZURE_API_VERSION", "2025-01-01-preview")
+        monkeypatch.delenv("AZURE_OPENAI_API_VERSION", raising=False)
 
         detector = AzureBackendDetector()
         _, config = detector.detect()
 
         assert config["api_version"] == "2025-01-01-preview"
 
+    def test_api_version_from_legacy_env_with_warning(self, monkeypatch):
+        """Should read API version from legacy var with deprecation warning."""
+        monkeypatch.setenv("AZURE_ENDPOINT", "https://my.openai.azure.com")
+        monkeypatch.setenv("AZURE_API_KEY", "test-key")
+        monkeypatch.delenv("AZURE_API_VERSION", raising=False)
+        monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2025-04-01-preview")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            detector = AzureBackendDetector()
+            _, config = detector.detect()
+
+        assert config["api_version"] == "2025-04-01-preview"
+        deprecation_warnings = [
+            x for x in w if issubclass(x.category, DeprecationWarning)
+        ]
+        messages = [str(x.message) for x in deprecation_warnings]
+        assert any("AZURE_OPENAI_API_VERSION" in m for m in messages)
+
     def test_api_version_default(self, monkeypatch):
         """Should use default API version when not specified."""
         monkeypatch.setenv("AZURE_ENDPOINT", "https://my.openai.azure.com")
         monkeypatch.setenv("AZURE_API_KEY", "test-key")
         monkeypatch.delenv("AZURE_API_VERSION", raising=False)
+        monkeypatch.delenv("AZURE_OPENAI_API_VERSION", raising=False)
 
         detector = AzureBackendDetector()
         _, config = detector.detect()
 
-        assert config["api_version"] == "2024-10-21"  # Default
+        assert config["api_version"] == "2024-10-21"
 
     # Property Tests
 
@@ -295,11 +374,9 @@ class TestPatternConstants:
     def test_openai_patterns_defined(self):
         """Azure OpenAI patterns should be defined."""
         assert len(AZURE_OPENAI_PATTERNS) >= 2
-        # Should include standard pattern (regex uses \. for literal dots)
         assert any("openai" in p and "azure" in p for p in AZURE_OPENAI_PATTERNS)
 
     def test_foundry_patterns_defined(self):
         """Azure AI Foundry patterns should be defined."""
         assert len(AZURE_AI_FOUNDRY_PATTERNS) >= 2
-        # Should include inference pattern (regex uses \. for literal dots)
         assert any("inference" in p and "azure" in p for p in AZURE_AI_FOUNDRY_PATTERNS)

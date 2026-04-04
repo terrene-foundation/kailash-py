@@ -220,7 +220,7 @@ Use empty strings "" for missing text fields. Return ONLY the JSON object, no ex
                 provider=self.ai_provider,
                 model=self.ai_model,
                 messages=[{"role": "user", "content": prompt}],
-                provider_config=response_format,  # Pass structured output configuration
+                response_format=response_format,  # Pass structured output configuration
             )
 
             # Parse AI response - LLMAgentNode returns nested structure
@@ -299,7 +299,7 @@ Return ONLY the JSON object, no explanation."""
                 provider=self.ai_provider,
                 model=self.ai_model,
                 messages=[{"role": "user", "content": prompt}],
-                provider_config=response_format,  # Pass structured output configuration
+                response_format=response_format,  # Pass structured output configuration
             )
 
             # Parse AI response - LLMAgentNode returns nested structure

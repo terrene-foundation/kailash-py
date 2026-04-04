@@ -1,13 +1,17 @@
 """
-Test WorkflowGenerator provider_config preservation.
+Test WorkflowGenerator structured output and provider_config handling.
 
-Verifies that provider_config is passed as nested dict to LLMAgentNode,
-not flattened into top-level node_config.
+Verifies that:
+- response_format is placed as a top-level key in node_config for structured output
+- provider_config is preserved as nested dict for provider-specific settings
+- structured_output_mode controls auto-generation behavior
 
 References:
-- Bug report: workflow_generator.py was flattening provider_config
-- Fix: Preserve provider_config as nested dict for LLMAgentNode
+- Explicit config refactor: response_format separated from provider_config
+- Original bug: workflow_generator.py was flattening provider_config
 """
+
+import warnings
 
 import pytest
 from kaizen.core.config import BaseAgentConfig
@@ -23,29 +27,26 @@ class SimpleSignature(Signature):
 
 
 class TestWorkflowGeneratorProviderConfig:
-    """Test provider_config preservation in WorkflowGenerator."""
+    """Test response_format and provider_config handling in WorkflowGenerator."""
 
-    def test_provider_config_preserved_as_nested_dict_signature_workflow(self):
-        """Test provider_config is preserved as nested dict in signature workflow."""
-        # Create config with provider_config
-        provider_config = {
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "test",
-                    "strict": True,
-                    "schema": {"type": "object"},
-                },
-            }
+    def test_explicit_response_format_in_node_config(self):
+        """Test explicit response_format is placed as top-level key in node_config."""
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "test",
+                "strict": True,
+                "schema": {"type": "object"},
+            },
         }
 
         config = BaseAgentConfig(
             llm_provider="openai",
             model="gpt-4o-2024-08-06",
-            provider_config=provider_config,
+            response_format=response_format,
+            structured_output_mode="explicit",
         )
 
-        # Generate workflow
         generator = WorkflowGenerator(config=config, signature=SimpleSignature())
         workflow = generator.generate_signature_workflow()
 
@@ -53,83 +54,171 @@ class TestWorkflowGeneratorProviderConfig:
         assert workflow.nodes
         assert len(workflow.nodes) == 1
 
-        # Get the LLMAgentNode config
         node_id = list(workflow.nodes.keys())[0]
         node = workflow.nodes[node_id]
         assert node["type"] == "LLMAgentNode"
 
-        # CRITICAL: Verify provider_config is nested, not flattened
-        assert "provider_config" in node["config"]
-        assert node["config"]["provider_config"] == provider_config
+        # response_format is a top-level key in node_config
+        assert "response_format" in node["config"]
+        assert node["config"]["response_format"] == response_format
 
-        # Verify response_format is NOT a top-level key (was the bug)
-        assert "response_format" not in node["config"]
+        # provider_config should NOT be present (none provided)
+        assert "provider_config" not in node["config"]
 
-    def test_provider_config_preserved_as_nested_dict_fallback_workflow(self):
-        """Test provider_config is preserved as nested dict in fallback workflow."""
-        # Create config with provider_config
+    def test_provider_config_preserved_separately_from_response_format(self):
+        """Test provider_config holds only provider-specific settings."""
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "test",
+                "strict": True,
+                "schema": {"type": "object"},
+            },
+        }
         provider_config = {
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "test",
-                    "strict": True,
-                    "schema": {"type": "object"},
-                },
-            }
+            "api_version": "2024-02-01",
+            "deployment": "my-deployment",
         }
 
         config = BaseAgentConfig(
-            llm_provider="openai",
-            model="gpt-4o-2024-08-06",
+            llm_provider="azure",
+            model="gpt-4o",
+            response_format=response_format,
+            provider_config=provider_config,
+            structured_output_mode="explicit",
+        )
+
+        generator = WorkflowGenerator(config=config, signature=SimpleSignature())
+        workflow = generator.generate_signature_workflow()
+
+        node_id = list(workflow.nodes.keys())[0]
+        node = workflow.nodes[node_id]
+
+        # Both are present as separate top-level keys
+        assert "response_format" in node["config"]
+        assert node["config"]["response_format"] == response_format
+        assert "provider_config" in node["config"]
+        assert node["config"]["provider_config"] == provider_config
+
+    def test_legacy_provider_config_migrated_to_response_format(self):
+        """Test legacy provider_config with 'type' key is migrated to response_format."""
+        # Old-style: structured output config in provider_config
+        legacy_provider_config = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "test",
+                "strict": True,
+                "schema": {"type": "object"},
+            },
+        }
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            config = BaseAgentConfig(
+                llm_provider="openai",
+                model="gpt-4o-2024-08-06",
+                provider_config=legacy_provider_config,
+                structured_output_mode="explicit",
+            )
+
+        # __post_init__ migration should have moved structured output keys
+        assert config.response_format is not None
+        assert config.response_format["type"] == "json_schema"
+        # provider_config should be cleared (no non-structured keys remained)
+        assert config.provider_config is None
+
+        generator = WorkflowGenerator(config=config, signature=SimpleSignature())
+        workflow = generator.generate_signature_workflow()
+
+        node_id = list(workflow.nodes.keys())[0]
+        node = workflow.nodes[node_id]
+
+        # response_format in node_config from migration
+        assert "response_format" in node["config"]
+        assert node["config"]["response_format"]["type"] == "json_schema"
+        # provider_config should NOT be present (was fully migrated)
+        assert "provider_config" not in node["config"]
+
+    def test_fallback_workflow_preserves_provider_config(self):
+        """Test provider_config is preserved in fallback workflow."""
+        provider_config = {
+            "api_version": "2024-02-01",
+            "deployment": "my-deployment",
+        }
+
+        config = BaseAgentConfig(
+            llm_provider="azure",
+            model="gpt-4o",
             provider_config=provider_config,
         )
 
-        # Generate fallback workflow (no signature)
         generator = WorkflowGenerator(config=config)
         workflow = generator.generate_fallback_workflow()
 
-        # Verify workflow structure
         assert workflow.nodes
         assert len(workflow.nodes) == 1
 
-        # Get the LLMAgentNode config
         node_id = list(workflow.nodes.keys())[0]
         node = workflow.nodes[node_id]
         assert node["type"] == "LLMAgentNode"
 
-        # CRITICAL: Verify provider_config is nested, not flattened
         assert "provider_config" in node["config"]
         assert node["config"]["provider_config"] == provider_config
 
-        # Verify response_format is NOT a top-level key (was the bug)
-        assert "response_format" not in node["config"]
+    def test_auto_mode_generates_response_format_with_deprecation_warning(self):
+        """Test auto mode auto-generates response_format with deprecation warning.
 
-    def test_empty_provider_config_gets_auto_generated_json_schema(self):
-        """Test that empty provider_config gets auto-generated JSON schema for OpenAI.
-
-        When provider_config=None is passed but OpenAI is the provider,
-        WorkflowGenerator now automatically generates a JSON schema for
-        structured outputs based on the signature.
+        When structured_output_mode='auto' (default) and no response_format is set,
+        WorkflowGenerator auto-generates structured output config and emits a
+        DeprecationWarning.
         """
         config = BaseAgentConfig(
             llm_provider="openai",
             model="gpt-4",
-            provider_config=None,  # No explicit provider config
+            # structured_output_mode defaults to "auto"
+        )
+
+        generator = WorkflowGenerator(config=config, signature=SimpleSignature())
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            workflow = generator.generate_signature_workflow()
+
+            # Should emit deprecation warning about auto-generation
+            deprecation_warnings = [
+                x for x in w if issubclass(x.category, DeprecationWarning)
+            ]
+            assert len(deprecation_warnings) >= 1
+            assert "Auto-generated structured output is deprecated" in str(
+                deprecation_warnings[0].message
+            )
+
+        node_id = list(workflow.nodes.keys())[0]
+        node = workflow.nodes[node_id]
+
+        # response_format is present with auto-generated JSON schema
+        assert "response_format" in node["config"]
+        assert node["config"]["response_format"]["type"] == "json_schema"
+        assert "json_schema" in node["config"]["response_format"]
+        assert (
+            node["config"]["response_format"]["json_schema"]["name"]
+            == "SimpleSignature"
+        )
+
+    def test_off_mode_suppresses_structured_output(self):
+        """Test structured_output_mode='off' prevents any structured output."""
+        config = BaseAgentConfig(
+            llm_provider="openai",
+            model="gpt-4",
+            response_format={"type": "json_object"},  # Explicitly set but...
+            structured_output_mode="off",  # ...off mode overrides
         )
 
         generator = WorkflowGenerator(config=config, signature=SimpleSignature())
         workflow = generator.generate_signature_workflow()
 
-        # Get the node config
         node_id = list(workflow.nodes.keys())[0]
         node = workflow.nodes[node_id]
 
-        # provider_config IS now present with auto-generated JSON schema
-        assert "provider_config" in node["config"]
-        assert node["config"]["provider_config"]["type"] == "json_schema"
-        assert "json_schema" in node["config"]["provider_config"]
-        assert (
-            node["config"]["provider_config"]["json_schema"]["name"]
-            == "SimpleSignature"
-        )
+        # response_format should NOT be in node_config when mode is "off"
+        assert "response_format" not in node["config"]
