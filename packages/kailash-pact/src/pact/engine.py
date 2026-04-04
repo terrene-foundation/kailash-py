@@ -26,7 +26,7 @@ import logging
 import math
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from pact.costs import CostTracker
 from pact.events import EventBus
@@ -34,7 +34,195 @@ from pact.work import WorkResult, WorkSubmission
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["PactEngine"]
+__all__ = [
+    "GovernanceHeldError",
+    "HeldActionCallback",
+    "GovernanceCallback",
+    "PactEngine",
+]
+
+
+# ---------------------------------------------------------------------------
+# Error types
+# ---------------------------------------------------------------------------
+
+
+class GovernanceHeldError(Exception):
+    """Raised when a governance verdict is HELD and no on_held callback handles it.
+
+    Carries the verdict, role address, action, and context for the caller
+    to inspect and potentially retry with human approval.
+
+    This is distinct from PactError / GovernanceBlockedError to allow callers
+    to catch held-for-review situations separately from permanent blocks.
+
+    Attributes:
+        verdict: The GovernanceVerdict that triggered the hold.
+        role: The D/T/R address of the role that requested the action.
+        action: The action that was held.
+        context: The context dict passed with the action.
+    """
+
+    def __init__(
+        self,
+        verdict: Any,
+        role: str,
+        action: str,
+        context: dict[str, Any] | None = None,
+    ) -> None:
+        self.verdict = verdict
+        self.role = role
+        self.action = action
+        self.context = context or {}
+        super().__init__(f"Action held for human review: {role} attempting {action}")
+
+
+# ---------------------------------------------------------------------------
+# Callback protocols
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class HeldActionCallback(Protocol):
+    """Protocol for handling HELD verdicts.
+
+    Implementations decide whether a held action should proceed or be blocked.
+    Return True to proceed with the action, False to block it.
+    """
+
+    async def __call__(
+        self,
+        verdict: Any,
+        role: str,
+        action: str,
+        context: dict[str, Any],
+    ) -> bool:
+        """Handle a HELD verdict.
+
+        Args:
+            verdict: The GovernanceVerdict with level "held".
+            role: The D/T/R address of the role.
+            action: The action being attempted.
+            context: The context dict for the action.
+
+        Returns:
+            True to proceed with the action, False to block.
+        """
+        ...
+
+
+@runtime_checkable
+class GovernanceCallback(Protocol):
+    """Protocol for per-node governance verification.
+
+    Called before each node execution to verify governance constraints.
+    Returns the GovernanceVerdict for the action.
+    """
+
+    async def __call__(
+        self,
+        role_address: str,
+        action: str,
+        context: dict[str, Any],
+    ) -> Any:
+        """Verify governance for a single node execution.
+
+        Args:
+            role_address: The D/T/R address of the role.
+            action: The action to verify.
+            context: The context dict for the action.
+
+        Returns:
+            A GovernanceVerdict.
+
+        Raises:
+            GovernanceHeldError: If the action is held and cannot proceed.
+            PactError: If the action is blocked.
+        """
+        ...
+
+
+# ---------------------------------------------------------------------------
+# Default governance callback implementation
+# ---------------------------------------------------------------------------
+
+
+class _DefaultGovernanceCallback:
+    """Default per-node governance callback.
+
+    Uses a read-only governance view to verify each action. Handles HELD
+    verdicts via an optional HeldActionCallback, and raises on BLOCKED.
+
+    Args:
+        governance: A governance object with a verify_action() method
+            (typically a _ReadOnlyGovernanceView or GovernanceEngine).
+        on_held: Optional callback for handling HELD verdicts.
+            If provided and returns True, the action proceeds.
+            If provided and returns False, raises GovernanceHeldError.
+            If not provided, raises GovernanceHeldError.
+    """
+
+    def __init__(
+        self,
+        governance: Any,
+        on_held: HeldActionCallback | None = None,
+    ) -> None:
+        self._governance = governance
+        self._on_held = on_held
+
+    async def __call__(
+        self,
+        role_address: str,
+        action: str,
+        context: dict[str, Any],
+    ) -> Any:
+        """Verify governance for a single action.
+
+        Args:
+            role_address: The D/T/R address of the role.
+            action: The action to verify.
+            context: The context dict for the action.
+
+        Returns:
+            The GovernanceVerdict if the action is allowed.
+
+        Raises:
+            GovernanceHeldError: If the action is held and no callback
+                approves it.
+            PactError (via import): If the action is blocked.
+        """
+        from kailash.trust.pact.exceptions import PactError
+
+        verdict = self._governance.verify_action(
+            role_address=role_address,
+            action=action,
+            context=context,
+        )
+
+        if verdict.is_held:
+            if self._on_held is not None:
+                proceed = await self._on_held(verdict, role_address, action, context)
+                if proceed:
+                    return verdict
+            raise GovernanceHeldError(
+                verdict=verdict,
+                role=role_address,
+                action=action,
+                context=context,
+            )
+
+        if verdict.is_blocked:
+            raise PactError(
+                f"Governance BLOCKED: {verdict.reason}",
+                details={
+                    "level": verdict.level,
+                    "reason": verdict.reason,
+                    "role_address": role_address,
+                    "action": action,
+                },
+            )
+
+        return verdict
 
 
 class _ReadOnlyGovernanceView:
@@ -142,6 +330,7 @@ class PactEngine:
         clearance: str = "restricted",
         store_backend: str = "memory",
         cost_model: Any | None = None,
+        on_held: HeldActionCallback | None = None,
     ) -> None:
         # Validate budget_usd (NaN/Inf/negative per pact-governance.md rule 6)
         if budget_usd is not None:
@@ -155,6 +344,7 @@ class PactEngine:
         self._model = model
         self._clearance = clearance
         self._store_backend = store_backend
+        self._on_held = on_held
 
         # Load org and create GovernanceEngine (Trust Plane)
         self._governance = self._create_governance_engine(org, store_backend)
@@ -169,6 +359,12 @@ class PactEngine:
         # Create event bus (bounded history per trust-plane-security.md rule 4)
         self._events = EventBus(maxlen=10000)
 
+        # Per-node governance callback (opt-in for now; supervisor integration
+        # happens in a future PR when kaizen-agents supports it)
+        self._governance_callback: GovernanceCallback = _DefaultGovernanceCallback(
+            governance=self._governance,
+            on_held=on_held,
+        )
         logger.info(
             "PactEngine initialized: org=%s model=%s budget=$%s clearance=%s",
             self._governance.org_name,
@@ -432,6 +628,19 @@ class PactEngine:
     def events(self) -> EventBus:
         """The event bus for governance and execution events."""
         return self._events
+
+    @property
+    def governance_callback(self) -> GovernanceCallback:
+        """The per-node governance callback for supervisor integration.
+
+        This callback verifies governance constraints before each node
+        execution. It is created automatically from the engine's governance
+        and on_held configuration.
+
+        Future PRs will pass this to GovernedSupervisor.run() for
+        per-node enforcement.
+        """
+        return self._governance_callback
 
     # -------------------------------------------------------------------
     # Internal helpers
