@@ -20,11 +20,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
-<<<<<<< HEAD
 from dataflow.fabric.consumers import ConsumerRegistry
-=======
-from dataflow.fabric.context import PipelineContext
->>>>>>> 592b276a
 from dataflow.fabric.products import ProductRegistration
 
 logger = logging.getLogger(__name__)
@@ -149,7 +145,6 @@ class FabricServingLayer:
             if request and hasattr(request, "query_params"):
                 params = dict(request.query_params)
 
-<<<<<<< HEAD
             # Extract consumer param before passing to product logic
             consumer_name = params.pop("consumer", None)
 
@@ -172,12 +167,6 @@ class FabricServingLayer:
                             f"'{name}' but no adapter function is registered."
                         ),
                     }
-=======
-            # Parse refresh flag — ?refresh=true bypasses cache
-            refresh = params.pop("refresh", "false")
-            if isinstance(refresh, str):
-                refresh = refresh.lower() == "true"
->>>>>>> 592b276a
 
             # Build cache key
             if product.mode.value == "parameterized" and params:
