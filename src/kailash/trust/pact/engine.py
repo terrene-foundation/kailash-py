@@ -660,6 +660,32 @@ class GovernanceEngine:
                 f"{sorted(allowed_actions)}",
             )
 
+        # --- Operational: check rate limits (max_actions_per_day/hour) ---
+        daily_calls = ctx.get("daily_calls")
+        if (
+            daily_calls is not None
+            and envelope.operational.max_actions_per_day is not None
+        ):
+            daily_calls_int = int(daily_calls)
+            if daily_calls_int >= envelope.operational.max_actions_per_day:
+                return (
+                    "blocked",
+                    f"Daily rate limit exceeded: {daily_calls_int} actions "
+                    f"(limit: {envelope.operational.max_actions_per_day}/day)",
+                )
+        hourly_calls = ctx.get("hourly_calls")
+        if (
+            hourly_calls is not None
+            and envelope.operational.max_actions_per_hour is not None
+        ):
+            hourly_calls_int = int(hourly_calls)
+            if hourly_calls_int >= envelope.operational.max_actions_per_hour:
+                return (
+                    "blocked",
+                    f"Hourly rate limit exceeded: {hourly_calls_int} actions "
+                    f"(limit: {envelope.operational.max_actions_per_hour}/hour)",
+                )
+
         # --- Financial: check cost against max_spend_usd ---
         cost = ctx.get("cost")
         if cost is not None and envelope.financial is not None:
@@ -760,9 +786,9 @@ class GovernanceEngine:
             resource_path = ctx.get("resource_path")
             access_type = ctx.get("access_type")  # "read" or "write"
             if resource_path is not None and access_type is not None:
-                import posixpath as _posixpath
+                from kailash.trust.pathutils import normalize_resource_path
 
-                _rp = _posixpath.normpath(str(resource_path))
+                _rp = normalize_resource_path(str(resource_path))
                 # Reject path traversal attempts
                 if ".." in _rp.split("/"):
                     return (

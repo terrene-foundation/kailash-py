@@ -82,7 +82,7 @@ nexus = [
     "kailash-nexus>=1.8.0",
 ]
 kaizen = [
-    "kailash-kaizen>=2.3.2,<3.0.0",
+    "kailash-kaizen>=2.4.0,<3.0.0",
     "kaizen-agents>=0.6.0",
 ]
 pact = [
@@ -135,7 +135,7 @@ docs = [
 all = [
     "kailash-dataflow>=1.7.0,<3.0.0",
     "kailash-nexus>=1.8.0",
-    "kailash-kaizen>=2.3.2,<3.0.0",
+    "kailash-kaizen>=2.4.0,<3.0.0",
     "kaizen-agents>=0.6.0",
     "kailash-pact>=0.7.0",
 ]

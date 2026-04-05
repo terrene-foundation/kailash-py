@@ -182,7 +182,7 @@ class TestFileSourceConfig:
 
     def test_empty_path_raises(self):
         cfg = FileSourceConfig()
-        with pytest.raises(ValueError, match="path must not be empty"):
+        with pytest.raises(ValueError, match="path.*or.*directory.*must be set"):
             cfg.validate()
 
 

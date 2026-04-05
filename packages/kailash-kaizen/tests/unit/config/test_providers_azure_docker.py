@@ -141,7 +141,7 @@ class TestGetAzureConfig:
         monkeypatch.delenv("AZURE_AI_INFERENCE_ENDPOINT", raising=False)
         monkeypatch.delenv("AZURE_AI_INFERENCE_API_KEY", raising=False)
 
-        with pytest.raises(ConfigurationError, match="Azure AI Foundry not configured"):
+        with pytest.raises(ConfigurationError, match="Azure not configured"):
             get_azure_config()
 
 

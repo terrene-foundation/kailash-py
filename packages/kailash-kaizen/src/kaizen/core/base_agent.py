@@ -466,6 +466,25 @@ class BaseAgent(Node):
 
         return parameters
 
+    def _run_async_hook(self, coro) -> None:
+        """Run an async coroutine from sync context (hook bridge).
+
+        Handles the async/sync boundary for hook triggers. Uses
+        ThreadPoolExecutor when inside an existing event loop, or
+        asyncio.run() when no loop is running.
+        """
+        import asyncio
+        import concurrent.futures
+
+        try:
+            asyncio.get_running_loop()
+            # Inside an event loop — run in a thread to avoid nesting
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                executor.submit(asyncio.run, coro).result(timeout=5.0)
+        except RuntimeError:
+            # No event loop — safe to use asyncio.run()
+            asyncio.run(coro)
+
     def run(self, **inputs) -> Dict[str, Any]:
         """
         Execute agent with strategy-based execution and error handling.
@@ -514,6 +533,17 @@ class BaseAgent(Node):
         import asyncio
         import inspect
         from datetime import datetime
+
+        # Auto-discover MCP tools on first run if configured but not yet discovered (#286)
+        if (
+            self.has_mcp_support()
+            and not self._discovered_mcp_tools
+            and self._mcp_client is not None
+        ):
+            try:
+                self._run_async_hook(self.discover_mcp_tools())
+            except Exception as e:
+                logger.warning("MCP auto-discovery failed: %s", e)
 
         # Extract session_id if provided (Week 2 Phase 1 addition)
         session_id = inputs.pop("session_id", None)

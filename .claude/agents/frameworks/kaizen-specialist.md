@@ -66,6 +66,20 @@ The LLM does ALL reasoning. Tools are dumb data endpoints. MUST NOT produce:
 
 Use `self.run()` with a rich Signature. Permitted: input validation, error handling, output formatting, safety guards.
 
+### Explicit Over Implicit (v2.5.0 -- BaseAgentConfig)
+
+Provider config follows an explicit model. Three fields, three purposes:
+
+- `response_format` — Structured output config (`{"type": "json_schema", ...}` or `{"type": "json_object"}`)
+- `provider_config` — Provider-specific operational settings only (`{"api_version": "...", "deployment": "..."}`)
+- `structured_output_mode` — `"explicit"` (recommended), `"auto"` (deprecated), `"off"`
+
+Deprecation shim auto-migrates `provider_config` with `"type"` key to `response_format`. New code MUST use `response_format` directly.
+
+**Prompt utilities** (`kaizen.core.prompt_utils`): `generate_prompt_from_signature()` is the single source of truth for signature-based prompts. `json_prompt_suffix()` for Azure `json_object` compatibility.
+
+**Azure env vars**: Canonical names are `AZURE_ENDPOINT`, `AZURE_API_KEY`, `AZURE_API_VERSION`. Legacy names emit `DeprecationWarning`. Use `resolve_azure_env()` for canonical-first resolution.
+
 ### Always
 
 - Use domain configs (e.g., `QAConfig`), auto-convert to BaseAgentConfig
@@ -73,12 +87,18 @@ Use `self.run()` with a rich Signature. Permitted: input validation, error handl
 - Use SharedMemoryPool for multi-agent coordination
 - Use `llm_provider="mock"` explicitly in unit tests
 - Validate with real models, not just mocks
+- Use `response_format` for structured output (not `provider_config`)
+- Set `structured_output_mode="explicit"` for new agents
 
 ### Never
 
 - Manually create BaseAgentConfig (use auto-extraction)
 - sys.path manipulation in tests (use fixtures)
 - Pass `model=` to OllamaVisionProvider (use config)
+- Put structured output keys in `provider_config` (use `response_format`)
+- Auto-generate config the user didn't ask for without deprecation warnings
+- Have two parallel implementations of the same logic (prompt generation)
+- Use error-based backend switching (detect upfront or set `AZURE_BACKEND`)
 
 ## Quick Start
 
@@ -111,15 +131,15 @@ result = agent.process("input")
 
 ### LLM Providers
 
-| Provider    | Env Var              | Features                          |
-| ----------- | -------------------- | --------------------------------- |
-| `openai`    | `OPENAI_API_KEY`     | GPT-4, structured outputs, tools  |
-| `azure`     | `AZURE_ENDPOINT/KEY` | Unified Azure, vision, embeddings |
-| `anthropic` | `ANTHROPIC_API_KEY`  | Claude 3.x, vision                |
-| `google`    | `GOOGLE_API_KEY`     | Gemini 2.0, vision, embeddings    |
-| `ollama`    | (port 11434)         | Free, local models                |
-| `docker`    | Docker Desktop       | Free local inference              |
-| `mock`      | None                 | Unit test provider                |
+| Provider    | Env Var                                       | Features                          |
+| ----------- | --------------------------------------------- | --------------------------------- |
+| `openai`    | `OPENAI_API_KEY`                              | GPT-4, structured outputs, tools  |
+| `azure`     | `AZURE_ENDPOINT`, `AZURE_API_KEY` (canonical) | Unified Azure, vision, embeddings |
+| `anthropic` | `ANTHROPIC_API_KEY`                           | Claude 3.x, vision                |
+| `google`    | `GOOGLE_API_KEY`                              | Gemini 2.0, vision, embeddings    |
+| `ollama`    | (port 11434)                                  | Free, local models                |
+| `docker`    | Docker Desktop                                | Free local inference              |
+| `mock`      | None                                          | Unit test provider                |
 
 ### Agent Classification
 
@@ -129,11 +149,14 @@ result = agent.process("input")
 
 ### Deprecation Notes
 
-| Feature                        | Status      | Migration                       |
-| ------------------------------ | ----------- | ------------------------------- |
-| `ToolRegistry`, `ToolExecutor` | **REMOVED** | Use MCP or `KaizenToolRegistry` |
-| `AgentTeam`                    | Deprecated  | Use `OrchestrationRuntime`      |
-| `max_tokens` (OpenAI)          | Deprecated  | Use `max_completion_tokens`     |
+| Feature                                   | Status      | Migration                                                  |
+| ----------------------------------------- | ----------- | ---------------------------------------------------------- |
+| `ToolRegistry`, `ToolExecutor`            | **REMOVED** | Use MCP or `KaizenToolRegistry`                            |
+| `AgentTeam`                               | Deprecated  | Use `OrchestrationRuntime`                                 |
+| `max_tokens` (OpenAI)                     | Deprecated  | Use `max_completion_tokens`                                |
+| `provider_config` for structured output   | Deprecated  | Use `response_format` field                                |
+| `structured_output_mode="auto"`           | Deprecated  | Use `"explicit"` (default changes in v2.6.0)               |
+| `AZURE_OPENAI_*` / `AZURE_AI_INFERENCE_*` | Deprecated  | Use `AZURE_ENDPOINT`, `AZURE_API_KEY`, `AZURE_API_VERSION` |
 
 ## Related Agents
 

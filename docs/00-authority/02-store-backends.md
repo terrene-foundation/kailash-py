@@ -18,7 +18,7 @@ def process(store: TrustPlaneStore) -> None:
 | Feature            | SQLite                       | Filesystem            | PostgreSQL               |
 | ------------------ | ---------------------------- | --------------------- | ------------------------ |
 | Default            | Yes                          | No                    | No                       |
-| Install extra      | (none)                       | (none)                | `[postgres]`             |
+| Install extra      | (none)                       | (none)                | (none)                   |
 | Concurrency        | WAL mode + `BEGIN IMMEDIATE` | `filelock`            | MVCC                     |
 | Atomic writes      | Transaction                  | temp + fsync + rename | Transaction              |
 | Schema versioning  | `meta` table                 | N/A                   | `meta` table             |
@@ -90,7 +90,7 @@ store = PostgresTrustPlaneStore("postgresql://user:pass@host/db")
 store.initialize()
 ```
 
-Requires `pip install kailash[trust-postgres]` (psycopg3 + psycopg_pool).
+PostgreSQL drivers (psycopg3 + psycopg_pool) are included in the base install (`pip install kailash`).
 
 - Connection pooling via `psycopg_pool`
 - MVCC for concurrent safety

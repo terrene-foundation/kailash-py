@@ -131,7 +131,7 @@ class TestConnectionLifecycle:
         config = FileSourceConfig(path="", watch=False)
         adapter = FileSourceAdapter(name="bad", config=config)
 
-        with pytest.raises(ValueError, match="must not be empty"):
+        with pytest.raises(ValueError, match="path.*or.*directory.*must be set"):
             await adapter.connect()
 
 

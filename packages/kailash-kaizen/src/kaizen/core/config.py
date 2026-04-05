@@ -53,7 +53,9 @@ class BaseAgentConfig:
     response_format: Optional[Dict[str, Any]] = (
         None  # Structured output config (json_schema, json_object)
     )
-    structured_output_mode: str = "auto"  # "auto" (deprecated), "explicit", or "off"
+    structured_output_mode: str = (
+        "explicit"  # "explicit", "off", or "auto" (deprecated)
+    )
     api_key: Optional[str] = None  # Per-request API key override for BYOK
     base_url: Optional[str] = None  # Per-request base URL override
 
@@ -165,6 +167,21 @@ class BaseAgentConfig:
                 f"structured_output_mode must be one of {valid_modes}, "
                 f"got '{self.structured_output_mode}'"
             )
+
+        # Validate response_format shape
+        if self.response_format is not None:
+            if not isinstance(self.response_format, dict):
+                raise ValueError(
+                    "response_format must be a dict, "
+                    f"got {type(self.response_format).__name__}"
+                )
+            rf_type = self.response_format.get("type")
+            valid_rf_types = ("json_object", "json_schema", "text")
+            if rf_type is not None and rf_type not in valid_rf_types:
+                raise ValueError(
+                    f"response_format.type must be one of {valid_rf_types}, "
+                    f"got '{rf_type}'"
+                )
 
         # Validate temperature
         if self.temperature is not None:

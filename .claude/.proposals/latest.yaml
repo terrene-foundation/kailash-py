@@ -1,54 +1,54 @@
 source_repo: kailash-py
 codify_date: "2026-04-04"
-codify_session: "feat(all): 23 GH issues — PACT hardening, governance, Nexus observability, DataFlow quality, Fabric engine"
-sdk_version: "2.4.1"
+codify_session: "feat(kaizen): codify explicit provider config patterns from #254-257 refactor"
+sdk_version: "2.5.0"
 coc_version: "1.0.0"
 
-# Context: Consolidated 23 GH issues (#231-#253) across 5 workstreams.
-# Implemented in 4 sessions with parallel agent execution.
-# 12 PRs merged, ~6500 lines, ~180 new tests, 0 regressions.
-# Red team found 3 merge regressions — all fixed in convergence round.
-# 5 cross-SDK issues filed on kailash-rs (#173-#177).
+# Context: Kaizen explicit provider config refactor (M1-M3).
+# Fixed 4 Azure provider bugs (#254-257). Refactored provider_config from
+# implicit magic to explicit configuration: response_format field, structured_output_mode,
+# prompt_utils.py single source of truth, canonical Azure env vars.
+# 3 cross-SDK issues filed on kailash-rs (#178-180).
+# This codification captures the patterns and anti-patterns learned.
 
 changes:
-  # === New Project Skills (Python-specific) ===
-  - file: skills/project/pact-enforcement-modes.md
+  # === Updated Skills ===
+  - file: skills/04-kaizen/SKILL.md
+    action: updated
+    suggested_tier: coc
+    reason: "Added Provider Configuration section (v2.5.0): response_format vs provider_config, structured_output_mode, Azure canonical env vars, prompt_utils, anti-patterns"
+    diff_lines: "~+45"
+
+  - file: skills/04-kaizen/kaizen-structured-outputs.md
+    action: updated
+    suggested_tier: coc-py
+    reason: "Migrated all examples from provider_config to response_format, added explicit mode as recommended Quick Start, documented structured_output_mode table, updated Azure section with canonical env vars"
+    diff_lines: "~+40 ~-30"
+
+  - file: skills/04-kaizen/kaizen-config-patterns.md
+    action: updated
+    suggested_tier: coc-py
+    reason: "Added response_format/structured_output_mode/api_key/base_url to auto-extract list, added response_format vs provider_config guidance, updated Azure config example with canonical env vars, added 3 new anti-patterns"
+    diff_lines: "~+55 ~-10"
+
+  - file: skills/31-error-troubleshooting/SKILL.md
+    action: updated
+    suggested_tier: coc
+    reason: "Added Kaizen Provider Errors section with 4 entries, expanded Quick Error Reference table, added 3 prevention checklist items"
+    diff_lines: "~+20"
+
+  # === New Skill Sub-File ===
+  - file: skills/31-error-troubleshooting/error-kaizen-provider-config.md
     action: created
     suggested_tier: coc-py
-    reason: "PACT enforcement modes (ENFORCE/SHADOW/DISABLED), envelope adapter mapping 5 dimensions, HELD verdict handling"
-    diff_lines: "+65"
+    reason: "Troubleshooting guide for 5 Kaizen provider config errors: Azure 400 json, missing response_format.type, provider_config deprecation, Azure env var deprecation, Azure backend auto-detection failure"
+    diff_lines: "+120"
 
-  - file: skills/project/fabric-cache-consumers.md
-    action: created
+  # === Updated Agent ===
+  - file: agents/frameworks/kaizen-specialist.md
+    action: updated
     suggested_tier: coc-py
-    reason: "Fabric cache control (invalidate/drain/refresh), consumer adapter registry, MCP tool generation, fabric-only mode"
-    diff_lines: "+75"
-
-  - file: skills/project/dataflow-provenance-audit.md
-    action: created
-    suggested_tier: coc-py
-    reason: "Provenance[T] field-level source tracking with validation, audit trail persistence with SQLite/PostgreSQL backends"
-    diff_lines: "+70"
-
-  # === Existing Skill Updates Needed at loom/ ===
-  # These skills should be updated to reflect new capabilities:
-
-  - file: skills/29-pact/SKILL.md
-    action: needs_update
-    suggested_tier: coc
-    reason: "Add enforcement modes, per-node governance callback, HELD verdict handling, envelope adapter to PACT quick reference"
-    diff_lines: "~+30"
-
-  - file: skills/02-dataflow/SKILL.md
-    action: needs_update
-    suggested_tier: coc
-    reason: "Add Provenance[T], audit persistence, consumer adapters, cache control to DataFlow quick reference"
-    diff_lines: "~+40"
-
-  - file: skills/03-nexus/SKILL.md
-    action: needs_update
-    suggested_tier: coc
-    reason: "Add /metrics endpoint, SSE /events/stream, sse_url() to Nexus quick reference"
-    diff_lines: "~+15"
+    reason: "Added Explicit Over Implicit section (v2.5.0 config model), updated Azure env var table to canonical names, added 4 new Never rules (provider_config for structured output, auto-generation without deprecation, parallel prompt implementations, error-based backend switching), added 3 deprecation entries"
+    diff_lines: "~+35 ~-5"
 
 status: pending_review

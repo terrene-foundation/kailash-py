@@ -107,4 +107,4 @@ Install: `pip install kailash` (included in base install)
 - **Windows**: `pywin32` DACL restricts access to current user's SID
 - **Windows without pywin32**: Warning logged, file still written (degraded security)
 
-Install for Windows: `pip install kailash[trust-windows]`
+Install for Windows: `pip install pywin32` (not required on POSIX systems)

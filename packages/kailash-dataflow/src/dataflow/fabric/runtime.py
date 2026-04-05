@@ -148,9 +148,20 @@ class FabricRuntime:
         self._shutting_down = False
         self._started_at = datetime.now(timezone.utc)
 
-        # 1. Ensure DataFlow is initialized
+        # 1. Ensure DataFlow is initialized (with timeout to prevent hung startup)
         if hasattr(self._dataflow, "initialize"):
-            await self._dataflow.initialize()
+            try:
+                await asyncio.wait_for(
+                    self._dataflow.initialize(),
+                    timeout=30.0,
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    "FabricRuntime: database initialization timed out after 30s"
+                )
+                raise ConnectionError(
+                    "Database initialization timed out after 30s"
+                ) from None
 
         # 2. Connect all registered sources (parallel)
         await self._connect_sources()
@@ -478,6 +489,29 @@ class FabricRuntime:
                     cache[name] = json.loads(data_bytes.decode("utf-8"))
 
         return cache
+
+    async def get_cached_product(
+        self,
+        product_name: str,
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Any]:
+        """Retrieve a cached product result without executing the pipeline.
+
+        Called by ProductInvokeNode to read fabric products from within workflows.
+
+        Args:
+            product_name: Name of the registered product.
+            params: Optional parameters for parameterized products.
+
+        Returns:
+            The cached product data, or None if not cached.
+        """
+        if self._pipeline is None:
+            return None
+        result = self._pipeline.get_product_from_cache(product_name, params)
+        if result is None:
+            return None
+        return result.data if hasattr(result, "data") else result
 
     # ------------------------------------------------------------------
     # Public API (db.fabric.*)

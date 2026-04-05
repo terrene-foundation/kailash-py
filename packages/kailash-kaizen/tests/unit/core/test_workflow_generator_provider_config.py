@@ -166,16 +166,16 @@ class TestWorkflowGeneratorProviderConfig:
         assert node["config"]["provider_config"] == provider_config
 
     def test_auto_mode_generates_response_format_with_deprecation_warning(self):
-        """Test auto mode auto-generates response_format with deprecation warning.
+        """Test auto mode auto-generates response_format with FutureWarning.
 
-        When structured_output_mode='auto' (default) and no response_format is set,
+        When structured_output_mode='auto' and no response_format is set,
         WorkflowGenerator auto-generates structured output config and emits a
-        DeprecationWarning.
+        FutureWarning (deprecated since v2.5.0, removal in v3.0).
         """
         config = BaseAgentConfig(
             llm_provider="openai",
             model="gpt-4",
-            # structured_output_mode defaults to "auto"
+            structured_output_mode="auto",  # Must be explicit — default is now "explicit"
         )
 
         generator = WorkflowGenerator(config=config, signature=SimpleSignature())
@@ -184,13 +184,11 @@ class TestWorkflowGeneratorProviderConfig:
             warnings.simplefilter("always")
             workflow = generator.generate_signature_workflow()
 
-            # Should emit deprecation warning about auto-generation
-            deprecation_warnings = [
-                x for x in w if issubclass(x.category, DeprecationWarning)
-            ]
-            assert len(deprecation_warnings) >= 1
-            assert "Auto-generated structured output is deprecated" in str(
-                deprecation_warnings[0].message
+            # Should emit FutureWarning about auto mode deprecation
+            future_warnings = [x for x in w if issubclass(x.category, FutureWarning)]
+            assert len(future_warnings) >= 1
+            assert "structured_output_mode='auto' is deprecated" in str(
+                future_warnings[0].message
             )
 
         node_id = list(workflow.nodes.keys())[0]

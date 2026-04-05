@@ -788,6 +788,53 @@ class DataFlowExpress:
 
         return await self._execute_with_timing(f"{model}.bulk_create", _bulk_create())
 
+    async def bulk_update(
+        self, model: str, records: List[Dict[str, Any]], key_field: str = "id"
+    ) -> List[Dict[str, Any]]:
+        """
+        Update multiple records in bulk.
+
+        Each record dict must contain the key_field (default: "id") to identify
+        which record to update. Remaining fields are the values to set.
+
+        Args:
+            model: Model name (e.g., "User")
+            records: List of record dicts, each must include key_field
+            key_field: Field used to identify records (default "id")
+
+        Returns:
+            List of updated records
+
+        Example:
+            updated = await db.express.bulk_update("User", [
+                {"id": "user-1", "name": "Alice Updated"},
+                {"id": "user-2", "name": "Bob Updated"},
+            ])
+        """
+
+        async def _bulk_update():
+            results = []
+            for record in records:
+                record_id = record.get(key_field)
+                if record_id is None:
+                    continue
+                fields = {k: v for k, v in record.items() if k != key_field}
+                if not fields:
+                    continue
+                updated = await self.update(model, str(record_id), fields)
+                results.append(updated)
+
+            # Model-scoped cache invalidation (TSG-104)
+            await self._invalidate_model_cache(model)
+
+            # TSG-201: Emit write event
+            if hasattr(self._db, "_emit_write_event"):
+                self._db._emit_write_event(model, "bulk_update", record_id=None)
+
+            return results
+
+        return await self._execute_with_timing(f"{model}.bulk_update", _bulk_update())
+
     async def bulk_delete(self, model: str, ids: List[str]) -> bool:
         """
         Delete multiple records by their IDs.

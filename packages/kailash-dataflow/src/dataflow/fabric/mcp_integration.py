@@ -68,12 +68,13 @@ def _product_params_to_schema(product: ProductRegistration) -> Dict[str, Any]:
 
         prop: Dict[str, Any] = {"type": "string", "description": param_name}
 
-        # Attempt to infer type from annotation
+        # Attempt to infer type from annotation (handles both real types
+        # and string annotations from `from __future__ import annotations`)
         if param.annotation is not inspect.Parameter.empty:
             ann = param.annotation
-            if ann is int or ann is float:
+            if ann is int or ann is float or ann in ("int", "float"):
                 prop["type"] = "number"
-            elif ann is bool:
+            elif ann is bool or ann == "bool":
                 prop["type"] = "boolean"
             # Default remains "string" for str and unrecognised types
 

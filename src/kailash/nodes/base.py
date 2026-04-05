@@ -606,6 +606,7 @@ class Node(ABC):
         """
         return {}
 
+    @abstractmethod
     def run(self, **kwargs) -> dict[str, Any]:
         """Execute the node's logic.
 
@@ -654,10 +655,8 @@ class Node(ABC):
             - LocalRuntime: During workflow execution
             - TestRunner: During unit testing
         """
-        # This is a synchronous node - subclass must override this method
-        raise NotImplementedError(
-            f"Node '{self.__class__.__name__}' must implement run() method"
-        )
+        # Abstract: subclass must override
+        ...
 
     def _validate_config(self):
         """Validate node configuration against defined parameters.
@@ -1916,6 +1915,7 @@ class AsyncTypedNode(TypedNode):
             f"AsyncTypedNode '{self.__class__.__name__}' should implement async_run() method, not run()"
         )
 
+    @abstractmethod
     async def async_run(self, **kwargs) -> dict[str, Any]:
         """Execute the async node's logic with type-safe port access.
 
@@ -1962,9 +1962,7 @@ class AsyncTypedNode(TypedNode):
             - AsyncLocalRuntime: During async workflow execution
             - Async test runners: During async unit testing
         """
-        raise NotImplementedError(
-            f"AsyncTypedNode '{self.__class__.__name__}' must implement async_run() method"
-        )
+        ...
 
     async def execute_async(self, **runtime_inputs) -> dict[str, Any]:
         """Execute the async node with validation and error handling.

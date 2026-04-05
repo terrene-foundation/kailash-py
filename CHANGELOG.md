@@ -15,6 +15,33 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [kailash-kaizen 2.5.0] - 2026-04-05
+
+Breaking: `structured_output_mode` default changed from "auto" to "explicit".
+
+#### Changed
+
+- `structured_output_mode` default flipped from "auto" to "explicit" — auto-generation no longer happens implicitly
+- "auto" mode still accepted but emits `FutureWarning` (will be removed in v3.0)
+- Removed hardcoded `"gpt-4"` fallback in WorkflowGenerator — now requires `DEFAULT_LLM_MODEL` env var or explicit `model` config
+
+#### Added (kailash-pact)
+
+- `submit()` input validation: rejects empty/whitespace `objective` and `role` parameters
+- `WorkResult.budget_allocated` field: tracks the budget ceiling allocated to the submission
+- `WorkResult.audit_trail` field: structured audit entries at each governance/execution milestone
+
+#### Added (kailash-dataflow)
+
+- Fabric-only mode (#251): DataFlow instances with sources but no `@db.model` classes skip database initialization entirely
+- `serving.py` parameter validation (security): consumer names validated against alphanumeric pattern (max 255 chars), refresh must be "true"/"false" exactly
+- Consumer error messages no longer leak the available consumer registry list
+
+#### Fixed
+
+- MCP `_product_params_to_schema` now handles `from __future__ import annotations` string annotations for int/float/bool types
+- Pre-existing test regex mismatches in `test_file_adapter.py`, `test_config.py`, and `test_providers_azure_docker.py`
+
 ### [kailash-kaizen 2.4.0] - 2026-04-04
 
 Explicit provider configuration refactor — eliminates implicit magic that caused #254-257.

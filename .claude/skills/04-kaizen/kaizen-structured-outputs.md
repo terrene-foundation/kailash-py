@@ -22,14 +22,15 @@ This guide covers configuration, type system, signature inheritance, and integra
 
 ## Quick Start
 
-### Automatic Configuration (Recommended)
+### Explicit Configuration (Recommended — v2.5.0+)
 
-**Most users don't need to configure anything!** When you use BaseAgent with a signature, structured outputs are **automatically configured** for supported providers (OpenAI, Google, Azure).
+As of v2.5.0, structured output configuration uses the **explicit over implicit** model. Use the `response_format` field on `BaseAgentConfig` instead of `provider_config`.
 
 ```python
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import Signature, InputField, OutputField
 from kaizen.core.config import BaseAgentConfig
+from kaizen.core.structured_output import create_structured_output_config
 
 class QASignature(Signature):
     """Simple Q&A signature."""
@@ -37,10 +38,14 @@ class QASignature(Signature):
     answer: str = OutputField(desc="Answer to the question")
     confidence: float = OutputField(desc="Confidence score 0-1")
 
-# Structured outputs auto-configured - NO provider_config needed!
+# Explicit mode: user controls structured output config
 config = BaseAgentConfig(
     llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
-    model=os.environ["LLM_MODEL"]
+    model=os.environ["LLM_MODEL"],
+    response_format=create_structured_output_config(
+        signature=QASignature(), strict=True, name="qa_response"
+    ),
+    structured_output_mode="explicit",
 )
 
 agent = BaseAgent(config=config, signature=QASignature())
@@ -51,18 +56,28 @@ print(result['answer'])       # Always present, always string
 print(result['confidence'])   # Always present, always float
 ```
 
-**How Auto-Configuration Works** (from `workflow_generator.py`):
+**How `structured_output_mode` Works**:
 
-- When a signature is provided and no `provider_config` is set
-- WorkflowGenerator automatically calls `create_structured_output_config()`
-- Uses strict mode for OpenAI (100% schema compliance)
-- Providers that don't support structured outputs (Ollama, Anthropic) use prompt-based schema enforcement
+| Mode         | Behavior                                                                     | Status      |
+| ------------ | ---------------------------------------------------------------------------- | ----------- |
+| `"auto"`     | Auto-generates structured output config from signature + deprecation warning | Deprecated  |
+| `"explicit"` | Only uses user-provided `response_format` — nothing auto-generated           | Recommended |
+| `"off"`      | Never uses structured output, even if `response_format` is set               | Opt-out     |
 
-**When to Use Manual Configuration**:
+**Migration from auto to explicit**: Set `response_format` with `create_structured_output_config()` and change `structured_output_mode="explicit"`. The deprecation warning tells you exactly what to change.
 
-- Force legacy JSON mode (`strict=False`) instead of strict schema mode
-- Override auto-generated schema with a custom one
-- Disable structured outputs entirely (rare)
+### Auto Configuration (Legacy — Deprecated)
+
+The `structured_output_mode="auto"` default still works for backward compatibility but emits a `DeprecationWarning`. In v2.6.0 the default will change to `"explicit"`.
+
+```python
+# Legacy: auto-generates config (deprecated, emits warning)
+config = BaseAgentConfig(
+    llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
+    model=os.environ["LLM_MODEL"],
+    # No response_format — auto-generated from signature
+)
+```
 
 ---
 
@@ -83,15 +98,16 @@ class ProductAnalysisSignature(Signature):
     price_range: str = OutputField(desc="Price range estimate")
     confidence: float = OutputField(desc="Confidence score 0-1")
 
-# Create structured output config (strict mode)
+# v2.5.0+: Use response_format (not provider_config)
 config = BaseAgentConfig(
     llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
     model=os.environ["LLM_MODEL"],
-    provider_config=create_structured_output_config(
+    response_format=create_structured_output_config(
         signature=ProductAnalysisSignature(),
         strict=True,
         name="product_analysis"
-    )
+    ),
+    structured_output_mode="explicit",
 )
 
 # Create agent with structured outputs
@@ -114,17 +130,16 @@ print(result)
 ```python
 from kaizen.core.structured_output import create_structured_output_config
 
-# Strict mode configuration
-provider_config = create_structured_output_config(
-    signature=MySignature(),
-    strict=True,  # Enforces schema compliance
-    name="my_response"
-)
-
+# Strict mode configuration — use response_format (not provider_config)
 config = BaseAgentConfig(
     llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
     model=os.environ["LLM_MODEL"],
-    provider_config=provider_config
+    response_format=create_structured_output_config(
+        signature=MySignature(),
+        strict=True,  # Enforces schema compliance
+        name="my_response"
+    ),
+    structured_output_mode="explicit",
 )
 ```
 
@@ -163,17 +178,16 @@ config = BaseAgentConfig(
 - OpenAI returns any valid JSON (not 100% guaranteed to match schema)
 
 ```python
-# Legacy mode configuration
-provider_config = create_structured_output_config(
-    signature=MySignature(),
-    strict=False,  # Best-effort JSON object mode
-    name="my_response"  # Name is ignored in legacy mode
-)
-
+# Legacy mode configuration — use response_format (not provider_config)
 config = BaseAgentConfig(
     llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
     model=os.environ["LLM_MODEL"],  # Works with older models
-    provider_config=provider_config
+    response_format=create_structured_output_config(
+        signature=MySignature(),
+        strict=False,  # Best-effort JSON object mode
+        name="my_response"  # Name is ignored in legacy mode
+    ),
+    structured_output_mode="explicit",
 )
 ```
 
@@ -322,17 +336,17 @@ print(len(sig.output_fields))  # 2 (parent field overridden + child extra)
 
 ## Integration with BaseAgent
 
-### Manual Provider Config
+### Manual Response Format (v2.5.0+)
 
 ```python
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 
-# Option 1: Pass provider_config directly to BaseAgentConfig
+# Option 1: Pass response_format directly to BaseAgentConfig
 config = BaseAgentConfig(
     llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
     model=os.environ["LLM_MODEL"],
-    provider_config={
+    response_format={
         "type": "json_schema",
         "json_schema": {
             "name": "response",
@@ -346,28 +360,28 @@ config = BaseAgentConfig(
                 "additionalProperties": False
             }
         }
-    }
+    },
+    structured_output_mode="explicit",
 )
 
 agent = BaseAgent(config=config, signature=MySignature())
 ```
 
-### Using Helper Function
+### Using Helper Function (Recommended)
 
 ```python
 from kaizen.core.structured_output import create_structured_output_config
 
 # Option 2: Use helper function (recommended)
-provider_config = create_structured_output_config(
-    signature=MySignature(),
-    strict=True,
-    name="my_response"
-)
-
 config = BaseAgentConfig(
     llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
     model=os.environ["LLM_MODEL"],
-    provider_config=provider_config
+    response_format=create_structured_output_config(
+        signature=MySignature(),
+        strict=True,
+        name="my_response"
+    ),
+    structured_output_mode="explicit",
 )
 
 agent = BaseAgent(config=config, signature=MySignature())
@@ -430,11 +444,12 @@ from kaizen.core.structured_output import create_structured_output_config
 config = BaseAgentConfig(
     llm_provider=os.environ.get("LLM_PROVIDER", "openai"),  # or "gemini"
     model=os.environ["LLM_MODEL"],
-    provider_config=create_structured_output_config(
+    response_format=create_structured_output_config(
         signature=MySignature(),
         strict=True,
         name="my_response"
-    )
+    ),
+    structured_output_mode="explicit",
 )
 
 agent = BaseAgent(config=config, signature=MySignature())
@@ -454,6 +469,7 @@ result = agent.run(input_text="...")  # Returns structured dict
 - Auto-translates OpenAI-style `response_format` to Azure's `JsonSchemaFormat`
 - Full `json_schema` support with strict mode
 - Enterprise-grade reliability and compliance
+- Canonical env vars: `AZURE_ENDPOINT`, `AZURE_API_KEY`, `AZURE_API_VERSION`
 
 **Usage**:
 
@@ -461,11 +477,12 @@ result = agent.run(input_text="...")  # Returns structured dict
 config = BaseAgentConfig(
     llm_provider="azure",
     model=os.environ["LLM_MODEL"],
-    provider_config=create_structured_output_config(
+    response_format=create_structured_output_config(
         signature=MySignature(),
         strict=True,
         name="my_response"
-    )
+    ),
+    structured_output_mode="explicit",
 )
 ```
 
@@ -704,7 +721,7 @@ class CustomAgent(BaseAgent):
 config = BaseAgentConfig(
     llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
     model=os.environ["LLM_MODEL"],  # Use supported model
-    provider_config=create_structured_output_config(signature, strict=True)
+    response_format=create_structured_output_config(signature, strict=True)
 )
 ```
 
@@ -753,8 +770,8 @@ def create_structured_output_config(
 ```python
 from kaizen.core.structured_output import create_structured_output_config
 
-# With auto-fallback (recommended)
-provider_config = create_structured_output_config(
+# With auto-fallback (recommended) — assign to response_format on BaseAgentConfig
+response_fmt = create_structured_output_config(
     signature=MySignature(),
     strict=True,
     name="my_analysis",
@@ -762,7 +779,7 @@ provider_config = create_structured_output_config(
 )
 
 # Strict validation (raise errors)
-provider_config = create_structured_output_config(
+response_fmt = create_structured_output_config(
     signature=MySignature(),
     strict=True,
     auto_fallback=False  # Raises ValueError on incompatible types
@@ -881,7 +898,7 @@ class SupportTicketSignature(Signature):
 config = BaseAgentConfig(
     llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
     model=os.environ["LLM_MODEL"],
-    provider_config=create_structured_output_config(
+    response_format=create_structured_output_config(
         signature=SupportTicketSignature(),
         strict=True,
         name="support_analysis"
@@ -934,7 +951,7 @@ print(f"Total fields: {len(sig.output_fields)}")  # 8 fields (2 base + 3 financi
 config = BaseAgentConfig(
     llm_provider=os.environ.get("LLM_PROVIDER", "openai"),
     model=os.environ["LLM_MODEL"],
-    provider_config=create_structured_output_config(sig, strict=True)
+    response_format=create_structured_output_config(sig, strict=True)
 )
 
 agent = BaseAgent(config=config, signature=sig)

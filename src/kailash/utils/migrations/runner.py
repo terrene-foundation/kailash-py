@@ -235,7 +235,21 @@ class MigrationRunner:
                 plan.add_warning(f"Migration {target_migration} not applied")
                 return plan
 
-            # TODO: Implement dependency checking for rollback
+            # Dependency checking for rollback: block if other applied
+            # migrations depend on the target (rolling back would break them)
+            blocking = []
+            for m_id, m_cls in self.registered_migrations.items():
+                if m_id in applied and m_id != target_migration:
+                    instance = m_cls()
+                    if target_migration in getattr(instance, "dependencies", []):
+                        blocking.append(m_id)
+            if blocking:
+                plan.add_warning(
+                    f"Cannot rollback {target_migration}: "
+                    f"depended on by applied migrations: {', '.join(blocking)}"
+                )
+                return plan
+
             migration_class = self.registered_migrations.get(target_migration)
             if migration_class:
                 plan.migrations_to_rollback.append(migration_class())

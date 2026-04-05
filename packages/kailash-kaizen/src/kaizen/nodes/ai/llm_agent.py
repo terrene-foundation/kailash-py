@@ -371,12 +371,19 @@ class LLMAgentNode(Node):
                 default=True,
                 description="Use real MCP tool execution instead of mock execution",
             ),
+            "response_format": NodeParameter(
+                name="response_format",
+                type=dict,
+                required=False,
+                default={},
+                description="Structured output config (json_object or json_schema). Set via BaseAgentConfig.response_format.",
+            ),
             "provider_config": NodeParameter(
                 name="provider_config",
                 type=dict,
                 required=False,
                 default={},
-                description="Provider-specific settings (e.g., api_version, deployment). Use response_format for structured output.",
+                description="Provider-specific settings (e.g., api_version, deployment).",
             ),
             "api_key": NodeParameter(
                 name="api_key",

@@ -86,7 +86,8 @@ class ConnectionManager:
                 self._pool.close()
                 await self._pool.wait_closed()
         except Exception:
-            logger.exception("Error closing connection pool")
+            logger.exception("Error closing connection pool for %s", db_type.value)
+            raise
         finally:
             self._pool = None
             logger.info("ConnectionManager closed for %s", db_type.value)

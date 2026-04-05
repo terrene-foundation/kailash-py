@@ -49,9 +49,9 @@ class TestDependencySpecification:
         dep_names = [re.split(r"[><=!]", dep)[0].strip() for dep in dependencies]
 
         for required in required_deps:
-            assert required in dep_names, (
-                f"Required dependency '{required}' not found in dependencies"
-            )
+            assert (
+                required in dep_names
+            ), f"Required dependency '{required}' not found in dependencies"
 
     def test_kailash_version_constraint(self, pyproject_data):
         """Test that kailash dependency has appropriate version constraint."""
@@ -63,15 +63,15 @@ class TestDependencySpecification:
         assert kailash_dep is not None, "kailash dependency not found"
 
         # Should have minimum version constraint
-        assert ">=" in kailash_dep, (
-            f"kailash dependency '{kailash_dep}' should specify minimum version (>=)"
-        )
+        assert (
+            ">=" in kailash_dep
+        ), f"kailash dependency '{kailash_dep}' should specify minimum version (>=)"
 
         # Extract version
         version_match = re.search(r">=(\d+\.\d+\.\d+)", kailash_dep)
-        assert version_match, (
-            f"kailash dependency '{kailash_dep}' should have valid version"
-        )
+        assert (
+            version_match
+        ), f"kailash dependency '{kailash_dep}' should have valid version"
 
         # Should be at least 0.9.19 (as specified in current config)
         version = version_match.group(1)
@@ -92,9 +92,9 @@ class TestDependencySpecification:
         assert pydantic_dep is not None, "pydantic dependency not found"
 
         # Should require pydantic v2
-        assert ">=2" in pydantic_dep or ">2" in pydantic_dep, (
-            f"pydantic dependency '{pydantic_dep}' should require v2+"
-        )
+        assert (
+            ">=2" in pydantic_dep or ">2" in pydantic_dep
+        ), f"pydantic dependency '{pydantic_dep}' should require v2+"
 
     def test_optional_dependencies_configured(self, pyproject_data):
         """Test that optional dependency groups are properly configured.
@@ -110,15 +110,15 @@ class TestDependencySpecification:
         expected_groups = ["dev"]  # azure is optional
 
         for group in expected_groups:
-            assert group in optional_deps, (
-                f"Optional dependency group '{group}' not found"
-            )
-            assert isinstance(optional_deps[group], list), (
-                f"Optional dependency group '{group}' should be a list"
-            )
-            assert len(optional_deps[group]) > 0, (
-                f"Optional dependency group '{group}' is empty"
-            )
+            assert (
+                group in optional_deps
+            ), f"Optional dependency group '{group}' not found"
+            assert isinstance(
+                optional_deps[group], list
+            ), f"Optional dependency group '{group}' should be a list"
+            assert (
+                len(optional_deps[group]) > 0
+            ), f"Optional dependency group '{group}' is empty"
 
     def test_dev_dependencies_complete(self, pyproject_data):
         """Test that dev dependencies include all necessary tools."""
@@ -137,9 +137,9 @@ class TestDependencySpecification:
         dep_names = [re.split(r"[><=!]", dep)[0].strip() for dep in dev_deps]
 
         for tool in required_tools:
-            assert tool in dep_names, (
-                f"Dev dependency '{tool}' not found in [dev] extras"
-            )
+            assert (
+                tool in dep_names
+            ), f"Dev dependency '{tool}' not found in [dev] extras"
 
 
 class TestDependencyVersionConstraints:
@@ -170,9 +170,9 @@ class TestDependencyVersionConstraints:
                 continue
 
             # If versioned, should use proper operator
-            assert any(op in dep for op in [">=", ">", "==", "~=", "^"]), (
-                f"Dependency '{dep}' should use proper version operator"
-            )
+            assert any(
+                op in dep for op in [">=", ">", "==", "~=", "^"]
+            ), f"Dependency '{dep}' should use proper version operator"
 
     def test_no_upper_version_bounds(self, pyproject_data):
         """Test that dependencies avoid strict upper version bounds."""
@@ -192,9 +192,9 @@ class TestDependencyVersionConstraints:
 
                     if lower_part and upper_part:
                         # Just ensure they're not identical (which would be pointless)
-                        assert lower_part[0].strip() != upper_part[0].strip(), (
-                            f"Dependency '{dep}' has identical upper/lower bounds"
-                        )
+                        assert (
+                            lower_part[0].strip() != upper_part[0].strip()
+                        ), f"Dependency '{dep}' has identical upper/lower bounds"
 
     def test_minimum_version_specified(self, pyproject_data):
         """Test that core dependencies have minimum versions specified."""
@@ -207,9 +207,9 @@ class TestDependencyVersionConstraints:
             dep = next((d for d in dependencies if d.startswith(core_dep)), None)
             assert dep is not None, f"Core dependency '{core_dep}' not found"
 
-            assert ">=" in dep or "==" in dep or "~=" in dep, (
-                f"Core dependency '{core_dep}' should specify minimum version"
-            )
+            assert (
+                ">=" in dep or "==" in dep or "~=" in dep
+            ), f"Core dependency '{core_dep}' should specify minimum version"
 
     def test_typing_extensions_version(self, pyproject_data):
         """Test that typing-extensions has appropriate version for Python 3.11+."""
@@ -222,9 +222,9 @@ class TestDependencyVersionConstraints:
         if typing_ext_dep:
             # For Python 3.11+, we need typing-extensions >= 4.0.0
             # to support all features
-            assert ">=" in typing_ext_dep or ">" in typing_ext_dep, (
-                f"typing-extensions '{typing_ext_dep}' should have minimum version"
-            )
+            assert (
+                ">=" in typing_ext_dep or ">" in typing_ext_dep
+            ), f"typing-extensions '{typing_ext_dep}' should have minimum version"
 
 
 class TestDependencyCompatibility:
@@ -256,80 +256,16 @@ class TestDependencyCompatibility:
 
         assert len(duplicates) == 0, f"Duplicate dependencies found: {duplicates}"
 
-    def test_pyproject_setup_dependency_alignment(self, package_root):
-        """Test that pyproject.toml and setup.py dependencies are aligned."""
-        # Load pyproject.toml dependencies
-        pyproject_file = package_root / "pyproject.toml"
-        with open(pyproject_file, "rb") as f:
-            pyproject_data = tomllib.load(f)
-        pyproject_deps = pyproject_data["project"]["dependencies"]
-
-        # Load setup.py dependencies
-        setup_file = package_root / "setup.py"
-        setup_content = setup_file.read_text()
-
-        # Extract install_requires from setup.py
-        install_requires_match = re.search(
-            r"install_requires\s*=\s*\[(.*?)\]", setup_content, re.DOTALL
-        )
-
-        if install_requires_match:
-            setup_deps_str = install_requires_match.group(1)
-            # Extract individual dependencies
-            setup_deps = [
-                dep.strip().strip("\"'").strip()
-                for dep in setup_deps_str.split(",")
-                if dep.strip() and not dep.strip().startswith("#")
-            ]
-
-            # Extract package names for comparison
-            pyproject_names = sorted(
-                [re.split(r"[><=!]", dep)[0].strip() for dep in pyproject_deps]
-            )
-            setup_names = sorted(
-                [
-                    re.split(r"[><=!]", dep)[0].strip()
-                    for dep in setup_deps
-                    if dep  # Skip empty strings
-                ]
-            )
-
-            # Core dependencies should be present in both
-            # (some differences allowed for optional deps)
-            core_deps = ["kailash", "pydantic"]
-            for dep in core_deps:
-                assert dep in pyproject_names, (
-                    f"Core dep '{dep}' missing from pyproject.toml"
-                )
-                assert dep in setup_names, f"Core dep '{dep}' missing from setup.py"
-
-    def test_python_version_compatibility(self, package_root):
-        """Test that Python version requirement is consistent."""
+    def test_python_version_requires_311(self, package_root):
+        """Test that pyproject.toml requires Python 3.11+."""
         pyproject_file = package_root / "pyproject.toml"
         with open(pyproject_file, "rb") as f:
             pyproject_data = tomllib.load(f)
 
-        setup_file = package_root / "setup.py"
-        setup_content = setup_file.read_text()
-
-        # Get Python version from pyproject.toml
         pyproject_python = pyproject_data["project"]["requires-python"]
-
-        # Get Python version from setup.py
-        python_requires_match = re.search(
-            r'python_requires\s*=\s*["\']([^"\']+)["\']', setup_content
-        )
-        assert python_requires_match, "No python_requires in setup.py"
-        setup_python = python_requires_match.group(1)
-
-        # Both should require Python 3.11+
-        assert pyproject_python == setup_python, (
-            f"Python version mismatch: pyproject.toml={pyproject_python}, "
-            f"setup.py={setup_python}"
-        )
-        assert "3.11" in pyproject_python, (
-            f"Python requirement should be >=3.11, got {pyproject_python}"
-        )
+        assert (
+            "3.11" in pyproject_python
+        ), f"Python requirement should be >=3.11, got {pyproject_python}"
 
 
 class TestDependencyResolution:
@@ -442,6 +378,6 @@ class TestImportDependencies:
         import_time_ms = (end - start) * 1000
 
         # Import should be under 1 second (generous limit for tests)
-        assert import_time_ms < 1000, (
-            f"Package import took {import_time_ms:.2f}ms (should be < 1000ms)"
-        )
+        assert (
+            import_time_ms < 1000
+        ), f"Package import took {import_time_ms:.2f}ms (should be < 1000ms)"

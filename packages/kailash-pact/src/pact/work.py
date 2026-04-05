@@ -75,14 +75,18 @@ class WorkResult:
         success: True if the work completed successfully.
         results: Mapping of output keys to values from execution.
         cost_usd: Total cost consumed during execution.
+        budget_allocated: Budget ceiling allocated to this submission (None = unlimited).
         events: List of event dicts emitted during execution.
+        audit_trail: Structured audit entries [{timestamp, event, role_address, details}].
         error: Human-readable error message if success is False, or None.
     """
 
     success: bool
     results: dict[str, Any] = field(default_factory=dict)
     cost_usd: float = 0.0
+    budget_allocated: float | None = None
     events: list[dict[str, Any]] = field(default_factory=list)
+    audit_trail: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
     governance_shadow: bool = False
     governance_verdicts: list[dict[str, Any]] = field(default_factory=list)
@@ -97,7 +101,9 @@ class WorkResult:
             "success": self.success,
             "results": self.results,
             "cost_usd": self.cost_usd,
+            "budget_allocated": self.budget_allocated,
             "events": list(self.events),
+            "audit_trail": list(self.audit_trail),
             "error": self.error,
             "governance_shadow": self.governance_shadow,
             "governance_verdicts": list(self.governance_verdicts),
@@ -116,11 +122,17 @@ class WorkResult:
         Raises:
             KeyError: If required field 'success' is missing.
         """
+        raw_budget = data.get("budget_allocated")
+        budget_allocated = (
+            _validated_cost(float(raw_budget)) if raw_budget is not None else None
+        )
         return cls(
             success=data["success"],
             results=data.get("results", {}),
             cost_usd=_validated_cost(float(data.get("cost_usd", 0.0))),
+            budget_allocated=budget_allocated,
             events=list(data.get("events", [])),
+            audit_trail=list(data.get("audit_trail", [])),
             error=data.get("error"),
             governance_shadow=data.get("governance_shadow", False),
             governance_verdicts=list(data.get("governance_verdicts", [])),

@@ -504,7 +504,7 @@ class AuditStore(ABC):
         Raises:
             AuditStoreError: If storage fails
         """
-        pass
+        ...
 
     @abstractmethod
     async def get(self, anchor_id: str) -> AuditAnchor:
@@ -520,7 +520,7 @@ class AuditStore(ABC):
         Raises:
             AuditAnchorNotFoundError: If not found
         """
-        pass
+        ...
 
     @abstractmethod
     async def get_agent_history(
@@ -546,7 +546,7 @@ class AuditStore(ABC):
         Returns:
             List of AuditAnchors
         """
-        pass
+        ...
 
     @abstractmethod
     async def get_action_chain(
@@ -565,7 +565,7 @@ class AuditStore(ABC):
         Returns:
             List of AuditAnchors from root to anchor_id
         """
-        pass
+        ...
 
     @abstractmethod
     async def query_by_action(
@@ -591,7 +591,7 @@ class AuditStore(ABC):
         Returns:
             List of matching AuditAnchors
         """
-        pass
+        ...
 
     @abstractmethod
     async def count_by_agent(
@@ -611,4 +611,4 @@ class AuditStore(ABC):
         Returns:
             Number of matching records
         """
-        pass
+        ...

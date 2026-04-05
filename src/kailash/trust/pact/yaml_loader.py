@@ -87,6 +87,7 @@ class EnvelopeSpec:
     temporal: dict[str, Any] | None = None
     data_access: dict[str, Any] | None = None
     communication: dict[str, Any] | None = None
+    gradient_thresholds: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -510,6 +511,7 @@ def _parse_envelopes(
                 temporal=entry.get("temporal"),
                 data_access=entry.get("data_access"),
                 communication=entry.get("communication"),
+                gradient_thresholds=entry.get("gradient_thresholds"),
             )
         )
 
