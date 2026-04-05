@@ -69,6 +69,9 @@ class MockNode(Node):
 
         return params
 
+    def run(self, **kwargs):
+        return self.execute(**kwargs)
+
     def execute(self, **inputs):
         """Execute the node."""
         self.executed = True
@@ -87,6 +90,9 @@ class NodeWithNameParam(Node):
     def get_parameters(self):
         return {}
 
+    def run(self, **kwargs):
+        return self.execute(**kwargs)
+
     def execute(self, **inputs):
         return {"result": f"executed_{self.name}"}
 
@@ -102,6 +108,9 @@ class NodeWithIdParam(Node):
     def get_parameters(self):
         return {}
 
+    def run(self, **kwargs):
+        return self.execute(**kwargs)
+
     def execute(self, **inputs):
         return {"result": f"executed_{self.id}"}
 
@@ -116,6 +125,9 @@ class NodeWithRequiredParam(Node):
 
     def get_parameters(self):
         return {}
+
+    def run(self, **kwargs):
+        return self.execute(**kwargs)
 
     def execute(self, **inputs):
         return {"result": "success"}

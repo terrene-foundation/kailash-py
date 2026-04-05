@@ -11,11 +11,11 @@ You are a multi-channel platform specialist for Kailash Nexus implementation. Ex
 
 ### Layer Preference (Engine-First)
 
-| Need | Layer | API |
-|------|-------|-----|
-| Standard deployment | Engine | `Nexus()` zero-config |
-| Enterprise with presets | Engine | `NexusEngine.builder().preset(Preset.SAAS)` |
-| Custom channel setup | Primitive | `ChannelManager` (rarely needed) |
+| Need                    | Layer     | API                                         |
+| ----------------------- | --------- | ------------------------------------------- |
+| Standard deployment     | Engine    | `Nexus()` zero-config                       |
+| Enterprise with presets | Engine    | `NexusEngine.builder().preset(Preset.SAAS)` |
+| Custom channel setup    | Primitive | `ChannelManager` (rarely needed)            |
 
 **Default to `Nexus()`** — it handles API + CLI + MCP from a single registration. Drop to primitives only for custom protocol extensions.
 
@@ -78,6 +78,25 @@ async def greet(name: str, greeting: str = "Hello") -> dict:
 # DataFlow integration — CRITICAL: prevents startup blocking
 app = Nexus(auto_discovery=False)
 ```
+
+## Transport Layer
+
+Nexus has 4 transports (all implement `Transport` ABC from `nexus.transports.base`):
+
+| Transport            | File                      | Purpose                                      |
+| -------------------- | ------------------------- | -------------------------------------------- |
+| `HTTPTransport`      | `transports/http.py`      | FastAPI/Starlette HTTP endpoints (default)   |
+| `MCPTransport`       | `transports/mcp.py`       | MCP protocol via FastMCP (background thread) |
+| `WebSocketTransport` | `transports/websocket.py` | Bidirectional real-time (JSON-RPC style)     |
+| `WebhookTransport`   | `transports/webhook.py`   | Inbound receiver + outbound delivery         |
+
+**Middleware**: `nexus.middleware.cache.ResponseCacheMiddleware` — TTL + LRU + ETag.
+
+**Security patterns for transports:**
+
+- Webhook: HMAC-SHA256 signatures (`hmac.compare_digest`), SSRF prevention via DNS-pinned delivery, idempotency deduplication
+- WebSocket: `max_connections` enforcement, generic error messages (never leak exception details)
+- All: bounded collections for connection/delivery tracking
 
 ## Framework Selection
 

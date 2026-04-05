@@ -117,6 +117,11 @@ class SagaStepNode(AsyncNode):
             ),
         }
 
+    def run(self, **kwargs) -> dict[str, Any]:
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
+
     def execute(self, **runtime_inputs) -> Dict[str, Any]:
         """Execute the saga step based on the requested operation."""
         # For sync compatibility with LocalRuntime, we don't make this async

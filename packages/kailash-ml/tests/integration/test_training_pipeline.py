@@ -29,7 +29,7 @@ from kailash_ml.engines.training_pipeline import (
     TrainingPipeline,
     TrainingResult,
 )
-from kailash_ml_protocols import FeatureField, FeatureSchema
+from kailash_ml.types import FeatureField, FeatureSchema
 
 
 # ---------------------------------------------------------------------------

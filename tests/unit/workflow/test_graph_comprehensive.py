@@ -64,6 +64,10 @@ class MockNode(Node):
 
         return params
 
+    def run(self, **kwargs):
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, **inputs):
         """Execute the node."""
         self.executed = True
@@ -86,6 +90,9 @@ class NodeWithNameConstructor(Node):
     def get_parameters(self):
         return {}
 
+    def run(self, **kwargs):
+        return self.execute(**kwargs)
+
     def execute(self, **inputs):
         return {"result": f"executed_{self.name}"}
 
@@ -100,6 +107,9 @@ class NodeWithIdConstructor(Node):
     def get_parameters(self):
         return {}
 
+    def run(self, **kwargs):
+        return self.execute(**kwargs)
+
     def execute(self, **inputs):
         return {"result": f"executed_{self._node_id}"}
 
@@ -113,6 +123,9 @@ class NodeWithInvalidConstructor(Node):
 
     def get_parameters(self):
         return {}
+
+    def run(self, **kwargs):
+        return self.execute(**kwargs)
 
     def execute(self, **inputs):
         return {"result": "success"}

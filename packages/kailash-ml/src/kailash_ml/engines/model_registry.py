@@ -23,7 +23,7 @@ from typing import Any, Protocol
 
 from kailash.db.connection import ConnectionManager
 from kailash.db.dialect import _validate_identifier
-from kailash_ml_protocols import MetricSpec, ModelSignature
+from kailash_ml.types import MetricSpec, ModelSignature
 
 logger = logging.getLogger(__name__)
 

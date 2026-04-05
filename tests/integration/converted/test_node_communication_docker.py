@@ -73,6 +73,10 @@ class TestNodeCommunication(DockerIntegrationTestBase):
             def get_parameters(self) -> dict[str, NodeParameter]:
                 return {"input": NodeParameter(name="input", type=str, required=True)}
 
+            def run(self, **kwargs):
+                """Execute the node's logic (Node ABC contract)."""
+                return self.execute(**kwargs)
+
             def execute(self, **kwargs) -> dict[str, Any]:
                 return {"output": "test"}
 

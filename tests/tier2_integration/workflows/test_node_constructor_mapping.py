@@ -247,6 +247,10 @@ class TestNodeConstructorConsistency:
             def get_parameters(self):
                 return {}
 
+            def run(self, **kwargs):
+                """Execute the node's logic (Node ABC contract)."""
+                return self.execute(**kwargs)
+
             def execute(self, **inputs):
                 return {"success": True}
 
@@ -320,6 +324,10 @@ class TestNodeConstructorConsistency:
             def get_parameters(self):
                 return {}
 
+            def run(self, **kwargs):
+                """Execute the node's logic (Node ABC contract)."""
+                return self.execute(**kwargs)
+
             def execute(self, **inputs):
                 return {"success": True}
 
@@ -357,6 +365,10 @@ class TestNodeConstructorConsistency:
         class TestNode(Node):
             def get_parameters(self):
                 return {}
+
+            def run(self, **kwargs):
+                """Execute the node's logic (Node ABC contract)."""
+                return self.execute(**kwargs)
 
             def execute(self, **inputs):
                 return {"success": True}

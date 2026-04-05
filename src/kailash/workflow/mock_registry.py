@@ -21,6 +21,10 @@ class MockNode(Node):
         """Process data."""
         return {"value": data.get("value", 0) * 2}
 
+    def run(self, **kwargs) -> dict[str, Any]:
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, **kwargs) -> dict[str, Any]:
         """Execute node with keyword arguments."""
         return self.process(kwargs)

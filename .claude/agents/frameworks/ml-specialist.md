@@ -79,7 +79,7 @@ await fs.initialize()
 
 ```python
 from kailash_ml import TrainingPipeline, ModelRegistry
-from kailash_ml_protocols import FeatureSchema, FeatureField
+from kailash_ml.types import FeatureSchema, FeatureField
 
 schema = FeatureSchema(
     name="user_churn",

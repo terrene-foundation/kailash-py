@@ -70,6 +70,12 @@ def http_transport_url() -> str:
 
 
 @pytest.fixture
+def base_url(http_transport_url: str) -> str:
+    """Alias for http_transport_url used by instantiation tests."""
+    return http_transport_url
+
+
+@pytest.fixture
 def transport_kwargs(http_transport_url: str) -> dict:
     """Common kwargs for HTTPTransport instantiation in tests."""
     return {"base_url": http_transport_url, "allow_insecure": True}

@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 import polars as pl
-from kailash_ml_protocols import FeatureSchema
+from kailash_ml.types import FeatureSchema
 
 from kailash_ml._decorators import experimental
 

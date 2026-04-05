@@ -180,6 +180,12 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
             ),
         }
 
+    def run(self, **kwargs) -> Dict[str, Any]:
+        """Sync entry point (Node ABC contract). Use async_run() for this node."""
+        raise RuntimeError(
+            f"{type(self).__name__} is async-only. Use async_run() instead."
+        )
+
     async def async_run(
         self,
         action: str,

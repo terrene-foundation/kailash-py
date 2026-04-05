@@ -22,7 +22,7 @@ import polars as pl
 from scipy.stats import ks_2samp
 
 from kailash.db.connection import ConnectionManager
-from kailash_ml_protocols import AgentInfusionProtocol
+from kailash_ml.types import AgentInfusionProtocol
 
 logger = logging.getLogger(__name__)
 

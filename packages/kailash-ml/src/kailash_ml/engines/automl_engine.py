@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import polars as pl
-from kailash_ml_protocols import FeatureSchema
+from kailash_ml.types import FeatureSchema
 
 logger = logging.getLogger(__name__)
 

@@ -2106,8 +2106,8 @@ Check the documentation or explore available resources.
         # P0-5: Validate workflow name (prevent path traversal)
         try:
             validate_workflow_name(workflow_name)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid workflow name.")
 
         # Check workflow exists
         if workflow_name not in self._workflows:
@@ -2120,8 +2120,8 @@ Check the documentation or explore available resources.
             # Use default max size or custom if configured
             max_size = getattr(self, "_max_input_size", 10 * 1024 * 1024)
             inputs = validate_workflow_inputs(inputs, max_size=max_size)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid workflow inputs.")
 
         # Execute workflow via gateway
         try:
@@ -2388,8 +2388,9 @@ Check the documentation or explore available resources.
             try:
                 gateway_health = gw.health_check()
                 base_status["gateway_health"] = gateway_health
-            except Exception as e:
-                base_status["gateway_health"] = {"status": "error", "error": str(e)}
+            except Exception:
+                logger.exception("Gateway health check failed")
+                base_status["gateway_health"] = {"status": "error"}
 
         # Add HTTP transport health
         base_status["http_transport"] = self._http_transport.health_check()

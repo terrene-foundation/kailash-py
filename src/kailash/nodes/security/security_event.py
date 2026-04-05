@@ -85,6 +85,10 @@ class SecurityEventNode(Node):
             ),
         }
 
+    def run(self, **kwargs) -> Dict[str, Any]:
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, **inputs) -> Dict[str, Any]:
         """Execute security event processing."""
         event_type = inputs.get("event_type", "security_check")
@@ -116,8 +120,17 @@ class SecurityEventNode(Node):
         else:
             self.logger.info(log_message)
 
-        # Check for alerting
-        should_alert = severity.value >= self.alert_threshold.value
+        # Check for alerting (use numeric ordering, not string comparison)
+        _severity_rank = {
+            SeverityLevel.INFO: 0,
+            SeverityLevel.LOW: 1,
+            SeverityLevel.MEDIUM: 2,
+            SeverityLevel.HIGH: 3,
+            SeverityLevel.CRITICAL: 4,
+        }
+        should_alert = _severity_rank.get(severity, 0) >= _severity_rank.get(
+            self.alert_threshold, 0
+        )
 
         return {
             "security_event": {

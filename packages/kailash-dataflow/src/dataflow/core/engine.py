@@ -1210,7 +1210,7 @@ class DataFlow(DataFlowEventMixin):
             # Preserve any events logged before backend was ready
             self._audit_integration.events.extend(old_events)
 
-            logger.info(
+            logger.debug(
                 "Audit trail persistence initialized (%s)", type(backend).__name__
             )
         except Exception:

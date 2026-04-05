@@ -15,7 +15,7 @@ from typing import Any
 
 import polars as pl
 from kailash.db.connection import ConnectionManager
-from kailash_ml_protocols import FeatureField, FeatureSchema
+from kailash_ml.types import FeatureField, FeatureSchema
 
 from kailash_ml.engines import _feature_sql as sql
 from kailash_ml.interop import polars_to_dict_records

@@ -81,7 +81,7 @@ class TestScheduledDecorator:
         with Nexus(enable_durability=False) as app:
 
             @app.scheduled("5m")
-            async def cleanup():
+            async def cleanup(request=None):
                 pass
 
             handlers = app._registry.list_handlers()
@@ -96,7 +96,7 @@ class TestScheduledDecorator:
         with Nexus(enable_durability=False) as app:
 
             @app.scheduled("1h", cron="0 * * * *")
-            async def hourly_task():
+            async def hourly_task(request=None):
                 pass
 
             handlers = app._registry.list_handlers()
@@ -110,7 +110,7 @@ class TestScheduledDecorator:
         with Nexus(enable_durability=False) as app:
 
             @app.scheduled("30s")
-            async def tick():
+            async def tick(request=None):
                 pass
 
             assert tick.__name__ == "tick"

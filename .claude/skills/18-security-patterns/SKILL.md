@@ -99,6 +99,33 @@ workflow.add_node("HTTPRequestNode", "api", {
 - [ ] OWASP Top 10 checked
 - [ ] Security review completed
 
+## SSRF Prevention (Webhook/Outbound HTTP)
+
+When making outbound HTTP requests to user-supplied URLs:
+
+1. **Validate URL scheme** — only `http://` and `https://`
+2. **Resolve DNS and check IP** — block RFC 1918, loopback, link-local, cloud metadata
+3. **Check IPv4-mapped IPv6** — `::ffff:127.0.0.1` bypasses IPv4-only blocklists. Use `addr.ipv4_mapped` to extract and re-validate
+4. **Pin resolved IP** — replace hostname with resolved IP in the URL to prevent DNS rebinding. Set `Host` header to original hostname
+5. **Block `0.0.0.0/8`** — routes to localhost on some systems
+
+Reference implementation: `nexus.transports.webhook._validate_target_url()` and `_is_blocked_address()`
+
+## Error Message Security
+
+Never return `str(exc)` or `str(e)` to clients — it leaks file paths, class names, database URLs.
+
+```python
+# ❌ WRONG
+except Exception as e:
+    return {"error": str(e)}
+
+# ✅ CORRECT
+except Exception:
+    logger.exception("Operation failed")
+    return {"error": "Internal server error"}
+```
+
 ## Common Vulnerabilities Prevented
 
 | Vulnerability            | Prevention Pattern                        |
@@ -107,6 +134,7 @@ workflow.add_node("HTTPRequestNode", "api", {
 | Code Injection           | Avoid `eval()`, use PythonCodeNode safely |
 | Credential Exposure      | Environment variables, secret managers    |
 | XSS                      | Output encoding, CSP headers              |
+| SSRF                     | DNS-pinned delivery, blocked IP ranges    |
 | CSRF                     | Token validation, SameSite cookies        |
 | Insecure Deserialization | Validate serialized data                  |
 

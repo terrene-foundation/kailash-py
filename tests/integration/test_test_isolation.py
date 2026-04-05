@@ -14,6 +14,10 @@ class TestGlobalStateIsolation:
 
         # Register a custom node
         class TestPollutionNode1(Node):
+            def run(self, **kwargs):
+                """Execute the node's logic (Node ABC contract)."""
+                return self.execute(**kwargs)
+
             def execute(self, **inputs):
                 return {"result": "test1"}
 
@@ -31,6 +35,10 @@ class TestGlobalStateIsolation:
 
         # Register a different node
         class TestPollutionNode2(Node):
+            def run(self, **kwargs):
+                """Execute the node's logic (Node ABC contract)."""
+                return self.execute(**kwargs)
+
             def execute(self, **inputs):
                 return {"result": "test2"}
 
@@ -48,6 +56,10 @@ class TestGlobalStateIsolation:
 
         # Verify we can still register nodes
         class TestPollutionNode3(Node):
+            def run(self, **kwargs):
+                """Execute the node's logic (Node ABC contract)."""
+                return self.execute(**kwargs)
+
             def execute(self, **inputs):
                 return {"result": "test3"}
 
@@ -88,6 +100,10 @@ class TestIsolationWithCleanRegistry:
 
         # Register a node
         class CleanTestNode(Node):
+            def run(self, **kwargs):
+                """Execute the node's logic (Node ABC contract)."""
+                return self.execute(**kwargs)
+
             def execute(self, **inputs):
                 return {"clean": True}
 
@@ -155,6 +171,10 @@ class TestIsolationErrorRecovery:
 
         # Pollute the registry
         class PollutingFailNode(Node):
+            def run(self, **kwargs):
+                """Execute the node's logic (Node ABC contract)."""
+                return self.execute(**kwargs)
+
             def execute(self, **inputs):
                 return {"polluted": True}
 
@@ -173,6 +193,10 @@ class TestIsolationErrorRecovery:
 
         # We can still use the registry normally
         class CleanNode(Node):
+            def run(self, **kwargs):
+                """Execute the node's logic (Node ABC contract)."""
+                return self.execute(**kwargs)
+
             def execute(self, **inputs):
                 return {"clean": True}
 

@@ -93,6 +93,10 @@ class SmartMergeNode(SmartNodeConnectionMixin, Node):
             ),
         }
 
+    def run(self, **kwargs):
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, **kwargs) -> Dict[str, Any]:
         """Execute smart merge operation with connection pool integration."""
         return self._execute_with_connection(self._perform_merge, **kwargs)

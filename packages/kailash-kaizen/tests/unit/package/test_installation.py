@@ -5,6 +5,7 @@ This module tests that the package can be built, installed, and used correctly
 across different installation methods (source dist, wheel, editable, with extras).
 """
 
+import os
 import re
 import shutil
 import subprocess
@@ -145,11 +146,27 @@ class TestPackageInstallation:
     @pytest.fixture
     def isolated_venv(self):
         """Create isolated virtual environment for testing installation."""
+        uv_path = shutil.which("uv")
         with tempfile.TemporaryDirectory() as temp_dir:
             venv_path = Path(temp_dir) / "test_venv"
-            venv.create(venv_path, with_pip=True, clear=True)
 
-            # Get paths to python and pip in venv
+            if uv_path:
+                subprocess.run(
+                    [uv_path, "venv", str(venv_path), "--python", sys.executable],
+                    capture_output=True,
+                    check=True,
+                )
+                # Install pip into the uv-managed venv so tests can use it
+                env = {**os.environ, "VIRTUAL_ENV": str(venv_path)}
+                subprocess.run(
+                    [uv_path, "pip", "install", "pip"],
+                    capture_output=True,
+                    check=True,
+                    env=env,
+                )
+            else:
+                venv.create(venv_path, with_pip=True, clear=True)
+
             if sys.platform == "win32":
                 python_path = venv_path / "Scripts" / "python.exe"
                 pip_path = venv_path / "Scripts" / "pip.exe"
@@ -325,34 +342,54 @@ class TestInstallationValidation:
 
     @pytest.fixture
     def isolated_venv(self):
-        """Create isolated virtual environment for testing installation."""
+        """Create isolated virtual environment with package pre-installed."""
+        uv_path = shutil.which("uv")
+        pkg_root = Path(__file__).parent.parent.parent.parent
         with tempfile.TemporaryDirectory() as temp_dir:
             venv_path = Path(temp_dir) / "test_venv"
-            venv.create(venv_path, with_pip=True, clear=True)
 
-            if sys.platform == "win32":
-                python_path = venv_path / "Scripts" / "python.exe"
-                pip_path = venv_path / "Scripts" / "pip.exe"
+            if uv_path:
+                subprocess.run(
+                    [uv_path, "venv", str(venv_path), "--python", sys.executable],
+                    capture_output=True,
+                    check=True,
+                )
+                # Install pip + package via uv with VIRTUAL_ENV
+                env = {**os.environ, "VIRTUAL_ENV": str(venv_path)}
+                subprocess.run(
+                    [uv_path, "pip", "install", "pip", "-e", str(pkg_root)],
+                    capture_output=True,
+                    check=True,
+                    env=env,
+                )
             else:
-                python_path = venv_path / "bin" / "python"
-                pip_path = venv_path / "bin" / "pip"
+                venv.create(venv_path, with_pip=True, clear=True)
+                pip_path = (
+                    venv_path / "Scripts" / "pip.exe"
+                    if sys.platform == "win32"
+                    else venv_path / "bin" / "pip"
+                )
+                subprocess.run(
+                    [str(pip_path), "install", "-e", str(pkg_root)],
+                    capture_output=True,
+                    check=True,
+                )
 
-            # Install package in editable mode
-            subprocess.run(
-                [
-                    str(pip_path),
-                    "install",
-                    "-e",
-                    str(Path(__file__).parent.parent.parent.parent),
-                ],
-                capture_output=True,
-                check=True,
+            python_bin = (
+                venv_path / "Scripts" / "python.exe"
+                if sys.platform == "win32"
+                else venv_path / "bin" / "python"
+            )
+            pip_bin = (
+                venv_path / "Scripts" / "pip.exe"
+                if sys.platform == "win32"
+                else venv_path / "bin" / "pip"
             )
 
             yield {
                 "venv_path": venv_path,
-                "python": str(python_path),
-                "pip": str(pip_path),
+                "python": str(python_bin),
+                "pip": str(pip_bin),
             }
 
     def test_package_version_accessible(self, isolated_venv):

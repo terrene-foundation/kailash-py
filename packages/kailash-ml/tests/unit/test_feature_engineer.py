@@ -15,7 +15,7 @@ from kailash_ml.engines.feature_engineer import (
     GeneratedFeatures,
     SelectedFeatures,
 )
-from kailash_ml_protocols import FeatureField, FeatureSchema
+from kailash_ml.types import FeatureField, FeatureSchema
 
 
 # ---------------------------------------------------------------------------
