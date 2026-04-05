@@ -15,6 +15,56 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash-ml 0.4.0 + kailash-pact 0.7.2 — 2026-04-05
+
+#### [kailash-ml 0.4.0]
+
+##### Added
+
+- **DataExplorer promoted to P1** with ydata-profiling feature parity
+- Async-first API: `profile()`, `visualize()`, `compare()`, `to_html()` are all async with parallel matrix computation via `asyncio.gather()`
+- **Skewness + kurtosis** per numeric column (numpy, excess kurtosis)
+- **Spearman rank correlation** via polars `rank()` + Pearson (no scipy)
+- **Cramer's V** categorical association matrix (hand-rolled, no scipy, bounded at 20 cols / 100 cardinality)
+- **IQR outlier detection** per numeric column (1.5x IQR Tukey fence)
+- **Type inference**: boolean, id, constant, categorical, numeric, text
+- **AlertConfig** with 8 configurable alert types: high_nulls, constant, high_skewness, high_zeros, high_cardinality, high_correlation, duplicates, imbalanced
+- **Duplicate row detection** via `polars.is_duplicated()`
+- **zero_count / zero_pct** per numeric column
+- **cardinality_ratio** (unique/count) for all columns
+- **memory_bytes**, **sample_head**, **sample_tail**, **type_summary** in DataProfile
+- **HTML report** (`to_html()`): self-contained, inline plotly.js, dark/light theme, sidebar navigation, XSS-safe
+- `_data_explorer_report.py`: HTML report generator with safe uid sanitization, NaN-safe correlation colors
+- `from_dict()` validation: required field checks, type/range validation on count/null_count/n_rows
+- PyCaret comparison test suite (13 tests covering full ML lifecycle)
+
+##### Changed
+
+- DataExplorer API is now **async** (breaking: `profile()` → `await explorer.profile()`)
+- Missing patterns computation bounded at 20 null columns (prevents O(2^n) group-by)
+- `@experimental` decorator removed (P2 → P1 promotion)
+
+##### Security
+
+- XSS-safe HTML report: `html.escape()` on all user content, `_safe_uid()` for plotly div IDs
+- `math.isfinite()` guards on all numpy-computed statistics (skewness, kurtosis, correlation)
+- Silent `except: pass` replaced with `logger.debug()` logging
+- Double HTML-escape bug fixed in `to_html()` title
+
+#### [kailash-pact 0.7.2]
+
+##### Fixed
+
+- **#291**: WorkResult constructor now validates cost_usd and budget_allocated via `__post_init__` — NaN/Inf clamped to 0.0/None with warning log
+- **#292**: PactEngine.submit() now acquires `asyncio.Lock` making check-remaining → execute → record-cost atomic — prevents concurrent budget overspend race
+
+##### Security
+
+- NaN/Inf in WorkResult financial fields no longer propagate to downstream consumers (dashboards, billing)
+- Concurrent submit() calls serialized — budget integrity guaranteed under multi-threaded server deployments
+
+---
+
 ### Multi-Package Release — 2026-04-05
 
 #### [kailash 2.5.1] — Core SDK

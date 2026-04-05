@@ -8,6 +8,7 @@ Use ``from kailash_ml import FeatureStore`` to load a specific engine.
 from __future__ import annotations
 
 from kailash_ml._version import __version__
+from kailash_ml.engines.data_explorer import AlertConfig
 from kailash_ml.types import (
     AgentInfusionProtocol,
     FeatureField,
@@ -29,6 +30,7 @@ def __getattr__(name: str):  # noqa: N807
         "HyperparameterSearch": "kailash_ml.engines.hyperparameter_search",
         "AutoMLEngine": "kailash_ml.engines.automl_engine",
         "DataExplorer": "kailash_ml.engines.data_explorer",
+        "AlertConfig": "kailash_ml.engines.data_explorer",
         "FeatureEngineer": "kailash_ml.engines.feature_engineer",
         "EnsembleEngine": "kailash_ml.engines.ensemble",
         "ExperimentTracker": "kailash_ml.engines.experiment_tracker",
@@ -70,6 +72,7 @@ __all__ = [
     "HyperparameterSearch",
     "AutoMLEngine",
     "DataExplorer",
+    "AlertConfig",
     "FeatureEngineer",
     "EnsembleEngine",
     "ExperimentTracker",

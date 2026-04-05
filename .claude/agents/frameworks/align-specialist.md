@@ -1,6 +1,6 @@
 ---
 name: align-specialist
-description: "LLM alignment specialist. Use for fine-tuning, LoRA adapters, RLHF/DPO/GRPO training, or model serving."
+description: "kailash-align specialist. Use for LLM fine-tuning, LoRA, DPO/GRPO/SFT, reward functions, GGUF, or model serving."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---

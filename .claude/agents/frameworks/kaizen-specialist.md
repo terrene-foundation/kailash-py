@@ -1,6 +1,6 @@
 ---
 name: kaizen-specialist
-description: "Kaizen AI framework specialist. Use for BaseAgent, signature-based programming, or multi-agent coordination."
+description: "kailash-kaizen specialist. Use for AI agents, signatures, Delegate, multi-agent orchestration, A2A, or planning."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---

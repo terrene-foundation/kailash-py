@@ -1,6 +1,6 @@
 ---
 name: pact-specialist
-description: "PACT governance specialist. Use for D/T/R addressing, operating envelopes, or MCP tool policy."
+description: "kailash-pact specialist. Use for governance, D/T/R addressing, envelopes, access enforcement, or knowledge clearance."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---

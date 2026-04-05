@@ -1,6 +1,6 @@
 ---
 name: nexus-specialist
-description: "Nexus multi-channel specialist. Use for production deployment, API+CLI+MCP orchestration, or DataFlow integration."
+description: "kailash-nexus specialist. Use for API+CLI+MCP deployment, handlers, transports, middleware, sessions, or webhooks."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---
@@ -159,15 +159,3 @@ When this guidance is insufficient, consult:
 - `.claude/skills/03-nexus/` - Complete Nexus skills directory
 - `.claude/skills/03-nexus/nexus-dataflow-integration.md` - Integration patterns
 - `.claude/skills/03-nexus/nexus-troubleshooting.md` - Troubleshooting and input mapping
-
----
-
-**Use this agent when:**
-
-- Setting up Nexus production deployments
-- Implementing multi-channel orchestration
-- Resolving DataFlow blocking issues
-- Configuring enterprise features (auth, monitoring)
-- Debugging channel-specific problems
-
-**For basic patterns (setup, simple registration), use Skills directly for faster response.**
