@@ -61,6 +61,10 @@ class AuditLogNode(Node):
             ),
         }
 
+    def run(self, **kwargs) -> Dict[str, Any]:
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, **inputs) -> Dict[str, Any]:
         """Execute audit logging."""
         event_data = inputs.get("event_data", {})

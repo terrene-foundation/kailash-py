@@ -92,6 +92,9 @@ class TestNodeTestHelperAdditional:
             def get_parameters(self):
                 return {}
 
+            def run(self, **kwargs):
+                return self.execute(**kwargs)
+
             def execute(self, **kwargs):
                 # Override execute to throw WorkflowExecutionError directly
                 raise WorkflowExecutionError("Workflow failed")

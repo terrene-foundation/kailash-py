@@ -53,12 +53,12 @@ server = InferenceServer(registry)
 monitor = DriftMonitor(conn)
 ```
 
-## Protocols (kailash-ml-protocols)
+## Type Contracts (kailash_ml.types)
 
-Cross-package contracts (separate package, no heavy dependencies):
+Cross-package contracts (stdlib-only types, no heavy dependencies):
 
 ```python
-from kailash_ml_protocols import (
+from kailash_ml.types import (
     MLToolProtocol,           # InferenceServer implements this for Kaizen tools
     AgentInfusionProtocol,    # AutoMLEngine's LLM interface
     FeatureSchema,            # FeatureStore schema definition

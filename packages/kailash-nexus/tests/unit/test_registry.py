@@ -200,10 +200,10 @@ class TestHandlerRegistryHandlers:
         reg = HandlerRegistry()
         assert reg.handler_count == 0
 
-        async def a():
+        async def a(request):
             pass
 
-        async def b():
+        async def b(request):
             pass
 
         reg.register_handler("a", a)
@@ -213,10 +213,10 @@ class TestHandlerRegistryHandlers:
     def test_list_handlers(self):
         reg = HandlerRegistry()
 
-        async def handler1():
+        async def handler1(request):
             pass
 
-        async def handler2():
+        async def handler2(request):
             pass
 
         reg.register_handler("first", handler1)
@@ -229,7 +229,7 @@ class TestHandlerRegistryHandlers:
     def test_handler_with_tags_and_metadata(self):
         reg = HandlerRegistry()
 
-        async def func():
+        async def func(request):
             pass
 
         hd = reg.register_handler(
@@ -245,7 +245,7 @@ class TestHandlerRegistryHandlers:
         """register_handler stores a workflow reference for backward compat."""
         reg = HandlerRegistry()
 
-        async def func():
+        async def func(request):
             pass
 
         wf = object()
@@ -256,7 +256,7 @@ class TestHandlerRegistryHandlers:
     def test_handler_description_from_docstring(self):
         reg = HandlerRegistry()
 
-        async def func():
+        async def func(request):
             """This handler does something."""
             pass
 
@@ -336,7 +336,7 @@ class TestHandlerRegistryEventBusIntegration:
         """Registry works without an EventBus."""
         reg = HandlerRegistry()
 
-        async def func():
+        async def func(request):
             pass
 
         hd = reg.register_handler("test", func)
@@ -352,7 +352,7 @@ class TestHandlerRegistryEventBusIntegration:
 
         reg = HandlerRegistry(event_bus=FakeBus())
 
-        async def func():
+        async def func(request):
             pass
 
         reg.register_handler("test", func)

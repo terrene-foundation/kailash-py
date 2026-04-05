@@ -221,6 +221,11 @@ class ConnectionDashboardNode(Node):
             ),
         }
 
+    def run(self, **kwargs) -> dict[str, Any]:
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
+
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:  # type: ignore[override]
         """Execute dashboard action.
 

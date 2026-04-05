@@ -34,7 +34,7 @@ SQLite / PostgreSQL / MySQL
 ```python
 from kailash.db.connection import ConnectionManager
 from kailash_ml import FeatureStore
-from kailash_ml_protocols import FeatureSchema, FeatureField
+from kailash_ml.types import FeatureSchema, FeatureField
 
 # 1. Create ConnectionManager (caller owns lifecycle)
 conn = ConnectionManager("sqlite:///ml.db")

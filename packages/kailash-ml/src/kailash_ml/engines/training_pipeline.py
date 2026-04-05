@@ -17,7 +17,7 @@ from typing import Any
 
 import numpy as np
 import polars as pl
-from kailash_ml_protocols import (
+from kailash_ml.types import (
     AgentInfusionProtocol,
     FeatureField,
     FeatureSchema,

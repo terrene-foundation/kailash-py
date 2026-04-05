@@ -85,6 +85,10 @@ class SecurityEventNode(Node):
             ),
         }
 
+    def run(self, **kwargs) -> Dict[str, Any]:
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, **inputs) -> Dict[str, Any]:
         """Execute security event processing."""
         event_type = inputs.get("event_type", "security_check")

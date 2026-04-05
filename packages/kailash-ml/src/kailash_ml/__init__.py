@@ -8,6 +8,14 @@ Use ``from kailash_ml import FeatureStore`` to load a specific engine.
 from __future__ import annotations
 
 from kailash_ml._version import __version__
+from kailash_ml.types import (
+    AgentInfusionProtocol,
+    FeatureField,
+    FeatureSchema,
+    MetricSpec,
+    MLToolProtocol,
+    ModelSignature,
+)
 
 
 def __getattr__(name: str):  # noqa: N807
@@ -46,6 +54,14 @@ def __getattr__(name: str):  # noqa: N807
 
 __all__ = [
     "__version__",
+    # Types (from kailash_ml.types)
+    "AgentInfusionProtocol",
+    "FeatureField",
+    "FeatureSchema",
+    "MetricSpec",
+    "MLToolProtocol",
+    "ModelSignature",
+    # Engines
     "FeatureStore",
     "ModelRegistry",
     "TrainingPipeline",

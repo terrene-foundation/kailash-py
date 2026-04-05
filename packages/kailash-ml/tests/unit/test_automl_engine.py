@@ -17,7 +17,7 @@ from kailash_ml.engines.automl_engine import (
     _CLASSIFICATION_CANDIDATES,
     _REGRESSION_CANDIDATES,
 )
-from kailash_ml_protocols import FeatureField, FeatureSchema
+from kailash_ml.types import FeatureField, FeatureSchema
 
 
 # ---------------------------------------------------------------------------

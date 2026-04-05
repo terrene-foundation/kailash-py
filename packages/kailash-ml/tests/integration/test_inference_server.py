@@ -18,7 +18,7 @@ from kailash_ml.engines.model_registry import (
     LocalFileArtifactStore,
     ModelRegistry,
 )
-from kailash_ml_protocols import (
+from kailash_ml.types import (
     FeatureField,
     FeatureSchema,
     MetricSpec,

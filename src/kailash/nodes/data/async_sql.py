@@ -633,6 +633,11 @@ class EnterpriseConnectionPool:
             # Direct adapter access for SQLite
             return self._adapter._get_connection()  # type: ignore[union-attr]
 
+    def run(self, **kwargs) -> dict[str, Any]:
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
+
     async def execute_query(
         self, query: str, params: Optional[Union[tuple, dict]] = None, **kwargs
     ) -> Any:

@@ -149,6 +149,10 @@ class SecureGovernedNode(SecurityMixin, LoggingMixin, PerformanceMixin, Node, AB
                     f"Governance validation setup warning: {e}", level="WARNING"
                 )
 
+    def run(self, **kwargs) -> dict[str, Any]:
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, **kwargs) -> Dict[str, Any]:
         """
         Execute node with full governance and security enforcement.

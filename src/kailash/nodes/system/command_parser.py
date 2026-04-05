@@ -87,6 +87,10 @@ class CommandParserNode(Node):
             ),
         }
 
+    def run(self, **kwargs) -> Dict[str, Any]:
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, **kwargs) -> Dict[str, Any]:
         """Execute command parsing.
 
@@ -461,6 +465,10 @@ class InteractiveShellNode(Node):
             ),
         }
 
+    def run(self, **kwargs) -> Dict[str, Any]:
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, **kwargs) -> Dict[str, Any]:
         """Execute interactive shell processing.
 
@@ -482,7 +490,8 @@ class InteractiveShellNode(Node):
                 session_state["environment"] = {}
             if "working_directory" not in session_state:
                 session_state["working_directory"] = "/"
-            if "last_command_time" not in session_state: session_state["last_command_time"] = None
+            if "last_command_time" not in session_state:
+                session_state["last_command_time"] = None
 
             # Process special shell commands BEFORE adding to history
             shell_result = self._process_shell_commands(command_input, session_state)
@@ -646,6 +655,10 @@ class CommandRouterNode(Node):
                 description="Default handler for unmatched commands",
             ),
         }
+
+    def run(self, **kwargs) -> Dict[str, Any]:
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
 
     def execute(self, **kwargs) -> Dict[str, Any]:
         """Execute command routing.
