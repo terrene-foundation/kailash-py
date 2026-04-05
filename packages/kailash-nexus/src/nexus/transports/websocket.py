@@ -392,8 +392,16 @@ class WebSocketTransport(Transport):
         if request_path is not None:
             path = getattr(request_path, "path", None)
             if path is not None and path != self._path:
-                await websocket.close(4004, f"Invalid path: {path}")
+                await websocket.close(4004, "Invalid path")
                 return
+
+        # Enforce max_connections (H2: prevent resource exhaustion)
+        if (
+            self._max_connections is not None
+            and len(self._connections) >= self._max_connections
+        ):
+            await websocket.close(4013, "Connection limit reached")
+            return
 
         connection_id = uuid.uuid4().hex
         tracked = _TrackedConnection(websocket, connection_id)
@@ -450,8 +458,10 @@ class WebSocketTransport(Transport):
                 if isinstance(raw_message, bytes):
                     raw_message = raw_message.decode("utf-8")
                 message = json.loads(raw_message)
-            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-                await self._send_error(tracked.ws, None, -32700, f"Parse error: {exc}")
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                await self._send_error(
+                    tracked.ws, None, -32700, "Parse error: invalid JSON"
+                )
                 continue
 
             if not isinstance(message, dict):
@@ -493,13 +503,13 @@ class WebSocketTransport(Transport):
         try:
             result = await self._invoke_handler(handler_def, params)
             await self._send_result(tracked.ws, request_id, result)
-        except Exception as exc:
+        except Exception:
             logger.exception("Handler '%s' raised an exception", method)
             await self._send_error(
                 tracked.ws,
                 request_id,
                 -32000,
-                f"Handler error: {exc}",
+                "Internal handler error",
             )
 
     async def _invoke_handler(self, handler_def: HandlerDef, params: Any) -> Any:

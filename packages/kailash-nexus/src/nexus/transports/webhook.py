@@ -4,10 +4,14 @@
 from __future__ import annotations
 
 import asyncio
+import collections
 import hashlib
 import hmac
+import ipaddress
 import logging
+import socket
 import time
+import urllib.parse
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
@@ -19,6 +23,42 @@ from nexus.transports.base import Transport
 logger = logging.getLogger(__name__)
 
 __all__ = ["WebhookTransport", "DeliveryStatus", "WebhookDelivery"]
+
+_BLOCKED_NETS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+]
+
+
+def _validate_target_url(url: str) -> None:
+    """Validate a webhook target URL to prevent SSRF attacks.
+
+    Rejects URLs with non-HTTP schemes or hostnames that resolve to
+    private/internal IP ranges. If DNS resolution fails (e.g. offline),
+    the URL is allowed — delivery will fail at send time instead.
+    """
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Unsupported URL scheme: {parsed.scheme!r}")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("URL has no hostname")
+    try:
+        for info in socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP):
+            addr = ipaddress.ip_address(info[4][0])
+            for net in _BLOCKED_NETS:
+                if addr in net:
+                    raise ValueError("Target URL resolves to blocked private address")
+    except socket.gaierror:
+        # DNS resolution may fail in offline/sandboxed environments.
+        # Allow registration; delivery will fail at send time.
+        logger.debug("Could not resolve hostname %r during SSRF check", hostname)
 
 
 class DeliveryStatus(str, Enum):
@@ -92,6 +132,7 @@ class WebhookTransport(Transport):
         max_delay: float = 60.0,
         idempotency_ttl: float = 3600.0,
         max_idempotency_keys: int = 10000,
+        max_deliveries: int = 10000,
     ):
         self._secret = secret
         self._signature_header = signature_header
@@ -101,6 +142,7 @@ class WebhookTransport(Transport):
         self._max_delay = max_delay
         self._idempotency_ttl = idempotency_ttl
         self._max_idempotency_keys = max_idempotency_keys
+        self._max_deliveries = max_deliveries
 
         self._running = False
         self._registry: Optional[HandlerRegistry] = None
@@ -362,7 +404,11 @@ class WebhookTransport(Transport):
         Args:
             handler_name: The handler whose results should be delivered.
             url: The target URL to POST results to.
+
+        Raises:
+            ValueError: If the URL resolves to a private/internal address (SSRF prevention).
         """
+        _validate_target_url(url)
         if handler_name not in self._target_urls:
             self._target_urls[handler_name] = []
         if url not in self._target_urls[handler_name]:
@@ -409,7 +455,12 @@ class WebhookTransport(Transport):
 
         Returns:
             A WebhookDelivery tracking the delivery outcome.
+
+        Raises:
+            ValueError: If the URL resolves to a private/internal address (SSRF prevention).
         """
+        _validate_target_url(target_url)
+
         import json
 
         delivery = WebhookDelivery(
@@ -420,6 +471,11 @@ class WebhookTransport(Transport):
             max_attempts=self._max_retries,
         )
         self._deliveries[delivery.delivery_id] = delivery
+
+        # Evict oldest deliveries if over limit (H1: bounded collection)
+        while len(self._deliveries) > self._max_deliveries:
+            oldest_key = next(iter(self._deliveries))
+            del self._deliveries[oldest_key]
 
         body = json.dumps(payload).encode("utf-8")
         headers: Dict[str, str] = {"Content-Type": "application/json"}

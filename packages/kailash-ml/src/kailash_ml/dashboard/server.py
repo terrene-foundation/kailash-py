@@ -214,8 +214,8 @@ async def _compare_runs(request: Any) -> Any:
 
     try:
         comparison = await tracker.compare_runs(run_ids)
-    except RunNotFoundError as exc:
-        return _error_response(str(exc), 404)
+    except RunNotFoundError:
+        return _error_response("One or more run IDs not found.", 404)
 
     return _json_response(comparison.to_dict())
 
@@ -272,9 +272,9 @@ async def _list_features(request: Any) -> Any:
 
     try:
         schemas = await feature_store.list_schemas()
-    except Exception as exc:
-        logger.debug("Failed to list feature schemas.", exc_info=True)
-        return _error_response(str(exc), 500)
+    except Exception:
+        logger.exception("Failed to list feature schemas.")
+        return _error_response("Internal server error", 500)
 
     return _json_response(schemas)
 
@@ -286,13 +286,17 @@ async def _get_drift_history(request: Any) -> Any:
         return _json_response([])
 
     model_name = request.path_params["model_name"]
-    limit = int(request.query_params.get("limit", "50"))
+
+    try:
+        limit = max(1, min(int(request.query_params.get("limit", "50")), 1000))
+    except (ValueError, TypeError):
+        return _error_response("Invalid 'limit' parameter.", 400)
 
     try:
         history = await drift_monitor.get_drift_history(model_name, limit=limit)
-    except Exception as exc:
-        logger.debug("Failed to get drift history.", exc_info=True)
-        return _error_response(str(exc), 500)
+    except Exception:
+        logger.exception("Failed to get drift history.")
+        return _error_response("Internal server error", 500)
 
     return _json_response(history)
 

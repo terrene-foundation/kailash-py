@@ -476,7 +476,7 @@ class TestMessageHandling:
                 raw = await asyncio.wait_for(ws.recv(), timeout=2.0)
                 resp = json.loads(raw)
                 assert resp["error"]["code"] == -32000
-                assert "something went wrong" in resp["error"]["message"]
+                assert "Internal handler error" in resp["error"]["message"]
         finally:
             await transport.stop()
 
