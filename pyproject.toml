@@ -88,6 +88,13 @@ kaizen = [
 pact = [
     "kailash-pact>=0.7.0",
 ]
+ml = [
+    "kailash-ml>=0.2.0",
+    "kailash-ml-protocols>=0.1.0",
+]
+align = [
+    "kailash-align>=0.2.0",
+]
 # Secret backends (vendor-specific SDKs)
 vault = [
     "hvac>=2.1.0",
@@ -179,3 +186,8 @@ ignore = ["E203", "E501", "F401", "F841"]
 "tests/integration/api/test_workflow_api.py" = ["E402"]
 # RAG nodes with embedded Python code strings
 "src/kailash/nodes/rag/privacy.py" = ["F821"]
+
+[tool.uv.sources]
+kailash-ml = { path = "packages/kailash-ml", editable = true }
+kailash-ml-protocols = { path = "packages/kailash-ml-protocols", editable = true }
+kailash-align = { path = "packages/kailash-align", editable = true }

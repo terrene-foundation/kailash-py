@@ -141,6 +141,10 @@ class TestFromSklearnOutput:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(
+    not __import__("importlib").util.find_spec("pyarrow"),
+    reason="pyarrow not installed",
+)
 class TestPolarsToArrow:
     def test_basic_conversion(self, sample_df: pl.DataFrame) -> None:
         table = polars_to_arrow(sample_df)
@@ -169,6 +173,10 @@ class TestPolarsToArrow:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skipif(
+    not __import__("importlib").util.find_spec("pyarrow"),
+    reason="pyarrow not installed (required for polars↔pandas)",
+)
 class TestPandasRoundTrip:
     def test_numeric_round_trip(self, numeric_df: pl.DataFrame) -> None:
         pdf = to_pandas(numeric_df)
