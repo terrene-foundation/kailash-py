@@ -12,12 +12,12 @@ class TestVersion:
     def test_version_accessible(self):
         from kailash_align._version import __version__
 
-        assert __version__ == "0.1.0"
+        assert __version__ == "0.2.0"
 
     def test_version_from_package(self):
         import kailash_align
 
-        assert kailash_align.__version__ == "0.1.0"
+        assert kailash_align.__version__ == "0.2.0"
 
 
 class TestLazyImports:

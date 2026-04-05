@@ -33,6 +33,10 @@ class MockSuccessNode(Node):
     def get_parameters(self) -> dict:
         return {}
 
+    def run(self, **kwargs):
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, **kwargs) -> Dict[str, Any]:
         return {"success": True, "data": "operation completed"}
 
@@ -43,6 +47,10 @@ class MockFailureNode(Node):
     def get_parameters(self) -> dict:
         return {}
 
+    def run(self, **kwargs):
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, **kwargs) -> Dict[str, Any]:
         return {"success": False, "error": "operation failed", "details": "test error"}
 
@@ -52,6 +60,10 @@ class MockExceptionNode(Node):
 
     def get_parameters(self) -> dict:
         return {}
+
+    def run(self, **kwargs):
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
 
     def execute(self, **kwargs) -> Dict[str, Any]:
         raise ValueError("Traditional exception-based failure")

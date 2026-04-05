@@ -149,6 +149,10 @@ class DataFlowConnectionManager(Node):
             ),
         }
 
+    def run(self, **kwargs):
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, **kwargs) -> Dict[str, Any]:
         """Execute connection management operations."""
         operation = kwargs.get("operation", "initialize")

@@ -453,6 +453,10 @@ class BaseAgent:
     # Public Methods (for testing extension points)
     # ============================================
 
+    def run(self, **kwargs):
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, **inputs) -> Dict[str, Any]:
         """
         Execute the agent (simplified for testing extension points).

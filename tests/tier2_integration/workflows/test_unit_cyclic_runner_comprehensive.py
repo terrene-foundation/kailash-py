@@ -56,6 +56,10 @@ class MockNode(Node):
             )
         }
 
+    def run(self, **kwargs):
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, **inputs):
         self.executed = True
         self.execution_count += 1

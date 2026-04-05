@@ -314,6 +314,14 @@ Your analysis should help security teams understand:
                 "error": str(e),
             }
 
+    def get_parameters(self) -> Dict[str, Any]:
+        """Define parameters for threat detection."""
+        return {}
+
+    def run(self, **kwargs) -> Dict[str, Any]:
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(kwargs)
+
     def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute AI-enhanced threat detection.

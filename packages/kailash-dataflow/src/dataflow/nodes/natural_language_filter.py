@@ -75,6 +75,10 @@ class NaturalLanguageFilterNode(SmartNodeConnectionMixin, Node):
             ),
         }
 
+    def run(self, **kwargs):
+        """Execute the node's logic (Node ABC contract)."""
+        return self.execute(**kwargs)
+
     def execute(self, **kwargs) -> Dict[str, Any]:
         """Execute natural language filtering with connection pool integration."""
         return self._execute_with_connection(self._perform_filtering, **kwargs)
