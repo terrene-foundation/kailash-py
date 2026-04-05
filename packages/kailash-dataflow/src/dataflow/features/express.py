@@ -813,10 +813,16 @@ class DataFlowExpress:
         """
 
         async def _bulk_update():
+            if not records:
+                return []
             results = []
             for record in records:
                 record_id = record.get(key_field)
                 if record_id is None:
+                    logger.warning(
+                        "bulk_update: skipping record missing '%s' field",
+                        key_field,
+                    )
                     continue
                 fields = {k: v for k, v in record.items() if k != key_field}
                 if not fields:

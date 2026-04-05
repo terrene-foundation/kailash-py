@@ -744,6 +744,14 @@ class TestReadOnlyGovernanceView:
             with pytest.raises(AttributeError, match="does not expose"):
                 getattr(gov, method_name)
 
+    def test_engine_attribute_not_accessible(
+        self, engine_from_yaml: PactEngine
+    ) -> None:
+        """Read-only view must not expose _engine (RT-276-1 regression)."""
+        gov = engine_from_yaml.governance
+        with pytest.raises(AttributeError, match="does not expose '_engine'"):
+            _ = gov._engine
+
     def test_repr_includes_org_name(self, engine_from_yaml: PactEngine) -> None:
         """Read-only view repr should include org name."""
         gov = engine_from_yaml.governance

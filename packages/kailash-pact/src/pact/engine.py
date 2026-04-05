@@ -932,50 +932,55 @@ def _org_def_from_dict(data: dict[str, Any]) -> Any:
 
 
 class _ReadOnlyGovernanceView:
-    """Read-only wrapper around GovernanceEngine per pact-governance.md Rule 1."""
+    """Read-only wrapper around GovernanceEngine per pact-governance.md Rule 1.
+
+    Uses an ALLOWLIST (not blocklist) to prevent exposing internal state,
+    mutation methods, stores, or locks. Only explicitly listed read-only
+    methods are proxied. _engine is not accessible from outside.
+    """
 
     __slots__ = ("_engine",)
 
+    # Allowlist of read-only methods safe to proxy.
+    # Mutation methods, stores, locks, and internal state are NOT listed
+    # and therefore NOT accessible.
+    _ALLOWED = frozenset(
+        {
+            "org_name",
+            "compiled_org",
+            "get_org",
+            "get_node",
+            "list_roles",
+            "get_context",
+            "verify_action",
+            "compute_envelope",
+            "check_access",
+            "get_vacancy_designation",
+        }
+    )
+
     def __init__(self, engine: Any) -> None:
-        self._engine = engine
+        object.__setattr__(self, "_engine", engine)
 
-    @property
-    def org_name(self) -> str:
-        return self._engine.org_name
-
-    @property
-    def compiled_org(self) -> Any:
-        return self._engine.compiled_org
-
-    def verify_action(self, *args: Any, **kwargs: Any) -> Any:
-        return self._engine.verify_action(*args, **kwargs)
-
-    def compute_envelope(self, *args: Any, **kwargs: Any) -> Any:
-        return self._engine.compute_envelope(*args, **kwargs)
-
-    def __repr__(self) -> str:
-        return f"<_ReadOnlyGovernanceView org='{self._engine.org_name}'>"
+    def __getattribute__(self, name: str) -> Any:
+        if name == "_engine":
+            raise AttributeError(
+                "'_ReadOnlyGovernanceView' does not expose '_engine'. "
+                "This is an internal implementation detail."
+            )
+        if name in ("__class__", "__repr__", "__slots__", "_ALLOWED"):
+            return object.__getattribute__(self, name)
+        return object.__getattribute__(self, name)
 
     def __getattr__(self, name: str) -> Any:
-        # Every mutation method on GovernanceEngine MUST be listed here.
-        # Verified against GovernanceEngine method inventory (2026-04-05).
-        _BLOCKED = {
-            "set_role_envelope",
-            "set_task_envelope",
-            "grant_clearance",
-            "revoke_clearance",
-            "compile_org",
-            "create_bridge",
-            "approve_bridge",
-            "consent_bridge",
-            "reject_bridge",
-            "register_compliance_role",
-            "create_ksp",
-            "designate_acting_occupant",
-        }
-        if name in _BLOCKED:
+        if name not in _ReadOnlyGovernanceView._ALLOWED:
             raise AttributeError(
                 f"'{type(self).__name__}' does not expose '{name}'. "
                 "Use PactEngine._admin_governance for mutable operations."
             )
-        return getattr(self._engine, name)
+        engine = object.__getattribute__(self, "_engine")
+        return getattr(engine, name)
+
+    def __repr__(self) -> str:
+        engine = object.__getattribute__(self, "_engine")
+        return f"<_ReadOnlyGovernanceView org='{engine.org_name}'>"

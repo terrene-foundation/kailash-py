@@ -102,11 +102,25 @@ class GovernanceContext:
             "Use GovernanceEngine.get_context() to create governance contexts."
         )
 
+    def __reduce_ex__(self, protocol: int):
+        """Block pickle via all protocol versions (defense-in-depth)."""
+        raise TypeError(
+            "GovernanceContext cannot be pickled. "
+            "Use GovernanceEngine.get_context() to create governance contexts."
+        )
+
     def __getstate__(self):
         """Block pickle serialization."""
         raise TypeError(
             "GovernanceContext cannot be pickled. "
             "Use to_dict() for serialization and GovernanceEngine.get_context() for construction."
+        )
+
+    def __deepcopy__(self, memo):
+        """Block deep copy to prevent context duplication."""
+        raise TypeError(
+            "GovernanceContext cannot be deep-copied. "
+            "Use GovernanceEngine.get_context() for a fresh context."
         )
 
     @classmethod

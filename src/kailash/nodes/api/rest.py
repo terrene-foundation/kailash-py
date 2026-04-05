@@ -466,6 +466,7 @@ class RESTClientNode(Node):
         max_pages = int(pagination_params.get("max_pages", 10))
         pages_fetched = 1
 
+        prev_cursor = None
         while pages_fetched < max_pages:
             next_query = dict(query_params)
 
@@ -477,27 +478,17 @@ class RESTClientNode(Node):
                 cursor_param = pagination_params.get("cursor_param", "cursor")
                 next_cursor_path = pagination_params.get("next_page_path", "meta.next")
                 next_cursor = self._get_nested_value(initial_response, next_cursor_path)
-                if not next_cursor:
-                    break
+                if not next_cursor or next_cursor == prev_cursor:
+                    break  # No cursor or duplicate cursor — stop
+                prev_cursor = next_cursor
                 next_query[cursor_param] = str(next_cursor)
             else:
                 break
 
-            # Make the next request
+            # Make the next request using the same http_node
             try:
                 next_result = self.http_node.execute(
-                    url=(
-                        self._build_url(
-                            query_params.get("_base_url", ""),
-                            query_params.get("_resource", ""),
-                            {},
-                            None,
-                        )
-                        if hasattr(self, "_last_url")
-                        else None
-                    ),
                     method="GET",
-                    headers=query_params.get("_headers", {}),
                     params=next_query,
                     response_format="json",
                     timeout=query_params.get("_timeout", 30),

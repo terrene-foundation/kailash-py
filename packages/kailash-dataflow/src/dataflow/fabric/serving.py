@@ -381,6 +381,11 @@ class FabricServingLayer:
             product_names = [
                 n.strip() for n in product_names_str.split(",") if n.strip()
             ]
+            if len(product_names) > 50:
+                return {
+                    "_status": 400,
+                    "error": "Maximum 50 products per batch request",
+                }
             results: Dict[str, Any] = {}
             overall_freshness = "fresh"
 

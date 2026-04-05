@@ -666,7 +666,13 @@ class GovernanceEngine:
             daily_calls is not None
             and envelope.operational.max_actions_per_day is not None
         ):
-            daily_calls_int = int(daily_calls)
+            try:
+                daily_calls_int = int(daily_calls)
+            except (ValueError, TypeError):
+                return (
+                    "blocked",
+                    "Invalid daily_calls value in context — fail-closed",
+                )
             if daily_calls_int >= envelope.operational.max_actions_per_day:
                 return (
                     "blocked",
@@ -678,7 +684,13 @@ class GovernanceEngine:
             hourly_calls is not None
             and envelope.operational.max_actions_per_hour is not None
         ):
-            hourly_calls_int = int(hourly_calls)
+            try:
+                hourly_calls_int = int(hourly_calls)
+            except (ValueError, TypeError):
+                return (
+                    "blocked",
+                    "Invalid hourly_calls value in context — fail-closed",
+                )
             if hourly_calls_int >= envelope.operational.max_actions_per_hour:
                 return (
                     "blocked",
