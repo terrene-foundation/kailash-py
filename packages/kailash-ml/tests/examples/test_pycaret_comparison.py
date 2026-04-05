@@ -44,7 +44,6 @@ from kailash_ml.engines.inference_server import InferenceServer, PredictionResul
 from kailash_ml.engines.model_registry import (
     LocalFileArtifactStore,
     ModelRegistry,
-    ModelVersion,
 )
 from kailash_ml.engines.preprocessing import PreprocessingPipeline, SetupResult
 from kailash_ml.engines.training_pipeline import (
@@ -818,7 +817,6 @@ async def test_11_drift_monitoring(
     assert len(report_no_drift.feature_results) == 10
 
     # Simulate distribution shift: shift mean of feat_0 by 3 std devs
-    rng = np.random.RandomState(99)
     shifted_data = data.clone()
     original_feat_0 = shifted_data["feat_0"].to_numpy()
     shifted_feat_0 = original_feat_0 + 3.0 * original_feat_0.std()
