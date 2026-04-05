@@ -765,6 +765,12 @@ class DataExplorer:
                         values="len",
                     ).fill_null(0)
                 except Exception:
+                    logger.debug(
+                        "Failed to pivot contingency table for %s × %s",
+                        col_a,
+                        col_b,
+                        exc_info=True,
+                    )
                     matrix[col_a][col_b] = 0.0
                     continue
                 # Extract observed frequencies (skip the index column)
