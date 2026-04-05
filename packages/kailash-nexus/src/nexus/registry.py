@@ -93,6 +93,21 @@ class HandlerRegistry:
                 f"Use a different name or unregister the existing handler first."
             )
 
+        if not callable(func):
+            raise ValueError(
+                f"Handler '{name}': func must be callable, "
+                f"got {type(func).__name__}"
+            )
+
+        import inspect
+
+        sig = inspect.signature(func)
+        if not sig.parameters:
+            raise ValueError(
+                f"Handler '{name}': function must accept at least one parameter "
+                f"(request or **kwargs)"
+            )
+
         params = self._extract_params(func)
         handler_def = HandlerDef(
             name=name,
