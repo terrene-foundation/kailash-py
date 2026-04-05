@@ -1,0 +1,42 @@
+# Session Notes — 2026-04-04 (Kaizen Explicit Config Refactor + Release)
+
+### Read These Files First (in order)
+
+1. `workspaces/kaizen-explicit-config/02-plans/01-implementation-plan.md` — full 4-phase plan (all complete)
+2. `workspaces/kaizen-explicit-config/01-analysis/01-research/03-adr-explicit-config.md` — ADR for explicit vs implicit
+3. `CHANGELOG.md` — release notes for kailash-kaizen 2.4.0
+4. `packages/kailash-kaizen/src/kaizen/core/config.py` — new response_format + structured_output_mode fields
+5. `packages/kailash-kaizen/src/kaizen/core/prompt_utils.py` — unified prompt generation (new file)
+6. `.claude/.proposals/latest.yaml` — upstream proposal for loom/ (7 artifacts, pending /sync)
+
+## Accomplished
+
+- **4 Azure bugs fixed** (#254-257) — PR #261 merged, issues closed
+- **Explicit config refactor** (M1-M4) — PR #262 merged: response_format separated from provider_config, structured_output_mode, StructuredOutput helper, Azure env var canonicalization, prompt unification
+- **StructuredOutput helper** — PR #263 merged: fluent API (from_signature, for_provider, prompt_hint)
+- **kailash-kaizen 2.4.0 released** — PR #264 merged, tag pushed, live on PyPI
+- **10 pre-existing test failures resolved** — 901 passed, 0 failed
+- **5 dependabot PRs merged** (#221-225) — CI workflow dependency bumps
+- **11 stale GH issues closed** (#236-253) — GitHub failed to auto-close from PR #258
+- **3 cross-SDK issues filed** on kailash-rs (#178-180): ResponseFormat, Azure builder, schema utility
+- **7 COC artifacts codified** — skills/04-kaizen, skills/31-error-troubleshooting, agents/frameworks/kaizen-specialist
+
+## Outstanding
+
+- [ ] **Upstream /sync** — `.claude/.proposals/latest.yaml` has 7 changes pending. Open loom/ and run `/sync py`
+- [ ] **Root pyproject.toml extras** — `kailash-kaizen>=2.3.2` should become `>=2.4.0` after PyPI resolves
+- [ ] **M4 todo 04.04 partial** — second `"gpt-4"` hardcode at `workflow_generator.py:402` in fallback path
+- [ ] **structured_output_mode default** — currently "auto" with deprecation. Flip to "explicit" in v2.5.0
+- [ ] **11 remaining GH issues** on kailash-rs (#173-180) — cross-SDK alignment work
+
+### Oversight — Verify Before Starting
+
+- [ ] `pip install kailash-kaizen==2.4.0` works: `python -c "import kaizen; print(kaizen.__version__)"` → 2.4.0
+- [ ] 0 open issues: `gh issue list --repo terrene-foundation/kailash-py --state open`
+- [ ] 0 open PRs: `gh pr list --repo terrene-foundation/kailash-py --state open`
+
+### Oversight — Verify After Completing
+
+- [ ] All tests: `uv run pytest packages/kailash-kaizen/tests/unit/ -q` → 901+ passed, 0 failed
+- [ ] Version match: `grep version packages/kailash-kaizen/pyproject.toml` matches `__init__.py`
+- [ ] No stale provider_config usage: `grep -r "provider_config.*type.*json" packages/kailash-kaizen/src/` → empty
