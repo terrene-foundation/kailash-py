@@ -114,7 +114,7 @@ Data in the database is retained and available if you re-enable the variable lat
   - Redis: `redis-server` or managed Redis instance
   - SQL: Same database as Level 1 (no extra setup)
 - [ ] Network connectivity from all workers to the queue backend
-- [ ] For Redis: `pip install redis` (or `pip install kailash[redis]` if available)
+- [ ] For Redis: `pip install redis` (included in base `pip install kailash`)
 
 ### Step 1: Set the Queue URL
 
