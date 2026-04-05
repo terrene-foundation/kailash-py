@@ -728,15 +728,17 @@ class TestReadOnlyGovernanceView:
         gov = engine_from_yaml.governance
         blocked_methods = [
             "set_role_envelope",
+            "set_task_envelope",
             "grant_clearance",
+            "revoke_clearance",
+            "compile_org",
             "create_bridge",
             "approve_bridge",
             "consent_bridge",
+            "reject_bridge",
             "register_compliance_role",
-            "designate_interim",
-            "revoke_interim",
-            "register_ksp",
-            "revoke_ksp",
+            "create_ksp",
+            "designate_acting_occupant",
         ]
         for method_name in blocked_methods:
             with pytest.raises(AttributeError, match="does not expose"):

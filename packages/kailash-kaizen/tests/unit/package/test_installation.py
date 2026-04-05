@@ -63,9 +63,9 @@ class TestPackageBuild:
 
         # Verify naming convention
         sdist_name = sdist_files[0].name
-        assert sdist_name.startswith("kailash_kaizen-"), (
-            f"Source dist name '{sdist_name}' should start with 'kailash_kaizen-'"
-        )
+        assert sdist_name.startswith(
+            "kailash_kaizen-"
+        ), f"Source dist name '{sdist_name}' should start with 'kailash_kaizen-'"
 
     def test_wheel_distribution_builds(self, package_root, clean_build_dir):
         """Test that wheel distribution builds successfully."""
@@ -84,12 +84,12 @@ class TestPackageBuild:
 
         # Verify naming convention (kailash_kaizen-version-py3-none-any.whl)
         wheel_name = wheel_files[0].name
-        assert wheel_name.startswith("kailash_kaizen-"), (
-            f"Wheel name '{wheel_name}' should start with 'kailash_kaizen-'"
-        )
-        assert wheel_name.endswith("-py3-none-any.whl"), (
-            f"Wheel name '{wheel_name}' should end with '-py3-none-any.whl' for pure Python"
-        )
+        assert wheel_name.startswith(
+            "kailash_kaizen-"
+        ), f"Wheel name '{wheel_name}' should start with 'kailash_kaizen-'"
+        assert wheel_name.endswith(
+            "-py3-none-any.whl"
+        ), f"Wheel name '{wheel_name}' should end with '-py3-none-any.whl' for pure Python"
 
     def test_both_distributions_build(self, package_root, clean_build_dir):
         """Test that both sdist and wheel can be built together."""
@@ -115,9 +115,9 @@ class TestPackageBuild:
         with open(pyproject_file, "rb") as f:
             pyproject_data = tomllib.load(f)
 
-        assert "build-system" in pyproject_data, (
-            "Missing build-system in pyproject.toml"
-        )
+        assert (
+            "build-system" in pyproject_data
+        ), "Missing build-system in pyproject.toml"
         build_system = pyproject_data["build-system"]
 
         assert "requires" in build_system, "Missing requires in build-system"
@@ -125,12 +125,12 @@ class TestPackageBuild:
 
         # Verify modern build tools
         requires = build_system["requires"]
-        assert any("setuptools" in req for req in requires), (
-            "setuptools should be in requires"
-        )
-        assert build_system["build-backend"] == "setuptools.build_meta", (
-            "build-backend should be setuptools.build_meta"
-        )
+        assert any(
+            "setuptools" in req for req in requires
+        ), "setuptools should be in requires"
+        assert (
+            build_system["build-backend"] == "setuptools.build_meta"
+        ), "build-backend should be setuptools.build_meta"
 
 
 @pytest.mark.timeout(300)  # 5 minutes for installation tests
@@ -185,9 +185,9 @@ class TestPackageInstallation:
             text=True,
         )
 
-        assert result.returncode == 0, (
-            f"Installation from sdist failed: {result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"Installation from sdist failed: {result.stderr}"
 
         # Verify package is importable
         import_test = subprocess.run(
@@ -196,9 +196,9 @@ class TestPackageInstallation:
             text=True,
         )
 
-        assert import_test.returncode == 0, (
-            f"Package import failed: {import_test.stderr}"
-        )
+        assert (
+            import_test.returncode == 0
+        ), f"Package import failed: {import_test.stderr}"
         assert len(import_test.stdout.strip()) > 0, "No version string returned"
 
     def test_install_from_wheel(self, package_root, isolated_venv):
@@ -223,9 +223,9 @@ class TestPackageInstallation:
             text=True,
         )
 
-        assert result.returncode == 0, (
-            f"Installation from wheel failed: {result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"Installation from wheel failed: {result.stderr}"
 
         # Verify package is importable
         import_test = subprocess.run(
@@ -234,9 +234,9 @@ class TestPackageInstallation:
             text=True,
         )
 
-        assert import_test.returncode == 0, (
-            f"Package import failed: {import_test.stderr}"
-        )
+        assert (
+            import_test.returncode == 0
+        ), f"Package import failed: {import_test.stderr}"
         assert len(import_test.stdout.strip()) > 0, "No version string returned"
 
     def test_editable_installation(self, package_root, isolated_venv):
@@ -256,9 +256,9 @@ class TestPackageInstallation:
             text=True,
         )
 
-        assert import_test.returncode == 0, (
-            f"Package import failed: {import_test.stderr}"
-        )
+        assert (
+            import_test.returncode == 0
+        ), f"Package import failed: {import_test.stderr}"
 
     def test_install_with_dev_extras(self, package_root, isolated_venv):
         """Test installation with dev extra dependencies."""
@@ -309,9 +309,9 @@ class TestPackageInstallation:
             matches = re.findall(pattern, result.stderr, re.IGNORECASE)
             # Allow some warnings but not critical ones
             if pattern in [r"ERROR", r"missing.*required"]:
-                assert len(matches) == 0, (
-                    f"Installation produced critical warnings/errors: {matches}"
-                )
+                assert (
+                    len(matches) == 0
+                ), f"Installation produced critical warnings/errors: {matches}"
 
 
 @pytest.mark.timeout(300)  # 5 minutes for installation validation tests
@@ -369,9 +369,9 @@ class TestInstallationValidation:
         # Extract the last line which should be the version
         # (other lines may be debug output from module loading)
         version = output.split("\n")[-1].strip()
-        assert re.match(r"\d+\.\d+\.\d+", version), (
-            f"Version '{version}' does not match semver pattern"
-        )
+        assert re.match(
+            r"\d+\.\d+\.\d+", version
+        ), f"Version '{version}' does not match semver pattern"
 
     def test_core_modules_importable(self, isolated_venv):
         """Test that core modules are importable after installation."""
@@ -389,9 +389,9 @@ class TestInstallationValidation:
                 capture_output=True,
                 text=True,
             )
-            assert result.returncode == 0, (
-                f"Module '{module}' import failed: {result.stderr}"
-            )
+            assert (
+                result.returncode == 0
+            ), f"Module '{module}' import failed: {result.stderr}"
 
     def test_dependencies_installed(self, isolated_venv):
         """Test that required dependencies are installed."""
@@ -403,9 +403,9 @@ class TestInstallationValidation:
 
         dependencies = pyproject_data["project"]["dependencies"]
 
-        # Extract package names (without version constraints)
+        # Extract package names (without version constraints or extras)
         for dep in dependencies:
-            pkg_name = re.split(r"[><=!]", dep)[0].strip()
+            pkg_name = re.split(r"[><=!\[]", dep)[0].strip()
             result = subprocess.run(
                 [isolated_venv["pip"], "show", pkg_name],
                 capture_output=True,
@@ -425,15 +425,15 @@ class TestInstallationValidation:
             text=True,
         )
 
-        assert result.returncode == 0, (
-            f"Import failed with missing dependencies: {result.stderr}"
-        )
-        assert "ModuleNotFoundError" not in result.stderr, (
-            f"Missing dependencies detected: {result.stderr}"
-        )
-        assert "ImportError" not in result.stderr, (
-            f"Import errors detected: {result.stderr}"
-        )
+        assert (
+            result.returncode == 0
+        ), f"Import failed with missing dependencies: {result.stderr}"
+        assert (
+            "ModuleNotFoundError" not in result.stderr
+        ), f"Missing dependencies detected: {result.stderr}"
+        assert (
+            "ImportError" not in result.stderr
+        ), f"Import errors detected: {result.stderr}"
 
     def test_package_metadata_accessible(self, isolated_venv):
         """Test that package metadata is accessible via pip."""
@@ -449,6 +449,6 @@ class TestInstallationValidation:
         metadata = result.stdout
         assert "Name: kailash-kaizen" in metadata, "Package name not in metadata"
         assert "Version:" in metadata, "Version not in metadata"
-        assert "Summary:" in metadata or "Description:" in metadata, (
-            "Description not in metadata"
-        )
+        assert (
+            "Summary:" in metadata or "Description:" in metadata
+        ), "Description not in metadata"

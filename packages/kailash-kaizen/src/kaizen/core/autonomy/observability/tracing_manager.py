@@ -86,6 +86,7 @@ class TracingManager:
         batch_size: int = 512,
         batch_timeout_ms: int = 5000,
         max_export_batch_size: int = 512,
+        exporter: Optional[object] = None,
     ):
         """
         Initialize TracingManager with OpenTelemetry and Jaeger configuration.
@@ -98,6 +99,8 @@ class TracingManager:
             batch_size: Batch processor max queue size (default 512)
             batch_timeout_ms: Batch processor export timeout in ms (default 5000)
             max_export_batch_size: Maximum spans per export batch (default 512)
+            exporter: Optional custom span exporter. When provided, skips OTLP
+                exporter creation (useful for tests with InMemorySpanExporter).
         """
         self.service_name = service_name
         self.jaeger_host = jaeger_host
@@ -119,18 +122,21 @@ class TracingManager:
         # Initialize TracerProvider
         self.tracer_provider = TracerProvider(resource=resource)
 
-        # Configure OTLP gRPC exporter to Jaeger
-        otlp_exporter = OTLPSpanExporter(
-            endpoint=f"{jaeger_host}:{jaeger_port}",
-            insecure=insecure,
-        )
+        # Use custom exporter or default OTLP gRPC exporter
+        if exporter is not None:
+            span_exporter = exporter
+        else:
+            span_exporter = OTLPSpanExporter(
+                endpoint=f"{jaeger_host}:{jaeger_port}",
+                insecure=insecure,
+            )
 
         # Configure batch span processor
         batch_processor = BatchSpanProcessor(
-            otlp_exporter,
+            span_exporter,
             max_queue_size=batch_size,
             schedule_delay_millis=batch_timeout_ms,
-            max_export_batch_size=self.max_export_batch_size,  # Use corrected value
+            max_export_batch_size=self.max_export_batch_size,
         )
 
         self.tracer_provider.add_span_processor(batch_processor)

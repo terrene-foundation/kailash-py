@@ -27,12 +27,23 @@ import pytest
 
 # OpenTelemetry imports
 from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
 
-# Kaizen imports - these will be implemented
-# from kaizen.core.autonomy.observability.tracing_manager import TracingManager
-# from kaizen.core.autonomy.hooks.builtin.tracing_hook import TracingHook
+# Kaizen imports
 from kaizen.core.autonomy.hooks import HookContext, HookEvent, HookResult
+
+
+def _make_manager(service_name: str = "test", **kwargs):
+    """Create TracingManager with in-memory exporter (no network calls)."""
+    from kaizen.core.autonomy.observability.tracing_manager import TracingManager
+
+    return TracingManager(
+        service_name=service_name,
+        exporter=InMemorySpanExporter(),
+        **kwargs,
+    )
+
 
 # ============================================================================
 # 1. TRACINGMANAGER TESTS (10 tests)
@@ -45,13 +56,8 @@ class TestTracingManagerInitialization:
     @pytest.mark.asyncio
     async def test_tracing_manager_initialization(self):
         """Test TracingManager initializes TracerProvider correctly"""
-        # This test will fail until TracingManager is implemented
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
-
-        # Setup: Create TracingManager
-        manager = TracingManager(
-            service_name="kaizen-test", jaeger_host="localhost", jaeger_port=4317
-        )
+        # Setup: Create TracingManager with in-memory exporter
+        manager = _make_manager(service_name="kaizen-test")
 
         # Assert: TracerProvider is configured
         assert manager.tracer_provider is not None
@@ -67,9 +73,7 @@ class TestTracingManagerInitialization:
     @pytest.mark.asyncio
     async def test_create_span_from_hook_context(self):
         """Test basic span creation from HookContext"""
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
-
-        manager = TracingManager(service_name="test")
+        manager = _make_manager()
 
         # Setup: Create HookContext
         context = HookContext(
@@ -97,9 +101,7 @@ class TestTracingManagerInitialization:
     @pytest.mark.asyncio
     async def test_span_attributes_mapping(self):
         """Test HookContext fields map to span attributes"""
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
-
-        manager = TracingManager(service_name="test")
+        manager = _make_manager()
 
         # Setup: HookContext with rich metadata
         context = HookContext(
@@ -138,9 +140,7 @@ class TestTracingManagerInitialization:
     @pytest.mark.asyncio
     async def test_trace_id_mapping(self):
         """Test HookContext.trace_id maps to OpenTelemetry trace ID"""
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
-
-        manager = TracingManager(service_name="test")
+        manager = _make_manager()
 
         # Setup: HookContext with specific trace_id
         hook_trace_id = str(uuid.uuid4())
@@ -169,9 +169,7 @@ class TestTracingManagerInitialization:
     @pytest.mark.asyncio
     async def test_span_parent_child_hierarchy(self):
         """Test parent span propagation for child spans"""
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
-
-        manager = TracingManager(service_name="test")
+        manager = _make_manager()
 
         trace_id = str(uuid.uuid4())
 
@@ -222,9 +220,7 @@ class TestTracingManagerInitialization:
     @pytest.mark.asyncio
     async def test_span_status_from_hook_result(self):
         """Test span status (ok/error) based on HookResult success"""
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
-
-        manager = TracingManager(service_name="test")
+        manager = _make_manager()
 
         context = HookContext(
             event_type=HookEvent.POST_TOOL_USE,
@@ -256,9 +252,7 @@ class TestTracingManagerInitialization:
     @pytest.mark.asyncio
     async def test_exception_recording_in_span(self):
         """Test exception details are captured in spans"""
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
-
-        manager = TracingManager(service_name="test")
+        manager = _make_manager()
 
         context = HookContext(
             event_type=HookEvent.PRE_TOOL_USE,
@@ -286,9 +280,7 @@ class TestTracingManagerInitialization:
     @pytest.mark.asyncio
     async def test_concurrent_span_creation(self):
         """Test thread safety with 100 concurrent spans"""
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
-
-        manager = TracingManager(service_name="test")
+        manager = _make_manager()
 
         created_spans = []
         errors = []
@@ -333,10 +325,8 @@ class TestTracingManagerInitialization:
     @pytest.mark.asyncio
     async def test_jaeger_exporter_configuration(self):
         """Test OTLP endpoint and service name configuration"""
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
-
-        # Setup: Create manager with specific Jaeger config
-        manager = TracingManager(
+        # Setup: Create manager with specific Jaeger config (in-memory exporter)
+        manager = _make_manager(
             service_name="kaizen-production",
             jaeger_host="jaeger.example.com",
             jaeger_port=4318,
@@ -358,11 +348,8 @@ class TestTracingManagerInitialization:
     @pytest.mark.asyncio
     async def test_batch_processor_settings(self):
         """Test batch span processor configuration (batch size, timeout)"""
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
-
-        # Setup: Create manager with custom batch settings
-        manager = TracingManager(
-            service_name="test",
+        # Setup: Create manager with custom batch settings (in-memory exporter)
+        manager = _make_manager(
             batch_size=512,
             batch_timeout_ms=5000,
             max_export_batch_size=1024,
@@ -390,9 +377,8 @@ class TestTracingHookInitialization:
     async def test_tracing_hook_initialization(self):
         """Test TracingHook initialization with default configuration"""
         from kaizen.core.autonomy.hooks.builtin.tracing_hook import TracingHook
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
 
-        manager = TracingManager(service_name="test")
+        manager = _make_manager()
         hook = TracingHook(tracing_manager=manager)
 
         # Assert: Hook initialized
@@ -408,9 +394,8 @@ class TestTracingHookInitialization:
     async def test_hook_event_filtering(self):
         """Test TracingHook only traces specified events"""
         from kaizen.core.autonomy.hooks.builtin.tracing_hook import TracingHook
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
 
-        manager = TracingManager(service_name="test")
+        manager = _make_manager()
 
         # Setup: Hook that only traces tool events
         hook = TracingHook(
@@ -450,9 +435,8 @@ class TestTracingHookInitialization:
     async def test_span_creation_for_hook_events(self):
         """Test TracingHook creates spans for PRE/POST events"""
         from kaizen.core.autonomy.hooks.builtin.tracing_hook import TracingHook
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
 
-        manager = TracingManager(service_name="test")
+        manager = _make_manager()
         hook = TracingHook(tracing_manager=manager)
 
         # Test PRE event
@@ -487,9 +471,8 @@ class TestTracingHookInitialization:
     async def test_span_hierarchy_for_agent_loop(self):
         """Test PRE_AGENT_LOOP creates parent span containing child spans"""
         from kaizen.core.autonomy.hooks.builtin.tracing_hook import TracingHook
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
 
-        manager = TracingManager(service_name="test")
+        manager = _make_manager()
         hook = TracingHook(tracing_manager=manager)
 
         trace_id = str(uuid.uuid4())
@@ -530,9 +513,8 @@ class TestTracingHookInitialization:
     async def test_span_attributes_include_agent_id(self):
         """Test span attributes include agent_id"""
         from kaizen.core.autonomy.hooks.builtin.tracing_hook import TracingHook
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
 
-        manager = TracingManager(service_name="test")
+        manager = _make_manager()
         hook = TracingHook(tracing_manager=manager)
 
         context = HookContext(
@@ -582,9 +564,8 @@ class TestTracingHookInitialization:
     async def test_trace_id_propagation(self):
         """Test trace_id flows through span hierarchy"""
         from kaizen.core.autonomy.hooks.builtin.tracing_hook import TracingHook
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
 
-        manager = TracingManager(service_name="test")
+        manager = _make_manager()
         hook = TracingHook(tracing_manager=manager)
 
         trace_id = str(uuid.uuid4())
@@ -625,9 +606,8 @@ class TestTracingHookInitialization:
     async def test_span_end_timing(self):
         """Test span duration matches event timing"""
         from kaizen.core.autonomy.hooks.builtin.tracing_hook import TracingHook
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
 
-        manager = TracingManager(service_name="test")
+        manager = _make_manager()
         hook = TracingHook(tracing_manager=manager)
 
         trace_id = str(uuid.uuid4())
@@ -676,10 +656,9 @@ class TestTracingHookInitialization:
         """Test TracingHook and MetricsHook work together"""
         from kaizen.core.autonomy.hooks.builtin.metrics_hook import MetricsHook
         from kaizen.core.autonomy.hooks.builtin.tracing_hook import TracingHook
-        from kaizen.core.autonomy.observability.tracing_manager import TracingManager
 
         # Setup: Both hooks
-        tracing_manager = TracingManager(service_name="test")
+        tracing_manager = _make_manager()
         tracing_hook = TracingHook(tracing_manager=tracing_manager)
         metrics_hook = MetricsHook()
 

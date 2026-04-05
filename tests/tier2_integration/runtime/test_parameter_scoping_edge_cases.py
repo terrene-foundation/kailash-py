@@ -457,7 +457,6 @@ result = {'value': value_value}
 class TestCyclicWorkflowParameterScoping:
     """Test parameter scoping in cyclic workflows."""
 
-    @pytest.mark.skip(reason="Cyclic workflow execution not fully implemented yet")
     def test_cyclic_workflow_parameter_scoping(self):
         """
         Test parameter scoping in cyclic workflows.

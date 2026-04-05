@@ -95,9 +95,29 @@ class GovernanceContext:
         }
         return result
 
+    def __reduce__(self):
+        """Block pickle deserialization to prevent forged context injection."""
+        raise TypeError(
+            "GovernanceContext cannot be pickled. "
+            "Use GovernanceEngine.get_context() to create governance contexts."
+        )
+
+    def __getstate__(self):
+        """Block pickle serialization."""
+        raise TypeError(
+            "GovernanceContext cannot be pickled. "
+            "Use to_dict() for serialization and GovernanceEngine.get_context() for construction."
+        )
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> GovernanceContext:
         """Deserialize from a dict.
+
+        SECURITY WARNING: This method constructs a GovernanceContext without
+        engine verification. The authoritative construction path is
+        GovernanceEngine.get_context(). Use from_dict() ONLY for read-only
+        display or audit logging where the context will NOT be used for
+        access control decisions.
 
         Args:
             data: A dict as produced by to_dict().
@@ -109,6 +129,14 @@ class GovernanceContext:
             KeyError: If required fields are missing.
             ValueError: If field values are invalid.
         """
+        import warnings
+
+        warnings.warn(
+            "GovernanceContext.from_dict() creates an unverified context. "
+            "Use GovernanceEngine.get_context() for access control decisions.",
+            UserWarning,
+            stacklevel=2,
+        )
         # Parse envelope
         envelope_data = data.get("effective_envelope")
         effective_envelope: ConstraintEnvelopeConfig | None = None

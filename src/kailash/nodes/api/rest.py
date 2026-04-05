@@ -440,6 +440,7 @@ class RESTClientNode(Node):
             )
 
         # Return immediately if no additional pages
+        current_page = 1
         if pagination_type == "page":
             current_page = int(
                 query_params.get(pagination_params.get("page_param", "page"), 1)
@@ -461,11 +462,63 @@ class RESTClientNode(Node):
             if not next_cursor:
                 return all_items
 
-        # TODO: Implement actual pagination fetching for different types
-        # This would involve making additional HTTP requests to fetch subsequent pages
-        # and combining the results, but for brevity we're omitting the implementation
+        # Fetch remaining pages
+        max_pages = int(pagination_params.get("max_pages", 10))
+        pages_fetched = 1
 
-        self.logger.warning("Pagination is not fully implemented in this example")
+        while pages_fetched < max_pages:
+            next_query = dict(query_params)
+
+            if pagination_type == "page":
+                current_page += 1
+                page_param = pagination_params.get("page_param", "page")
+                next_query[page_param] = str(current_page)
+            elif pagination_type == "cursor":
+                cursor_param = pagination_params.get("cursor_param", "cursor")
+                next_cursor_path = pagination_params.get("next_page_path", "meta.next")
+                next_cursor = self._get_nested_value(initial_response, next_cursor_path)
+                if not next_cursor:
+                    break
+                next_query[cursor_param] = str(next_cursor)
+            else:
+                break
+
+            # Make the next request
+            try:
+                next_result = self.http_node.execute(
+                    url=(
+                        self._build_url(
+                            query_params.get("_base_url", ""),
+                            query_params.get("_resource", ""),
+                            {},
+                            None,
+                        )
+                        if hasattr(self, "_last_url")
+                        else None
+                    ),
+                    method="GET",
+                    headers=query_params.get("_headers", {}),
+                    params=next_query,
+                    response_format="json",
+                    timeout=query_params.get("_timeout", 30),
+                )
+            except Exception as e:
+                self.logger.warning("Pagination request failed: %s", e)
+                break
+
+            next_response = next_result.get("response", {})
+            if not next_result.get("success"):
+                break
+
+            next_content = next_response.get("content", {}) if next_response else {}
+            next_items = self._get_nested_value(next_content, items_path, [])
+            if not next_items:
+                break
+
+            all_items.extend(next_items)
+            pages_fetched += 1
+            initial_response = next_content  # For cursor extraction on next iteration
+
         return all_items
 
     def _get_nested_value(

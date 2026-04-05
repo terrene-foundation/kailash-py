@@ -957,24 +957,21 @@ class _ReadOnlyGovernanceView:
         return f"<_ReadOnlyGovernanceView org='{self._engine.org_name}'>"
 
     def __getattr__(self, name: str) -> Any:
+        # Every mutation method on GovernanceEngine MUST be listed here.
+        # Verified against GovernanceEngine method inventory (2026-04-05).
         _BLOCKED = {
-            "update_envelope",
-            "modify_envelope",
             "set_role_envelope",
+            "set_task_envelope",
             "grant_clearance",
             "revoke_clearance",
-            "register_vacancy",
-            "register_tool",
             "compile_org",
-            "set_compliance_role",
             "create_bridge",
             "approve_bridge",
             "consent_bridge",
+            "reject_bridge",
             "register_compliance_role",
-            "designate_interim",
-            "revoke_interim",
-            "register_ksp",
-            "revoke_ksp",
+            "create_ksp",
+            "designate_acting_occupant",
         }
         if name in _BLOCKED:
             raise AttributeError(

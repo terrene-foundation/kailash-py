@@ -673,12 +673,25 @@ class DataFlow(DataFlowEventMixin):
                     try:
                         from dataflow.core.pool_validator import validate_pool_config
 
-                        validate_pool_config(
+                        result = validate_pool_config(
                             database_url=self.config.database.url
                             or self.config.database.database_url,
                             pool_size=resolved_pool_size,
                             max_overflow=resolved_max_overflow,
                         )
+                        # #265: Strict mode — block startup if pool WILL exhaust
+                        strict = (
+                            os.environ.get(
+                                "DATAFLOW_STRICT_POOL_VALIDATION", "false"
+                            ).lower()
+                            == "true"
+                        )
+                        if strict and result.get("status") == "error":
+                            raise RuntimeError(
+                                f"Strict pool validation failed: {result.get('message')}"
+                            )
+                    except RuntimeError:
+                        raise  # Re-raise strict validation failure
                     except Exception:
                         logger.debug(
                             "Pool startup validation failed (non-fatal)",
@@ -1970,6 +1983,7 @@ class DataFlow(DataFlowEventMixin):
         self,
         fail_fast: bool = True,
         dev_mode: bool = False,
+        prewarm: bool = True,
         nexus: Optional[Any] = None,
         coordination: Optional[str] = None,
         host: str = "127.0.0.1",
@@ -1985,6 +1999,7 @@ class DataFlow(DataFlowEventMixin):
         Args:
             fail_fast: Raise on source health check failure.
             dev_mode: Skip pre-warming, in-memory cache, reduced poll intervals.
+            prewarm: Pre-warm materialized products on startup (default True).
             nexus: Existing Nexus instance to attach to (production).
             coordination: "redis" or "postgresql". Auto-detects if None.
             host: Bind address for internal server (if no nexus provided).
@@ -2016,7 +2031,7 @@ class DataFlow(DataFlowEventMixin):
             tenant_extractor=tenant_extractor,
             nexus=nexus,
         )
-        await self._fabric.start()
+        await self._fabric.start(prewarm=prewarm)
         return self._fabric
 
     async def stop(self) -> None:
