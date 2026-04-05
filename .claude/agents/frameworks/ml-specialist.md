@@ -1,6 +1,6 @@
 ---
 name: ml-specialist
-description: "ML lifecycle specialist. Use for feature stores, model training, drift monitoring, or AutoML pipelines."
+description: "kailash-ml specialist. Use for training, inference, drift, AutoML, experiments, ensembles, features, or ML examples."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---
@@ -29,7 +29,8 @@ kailash-ml
     automl_engine.py    <- [P1] agent-infused, LLM guardrails, cost tracking
     ensemble.py         <- [P1] blend/stack/bag/boost
     preprocessing.py    <- [P1] auto-setup from FeatureSchema
-    data_explorer.py    <- [P2] profiling, visualization
+    data_explorer.py    <- [P1] async profiling, alerts, HTML reports, ydata-profiling parity
+    _data_explorer_report.py <- HTML report generator (self-contained, XSS-safe)
     feature_engineer.py <- [P2] auto-generation, selection, ranking
     model_visualizer.py <- [P2] experimental
   agents/
@@ -113,6 +114,28 @@ report = await monitor.check_drift("model_v1", current_df)
 # report.overall_drift, report.feature_results, report.recommendations
 ```
 
+### DataExplorer (P1 — Async, ydata-profiling Parity)
+
+All methods are **async**. 5 matrix computations run in parallel via `asyncio.gather()`.
+
+```python
+from kailash_ml import DataExplorer, AlertConfig
+
+explorer = DataExplorer(alert_config=AlertConfig(high_correlation_threshold=0.9))
+profile = await explorer.profile(df)
+# profile.skewness, .kurtosis, .iqr, .outlier_count, .zero_count
+# profile.spearman_matrix, .categorical_associations (Cramér's V)
+# profile.duplicate_count, .memory_bytes, .sample_head, .sample_tail
+# profile.alerts (8 types: high_nulls, constant, high_skewness, high_zeros,
+#                  high_cardinality, high_correlation, duplicates, imbalanced)
+# profile.type_summary, .inferred_type per column (boolean, id, categorical, numeric, text)
+
+html_report = await explorer.to_html(df, title="My Report")  # Self-contained HTML
+comparison = await explorer.compare(train_df, prod_df)  # Parallel profiling
+```
+
+**Security**: XSS-safe HTML via `html.escape()` + `_safe_uid()` for plotly div IDs. No scipy dependency. `math.isfinite()` guards on all numpy outputs.
+
 ### Agent-Infused AutoML (Double Opt-In)
 
 Agents require both `agent=True` AND `kailash-ml[agents]` installed.
@@ -155,6 +178,10 @@ result = await engine.run(schema=schema, data=df)
 - `GuardrailConfig.max_llm_cost_usd`, `GuardrailConfig.min_confidence`
 
 **Why**: NaN bypasses all numeric comparisons; Inf defeats upper-bound checks.
+
+### NaN/Inf Guards in DataExplorer
+
+All numpy-computed statistics (skewness, kurtosis, correlation values) use `math.isfinite()` before storage. Inf/NaN values fall back to `0.0`. HTML report's `_corr_color()` guards against NaN with grey fallback.
 
 ### Bounded Collections
 

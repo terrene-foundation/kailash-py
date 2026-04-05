@@ -1,59 +1,71 @@
 source_repo: kailash-py
 codify_date: "2026-04-05"
-codify_session: "feat: outstanding completion — protocols elimination, Nexus transports, security hardening"
-sdk_version: "2.5.0"
+codify_session: "feat(ml): DataExplorer ydata-profiling parity + framework specialist description fix"
+sdk_version: "2.5.1"
 coc_version: "1.0.0"
 
-# Context: Resolved all outstanding items from 3 prior sessions.
-# Eliminated kailash-ml-protocols (merged into kailash_ml.types).
-# Added Nexus WebSocket/Webhook/ResponseCache. Redesigned ML dashboard.
-# Fixed 14 security findings across 3 red team rounds. Fixed 30+ pre-existing
-# test failures including systemic Node ABC run() issue across 24+ subclasses.
-# 15,525+ tests passing across all 8 packages, 0 failures.
+# Context: Two changes codified in this session:
+#
+# 1. DataExplorer promoted from P2 to P1 with ydata-profiling feature parity:
+#    async API, parallel matrix computation, skewness/kurtosis, Spearman/Cramér's V,
+#    IQR outliers, type inference, alerts system, HTML report, duplicate detection.
+#    Security hardened: XSS-safe uids, NaN/Inf guards, no scipy.
+#
+# 2. All 8 framework specialist descriptions rewritten for reliable activation:
+#    package name as lead keyword, all capability categories covered.
+#
+# Validation: 72/72 tests pass. 17/17 spec items PASS. 0 CRITICAL security findings.
+# 2 HIGH findings fixed (XSS div_id, alert key mismatch).
 
 changes:
-  # === Updated Agents ===
-  - file: agents/frameworks/nexus-specialist.md
-    action: updated
-    suggested_tier: coc
-    reason: "Added Transport Layer section: 4 transports (HTTP, MCP, WebSocket, Webhook), ResponseCache middleware, security patterns for each transport"
-    diff_lines: "~+15"
-
+  # === DataExplorer codification ===
   - file: agents/frameworks/ml-specialist.md
-    action: updated
-    suggested_tier: coc-py
-    reason: "Updated imports from kailash_ml_protocols to kailash_ml.types in all code examples"
-    diff_lines: "~+1 ~-1"
-
-  # === Updated Skills ===
-  - file: skills/18-security-patterns/SKILL.md
-    action: updated
+    action: modified
     suggested_tier: coc
-    reason: "Added SSRF prevention section (DNS-pinned delivery, IPv4-mapped IPv6, blocked ranges) and Error Message Security section (never return str(exc))"
-    diff_lines: "~+30"
+    reason: "Added DataExplorer P1 section (async API, alerts, HTML reports, security guards). Updated architecture diagram (P2->P1, added _data_explorer_report.py). Added NaN/Inf guard security section. Also fixed description for reliable activation."
+    diff_lines: "+30 -2"
 
-  - file: skills/02-dataflow/dataflow-ml-integration.md
-    action: updated
-    suggested_tier: coc-py
-    reason: "Updated import from kailash_ml_protocols to kailash_ml.types"
-    diff_lines: "~+1 ~-1"
+  # === Description fixes (all 8 specialists) ===
+  - file: agents/frameworks/align-specialist.md
+    action: modified
+    suggested_tier: coc
+    reason: "Description: added kailash-align lead keyword, SFT, reward functions, GGUF."
+    diff_lines: "+1 -1"
 
-  - file: skills/04-kaizen/kaizen-ml-integration.md
-    action: updated
-    suggested_tier: coc-py
-    reason: "Updated import from kailash_ml_protocols to kailash_ml.types, renamed section from 'Protocols (kailash-ml-protocols)' to 'Type Contracts (kailash_ml.types)'"
-    diff_lines: "~+3 ~-3"
+  - file: agents/frameworks/dataflow-specialist.md
+    action: modified
+    suggested_tier: coc
+    reason: "Description: added kailash-dataflow lead, CRUD, express API, migrations, data fabric."
+    diff_lines: "+1 -1"
 
-  - file: skills/project/ml-quick-reference.md
-    action: updated
-    suggested_tier: coc-py
-    reason: "Updated import from kailash_ml_protocols to kailash_ml.types"
-    diff_lines: "~+1 ~-1"
+  - file: agents/frameworks/nexus-specialist.md
+    action: modified
+    suggested_tier: coc
+    reason: "Description: added kailash-nexus lead, handlers, transports, middleware, webhooks."
+    diff_lines: "+1 -1"
 
-  # === Key Patterns Learned (for loom classification) ===
-  # 1. Node ABC contract: All Node subclasses MUST implement run() — execute() alone
-  #    is insufficient. 24+ subclasses were missing this across 8 files. Systemic issue.
-  # 2. SSRF prevention: DNS-pinned delivery pattern with IPv4-mapped IPv6 checking.
-  # 3. Protocol consolidation: kailash-ml-protocols eliminated, types live in kailash_ml.types.
-  # 4. uv-managed Python breaks venv.create(with_pip=True) — use uv venv + VIRTUAL_ENV env var.
-  # 5. Severity enum string comparison is wrong — must use numeric ranking map.
+  - file: agents/frameworks/kaizen-specialist.md
+    action: modified
+    suggested_tier: coc
+    reason: "Description: added kailash-kaizen lead, Delegate, A2A, planning."
+    diff_lines: "+1 -1"
+
+  - file: agents/frameworks/mcp-specialist.md
+    action: modified
+    suggested_tier: coc
+    reason: "Description: added kailash-mcp lead, servers, tools, resources, transports, auth."
+    diff_lines: "+1 -1"
+
+  - file: agents/frameworks/pact-specialist.md
+    action: modified
+    suggested_tier: coc
+    reason: "Description: added kailash-pact lead, access enforcement, knowledge clearance."
+    diff_lines: "+1 -1"
+
+  - file: agents/frameworks/infrastructure-specialist.md
+    action: modified
+    suggested_tier: coc
+    reason: "Description: added connections, stores. Removed internal '(Level 0/1/2)'."
+    diff_lines: "+1 -1"
+
+status: pending_review

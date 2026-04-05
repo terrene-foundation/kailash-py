@@ -1,6 +1,6 @@
 ---
 name: infrastructure-specialist
-description: "Kailash infrastructure specialist (Level 0/1/2). Use for dialect-portable SQL, task queues, or idempotency."
+description: "Kailash infrastructure specialist. Use for connections, dialect-portable SQL, task queues, stores, or idempotency."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---

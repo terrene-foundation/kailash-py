@@ -91,6 +91,22 @@ class WorkResult:
     governance_shadow: bool = False
     governance_verdicts: list[dict[str, Any]] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        """Validate financial fields — NaN/Inf bypass budget checks (rule 6)."""
+        if not math.isfinite(self.cost_usd):
+            logger.warning(
+                "WorkResult cost_usd=%r is not finite, clamping to 0.0", self.cost_usd
+            )
+            object.__setattr__(self, "cost_usd", 0.0)
+        if self.budget_allocated is not None and not math.isfinite(
+            self.budget_allocated
+        ):
+            logger.warning(
+                "WorkResult budget_allocated=%r is not finite, setting to None",
+                self.budget_allocated,
+            )
+            object.__setattr__(self, "budget_allocated", None)
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a plain dict for transport or storage.
 

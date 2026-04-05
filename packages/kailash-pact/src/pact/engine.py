@@ -190,6 +190,9 @@ class PactEngine:
         # Supervisor is lazy -- only created when kaizen-agents is installed
         self._supervisor: Any | None = None
 
+        # Submit lock: makes check-remaining → execute → record-cost atomic (#292)
+        self._submit_lock = asyncio.Lock()
+
         logger.info(
             "PactEngine initialized: org=%s model=%s budget=$%s clearance=%s mode=%s",
             self._governance.org_name,
@@ -227,6 +230,19 @@ class PactEngine:
             A WorkResult with the outcome. success=False if governance
             blocks the action or if kaizen-agents is not available.
         """
+        # Acquire submit lock to make check-remaining → execute → record-cost
+        # atomic. Prevents concurrent submits from both seeing the same
+        # remaining budget and overspending. (#292)
+        async with self._submit_lock:
+            return await self._submit_locked(objective, role, context)
+
+    async def _submit_locked(
+        self,
+        objective: str,
+        role: str,
+        context: dict[str, Any] | None = None,
+    ) -> WorkResult:
+        """Inner submit logic, called under _submit_lock."""
         # Input validation (Tier 1): reject empty/invalid objective and role
         if not objective or not isinstance(objective, str) or not objective.strip():
             return WorkResult(
