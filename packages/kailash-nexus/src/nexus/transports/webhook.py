@@ -24,24 +24,42 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["WebhookTransport", "DeliveryStatus", "WebhookDelivery"]
 
-_BLOCKED_NETS = [
+_BLOCKED_IPV4 = [
+    ipaddress.ip_network("0.0.0.0/8"),
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
     ipaddress.ip_network("192.168.0.0/16"),
     ipaddress.ip_network("127.0.0.0/8"),
     ipaddress.ip_network("169.254.0.0/16"),
+]
+
+_BLOCKED_IPV6 = [
     ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("::/128"),
     ipaddress.ip_network("fc00::/7"),
     ipaddress.ip_network("fe80::/10"),
+    ipaddress.ip_network("::ffff:0:0/96"),  # IPv4-mapped IPv6
 ]
+
+
+def _is_blocked_address(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Check if an IP address falls within a blocked private range."""
+    if isinstance(addr, ipaddress.IPv6Address):
+        # Check IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1)
+        mapped = addr.ipv4_mapped
+        if mapped is not None:
+            return any(mapped in net for net in _BLOCKED_IPV4)
+        return any(addr in net for net in _BLOCKED_IPV6)
+    return any(addr in net for net in _BLOCKED_IPV4)
 
 
 def _validate_target_url(url: str) -> None:
     """Validate a webhook target URL to prevent SSRF attacks.
 
     Rejects URLs with non-HTTP schemes or hostnames that resolve to
-    private/internal IP ranges. If DNS resolution fails (e.g. offline),
-    the URL is allowed — delivery will fail at send time instead.
+    private/internal IP ranges, including IPv4-mapped IPv6 addresses.
+    If DNS resolution fails (e.g. offline), the URL is allowed —
+    delivery will fail at send time instead.
     """
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in ("http", "https"):
@@ -52,9 +70,8 @@ def _validate_target_url(url: str) -> None:
     try:
         for info in socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP):
             addr = ipaddress.ip_address(info[4][0])
-            for net in _BLOCKED_NETS:
-                if addr in net:
-                    raise ValueError("Target URL resolves to blocked private address")
+            if _is_blocked_address(addr):
+                raise ValueError("Target URL resolves to blocked private address")
     except socket.gaierror:
         # DNS resolution may fail in offline/sandboxed environments.
         # Allow registration; delivery will fail at send time.
