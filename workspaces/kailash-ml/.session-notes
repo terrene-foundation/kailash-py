@@ -1,0 +1,47 @@
+# Session Notes — 2026-04-05 (Outstanding Issues Sprint + ML/Align Convergence)
+
+### Read These Files First (in order)
+
+1. `CHANGELOG.md` — release notes for kaizen 2.5.0 and all fixes
+2. `packages/kailash-ml/src/kailash_ml/types.py` — NEW: merged from kailash-ml-protocols
+3. `packages/kailash-ml/README.md` — current README (needs major expansion)
+4. `packages/kailash-ml/src/kailash_ml/dashboard/templates/index.html` — 922-line dashboard UI (needs AI UX redesign)
+5. `packages/kailash-ml/src/kailash_ml/engines/` — all 15 engines (all fully implemented)
+6. `.claude/.proposals/latest.yaml` — upstream proposal (needs regeneration after this session)
+
+## Accomplished
+
+- **22 GH issues resolved** (#265-286) — security, bugs, spec conformance, enhancements
+- **12 pre-existing test failures fixed** across kaizen, pact, dataflow
+- **Red team converged**: 1 CRITICAL + 5 HIGH security findings fixed (allowlist governance view, anti-forging, batch cap)
+- **kailash-ml convergence**: 449 passed, 0 failed, 0 skipped
+- **kailash-align convergence**: 392 passed, 0 failed, 0 skipped (TRL version conflict fixed)
+- **kailash-ml-protocols ELIMINATED** — types merged into `kailash_ml.types`, package removed
+- **9 COC artifacts codified** — security patterns, testing patterns, monorepo integration, config patterns
+- **Kaizen 2.5.0**: structured_output_mode default flipped to "explicit"
+- **PR #275** on `feat/outstanding-issues-consolidation` — 8 commits, ready for merge
+
+## Outstanding
+
+- [ ] **Nexus gaps** (from loom report): WebSocket transport (partial), Webhook transport (partial), ResponseCache (not started) — `packages/kailash-nexus/src/nexus/transports/`
+- [ ] **MCP gaps** (from loom report): DataFlow introspection (not started), platform_map (not started), server infra (partial) — `src/kailash/mcp/`
+- [ ] **kailash-ml README** — needs PyCaret comparison table, architecture diagram section, engine deep-dives, troubleshooting
+- [ ] **Dashboard UI redesign** — `packages/kailash-ml/src/kailash_ml/dashboard/templates/index.html` needs AI UX specialist treatment (compare runs, metric charts, model lifecycle viz)
+- [ ] **Upstream proposal** — `.claude/.proposals/latest.yaml` needs regeneration with all session changes
+- [ ] **Delete kailash-ml-protocols package directory** — `packages/kailash-ml-protocols/` is dead code, remove entirely
+- [ ] **Merge PR #275** — `gh pr merge 275 --admin --merge --delete-branch`
+
+### Oversight — Verify Before Starting
+
+- [ ] `uv run python -c "from kailash_ml.types import FeatureSchema; print('OK')"` — types module works
+- [ ] `uv run python -m pytest packages/kailash-ml/tests/unit/ -q --timeout=60` — 449 passed
+- [ ] `uv run python -m pytest packages/kailash-align/tests/ -q --timeout=60` — 392 passed
+- [ ] `gh issue list --repo terrene-foundation/kailash-py --state open` — 0 open issues
+- [ ] `grep -r "kailash_ml_protocols" packages/kailash-ml/` — should return 0 matches
+
+### Oversight — Verify After Completing
+
+- [ ] Nexus: `uv run pytest packages/kailash-nexus/tests/ -q` — 0 failures
+- [ ] MCP: `uv run pytest src/kailash/mcp/ -q` — 0 failures
+- [ ] Dashboard: manually verify `kailash-ml-dashboard` launches and renders
+- [ ] README: check all code examples are runnable
