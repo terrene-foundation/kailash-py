@@ -53,13 +53,17 @@ def _is_blocked_address(addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> 
     return any(addr in net for net in _BLOCKED_IPV4)
 
 
-def _validate_target_url(url: str) -> None:
+def _validate_target_url(url: str) -> Optional[str]:
     """Validate a webhook target URL to prevent SSRF attacks.
 
     Rejects URLs with non-HTTP schemes or hostnames that resolve to
     private/internal IP ranges, including IPv4-mapped IPv6 addresses.
     If DNS resolution fails (e.g. offline), the URL is allowed —
     delivery will fail at send time instead.
+
+    Returns:
+        The first resolved IP address as a string (for DNS-pinned delivery),
+        or None if DNS resolution was not possible.
     """
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in ("http", "https"):
@@ -67,15 +71,19 @@ def _validate_target_url(url: str) -> None:
     hostname = parsed.hostname
     if not hostname:
         raise ValueError("URL has no hostname")
+    resolved_ip: Optional[str] = None
     try:
         for info in socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP):
             addr = ipaddress.ip_address(info[4][0])
             if _is_blocked_address(addr):
                 raise ValueError("Target URL resolves to blocked private address")
+            if resolved_ip is None:
+                resolved_ip = str(addr)
     except socket.gaierror:
         # DNS resolution may fail in offline/sandboxed environments.
         # Allow registration; delivery will fail at send time.
         logger.debug("Could not resolve hostname %r during SSRF check", hostname)
+    return resolved_ip
 
 
 class DeliveryStatus(str, Enum):
@@ -476,7 +484,7 @@ class WebhookTransport(Transport):
         Raises:
             ValueError: If the URL resolves to a private/internal address (SSRF prevention).
         """
-        _validate_target_url(target_url)
+        resolved_ip = _validate_target_url(target_url)
 
         import json
 
@@ -494,8 +502,21 @@ class WebhookTransport(Transport):
             oldest_key = next(iter(self._deliveries))
             del self._deliveries[oldest_key]
 
+        # Pin DNS: replace hostname with resolved IP to prevent rebinding
+        if resolved_ip is not None:
+            pinned_url = self._pin_url(target_url, resolved_ip)
+        else:
+            pinned_url = target_url
+
         body = json.dumps(payload).encode("utf-8")
         headers: Dict[str, str] = {"Content-Type": "application/json"}
+
+        # Preserve original Host header for the target server
+        parsed = urllib.parse.urlparse(target_url)
+        if parsed.hostname and resolved_ip is not None:
+            headers["Host"] = (
+                f"{parsed.hostname}:{parsed.port}" if parsed.port else parsed.hostname
+            )
 
         if self._secret is not None:
             sig = self.compute_signature(body)
@@ -506,7 +527,7 @@ class WebhookTransport(Transport):
         for attempt in range(1, self._max_retries + 1):
             delivery.attempts = attempt
             try:
-                status_code = await sender(target_url, body, headers)
+                status_code = await sender(pinned_url, body, headers)
 
                 if 200 <= status_code < 300:
                     delivery.status = DeliveryStatus.DELIVERED
@@ -617,6 +638,28 @@ class WebhookTransport(Transport):
         }
 
     # -- Internal -----------------------------------------------------------
+
+    @staticmethod
+    def _pin_url(original_url: str, resolved_ip: str) -> str:
+        """Replace the hostname in a URL with a resolved IP address.
+
+        This prevents DNS rebinding attacks by ensuring the HTTP request
+        connects to the same IP that was validated during SSRF checks.
+        The original Host header should be set separately.
+        """
+        parsed = urllib.parse.urlparse(original_url)
+        # For IPv6 addresses, wrap in brackets
+        if ":" in resolved_ip:
+            host_part = f"[{resolved_ip}]"
+        else:
+            host_part = resolved_ip
+        if parsed.port:
+            netloc = f"{host_part}:{parsed.port}"
+        else:
+            netloc = host_part
+        return urllib.parse.urlunparse(
+            (parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, "")
+        )
 
     @staticmethod
     async def _default_send(url: str, body: bytes, headers: Dict[str, str]) -> int:

@@ -10,6 +10,7 @@ All types provide to_dict() / from_dict() round-trip serialization.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
@@ -217,6 +218,10 @@ class MetricSpec:
     value: float
     split: str = "test"  # "train", "val", "test"
     higher_is_better: bool = True
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.value):
+            raise ValueError(f"MetricSpec.value must be finite, got {self.value!r}")
 
     def to_dict(self) -> dict[str, Any]:
         return {
