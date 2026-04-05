@@ -110,6 +110,41 @@ def resolve_envelope(self, address: Address) -> GovernanceEnvelope:
         return self._envelopes[address.key]
 ```
 
+### 9. Allowlist Over Blocklist for Read-Only Views
+
+Read-only proxy classes (e.g., `_ReadOnlyGovernanceView`) MUST use an allowlist of permitted methods, NOT a blocklist of forbidden methods.
+
+```python
+# DO: Allowlist — only explicitly listed methods are proxied
+_ALLOWED = frozenset({"verify_action", "compute_envelope", "get_context", ...})
+def __getattr__(self, name):
+    if name not in _ALLOWED:
+        raise AttributeError(f"... does not expose '{name}'")
+    return getattr(object.__getattribute__(self, "_engine"), name)
+
+# DO NOT: Blocklist — new methods added later are automatically exposed
+_BLOCKED = {"set_role_envelope", "grant_clearance", ...}
+def __getattr__(self, name):
+    if name in _BLOCKED:
+        raise AttributeError(...)
+    return getattr(self._engine, name)  # Exposes EVERYTHING not blocked
+```
+
+**Why:** Blocklist security fails when new mutation methods are added — they're automatically exposed until someone remembers to update the blocklist.
+
+### 10. Block All Deserialization on Governance Contexts
+
+GovernanceContext and similar frozen security dataclasses MUST block pickle, deepcopy, and all deserialization paths. The only valid construction path is through the engine.
+
+```python
+def __reduce__(self): raise TypeError("...")
+def __reduce_ex__(self, protocol): raise TypeError("...")
+def __getstate__(self): raise TypeError("...")
+def __deepcopy__(self, memo): raise TypeError("...")
+```
+
+**Why:** Pickle deserialization allows forging governance contexts with arbitrary permissions, bypassing all access controls.
+
 ## MUST NOT
 
 - Expose `GovernanceEngine` to agent code — agents receive `GovernanceContext` only

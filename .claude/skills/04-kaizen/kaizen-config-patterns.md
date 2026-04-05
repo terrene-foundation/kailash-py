@@ -532,6 +532,146 @@ class CodeGenConfig(BaseConfig):
     include_tests: bool = True
 ```
 
+## structured_output_mode Default Flip (v2.5.0)
+
+Starting in v2.5.0, `structured_output_mode` defaults to `"auto"` but emits a `FutureWarning` on every agent instantiation. In v2.6.0 the default will change to `"explicit"`.
+
+**What changed**: Previously, BaseAgent would auto-generate a `response_format` from the signature whenever `structured_output_mode` was not set. This hidden behavior caused confusion when the auto-generated config did not match user expectations (especially on Azure).
+
+**Migration path**:
+
+```python
+# Before (implicit auto — triggers FutureWarning in v2.5.0)
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model=os.environ["LLM_MODEL"],
+    # structured_output_mode defaults to "auto" — emits FutureWarning
+)
+
+# After (explicit — no warning, future-proof)
+from kaizen.core.structured_output import create_structured_output_config
+
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model=os.environ["LLM_MODEL"],
+    response_format=create_structured_output_config(MySignature(), strict=True),
+    structured_output_mode="explicit",
+)
+```
+
+**Timeline**:
+
+- v2.5.0: `"auto"` is the default but emits `FutureWarning`
+- v2.6.0: `"explicit"` becomes the default — `"auto"` still works but is opt-in only
+
+## response_format Validation
+
+The `response_format` field is validated at config construction time. It must contain a valid `"type"` key with one of three allowed values:
+
+| `type` value    | Purpose                          | Requires `json_schema` key |
+| --------------- | -------------------------------- | -------------------------- |
+| `"json_schema"` | Strict structured output (100%)  | Yes                        |
+| `"json_object"` | Best-effort JSON mode (70-85%)   | No                         |
+| `"text"`        | Plain text response (no parsing) | No                         |
+
+```python
+# Valid:
+response_format={"type": "json_schema", "json_schema": {"name": "r", "schema": {...}}}
+response_format={"type": "json_object"}
+response_format={"type": "text"}
+
+# Invalid — raises ValueError at config time:
+response_format={"json_schema": {...}}        # Missing "type" key
+response_format={"type": "xml"}               # Unknown type
+response_format={"type": "json_schema"}       # Missing json_schema key
+```
+
+## Three-Field Separation: response_format vs provider_config vs structured_output_mode
+
+These three `BaseAgentConfig` fields serve distinct, non-overlapping purposes:
+
+| Field                    | Scope                                     | Sent to LLM API | Example                                                  |
+| ------------------------ | ----------------------------------------- | --------------- | -------------------------------------------------------- |
+| `response_format`        | What the LLM should return                | Yes             | `{"type": "json_schema", "json_schema": {...}}`          |
+| `provider_config`        | How the provider connection is configured | Depends         | `{"api_version": "2024-10-21", "deployment": "my-gpt4"}` |
+| `structured_output_mode` | Whether Kaizen auto-generates format      | No (internal)   | `"explicit"`, `"auto"` (deprecated), `"off"`             |
+
+**Decision tree**:
+
+1. Need structured JSON from the LLM? Set `response_format`.
+2. Need provider-specific operational settings (API version, deployment name, org ID)? Set `provider_config`.
+3. Want to control whether Kaizen auto-generates `response_format` from your signature? Set `structured_output_mode`.
+
+**A deprecation shim** in BaseAgentConfig detects structured output keys (`type`, `json_schema`, `schema`) inside `provider_config` and auto-migrates them to `response_format` with a `DeprecationWarning`. New code should never rely on this shim.
+
+## The \_run_async_hook() Pattern for BaseAgent Async/Sync Bridging
+
+BaseAgent provides `_run_async_hook()` as an internal helper for running async code from synchronous agent methods. This is used when a `run()` call needs to invoke async operations (provider calls, tool execution, MCP discovery) from a sync context.
+
+**How it works**:
+
+```python
+# Inside BaseAgent (simplified)
+def _run_async_hook(self, coro):
+    """Run an async coroutine from sync context, handling event loop detection."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        # Already in async context — schedule on existing loop
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            return pool.submit(asyncio.run, coro).result()
+    else:
+        # No loop — create one
+        return asyncio.run(coro)
+```
+
+**When you encounter this**: If subclassing BaseAgent and overriding `run()`, use `_run_async_hook()` to call async methods:
+
+```python
+class MyAgent(BaseAgent):
+    def run(self, **kwargs):
+        # Need to call an async method from sync run()
+        result = self._run_async_hook(self._async_process(kwargs))
+        return result
+
+    async def _async_process(self, kwargs):
+        # Async logic here
+        return await self.provider.chat_async(...)
+```
+
+**Why this matters**: Naive `asyncio.run()` fails when called inside an already-running event loop (e.g., inside FastAPI, Jupyter, or nested agent calls). `_run_async_hook()` detects the context and handles both cases.
+
+## MCP Auto-Discovery on First run()
+
+When an agent is configured with MCP tools but `discover()` has not been called, BaseAgent automatically triggers MCP discovery on the first `run()` call.
+
+**Behavior**:
+
+```python
+from kaizen.core.base_agent import BaseAgent
+
+# Agent configured with MCP but no explicit discover()
+agent = MyAgent(config=config, signature=sig)
+agent.add_mcp_server("my-server", url="http://localhost:3000")
+
+# First run() triggers auto-discovery before execution
+result = agent.run(input="Hello")
+# Internally: discovers MCP tools → registers them → then executes
+```
+
+**Key details**:
+
+- Auto-discovery runs once per agent instance, on the first `run()` call only
+- Subsequent `run()` calls skip discovery (tools are cached)
+- If you call `agent.discover()` explicitly before `run()`, auto-discovery is skipped
+- Discovery failures raise `MCPDiscoveryError` — they do not silently degrade
+
+**When to call discover() explicitly**: When you need to inspect available tools before running, or when you want to handle discovery errors separately from execution errors.
+
 ## Anti-Patterns (DON'T DO THIS)
 
 ### ❌ Manual BaseAgentConfig Creation

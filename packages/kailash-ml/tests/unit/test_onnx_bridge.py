@@ -16,7 +16,7 @@ from kailash_ml.engines.model_registry import (
     VALID_TRANSITIONS,
     ALL_STAGES,
 )
-from kailash_ml_protocols import FeatureField, FeatureSchema, MetricSpec, ModelSignature
+from kailash_ml.types import FeatureField, FeatureSchema, MetricSpec, ModelSignature
 
 
 # ---------------------------------------------------------------------------

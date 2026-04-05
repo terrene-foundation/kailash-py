@@ -91,6 +91,12 @@ with open(path, 'w') as f:  # Partial write on crash = corrupted record
 
 **Why**: `atomic_write()` uses temp file + `fsync` + `os.replace()` for crash safety + `O_NOFOLLOW`.
 
+### 8. Block Deserialization on Security-Critical Dataclasses
+
+Frozen dataclasses carrying governance state (GovernanceContext, ConstraintEnvelope) MUST override `__reduce__`, `__reduce_ex__`, `__getstate__`, and `__deepcopy__` to raise TypeError.
+
+**Why:** An attacker who can pickle/unpickle a governance object can forge arbitrary permissions. Blocking all deserialization paths forces construction through the engine's verified code path.
+
 ## MUST NOT
 
 ### 1. No `==` to Compare HMAC Digests

@@ -31,7 +31,6 @@ dependencies = [
     "kailash>=1.0",
     "kailash-dataflow>=1.0",
     "kailash-nexus>=1.0",
-    "kailash-ml-protocols>=0.1.0",
     "polars>=1.0",
     "numpy>=1.24",
     "scipy>=1.11",

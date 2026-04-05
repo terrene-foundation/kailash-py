@@ -1726,7 +1726,7 @@ name = "jaraco-classes"
 version = "3.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "more-itertools" },
+    { name = "more-itertools", marker = "platform_machine != 's390x'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/06/c0/ed4a27bc5571b99e3cff68f8a9fa5b56ff7df1c2251cc715a652ddd26402/jaraco.classes-3.4.0.tar.gz", hash = "sha256:47a024b51d0239c0dd8c8540c6c7f484be3b8fcf0b2d85c13825780d3b3f3acd", size = 11780, upload-time = "2024-03-31T07:27:36.643Z" }
 wheels = [
@@ -1738,7 +1738,7 @@ name = "jaraco-context"
 version = "6.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "backports-tarfile", marker = "python_full_version < '3.12'" },
+    { name = "backports-tarfile", marker = "python_full_version < '3.12' and platform_machine != 's390x'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/cb/9c/a788f5bb29c61e456b8ee52ce76dbdd32fd72cd73dd67bc95f42c7a8d13c/jaraco_context-6.1.0.tar.gz", hash = "sha256:129a341b0a85a7db7879e22acd66902fda67882db771754574338898b2d5d86f", size = 15850, upload-time = "2026-01-13T02:53:53.847Z" }
 wheels = [
@@ -1750,7 +1750,7 @@ name = "jaraco-functools"
 version = "4.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "more-itertools" },
+    { name = "more-itertools", marker = "platform_machine != 's390x'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0f/27/056e0638a86749374d6f57d0b0db39f29509cce9313cf91bdc0ac4d91084/jaraco_functools-4.4.0.tar.gz", hash = "sha256:da21933b0417b89515562656547a77b4931f98176eb173644c0d35032a33d6bb", size = 19943, upload-time = "2025-12-21T09:29:43.6Z" }
 wheels = [
@@ -2007,7 +2007,6 @@ ldap = [
 ]
 ml = [
     { name = "kailash-ml" },
-    { name = "kailash-ml-protocols" },
 ]
 nexus = [
     { name = "kailash-nexus" },
@@ -2052,7 +2051,6 @@ requires-dist = [
     { name = "kailash-kaizen", marker = "extra == 'all'", specifier = ">=2.4.0,<3.0.0" },
     { name = "kailash-kaizen", marker = "extra == 'kaizen'", specifier = ">=2.4.0,<3.0.0" },
     { name = "kailash-ml", marker = "extra == 'ml'", editable = "packages/kailash-ml" },
-    { name = "kailash-ml-protocols", marker = "extra == 'ml'", editable = "packages/kailash-ml-protocols" },
     { name = "kailash-nexus", marker = "extra == 'all'", specifier = ">=1.8.0" },
     { name = "kailash-nexus", marker = "extra == 'nexus'", specifier = ">=1.8.0" },
     { name = "kailash-pact", marker = "extra == 'all'", specifier = ">=0.7.0" },
@@ -2220,7 +2218,6 @@ source = { editable = "packages/kailash-ml" }
 dependencies = [
     { name = "kailash" },
     { name = "kailash-dataflow" },
-    { name = "kailash-ml-protocols" },
     { name = "kailash-nexus" },
     { name = "lightgbm" },
     { name = "numpy" },
@@ -2244,7 +2241,6 @@ requires-dist = [
     { name = "kailash-ml", extras = ["dl"], marker = "extra == 'rl'" },
     { name = "kailash-ml", extras = ["dl", "xgb", "catboost", "stats", "rl", "agents"], marker = "extra == 'full'" },
     { name = "kailash-ml", extras = ["dl-gpu", "xgb", "catboost", "stats", "rl", "agents"], marker = "extra == 'full-gpu'" },
-    { name = "kailash-ml-protocols", specifier = ">=0.1.0" },
     { name = "kailash-nexus", specifier = ">=1.0" },
     { name = "lightgbm", specifier = ">=4.0" },
     { name = "lightning", marker = "extra == 'dl'", specifier = ">=2.2" },
@@ -2278,21 +2274,6 @@ requires-dist = [
     { name = "xgboost", marker = "extra == 'xgb'", specifier = ">=2.0" },
 ]
 provides-extras = ["dl", "dl-gpu", "rl", "agents", "xgb", "catboost", "stats", "full", "full-gpu", "dev"]
-
-[[package]]
-name = "kailash-ml-protocols"
-version = "0.1.0"
-source = { editable = "packages/kailash-ml-protocols" }
-
-[package.metadata]
-requires-dist = [
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
-    { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.3" },
-]
-provides-extras = ["dev"]
 
 [[package]]
 name = "kailash-nexus"
@@ -2348,13 +2329,13 @@ name = "keyring"
 version = "25.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "importlib-metadata", marker = "python_full_version < '3.12'" },
-    { name = "jaraco-classes" },
-    { name = "jaraco-context" },
-    { name = "jaraco-functools" },
-    { name = "jeepney", marker = "sys_platform == 'linux'" },
-    { name = "pywin32-ctypes", marker = "sys_platform == 'win32'" },
-    { name = "secretstorage", marker = "sys_platform == 'linux'" },
+    { name = "importlib-metadata", marker = "python_full_version < '3.12' and platform_machine != 's390x'" },
+    { name = "jaraco-classes", marker = "platform_machine != 's390x'" },
+    { name = "jaraco-context", marker = "platform_machine != 's390x'" },
+    { name = "jaraco-functools", marker = "platform_machine != 's390x'" },
+    { name = "jeepney", marker = "platform_machine != 's390x' and sys_platform == 'linux'" },
+    { name = "pywin32-ctypes", marker = "platform_machine != 's390x' and sys_platform == 'win32'" },
+    { name = "secretstorage", marker = "platform_machine != 's390x' and sys_platform == 'linux'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/43/4b/674af6ef2f97d56f0ab5153bf0bfa28ccb6c3ed4d1babf4305449668807b/keyring-25.7.0.tar.gz", hash = "sha256:fe01bd85eb3f8fb3dd0405defdeac9a5b4f6f0439edbb3149577f244a2e8245b", size = 63516, upload-time = "2025-11-16T16:26:09.482Z" }
 wheels = [
@@ -5026,8 +5007,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography" },
-    { name = "jeepney" },
+    { name = "cryptography", marker = "platform_machine != 's390x'" },
+    { name = "jeepney", marker = "platform_machine != 's390x'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [

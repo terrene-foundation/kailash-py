@@ -90,7 +90,6 @@ pact = [
 ]
 ml = [
     "kailash-ml>=0.2.0",
-    "kailash-ml-protocols>=0.1.0",
 ]
 align = [
     "kailash-align>=0.2.0",
@@ -189,5 +188,4 @@ ignore = ["E203", "E501", "F401", "F841"]
 
 [tool.uv.sources]
 kailash-ml = { path = "packages/kailash-ml", editable = true }
-kailash-ml-protocols = { path = "packages/kailash-ml-protocols", editable = true }
 kailash-align = { path = "packages/kailash-align", editable = true }

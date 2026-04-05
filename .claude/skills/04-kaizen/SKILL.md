@@ -440,11 +440,11 @@ As of v2.5.0, provider configuration follows an **explicit over implicit** model
 
 ### BaseAgentConfig Fields
 
-| Field                    | Purpose                                                                | Example                                      |
-| ------------------------ | ---------------------------------------------------------------------- | -------------------------------------------- |
-| `response_format`        | Structured output config (json_schema, json_object)                    | `{"type": "json_schema", "json_schema": {}}` |
-| `provider_config`        | Provider-specific operational settings only                            | `{"api_version": "2024-10-21"}`              |
-| `structured_output_mode` | Controls auto-generation: `"auto"` (deprecated), `"explicit"`, `"off"` | `"explicit"`                                 |
+| Field                    | Purpose                                                                                                   | Example                                      |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `response_format`        | Structured output config (json_schema, json_object)                                                       | `{"type": "json_schema", "json_schema": {}}` |
+| `provider_config`        | Provider-specific operational settings only                                                               | `{"api_version": "2024-10-21"}`              |
+| `structured_output_mode` | Controls auto-generation: `"auto"` (deprecated, FutureWarning), `"explicit"` (default in v2.6.0), `"off"` | `"explicit"`                                 |
 
 ### Quick Pattern
 
@@ -496,7 +496,7 @@ Legacy vars emit `DeprecationWarning`. Use `resolve_azure_env()` from `kaizen.no
 
 For detailed configuration patterns, see:
 
-- **[kaizen-config-patterns](kaizen-config-patterns.md)** — Domain configs, auto-extraction, provider-specific patterns
+- **[kaizen-config-patterns](kaizen-config-patterns.md)** — Domain configs, auto-extraction, provider-specific patterns, structured_output_mode default flip (auto to explicit), response_format validation, three-field separation, \_run_async_hook() pattern, MCP auto-discovery
 - **[kaizen-structured-outputs](kaizen-structured-outputs.md)** — Full structured output guide with migration examples
 
 ## Critical Rules

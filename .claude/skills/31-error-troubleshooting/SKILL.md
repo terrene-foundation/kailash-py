@@ -1,6 +1,6 @@
 ---
 name: error-troubleshooting
-description: "Common error patterns and troubleshooting guides for Kailash SDK including Nexus blocking issues, connection parameter errors, runtime execution errors, cycle convergence problems, missing .build() calls, parameter validation errors, and DataFlow template syntax errors. Use when encountering errors, debugging issues, or asking about 'error', 'troubleshooting', 'debugging', 'not working', 'hangs', 'timeout', 'validation error', 'connection error', 'runtime error', 'cycle not converging', 'missing build', or 'template syntax'."
+description: "Common error patterns and troubleshooting guides for Kailash SDK including Nexus blocking issues, connection parameter errors, runtime execution errors, cycle convergence problems, missing .build() calls, parameter validation errors, DataFlow template syntax errors, monorepo dependency issues, and OpenTelemetry test isolation. Use when encountering errors, debugging issues, or asking about 'error', 'troubleshooting', 'debugging', 'not working', 'hangs', 'timeout', 'validation error', 'connection error', 'runtime error', 'cycle not converging', 'missing build', 'template syntax', 'no module named', 'version conflict', 'setup.py not found', or 'otel timeout'."
 ---
 
 # Kailash Error Troubleshooting
@@ -45,6 +45,14 @@ Common error patterns and solutions for Kailash SDK.
   - DeprecationWarning about `provider_config` | Migrate to `response_format` field
   - Azure env var deprecation warnings | Switch to canonical names (`AZURE_ENDPOINT`, `AZURE_API_KEY`)
 
+### Monorepo & Dependency Errors
+
+- **No module named 'kailash_ml'** — Sub-package not installed. Fix: `uv sync --extra ml`
+- **No module named 'kailash_align'** — Sub-package not installed. Fix: `uv sync --extra align`
+- **TRL/datasets version conflict** — TRL minor versions can break APIs. Fix: Pin `trl>=0.25,<1.0` in `pyproject.toml`
+- **"setup.py not found" in tests** — Package uses `pyproject.toml` only; there is no `setup.py`. Remove any test or CI step that assumes `setup.py` exists
+- **OpenTelemetry timeout in tests** — OTLP exporter tries to reach a collector that isn't running. Fix: Use `InMemorySpanExporter` for test isolation (see [testing-otel-patterns](../12-testing-strategies/testing-otel-patterns.md))
+
 ## Quick Error Reference
 
 | Symptom                                            | Error Type            | Quick Fix                                       |
@@ -60,6 +68,11 @@ Common error patterns and solutions for Kailash SDK.
 | Azure 400 "messages must contain 'json'"           | Kaizen provider       | Use `json_prompt_suffix()` or `response_format` |
 | "Missing required parameter: response_format.type" | Kaizen provider       | Don't put `api_version` in `response_format`    |
 | DeprecationWarning about `provider_config`         | Kaizen provider       | Migrate to `response_format` field              |
+| `No module named 'kailash_ml'`                     | Missing extra         | `uv sync --extra ml`                            |
+| `No module named 'kailash_align'`                  | Missing extra         | `uv sync --extra align`                         |
+| TRL/datasets version conflict                      | Dependency pinning    | Pin `trl>=0.25,<1.0`                            |
+| "setup.py not found"                               | Build system          | Package uses `pyproject.toml` only              |
+| OpenTelemetry timeout in tests                     | Test isolation        | Use `InMemorySpanExporter`                      |
 
 ## Error Prevention Checklist
 
@@ -73,6 +86,10 @@ Common error patterns and solutions for Kailash SDK.
 - Structured output in `response_format` (not `provider_config`)?
 - Azure using canonical env vars (`AZURE_ENDPOINT`, `AZURE_API_KEY`)?
 - `structured_output_mode="explicit"` for new agents?
+- Sub-package extras installed (`uv sync --extra ml`, `--extra align`)?
+- TRL pinned to bounded range (`>=0.25,<1.0`)?
+- Using `InMemorySpanExporter` in OpenTelemetry tests (not OTLP)?
+- Running tests with `uv run python -m pytest` (not bare `pytest`)?
 
 ## Debugging Tips
 

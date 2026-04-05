@@ -116,6 +116,7 @@ Each `@db.model` class generates:
 ### Data Fabric Engine
 
 - **[dataflow-fabric-engine](dataflow-fabric-engine.md)** - External data sources (`db.source()`), derived products (`@db.product()`), fabric runtime (`db.start()`), 5 source adapters, webhooks, SSRF protection, observability
+- **[dataflow-fabric-patterns](dataflow-fabric-patterns.md)** - Fabric-only mode, serving validation, batch caps (50 max), `get_cached_product()`, startup timeout (30s), `prewarm` passthrough, `DATAFLOW_STRICT_POOL_VALIDATION`
 
 ### Enterprise Features
 

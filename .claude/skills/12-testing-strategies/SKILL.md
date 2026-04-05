@@ -10,6 +10,7 @@ description: "Comprehensive testing strategies for Kailash applications includin
 ## Sub-File Index
 
 - **[test-3tier-strategy](test-3tier-strategy.md)** - Complete 3-tier guide: tier definitions, fixture patterns, CI/CD integration
+- **[testing-otel-patterns](testing-otel-patterns.md)** - OpenTelemetry test isolation, optional dependency testing, sys.path patterns
 
 ## 3-Tier Strategy
 
