@@ -15,7 +15,70 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
-### [kailash-kaizen 2.5.0] - 2026-04-05
+### Multi-Package Release — 2026-04-05
+
+#### [kailash 2.5.1] — Core SDK
+
+##### Fixed
+
+- Abstract Node subclasses missing `run()` method across 24+ classes (security, data, system, transaction, monitoring, governance nodes)
+- `SecurityEventNode` severity comparison used string ordering instead of numeric ranking (CRITICAL < HIGH was wrong)
+
+#### [kailash-nexus 1.9.0]
+
+##### Added
+
+- **WebSocket transport** (`nexus.transports.websocket`): bidirectional real-time communication with connection lifecycle, heartbeat, max_connections enforcement
+- **Webhook transport** (`nexus.transports.webhook`): inbound HMAC-SHA256 verification, outbound delivery with retry, idempotency deduplication, DNS-pinned SSRF prevention
+- **ResponseCache middleware** (`nexus.middleware.cache`): TTL + LRU eviction, ETag/304 support, Cache-Control parsing, thread-safe, per-handler configuration
+
+##### Fixed
+
+- Handler parameter validation: tests updated for new `register_handler` validation (30 pre-existing failures)
+- `SecurityEventNode` and `AuditLogNode` missing `run()` (auth plugin instantiation failure)
+
+##### Security
+
+- SSRF prevention with blocked IP ranges (RFC 1918, loopback, link-local, cloud metadata, IPv4-mapped IPv6)
+- DNS rebinding prevention via IP pinning in webhook delivery
+- Generic error messages in WebSocket and health endpoints (no `str(exc)` leaks)
+- `max_connections` enforcement prevents WebSocket resource exhaustion
+
+#### [kailash-ml 0.3.0]
+
+##### Added
+
+- `kailash_ml.types` module — consolidated type contracts (MLToolProtocol, AgentInfusionProtocol, FeatureField, FeatureSchema, ModelSignature, MetricSpec)
+- `pyarrow>=14.0` as base dependency for Arrow interop
+- `MetricSpec.__post_init__` validates `math.isfinite(value)` — rejects NaN/Inf
+- README expanded from 133 to 917 lines (all 15 engines, type contracts, agent integration, dashboard)
+- Dashboard redesigned: sidebar navigation, search/filter, dark mode, 5 new API routes (overview, features, drift)
+
+##### Removed
+
+- `kailash-ml-protocols` package eliminated — all types merged into `kailash_ml.types`
+
+#### [kailash-dataflow 1.7.1]
+
+##### Fixed
+
+- `logger.info` → `logger.debug` for audit trail initialization (log level compliance)
+- Added `run()` to 4 Node subclasses (AggregateNode, NaturalLanguageFilterNode, SmartMergeNode, DataFlowConnectionManager)
+
+#### [kailash-pact 0.7.1]
+
+##### Fixed
+
+- Pre-existing test collection errors resolved (hypothesis dependency)
+
+#### [kailash-align 0.2.1]
+
+##### Fixed
+
+- `datasets` version cap removed (`<4.0` → `>=4.0`) — resolves `trl>=1.0` dependency conflict
+- Test version assertion updated to match 0.2.0 release
+
+#### [kailash-kaizen 2.5.0] (first PyPI release at this version)
 
 Breaking: `structured_output_mode` default changed from "auto" to "explicit".
 
