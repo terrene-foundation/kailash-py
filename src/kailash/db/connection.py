@@ -72,7 +72,12 @@ class ConnectionManager:
         logger.info("ConnectionManager initialized for %s", db_type.value)
 
     async def close(self) -> None:
-        """Close the connection pool and release resources."""
+        """Close the connection pool and release resources.
+
+        Raises:
+            Exception: Re-raises any exception from pool.close() after logging,
+                so callers can detect failed close and avoid using stale connections.
+        """
         if self._pool is None:
             return
 
@@ -86,10 +91,13 @@ class ConnectionManager:
                 self._pool.close()
                 await self._pool.wait_closed()
         except Exception:
-            logger.exception("Error closing connection pool")
-        finally:
+            logger.exception("Error closing connection pool for %s", db_type.value)
             self._pool = None
-            logger.info("ConnectionManager closed for %s", db_type.value)
+            raise
+        finally:
+            if self._pool is not None:
+                self._pool = None
+                logger.info("ConnectionManager closed for %s", db_type.value)
 
     async def create_index(self, index_name: str, table: str, columns: str) -> None:
         """Create an index, ignoring if it already exists.
