@@ -146,6 +146,8 @@ class PreprocessingPipeline:
         imputation_strategy: str = "mean",
         remove_outliers: bool = False,
         outlier_threshold: float = 0.05,
+        max_cardinality: int = 50,
+        exclude_columns: list[str] | None = None,
     ) -> SetupResult:
         """Auto-configure preprocessing and return transformed data splits.
 
@@ -182,6 +184,15 @@ class PreprocessingPipeline:
         outlier_threshold:
             IQR multiplier for outlier detection (fraction of data that
             can be considered outlier).  Lower values are more aggressive.
+        max_cardinality:
+            Maximum number of unique values for one-hot encoding.
+            Categorical columns exceeding this threshold are automatically
+            downgraded to ordinal encoding.  Only applies when
+            ``categorical_encoding="onehot"``.
+        exclude_columns:
+            Column names to exclude from categorical encoding.  Excluded
+            columns are left as-is (no encoding applied).  All names must
+            exist in *data*.
         """
         if target not in data.columns:
             raise ValueError(f"Target column '{target}' not found in data.")
@@ -199,6 +210,13 @@ class PreprocessingPipeline:
                 f"imputation_strategy must be 'mean', 'median', 'mode', or 'drop', "
                 f"got '{imputation_strategy}'."
             )
+        if exclude_columns is not None:
+            invalid_cols = [c for c in exclude_columns if c not in data.columns]
+            if invalid_cols:
+                msg = (
+                    f"exclude_columns contains columns not in DataFrame: {invalid_cols}"
+                )
+                raise ValueError(msg)
 
         original_shape = (data.height, data.width)
 
@@ -239,7 +257,12 @@ class PreprocessingPipeline:
 
         # 2. Encode categoricals
         result_df = self._encode_categoricals(
-            result_df, categorical_cols, target, categorical_encoding
+            result_df,
+            categorical_cols,
+            target,
+            categorical_encoding,
+            max_cardinality=max_cardinality,
+            exclude_columns=exclude_columns,
         )
 
         # 3. Normalize numerics
@@ -449,17 +472,46 @@ class PreprocessingPipeline:
         categorical_cols: list[str],
         target: str,
         encoding: str,
+        *,
+        max_cardinality: int = 50,
+        exclude_columns: list[str] | None = None,
     ) -> pl.DataFrame:
         """Encode categorical columns and store fitted mappings."""
         if not categorical_cols:
             return data
 
-        cols_present = [c for c in categorical_cols if c in data.columns]
+        # Filter out excluded columns
+        cols_to_encode = [
+            c for c in categorical_cols if c not in (exclude_columns or [])
+        ]
+        cols_present = [c for c in cols_to_encode if c in data.columns]
         if not cols_present:
             return data
 
         if encoding == "onehot":
-            return self._onehot_encode(data, cols_present)
+            # Split by cardinality: low-cardinality → onehot, high → ordinal
+            low_card_cols: list[str] = []
+            high_card_cols: list[str] = []
+            for col in cols_present:
+                n_unique = data[col].drop_nulls().n_unique()
+                if n_unique > max_cardinality:
+                    logger.warning(
+                        "Column '%s' has %d unique values (> max_cardinality=%d), "
+                        "using ordinal encoding",
+                        col,
+                        n_unique,
+                        max_cardinality,
+                    )
+                    high_card_cols.append(col)
+                else:
+                    low_card_cols.append(col)
+
+            result = data
+            if low_card_cols:
+                result = self._onehot_encode(result, low_card_cols)
+            if high_card_cols:
+                result = self._ordinal_encode_overflow(result, high_card_cols)
+            return result
         elif encoding == "ordinal":
             return self._ordinal_encode(data, cols_present)
         elif encoding == "target":
@@ -522,6 +574,39 @@ class PreprocessingPipeline:
         self._transformers["ordinal_mappings"] = ordinal_mappings
         return result
 
+    def _ordinal_encode_overflow(
+        self,
+        data: pl.DataFrame,
+        cols: list[str],
+    ) -> pl.DataFrame:
+        """Ordinal-encode columns that exceeded the cardinality threshold.
+
+        Mappings are stored separately from explicit ordinal encoding
+        to preserve backward compatibility of the transformers dict.
+        """
+        result = data
+        overflow_mappings: dict[str, dict[str, int]] = {}
+        for col in cols:
+            if col not in result.columns:
+                continue
+            categories = (
+                result[col].drop_nulls().cast(pl.Utf8).unique().sort().to_list()
+            )
+            mapping = {cat: i for i, cat in enumerate(categories)}
+            overflow_mappings[col] = mapping
+            result = result.with_columns(
+                pl.col(col)
+                .cast(pl.Utf8)
+                .replace_strict(
+                    {k: str(v) for k, v in mapping.items()},
+                    default="-1",
+                )
+                .cast(pl.Int64)
+                .alias(col)
+            )
+        self._transformers["ordinal_overflow_mappings"] = overflow_mappings
+        return result
+
     def _target_encode(
         self, data: pl.DataFrame, cols: list[str], target: str
     ) -> pl.DataFrame:
@@ -563,7 +648,11 @@ class PreprocessingPipeline:
         return result
 
     def _apply_fitted_encoding(self, data: pl.DataFrame) -> pl.DataFrame:
-        """Apply previously fitted encoding to new data."""
+        """Apply previously fitted encoding to new data.
+
+        Uses separate ``if`` blocks (not ``elif``) so that mixed encoding
+        (onehot + ordinal overflow) can coexist in the same pipeline.
+        """
         result = data
 
         if "onehot_mappings" in self._transformers:
@@ -580,7 +669,23 @@ class PreprocessingPipeline:
                     )
                 result = result.drop(col)
 
-        elif "ordinal_mappings" in self._transformers:
+        if "ordinal_overflow_mappings" in self._transformers:
+            overflow = self._transformers["ordinal_overflow_mappings"]
+            for col, mapping in overflow.items():
+                if col not in result.columns:
+                    continue
+                result = result.with_columns(
+                    pl.col(col)
+                    .cast(pl.Utf8)
+                    .replace_strict(
+                        {k: str(v) for k, v in mapping.items()},
+                        default="-1",
+                    )
+                    .cast(pl.Int64)
+                    .alias(col)
+                )
+
+        if "ordinal_mappings" in self._transformers:
             mappings = self._transformers["ordinal_mappings"]
             for col, mapping in mappings.items():
                 if col not in result.columns:
@@ -593,7 +698,7 @@ class PreprocessingPipeline:
                     .alias(col)
                 )
 
-        elif "target_mappings" in self._transformers:
+        if "target_mappings" in self._transformers:
             mappings = self._transformers["target_mappings"]
             global_mean = self._transformers.get("target_global_mean", 0.0)
             for col, mapping in mappings.items():

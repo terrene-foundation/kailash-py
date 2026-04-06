@@ -615,3 +615,161 @@ class TestEdgeCases:
         result2 = pipeline.setup(regression_df, "target", seed=99)
         # Extremely unlikely to produce the same split
         assert not result1.train_data.equals(result2.train_data)
+
+
+# ---------------------------------------------------------------------------
+# Cardinality guard (#313)
+# ---------------------------------------------------------------------------
+
+
+class TestCardinalityGuard:
+    """Tests for max_cardinality and exclude_columns (#313)."""
+
+    @pytest.fixture()
+    def high_card_df(self) -> pl.DataFrame:
+        """DataFrame with a high-cardinality categorical column."""
+        n = 200
+        return pl.DataFrame(
+            {
+                "id": [f"id_{i}" for i in range(n)],
+                "color": ["red", "blue", "green"] * 66 + ["red", "blue"],
+                "size": ["S", "M", "L", "XL"] * 50,
+                "value": list(range(n)),
+                "target": [0, 1] * 100,
+            }
+        )
+
+    def test_high_cardinality_auto_downgrade(self, high_card_df: pl.DataFrame) -> None:
+        """Columns exceeding max_cardinality are ordinal-encoded."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            high_card_df,
+            "target",
+            categorical_encoding="onehot",
+            max_cardinality=10,
+            normalize=False,
+        )
+        # 'id' has 200 unique -> ordinal (1 column kept)
+        # 'color' has 3 unique -> onehot (3 columns)
+        # 'size' has 4 unique -> onehot (4 columns)
+        train_cols = result.train_data.columns
+        # Should NOT have 200 id_* columns
+        id_onehot = [c for c in train_cols if c.startswith("id_")]
+        assert len(id_onehot) == 0, f"id was one-hot encoded: {id_onehot[:5]}"
+        # Should still have color/size one-hot columns
+        color_onehot = [c for c in train_cols if c.startswith("color_")]
+        assert len(color_onehot) == 3
+
+    def test_all_columns_exceed_threshold(self, high_card_df: pl.DataFrame) -> None:
+        """When all categoricals exceed threshold, all get ordinal."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            high_card_df,
+            "target",
+            categorical_encoding="onehot",
+            max_cardinality=2,
+            normalize=False,
+        )
+        train_cols = result.train_data.columns
+        # No one-hot columns should exist for any of the categoricals
+        onehot_cols = [
+            c
+            for c in train_cols
+            if any(c.startswith(f"{cat}_") for cat in ["id", "color", "size"])
+        ]
+        assert len(onehot_cols) == 0, f"Unexpected one-hot columns: {onehot_cols}"
+        # Original columns should remain (ordinal-encoded as Int64)
+        assert "id" in train_cols
+        assert "color" in train_cols
+        assert "size" in train_cols
+
+    def test_exclude_columns(self, high_card_df: pl.DataFrame) -> None:
+        """Excluded columns are not encoded."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            high_card_df,
+            "target",
+            categorical_encoding="onehot",
+            exclude_columns=["id"],
+            normalize=False,
+        )
+        train_cols = result.train_data.columns
+        # id should NOT be one-hot encoded (excluded)
+        id_onehot = [c for c in train_cols if c.startswith("id_")]
+        assert len(id_onehot) == 0
+        # id should remain as its original string column
+        assert "id" in train_cols
+
+    def test_exclude_nonexistent_column_raises(
+        self, high_card_df: pl.DataFrame
+    ) -> None:
+        """Excluding a nonexistent column raises ValueError."""
+        pipeline = PreprocessingPipeline()
+        with pytest.raises(ValueError, match="not in DataFrame"):
+            pipeline.setup(
+                high_card_df,
+                "target",
+                categorical_encoding="onehot",
+                exclude_columns=["nonexistent"],
+            )
+
+    def test_exclude_noncategorical_ignored(self, high_card_df: pl.DataFrame) -> None:
+        """Excluding a numeric column is silently ignored (it's not categorical)."""
+        pipeline = PreprocessingPipeline()
+        # Should not raise -- 'value' is numeric, not categorical
+        result = pipeline.setup(
+            high_card_df,
+            "target",
+            categorical_encoding="onehot",
+            exclude_columns=["value"],
+            normalize=False,
+        )
+        assert result.train_data is not None
+
+    def test_target_encoding_ignores_cardinality(
+        self, high_card_df: pl.DataFrame
+    ) -> None:
+        """Target encoding is cardinality-safe; max_cardinality should not apply."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            high_card_df,
+            "target",
+            categorical_encoding="target",
+            max_cardinality=2,
+            normalize=False,
+        )
+        # Should work without any cardinality warnings
+        assert result.train_data is not None
+
+    def test_default_threshold_preserves_existing(self) -> None:
+        """Default max_cardinality=50 doesn't affect small category counts."""
+        df = pl.DataFrame(
+            {
+                "color": ["red", "blue", "green"] * 20,
+                "target": [0, 1] * 30,
+            }
+        )
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            df, "target", categorical_encoding="onehot", normalize=False
+        )
+        train_cols = result.train_data.columns
+        color_onehot = [c for c in train_cols if c.startswith("color_")]
+        assert len(color_onehot) == 3
+
+    def test_transform_applies_mixed_encoding(self, high_card_df: pl.DataFrame) -> None:
+        """transform() correctly applies mixed onehot+ordinal to new data."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            high_card_df,
+            "target",
+            categorical_encoding="onehot",
+            max_cardinality=10,
+            normalize=False,
+        )
+        # transform should work on test data
+        assert result.test_data is not None
+        test_cols = result.test_data.columns
+        # Same encoding should be applied
+        id_onehot = [c for c in test_cols if c.startswith("id_")]
+        assert len(id_onehot) == 0
