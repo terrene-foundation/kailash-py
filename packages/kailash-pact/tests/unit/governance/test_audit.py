@@ -59,7 +59,9 @@ class TestPactAuditAction:
 
     def test_all_audit_actions_exist(self) -> None:
         """All action types per thesis Section 5.7 normative mapping + LCA bridge approval + vacancy + bilateral consent."""
-        assert len(PactAuditAction) == 15  # 14 original + BRIDGE_REJECTED (#231)
+        assert (
+            len(PactAuditAction) == 16
+        )  # 14 original + BRIDGE_REJECTED (#231) + CLEARANCE_SUSPENDED (#309)
 
 
 # ===========================================================================
