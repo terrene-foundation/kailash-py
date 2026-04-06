@@ -1,0 +1,189 @@
+name: Test kailash-ml
+
+on:
+  push:
+    branches: [feat/*, feature/*, fix/*, docs/*, session/*, session-*]
+    paths:
+      - "packages/kailash-ml/**"
+      - ".github/workflows/test-kailash-ml.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/kailash-ml/**"
+      - ".github/workflows/test-kailash-ml.yml"
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "Test variant to run"
+        required: false
+        default: "base"
+        type: choice
+        options:
+          - base
+          - dl
+          - rl
+          - all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  version-check:
+    name: Version Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Check version consistency
+        run: |
+          PYPROJECT_VER=$(python -c "
+          import tomllib
+          with open('packages/kailash-ml/pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+          print(data['project']['version'])
+          ")
+          INIT_VER=$(python -c "
+          import ast, pathlib
+          src = pathlib.Path('packages/kailash-ml/src/kailash_ml/_version.py').read_text()
+          for node in ast.walk(ast.parse(src)):
+              if isinstance(node, ast.Assign):
+                  for target in node.targets:
+                      if getattr(target, 'id', '') == '__version__':
+                          print(ast.literal_eval(node.value))
+          ")
+          echo "pyproject.toml: $PYPROJECT_VER"
+          echo "_version.py:    $INIT_VER"
+          if [ "$PYPROJECT_VER" != "$INIT_VER" ]; then
+            echo "::error::Version mismatch: pyproject.toml=$PYPROJECT_VER vs _version.py=$INIT_VER"
+            exit 1
+          fi
+
+  test-base:
+    name: Base (Python ${{ matrix.python-version }})
+    needs: version-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Restore uv cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-ml-py${{ matrix.python-version }}-${{ hashFiles('packages/kailash-ml/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-ml-py${{ matrix.python-version }}-
+
+      - name: Install kailash-ml[dev]
+        run: |
+          uv venv .venv
+          uv pip install -e "packages/kailash-ml[dev]" --python .venv/bin/python
+
+      - name: Lint (ruff)
+        run: |
+          .venv/bin/ruff check packages/kailash-ml/src/ packages/kailash-ml/tests/ --select=E9,F63,F7,F82
+
+      - name: Test (unit + integration)
+        timeout-minutes: 10
+        run: |
+          .venv/bin/python -m pytest \
+            packages/kailash-ml/tests/unit/ \
+            -m 'not (slow or gpu or bench)' \
+            --maxfail=10 -q --timeout=30
+
+      - name: Coverage
+        if: matrix.python-version == '3.12'
+        run: |
+          uv pip install pytest-cov --python .venv/bin/python
+          .venv/bin/python -m pytest \
+            packages/kailash-ml/tests/unit/ \
+            -m 'not (slow or gpu or bench)' \
+            --cov=packages/kailash-ml/src/kailash_ml \
+            --cov-report=term-missing \
+            --cov-fail-under=70 \
+            -q --timeout=30
+
+  test-dl:
+    name: Deep Learning
+    needs: version-check
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.variant == 'dl' || inputs.variant == 'all')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install kailash-ml[dl,dev]
+        run: |
+          uv venv .venv
+          uv pip install -e "packages/kailash-ml[dl,dev]" --python .venv/bin/python
+
+      - name: Test DL
+        timeout-minutes: 15
+        run: |
+          .venv/bin/python -m pytest \
+            packages/kailash-ml/tests/ \
+            -m 'dl or deep_learning' \
+            --maxfail=5 -q --timeout=120
+
+  test-rl:
+    name: Reinforcement Learning
+    needs: version-check
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      (inputs.variant == 'rl' || inputs.variant == 'all')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install kailash-ml[rl,dev]
+        run: |
+          uv venv .venv
+          uv pip install -e "packages/kailash-ml[rl,dev]" --python .venv/bin/python
+
+      - name: Test RL
+        timeout-minutes: 15
+        run: |
+          .venv/bin/python -m pytest \
+            packages/kailash-ml/tests/ \
+            -m 'rl or reinforcement_learning' \
+            --maxfail=5 -q --timeout=120

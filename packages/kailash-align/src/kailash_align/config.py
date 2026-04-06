@@ -715,6 +715,7 @@ class AlignmentConfig:
     experiment_dir: str = "./align-experiments"
     local_files_only: bool = False
     base_model_revision: Optional[str] = None
+    onprem: Optional["OnPremConfig"] = None
 
     def __post_init__(self) -> None:
         from kailash_align.method_registry import validate_method_name

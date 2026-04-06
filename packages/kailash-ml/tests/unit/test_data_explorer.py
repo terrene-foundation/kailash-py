@@ -795,3 +795,115 @@ class TestFromDictValidation:
     def test_data_profile_negative_rows_raises(self) -> None:
         with pytest.raises(ValueError, match="n_rows must be non-negative"):
             DataProfile.from_dict({"n_rows": -1, "n_columns": 2, "columns": []})
+
+
+# ---------------------------------------------------------------------------
+# Regression: #295 — Correlation robustness (pairwise-complete, sanitize)
+# ---------------------------------------------------------------------------
+
+
+class TestCorrelationRobustness:
+    """Regression tests for issue #295: NaN/Inf guards + pairwise-complete."""
+
+    async def test_constant_column_pearson_returns_none(
+        self, explorer: DataExplorer
+    ) -> None:
+        """A constant column has zero variance → correlation undefined → None."""
+        df = pl.DataFrame(
+            {"a": [1.0, 2.0, 3.0, 4.0, 5.0], "const": [7.0, 7.0, 7.0, 7.0, 7.0]}
+        )
+        profile = await explorer.profile(df)
+        assert profile.correlation_matrix is not None
+        val = profile.correlation_matrix["a"]["const"]
+        assert val is None, f"Expected None for constant column, got {val}"
+
+    async def test_constant_column_spearman_returns_none(
+        self, explorer: DataExplorer
+    ) -> None:
+        """Spearman on a constant column is also undefined."""
+        df = pl.DataFrame(
+            {"a": [1.0, 2.0, 3.0, 4.0, 5.0], "const": [7.0, 7.0, 7.0, 7.0, 7.0]}
+        )
+        profile = await explorer.profile(df)
+        assert profile.spearman_matrix is not None
+        val = profile.spearman_matrix["a"]["const"]
+        assert val is None, f"Expected None for constant column, got {val}"
+
+    async def test_single_row_returns_none(self, explorer: DataExplorer) -> None:
+        """Single-row DataFrame cannot compute correlation."""
+        df = pl.DataFrame({"a": [1.0], "b": [2.0]})
+        profile = await explorer.profile(df)
+        assert profile.correlation_matrix is None
+
+    async def test_null_heavy_pairwise_complete(self, explorer: DataExplorer) -> None:
+        """Pairwise-complete observation: shared non-null rows used per pair.
+
+        Columns a and b share rows [0, 3, 4] with perfect correlation.
+        fill_null(0.0) would bias this toward ~0.7 — pairwise-complete gives 1.0.
+        """
+        df = pl.DataFrame(
+            {
+                "a": [1.0, 2.0, None, 4.0, 5.0],
+                "b": [1.0, None, None, 4.0, 5.0],
+            }
+        )
+        profile = await explorer.profile(df)
+        assert profile.correlation_matrix is not None
+        val = profile.correlation_matrix["a"]["b"]
+        assert val is not None
+        assert val == pytest.approx(
+            1.0, abs=0.01
+        ), f"Pairwise-complete should give ~1.0, got {val}"
+
+    async def test_null_free_fast_path(
+        self, numeric_df: pl.DataFrame, explorer: DataExplorer
+    ) -> None:
+        """Null-free DataFrame uses fast-path (same result as before)."""
+        profile = await explorer.profile(numeric_df)
+        assert profile.correlation_matrix is not None
+        assert profile.correlation_matrix["x"]["y"] == pytest.approx(1.0, abs=0.01)
+        assert profile.correlation_matrix["x"]["z"] == pytest.approx(-1.0, abs=0.01)
+
+    async def test_no_nan_in_correlation_matrix(self, explorer: DataExplorer) -> None:
+        """No NaN or Inf values anywhere in the correlation matrix."""
+        import math
+
+        df = pl.DataFrame(
+            {
+                "a": [1.0, None, 3.0, None, 5.0],
+                "b": [None, 2.0, None, 4.0, 5.0],
+                "c": [1.0, 2.0, 3.0, 4.0, 5.0],
+            }
+        )
+        profile = await explorer.profile(df)
+        assert profile.correlation_matrix is not None
+        for c1, row in profile.correlation_matrix.items():
+            for c2, val in row.items():
+                assert val is None or math.isfinite(
+                    val
+                ), f"Non-finite value {val} at [{c1}][{c2}]"
+
+    async def test_alert_skips_none_correlation(self, explorer: DataExplorer) -> None:
+        """None correlations must not trigger high_correlation alerts."""
+        df = pl.DataFrame(
+            {
+                "a": [1.0, 2.0, 3.0, 4.0, 5.0],
+                "const": [7.0, 7.0, 7.0, 7.0, 7.0],
+            }
+        )
+        profile = await explorer.profile(df)
+        corr_alerts = [a for a in profile.alerts if a["type"] == "high_correlation"]
+        for alert in corr_alerts:
+            assert alert["value"] is not None, "Alert should never have None value"
+
+    async def test_sanitize_float_finite(self) -> None:
+        """_sanitize_float returns finite values or default."""
+        sf = DataExplorer._sanitize_float
+        assert sf(1.5) == 1.5
+        assert sf(0.0) == 0.0
+        assert sf(None) is None
+        assert sf(None, default=0.0) == 0.0
+        assert sf(float("nan")) is None
+        assert sf(float("inf")) is None
+        assert sf(float("-inf")) is None
+        assert sf(float("nan"), default=0.0) == 0.0

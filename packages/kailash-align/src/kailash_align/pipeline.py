@@ -186,11 +186,14 @@ class AlignmentPipeline:
             "Loading base model %s for %s", self._config.base_model_id, method_name
         )
         model = AutoModelForCausalLM.from_pretrained(**model_kwargs)
-        tokenizer = AutoTokenizer.from_pretrained(
-            self._config.base_model_id,
-            local_files_only=self._config.local_files_only,
-            trust_remote_code=False,
-        )
+        tokenizer_kwargs = {
+            "pretrained_model_name_or_path": self._config.base_model_id,
+            "local_files_only": model_kwargs["local_files_only"],
+            "trust_remote_code": False,
+        }
+        if "cache_dir" in model_kwargs:
+            tokenizer_kwargs["cache_dir"] = model_kwargs["cache_dir"]
+        tokenizer = AutoTokenizer.from_pretrained(**tokenizer_kwargs)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
@@ -295,14 +298,26 @@ class AlignmentPipeline:
     # --- Internal helpers ---
 
     def _base_model_kwargs(self) -> dict[str, Any]:
-        """Build base model loading kwargs."""
+        """Build base model loading kwargs.
+
+        Respects both ``config.local_files_only`` and nested
+        ``config.onprem.offline_mode``.  When either is True,
+        ``local_files_only=True`` is set so no HuggingFace Hub
+        requests escape.
+        """
+        onprem = self._config.onprem
+        offline = self._config.local_files_only or (
+            onprem is not None and onprem.offline_mode
+        )
         kwargs: dict[str, Any] = {
             "pretrained_model_name_or_path": self._config.base_model_id,
-            "local_files_only": self._config.local_files_only,
+            "local_files_only": offline,
             "trust_remote_code": False,
         }
         if self._config.base_model_revision:
             kwargs["revision"] = self._config.base_model_revision
+        if onprem is not None and onprem.model_cache_dir:
+            kwargs["cache_dir"] = onprem.model_cache_dir
         return kwargs
 
     def _resolve_dtype(self, stage_config: Any) -> Any:

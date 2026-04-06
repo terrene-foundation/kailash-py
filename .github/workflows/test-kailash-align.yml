@@ -1,0 +1,181 @@
+name: Test kailash-align
+
+on:
+  push:
+    branches: [feat/*, feature/*, fix/*, docs/*, session/*, session-*]
+    paths:
+      - "packages/kailash-align/**"
+      - ".github/workflows/test-kailash-align.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/kailash-align/**"
+      - ".github/workflows/test-kailash-align.yml"
+  workflow_dispatch:
+    inputs:
+      run-gpu:
+        description: "Include GPU tests (requires GPU runner)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  version-check:
+    name: Version Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Check version consistency
+        run: |
+          PYPROJECT_VER=$(python -c "
+          import tomllib
+          with open('packages/kailash-align/pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+          print(data['project']['version'])
+          ")
+          INIT_VER=$(python -c "
+          import ast, pathlib
+          src = pathlib.Path('packages/kailash-align/src/kailash_align/_version.py').read_text()
+          for node in ast.walk(ast.parse(src)):
+              if isinstance(node, ast.Assign):
+                  for target in node.targets:
+                      if getattr(target, 'id', '') == '__version__':
+                          print(ast.literal_eval(node.value))
+          ")
+          echo "pyproject.toml: $PYPROJECT_VER"
+          echo "_version.py:    $INIT_VER"
+          if [ "$PYPROJECT_VER" != "$INIT_VER" ]; then
+            echo "::error::Version mismatch: pyproject.toml=$PYPROJECT_VER vs _version.py=$INIT_VER"
+            exit 1
+          fi
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    needs: version-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Restore uv cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-align-py${{ matrix.python-version }}-${{ hashFiles('packages/kailash-align/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-align-py${{ matrix.python-version }}-
+
+      - name: Install kailash-align[dev]
+        run: |
+          uv venv .venv
+          uv pip install -e "packages/kailash-align[dev]" --python .venv/bin/python
+
+      - name: Lint (ruff)
+        run: |
+          .venv/bin/ruff check packages/kailash-align/src/ packages/kailash-align/tests/ --select=E9,F63,F7,F82
+
+      - name: Test (unit)
+        timeout-minutes: 10
+        run: |
+          .venv/bin/python -m pytest \
+            packages/kailash-align/tests/ \
+            -m 'not (gpu or slow)' \
+            --maxfail=10 -q --timeout=30
+
+      - name: Coverage
+        if: matrix.python-version == '3.12'
+        run: |
+          uv pip install pytest-cov --python .venv/bin/python
+          .venv/bin/python -m pytest \
+            packages/kailash-align/tests/ \
+            -m 'not (gpu or slow)' \
+            --cov=packages/kailash-align/src/kailash_align \
+            --cov-report=term-missing \
+            --cov-fail-under=60 \
+            -q --timeout=30
+
+  test-gpu:
+    name: GPU Tests (optional)
+    needs: version-check
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.run-gpu == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install kailash-align[dev,rlhf]
+        run: |
+          uv venv .venv
+          uv pip install -e "packages/kailash-align[dev,rlhf]" --python .venv/bin/python
+
+      - name: Test GPU
+        timeout-minutes: 25
+        run: |
+          .venv/bin/python -m pytest \
+            packages/kailash-align/tests/ \
+            -m 'gpu' \
+            --maxfail=5 -q --timeout=300
+
+  inter-package:
+    name: Inter-Package (align + dev ML)
+    needs: version-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install dev kailash-ml + kailash-align
+        run: |
+          uv venv .venv
+          uv pip install -e "packages/kailash-ml[dev]" --python .venv/bin/python
+          uv pip install -e "packages/kailash-align[dev]" --python .venv/bin/python
+
+      - name: Test align with dev ML
+        timeout-minutes: 10
+        run: |
+          .venv/bin/python -m pytest \
+            packages/kailash-align/tests/ \
+            -m 'not (gpu or slow)' \
+            --maxfail=10 -q --timeout=30

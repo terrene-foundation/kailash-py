@@ -17,7 +17,13 @@ from kailash_align.exceptions import CacheNotFoundError
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["OnPremModelCache", "CachedModel"]
+__all__ = [
+    "OnPremModelCache",
+    "CachedModel",
+    "OnPremSetupGuide",
+    "ChecklistItem",
+    "SetupChecklist",
+]
 
 
 @dataclass
@@ -200,3 +206,164 @@ class OnPremModelCache:
                 f"Model '{model_id}' not found in cache at {self._cache_dir}. "
                 f"Download it first: kailash-align-prepare download {model_id}"
             )
+
+
+# ---------------------------------------------------------------------------
+# OnPremSetupGuide — structured deployment checklist
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ChecklistItem:
+    """Single item in a deployment checklist.
+
+    Structured so agents can process programmatically and renderers
+    can produce markdown, JSON, or CLI table output.
+    """
+
+    step: int
+    category: str  # "download", "verify", "configure", "deploy"
+    description: str
+    command: Optional[str] = None
+    size_estimate_gb: Optional[float] = None
+
+
+@dataclass(frozen=True)
+class SetupChecklist:
+    """Complete deployment checklist for on-prem setup."""
+
+    items: tuple[ChecklistItem, ...]
+    total_disk_gb: float
+    model_count: int
+
+    def to_dict(self) -> dict:
+        """Structured dict for API responses."""
+        return {
+            "items": [
+                {
+                    "step": item.step,
+                    "category": item.category,
+                    "description": item.description,
+                    "command": item.command,
+                    "size_estimate_gb": item.size_estimate_gb,
+                }
+                for item in self.items
+            ],
+            "total_disk_gb": self.total_disk_gb,
+            "model_count": self.model_count,
+        }
+
+    def to_markdown(self) -> str:
+        """Render as markdown for human consumption."""
+        lines = [
+            "# On-Prem Deployment Checklist",
+            "",
+            f"**Models**: {self.model_count} | "
+            f"**Estimated disk**: {self.total_disk_gb:.1f} GB",
+            "",
+        ]
+        current_cat = ""
+        for item in self.items:
+            if item.category != current_cat:
+                current_cat = item.category
+                lines.append(f"## {current_cat.title()}")
+                lines.append("")
+            size_note = (
+                f" (~{item.size_estimate_gb:.1f} GB)" if item.size_estimate_gb else ""
+            )
+            lines.append(f"- [ ] **Step {item.step}**: {item.description}{size_note}")
+            if item.command:
+                lines.append(f"  ```bash")
+                lines.append(f"  {item.command}")
+                lines.append(f"  ```")
+            lines.append("")
+        return "\n".join(lines)
+
+
+class OnPremSetupGuide:
+    """Generate deployment checklists for air-gapped environments."""
+
+    # Approximate sizes for common base models (GB).
+    _MODEL_SIZES: dict[str, float] = {
+        "meta-llama/Llama-2-7b-hf": 13.5,
+        "meta-llama/Meta-Llama-3-8B": 16.0,
+        "mistralai/Mistral-7B-v0.1": 14.5,
+        "microsoft/phi-2": 5.5,
+        "TinyLlama/TinyLlama-1.1B-Chat-v1.0": 2.2,
+    }
+
+    @classmethod
+    def generate_checklist(
+        cls,
+        models: list[str],
+        cache_dir: str = "~/.cache/kailash-align/models",
+    ) -> SetupChecklist:
+        """Generate a structured deployment checklist.
+
+        Args:
+            models: HuggingFace model IDs to include.
+            cache_dir: Target cache directory on the air-gapped machine.
+
+        Returns:
+            SetupChecklist with structured items, renderable as markdown or dict.
+        """
+        items: list[ChecklistItem] = []
+        total_size = 0.0
+        step = 1
+
+        # Download phase
+        for model_id in models:
+            size = cls._MODEL_SIZES.get(model_id, 10.0)
+            total_size += size
+            items.append(
+                ChecklistItem(
+                    step=step,
+                    category="download",
+                    description=f"Download {model_id}",
+                    command=f"kailash-align-prepare download {model_id}",
+                    size_estimate_gb=size,
+                )
+            )
+            step += 1
+
+        # Verify phase
+        for model_id in models:
+            items.append(
+                ChecklistItem(
+                    step=step,
+                    category="verify",
+                    description=f"Verify {model_id} is loadable",
+                    command=f"kailash-align-prepare verify {model_id}",
+                )
+            )
+            step += 1
+
+        # Configure phase
+        items.append(
+            ChecklistItem(
+                step=step,
+                category="configure",
+                description=(
+                    "Set OnPremConfig(offline_mode=True, "
+                    f'model_cache_dir="{cache_dir}")'
+                ),
+            )
+        )
+        step += 1
+
+        # Deploy phase
+        items.append(
+            ChecklistItem(
+                step=step,
+                category="deploy",
+                description="Transfer cache directory to air-gapped machine",
+                command=f"rsync -av {cache_dir} target-host:{cache_dir}",
+                size_estimate_gb=total_size,
+            )
+        )
+
+        return SetupChecklist(
+            items=tuple(items),
+            total_disk_gb=total_size,
+            model_count=len(models),
+        )

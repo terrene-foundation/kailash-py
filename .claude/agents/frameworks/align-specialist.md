@@ -90,6 +90,32 @@ Set `AlignmentConfig.loss_type` to use DPO variants without new trainer code:
 5. **KaizenModelBridge** — Connect fine-tuned models to Kaizen Delegate
 6. **OnPremModelCache** — Air-gapped model preparation
 
+## 4 Kaizen Agents (BaseAgent + Signature)
+
+```
+agents/
+  strategist.py        <- AlignmentStrategistAgent: method + base model selection
+  data_curation.py     <- DataCurationAgent: dataset quality + gap analysis
+  training_config.py   <- TrainingConfigAgent: hyperparameters + LoRA config
+  eval_interpreter.py  <- EvalInterpreterAgent: eval result interpretation
+  tools.py             <- 8 engine-backed tools (LLM-first, zero decision logic)
+  orchestrator.py      <- alignment_workflow() convenience function
+```
+
+**Pattern**: BaseAgent + Signature (matches kailash-ml, NOT Delegate). Tools MUST delegate to existing engines — `estimate_lora_memory` wraps `gpu_memory.estimate_training_memory()`, `list_training_methods` wraps `METHOD_REGISTRY`, `get_gpu_memory` wraps `gpu_memory.get_gpu_info()`. Reimplementing engine logic in tools is a zero-tolerance Rule 4 violation.
+
+### On-Prem / Air-Gapped Deployment
+
+`OnPremConfig` is nested inside `AlignmentConfig` as `config.onprem`. When `onprem.offline_mode=True`, `_base_model_kwargs()` sets `local_files_only=True` and `cache_dir` on all HuggingFace calls. `OnPremSetupGuide.generate_checklist()` returns structured `SetupChecklist` (not markdown string) with `to_markdown()` and `to_dict()` methods.
+
+```python
+config = AlignmentConfig(
+    method="sft",
+    base_model_id="meta-llama/Meta-Llama-3-8B",
+    onprem=OnPremConfig(offline_mode=True, model_cache_dir="/models/cache"),
+)
+```
+
 ## Security Rules
 
 - `trust_remote_code=False` on all model/tokenizer loading

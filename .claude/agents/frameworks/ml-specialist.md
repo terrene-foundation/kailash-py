@@ -134,7 +134,9 @@ html_report = await explorer.to_html(df, title="My Report")  # Self-contained HT
 comparison = await explorer.compare(train_df, prod_df)  # Parallel profiling
 ```
 
-**Security**: XSS-safe HTML via `html.escape()` + `_safe_uid()` for plotly div IDs. No scipy dependency. `math.isfinite()` guards on all numpy outputs.
+**Correlation robustness**: Pairwise-complete observation (not `fill_null(0.0)`) for Pearson and Spearman. Centralized `_sanitize_float()` guards ALL numeric outputs — returns `None` for non-finite values. Correlation `None` = "undefined" (constant column), distinct from `0.0` = "no correlation". HTML report renders "N/A" with tooltip. Alert threshold check guards against `None`.
+
+**Security**: XSS-safe HTML via `html.escape()` + `_safe_uid()` for plotly div IDs. No scipy dependency.
 
 ### Agent-Infused AutoML (Double Opt-In)
 

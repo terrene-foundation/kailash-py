@@ -330,6 +330,56 @@ class InferenceServer:
             return server._cache.stats()
 
     # ------------------------------------------------------------------
+    # MCP integration (lazy import)
+    # ------------------------------------------------------------------
+
+    def register_mcp_tools(self, server: Any, namespace: str = "ml") -> None:
+        """Register prediction tools with an MCP server.
+
+        Symmetric with ``register_endpoints()`` for Nexus HTTP.
+
+        Args:
+            server: FastMCP server instance.
+            namespace: Tool namespace prefix (e.g., "ml").
+        """
+        inference = self
+
+        @server.tool(name=f"{namespace}.predict")
+        async def predict_tool(
+            model_name: str,
+            features: str,
+            version: int | None = None,
+        ) -> dict:
+            """Run a single prediction on a registered model."""
+            import json as _json
+
+            feature_dict = (
+                _json.loads(features) if isinstance(features, str) else features
+            )
+            result = await inference.predict(model_name, feature_dict, version=version)
+            return result.__dict__
+
+        @server.tool(name=f"{namespace}.predict_batch")
+        async def predict_batch_tool(
+            model_name: str,
+            records: str,
+            version: int | None = None,
+        ) -> list:
+            """Run batch predictions on a registered model."""
+            import json as _json
+
+            records_list = _json.loads(records) if isinstance(records, str) else records
+            results = await inference.predict_batch(
+                model_name, records_list, version=version
+            )
+            return [r.__dict__ for r in results]
+
+        @server.tool(name=f"{namespace}.model_info")
+        async def model_info_tool(model_name: str) -> dict:
+            """Get metadata for a registered model."""
+            return inference._cache.stats()
+
+    # ------------------------------------------------------------------
     # Private: model loading
     # ------------------------------------------------------------------
 

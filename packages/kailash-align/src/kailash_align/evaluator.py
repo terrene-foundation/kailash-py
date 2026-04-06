@@ -113,8 +113,13 @@ class AlignmentEvaluator:
         adapter_registry: AdapterRegistry for looking up adapter metadata.
     """
 
-    def __init__(self, adapter_registry: Any = None) -> None:
+    def __init__(
+        self,
+        adapter_registry: Any = None,
+        onprem_config: Any = None,
+    ) -> None:
         self._registry = adapter_registry
+        self._onprem = onprem_config
 
     async def evaluate(
         self,

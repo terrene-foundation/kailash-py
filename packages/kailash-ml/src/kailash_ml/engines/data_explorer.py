@@ -144,12 +144,12 @@ class DataProfile:
     n_rows: int
     n_columns: int
     columns: list[ColumnProfile]
-    correlation_matrix: dict[str, dict[str, float]] | None = None
-    categorical_associations: dict[str, dict[str, float]] | None = None
+    correlation_matrix: dict[str, dict[str, float | None]] | None = None
+    categorical_associations: dict[str, dict[str, float | None]] | None = None
     missing_patterns: list[dict[str, Any]] = field(default_factory=list)
     profiled_at: str = ""
     # Extended fields
-    spearman_matrix: dict[str, dict[str, float]] | None = None
+    spearman_matrix: dict[str, dict[str, float | None]] | None = None
     duplicate_count: int = 0
     duplicate_pct: float = 0.0
     memory_bytes: int = 0
@@ -436,20 +436,20 @@ class DataExplorer:
             if series.dtype in _NUMERIC_DTYPES:
                 non_null = series.drop_nulls()
                 if len(non_null) > 0:
-                    base.mean = float(non_null.mean())  # type: ignore[arg-type]
-                    std_val = non_null.std()
-                    base.std = float(std_val) if std_val is not None else 0.0
-                    base.min_val = float(non_null.min())  # type: ignore[arg-type]
-                    base.max_val = float(non_null.max())  # type: ignore[arg-type]
-                    base.q25 = float(non_null.quantile(0.25))  # type: ignore[arg-type]
-                    base.q50 = float(non_null.quantile(0.50))  # type: ignore[arg-type]
-                    base.q75 = float(non_null.quantile(0.75))  # type: ignore[arg-type]
+                    _sf = DataExplorer._sanitize_float
+                    base.mean = _sf(non_null.mean(), default=0.0)
+                    base.std = _sf(non_null.std(), default=0.0)
+                    base.min_val = _sf(non_null.min(), default=0.0)
+                    base.max_val = _sf(non_null.max(), default=0.0)
+                    base.q25 = _sf(non_null.quantile(0.25), default=0.0)
+                    base.q50 = _sf(non_null.quantile(0.50), default=0.0)
+                    base.q75 = _sf(non_null.quantile(0.75), default=0.0)
 
                     # IQR + outlier detection
-                    iqr_val = base.q75 - base.q25
+                    iqr_val = (base.q75 or 0.0) - (base.q25 or 0.0)
                     base.iqr = iqr_val
-                    lower = base.q25 - 1.5 * iqr_val
-                    upper = base.q75 + 1.5 * iqr_val
+                    lower = (base.q25 or 0.0) - 1.5 * iqr_val
+                    upper = (base.q75 or 0.0) + 1.5 * iqr_val
                     outliers = int(((non_null < lower) | (non_null > upper)).sum())
                     base.outlier_count = outliers
                     base.outlier_pct = outliers / count if count > 0 else 0.0
@@ -684,6 +684,24 @@ class DataExplorer:
         }
 
     # ------------------------------------------------------------------
+    # Numeric sanitisation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _sanitize_float(val: Any, *, default: float | None = None) -> float | None:
+        """Convert *val* to a finite Python float or return *default*.
+
+        Centralises NaN/Inf handling for every numeric output so new
+        statistics added in the future inherit the guard automatically.
+        """
+        if val is None:
+            return default
+        fval = float(val)
+        if not math.isfinite(fval):
+            return default
+        return fval
+
+    # ------------------------------------------------------------------
     # Correlation helpers
     # ------------------------------------------------------------------
 
@@ -691,42 +709,108 @@ class DataExplorer:
     def _compute_pearson(
         data: pl.DataFrame,
         numeric_cols: list[str],
-    ) -> dict[str, dict[str, float]] | None:
-        """Pearson correlation matrix for numeric columns."""
-        if len(numeric_cols) < 2:
+    ) -> dict[str, dict[str, float | None]] | None:
+        """Pearson correlation matrix using pairwise-complete observation.
+
+        Instead of ``fill_null(0.0)`` (which biases correlations toward
+        zero), we drop nulls per column pair so that only shared non-null
+        rows contribute.  When the DataFrame has *no* nulls we fast-path
+        to ``df.corr()`` for performance.
+        """
+        if len(numeric_cols) < 2 or data.height < 2:
             return None
-        numeric_df = data.select(numeric_cols).fill_null(0.0)
-        corr_df = (
-            numeric_df.corr()
-            if hasattr(numeric_df, "corr")
-            else numeric_df.pearson_corr()
-        )
-        matrix: dict[str, dict[str, float]] = {}
-        for i, c in enumerate(numeric_cols):
+
+        numeric_df = data.select(numeric_cols)
+        has_nulls = numeric_df.null_count().row(0) != tuple(0 for _ in numeric_cols)
+
+        if not has_nulls:
+            # Fast-path: no nulls → single vectorised correlation.
+            corr_df = (
+                numeric_df.corr()
+                if hasattr(numeric_df, "corr")
+                else numeric_df.pearson_corr()
+            )
+            matrix: dict[str, dict[str, float | None]] = {}
+            for i, c in enumerate(numeric_cols):
+                matrix[c] = {}
+                for j, c2 in enumerate(numeric_cols):
+                    val = corr_df[i, j]
+                    matrix[c][c2] = DataExplorer._sanitize_float(val)
+            return matrix
+
+        # Pairwise-complete: drop nulls per column pair.
+        matrix = {}
+        for c in numeric_cols:
             matrix[c] = {}
-            for j, c2 in enumerate(numeric_cols):
-                val = corr_df[i, j]
-                matrix[c][c2] = float(val) if val is not None else 0.0
+        for i, c1 in enumerate(numeric_cols):
+            matrix[c1][c1] = 1.0
+            for j in range(i + 1, len(numeric_cols)):
+                c2 = numeric_cols[j]
+                pair = numeric_df.select([c1, c2]).drop_nulls()
+                if pair.height < 2:
+                    matrix[c1][c2] = None
+                    matrix[c2][c1] = None
+                    continue
+                pair_corr = (
+                    pair.corr() if hasattr(pair, "corr") else pair.pearson_corr()
+                )
+                val = DataExplorer._sanitize_float(pair_corr[0, 1])
+                matrix[c1][c2] = val
+                matrix[c2][c1] = val
         return matrix
 
     @staticmethod
     def _compute_spearman(
         data: pl.DataFrame,
         numeric_cols: list[str],
-    ) -> dict[str, dict[str, float]] | None:
-        """Spearman rank correlation via polars rank() + Pearson on ranks."""
-        if len(numeric_cols) < 2:
+    ) -> dict[str, dict[str, float | None]] | None:
+        """Spearman rank correlation via pairwise-complete observation.
+
+        Ranks are computed per column, then Pearson correlation is applied
+        on the ranked values with pairwise null-dropping.
+        """
+        if len(numeric_cols) < 2 or data.height < 2:
             return None
-        ranked = data.select(
-            [pl.col(c).rank().alias(c) for c in numeric_cols]
-        ).fill_null(0.0)
-        corr_df = ranked.corr() if hasattr(ranked, "corr") else ranked.pearson_corr()
-        matrix: dict[str, dict[str, float]] = {}
-        for i, c in enumerate(numeric_cols):
+
+        numeric_df = data.select(numeric_cols)
+        has_nulls = numeric_df.null_count().row(0) != tuple(0 for _ in numeric_cols)
+
+        ranked = data.select([pl.col(c).rank().alias(c) for c in numeric_cols])
+
+        if not has_nulls:
+            ranked_filled = ranked.fill_null(0.0)
+            corr_df = (
+                ranked_filled.corr()
+                if hasattr(ranked_filled, "corr")
+                else ranked_filled.pearson_corr()
+            )
+            matrix: dict[str, dict[str, float | None]] = {}
+            for i, c in enumerate(numeric_cols):
+                matrix[c] = {}
+                for j, c2 in enumerate(numeric_cols):
+                    val = corr_df[i, j]
+                    matrix[c][c2] = DataExplorer._sanitize_float(val)
+            return matrix
+
+        # Pairwise-complete on ranks.
+        matrix = {}
+        for c in numeric_cols:
             matrix[c] = {}
-            for j, c2 in enumerate(numeric_cols):
-                val = corr_df[i, j]
-                matrix[c][c2] = float(val) if val is not None else 0.0
+        for i, c1 in enumerate(numeric_cols):
+            matrix[c1][c1] = 1.0
+            for j in range(i + 1, len(numeric_cols)):
+                c2 = numeric_cols[j]
+                pair = ranked.select([c1, c2]).drop_nulls()
+                if pair.height < 2:
+                    matrix[c1][c2] = None
+                    matrix[c2][c1] = None
+                    continue
+                pair_corr = (
+                    pair.corr() if hasattr(pair, "corr") else pair.pearson_corr()
+                )
+                val = DataExplorer._sanitize_float(pair_corr[0, 1])
+                matrix[c1][c2] = val
+                matrix[c2][c1] = val
         return matrix
 
     @staticmethod
@@ -736,7 +820,7 @@ class DataExplorer:
         *,
         max_cols: int = 20,
         max_cardinality: int = 100,
-    ) -> dict[str, dict[str, float]] | None:
+    ) -> dict[str, dict[str, float | None]] | None:
         """Cramer's V association matrix -- pure polars + numpy, no scipy.
 
         Bounded: skips columns with >*max_cardinality* unique values and
@@ -794,7 +878,8 @@ class DataExplorer:
                 if k <= 1:
                     matrix[col_a][col_b] = 0.0
                 else:
-                    matrix[col_a][col_b] = float(np.sqrt(chi2 / (n * (k - 1))))
+                    raw = float(np.sqrt(chi2 / (n * (k - 1))))
+                    matrix[col_a][col_b] = raw if math.isfinite(raw) else 0.0
         return matrix
 
     # ------------------------------------------------------------------
@@ -912,7 +997,11 @@ class DataExplorer:
         if profile.correlation_matrix:
             for c1, row in profile.correlation_matrix.items():
                 for c2, val in row.items():
-                    if c1 < c2 and abs(val) > config.high_correlation_threshold:
+                    if (
+                        c1 < c2
+                        and val is not None
+                        and abs(val) > config.high_correlation_threshold
+                    ):
                         alerts.append(
                             {
                                 "type": "high_correlation",
