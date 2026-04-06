@@ -187,7 +187,7 @@ All config dataclasses validate numeric fields with `math.isfinite()` in `__post
 | `[eval]`   | `pip install kailash-align[eval]`   | `lm-eval>=0.4`                        | lm-eval-harness benchmarking              |
 | `[serve]`  | `pip install kailash-align[serve]`  | `llama-cpp-python>=0.3`, `gguf>=0.10` | GGUF export, Ollama deployment            |
 | `[online]` | `pip install kailash-align[online]` | `vllm>=0.6`                           | Fast generation for GRPO/RLOO (CUDA only) |
-| `[full]`   | `pip install kailash-align[full]`   | All of the above                      | Everything                                |
+| `[all]`    | `pip install kailash-align[all]`    | All of the above                      | Everything                                |
 
 ## Development Patterns
 

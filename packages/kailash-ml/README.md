@@ -36,8 +36,8 @@ pip install kailash-ml[agents]    # + Kaizen (LLM-augmented ML)
 pip install kailash-ml[xgb]       # + XGBoost
 pip install kailash-ml[catboost]  # + CatBoost
 pip install kailash-ml[stats]     # + statsmodels
-pip install kailash-ml[full]      # Everything above
-pip install kailash-ml[full-gpu]  # Everything + GPU runtime
+pip install kailash-ml[all]       # Everything above
+pip install kailash-ml[all-gpu]   # Everything + GPU runtime
 ```
 
 ### Development

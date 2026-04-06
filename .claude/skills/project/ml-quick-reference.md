@@ -182,8 +182,8 @@ pip install kailash-ml[agents]    # + kailash-kaizen
 pip install kailash-ml[xgb]       # + XGBoost
 pip install kailash-ml[catboost]  # + CatBoost
 pip install kailash-ml[stats]     # + statsmodels
-pip install kailash-ml[full]      # Everything (CPU)
-pip install kailash-ml[full-gpu]  # Everything (GPU)
+pip install kailash-ml[all]       # Everything (CPU)
+pip install kailash-ml[all-gpu]   # Everything (GPU)
 ```
 
 ## Cross-References
