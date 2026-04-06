@@ -227,7 +227,7 @@ from kailash_ml.engines.experiment_tracker import ExperimentTracker
 
 Provides MLflow-compatible experiment tracking: experiments, runs, parameters, step-based metrics (for training curves), and artifact metadata. Artifacts are stored on the local filesystem; the database holds metadata only -- no binary blobs in SQL.
 
-Key operations: `create_experiment()`, `start_run()`, `log_param()`, `log_metric()`, `log_artifact()`, `get_run()`, `list_runs()`.
+Key operations: `create_experiment()`, `run()` (context manager), `log_param()`, `log_metric()`, `log_artifact()`, `get_run()`, `list_runs()`. Standalone usage: `await ExperimentTracker.create("sqlite:///ml.db")`.
 
 ### Search and Optimization Engines (P1 -- tested, API may evolve)
 
@@ -798,7 +798,7 @@ registry = ModelRegistry(conn, artifact_store=LocalFileArtifactStore("./artifact
 await registry.initialize()
 
 tracker = ExperimentTracker(conn, artifact_root="./experiment_artifacts")
-await tracker.initialize()
+# ExperimentTracker auto-initializes on first use (no initialize() needed)
 
 monitor = DriftMonitor(conn)
 await monitor.initialize()
