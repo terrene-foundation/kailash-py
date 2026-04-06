@@ -576,6 +576,7 @@ class ModelVisualizer:
         self,
         metrics: dict[str, list[float]],
         x_label: str = "Epoch",
+        y_label: str = "Value",
     ) -> Any:
         """Plot training metrics over time (loss curves, etc.).
 
@@ -588,6 +589,8 @@ class ModelVisualizer:
                 {"train_loss": [0.9, 0.5, 0.3], "val_loss": [1.0, 0.6, 0.4]}
         x_label:
             Label for the x-axis.
+        y_label:
+            Label for the y-axis.
 
         Returns
         -------
@@ -611,6 +614,6 @@ class ModelVisualizer:
         fig.update_layout(
             title="Training History",
             xaxis_title=x_label,
-            yaxis_title="Value",
+            yaxis_title=y_label,
         )
         return fig
