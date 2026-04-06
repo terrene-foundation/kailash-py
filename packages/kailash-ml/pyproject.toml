@@ -4,9 +4,9 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-ml"
-version = "0.5.0"
+version = "0.6.0"
 description = "Machine learning lifecycle for the Kailash ecosystem"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [
     { name = "Terrene Foundation" },
@@ -16,7 +16,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -72,8 +71,16 @@ agents = [
 xgb = ["xgboost>=2.0"]
 catboost = ["catboost>=1.2"]
 stats = ["statsmodels>=0.14"]
-full = ["kailash-ml[dl,xgb,catboost,stats,rl,agents]"]
-full-gpu = ["kailash-ml[dl-gpu,xgb,catboost,stats,rl,agents]"]
+hpo = ["optuna>=3.0"]
+mlflow = ["pyyaml>=6.0"]
+huggingface = ["datasets>=2.0"]
+dashboard = [
+    "starlette>=0.35",
+    "uvicorn>=0.27",
+]
+interop = ["pandas>=2.0"]
+all = ["kailash-ml[dl,xgb,catboost,stats,rl,agents,hpo,mlflow,huggingface,dashboard,interop]"]
+all-gpu = ["kailash-ml[dl-gpu,xgb,catboost,stats,rl,agents,hpo,mlflow,huggingface,dashboard,interop]"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -106,7 +113,7 @@ markers = [
 ]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 100
 
 [tool.mypy]

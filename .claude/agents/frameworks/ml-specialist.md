@@ -114,6 +114,57 @@ report = await monitor.check_drift("model_v1", current_df)
 # report.overall_drift, report.feature_results, report.recommendations
 ```
 
+### PreprocessingPipeline Cardinality Guard
+
+`setup()` has a built-in cardinality guard for one-hot encoding. High-cardinality categoricals are auto-downgraded to ordinal with a warning.
+
+```python
+from kailash_ml import PreprocessingPipeline
+
+pipeline = PreprocessingPipeline()
+result = pipeline.setup(
+    data=df,
+    target="target",
+    categorical_encoding="onehot",
+    max_cardinality=50,          # columns above threshold → ordinal (default 50)
+    exclude_columns=["trip_id"], # skip encoding for specific columns
+)
+# Warning: "Column 'zone' has 263 unique values (> max_cardinality=50), using ordinal encoding"
+```
+
+**Mixed encoding**: When some columns are one-hot and others overflow to ordinal, `_transformers` stores both `onehot_mappings` AND `ordinal_overflow_mappings`. `_apply_fitted_encoding()` uses separate `if` blocks (not `elif`) so both can coexist. The cardinality guard only applies to `"onehot"` encoding — `"target"` and `"ordinal"` are inherently cardinality-safe.
+
+### ModelVisualizer EDA Methods
+
+Beyond post-training diagnostics (confusion_matrix, roc_curve, etc.), ModelVisualizer has 3 EDA methods for pre-training data exploration. These accept `pl.DataFrame` (unlike the older array-based methods).
+
+```python
+from kailash_ml import ModelVisualizer
+
+viz = ModelVisualizer()
+fig = viz.histogram(df, "price", bins=50)
+fig = viz.scatter(df, x="area", y="price", color="region")
+fig = viz.box_plot(df, "price", group_by="region")
+```
+
+### ExperimentTracker Standalone Usage
+
+For standalone/prototyping, use the `create()` factory instead of manually creating a ConnectionManager:
+
+```python
+from kailash_ml import ExperimentTracker
+
+# Standalone (factory manages its own connection)
+async with await ExperimentTracker.create("sqlite:///ml.db") as tracker:
+    exp_name = await tracker.create_experiment("my-experiment")
+    async with tracker.run(exp_name, run_name="baseline") as run:
+        await run.log_metric("accuracy", 0.95)
+
+# ExperimentTracker auto-initializes — no initialize() call needed.
+# Factory-created trackers own their connection; close() releases it.
+# External ConnectionManager trackers leave connection lifecycle to caller.
+```
+
 ### DataExplorer (P1 — Async, ydata-profiling Parity)
 
 All methods are **async**. 5 matrix computations run in parallel via `asyncio.gather()`.
@@ -256,4 +307,4 @@ pip install kailash-ml[full]      # Everything
 ## Full Documentation
 
 - `pip install kailash-ml` -- Core package
-- `pip install kailash-ml[full]` -- All extras
+- `pip install kailash-ml[all]` -- All extras

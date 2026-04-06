@@ -160,7 +160,7 @@ pip install kailash-align[rlhf]     # + QLoRA (bitsandbytes)
 pip install kailash-align[eval]     # + benchmarks (lm-eval)
 pip install kailash-align[serve]    # + GGUF/Ollama (llama-cpp-python, gguf)
 pip install kailash-align[online]   # + fast generation (vllm, CUDA only)
-pip install kailash-align[full]     # Everything
+pip install kailash-align[all]      # Everything
 ```
 
 ## Cross-References

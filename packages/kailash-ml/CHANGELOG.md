@@ -1,5 +1,19 @@
 # kailash-ml Changelog
 
+## [0.6.0] - 2026-04-07
+
+### Added
+
+- **PreprocessingPipeline cardinality guard** — `max_cardinality=50` threshold with `exclude_columns` parameter; mixed one-hot + ordinal encoding for high-cardinality categoricals
+- **ModelVisualizer EDA charts** — `histogram()`, `scatter()`, `box_plot()` methods accepting polars DataFrame
+- **ExperimentTracker factory** — `ExperimentTracker.create()` convenience constructor
+- **`training_history()` y_label parameter** — customizable y-axis label for training history plots
+
+### Fixed
+
+- Corrected HyperparameterSearch README example to match actual API
+- Removed stale `tracker.initialize()` from README Engine Initialization section
+
 ## [0.2.0] - 2026-04-02
 
 ### Added

@@ -22,7 +22,7 @@ pip install kailash-align
 pip install kailash-align[rlhf]    # QLoRA via bitsandbytes
 pip install kailash-align[eval]    # Model evaluation via lm-eval
 pip install kailash-align[serve]   # GGUF export via llama-cpp-python
-pip install kailash-align[full]    # All extras
+pip install kailash-align[all]     # All extras
 ```
 
 ## Quick Start
