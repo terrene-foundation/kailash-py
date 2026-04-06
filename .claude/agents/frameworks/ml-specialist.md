@@ -294,7 +294,7 @@ pip install kailash-ml[agents]    # + kailash-kaizen (agent integration)
 pip install kailash-ml[xgb]       # + XGBoost
 pip install kailash-ml[catboost]  # + CatBoost
 pip install kailash-ml[stats]     # + statsmodels
-pip install kailash-ml[full]      # Everything
+pip install kailash-ml[all]       # Everything
 ```
 
 ## Related Agents
