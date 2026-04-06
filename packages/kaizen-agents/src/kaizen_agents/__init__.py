@@ -35,6 +35,34 @@ except ImportError:
     ReActAgent = None  # type: ignore[assignment, misc]
     Pipeline = None  # type: ignore[assignment, misc]
 
+# Multi-agent patterns
+try:
+    from kaizen_agents.patterns.patterns import (
+        BaseMultiAgentPattern,
+        ConsensusPattern,
+        DebatePattern,
+        HandoffPattern,
+        SequentialPipelinePattern,
+        SupervisorWorkerPattern,
+        create_consensus_pattern,
+        create_debate_pattern,
+        create_handoff_pattern,
+        create_sequential_pipeline,
+        create_supervisor_worker_pattern,
+    )
+except ImportError:
+    BaseMultiAgentPattern = None  # type: ignore[assignment,misc]
+    ConsensusPattern = None  # type: ignore[assignment,misc]
+    DebatePattern = None  # type: ignore[assignment,misc]
+    HandoffPattern = None  # type: ignore[assignment,misc]
+    SequentialPipelinePattern = None  # type: ignore[assignment,misc]
+    SupervisorWorkerPattern = None  # type: ignore[assignment,misc]
+    create_consensus_pattern = None  # type: ignore[assignment,misc]
+    create_debate_pattern = None  # type: ignore[assignment,misc]
+    create_handoff_pattern = None  # type: ignore[assignment,misc]
+    create_sequential_pipeline = None  # type: ignore[assignment,misc]
+    create_supervisor_worker_pattern = None  # type: ignore[assignment,misc]
+
 __all__ = [
     "Delegate",
     "GovernedSupervisor",
@@ -42,4 +70,16 @@ __all__ = [
     "Agent",
     "ReActAgent",
     "Pipeline",
+    # Multi-agent patterns
+    "BaseMultiAgentPattern",
+    "SupervisorWorkerPattern",
+    "ConsensusPattern",
+    "DebatePattern",
+    "HandoffPattern",
+    "SequentialPipelinePattern",
+    "create_supervisor_worker_pattern",
+    "create_consensus_pattern",
+    "create_debate_pattern",
+    "create_handoff_pattern",
+    "create_sequential_pipeline",
 ]

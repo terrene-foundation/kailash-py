@@ -15,7 +15,7 @@ Learning Objectives:
 Estimated time: 5 minutes
 """
 
-from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
 
 def main():

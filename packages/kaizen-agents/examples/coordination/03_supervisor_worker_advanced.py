@@ -14,7 +14,7 @@ Learning Objectives:
 Estimated time: 10 minutes
 """
 
-from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 from kaizen.memory import SharedMemoryPool
 
 

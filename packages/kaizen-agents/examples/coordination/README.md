@@ -136,7 +136,7 @@ pip install kailash-kaizen
 ### Minimal Example (Zero-Config)
 
 ```python
-from kaizen.agents.coordination import create_supervisor_worker_pattern
+from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
 # Create pattern with defaults (3 workers, gpt-3.5-turbo)
 pattern = create_supervisor_worker_pattern()
@@ -882,7 +882,7 @@ import logging
 
 # Enable Kaizen debug logging
 logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger('kaizen.agents.coordination')
+logger = logging.getLogger('kaizen_agents.patterns.patterns')
 logger.setLevel(logging.DEBUG)
 
 # Now see detailed coordination logs
@@ -935,7 +935,7 @@ assert all(w.shared_memory is shared_memory for w in pattern.workers)
 Create custom patterns by extending SupervisorWorkerPattern:
 
 ```python
-from kaizen.agents.coordination import SupervisorWorkerPattern
+from kaizen_agents.patterns.patterns import SupervisorWorkerPattern
 
 class CustomPattern(SupervisorWorkerPattern):
     def __init__(self, *args, **kwargs):

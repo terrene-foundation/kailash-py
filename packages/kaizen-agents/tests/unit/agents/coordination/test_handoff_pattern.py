@@ -26,7 +26,7 @@ class TestCreateHandoffPattern:
 
     def test_zero_config_creation(self):
         """Test zero-config pattern creation."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern()
 
@@ -40,7 +40,7 @@ class TestCreateHandoffPattern:
 
     def test_custom_num_tiers(self):
         """Test creating pattern with custom tier count."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=5)
 
@@ -53,7 +53,7 @@ class TestCreateHandoffPattern:
 
     def test_basic_parameter_override(self):
         """Test overriding basic parameters (model, temperature)."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(model="gpt-4", temperature=0.7, num_tiers=2)
 
@@ -64,7 +64,7 @@ class TestCreateHandoffPattern:
 
     def test_tier_configs_different_per_tier(self):
         """Test tier_configs with different config per tier."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         tier_configs = {
             1: {"model": "gpt-3.5-turbo", "temperature": 0.3},
@@ -84,7 +84,7 @@ class TestCreateHandoffPattern:
 
     def test_custom_agents_provided(self):
         """Test providing pre-built HandoffAgent instances."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen.memory import SharedMemoryPool
         from kaizen_agents.patterns.patterns.handoff import HandoffAgent
@@ -118,7 +118,7 @@ class TestCreateHandoffPattern:
         """Test environment variable fallback for provider/model."""
         import os
 
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         # Set env vars
         os.environ["KAIZEN_LLM_PROVIDER"] = "anthropic"
@@ -137,7 +137,7 @@ class TestCreateHandoffPattern:
 
     def test_invalid_configuration_empty_tiers(self):
         """Test invalid configuration with empty tiers."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         # Creating with 0 tiers should raise error
         with pytest.raises((ValueError, AssertionError)):
@@ -145,7 +145,7 @@ class TestCreateHandoffPattern:
 
     def test_mixed_configuration_override(self):
         """Test mixed configuration (basic params + tier configs)."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         # Base config for all tiers
         pattern = create_handoff_pattern(
@@ -178,7 +178,7 @@ class TestHandoffPattern:
 
     def test_add_tier_method(self):
         """Test add_tier method adds new tier."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen_agents.patterns.patterns.handoff import HandoffAgent
 
@@ -200,7 +200,7 @@ class TestHandoffPattern:
 
     def test_execute_with_handoff_basic(self):
         """Test execute_with_handoff basic execution."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3)
 
@@ -216,7 +216,7 @@ class TestHandoffPattern:
 
     def test_get_handoff_history(self):
         """Test get_handoff_history retrieves decisions."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3)
 
@@ -233,7 +233,7 @@ class TestHandoffPattern:
 
     def test_validate_pattern_valid(self):
         """Test validate_pattern on valid pattern."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3)
 
@@ -250,7 +250,7 @@ class TestHandoffPattern:
 
     def test_tier_ordering_enforced(self):
         """Test tier levels are ordered correctly."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=5)
 
@@ -261,7 +261,7 @@ class TestHandoffPattern:
 
     def test_max_tier_enforcement(self):
         """Test max_tier parameter enforces limit."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=5)
 
@@ -302,7 +302,7 @@ class TestHandoffAgent:
 
     def test_evaluate_task_method(self):
         """Test evaluate_task method."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3)
         agent = pattern.tiers[1]
@@ -317,7 +317,7 @@ class TestHandoffAgent:
 
     def test_evaluate_task_can_handle_yes(self):
         """Test evaluate_task returns can_handle='yes' for simple tasks."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3, llm_provider="mock")
         agent = pattern.tiers[1]
@@ -332,7 +332,7 @@ class TestHandoffAgent:
 
     def test_evaluate_task_can_handle_no(self):
         """Test evaluate_task returns can_handle='no' for complex tasks."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3, llm_provider="mock")
         agent = pattern.tiers[1]
@@ -349,7 +349,7 @@ class TestHandoffAgent:
 
     def test_execute_task_method(self):
         """Test execute_task method."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3)
         agent = pattern.tiers[1]
@@ -363,7 +363,7 @@ class TestHandoffAgent:
 
     def test_handoff_decision_logic(self):
         """Test handoff decision writes to shared memory."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3)
         agent = pattern.tiers[1]
@@ -381,7 +381,7 @@ class TestHandoffAgent:
 
     def test_complexity_scoring(self):
         """Test complexity_score is within 0.0-1.0 range."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3)
         agent = pattern.tiers[1]
@@ -394,7 +394,7 @@ class TestHandoffAgent:
 
     def test_shared_memory_writing(self):
         """Test agent writes handoff decision to shared memory."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3)
         agent = pattern.tiers[2]
@@ -415,7 +415,7 @@ class TestHandoffAgent:
 
     def test_tier_level_tracking(self):
         """Test tier_level is tracked in handoff decisions."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3)
         agent = pattern.tiers[2]
@@ -466,7 +466,7 @@ class TestHandoffIntegration:
 
     def test_three_tier_escalation(self):
         """Test escalation through tier1 -> tier2 -> tier3."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3)
 
@@ -485,7 +485,7 @@ class TestHandoffIntegration:
 
     def test_early_resolution_tier1(self):
         """Test tier1 handles simple task without escalation."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3)
 
@@ -500,7 +500,7 @@ class TestHandoffIntegration:
 
     def test_mid_tier_resolution(self):
         """Test tier1 -> tier2 (tier2 handles)."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3)
 
@@ -514,7 +514,7 @@ class TestHandoffIntegration:
 
     def test_max_tier_enforcement(self):
         """Test max_tier prevents escalation beyond limit."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=5)
 
@@ -528,7 +528,7 @@ class TestHandoffIntegration:
 
     def test_context_preservation(self):
         """Test context is preserved through escalation."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3)
 
@@ -543,7 +543,7 @@ class TestHandoffIntegration:
 
     def test_handoff_history_retrieval(self):
         """Test complete handoff history is retrievable."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3)
 
@@ -579,7 +579,7 @@ class TestHandoffIntegration:
 
     def test_single_tier_handoff(self):
         """Test handoff with only one tier."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=1)
 
@@ -591,7 +591,7 @@ class TestHandoffIntegration:
 
     def test_complex_escalation_scenario(self):
         """Test complex escalation with multiple tiers."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=5)
 
@@ -607,7 +607,7 @@ class TestHandoffIntegration:
 
     def test_confidence_scoring(self):
         """Test confidence scoring in task execution."""
-        from kaizen_agents.agents.coordination import create_handoff_pattern
+        from kaizen_agents.patterns.patterns import create_handoff_pattern
 
         pattern = create_handoff_pattern(num_tiers=3)
 

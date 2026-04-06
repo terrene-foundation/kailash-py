@@ -138,7 +138,7 @@ pip install kailash-kaizen
 ### Minimal Example (Zero-Config)
 
 ```python
-from kaizen.agents.coordination import create_consensus_pattern
+from kaizen_agents.patterns.patterns import create_consensus_pattern
 
 # Create pattern with defaults (3 voters, gpt-3.5-turbo)
 pattern = create_consensus_pattern()
@@ -918,7 +918,7 @@ import logging
 
 # Enable Kaizen debug logging
 logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger('kaizen.agents.coordination')
+logger = logging.getLogger('kaizen_agents.patterns.patterns')
 logger.setLevel(logging.DEBUG)
 
 # Now see detailed coordination logs
@@ -948,7 +948,7 @@ Before deploying to production, verify:
 Extend AggregatorAgent for custom consensus logic:
 
 ```python
-from kaizen.agents.coordination import AggregatorAgent
+from kaizen_agents.patterns.patterns import AggregatorAgent
 
 class SupermajorityAggregator(AggregatorAgent):
     def aggregate_votes(self, proposal_id: str) -> Dict[str, Any]:
@@ -1002,7 +1002,7 @@ decision = consensus_pattern.determine_consensus(proposal_id)
 
 # If approved, use SupervisorWorkerPattern for execution
 if decision['consensus_reached'] == 'yes':
-    from kaizen.agents.coordination import create_supervisor_worker_pattern
+    from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
     worker_pattern = create_supervisor_worker_pattern(num_workers=5)
     tasks = worker_pattern.delegate("Implement approved change")

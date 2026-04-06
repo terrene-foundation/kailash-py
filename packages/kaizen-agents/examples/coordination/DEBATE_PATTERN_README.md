@@ -134,7 +134,7 @@ pip install kailash-kaizen
 ### Minimal Example (Zero-Config)
 
 ```python
-from kaizen.agents.coordination import create_debate_pattern
+from kaizen_agents.patterns.patterns import create_debate_pattern
 
 # Create pattern with defaults (gpt-3.5-turbo)
 pattern = create_debate_pattern()
@@ -833,7 +833,7 @@ import logging
 
 # Enable Kaizen debug logging
 logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger('kaizen.agents.coordination')
+logger = logging.getLogger('kaizen_agents.patterns.patterns')
 logger.setLevel(logging.DEBUG)
 
 # Now see detailed coordination logs
@@ -864,7 +864,7 @@ Before deploying to production, verify:
 Extend DebatePattern for custom formats:
 
 ```python
-from kaizen.agents.coordination import DebatePattern
+from kaizen_agents.patterns.patterns import DebatePattern
 
 class OxfordDebatePattern(DebatePattern):
     """Oxford-style debate with opening/closing statements."""

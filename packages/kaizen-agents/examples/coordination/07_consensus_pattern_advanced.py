@@ -17,7 +17,7 @@ Estimated time: 10 minutes
 
 from typing import Any, Dict, List
 
-from kaizen_agents.agents.coordination import create_consensus_pattern
+from kaizen_agents.patterns.patterns import create_consensus_pattern
 
 
 def analyze_vote_confidence(votes: List[Dict[str, Any]]):

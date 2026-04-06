@@ -29,7 +29,7 @@ class TestCreateSequentialPipeline:
 
     def test_zero_config_creation(self):
         """Test zero-config pattern creation."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
 
         pipeline = create_sequential_pipeline()
 
@@ -40,7 +40,7 @@ class TestCreateSequentialPipeline:
 
     def test_basic_parameter_override(self):
         """Test overriding model and temperature."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
 
         pipeline = create_sequential_pipeline(model="gpt-4", temperature=0.9)
 
@@ -49,7 +49,7 @@ class TestCreateSequentialPipeline:
 
     def test_stage_configs_different_per_stage(self):
         """Test different config per stage."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
 
         stage_configs = [
             {"model": "gpt-4", "temperature": 0.1},
@@ -64,7 +64,7 @@ class TestCreateSequentialPipeline:
 
     def test_custom_shared_memory(self):
         """Test providing custom shared memory."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.memory import SharedMemoryPool
 
         custom_memory = SharedMemoryPool()
@@ -75,7 +75,7 @@ class TestCreateSequentialPipeline:
 
     def test_environment_variable_fallback(self):
         """Test fallback to environment variables."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
 
         # Should use env vars or defaults
         pipeline = create_sequential_pipeline()
@@ -84,14 +84,14 @@ class TestCreateSequentialPipeline:
 
     def test_invalid_configuration_stage_configs_not_list(self):
         """Test invalid stage_configs type."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
 
         with pytest.raises((ValueError, TypeError)):
             create_sequential_pipeline(stage_configs="not a list")  # Invalid
 
     def test_stages_parameter_direct_provision(self):
         """Test providing stages directly."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen.memory import SharedMemoryPool
         from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
@@ -123,7 +123,7 @@ class TestCreateSequentialPipeline:
 
     def test_mixed_configuration_stages_and_configs(self):
         """Test providing both stages and stage_configs (stages take precedence)."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen.memory import SharedMemoryPool
         from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
@@ -160,7 +160,7 @@ class TestSequentialPipelinePattern:
 
     def test_add_stage_method(self):
         """Test add_stage() adds stage to pipeline."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
 
@@ -181,7 +181,7 @@ class TestSequentialPipelinePattern:
 
     def test_execute_pipeline_method(self):
         """Test execute_pipeline() executes all stages."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
 
@@ -208,7 +208,7 @@ class TestSequentialPipelinePattern:
 
     def test_get_stage_results_method(self):
         """Test get_stage_results() retrieves all stage results."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
 
@@ -235,7 +235,7 @@ class TestSequentialPipelinePattern:
 
     def test_validate_pattern_method(self):
         """Test validate_pattern() validates pipeline."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
 
@@ -256,7 +256,7 @@ class TestSequentialPipelinePattern:
 
     def test_stage_ordering_preserved(self):
         """Test stages execute in order they were added."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
 
@@ -283,7 +283,7 @@ class TestSequentialPipelinePattern:
 
     def test_pipeline_id_generation_unique(self):
         """Test each pipeline execution generates unique ID."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
 
@@ -516,7 +516,7 @@ class TestSequentialPipelineIntegration:
 
     def test_three_stage_etl_pipeline(self):
         """Test 3-stage ETL pipeline: extract → transform → load."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
 
@@ -545,7 +545,7 @@ class TestSequentialPipelineIntegration:
 
     def test_four_stage_content_generation_pipeline(self):
         """Test 4-stage content generation pipeline."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
 
@@ -573,7 +573,7 @@ class TestSequentialPipelineIntegration:
 
     def test_context_preservation_across_stages(self):
         """Test context is preserved and passed through all stages."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
 
@@ -601,7 +601,7 @@ class TestSequentialPipelineIntegration:
 
     def test_partial_failure_handling(self):
         """Test pipeline handles stage failures gracefully."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
 
@@ -628,7 +628,7 @@ class TestSequentialPipelineIntegration:
 
     def test_stage_result_retrieval(self):
         """Test retrieving all stage results."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
 
@@ -655,7 +655,7 @@ class TestSequentialPipelineIntegration:
 
     def test_empty_pipeline_execution(self):
         """Test executing empty pipeline (no stages)."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
 
         pipeline = create_sequential_pipeline()
 
@@ -668,7 +668,7 @@ class TestSequentialPipelineIntegration:
 
     def test_single_stage_pipeline(self):
         """Test pipeline with single stage."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
 
@@ -690,7 +690,7 @@ class TestSequentialPipelineIntegration:
 
     def test_complex_multi_stage_workflow(self):
         """Test complex 6-stage workflow."""
-        from kaizen_agents.agents.coordination import create_sequential_pipeline
+        from kaizen_agents.patterns.patterns import create_sequential_pipeline
         from kaizen.core.base_agent import BaseAgentConfig
         from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
 

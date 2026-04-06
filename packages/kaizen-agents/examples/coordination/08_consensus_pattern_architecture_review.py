@@ -23,7 +23,7 @@ import json
 from datetime import datetime
 from typing import Any, Dict, List
 
-from kaizen_agents.agents.coordination import create_consensus_pattern
+from kaizen_agents.patterns.patterns import create_consensus_pattern
 
 # Sample architecture proposals
 ARCHITECTURE_PROPOSALS = [

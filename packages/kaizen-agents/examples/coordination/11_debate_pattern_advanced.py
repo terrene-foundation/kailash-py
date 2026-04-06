@@ -16,7 +16,7 @@ Estimated time: 10 minutes
 
 from typing import Any, Dict
 
-from kaizen_agents.agents.coordination import create_debate_pattern
+from kaizen_agents.patterns.patterns import create_debate_pattern
 
 
 def analyze_debate_strength(result: Dict[str, Any], judgment: Dict[str, Any]):
