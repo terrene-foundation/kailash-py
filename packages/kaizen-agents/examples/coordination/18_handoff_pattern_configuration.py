@@ -15,8 +15,8 @@ Estimated time: 5 minutes
 
 import os
 
-from kaizen_agents.agents.coordination import create_handoff_pattern
-from kaizen_agents.agents.coordination.handoff_pattern import HandoffAgent
+from kaizen_agents.patterns.patterns import create_handoff_pattern
+from kaizen_agents.patterns.patterns.handoff import HandoffAgent
 from kaizen.core.base_agent import BaseAgentConfig
 
 

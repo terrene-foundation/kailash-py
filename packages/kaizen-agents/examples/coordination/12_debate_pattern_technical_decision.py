@@ -22,7 +22,7 @@ import json
 from datetime import datetime
 from typing import Any, Dict
 
-from kaizen_agents.agents.coordination import create_debate_pattern
+from kaizen_agents.patterns.patterns import create_debate_pattern
 
 # Sample technical decisions
 TECHNICAL_DECISIONS = [

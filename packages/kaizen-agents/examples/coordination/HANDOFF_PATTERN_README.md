@@ -156,7 +156,7 @@ def create_handoff_pattern(
 ### Basic Usage (Zero-Config)
 
 ```python
-from kaizen.agents.coordination import create_handoff_pattern
+from kaizen_agents.patterns.patterns import create_handoff_pattern
 
 # 1. Create pattern (3 tiers automatically)
 handoff = create_handoff_pattern()

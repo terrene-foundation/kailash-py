@@ -30,7 +30,7 @@ class TestCreateSupervisorWorkerPattern:
 
     def test_zero_config_creation(self):
         """Test zero-config pattern creation."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern()
 
@@ -42,7 +42,7 @@ class TestCreateSupervisorWorkerPattern:
 
     def test_custom_num_workers(self):
         """Test creating pattern with custom worker count."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=5)
 
@@ -52,7 +52,7 @@ class TestCreateSupervisorWorkerPattern:
 
     def test_progressive_configuration_model_only(self):
         """Test overriding model only."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(model="gpt-4", num_workers=2)
 
@@ -66,7 +66,7 @@ class TestCreateSupervisorWorkerPattern:
 
     def test_progressive_configuration_multiple_params(self):
         """Test overriding multiple parameters."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(
             llm_provider="anthropic",
@@ -88,7 +88,7 @@ class TestCreateSupervisorWorkerPattern:
 
     def test_separate_configs_per_agent_type(self):
         """Test separate configs for supervisor, workers, coordinator."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(
             num_workers=2,
@@ -107,7 +107,7 @@ class TestCreateSupervisorWorkerPattern:
 
     def test_shared_memory_provided(self):
         """Test providing existing SharedMemoryPool."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
         from kaizen.memory import SharedMemoryPool
 
         existing_pool = SharedMemoryPool()
@@ -126,7 +126,7 @@ class TestCreateSupervisorWorkerPattern:
 
     def test_agent_ids_are_unique(self):
         """Test that all agent IDs are unique."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=5)
 
@@ -139,7 +139,7 @@ class TestCreateSupervisorWorkerPattern:
 
     def test_default_agent_ids_format(self):
         """Test default agent ID naming convention."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=3)
 
@@ -163,7 +163,7 @@ class TestSupervisorWorkerPattern:
 
     def test_pattern_initialization(self):
         """Test pattern is properly initialized."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern()
 
@@ -171,7 +171,7 @@ class TestSupervisorWorkerPattern:
 
     def test_delegate_convenience_method(self):
         """Test pattern.delegate() calls supervisor.delegate()."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
         tasks = pattern.delegate("Process documents", num_tasks=2)
@@ -186,7 +186,7 @@ class TestSupervisorWorkerPattern:
 
     def test_aggregate_convenience_method(self):
         """Test pattern.aggregate_results() calls supervisor.aggregate_results()."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -208,7 +208,7 @@ class TestSupervisorWorkerPattern:
 
     def test_monitor_convenience_method(self):
         """Test pattern.monitor_progress() calls coordinator.monitor_progress()."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -223,7 +223,7 @@ class TestSupervisorWorkerPattern:
 
     def test_get_agents(self):
         """Test get_agents() returns all agents."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
         agents = pattern.get_agents()
@@ -240,7 +240,7 @@ class TestSupervisorWorkerPattern:
 
     def test_get_agent_ids(self):
         """Test get_agent_ids() returns unique IDs."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
         agent_ids = pattern.get_agent_ids()
@@ -253,7 +253,7 @@ class TestSupervisorWorkerPattern:
 
     def test_clear_shared_memory(self):
         """Test clear_shared_memory() clears pattern state."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -316,7 +316,7 @@ class TestSupervisorAgent:
 
     def test_delegate_creates_tasks(self):
         """Test delegate() creates tasks."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
         tasks = pattern.supervisor.delegate("Process documents", num_tasks=3)
@@ -328,7 +328,7 @@ class TestSupervisorAgent:
 
     def test_delegate_writes_to_shared_memory(self):
         """Test delegate() writes tasks to shared memory."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
         pattern.supervisor.delegate("Process documents", num_tasks=2)
@@ -339,7 +339,7 @@ class TestSupervisorAgent:
 
     def test_delegate_round_robin_assignment(self):
         """Test delegate() assigns tasks round-robin to workers."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=3)
         tasks = pattern.supervisor.delegate("Process documents", num_tasks=6)
@@ -357,7 +357,7 @@ class TestSupervisorAgent:
 
     def test_aggregate_results_reads_from_shared_memory(self):
         """Test aggregate_results() reads results from shared memory."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -379,7 +379,7 @@ class TestSupervisorAgent:
 
     def test_aggregate_results_signature_switch(self):
         """Test aggregate_results() switches signature temporarily."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -399,7 +399,7 @@ class TestSupervisorAgent:
 
     def test_check_all_tasks_completed(self):
         """Test check_all_tasks_completed() detects completion."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -423,7 +423,7 @@ class TestSupervisorAgent:
 
     def test_check_failures(self):
         """Test check_failures() detects failed tasks."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -437,7 +437,7 @@ class TestSupervisorAgent:
 
     def test_reassign_task(self):
         """Test reassign_task() reassigns to different worker."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=3)
 
@@ -457,7 +457,7 @@ class TestSupervisorAgent:
 
     def test_reassign_task_writes_to_shared_memory(self):
         """Test reassign_task() writes reassignment to shared memory."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=3)
 
@@ -483,7 +483,7 @@ class TestSupervisorAgent:
 
     def test_delegate_with_custom_available_workers(self):
         """Test delegate() with custom available_workers list."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=5)
 
@@ -498,7 +498,7 @@ class TestSupervisorAgent:
 
     def test_delegate_generates_unique_request_id(self):
         """Test delegate() generates unique request IDs."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -539,7 +539,7 @@ class TestWorkerAgent:
 
     def test_get_assigned_tasks(self):
         """Test worker reads assigned tasks from shared memory."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -555,7 +555,7 @@ class TestWorkerAgent:
 
     def test_get_assigned_tasks_filters_by_worker_id(self):
         """Test worker only retrieves tasks assigned to it."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=3)
 
@@ -570,7 +570,7 @@ class TestWorkerAgent:
 
     def test_execute_task(self):
         """Test worker executes task and returns result."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -588,7 +588,7 @@ class TestWorkerAgent:
 
     def test_execute_task_writes_to_shared_memory(self):
         """Test worker writes result to shared memory."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -607,7 +607,7 @@ class TestWorkerAgent:
 
     def test_execute_task_includes_request_id_in_result(self):
         """Test executed task result includes request_id."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -626,7 +626,7 @@ class TestWorkerAgent:
 
     def test_execute_task_with_task_id(self):
         """Test execute_task preserves task_id."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -643,7 +643,7 @@ class TestWorkerAgent:
 
     def test_multiple_workers_execute_different_tasks(self):
         """Test multiple workers execute their respective tasks."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=3)
 
@@ -664,7 +664,7 @@ class TestWorkerAgent:
 
     def test_worker_handles_empty_task_list(self):
         """Test worker handles case with no assigned tasks."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=5)
 
@@ -687,7 +687,7 @@ class TestWorkerAgent:
 
     def test_execute_task_status_completed(self):
         """Test execute_task marks status as completed."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -730,7 +730,7 @@ class TestCoordinatorAgent:
 
     def test_monitor_progress_returns_dict(self):
         """Test monitor_progress() returns progress information."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
         progress = pattern.coordinator.monitor_progress()
@@ -739,7 +739,7 @@ class TestCoordinatorAgent:
 
     def test_monitor_progress_has_expected_fields(self):
         """Test monitor_progress() returns expected fields."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
         progress = pattern.coordinator.monitor_progress()
@@ -753,7 +753,7 @@ class TestCoordinatorAgent:
 
     def test_monitor_progress_after_delegation(self):
         """Test monitor_progress() after tasks delegated."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -768,7 +768,7 @@ class TestCoordinatorAgent:
 
     def test_monitor_progress_tracks_pending_tasks(self):
         """Test monitor_progress() tracks pending tasks."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -785,7 +785,7 @@ class TestCoordinatorAgent:
 
     def test_monitor_progress_tracks_completed_tasks(self):
         """Test monitor_progress() tracks completed tasks."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -805,7 +805,7 @@ class TestCoordinatorAgent:
 
     def test_monitor_progress_with_no_activity(self):
         """Test monitor_progress() with no tasks delegated."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -817,7 +817,7 @@ class TestCoordinatorAgent:
 
     def test_coordinator_reads_all_insights(self):
         """Test coordinator reads all insights from shared memory."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -841,7 +841,7 @@ class TestSupervisorWorkerIntegration:
 
     def test_end_to_end_workflow(self):
         """Test complete workflow: delegate → execute → aggregate."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -865,7 +865,7 @@ class TestSupervisorWorkerIntegration:
 
     def test_task_round_robin_assignment(self):
         """Test tasks assigned to workers in round-robin."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=3)
         tasks = pattern.delegate("Process documents", num_tasks=6)
@@ -879,7 +879,7 @@ class TestSupervisorWorkerIntegration:
 
     def test_multiple_requests_isolated(self):
         """Test multiple requests are isolated by request_id."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -899,7 +899,7 @@ class TestSupervisorWorkerIntegration:
 
     def test_worker_only_sees_own_tasks(self):
         """Test worker only retrieves tasks assigned to it."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=3)
 
@@ -914,7 +914,7 @@ class TestSupervisorWorkerIntegration:
 
     def test_coordinator_monitors_during_execution(self):
         """Test coordinator can monitor while workers execute."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -938,7 +938,7 @@ class TestSupervisorWorkerIntegration:
 
     def test_parallel_worker_execution(self):
         """Test multiple workers execute tasks in parallel."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=3)
 
@@ -958,7 +958,7 @@ class TestSupervisorWorkerIntegration:
 
     def test_aggregation_combines_multiple_results(self):
         """Test aggregation combines results from multiple workers."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -979,7 +979,7 @@ class TestSupervisorWorkerIntegration:
 
     def test_shared_memory_accumulates_insights(self):
         """Test shared memory accumulates insights from all agents."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -994,7 +994,7 @@ class TestSupervisorWorkerIntegration:
 
     def test_pattern_handles_no_workers(self):
         """Test pattern handles edge case with no workers."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         # Create pattern with 1 worker
         pattern = create_supervisor_worker_pattern(num_workers=1)
@@ -1004,7 +1004,7 @@ class TestSupervisorWorkerIntegration:
 
     def test_pattern_state_reset_between_requests(self):
         """Test pattern can handle multiple sequential requests."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -1030,7 +1030,7 @@ class TestSharedMemoryCoordination:
 
     def test_tasks_written_with_correct_tags(self):
         """Test tasks have correct tags in shared memory."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -1046,7 +1046,7 @@ class TestSharedMemoryCoordination:
 
     def test_results_written_with_correct_tags(self):
         """Test results have correct tags in shared memory."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -1065,7 +1065,7 @@ class TestSharedMemoryCoordination:
 
     def test_workers_only_see_own_tasks(self):
         """Test workers only retrieve tasks assigned to them."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=3)
 
@@ -1080,7 +1080,7 @@ class TestSharedMemoryCoordination:
 
     def test_request_id_isolates_different_requests(self):
         """Test request_id properly isolates different requests."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -1100,7 +1100,7 @@ class TestSharedMemoryCoordination:
 
     def test_task_importance_set_correctly(self):
         """Test task importance is set in shared memory."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -1119,7 +1119,7 @@ class TestSharedMemoryCoordination:
 
     def test_result_importance_set_correctly(self):
         """Test result importance is set in shared memory."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -1142,7 +1142,7 @@ class TestSharedMemoryCoordination:
 
     def test_memory_segments_used_correctly(self):
         """Test correct memory segments are used."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -1164,7 +1164,7 @@ class TestSharedMemoryCoordination:
 
     def test_metadata_includes_task_info(self):
         """Test metadata includes task information."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -1199,7 +1199,7 @@ class TestSupervisorWorkerErrorHandling:
 
     def test_delegate_with_invalid_request(self):
         """Test handling invalid request."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -1211,7 +1211,7 @@ class TestSupervisorWorkerErrorHandling:
 
     def test_delegate_with_zero_num_tasks(self):
         """Test delegate with num_tasks=0."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -1224,7 +1224,7 @@ class TestSupervisorWorkerErrorHandling:
 
     def test_execute_task_with_missing_fields(self):
         """Test execute_task with incomplete task."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=1)
 
@@ -1242,7 +1242,7 @@ class TestSupervisorWorkerErrorHandling:
 
     def test_aggregate_with_no_results(self):
         """Test aggregate_results with no completed tasks."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 
@@ -1254,7 +1254,7 @@ class TestSupervisorWorkerErrorHandling:
 
     def test_monitor_with_empty_shared_memory(self):
         """Test monitor_progress with no insights."""
-        from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+        from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
         pattern = create_supervisor_worker_pattern(num_workers=2)
 

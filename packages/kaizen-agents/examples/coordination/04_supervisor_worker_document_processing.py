@@ -25,7 +25,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List
 
-from kaizen_agents.agents.coordination import create_supervisor_worker_pattern
+from kaizen_agents.patterns.patterns import create_supervisor_worker_pattern
 
 # Simulated document dataset
 SAMPLE_DOCUMENTS = [

@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List
 
 import pytest
-from kaizen_agents.agents.coordination import (
+from kaizen_agents.patterns.patterns import (
     AggregatorAgent,
     JudgeAgent,
     OpponentAgent,

@@ -17,8 +17,8 @@ Estimated time: 10 minutes
 import json
 from typing import Any, Dict
 
-from kaizen_agents.agents.coordination import create_sequential_pipeline
-from kaizen_agents.agents.coordination.sequential_pipeline import PipelineStageAgent
+from kaizen_agents.patterns.patterns import create_sequential_pipeline
+from kaizen_agents.patterns.patterns.sequential import PipelineStageAgent
 from kaizen.core.base_agent import BaseAgentConfig
 
 

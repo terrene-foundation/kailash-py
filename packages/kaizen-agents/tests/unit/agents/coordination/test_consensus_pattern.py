@@ -28,7 +28,7 @@ class TestCreateConsensusPattern:
 
     def test_zero_config_creation(self):
         """Test zero-config pattern creation."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern()
 
@@ -40,7 +40,7 @@ class TestCreateConsensusPattern:
 
     def test_custom_num_voters(self):
         """Test creating pattern with custom voter count."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=5)
 
@@ -50,7 +50,7 @@ class TestCreateConsensusPattern:
 
     def test_custom_voter_perspectives(self):
         """Test creating pattern with custom voter perspectives."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         perspectives = ["technical", "business", "security"]
         pattern = create_consensus_pattern(
@@ -63,7 +63,7 @@ class TestCreateConsensusPattern:
 
     def test_voter_perspectives_mismatch_uses_provided_list(self):
         """Test that num_voters is adjusted to match perspectives length."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         perspectives = ["technical", "business"]
         pattern = create_consensus_pattern(
@@ -78,7 +78,7 @@ class TestCreateConsensusPattern:
 
     def test_progressive_configuration_model_only(self):
         """Test overriding model only."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(model="gpt-4", num_voters=2)
 
@@ -90,7 +90,7 @@ class TestCreateConsensusPattern:
 
     def test_progressive_configuration_multiple_params(self):
         """Test overriding multiple parameters."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(
             llm_provider="anthropic",
@@ -112,7 +112,7 @@ class TestCreateConsensusPattern:
 
     def test_separate_configs_per_agent_type(self):
         """Test separate configs for proposer, voters, aggregator."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(
             num_voters=2,
@@ -131,7 +131,7 @@ class TestCreateConsensusPattern:
 
     def test_shared_memory_provided(self):
         """Test providing existing SharedMemoryPool."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
         from kaizen.memory import SharedMemoryPool
 
         existing_pool = SharedMemoryPool()
@@ -148,7 +148,7 @@ class TestCreateConsensusPattern:
 
     def test_agent_ids_are_unique(self):
         """Test that all agent IDs are unique."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=5)
 
@@ -161,7 +161,7 @@ class TestCreateConsensusPattern:
 
     def test_default_agent_ids_format(self):
         """Test default agent ID naming convention."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=3)
 
@@ -185,7 +185,7 @@ class TestConsensusPattern:
 
     def test_pattern_initialization(self):
         """Test pattern is properly initialized."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern()
 
@@ -193,7 +193,7 @@ class TestConsensusPattern:
 
     def test_create_proposal_convenience_method(self):
         """Test pattern.create_proposal() calls proposer.create_proposal()."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
         proposal = pattern.create_proposal("Should we adopt AI?", "Important decision")
@@ -205,7 +205,7 @@ class TestConsensusPattern:
 
     def test_collect_votes_convenience_method(self):
         """Test pattern.collect_votes() collects all votes."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -225,7 +225,7 @@ class TestConsensusPattern:
 
     def test_determine_consensus_convenience_method(self):
         """Test pattern.determine_consensus() calls aggregator.aggregate_votes()."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -246,7 +246,7 @@ class TestConsensusPattern:
 
     def test_get_agents(self):
         """Test get_agents() returns all agents."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=3)
         agents = pattern.get_agents()
@@ -263,7 +263,7 @@ class TestConsensusPattern:
 
     def test_get_agent_ids(self):
         """Test get_agent_ids() returns unique IDs."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=3)
         agent_ids = pattern.get_agent_ids()
@@ -277,7 +277,7 @@ class TestConsensusPattern:
 
     def test_clear_shared_memory(self):
         """Test clear_shared_memory() clears pattern state."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -309,7 +309,7 @@ class TestConsensusPattern:
 
     def test_pattern_str_representation(self):
         """Test string representation of pattern."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=3)
         pattern_str = str(pattern)
@@ -319,7 +319,7 @@ class TestConsensusPattern:
 
     def test_pattern_works_with_base_pattern_helpers(self):
         """Test pattern works with BaseMultiAgentPattern helper methods."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -362,7 +362,7 @@ class TestProposerAgent:
 
     def test_create_proposal_returns_dict(self):
         """Test create_proposal() returns proper dict structure."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
         proposal = pattern.proposer.create_proposal("Test topic", "Test context")
@@ -375,7 +375,7 @@ class TestProposerAgent:
 
     def test_create_proposal_writes_to_shared_memory(self):
         """Test create_proposal() writes to shared memory."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
         pattern.proposer.create_proposal("Test topic", "Test context")
@@ -386,7 +386,7 @@ class TestProposerAgent:
 
     def test_create_proposal_uses_correct_tags(self):
         """Test create_proposal() uses correct tags."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
         proposal = pattern.proposer.create_proposal("Test topic", "Test context")
@@ -402,7 +402,7 @@ class TestProposerAgent:
 
     def test_create_proposal_uses_proposals_segment(self):
         """Test create_proposal() uses 'proposals' segment."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
         pattern.proposer.create_proposal("Test topic", "Test context")
@@ -413,7 +413,7 @@ class TestProposerAgent:
 
     def test_create_proposal_sets_importance(self):
         """Test create_proposal() sets importance to 0.8."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
         pattern.proposer.create_proposal("Test topic", "Test context")
@@ -425,7 +425,7 @@ class TestProposerAgent:
 
     def test_create_proposal_generates_unique_ids(self):
         """Test create_proposal() generates unique proposal IDs."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -437,7 +437,7 @@ class TestProposerAgent:
 
     def test_create_proposal_includes_topic(self):
         """Test create_proposal() includes topic in proposal."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
         topic = "Should we implement AI?"
@@ -448,7 +448,7 @@ class TestProposerAgent:
 
     def test_create_proposal_with_empty_context(self):
         """Test create_proposal() works with empty context."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
         proposal = pattern.proposer.create_proposal("Test topic", "")
@@ -458,7 +458,7 @@ class TestProposerAgent:
 
     def test_create_proposal_signature_used(self):
         """Test create_proposal() uses ProposalCreationSignature."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
         from kaizen_agents.patterns.patterns.consensus import ProposalCreationSignature
 
         pattern = create_consensus_pattern(num_voters=2)
@@ -468,7 +468,7 @@ class TestProposerAgent:
 
     def test_multiple_proposals_isolated_by_request_id(self):
         """Test multiple proposals are isolated by request_id."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -485,7 +485,7 @@ class TestProposerAgent:
 
     def test_create_proposal_includes_rationale(self):
         """Test create_proposal() includes rationale in result."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
         proposal = pattern.proposer.create_proposal("Test topic", "Test context")
@@ -540,7 +540,7 @@ class TestVoterAgent:
 
     def test_get_proposals_reads_from_memory(self):
         """Test get_proposals() reads proposals from shared memory."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -557,7 +557,7 @@ class TestVoterAgent:
 
     def test_vote_returns_dict(self):
         """Test vote() returns proper dict structure."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -576,7 +576,7 @@ class TestVoterAgent:
 
     def test_vote_writes_to_shared_memory(self):
         """Test vote() writes to shared memory."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -593,7 +593,7 @@ class TestVoterAgent:
 
     def test_vote_uses_correct_tags(self):
         """Test vote() uses correct tags."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -615,7 +615,7 @@ class TestVoterAgent:
 
     def test_vote_uses_votes_segment(self):
         """Test vote() uses 'votes' segment."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -632,7 +632,7 @@ class TestVoterAgent:
 
     def test_vote_sets_importance(self):
         """Test vote() sets importance to 0.8."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -650,7 +650,7 @@ class TestVoterAgent:
 
     def test_vote_includes_perspective(self):
         """Test vote() uses voter's perspective."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(
             num_voters=1, voter_perspectives=["security"]
@@ -668,7 +668,7 @@ class TestVoterAgent:
 
     def test_vote_returns_valid_vote_options(self):
         """Test vote() returns one of: approve, reject, abstain."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -684,7 +684,7 @@ class TestVoterAgent:
 
     def test_vote_confidence_in_range(self):
         """Test vote() returns confidence in range 0.0-1.0."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -701,7 +701,7 @@ class TestVoterAgent:
 
     def test_vote_signature_used(self):
         """Test vote() uses VotingSignature."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
         from kaizen_agents.patterns.patterns.consensus import VotingSignature
 
         pattern = create_consensus_pattern(num_voters=2)
@@ -712,7 +712,7 @@ class TestVoterAgent:
 
     def test_multiple_voters_vote_independently(self):
         """Test multiple voters can vote on same proposal."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=3)
 
@@ -729,7 +729,7 @@ class TestVoterAgent:
 
     def test_voter_perspective_used_in_voting(self):
         """Test voter perspective is passed to LLM for voting."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(
             num_voters=2, voter_perspectives=["technical", "business"]
@@ -746,7 +746,7 @@ class TestVoterAgent:
 
     def test_vote_includes_reasoning(self):
         """Test vote() includes reasoning for decision."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -789,7 +789,7 @@ class TestAggregatorAgent:
 
     def test_aggregate_votes_reads_from_memory(self):
         """Test aggregate_votes() reads votes from shared memory."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -806,7 +806,7 @@ class TestAggregatorAgent:
 
     def test_aggregate_votes_returns_consensus_decision(self):
         """Test aggregate_votes() returns consensus decision."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -824,7 +824,7 @@ class TestAggregatorAgent:
 
     def test_aggregate_votes_consensus_reached_values(self):
         """Test aggregate_votes() returns yes/no for consensus_reached."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2, llm_provider="mock")
 
@@ -840,7 +840,7 @@ class TestAggregatorAgent:
 
     def test_aggregate_votes_signature_used(self):
         """Test aggregate_votes() uses ConsensusAggregationSignature."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
         from kaizen_agents.patterns.patterns.consensus import (
             ConsensusAggregationSignature,
         )
@@ -852,7 +852,7 @@ class TestAggregatorAgent:
 
     def test_check_consensus_reached_returns_bool(self):
         """Test check_consensus_reached() returns boolean."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -868,7 +868,7 @@ class TestAggregatorAgent:
 
     def test_check_consensus_reached_with_no_votes(self):
         """Test check_consensus_reached() with no votes."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -882,7 +882,7 @@ class TestAggregatorAgent:
 
     def test_aggregate_votes_filters_by_proposal_id(self):
         """Test aggregate_votes() only aggregates votes for specific proposal."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -904,7 +904,7 @@ class TestAggregatorAgent:
 
     def test_aggregate_votes_includes_vote_summary(self):
         """Test aggregate_votes() includes summary of votes."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -921,7 +921,7 @@ class TestAggregatorAgent:
 
     def test_aggregate_votes_with_mixed_votes(self):
         """Test aggregate_votes() handles approve/reject/abstain mix."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=3)
 
@@ -941,7 +941,7 @@ class TestAggregatorAgent:
 
     def test_aggregate_votes_uses_proposal_in_signature(self):
         """Test aggregate_votes() passes original proposal to signature."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -957,7 +957,7 @@ class TestAggregatorAgent:
 
     def test_aggregate_votes_handles_abstentions(self):
         """Test aggregate_votes() properly handles abstentions."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=3)
 
@@ -982,7 +982,7 @@ class TestConsensusPatternIntegration:
 
     def test_complete_workflow_propose_vote_aggregate(self):
         """Test complete workflow: propose → vote → aggregate."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=3, llm_provider="mock")
 
@@ -1002,7 +1002,7 @@ class TestConsensusPatternIntegration:
 
     def test_multiple_voters_different_perspectives(self):
         """Test workflow with different voter perspectives."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         perspectives = ["technical", "business", "security"]
         pattern = create_consensus_pattern(
@@ -1023,7 +1023,7 @@ class TestConsensusPatternIntegration:
 
     def test_consensus_reached_scenario(self):
         """Test scenario where consensus is reached (majority approve)."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=3)
 
@@ -1044,7 +1044,7 @@ class TestConsensusPatternIntegration:
 
     def test_consensus_not_reached_scenario(self):
         """Test scenario where consensus is not reached."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2, llm_provider="mock")
 
@@ -1064,7 +1064,7 @@ class TestConsensusPatternIntegration:
 
     def test_all_votes_abstain_scenario(self):
         """Test scenario where all voters abstain."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=3)
 
@@ -1083,7 +1083,7 @@ class TestConsensusPatternIntegration:
 
     def test_isolation_between_proposals_different_request_ids(self):
         """Test proposals are isolated by request_id."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2, llm_provider="mock")
 
@@ -1107,7 +1107,7 @@ class TestConsensusPatternIntegration:
 
     def test_proposal_and_votes_persist_in_shared_memory(self):
         """Test proposals and votes persist in shared memory."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1127,7 +1127,7 @@ class TestConsensusPatternIntegration:
 
     def test_collect_votes_returns_all_votes(self):
         """Test collect_votes() returns all votes for proposal."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=3)
 
@@ -1145,7 +1145,7 @@ class TestConsensusPatternIntegration:
 
     def test_pattern_handles_multiple_sequential_proposals(self):
         """Test pattern handles multiple proposals sequentially."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1161,7 +1161,7 @@ class TestConsensusPatternIntegration:
 
     def test_pattern_works_with_single_voter(self):
         """Test pattern works with single voter (edge case)."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=1)
 
@@ -1178,7 +1178,7 @@ class TestConsensusPatternIntegration:
 
     def test_pattern_works_with_many_voters(self):
         """Test pattern scales to many voters."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=10)
 
@@ -1196,7 +1196,7 @@ class TestConsensusPatternIntegration:
 
     def test_workflow_respects_voter_perspectives(self):
         """Test workflow respects different voter perspectives."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         perspectives = ["technical", "business", "legal", "security"]
         pattern = create_consensus_pattern(
@@ -1229,7 +1229,7 @@ class TestSharedMemoryCoordination:
 
     def test_proposals_written_with_correct_tags(self):
         """Test proposals have correct tags."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1245,7 +1245,7 @@ class TestSharedMemoryCoordination:
 
     def test_votes_written_with_correct_tags(self):
         """Test votes have correct tags."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1264,7 +1264,7 @@ class TestSharedMemoryCoordination:
 
     def test_tag_based_filtering_proposals(self):
         """Test tag-based filtering for proposals."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1280,7 +1280,7 @@ class TestSharedMemoryCoordination:
 
     def test_tag_based_filtering_votes(self):
         """Test tag-based filtering for votes."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1296,7 +1296,7 @@ class TestSharedMemoryCoordination:
 
     def test_segments_proposals_segment(self):
         """Test proposals use 'proposals' segment."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1308,7 +1308,7 @@ class TestSharedMemoryCoordination:
 
     def test_segments_votes_segment(self):
         """Test votes use 'votes' segment."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1321,7 +1321,7 @@ class TestSharedMemoryCoordination:
 
     def test_request_isolation_via_tags(self):
         """Test request isolation via tags."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1344,7 +1344,7 @@ class TestSharedMemoryCoordination:
 
     def test_importance_levels_proposals(self):
         """Test proposals have importance 0.8."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1356,7 +1356,7 @@ class TestSharedMemoryCoordination:
 
     def test_importance_levels_votes(self):
         """Test votes have importance 0.8."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1369,7 +1369,7 @@ class TestSharedMemoryCoordination:
 
     def test_shared_memory_coordination_complete_flow(self):
         """Test shared memory coordination in complete flow."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=3)
 
@@ -1403,7 +1403,7 @@ class TestErrorHandling:
 
     def test_aggregate_votes_with_no_votes(self):
         """Test aggregate_votes() with no votes."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1418,7 +1418,7 @@ class TestErrorHandling:
 
     def test_aggregate_votes_with_invalid_proposal_id(self):
         """Test aggregate_votes() with invalid proposal ID."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1430,7 +1430,7 @@ class TestErrorHandling:
 
     def test_collect_votes_with_no_votes(self):
         """Test collect_votes() with no votes."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1446,7 +1446,7 @@ class TestErrorHandling:
 
     def test_create_proposal_with_empty_topic(self):
         """Test create_proposal() with empty topic."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1458,7 +1458,7 @@ class TestErrorHandling:
 
     def test_vote_with_malformed_proposal(self):
         """Test vote() with malformed proposal dict."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1473,7 +1473,7 @@ class TestErrorHandling:
 
     def test_check_consensus_reached_with_invalid_id(self):
         """Test check_consensus_reached() with invalid ID."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 
@@ -1485,7 +1485,7 @@ class TestErrorHandling:
 
     def test_pattern_with_zero_voters(self):
         """Test pattern creation with zero voters (edge case)."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         # Should create pattern but validation may fail
         pattern = create_consensus_pattern(num_voters=0)
@@ -1496,7 +1496,7 @@ class TestErrorHandling:
 
     def test_get_proposals_with_no_proposals(self):
         """Test get_proposals() with no proposals in memory."""
-        from kaizen_agents.agents.coordination import create_consensus_pattern
+        from kaizen_agents.patterns.patterns import create_consensus_pattern
 
         pattern = create_consensus_pattern(num_voters=2)
 

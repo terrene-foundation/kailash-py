@@ -30,7 +30,7 @@ class TestCreateDebatePattern:
 
     def test_zero_config_creation(self):
         """Test zero-config pattern creation."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -42,7 +42,7 @@ class TestCreateDebatePattern:
 
     def test_custom_llm_provider(self):
         """Test creating pattern with custom LLM provider."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="anthropic")
 
@@ -52,7 +52,7 @@ class TestCreateDebatePattern:
 
     def test_custom_model(self):
         """Test creating pattern with custom model."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(model="gpt-4")
 
@@ -62,7 +62,7 @@ class TestCreateDebatePattern:
 
     def test_progressive_configuration_temperature_and_max_tokens(self):
         """Test overriding temperature and max_tokens."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(temperature=0.8, max_tokens=2000)
 
@@ -73,7 +73,7 @@ class TestCreateDebatePattern:
 
     def test_progressive_configuration_multiple_params(self):
         """Test overriding multiple parameters."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(
             llm_provider="anthropic",
@@ -93,7 +93,7 @@ class TestCreateDebatePattern:
 
     def test_separate_configs_per_agent_type(self):
         """Test separate configs for proponent, opponent, judge."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(
             proponent_config={"model": "gpt-4"},
@@ -110,7 +110,7 @@ class TestCreateDebatePattern:
 
     def test_shared_memory_provided(self):
         """Test providing existing SharedMemoryPool."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
         from kaizen.memory import SharedMemoryPool
 
         existing_pool = SharedMemoryPool()
@@ -126,7 +126,7 @@ class TestCreateDebatePattern:
 
     def test_agent_ids_are_unique(self):
         """Test that all agent IDs are unique."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -139,7 +139,7 @@ class TestCreateDebatePattern:
 
     def test_default_agent_ids_format(self):
         """Test default agent ID naming convention."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -154,7 +154,7 @@ class TestCreateDebatePattern:
         """Test that factory uses environment variables as fallback."""
         import os
 
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         # Set environment variables
         os.environ["KAIZEN_LLM_PROVIDER"] = "mock"  # Use mock provider for testing
@@ -188,7 +188,7 @@ class TestDebatePattern:
 
     def test_pattern_initialization(self):
         """Test pattern is properly initialized."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -196,7 +196,7 @@ class TestDebatePattern:
 
     def test_debate_convenience_method_single_round(self):
         """Test pattern.debate() orchestrates single-round debate."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         result = pattern.debate(
@@ -211,7 +211,7 @@ class TestDebatePattern:
 
     def test_debate_convenience_method_multi_round(self):
         """Test pattern.debate() orchestrates multi-round debate."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         result = pattern.debate(
@@ -227,7 +227,7 @@ class TestDebatePattern:
 
     def test_get_judgment_convenience_method(self):
         """Test pattern.get_judgment() retrieves final judgment."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -245,7 +245,7 @@ class TestDebatePattern:
 
     def test_get_agents(self):
         """Test get_agents() returns all agents."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         agents = pattern.get_agents()
@@ -258,7 +258,7 @@ class TestDebatePattern:
 
     def test_get_agent_ids(self):
         """Test get_agent_ids() returns unique IDs."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         agent_ids = pattern.get_agent_ids()
@@ -270,7 +270,7 @@ class TestDebatePattern:
 
     def test_clear_shared_memory(self):
         """Test clear_shared_memory() clears pattern state."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -302,7 +302,7 @@ class TestDebatePattern:
 
     def test_pattern_str_representation(self):
         """Test string representation of pattern."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         pattern_str = str(pattern)
@@ -312,7 +312,7 @@ class TestDebatePattern:
 
     def test_pattern_works_with_base_pattern_helpers(self):
         """Test pattern works with BaseMultiAgentPattern helper methods."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -329,7 +329,7 @@ class TestDebatePattern:
 
     def test_debate_isolation_with_different_debate_ids(self):
         """Test that different debates are isolated via debate_ids."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -375,7 +375,7 @@ class TestProponentAgent:
 
     def test_construct_argument_returns_dict(self):
         """Test construct_argument() returns proper dict structure."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         argument = pattern.proponent.construct_argument(
@@ -389,7 +389,7 @@ class TestProponentAgent:
 
     def test_construct_argument_for_position(self):
         """Test construct_argument() creates FOR argument."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         argument = pattern.proponent.construct_argument(
@@ -402,7 +402,7 @@ class TestProponentAgent:
 
     def test_construct_argument_key_points_is_json_list(self):
         """Test key_points is JSON list."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         argument = pattern.proponent.construct_argument(
@@ -419,7 +419,7 @@ class TestProponentAgent:
 
     def test_construct_argument_includes_evidence(self):
         """Test argument includes evidence."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         argument = pattern.proponent.construct_argument(
@@ -432,7 +432,7 @@ class TestProponentAgent:
 
     def test_construct_argument_writes_to_shared_memory(self):
         """Test construct_argument() writes to shared memory."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         pattern.proponent.construct_argument(
@@ -445,7 +445,7 @@ class TestProponentAgent:
 
     def test_construct_argument_tags_include_for_position(self):
         """Test argument tags include 'for' position."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         pattern.proponent.construct_argument(
@@ -458,7 +458,7 @@ class TestProponentAgent:
 
     def test_construct_argument_importance_level(self):
         """Test argument written with importance 0.8."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         pattern.proponent.construct_argument(
@@ -476,7 +476,7 @@ class TestProponentAgent:
 
     def test_construct_argument_segment_is_arguments(self):
         """Test argument written to 'arguments' segment."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         pattern.proponent.construct_argument(
@@ -489,7 +489,7 @@ class TestProponentAgent:
 
     def test_rebut_returns_dict(self):
         """Test rebut() returns proper dict structure."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -510,7 +510,7 @@ class TestProponentAgent:
 
     def test_rebut_counterpoints_is_json_list(self):
         """Test counterpoints is JSON list."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -534,7 +534,7 @@ class TestProponentAgent:
 
     def test_rebut_strength_validation(self):
         """Test rebuttal strength is between 0.0 and 1.0."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -557,7 +557,7 @@ class TestProponentAgent:
 
     def test_rebut_writes_to_shared_memory(self):
         """Test rebut() writes to shared memory."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -578,7 +578,7 @@ class TestProponentAgent:
 
     def test_multiple_rounds_supported(self):
         """Test proponent can participate in multiple rounds."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -599,7 +599,7 @@ class TestProponentAgent:
 
     def test_construct_argument_with_empty_context(self):
         """Test construct_argument works with empty context."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         argument = pattern.proponent.construct_argument(
@@ -637,7 +637,7 @@ class TestOpponentAgent:
 
     def test_construct_argument_returns_dict(self):
         """Test construct_argument() returns proper dict structure."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         argument = pattern.opponent.construct_argument(
@@ -651,7 +651,7 @@ class TestOpponentAgent:
 
     def test_construct_argument_against_position(self):
         """Test construct_argument() creates AGAINST argument."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         argument = pattern.opponent.construct_argument(
@@ -664,7 +664,7 @@ class TestOpponentAgent:
 
     def test_construct_argument_key_points_is_json_list(self):
         """Test key_points is JSON list."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         argument = pattern.opponent.construct_argument(
@@ -681,7 +681,7 @@ class TestOpponentAgent:
 
     def test_construct_argument_includes_evidence(self):
         """Test argument includes evidence."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         argument = pattern.opponent.construct_argument(
@@ -694,7 +694,7 @@ class TestOpponentAgent:
 
     def test_construct_argument_writes_to_shared_memory(self):
         """Test construct_argument() writes to shared memory."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         pattern.opponent.construct_argument(
@@ -707,7 +707,7 @@ class TestOpponentAgent:
 
     def test_construct_argument_tags_include_against_position(self):
         """Test argument tags include 'against' position."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         pattern.opponent.construct_argument(
@@ -720,7 +720,7 @@ class TestOpponentAgent:
 
     def test_construct_argument_importance_level(self):
         """Test argument written with importance 0.8."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         pattern.opponent.construct_argument(
@@ -738,7 +738,7 @@ class TestOpponentAgent:
 
     def test_construct_argument_segment_is_arguments(self):
         """Test argument written to 'arguments' segment."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         pattern.opponent.construct_argument(
@@ -751,7 +751,7 @@ class TestOpponentAgent:
 
     def test_rebut_returns_dict(self):
         """Test rebut() returns proper dict structure."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -772,7 +772,7 @@ class TestOpponentAgent:
 
     def test_rebut_counterpoints_is_json_list(self):
         """Test counterpoints is JSON list."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -796,7 +796,7 @@ class TestOpponentAgent:
 
     def test_rebut_strength_validation(self):
         """Test rebuttal strength is between 0.0 and 1.0."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -819,7 +819,7 @@ class TestOpponentAgent:
 
     def test_rebut_writes_to_shared_memory(self):
         """Test rebut() writes to shared memory."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -840,7 +840,7 @@ class TestOpponentAgent:
 
     def test_multiple_rounds_supported(self):
         """Test opponent can participate in multiple rounds."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -861,7 +861,7 @@ class TestOpponentAgent:
 
     def test_construct_argument_with_empty_context(self):
         """Test construct_argument works with empty context."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
         argument = pattern.opponent.construct_argument(
@@ -899,7 +899,7 @@ class TestJudgeAgent:
 
     def test_judge_debate_returns_dict(self):
         """Test judge_debate() returns proper dict structure."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -918,7 +918,7 @@ class TestJudgeAgent:
 
     def test_judge_debate_decision_options(self):
         """Test decision is one of: for, against, tie."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -934,7 +934,7 @@ class TestJudgeAgent:
 
     def test_judge_debate_winner_determination(self):
         """Test winner matches decision."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -956,7 +956,7 @@ class TestJudgeAgent:
 
     def test_judge_debate_confidence_validation(self):
         """Test confidence is between 0.0 and 1.0."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -976,7 +976,7 @@ class TestJudgeAgent:
 
     def test_judge_debate_reasoning_provided(self):
         """Test reasoning is provided."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -993,7 +993,7 @@ class TestJudgeAgent:
 
     def test_judge_debate_writes_to_shared_memory(self):
         """Test judge_debate() writes to shared memory."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1013,7 +1013,7 @@ class TestJudgeAgent:
 
     def test_judge_debate_tags_include_debate_id(self):
         """Test judgment tags include debate_id."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1030,7 +1030,7 @@ class TestJudgeAgent:
 
     def test_judge_debate_importance_level(self):
         """Test judgment written with importance 0.9."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1052,7 +1052,7 @@ class TestJudgeAgent:
 
     def test_judge_debate_segment_is_judgments(self):
         """Test judgment written to 'judgments' segment."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1069,7 +1069,7 @@ class TestJudgeAgent:
 
     def test_get_arguments_retrieves_all_arguments(self):
         """Test get_arguments() retrieves all arguments for debate."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1087,7 +1087,7 @@ class TestJudgeAgent:
 
     def test_get_arguments_includes_rebuttals(self):
         """Test get_arguments() includes rebuttals if present."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1108,7 +1108,7 @@ class TestJudgeAgent:
 
     def test_judge_debate_reads_all_arguments_and_rebuttals(self):
         """Test judge reads all arguments and rebuttals before judging."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1127,7 +1127,7 @@ class TestJudgeAgent:
         """Test judge_debate() handles case with no arguments."""
         import uuid
 
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1145,7 +1145,7 @@ class TestJudgeAgent:
 
     def test_judge_debate_for_proponent_wins(self):
         """Test judgment when proponent should win."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1161,7 +1161,7 @@ class TestJudgeAgent:
 
     def test_judge_debate_for_tie(self):
         """Test judgment can result in tie."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1186,7 +1186,7 @@ class TestDebatePatternIntegration:
 
     def test_complete_single_round_debate(self):
         """Test complete single-round debate workflow."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1202,7 +1202,7 @@ class TestDebatePatternIntegration:
 
     def test_complete_multi_round_debate(self):
         """Test complete multi-round debate workflow."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1220,7 +1220,7 @@ class TestDebatePatternIntegration:
 
     def test_proponent_wins_scenario(self):
         """Test scenario where proponent wins."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1236,7 +1236,7 @@ class TestDebatePatternIntegration:
 
     def test_opponent_wins_scenario(self):
         """Test scenario where opponent wins."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1252,7 +1252,7 @@ class TestDebatePatternIntegration:
 
     def test_tie_scenario(self):
         """Test scenario resulting in tie."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1268,7 +1268,7 @@ class TestDebatePatternIntegration:
 
     def test_debate_isolation_different_topics(self):
         """Test debates on different topics are isolated."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1288,7 +1288,7 @@ class TestDebatePatternIntegration:
 
     def test_debate_with_context(self):
         """Test debate with additional context."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1303,7 +1303,7 @@ class TestDebatePatternIntegration:
 
     def test_debate_without_context(self):
         """Test debate without context."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1314,7 +1314,7 @@ class TestDebatePatternIntegration:
 
     def test_multiple_sequential_debates(self):
         """Test running multiple debates sequentially."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1328,7 +1328,7 @@ class TestDebatePatternIntegration:
 
     def test_debate_flow_order(self):
         """Test debate follows correct flow: arg -> arg -> rebut -> rebut -> judge."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1348,7 +1348,7 @@ class TestDebatePatternIntegration:
 
     def test_debate_result_structure(self):
         """Test debate result has expected structure."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1362,7 +1362,7 @@ class TestDebatePatternIntegration:
 
     def test_get_judgment_after_debate(self):
         """Test get_judgment() retrieves judgment after debate."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1378,7 +1378,7 @@ class TestDebatePatternIntegration:
 
     def test_debate_with_zero_rounds_returns_no_judgment(self):
         """Test debate with 0 rounds returns early."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1390,7 +1390,7 @@ class TestDebatePatternIntegration:
 
     def test_shared_memory_organization(self):
         """Test shared memory is organized by segments and tags."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1408,7 +1408,7 @@ class TestDebatePatternIntegration:
         """Test debate completes in reasonable time."""
         import time
 
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1431,7 +1431,7 @@ class TestDebatePatternSharedMemory:
 
     def test_arguments_written_with_correct_tags(self):
         """Test arguments are written with correct tags."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1448,7 +1448,7 @@ class TestDebatePatternSharedMemory:
 
     def test_rebuttals_written_with_correct_tags(self):
         """Test rebuttals are written with correct tags."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1469,7 +1469,7 @@ class TestDebatePatternSharedMemory:
 
     def test_judgments_written_with_correct_tags(self):
         """Test judgments are written with correct tags."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1487,7 +1487,7 @@ class TestDebatePatternSharedMemory:
 
     def test_segments_work_correctly(self):
         """Test memory segments are used correctly."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1504,7 +1504,7 @@ class TestDebatePatternSharedMemory:
 
     def test_debate_isolation_via_tags(self):
         """Test debates are isolated via debate_id tags."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1527,7 +1527,7 @@ class TestDebatePatternSharedMemory:
 
     def test_importance_levels_are_correct(self):
         """Test importance levels: 0.8 for arguments, 0.9 for judgments."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1548,7 +1548,7 @@ class TestDebatePatternSharedMemory:
 
     def test_shared_memory_read_by_judge(self):
         """Test judge reads arguments from shared memory."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1568,7 +1568,7 @@ class TestDebatePatternSharedMemory:
 
     def test_shared_memory_isolation_between_agents(self):
         """Test agents can read each other's insights."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1582,7 +1582,7 @@ class TestDebatePatternSharedMemory:
 
     def test_memory_segments_organization(self):
         """Test memory is organized into segments."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1599,7 +1599,7 @@ class TestDebatePatternSharedMemory:
 
     def test_clear_shared_memory_removes_all_insights(self):
         """Test clear_shared_memory() removes all insights."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1628,7 +1628,7 @@ class TestDebatePatternErrorHandling:
 
     def test_invalid_position_in_construct_argument(self):
         """Test handling of invalid position."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1645,7 +1645,7 @@ class TestDebatePatternErrorHandling:
         """Test judge_debate() with no arguments."""
         import uuid
 
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1663,7 +1663,7 @@ class TestDebatePatternErrorHandling:
 
     def test_malformed_argument_structure(self):
         """Test handling of malformed argument."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1683,7 +1683,7 @@ class TestDebatePatternErrorHandling:
 
     def test_invalid_confidence_value(self):
         """Test confidence validation with invalid values."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1700,7 +1700,7 @@ class TestDebatePatternErrorHandling:
 
     def test_empty_topic(self):
         """Test debate with empty topic."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1715,7 +1715,7 @@ class TestDebatePatternErrorHandling:
 
     def test_zero_rounds(self):
         """Test debate with zero rounds."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1725,7 +1725,7 @@ class TestDebatePatternErrorHandling:
 
     def test_negative_rounds(self):
         """Test debate with negative rounds."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 
@@ -1739,7 +1739,7 @@ class TestDebatePatternErrorHandling:
 
     def test_invalid_debate_id_in_get_judgment(self):
         """Test get_judgment() with invalid debate_id."""
-        from kaizen_agents.agents.coordination import create_debate_pattern
+        from kaizen_agents.patterns.patterns import create_debate_pattern
 
         pattern = create_debate_pattern(llm_provider="mock")
 

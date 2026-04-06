@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from kaizen_agents.agents.coordination import (
+from kaizen_agents.patterns.patterns import (
     SupervisorAgent,
     SupervisorWorkerPattern,
     WorkerAgent,

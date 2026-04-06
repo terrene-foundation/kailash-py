@@ -14,7 +14,7 @@ Learning Objectives:
 Estimated time: 5 minutes
 """
 
-from kaizen_agents.agents.coordination import create_consensus_pattern
+from kaizen_agents.patterns.patterns import create_consensus_pattern
 
 
 def main():

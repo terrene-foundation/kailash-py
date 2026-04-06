@@ -25,12 +25,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from benchmarks.framework import BenchmarkSuite
-from kaizen_agents.agents.coordination.a2a.capability import (
-    CapabilityCard,
-    CapabilityMatcher,
-    SemanticMatcher,
-)
-from kaizen_agents.agents.coordination.a2a.protocol import A2AProtocol
+from kaizen.nodes.ai.a2a import A2AAgentCard as CapabilityCard
+from kaizen.nodes.ai.a2a import A2ACoordinatorNode as CapabilityMatcher
+from kaizen.nodes.ai.a2a import A2ACoordinatorNode as SemanticMatcher
+from kaizen.nodes.ai.a2a import A2ACoordinatorNode as A2AProtocol
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature

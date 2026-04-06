@@ -15,7 +15,7 @@ Estimated time: 10 minutes
 
 from typing import Any, Dict, List
 
-from kaizen_agents.agents.coordination import create_handoff_pattern
+from kaizen_agents.patterns.patterns import create_handoff_pattern
 
 
 def analyze_handoff_metrics(history: List[Dict[str, Any]]) -> Dict[str, Any]:
