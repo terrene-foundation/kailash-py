@@ -224,53 +224,8 @@ def _scan_handlers(project_root: Path) -> tuple[list[dict[str, Any]], dict[str, 
 
 
 # ---------------------------------------------------------------------------
-# Runtime introspection helpers
+# AST enrichment helpers
 # ---------------------------------------------------------------------------
-
-
-def _try_runtime_handlers(project_root: Path) -> list[dict[str, Any]] | None:
-    """Try to import the project's Nexus instance and query its handlers.
-
-    Returns *None* when the project cannot be imported (graceful
-    fallback to AST).
-    """
-    try:
-        sys.path.insert(0, str(project_root))
-        # Look for a common app entry pattern
-        for candidate in ("app", "main", "server"):
-            try:
-                mod = __import__(candidate)
-                for attr_name in dir(mod):
-                    obj = getattr(mod, attr_name, None)
-                    if obj is None:
-                        continue
-                    # Duck-type check for Nexus instance
-                    if hasattr(obj, "_handlers") and hasattr(obj, "register"):
-                        return _extract_runtime_handlers(obj)
-            except Exception:
-                continue
-        return None
-    except Exception:
-        return None
-    finally:
-        if str(project_root) in sys.path:
-            sys.path.remove(str(project_root))
-
-
-def _extract_runtime_handlers(nexus_instance: Any) -> list[dict[str, Any]]:
-    """Extract handler metadata from a live Nexus instance."""
-    handlers: list[dict[str, Any]] = []
-    raw_handlers = getattr(nexus_instance, "_handlers", {})
-    for name, handler_info in raw_handlers.items():
-        entry: dict[str, Any] = {"name": name}
-        if isinstance(handler_info, dict):
-            entry["method"] = handler_info.get("method")
-            entry["path"] = handler_info.get("path")
-            entry["description"] = handler_info.get("description", "")
-            entry["channel"] = handler_info.get("channel", "http")
-            entry["middleware"] = handler_info.get("middleware", [])
-        handlers.append(entry)
-    return handlers
 
 
 def _enrich_handler_descriptions(
@@ -468,21 +423,12 @@ def register_tools(server: Any, project_root: Path, namespace: str) -> None:
     async def list_handlers() -> dict:
         """List all Nexus handlers found in this project.
 
-        Uses runtime introspection when available, with AST-based
-        static analysis as fallback.  Returns handler metadata
-        including description, channel, and middleware when detectable.
+        Uses AST-based static analysis with docstring enrichment.
+        Runtime introspection is intentionally NOT used at Tier 1
+        because importing project modules executes arbitrary code.
         """
-        # Try runtime introspection first.
-        runtime_handlers = _try_runtime_handlers(project_root)
-        if runtime_handlers is not None:
-            return {
-                "handlers": runtime_handlers,
-                "total": len(runtime_handlers),
-                "scan_metadata": {"method": "runtime_introspection"},
-            }
-        # Fallback to AST.
         handlers, metadata = _get_handlers()
-        # Enrich with docstring descriptions where possible.
+        # Enrich with docstring descriptions (AST-only, no imports).
         _enrich_handler_descriptions(handlers, project_root)
         return {
             "handlers": handlers,
@@ -727,17 +673,67 @@ class Test{class_name}:
             handler_file = handler.get("file", "")
             module_path = handler_file.replace("/", ".").replace(".py", "")
 
+            # Security: never interpolate user input into Python source.
+            # Pass input_data, module_path, and handler_name via env vars
+            # to prevent code injection.
+            import base64 as _b64
+
+            encoded_input = _b64.b64encode(input_data.encode()).decode()
+            encoded_module = _b64.b64encode(module_path.encode()).decode()
+            encoded_handler = _b64.b64encode(handler_name.encode()).decode()
+
             script = f"""
-import json, sys
+import json, sys, os, base64
 sys.path.insert(0, '.')
 try:
-    mod = __import__('{module_path}', fromlist=['{handler_name}'])
-    handler_fn = getattr(mod, '{handler_name}')
-    input_data = json.loads('{input_data}')
+    module_path = base64.b64decode(os.environ['_HANDLER_MODULE']).decode()
+    handler_name = base64.b64decode(os.environ['_HANDLER_NAME']).decode()
+    input_str = base64.b64decode(os.environ['_HANDLER_INPUT']).decode()
+    mod = __import__(module_path, fromlist=[handler_name])
+    handler_fn = getattr(mod, handler_name)
+    input_data = json.loads(input_str)
     import asyncio
     result = asyncio.run(handler_fn(input_data))
     print(json.dumps({{"result": str(result), "status_code": 200}}))
 except Exception as e:
     print(json.dumps({{"errors": [str(e)], "status_code": 500}}))
 """
-            return _execute_in_subprocess(script, project_root, timeout=30)
+            # Inject values via environment, not string interpolation.
+            start = time.monotonic()
+            env = {
+                **dict(os.environ),
+                "PYTHONPATH": str(project_root),
+                "_HANDLER_MODULE": encoded_module,
+                "_HANDLER_NAME": encoded_handler,
+                "_HANDLER_INPUT": encoded_input,
+            }
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-c", script],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    cwd=str(project_root),
+                    env=env,
+                )
+                elapsed_ms = int((time.monotonic() - start) * 1000)
+                if result.returncode != 0:
+                    return {
+                        "errors": [
+                            result.stderr.strip()
+                            or f"Process exited with code {result.returncode}"
+                        ],
+                        "duration_ms": elapsed_ms,
+                    }
+                try:
+                    output = json.loads(result.stdout)
+                except json.JSONDecodeError:
+                    output = {"raw_output": result.stdout.strip()}
+                output["duration_ms"] = elapsed_ms
+                return output
+            except subprocess.TimeoutExpired:
+                elapsed_ms = int((time.monotonic() - start) * 1000)
+                return {
+                    "errors": ["Execution timed out after 30s"],
+                    "duration_ms": elapsed_ms,
+                }

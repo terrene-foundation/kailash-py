@@ -312,15 +312,18 @@ class OnPremSetupGuide:
         step = 1
 
         # Download phase
+        import shlex
+
         for model_id in models:
             size = cls._MODEL_SIZES.get(model_id, 10.0)
             total_size += size
+            safe_model = shlex.quote(model_id)
             items.append(
                 ChecklistItem(
                     step=step,
                     category="download",
                     description=f"Download {model_id}",
-                    command=f"kailash-align-prepare download {model_id}",
+                    command=f"kailash-align-prepare download {safe_model}",
                     size_estimate_gb=size,
                 )
             )
@@ -328,12 +331,13 @@ class OnPremSetupGuide:
 
         # Verify phase
         for model_id in models:
+            safe_model = shlex.quote(model_id)
             items.append(
                 ChecklistItem(
                     step=step,
                     category="verify",
                     description=f"Verify {model_id} is loadable",
-                    command=f"kailash-align-prepare verify {model_id}",
+                    command=f"kailash-align-prepare verify {safe_model}",
                 )
             )
             step += 1
@@ -352,12 +356,13 @@ class OnPremSetupGuide:
         step += 1
 
         # Deploy phase
+        safe_cache = shlex.quote(cache_dir)
         items.append(
             ChecklistItem(
                 step=step,
                 category="deploy",
                 description="Transfer cache directory to air-gapped machine",
-                command=f"rsync -av {cache_dir} target-host:{cache_dir}",
+                command=f"rsync -av {safe_cache} target-host:{safe_cache}",
                 size_estimate_gb=total_size,
             )
         )
