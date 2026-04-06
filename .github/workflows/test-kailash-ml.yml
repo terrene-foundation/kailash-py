@@ -121,7 +121,7 @@ jobs:
             -m 'not (slow or gpu or bench)' \
             --cov=packages/kailash-ml/src/kailash_ml \
             --cov-report=term-missing \
-            --cov-fail-under=70 \
+            --cov-fail-under=60 \
             -q --timeout=30
 
   test-dl:

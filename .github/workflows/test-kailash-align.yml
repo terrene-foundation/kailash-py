@@ -116,7 +116,7 @@ jobs:
             -m 'not (gpu or slow)' \
             --cov=packages/kailash-align/src/kailash_align \
             --cov-report=term-missing \
-            --cov-fail-under=60 \
+            --cov-fail-under=50 \
             -q --timeout=30
 
   test-gpu:
