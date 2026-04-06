@@ -709,21 +709,20 @@ config = SearchConfig(
     direction="maximize",
 )
 
-searcher = HyperparameterSearch(
-    training_pipeline=pipeline,
-    model_registry=registry,
-)
+searcher = HyperparameterSearch(pipeline)
 result = await searcher.search(
-    search_space=space,
-    config=config,
     data=data,
     schema=schema,
-    target_col="churned",
+    base_model_spec=base_model_spec,
+    search_space=space,
+    config=config,
+    eval_spec=eval_spec,
+    experiment_name="my-search",
 )
 
-print(f"Best trial: {result.best_trial}")
-print(f"Best params: {result.best_trial.hyperparameters}")
-print(f"Best score: {result.best_trial.metric_value:.4f}")
+print(f"Best params: {result.best_params}")
+print(f"Best metrics: {result.best_metrics}")
+print(f"Best trial: #{result.best_trial_number}")
 ```
 
 ---
