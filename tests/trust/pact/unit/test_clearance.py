@@ -24,6 +24,7 @@ from kailash.trust.pact.clearance import (
     RoleClearance,
     VettingStatus,
     effective_clearance,
+    validate_transition,
 )
 
 
@@ -47,8 +48,66 @@ class TestVettingStatus:
     def test_revoked_value(self) -> None:
         assert VettingStatus.REVOKED.value == "revoked"
 
+    def test_suspended_value(self) -> None:
+        assert VettingStatus.SUSPENDED.value == "suspended"
+
     def test_is_string_enum(self) -> None:
         assert isinstance(VettingStatus.ACTIVE, str)
+
+
+# ---------------------------------------------------------------------------
+# VettingStatus FSM transitions
+# ---------------------------------------------------------------------------
+
+
+class TestVettingTransitions:
+    """FSM transition validation for VettingStatus."""
+
+    @pytest.mark.parametrize(
+        "from_status, to_status",
+        [
+            (VettingStatus.PENDING, VettingStatus.ACTIVE),
+            (VettingStatus.PENDING, VettingStatus.REVOKED),
+            (VettingStatus.ACTIVE, VettingStatus.SUSPENDED),
+            (VettingStatus.ACTIVE, VettingStatus.EXPIRED),
+            (VettingStatus.ACTIVE, VettingStatus.REVOKED),
+            (VettingStatus.SUSPENDED, VettingStatus.ACTIVE),
+            (VettingStatus.SUSPENDED, VettingStatus.REVOKED),
+            (VettingStatus.EXPIRED, VettingStatus.ACTIVE),
+            (VettingStatus.EXPIRED, VettingStatus.REVOKED),
+        ],
+    )
+    def test_valid_transitions(self, from_status, to_status) -> None:
+        validate_transition(from_status, to_status)  # should not raise
+
+    @pytest.mark.parametrize(
+        "from_status, to_status",
+        [
+            (VettingStatus.PENDING, VettingStatus.SUSPENDED),
+            (VettingStatus.PENDING, VettingStatus.EXPIRED),
+            (VettingStatus.PENDING, VettingStatus.PENDING),
+            (VettingStatus.ACTIVE, VettingStatus.PENDING),
+            (VettingStatus.ACTIVE, VettingStatus.ACTIVE),
+            (VettingStatus.SUSPENDED, VettingStatus.PENDING),
+            (VettingStatus.SUSPENDED, VettingStatus.SUSPENDED),
+            (VettingStatus.SUSPENDED, VettingStatus.EXPIRED),
+            (VettingStatus.EXPIRED, VettingStatus.PENDING),
+            (VettingStatus.EXPIRED, VettingStatus.SUSPENDED),
+            (VettingStatus.EXPIRED, VettingStatus.EXPIRED),
+            (VettingStatus.REVOKED, VettingStatus.PENDING),
+            (VettingStatus.REVOKED, VettingStatus.ACTIVE),
+            (VettingStatus.REVOKED, VettingStatus.SUSPENDED),
+            (VettingStatus.REVOKED, VettingStatus.EXPIRED),
+            (VettingStatus.REVOKED, VettingStatus.REVOKED),
+        ],
+    )
+    def test_invalid_transitions_raise_pact_error(self, from_status, to_status) -> None:
+        from kailash.trust.pact.exceptions import PactError
+
+        with pytest.raises(PactError) as exc_info:
+            validate_transition(from_status, to_status)
+        assert exc_info.value.details["from_status"] == from_status.value
+        assert exc_info.value.details["to_status"] == to_status.value
 
 
 # ---------------------------------------------------------------------------

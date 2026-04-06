@@ -69,8 +69,9 @@ class TestPactAuditAction:
         - VACANCY_SUSPENDED (Section 5.5 vacancy management)
         - BRIDGE_CONSENT (Section 4.4 bilateral consent)
         - BRIDGE_REJECTED (Section 4.4 LCA rejection)
+        - CLEARANCE_TRANSITIONED (#309 FSM transitions)
         """
-        assert len(PactAuditAction) == 15
+        assert len(PactAuditAction) == 16
 
 
 # ===========================================================================

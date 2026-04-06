@@ -434,7 +434,9 @@ class TestSqliteClearanceStore:
         clr = _make_clearance("D1-R1-T1-R1")
         store.grant_clearance(clr)
         store.revoke_clearance("D1-R1-T1-R1")
-        assert store.get_clearance("D1-R1-T1-R1") is None
+        revoked = store.get_clearance("D1-R1-T1-R1")
+        assert revoked is not None
+        assert revoked.vetting_status == VettingStatus.REVOKED
 
     def test_revoke_nonexistent_no_error(self) -> None:
         store = SqliteClearanceStore(":memory:")

@@ -41,6 +41,7 @@ from pact.examples.university.clearance import create_university_clearances
 from pact.examples.university.org import create_university_org
 from kailash.trust.pact.access import AccessDecision, KnowledgeSharePolicy, PactBridge
 from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+from kailash.trust.pact.exceptions import PactError
 from kailash.trust.pact.compilation import CompiledOrg, OrgNode
 from kailash.trust.pact.engine import GovernanceEngine
 from kailash.trust.pact.envelopes import (
@@ -953,3 +954,187 @@ class TestMonotonicTighteningEnforcement:
         assert isinstance(verdict, GovernanceVerdict)
         assert verdict.level == "blocked"
         assert verdict.allowed is False
+
+
+# ---------------------------------------------------------------------------
+# Clearance FSM transitions (#309)
+# ---------------------------------------------------------------------------
+
+
+class TestClearanceFSM:
+    """FSM transition validation for grant_clearance() and transition_clearance()."""
+
+    def test_transition_active_to_suspended(self, compiled_org: CompiledOrg) -> None:
+        """ACTIVE -> SUSPENDED is valid via transition_clearance()."""
+        engine = GovernanceEngine(compiled_org)
+        clearance = RoleClearance(
+            role_address="D1-R1",
+            max_clearance=ConfidentialityLevel.SECRET,
+            vetting_status=VettingStatus.ACTIVE,
+        )
+        engine.grant_clearance("D1-R1", clearance)
+        engine.transition_clearance("D1-R1", VettingStatus.SUSPENDED)
+
+        result = engine._clearance_store.get_clearance("D1-R1")
+        assert result is not None
+        assert result.vetting_status == VettingStatus.SUSPENDED
+
+    def test_transition_suspended_to_active_reinstatement(
+        self, compiled_org: CompiledOrg
+    ) -> None:
+        """SUSPENDED -> ACTIVE (reinstatement) is valid."""
+        engine = GovernanceEngine(compiled_org)
+        clearance = RoleClearance(
+            role_address="D1-R1",
+            max_clearance=ConfidentialityLevel.CONFIDENTIAL,
+            vetting_status=VettingStatus.ACTIVE,
+        )
+        engine.grant_clearance("D1-R1", clearance)
+        engine.transition_clearance("D1-R1", VettingStatus.SUSPENDED)
+        engine.transition_clearance("D1-R1", VettingStatus.ACTIVE)
+
+        result = engine._clearance_store.get_clearance("D1-R1")
+        assert result is not None
+        assert result.vetting_status == VettingStatus.ACTIVE
+
+    def test_transition_active_to_revoked(self, compiled_org: CompiledOrg) -> None:
+        """ACTIVE -> REVOKED is valid."""
+        engine = GovernanceEngine(compiled_org)
+        clearance = RoleClearance(
+            role_address="D1-R1",
+            max_clearance=ConfidentialityLevel.RESTRICTED,
+            vetting_status=VettingStatus.ACTIVE,
+        )
+        engine.grant_clearance("D1-R1", clearance)
+        engine.transition_clearance("D1-R1", VettingStatus.REVOKED)
+
+        result = engine._clearance_store.get_clearance("D1-R1")
+        assert result is not None
+        assert result.vetting_status == VettingStatus.REVOKED
+
+    def test_transition_revoked_to_active_raises(
+        self, compiled_org: CompiledOrg
+    ) -> None:
+        """REVOKED is terminal -- cannot transition to ACTIVE."""
+        engine = GovernanceEngine(compiled_org)
+        clearance = RoleClearance(
+            role_address="D1-R1",
+            max_clearance=ConfidentialityLevel.SECRET,
+            vetting_status=VettingStatus.ACTIVE,
+        )
+        engine.grant_clearance("D1-R1", clearance)
+        engine.transition_clearance("D1-R1", VettingStatus.REVOKED)
+
+        with pytest.raises(PactError, match="Invalid vetting status transition"):
+            engine.transition_clearance("D1-R1", VettingStatus.ACTIVE)
+
+    def test_transition_missing_clearance_raises(
+        self, compiled_org: CompiledOrg
+    ) -> None:
+        """transition_clearance on a non-existent role raises PactError."""
+        engine = GovernanceEngine(compiled_org)
+        with pytest.raises(PactError, match="no clearance found"):
+            engine.transition_clearance("D1-R1", VettingStatus.SUSPENDED)
+
+    def test_grant_over_revoked_allows_unconditional_overwrite(
+        self, compiled_org: CompiledOrg
+    ) -> None:
+        """grant_clearance() over a REVOKED record succeeds (terminal overwrite)."""
+        engine = GovernanceEngine(compiled_org)
+        clearance = RoleClearance(
+            role_address="D1-R1",
+            max_clearance=ConfidentialityLevel.RESTRICTED,
+            vetting_status=VettingStatus.ACTIVE,
+        )
+        engine.grant_clearance("D1-R1", clearance)
+        engine.revoke_clearance("D1-R1")
+
+        # Re-grant should work despite REVOKED being terminal
+        new_clearance = RoleClearance(
+            role_address="D1-R1",
+            max_clearance=ConfidentialityLevel.CONFIDENTIAL,
+            vetting_status=VettingStatus.ACTIVE,
+        )
+        engine.grant_clearance("D1-R1", new_clearance)
+
+        result = engine._clearance_store.get_clearance("D1-R1")
+        assert result is not None
+        assert result.vetting_status == VettingStatus.ACTIVE
+        assert result.max_clearance == ConfidentialityLevel.CONFIDENTIAL
+
+    def test_grant_over_expired_allows_unconditional_overwrite(
+        self, compiled_org: CompiledOrg
+    ) -> None:
+        """grant_clearance() over an EXPIRED record succeeds (terminal overwrite)."""
+        engine = GovernanceEngine(compiled_org)
+        clearance = RoleClearance(
+            role_address="D1-R1",
+            max_clearance=ConfidentialityLevel.SECRET,
+            vetting_status=VettingStatus.ACTIVE,
+        )
+        engine.grant_clearance("D1-R1", clearance)
+        engine.transition_clearance("D1-R1", VettingStatus.EXPIRED)
+
+        new_clearance = RoleClearance(
+            role_address="D1-R1",
+            max_clearance=ConfidentialityLevel.RESTRICTED,
+            vetting_status=VettingStatus.ACTIVE,
+        )
+        engine.grant_clearance("D1-R1", new_clearance)
+
+        result = engine._clearance_store.get_clearance("D1-R1")
+        assert result is not None
+        assert result.vetting_status == VettingStatus.ACTIVE
+
+    def test_grant_active_to_pending_via_grant_raises(
+        self, compiled_org: CompiledOrg
+    ) -> None:
+        """grant_clearance() from ACTIVE to PENDING is invalid per FSM."""
+        engine = GovernanceEngine(compiled_org)
+        clearance = RoleClearance(
+            role_address="D1-R1",
+            max_clearance=ConfidentialityLevel.SECRET,
+            vetting_status=VettingStatus.ACTIVE,
+        )
+        engine.grant_clearance("D1-R1", clearance)
+
+        pending_clearance = RoleClearance(
+            role_address="D1-R1",
+            max_clearance=ConfidentialityLevel.SECRET,
+            vetting_status=VettingStatus.PENDING,
+        )
+        with pytest.raises(PactError, match="Invalid vetting status transition"):
+            engine.grant_clearance("D1-R1", pending_clearance)
+
+    def test_suspended_denies_access(self, compiled_org: CompiledOrg) -> None:
+        """A SUSPENDED clearance should deny access (vetting != ACTIVE)."""
+        engine = GovernanceEngine(compiled_org)
+        clearance = RoleClearance(
+            role_address="D1-R1-D1-R1-D1-R1-T1-R1",
+            max_clearance=ConfidentialityLevel.CONFIDENTIAL,
+            vetting_status=VettingStatus.ACTIVE,
+        )
+        engine.grant_clearance("D1-R1-D1-R1-D1-R1-T1-R1", clearance)
+
+        item = KnowledgeItem(
+            item_id="test-item-001",
+            classification=ConfidentialityLevel.RESTRICTED,
+            owning_unit_address="D1-R1-D1-R1-D1-R1-T1",
+            description="Test data",
+        )
+        decision = engine.check_access(
+            role_address="D1-R1-D1-R1-D1-R1-T1-R1",
+            knowledge_item=item,
+            posture=TrustPostureLevel.SHARED_PLANNING,
+        )
+        assert decision.allowed is True
+
+        # Suspend
+        engine.transition_clearance("D1-R1-D1-R1-D1-R1-T1-R1", VettingStatus.SUSPENDED)
+
+        decision = engine.check_access(
+            role_address="D1-R1-D1-R1-D1-R1-T1-R1",
+            knowledge_item=item,
+            posture=TrustPostureLevel.SHARED_PLANNING,
+        )
+        assert decision.allowed is False

@@ -420,10 +420,12 @@ class TestMemoryClearanceStoreThreadSafety:
             concurrent.futures.wait(futures)
 
         assert errors == [], f"Concurrent grant/revoke raised exceptions: {errors}"
-        # All grants should be present, all revokes should have taken effect
+        # All grants should be present, all revokes should have set REVOKED status
         for i in range(NUM_THREADS):
             assert store.get_clearance(f"grant-D{i}-R1") is not None
-            assert store.get_clearance(f"revoke-D{i}-R1") is None
+            revoked = store.get_clearance(f"revoke-D{i}-R1")
+            assert revoked is not None
+            assert revoked.vetting_status == VettingStatus.REVOKED
 
 
 # ===========================================================================

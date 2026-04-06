@@ -26,7 +26,14 @@ from kailash.trust.pact.config import ConfidentialityLevel, TrustPostureLevel
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["RoleClearance", "VettingStatus", "effective_clearance", "POSTURE_CEILING"]
+__all__ = [
+    "RoleClearance",
+    "VettingStatus",
+    "_VALID_TRANSITIONS",
+    "effective_clearance",
+    "validate_transition",
+    "POSTURE_CEILING",
+]
 
 
 class VettingStatus(str, Enum):
@@ -34,6 +41,7 @@ class VettingStatus(str, Enum):
 
     PENDING = "pending"
     ACTIVE = "active"
+    SUSPENDED = "suspended"
     EXPIRED = "expired"
     REVOKED = "revoked"
 
@@ -54,6 +62,37 @@ _CLEARANCE_ORDER: dict[ConfidentialityLevel, int] = {
     ConfidentialityLevel.SECRET: 3,
     ConfidentialityLevel.TOP_SECRET: 4,
 }
+
+_VALID_TRANSITIONS: dict[VettingStatus, frozenset[VettingStatus]] = {
+    VettingStatus.PENDING: frozenset({VettingStatus.ACTIVE, VettingStatus.REVOKED}),
+    VettingStatus.ACTIVE: frozenset(
+        {VettingStatus.SUSPENDED, VettingStatus.EXPIRED, VettingStatus.REVOKED}
+    ),
+    VettingStatus.SUSPENDED: frozenset({VettingStatus.ACTIVE, VettingStatus.REVOKED}),
+    VettingStatus.EXPIRED: frozenset({VettingStatus.ACTIVE, VettingStatus.REVOKED}),
+    VettingStatus.REVOKED: frozenset(),  # terminal
+}
+
+
+def validate_transition(from_status: VettingStatus, to_status: VettingStatus) -> None:
+    """Validate an FSM transition between vetting statuses.
+
+    Raises PactError if the transition is not valid.
+    """
+    valid_targets = _VALID_TRANSITIONS.get(from_status, frozenset())
+    if to_status not in valid_targets:
+        from kailash.trust.pact.exceptions import PactError
+
+        raise PactError(
+            f"Invalid vetting status transition: {from_status.value} -> {to_status.value}",
+            details={
+                "from_status": from_status.value,
+                "to_status": to_status.value,
+                "valid_targets": [
+                    s.value for s in sorted(valid_targets, key=lambda s: s.value)
+                ],
+            },
+        )
 
 
 def effective_clearance(

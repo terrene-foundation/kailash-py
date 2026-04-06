@@ -18,10 +18,11 @@ from __future__ import annotations
 import logging
 import threading
 from collections import OrderedDict
+from dataclasses import replace
 from typing import Protocol, runtime_checkable
 
 from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
-from kailash.trust.pact.clearance import RoleClearance
+from kailash.trust.pact.clearance import RoleClearance, VettingStatus
 from kailash.trust.pact.compilation import CompiledOrg, OrgNode
 from kailash.trust.pact.envelopes import RoleEnvelope, TaskEnvelope
 
@@ -64,7 +65,9 @@ class EnvelopeStore(Protocol):
     def save_role_envelope(self, envelope: RoleEnvelope) -> None: ...
     def get_role_envelope(self, target_role_address: str) -> RoleEnvelope | None: ...
     def save_task_envelope(self, envelope: TaskEnvelope) -> None: ...
-    def get_active_task_envelope(self, role_address: str, task_id: str) -> TaskEnvelope | None: ...
+    def get_active_task_envelope(
+        self, role_address: str, task_id: str
+    ) -> TaskEnvelope | None: ...
     def get_ancestor_envelopes(self, role_address: str) -> dict[str, RoleEnvelope]: ...
 
 
@@ -82,10 +85,14 @@ class AccessPolicyStore(Protocol):
     """Protocol for KSP and bridge persistence."""
 
     def save_ksp(self, ksp: KnowledgeSharePolicy) -> None: ...
-    def find_ksp(self, source_prefix: str, target_prefix: str) -> KnowledgeSharePolicy | None: ...
+    def find_ksp(
+        self, source_prefix: str, target_prefix: str
+    ) -> KnowledgeSharePolicy | None: ...
     def list_ksps(self) -> list[KnowledgeSharePolicy]: ...
     def save_bridge(self, bridge: PactBridge) -> None: ...
-    def find_bridge(self, role_a_address: str, role_b_address: str) -> PactBridge | None: ...
+    def find_bridge(
+        self, role_a_address: str, role_b_address: str
+    ) -> PactBridge | None: ...
     def list_bridges(self) -> list[PactBridge]: ...
 
 
@@ -103,7 +110,9 @@ def _evict_oldest(store: OrderedDict, max_size: int) -> None:
     """
     while len(store) > max_size:
         evicted_key, _ = store.popitem(last=False)
-        logger.debug("Evicted oldest entry: %s (store size exceeded %d)", evicted_key, max_size)
+        logger.debug(
+            "Evicted oldest entry: %s (store size exceeded %d)", evicted_key, max_size
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +226,9 @@ class MemoryEnvelopeStore:
             envelope.parent_envelope_id,
         )
 
-    def get_active_task_envelope(self, role_address: str, task_id: str) -> TaskEnvelope | None:
+    def get_active_task_envelope(
+        self, role_address: str, task_id: str
+    ) -> TaskEnvelope | None:
         """Get an active (non-expired) task envelope by role address and task ID.
 
         Looks up by task_id. The role_address parameter is accepted for
@@ -290,10 +301,17 @@ class MemoryClearanceStore:
             return self._clearances.get(role_address)
 
     def revoke_clearance(self, role_address: str) -> None:
-        """Revoke clearance for a role address. No-op if not found."""
+        """Revoke clearance for a role address by setting status to REVOKED.
+
+        Preserves the clearance record for audit trail. No-op if not found.
+        """
         with self._lock:
-            removed = self._clearances.pop(role_address, None)
-        if removed is not None:
+            existing = self._clearances.get(role_address)
+            if existing is not None:
+                revoked = replace(existing, vetting_status=VettingStatus.REVOKED)
+                self._clearances[role_address] = revoked
+                self._clearances.move_to_end(role_address)
+        if existing is not None:
             logger.info("Revoked clearance for role '%s'", role_address)
         else:
             logger.debug(
@@ -331,7 +349,9 @@ class MemoryAccessPolicyStore:
             ksp.target_unit_address,
         )
 
-    def find_ksp(self, source_prefix: str, target_prefix: str) -> KnowledgeSharePolicy | None:
+    def find_ksp(
+        self, source_prefix: str, target_prefix: str
+    ) -> KnowledgeSharePolicy | None:
         """Find a KSP matching the given source and target prefixes.
 
         KSPs are directional: source shares WITH target. This method
@@ -377,7 +397,9 @@ class MemoryAccessPolicyStore:
             bridge.bridge_type,
         )
 
-    def find_bridge(self, role_a_address: str, role_b_address: str) -> PactBridge | None:
+    def find_bridge(
+        self, role_a_address: str, role_b_address: str
+    ) -> PactBridge | None:
         """Find a bridge connecting two role addresses.
 
         Bridges are symmetric in lookup -- find_bridge(A, B) and
