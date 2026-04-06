@@ -872,6 +872,81 @@ class DataFlowExpress:
 
         return await self._execute_with_timing(f"{model}.bulk_delete", _bulk_delete())
 
+    async def bulk_upsert(
+        self,
+        model: str,
+        records: List[Dict[str, Any]],
+        conflict_on: Optional[List[str]] = None,
+        batch_size: int = 1000,
+    ) -> Dict[str, Any]:
+        """Bulk upsert (insert-or-update) multiple records.
+
+        Uses database-native ``INSERT ... ON CONFLICT`` for optimal
+        performance.  Returns structured results with insert/update
+        breakdown rather than a bare list.
+
+        Args:
+            model: Model name (e.g., "User")
+            records: List of record data dicts
+            conflict_on: Fields for conflict detection (default: ["id"]).
+                Each field name is validated against the model schema.
+            batch_size: Records processed per database batch (default 1000)
+
+        Returns:
+            ``{"records": [...], "created": int, "updated": int, "total": int}``
+
+        Example:
+            result = await db.express.bulk_upsert("User", [
+                {"id": "u1", "name": "Alice", "email": "alice@example.com"},
+                {"id": "u2", "name": "Bob", "email": "bob@example.com"},
+            ], conflict_on=["id"])
+            print(result["created"], result["updated"])
+        """
+        conflict_fields = conflict_on or ["id"]
+
+        # Validate conflict_on fields against the model schema.
+        try:
+            known_fields = set(self._db.get_model_fields(model))
+            unknown = [f for f in conflict_fields if f not in known_fields]
+            if unknown:
+                raise ValueError(
+                    f"bulk_upsert: conflict_on fields {unknown} not found "
+                    f"in model '{model}'. Known fields: {sorted(known_fields)}"
+                )
+        except AttributeError:
+            pass  # get_model_fields not available — skip validation
+
+        async def _bulk_upsert():
+            node = self._create_node(model, "BulkUpsert")
+            # BulkUpsertNode accepts conflict_columns in its config.
+            node.conflict_columns = conflict_fields
+            node.batch_size = batch_size
+            result = await node.async_run(data=records)
+
+            # Model-scoped cache invalidation (TSG-104)
+            await self._invalidate_model_cache(model)
+
+            # TSG-201: Emit write event
+            if hasattr(self._db, "_emit_write_event"):
+                self._db._emit_write_event(model, "bulk_upsert", record_id=None)
+
+            # Return structured result with counts.
+            if isinstance(result, dict):
+                return {
+                    "records": result.get("records", []),
+                    "created": result.get("inserted", 0),
+                    "updated": result.get("updated", 0),
+                    "total": result.get("total", len(records)),
+                }
+            return {
+                "records": result if isinstance(result, list) else [],
+                "created": 0,
+                "updated": 0,
+                "total": len(records),
+            }
+
+        return await self._execute_with_timing(f"{model}.bulk_upsert", _bulk_upsert())
+
     # ========================================================================
     # Cache Helpers (TSG-104)
     # ========================================================================
@@ -1354,6 +1429,24 @@ class SyncExpress:
         """
         return self._run_sync(self._express.bulk_create(model, records))
 
+    def bulk_update(
+        self,
+        model: str,
+        records: List[Dict[str, Any]],
+        key_field: str = "id",
+    ) -> List[Dict[str, Any]]:
+        """Update multiple records in bulk (sync).
+
+        Args:
+            model: Model name (e.g., "User")
+            records: List of record dicts, each must include key_field
+            key_field: Field used to identify records (default "id")
+
+        Returns:
+            List of updated records
+        """
+        return self._run_sync(self._express.bulk_update(model, records, key_field))
+
     def bulk_delete(self, model: str, ids: List[str]) -> bool:
         """Delete multiple records by their IDs (sync).
 
@@ -1365,6 +1458,28 @@ class SyncExpress:
             True if all deletions succeeded
         """
         return self._run_sync(self._express.bulk_delete(model, ids))
+
+    def bulk_upsert(
+        self,
+        model: str,
+        records: List[Dict[str, Any]],
+        conflict_on: Optional[List[str]] = None,
+        batch_size: int = 1000,
+    ) -> Dict[str, Any]:
+        """Bulk upsert (insert-or-update) multiple records (sync).
+
+        Args:
+            model: Model name (e.g., "User")
+            records: List of record data dicts
+            conflict_on: Fields for conflict detection (default: ["id"])
+            batch_size: Records per database batch (default 1000)
+
+        Returns:
+            ``{"records": [...], "created": int, "updated": int, "total": int}``
+        """
+        return self._run_sync(
+            self._express.bulk_upsert(model, records, conflict_on, batch_size)
+        )
 
     # ========================================================================
     # Cache Management (TSG-104)

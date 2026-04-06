@@ -381,17 +381,25 @@ def _fmt(v: float | None) -> str:
     return f"{v:.4f}"
 
 
-def _matrix_table(title: str, matrix: dict[str, dict[str, float]]) -> str:
+def _matrix_table(title: str, matrix: dict[str, dict[str, float | None]]) -> str:
     labels = list(matrix.keys())
     header = "".join(f"<th>{html.escape(l)}</th>" for l in labels)
     rows: list[str] = []
     for r in labels:
-        cells = "".join(
-            f'<td style="background:{_corr_color(matrix[r].get(c, 0))}">'
-            f"{matrix[r].get(c, 0):.2f}</td>"
-            for c in labels
-        )
-        rows.append(f"<tr><th>{html.escape(r)}</th>{cells}</tr>")
+        cells_list: list[str] = []
+        for c in labels:
+            val = matrix[r].get(c)
+            bg = _corr_color(val)
+            if val is None:
+                cell_text = "N/A"
+                tooltip = (
+                    ' title="Correlation undefined (constant or insufficient data)"'
+                )
+            else:
+                cell_text = f"{val:.2f}"
+                tooltip = ""
+            cells_list.append(f'<td style="background:{bg}"{tooltip}>{cell_text}</td>')
+        rows.append(f"<tr><th>{html.escape(r)}</th>{''.join(cells_list)}</tr>")
     return (
         f'<div class="corr-panel"><h3>{html.escape(title)}</h3>'
         f'<table class="corr-table"><tr><th></th>{header}</tr>'
@@ -399,11 +407,11 @@ def _matrix_table(title: str, matrix: dict[str, dict[str, float]]) -> str:
     )
 
 
-def _corr_color(v: float) -> str:
+def _corr_color(v: float | None) -> str:
     """Map correlation [-1, 1] to a background colour."""
     import math
 
-    if not math.isfinite(v):
+    if v is None or not math.isfinite(v):
         return "rgba(128,128,128,0.2)"
     if v >= 0:
         intensity = int(min(v, 1.0) * 180)
