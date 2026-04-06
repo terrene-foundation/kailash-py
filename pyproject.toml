@@ -88,6 +88,12 @@ kaizen = [
 pact = [
     "kailash-pact>=0.7.1",
 ]
+ml = [
+    "kailash-ml>=0.5.0",
+]
+align = [
+    "kailash-align>=0.3.0",
+]
 # Secret backends (vendor-specific SDKs)
 vault = [
     "hvac>=2.1.0",
@@ -131,13 +137,15 @@ docs = [
     "sphinx-rtd-theme>=3.0.2",
     "sphinxcontrib-mermaid>=1.0.0",
 ]
-# Everything (core + all sub-packages)
+# Everything (core + all sub-packages with their optional deps)
 all = [
     "kailash-dataflow>=1.7.1",
     "kailash-nexus>=1.9.0",
     "kailash-kaizen>=2.5.0",
     "kaizen-agents>=0.6.0",
     "kailash-pact>=0.7.1",
+    "kailash-ml[all]>=0.5.0",
+    "kailash-align[all]>=0.3.0",
 ]
 
 [project.urls]
