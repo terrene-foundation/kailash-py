@@ -1,20 +1,26 @@
 source_repo: kailash-py
-codify_date: "2026-04-06"
-codify_session: "feat(pact): add SUSPENDED to VettingStatus + FSM transition validation"
-sdk_version: "2.5.1"
+codify_date: "2026-04-07"
+codify_session: "chore(release): kailash-ml 0.6.0, kaizen-agents 0.7.0 — extras rename [full] → [all], missing deps"
+sdk_version: "2.6.0"
 coc_version: "1.0.0"
 
 changes:
-  - file: agents/frameworks/pact-specialist.md
+  - file: agents/frameworks/ml-specialist.md
     action: modified
-    suggested_tier: coc
-    reason: "Added clearance lifecycle FSM pattern (SUSPENDED state, transition_clearance, reinstatement path)"
-    diff_lines: "+4 -3"
+    suggested_tier: coc-py
+    reason: "Updated install command from [full] to [all]; added EDA/cardinality/factory patterns from #313-318"
+    diff_lines: "+52 -2"
 
-  - file: skills/29-pact/pact-governance-engine.md
+  - file: agents/frameworks/align-specialist.md
     action: modified
-    suggested_tier: coc
-    reason: "Updated clearance section with FSM diagram, transition_clearance() API, revoke preserves record"
-    diff_lines: "+8 -5"
+    suggested_tier: coc-py
+    reason: "Updated install command from [full] to [all]"
+    diff_lines: "+1 -1"
 
-status: pending_review
+  - file: skills/project/ml-quick-reference.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Updated install commands from [full]/[full-gpu] to [all]/[all-gpu]"
+    diff_lines: "+2 -2"
+
+status: reviewed
