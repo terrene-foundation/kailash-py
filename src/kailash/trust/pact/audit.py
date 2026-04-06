@@ -61,6 +61,7 @@ class PactAuditAction(str, Enum):
     VACANCY_SUSPENDED = "vacancy_suspended"
     BRIDGE_CONSENT = "bridge_consent"
     BRIDGE_REJECTED = "bridge_rejected"
+    CLEARANCE_TRANSITIONED = "clearance_transitioned"
 
 
 def create_pact_audit_details(
@@ -377,7 +378,7 @@ class AuditChain:
 
         # Verify integrity after reconstruction (P-H10 fix)
         if chain.anchors:
-            valid, errors = chain.verify_integrity()
+            valid, errors = chain.verify_chain_integrity()
             if not valid:
                 logger.warning(
                     "AuditChain '%s' integrity check failed after from_dict: %s",

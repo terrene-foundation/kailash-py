@@ -384,7 +384,9 @@ class TestMemoryClearanceStore:
         clr = _make_clearance("D1-R1-T1-R1")
         store.grant_clearance(clr)
         store.revoke_clearance("D1-R1-T1-R1")
-        assert store.get_clearance("D1-R1-T1-R1") is None
+        revoked = store.get_clearance("D1-R1-T1-R1")
+        assert revoked is not None
+        assert revoked.vetting_status == VettingStatus.REVOKED
 
     def test_revoke_nonexistent_clearance_no_error(self) -> None:
         """Revoking a clearance that does not exist should not raise."""

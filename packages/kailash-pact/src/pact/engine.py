@@ -974,12 +974,13 @@ class _ReadOnlyGovernanceView:
 
     def __getattr__(self, name: str) -> Any:
         # Every mutation method on GovernanceEngine MUST be listed here.
-        # Verified against GovernanceEngine method inventory (2026-04-05).
+        # Verified against GovernanceEngine method inventory (2026-04-06).
         _BLOCKED = {
             "set_role_envelope",
             "set_task_envelope",
             "grant_clearance",
             "revoke_clearance",
+            "transition_clearance",
             "compile_org",
             "create_bridge",
             "approve_bridge",

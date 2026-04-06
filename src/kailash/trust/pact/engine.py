@@ -40,7 +40,12 @@ from kailash.trust.pact.access import (
     can_access,
 )
 from kailash.trust.pact.audit import PactAuditAction, create_pact_audit_details
-from kailash.trust.pact.clearance import RoleClearance, effective_clearance
+from kailash.trust.pact.clearance import (
+    RoleClearance,
+    VettingStatus,
+    effective_clearance,
+    validate_transition,
+)
 from kailash.trust.pact.compilation import (
     CompiledOrg,
     OrgNode,
@@ -1056,11 +1061,31 @@ class GovernanceEngine:
     def grant_clearance(self, role_address: str, clearance: RoleClearance) -> None:
         """Grant clearance to a role. Thread-safe. Emits audit anchor.
 
+        FSM validation is enforced for "living" states (PENDING, ACTIVE,
+        SUSPENDED). Terminal states (REVOKED, EXPIRED) and missing records
+        allow unconditional overwrite to support re-granting and backup/restore.
+
         Args:
             role_address: The D/T/R address of the role.
             clearance: The RoleClearance to grant.
+
+        Raises:
+            PactError: If the transition from the existing vetting status
+                to the new one is invalid per the FSM.
         """
+        _LIVING_STATES = {
+            VettingStatus.PENDING,
+            VettingStatus.ACTIVE,
+            VettingStatus.SUSPENDED,
+        }
         with self._lock:
+            existing = self._clearance_store.get_clearance(role_address)
+            if (
+                existing is not None
+                and existing.vetting_status in _LIVING_STATES
+                and existing.vetting_status != clearance.vetting_status
+            ):
+                validate_transition(existing.vetting_status, clearance.vetting_status)
             self._clearance_store.grant_clearance(clearance)
 
         self._emit_audit(
@@ -1104,10 +1129,18 @@ class GovernanceEngine:
     def revoke_clearance(self, role_address: str) -> None:
         """Revoke clearance for a role. Thread-safe. Emits audit anchor.
 
+        No-op if the clearance is already REVOKED (prevents audit log pollution).
+
         Args:
             role_address: The D/T/R address whose clearance to revoke.
         """
         with self._lock:
+            existing = self._clearance_store.get_clearance(role_address)
+            if (
+                existing is not None
+                and existing.vetting_status == VettingStatus.REVOKED
+            ):
+                return
             self._clearance_store.revoke_clearance(role_address)
 
         self._emit_audit(
@@ -1118,6 +1151,78 @@ class GovernanceEngine:
                 reason="Clearance revoked",
             ),
         )
+
+    def transition_clearance(
+        self, role_address: str, new_status: VettingStatus
+    ) -> None:
+        """Transition an existing clearance's vetting status. Thread-safe.
+
+        Validates the FSM transition and emits an audit anchor. Use this
+        for status changes (e.g., ACTIVE -> SUSPENDED for investigation,
+        SUSPENDED -> ACTIVE for reinstatement).
+
+        Args:
+            role_address: The D/T/R address of the role.
+            new_status: The target VettingStatus.
+
+        Raises:
+            PactError: If no clearance exists for the role, or if the
+                transition is invalid per the FSM.
+        """
+        from dataclasses import replace
+
+        with self._lock:
+            existing = self._clearance_store.get_clearance(role_address)
+            if existing is None:
+                raise PactError(
+                    f"Cannot transition clearance: no clearance found for '{role_address}'",
+                    details={
+                        "role_address": role_address,
+                        "new_status": new_status.value,
+                    },
+                )
+            validate_transition(existing.vetting_status, new_status)
+            updated = replace(existing, vetting_status=new_status)
+            self._clearance_store.grant_clearance(updated)
+
+        self._emit_audit(
+            PactAuditAction.CLEARANCE_TRANSITIONED.value,
+            create_pact_audit_details(
+                PactAuditAction.CLEARANCE_TRANSITIONED,
+                role_address=role_address,
+                reason=f"Transitioned from {existing.vetting_status.value} to {new_status.value}",
+                from_status=existing.vetting_status.value,
+                to_status=new_status.value,
+            ),
+        )
+
+        # Emit CapabilityAttestation via EATP (Section 5.7)
+        if self._eatp_emitter is not None:
+            try:
+                from uuid import uuid4
+
+                from kailash.trust.chain import CapabilityAttestation, CapabilityType
+
+                constraints = [
+                    f"vetting:{new_status.value}",
+                    f"transition:{existing.vetting_status.value}->{new_status.value}",
+                ]
+                for compartment in sorted(existing.compartments):
+                    constraints.append(f"compartment:{compartment}")
+                attestation = CapabilityAttestation(
+                    id=f"pact-capability-{uuid4().hex[:8]}",
+                    capability=f"clearance:{existing.max_clearance.value}",
+                    capability_type=CapabilityType.ACCESS,
+                    constraints=constraints,
+                    attester_id=role_address,
+                    attested_at=datetime.now(UTC),
+                    signature="UNSIGNED",
+                )
+                self._eatp_emitter.emit_capability(attestation)
+            except Exception:
+                logger.exception(
+                    "Failed to emit CapabilityAttestation for transition_clearance"
+                )
 
     def consent_bridge(self, role_address: str, bridge_id: str) -> None:
         """Register a role's consent to participate in a bridge (Section 4.4).

@@ -1,71 +1,20 @@
 source_repo: kailash-py
-codify_date: "2026-04-05"
-codify_session: "feat(ml): DataExplorer ydata-profiling parity + framework specialist description fix"
+codify_date: "2026-04-06"
+codify_session: "feat(pact): add SUSPENDED to VettingStatus + FSM transition validation"
 sdk_version: "2.5.1"
 coc_version: "1.0.0"
 
-# Context: Two changes codified in this session:
-#
-# 1. DataExplorer promoted from P2 to P1 with ydata-profiling feature parity:
-#    async API, parallel matrix computation, skewness/kurtosis, Spearman/Cramér's V,
-#    IQR outliers, type inference, alerts system, HTML report, duplicate detection.
-#    Security hardened: XSS-safe uids, NaN/Inf guards, no scipy.
-#
-# 2. All 8 framework specialist descriptions rewritten for reliable activation:
-#    package name as lead keyword, all capability categories covered.
-#
-# Validation: 72/72 tests pass. 17/17 spec items PASS. 0 CRITICAL security findings.
-# 2 HIGH findings fixed (XSS div_id, alert key mismatch).
-
 changes:
-  # === DataExplorer codification ===
-  - file: agents/frameworks/ml-specialist.md
-    action: modified
-    suggested_tier: coc
-    reason: "Added DataExplorer P1 section (async API, alerts, HTML reports, security guards). Updated architecture diagram (P2->P1, added _data_explorer_report.py). Added NaN/Inf guard security section. Also fixed description for reliable activation."
-    diff_lines: "+30 -2"
-
-  # === Description fixes (all 8 specialists) ===
-  - file: agents/frameworks/align-specialist.md
-    action: modified
-    suggested_tier: coc
-    reason: "Description: added kailash-align lead keyword, SFT, reward functions, GGUF."
-    diff_lines: "+1 -1"
-
-  - file: agents/frameworks/dataflow-specialist.md
-    action: modified
-    suggested_tier: coc
-    reason: "Description: added kailash-dataflow lead, CRUD, express API, migrations, data fabric."
-    diff_lines: "+1 -1"
-
-  - file: agents/frameworks/nexus-specialist.md
-    action: modified
-    suggested_tier: coc
-    reason: "Description: added kailash-nexus lead, handlers, transports, middleware, webhooks."
-    diff_lines: "+1 -1"
-
-  - file: agents/frameworks/kaizen-specialist.md
-    action: modified
-    suggested_tier: coc
-    reason: "Description: added kailash-kaizen lead, Delegate, A2A, planning."
-    diff_lines: "+1 -1"
-
-  - file: agents/frameworks/mcp-specialist.md
-    action: modified
-    suggested_tier: coc
-    reason: "Description: added kailash-mcp lead, servers, tools, resources, transports, auth."
-    diff_lines: "+1 -1"
-
   - file: agents/frameworks/pact-specialist.md
     action: modified
     suggested_tier: coc
-    reason: "Description: added kailash-pact lead, access enforcement, knowledge clearance."
-    diff_lines: "+1 -1"
+    reason: "Added clearance lifecycle FSM pattern (SUSPENDED state, transition_clearance, reinstatement path)"
+    diff_lines: "+4 -3"
 
-  - file: agents/frameworks/infrastructure-specialist.md
+  - file: skills/29-pact/pact-governance-engine.md
     action: modified
     suggested_tier: coc
-    reason: "Description: added connections, stores. Removed internal '(Level 0/1/2)'."
-    diff_lines: "+1 -1"
+    reason: "Updated clearance section with FSM diagram, transition_clearance() API, revoke preserves record"
+    diff_lines: "+8 -5"
 
 status: pending_review

@@ -579,12 +579,15 @@ class SqliteClearanceStore(_SqliteBase):
         )
 
     def revoke_clearance(self, role_address: str) -> None:
-        """Revoke clearance for a role address. No-op if not found."""
+        """Revoke clearance for a role address by setting status to REVOKED.
+
+        Preserves the clearance record for audit trail. No-op if not found.
+        """
         conn = self._get_connection()
         with self._write_lock, conn:
             conn.execute(
-                "DELETE FROM pact_clearances WHERE role_address = ?",
-                (role_address,),
+                "UPDATE pact_clearances SET vetting_status = ? WHERE role_address = ?",
+                ("revoked", role_address),
             )
         logger.info("Revoked clearance for role '%s'", role_address)
 

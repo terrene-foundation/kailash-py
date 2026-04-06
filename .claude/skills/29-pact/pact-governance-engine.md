@@ -181,9 +181,12 @@ engine.set_task_envelope(TaskEnvelope(
 
 ### Clearance
 
+VettingStatus FSM: `PENDING -> {ACTIVE, REVOKED}`, `ACTIVE -> {SUSPENDED, EXPIRED, REVOKED}`, `SUSPENDED -> {ACTIVE, REVOKED}`, `EXPIRED -> {ACTIVE, REVOKED}`, `REVOKED -> {}` (terminal).
+
 ```python
 from kailash.trust.pact.clearance import RoleClearance, VettingStatus
 
+# Grant clearance (FSM-validated for living states, unconditional for terminal/missing)
 engine.grant_clearance(
     role_address="D1-R1-T1-R1",
     clearance=RoleClearance(
@@ -194,6 +197,11 @@ engine.grant_clearance(
     ),
 )
 
+# Transition status (FSM-validated, e.g., suspend during investigation)
+engine.transition_clearance("D1-R1-T1-R1", VettingStatus.SUSPENDED)
+engine.transition_clearance("D1-R1-T1-R1", VettingStatus.ACTIVE)  # reinstate
+
+# Revoke (sets REVOKED status, preserves record for audit trail)
 engine.revoke_clearance(role_address="D1-R1-T1-R1")
 ```
 
