@@ -447,6 +447,12 @@ class TestTrainingHistory:
         fig = viz.training_history(metrics, x_label="Step")
         assert fig.layout.xaxis.title.text == "Step"
 
+    def test_custom_y_label(self) -> None:
+        metrics = {"loss": [0.9, 0.5]}
+        viz = ModelVisualizer()
+        fig = viz.training_history(metrics, y_label="Loss")
+        assert fig.layout.yaxis.title.text == "Loss"
+
     def test_empty_metrics_raises(self) -> None:
         viz = ModelVisualizer()
         with pytest.raises(ValueError, match="at least one series"):

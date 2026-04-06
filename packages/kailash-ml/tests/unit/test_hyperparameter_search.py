@@ -67,6 +67,12 @@ class TestParamDistribution:
         assert p.choices == ["rbf", "linear"]
         assert p.low is None
 
+    def test_param_distribution_alias(self) -> None:
+        """Test that distribution property aliases type field."""
+        p = ParamDistribution("lr", "uniform", low=0.001, high=0.1)
+        assert p.distribution == "uniform"
+        assert p.distribution == p.type
+
 
 # ---------------------------------------------------------------------------
 # SearchSpace.sample_grid

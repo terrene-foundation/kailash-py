@@ -694,21 +694,19 @@ from kailash_ml.engines.hyperparameter_search import (
     ParamDistribution,
 )
 
-search_space = SearchSpace(
-    model_class="sklearn.ensemble.RandomForestClassifier",
-    framework="sklearn",
-    parameters={
-        "n_estimators": ParamDistribution(type="choice", values=[50, 100, 200, 500]),
-        "max_depth": ParamDistribution(type="range", low=3, high=20),
-        "min_samples_split": ParamDistribution(type="range", low=2, high=10),
-    },
-)
+# Define search space
+space = SearchSpace(params=[
+    ParamDistribution("n_estimators", "int_uniform", low=50, high=500),
+    ParamDistribution("max_depth", "int_uniform", low=3, high=15),
+    ParamDistribution("learning_rate", "log_uniform", low=0.001, high=0.3),
+    ParamDistribution("subsample", "uniform", low=0.6, high=1.0),
+])
 
 config = SearchConfig(
     strategy="bayesian",        # "grid", "random", "bayesian", "successive_halving"
     n_trials=50,
-    metric="f1",
-    higher_is_better=True,
+    metric_to_optimize="f1",
+    direction="maximize",
 )
 
 searcher = HyperparameterSearch(
@@ -716,7 +714,7 @@ searcher = HyperparameterSearch(
     model_registry=registry,
 )
 result = await searcher.search(
-    search_space=search_space,
+    search_space=space,
     config=config,
     data=data,
     schema=schema,
@@ -725,7 +723,7 @@ result = await searcher.search(
 
 print(f"Best trial: {result.best_trial}")
 print(f"Best params: {result.best_trial.hyperparameters}")
-print(f"Best F1: {result.best_trial.metric_value:.4f}")
+print(f"Best score: {result.best_trial.metric_value:.4f}")
 ```
 
 ---

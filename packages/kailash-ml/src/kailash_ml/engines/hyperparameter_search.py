@@ -37,13 +37,37 @@ __all__ = [
 
 @dataclass
 class ParamDistribution:
-    """Single hyperparameter distribution."""
+    """Single hyperparameter distribution.
+
+    Attributes:
+        name: The hyperparameter name (e.g., ``"n_estimators"``).
+        type: The distribution type. Valid values:
+
+            - ``"uniform"`` — continuous uniform between ``low`` and ``high``
+            - ``"log_uniform"`` — log-uniform between ``low`` and ``high``
+            - ``"int_uniform"`` — integer uniform between ``low`` and ``high``
+            - ``"categorical"`` — categorical choice from ``choices``
+
+            .. note::
+                The ``type`` field intentionally shadows Python's ``type()``
+                builtin for API clarity. Use the ``distribution`` property
+                as an alias if preferred.
+
+        low: Lower bound for uniform/log_uniform/int_uniform distributions.
+        high: Upper bound for uniform/log_uniform/int_uniform distributions.
+        choices: List of values for categorical distributions.
+    """
 
     name: str
     type: str  # "uniform", "log_uniform", "int_uniform", "categorical"
     low: float | None = None
     high: float | None = None
     choices: list[Any] | None = None  # for categorical
+
+    @property
+    def distribution(self) -> str:
+        """Alias for ``type`` that avoids shadowing the Python builtin."""
+        return self.type
 
     def to_dict(self) -> dict[str, Any]:
         return {
