@@ -6,6 +6,7 @@ from __future__ import annotations
 import warnings
 
 import numpy as np
+import polars as pl
 import pytest
 from kailash_ml._decorators import ExperimentalWarning, _warned_classes
 from kailash_ml.engines.model_visualizer import ModelVisualizer
@@ -457,6 +458,90 @@ class TestTrainingHistory:
         viz = ModelVisualizer()
         with pytest.raises(ValueError, match="at least one series"):
             viz.training_history({})
+
+
+# ---------------------------------------------------------------------------
+# Lazy-loading from top-level package
+# ---------------------------------------------------------------------------
+
+
+class TestEDACharts:
+    """Tests for EDA visualization methods (#314)."""
+
+    @pytest.fixture
+    def sample_df(self) -> pl.DataFrame:
+        return pl.DataFrame(
+            {
+                "price": [10.0, 20.0, 30.0, 40.0, 50.0, 15.0, 25.0, 35.0],
+                "area": [100, 200, 300, 400, 500, 150, 250, 350],
+                "region": ["A", "B", "A", "B", "A", "B", "A", "B"],
+            }
+        )
+
+    def test_histogram_basic(self, sample_df: pl.DataFrame) -> None:
+        import plotly.graph_objects as go
+
+        viz = ModelVisualizer()
+        fig = viz.histogram(sample_df, "price")
+        assert isinstance(fig, go.Figure)
+        assert fig.layout.title.text == "Distribution of price"
+        assert fig.layout.xaxis.title.text == "price"
+
+    def test_histogram_custom_title(self, sample_df: pl.DataFrame) -> None:
+        viz = ModelVisualizer()
+        fig = viz.histogram(sample_df, "price", title="Price Distribution", bins=10)
+        assert fig.layout.title.text == "Price Distribution"
+
+    def test_histogram_invalid_column(self, sample_df: pl.DataFrame) -> None:
+        viz = ModelVisualizer()
+        with pytest.raises(ValueError, match="not found"):
+            viz.histogram(sample_df, "nonexistent")
+
+    def test_histogram_invalid_data(self) -> None:
+        viz = ModelVisualizer()
+        with pytest.raises(TypeError, match="polars DataFrame"):
+            viz.histogram([1, 2, 3], "col")
+
+    def test_scatter_basic(self, sample_df: pl.DataFrame) -> None:
+        import plotly.graph_objects as go
+
+        viz = ModelVisualizer()
+        fig = viz.scatter(sample_df, x="area", y="price")
+        assert isinstance(fig, go.Figure)
+        assert fig.layout.title.text == "price vs area"
+
+    def test_scatter_with_color(self, sample_df: pl.DataFrame) -> None:
+        import plotly.graph_objects as go
+
+        viz = ModelVisualizer()
+        fig = viz.scatter(sample_df, x="area", y="price", color="region")
+        assert isinstance(fig, go.Figure)
+        assert len(fig.data) == 2  # Two traces for two regions
+
+    def test_scatter_invalid_column(self, sample_df: pl.DataFrame) -> None:
+        viz = ModelVisualizer()
+        with pytest.raises(ValueError, match="not found"):
+            viz.scatter(sample_df, x="area", y="nonexistent")
+
+    def test_box_plot_basic(self, sample_df: pl.DataFrame) -> None:
+        import plotly.graph_objects as go
+
+        viz = ModelVisualizer()
+        fig = viz.box_plot(sample_df, "price")
+        assert isinstance(fig, go.Figure)
+        assert fig.layout.title.text == "Distribution of price"
+
+    def test_box_plot_grouped(self, sample_df: pl.DataFrame) -> None:
+        import plotly.graph_objects as go
+
+        viz = ModelVisualizer()
+        fig = viz.box_plot(sample_df, "price", group_by="region")
+        assert isinstance(fig, go.Figure)
+
+    def test_box_plot_invalid_column(self, sample_df: pl.DataFrame) -> None:
+        viz = ModelVisualizer()
+        with pytest.raises(ValueError, match="not found"):
+            viz.box_plot(sample_df, "nonexistent")
 
 
 # ---------------------------------------------------------------------------

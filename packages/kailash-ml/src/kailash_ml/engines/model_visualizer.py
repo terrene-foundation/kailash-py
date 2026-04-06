@@ -16,6 +16,8 @@ from typing import Any
 
 import numpy as np
 
+import plotly.express as px
+
 from kailash_ml._decorators import experimental
 
 logger = logging.getLogger(__name__)
@@ -616,4 +618,128 @@ class ModelVisualizer:
             xaxis_title=x_label,
             yaxis_title=y_label,
         )
+        return fig
+
+    # ------------------------------------------------------------------
+    # EDA chart methods (#314)
+    # ------------------------------------------------------------------
+
+    def histogram(
+        self,
+        data: Any,
+        column: str,
+        *,
+        bins: int = 30,
+        title: str | None = None,
+    ) -> Any:
+        """Create a histogram for a single column.
+
+        Unlike other ModelVisualizer methods that accept raw arrays,
+        EDA methods accept a polars DataFrame with column names for
+        richer context.
+
+        Args:
+            data: A polars DataFrame.
+            column: Column name to plot.
+            bins: Number of bins.
+            title: Optional chart title.
+
+        Returns:
+            A plotly Figure.
+        """
+        import polars as pl
+
+        import plotly.graph_objects as go
+
+        if not isinstance(data, pl.DataFrame):
+            msg = "data must be a polars DataFrame"
+            raise TypeError(msg)
+        if column not in data.columns:
+            msg = f"Column '{column}' not found in DataFrame"
+            raise ValueError(msg)
+
+        series = data[column].drop_nulls().to_list()
+        fig = go.Figure(data=[go.Histogram(x=series, nbinsx=bins)])
+        fig.update_layout(
+            title=title or f"Distribution of {column}",
+            xaxis_title=column,
+            yaxis_title="Count",
+        )
+        return fig
+
+    def scatter(
+        self,
+        data: Any,
+        x: str,
+        y: str,
+        *,
+        color: str | None = None,
+        title: str | None = None,
+    ) -> Any:
+        """Create a scatter plot of two columns.
+
+        Args:
+            data: A polars DataFrame.
+            x: Column name for x-axis.
+            y: Column name for y-axis.
+            color: Optional column name for color grouping.
+            title: Optional chart title.
+
+        Returns:
+            A plotly Figure.
+        """
+        import polars as pl
+
+        if not isinstance(data, pl.DataFrame):
+            msg = "data must be a polars DataFrame"
+            raise TypeError(msg)
+        for col_name in [x, y] + ([color] if color else []):
+            if col_name not in data.columns:
+                msg = f"Column '{col_name}' not found in DataFrame"
+                raise ValueError(msg)
+
+        pdf = data.select([x, y] + ([color] if color else [])).drop_nulls().to_pandas()
+        fig = px.scatter(pdf, x=x, y=y, color=color)
+        fig.update_layout(title=title or f"{y} vs {x}")
+        return fig
+
+    def box_plot(
+        self,
+        data: Any,
+        column: str,
+        *,
+        group_by: str | None = None,
+        title: str | None = None,
+    ) -> Any:
+        """Create a box plot for a column, optionally grouped.
+
+        Args:
+            data: A polars DataFrame.
+            column: Column name for values.
+            group_by: Optional column name for grouping.
+            title: Optional chart title.
+
+        Returns:
+            A plotly Figure.
+        """
+        import polars as pl
+
+        if not isinstance(data, pl.DataFrame):
+            msg = "data must be a polars DataFrame"
+            raise TypeError(msg)
+        for col_name in [column] + ([group_by] if group_by else []):
+            if col_name not in data.columns:
+                msg = f"Column '{col_name}' not found in DataFrame"
+                raise ValueError(msg)
+
+        pdf = (
+            data.select([column] + ([group_by] if group_by else []))
+            .drop_nulls()
+            .to_pandas()
+        )
+        if group_by:
+            fig = px.box(pdf, x=group_by, y=column)
+        else:
+            fig = px.box(pdf, y=column)
+        fig.update_layout(title=title or f"Distribution of {column}")
         return fig

@@ -653,33 +653,37 @@ for feature_result in report.feature_results:
 
 ```python
 from kailash.db.connection import ConnectionManager
-from kailash_ml.engines.experiment_tracker import ExperimentTracker
+from kailash_ml import ExperimentTracker
 
+# Option 1: Standalone (factory -- manages its own connection)
+async with await ExperimentTracker.create("sqlite:///ml.db") as tracker:
+    exp_name = await tracker.create_experiment("my-experiment")
+    async with tracker.run(exp_name, run_name="baseline") as run:
+        await run.log_metric("accuracy", 0.95)
+        await run.log_param("n_estimators", "100")
+
+# Option 2: Shared connection (caller manages ConnectionManager lifecycle)
 conn = ConnectionManager("sqlite:///ml.db")
 await conn.initialize()
+tracker = ExperimentTracker(conn, artifact_root="./artifacts")
 
-tracker = ExperimentTracker(conn, artifact_root="./experiment_artifacts")
-await tracker.initialize()
+exp_name = await tracker.create_experiment("churn_classification")
 
-# Create experiment and start a run
-experiment = await tracker.create_experiment("churn_classification")
-
-async with tracker.start_run(experiment.id, run_name="rf_baseline") as run:
+async with tracker.run("churn_classification", run_name="rf_baseline") as run:
     # Log parameters
-    await tracker.log_param(run.id, "n_estimators", "100")
-    await tracker.log_param(run.id, "max_depth", "5")
+    await run.log_param("n_estimators", "100")
+    await run.log_param("max_depth", "5")
 
     # Log metrics (supports step-based logging for training curves)
-    await tracker.log_metric(run.id, "accuracy", 0.92)
-    await tracker.log_metric(run.id, "f1", 0.87)
-
-    # Log artifacts
-    await tracker.log_artifact(run.id, "model.pkl")
+    await run.log_metric("accuracy", 0.92)
+    await run.log_metric("f1", 0.87)
 
 # Query results
-runs = await tracker.list_runs(experiment.id, order_by="accuracy", ascending=False)
+runs = await tracker.list_runs("churn_classification")
 best_run = runs[0]
 print(f"Best accuracy: {best_run.metrics['accuracy']}")
+
+await conn.close()
 ```
 
 ---
