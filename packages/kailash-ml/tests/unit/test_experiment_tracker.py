@@ -995,3 +995,54 @@ class TestEdgeCases:
         assert runs_a[0].id == r1.id
         assert len(runs_b) == 1
         assert runs_b[0].id == r2.id
+
+
+# ---------------------------------------------------------------------------
+# Factory create (#317)
+# ---------------------------------------------------------------------------
+
+
+class TestFactoryCreate:
+    """Tests for ExperimentTracker.create() factory (#317)."""
+
+    @pytest.mark.asyncio
+    async def test_create_factory(self, tmp_path: Path) -> None:
+        """Factory creates a working tracker."""
+        db_path = tmp_path / "test.db"
+        tracker = await ExperimentTracker.create(
+            f"sqlite:///{db_path}",
+            artifact_root=str(tmp_path / "artifacts"),
+        )
+        try:
+            assert tracker._owns_conn is True
+            exp_name = await tracker.create_experiment("test-exp")
+            assert exp_name is not None
+        finally:
+            await tracker.close()
+
+    @pytest.mark.asyncio
+    async def test_create_context_manager(self, tmp_path: Path) -> None:
+        """Factory tracker works as async context manager."""
+        db_path = tmp_path / "test.db"
+        async with await ExperimentTracker.create(
+            f"sqlite:///{db_path}",
+            artifact_root=str(tmp_path / "artifacts"),
+        ) as tracker:
+            assert tracker._owns_conn is True
+            exp_name = await tracker.create_experiment("ctx-exp")
+            assert exp_name is not None
+
+    @pytest.mark.asyncio
+    async def test_external_conn_not_closed(self, tmp_path: Path) -> None:
+        """Tracker with external conn does not close it."""
+        db_path = tmp_path / "test.db"
+        conn = ConnectionManager(f"sqlite:///{db_path}")
+        await conn.initialize()
+        try:
+            tracker = ExperimentTracker(conn, artifact_root=str(tmp_path / "artifacts"))
+            assert tracker._owns_conn is False
+            await tracker.close()
+            # Connection should still be usable
+            assert conn is not None
+        finally:
+            await conn.close()

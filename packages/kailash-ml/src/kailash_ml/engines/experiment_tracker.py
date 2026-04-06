@@ -393,11 +393,59 @@ class ExperimentTracker:
         self,
         conn: ConnectionManager,
         artifact_root: str = "./mlartifacts",
+        *,
+        _owns_conn: bool = False,
     ) -> None:
         self._conn = conn
         self._artifact_root = Path(artifact_root)
         self._artifact_root.mkdir(parents=True, exist_ok=True)
         self._initialized = False
+        self._owns_conn = _owns_conn
+
+    @classmethod
+    async def create(
+        cls,
+        url: str = "sqlite:///experiments.db",
+        artifact_root: str = "./mlartifacts",
+    ) -> "ExperimentTracker":
+        """Create an ExperimentTracker with an internally managed connection.
+
+        Convenience factory for standalone usage. The returned tracker
+        owns its connection -- call :meth:`close` or use as an async
+        context manager to release resources.
+
+        Args:
+            url: Database URL (default: local SQLite).
+            artifact_root: Directory for artifact storage.
+
+        Returns:
+            An initialized ExperimentTracker.
+        """
+        conn = ConnectionManager(url)
+        await conn.initialize()
+        return cls(conn, artifact_root, _owns_conn=True)
+
+    async def close(self) -> None:
+        """Close the tracker and release resources.
+
+        Only closes the database connection if this tracker owns it
+        (i.e., created via :meth:`create`). Trackers initialized with
+        an external ``ConnectionManager`` leave connection lifecycle
+        to the caller.
+        """
+        if self._owns_conn and self._conn is not None:
+            await self._conn.close()
+
+    async def __aenter__(self) -> "ExperimentTracker":
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> None:
+        await self.close()
 
     async def _ensure_tables(self) -> None:
         if not self._initialized:
