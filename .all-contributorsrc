@@ -1,0 +1,37 @@
+{
+  "projectName": "kailash-py",
+  "projectOwner": "terrene-foundation",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 80,
+  "commit": false,
+  "commitConvention": "angular",
+  "contributors": [
+    {
+      "login": "esperie",
+      "name": "Jack Hong",
+      "avatar_url": "https://avatars.githubusercontent.com/u/19761202?v=4",
+      "profile": "https://github.com/esperie",
+      "contributions": [
+        "code",
+        "doc",
+        "maintenance",
+        "infra"
+      ]
+    },
+    {
+      "login": "TheCodingDragon0",
+      "name": "Coding Dragon",
+      "avatar_url": "https://avatars.githubusercontent.com/u/273658629?v=4",
+      "profile": "https://github.com/TheCodingDragon0",
+      "contributions": [
+        "bug",
+        "code"
+      ]
+    }
+  ],
+  "contributorsPerLine": 7
+}
