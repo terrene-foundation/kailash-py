@@ -15,6 +15,57 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash 2.6.0 + kailash-pact 0.8.0 + kailash-dataflow 1.8.0 + kailash-ml 0.5.0 + kailash-align 0.3.0 — 2026-04-06
+
+#### [kailash 2.6.0]
+
+##### Added
+
+- **SUSPENDED VettingStatus** in clearance FSM with full transition validation (#309)
+- FSM transitions: PENDING→ACTIVE→SUSPENDED→ACTIVE (reinstatement) or →REVOKED (terminal)
+- `validate_transition()` for clearance state machine enforcement
+- `transition_clearance()` for safe status transitions with audit trail
+- Revoke guard against already-revoked clearances
+
+##### Fixed
+
+- **Security**: Code injection and shell injection vulnerabilities addressed (#306)
+- `AuditChain.from_dict()` called nonexistent `verify_integrity()` method
+
+#### [kailash-pact 0.8.0]
+
+##### Added
+
+- **SUSPENDED** added to `VettingStatus` enum with FSM transition validation (#309)
+- Clearance FSM pattern: PENDING→ACTIVE→SUSPENDED↔ACTIVE, SUSPENDED→REVOKED
+- `revoke_clearance()` preserves record with REVOKED status for audit trail
+
+#### [kailash-dataflow 1.8.0]
+
+##### Added
+
+- `bulk_upsert` operation for efficient batch insert-or-update (#294-#303)
+
+#### [kailash-ml 0.5.0]
+
+##### Added
+
+- ML correlation robustness improvements (#294-#303)
+
+##### Fixed
+
+- Cramer's V pivot fallback with logging for edge cases
+
+#### [kailash-align 0.3.0]
+
+##### Added
+
+- Agent support and on-premises deployment patterns (#294-#303)
+
+##### Fixed
+
+- **Security**: Code injection prevention in alignment pipeline (#306)
+
 ### kailash-ml 0.4.0 + kailash-pact 0.7.2 — 2026-04-05
 
 #### [kailash-ml 0.4.0]
