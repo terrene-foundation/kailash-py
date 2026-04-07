@@ -89,7 +89,7 @@ pact = [
     "kailash-pact>=0.8.0",
 ]
 ml = [
-    "kailash-ml>=0.6.0",
+    "kailash-ml>=0.7.0",
 ]
 align = [
     "kailash-align>=0.3.0",
@@ -144,7 +144,7 @@ all = [
     "kailash-kaizen>=2.5.0",
     "kaizen-agents>=0.7.0",
     "kailash-pact>=0.8.0",
-    "kailash-ml[all]>=0.6.0",
+    "kailash-ml[all]>=0.7.0",
     "kailash-align[all]>=0.3.0",
 ]
 

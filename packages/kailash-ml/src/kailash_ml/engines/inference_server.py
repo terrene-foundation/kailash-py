@@ -155,6 +155,7 @@ class InferenceServer:
         *,
         version: int | None = None,
         options: dict | None = None,
+        strict: bool = True,
     ) -> PredictionResult:
         """Single-record prediction.
 
@@ -166,8 +167,15 @@ class InferenceServer:
             Feature dict, e.g. {"feature_a": 1.0, "feature_b": 2.0}.
         version:
             Specific version. If None, uses the latest version.
+        strict:
+            If True (default), raise ValueError when required features are
+            missing or contain non-numeric values. If False, log a warning
+            and substitute 0.0 for missing features (legacy behaviour).
         """
         model_entry = await self._get_model(model_name, version)
+
+        feature_names = self._resolve_feature_names(model_entry, features)
+        self._validate_features(features, feature_names, strict=strict)
 
         start = time.perf_counter()
 
@@ -200,6 +208,7 @@ class InferenceServer:
         records: list[dict[str, Any]],
         *,
         version: int | None = None,
+        strict: bool = True,
     ) -> list[PredictionResult]:
         """Batch prediction. Converts records to polars -> numpy for efficiency.
 
@@ -211,19 +220,43 @@ class InferenceServer:
             List of feature dicts.
         version:
             Specific version. If None, uses the latest version.
+        strict:
+            If True (default), raise ValueError when required features are
+            missing or contain non-numeric values. If False, log a warning
+            and substitute 0.0 for missing features (legacy behaviour).
         """
         if not records:
             return []
 
         model_entry = await self._get_model(model_name, version)
 
+        feature_cols = self._resolve_feature_names(model_entry, records[0])
+
+        # Validate every record in the batch
+        for idx, record in enumerate(records):
+            self._validate_features(
+                record, feature_cols, strict=strict, record_index=idx
+            )
+
+        # In non-strict mode, fill missing features with 0.0 so the
+        # DataFrame has all expected columns.
+        if not strict:
+            patched_records: list[dict[str, Any]] = []
+            for record in records:
+                patched = dict(record)
+                for col in feature_cols:
+                    if col not in patched:
+                        patched[col] = 0.0
+                    else:
+                        try:
+                            patched[col] = float(patched[col])
+                        except (TypeError, ValueError):
+                            patched[col] = 0.0
+                patched_records.append(patched)
+            records = patched_records
+
         # Convert list[dict] -> polars -> numpy in one shot
         df = pl.DataFrame(records)
-        feature_cols = (
-            [f.name for f in model_entry.signature.input_schema.features]
-            if model_entry.signature
-            else list(records[0].keys())
-        )
         X, _, _col_info = to_sklearn_input(df, feature_columns=feature_cols)
 
         start = time.perf_counter()
@@ -232,7 +265,8 @@ class InferenceServer:
         if hasattr(model_entry.model, "predict_proba"):
             try:
                 probabilities = model_entry.model.predict_proba(X).tolist()
-            except Exception:
+            except Exception as exc:
+                logger.debug("predict_proba failed: %s", exc)
                 probabilities = None
         inference_ms = (time.perf_counter() - start) * 1000
 
@@ -380,6 +414,85 @@ class InferenceServer:
             return inference._cache.stats()
 
     # ------------------------------------------------------------------
+    # Private: feature validation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _resolve_feature_names(
+        entry: _CachedModel,
+        features: dict[str, Any],
+    ) -> list[str]:
+        """Return the ordered list of expected feature names."""
+        if entry.signature:
+            return [f.name for f in entry.signature.input_schema.features]
+        return list(features.keys())
+
+    @staticmethod
+    def _validate_features(
+        features: dict[str, Any],
+        feature_names: list[str],
+        *,
+        strict: bool = True,
+        record_index: int | None = None,
+    ) -> None:
+        """Validate that *features* contains all required names with numeric values.
+
+        Parameters
+        ----------
+        features:
+            The feature dict from the caller.
+        feature_names:
+            Ordered list of expected feature names (from model signature).
+        strict:
+            If True, raise ``ValueError`` on problems. If False, log a
+            warning and allow the caller to fall back to 0.0.
+        record_index:
+            If set, included in error/warning messages to identify which
+            record in a batch is problematic.
+        """
+        record_label = (
+            f" (record index {record_index})" if record_index is not None else ""
+        )
+
+        # --- missing features ---
+        missing = [n for n in feature_names if n not in features]
+        if missing:
+            msg = (
+                f"Missing required features{record_label}: {missing}. "
+                f"Expected features: {feature_names}"
+            )
+            if strict:
+                raise ValueError(msg)
+            logger.warning("Non-strict mode: %s — substituting 0.0", msg)
+
+        # --- type validation (only for keys that are present) ---
+        non_numeric: list[str] = []
+        for name in feature_names:
+            if name not in features:
+                continue
+            val = features[name]
+            # Allow int, float, bool (bool is subclass of int), np scalars
+            if isinstance(val, (int, float)):
+                continue
+            if hasattr(val, "item"):
+                # numpy scalar — try conversion
+                continue
+            try:
+                float(val)
+            except (TypeError, ValueError):
+                non_numeric.append(name)
+
+        if non_numeric:
+            bad_pairs = {n: type(features[n]).__name__ for n in non_numeric}
+            msg = (
+                f"Non-numeric feature values{record_label}: {bad_pairs}. "
+                "All feature values must be numeric."
+            )
+            if strict:
+                raise ValueError(msg)
+            logger.warning("Non-strict mode: %s — substituting 0.0", msg)
+
+    # ------------------------------------------------------------------
     # Private: model loading
     # ------------------------------------------------------------------
 
@@ -469,8 +582,8 @@ class InferenceServer:
             try:
                 proba = model.predict_proba(X)[0].tolist()
                 result["probabilities"] = proba
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("predict_proba failed: %s", exc)
 
         return result
 

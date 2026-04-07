@@ -222,3 +222,140 @@ class TestBuildResult:
         assert result.best_params == {}
         assert result.best_trial_number == -1
         assert result.all_trials == []
+
+    def test_build_result_excludes_pruned_from_best(self) -> None:
+        """_build_result picks best from completed trials, not pruned ones."""
+        from unittest.mock import MagicMock
+
+        pipeline = MagicMock()
+        hs = HyperparameterSearch(pipeline)
+
+        trials = [
+            TrialResult(0, {"lr": 0.1}, {"accuracy": 0.99}, 1.0, pruned=True),
+            TrialResult(1, {"lr": 0.01}, {"accuracy": 0.85}, 2.0, pruned=False),
+            TrialResult(2, {"lr": 0.5}, {"accuracy": 0.80}, 0.5, pruned=False),
+        ]
+        config = SearchConfig(direction="maximize", metric_to_optimize="accuracy")
+
+        result = hs._build_result(
+            trials, config, "successive_halving", None, None, None, None, "exp"
+        )
+        # Trial 0 has best metric but was pruned; best should be trial 1
+        assert result.best_trial_number == 1
+        assert result.best_metrics["accuracy"] == 0.85
+        # All trials (including pruned) are still in the result
+        assert len(result.all_trials) == 3
+
+
+# ---------------------------------------------------------------------------
+# Successive halving search
+# ---------------------------------------------------------------------------
+
+
+class TestSuccessiveHalvingSearch:
+    """Tests for successive halving with Optuna's SuccessiveHalvingPruner."""
+
+    @pytest.mark.asyncio
+    async def test_successive_halving_prunes_trials(self) -> None:
+        """Successive halving actually prunes poor trials (not all run to completion)."""
+        import asyncio
+        from dataclasses import dataclass
+        from unittest.mock import AsyncMock, MagicMock
+
+        @dataclass
+        class FakeTrainResult:
+            metrics: dict
+            model_version: object = None
+            training_time_seconds: float = 0.1
+            data_shape: tuple = (100, 2)
+            registered: bool = False
+            threshold_met: bool = True
+
+        # Track how many train calls happen per trial
+        call_log: list[str] = []
+
+        trial_metrics: dict[int, float] = {}
+        call_counter = 0
+
+        async def fake_train(
+            data, schema, model_spec, eval_spec, experiment_name, **kwargs
+        ):
+            nonlocal call_counter
+            call_counter += 1
+            call_log.append(experiment_name)
+            # Extract trial number from experiment name
+            # Format: "exp_trial_{N}_rung_{S}"
+            parts = experiment_name.split("_")
+            trial_idx = int(parts[parts.index("trial") + 1])
+            rung_idx = int(parts[parts.index("rung") + 1])
+
+            # Give deterministic but varied accuracy:
+            # Even trials get high accuracy, odd trials get low accuracy.
+            # This ensures the pruner has signal to prune odd trials.
+            if trial_idx % 2 == 0:
+                acc = 0.9 + rung_idx * 0.01
+            else:
+                acc = 0.3 + rung_idx * 0.01
+
+            return FakeTrainResult(metrics={"accuracy": acc})
+
+        pipeline = MagicMock()
+        pipeline.train = fake_train
+
+        hs = HyperparameterSearch(pipeline)
+
+        import polars as pl
+
+        data = pl.DataFrame(
+            {"f1": list(range(200)), "f2": list(range(200)), "target": [0, 1] * 100}
+        )
+
+        schema = MagicMock()
+        base_model_spec = MagicMock()
+        base_model_spec.model_class = "sklearn.ensemble.RandomForestClassifier"
+        base_model_spec.hyperparameters = {}
+        base_model_spec.framework = "sklearn"
+
+        search_space = SearchSpace(
+            [ParamDistribution("n_estimators", "int_uniform", low=10, high=200)]
+        )
+
+        # Use enough trials that pruning has a chance to kick in.
+        # SuccessiveHalvingPruner needs a few initial trials before it prunes.
+        config = SearchConfig(
+            strategy="successive_halving",
+            n_trials=20,
+            metric_to_optimize="accuracy",
+            direction="maximize",
+        )
+
+        eval_spec = MagicMock()
+
+        result = await hs._successive_halving_search(
+            data, schema, base_model_spec, search_space, config, eval_spec, "exp"
+        )
+
+        assert result.strategy == "successive_halving"
+        assert len(result.all_trials) == 20
+
+        pruned_trials = [t for t in result.all_trials if t.pruned]
+        completed_trials = [t for t in result.all_trials if not t.pruned]
+
+        # The pruner should have pruned at least some trials
+        assert (
+            len(pruned_trials) > 0
+        ), "Successive halving should prune at least some trials"
+
+        # Pruned trials should have fewer train calls (fewer rungs) than
+        # completed trials (4 rungs each). Total calls < 20 * 4 = 80.
+        max_calls_without_pruning = 20 * 4
+        assert call_counter < max_calls_without_pruning, (
+            f"Expected fewer train calls than {max_calls_without_pruning} "
+            f"due to pruning, got {call_counter}"
+        )
+
+        # Best trial should NOT be pruned
+        assert not result.all_trials[result.best_trial_number].pruned
+
+        # Best trial should come from completed trials
+        assert result.best_trial_number in {t.trial_number for t in completed_trials}

@@ -290,58 +290,118 @@ class HyperparameterSearch:
         config: SearchConfig,
         eval_spec: Any,
         experiment_name: str,
+        *,
+        tracker: Any | None = None,
+        parent_run_id: str | None = None,
     ) -> SearchResult:
         """Run hyperparameter search.
 
         Iterates over hyperparameter configurations using the selected
         strategy, trains a model for each, and returns the best result.
+
+        Parameters
+        ----------
+        tracker:
+            Optional ExperimentTracker instance. When provided, creates a
+            parent run for the search and logs each trial as a child run.
+            Typed as ``Any`` to avoid circular imports.
+        parent_run_id:
+            Optional parent run ID. When provided, the search parent run
+            is created as a child of this run.
         """
         start_time = time.perf_counter()
 
-        if config.strategy == "bayesian":
-            result = await self._bayesian_search(
-                data,
-                schema,
-                base_model_spec,
-                search_space,
-                config,
-                eval_spec,
+        # Start a parent run for the search if tracker is provided
+        search_run_id: str | None = None
+        if tracker is not None:
+            parent_run_obj = await tracker.start_run(
                 experiment_name,
+                run_name=f"search_{config.strategy}",
+                parent_run_id=parent_run_id,
             )
-        elif config.strategy == "successive_halving":
-            result = await self._successive_halving_search(
-                data,
-                schema,
-                base_model_spec,
-                search_space,
-                config,
-                eval_spec,
-                experiment_name,
+            search_run_id = parent_run_obj.id  # type: ignore[union-attr]
+            # Log search config as params on the search run
+            await tracker.log_params(
+                search_run_id,
+                {
+                    "search_strategy": config.strategy,
+                    "n_trials": str(config.n_trials),
+                    "metric_to_optimize": config.metric_to_optimize,
+                    "direction": config.direction,
+                    "model_class": str(getattr(base_model_spec, "model_class", "")),
+                },
             )
-        elif config.strategy == "random":
-            result = await self._random_search(
-                data,
-                schema,
-                base_model_spec,
-                search_space,
-                config,
-                eval_spec,
-                experiment_name,
-            )
-        elif config.strategy == "grid":
-            result = await self._grid_search(
-                data,
-                schema,
-                base_model_spec,
-                search_space,
-                config,
-                eval_spec,
-                experiment_name,
-            )
-        else:
-            raise ValueError(f"Unknown search strategy: {config.strategy}")
 
-        result.total_time_seconds = time.perf_counter() - start_time
+        try:
+            if config.strategy == "bayesian":
+                result = await self._bayesian_search(
+                    data,
+                    schema,
+                    base_model_spec,
+                    search_space,
+                    config,
+                    eval_spec,
+                    experiment_name,
+                    tracker=tracker,
+                    parent_run_id=search_run_id,
+                )
+            elif config.strategy == "successive_halving":
+                result = await self._successive_halving_search(
+                    data,
+                    schema,
+                    base_model_spec,
+                    search_space,
+                    config,
+                    eval_spec,
+                    experiment_name,
+                    tracker=tracker,
+                    parent_run_id=search_run_id,
+                )
+            elif config.strategy == "random":
+                result = await self._random_search(
+                    data,
+                    schema,
+                    base_model_spec,
+                    search_space,
+                    config,
+                    eval_spec,
+                    experiment_name,
+                    tracker=tracker,
+                    parent_run_id=search_run_id,
+                )
+            elif config.strategy == "grid":
+                result = await self._grid_search(
+                    data,
+                    schema,
+                    base_model_spec,
+                    search_space,
+                    config,
+                    eval_spec,
+                    experiment_name,
+                    tracker=tracker,
+                    parent_run_id=search_run_id,
+                )
+            else:
+                raise ValueError(f"Unknown search strategy: {config.strategy}")
+
+            result.total_time_seconds = time.perf_counter() - start_time
+
+            # Log best trial metrics on search run
+            if (
+                tracker is not None
+                and search_run_id is not None
+                and result.best_metrics
+            ):
+                await tracker.log_metrics(search_run_id, result.best_metrics)
+
+        except Exception:
+            if tracker is not None and search_run_id is not None:
+                await tracker.end_run(search_run_id, status="FAILED")
+            raise
+        else:
+            if tracker is not None and search_run_id is not None:
+                await tracker.end_run(search_run_id, status="COMPLETED")
+
         return result
 
     # ------------------------------------------------------------------
@@ -357,6 +417,9 @@ class HyperparameterSearch:
         config,
         eval_spec,
         experiment_name,
+        *,
+        tracker: Any | None = None,
+        parent_run_id: str | None = None,
     ) -> SearchResult:
         from kailash_ml.engines.training_pipeline import ModelSpec
 
@@ -377,6 +440,8 @@ class HyperparameterSearch:
                 merged_spec,
                 eval_spec,
                 f"{experiment_name}_trial_{i}",
+                tracker=tracker,
+                parent_run_id=parent_run_id,
             )
             trial_time = time.perf_counter() - trial_start
             all_trials.append(
@@ -412,6 +477,9 @@ class HyperparameterSearch:
         config,
         eval_spec,
         experiment_name,
+        *,
+        tracker: Any | None = None,
+        parent_run_id: str | None = None,
     ) -> SearchResult:
         from kailash_ml.engines.training_pipeline import ModelSpec
 
@@ -431,6 +499,8 @@ class HyperparameterSearch:
                 merged_spec,
                 eval_spec,
                 f"{experiment_name}_trial_{i}",
+                tracker=tracker,
+                parent_run_id=parent_run_id,
             )
             trial_time = time.perf_counter() - trial_start
             all_trials.append(
@@ -466,6 +536,9 @@ class HyperparameterSearch:
         config,
         eval_spec,
         experiment_name,
+        *,
+        tracker: Any | None = None,
+        parent_run_id: str | None = None,
     ) -> SearchResult:
         import optuna
         from kailash_ml.engines.training_pipeline import ModelSpec
@@ -473,7 +546,7 @@ class HyperparameterSearch:
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
         all_trials: list[TrialResult] = []
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def objective(trial: optuna.Trial) -> float:
             params: dict[str, Any] = {}
@@ -508,6 +581,8 @@ class HyperparameterSearch:
                     merged_spec,
                     eval_spec,
                     f"{experiment_name}_trial_{trial.number}",
+                    tracker=tracker,
+                    parent_run_id=parent_run_id,
                 ),
                 loop,
             )
@@ -556,16 +631,128 @@ class HyperparameterSearch:
         config,
         eval_spec,
         experiment_name,
+        *,
+        tracker: Any | None = None,
+        parent_run_id: str | None = None,
     ) -> SearchResult:
-        # Successive halving is Bayesian with a pruner; for simplicity
-        # in v1, delegate to random search with early stopping heuristic:
-        # train fewer estimators for early trials.
-        return await self._random_search(
+        """Successive halving via Optuna's SuccessiveHalvingPruner.
+
+        Trains each configuration at increasing resource budgets (data
+        fractions). Poor performers are pruned early, concentrating
+        compute on the most promising hyperparameter regions.
+        """
+        import optuna
+        from kailash_ml.engines.training_pipeline import ModelSpec
+
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+        # Resource rungs: train on 12.5%, 25%, 50%, 100% of data
+        n_rungs = 4
+        rung_fractions = [1.0 / (2 ** (n_rungs - 1 - i)) for i in range(n_rungs)]
+
+        all_trials: list[TrialResult] = []
+        loop = asyncio.get_running_loop()
+
+        def objective(trial: optuna.Trial) -> float:
+            params: dict[str, Any] = {}
+            for p in search_space.params:
+                if p.type == "uniform" and p.low is not None and p.high is not None:
+                    params[p.name] = trial.suggest_float(p.name, p.low, p.high)
+                elif (
+                    p.type == "log_uniform" and p.low is not None and p.high is not None
+                ):
+                    params[p.name] = trial.suggest_float(
+                        p.name, p.low, p.high, log=True
+                    )
+                elif (
+                    p.type == "int_uniform" and p.low is not None and p.high is not None
+                ):
+                    params[p.name] = trial.suggest_int(p.name, int(p.low), int(p.high))
+                elif p.type == "categorical" and p.choices is not None:
+                    params[p.name] = trial.suggest_categorical(p.name, p.choices)
+
+            merged_spec = ModelSpec(
+                model_class=base_model_spec.model_class,
+                hyperparameters={**base_model_spec.hyperparameters, **params},
+                framework=base_model_spec.framework,
+            )
+
+            trial_start = time.perf_counter()
+            last_value = 0.0
+            last_metrics: dict[str, float] = {}
+
+            for step, frac in enumerate(rung_fractions):
+                # Sub-sample data for this rung
+                n_rows = data.height
+                sample_n = max(1, int(n_rows * frac))
+                if sample_n >= n_rows:
+                    rung_data = data
+                else:
+                    rung_data = data.sample(n=sample_n, seed=42 + trial.number)
+
+                future = asyncio.run_coroutine_threadsafe(
+                    self._pipeline.train(
+                        rung_data,
+                        schema,
+                        merged_spec,
+                        eval_spec,
+                        f"{experiment_name}_trial_{trial.number}_rung_{step}",
+                        tracker=tracker,
+                        parent_run_id=parent_run_id,
+                    ),
+                    loop,
+                )
+                train_result = future.result(timeout=config.timeout_seconds)
+                last_value = train_result.metrics.get(config.metric_to_optimize, 0.0)
+                last_metrics = train_result.metrics
+
+                # Report intermediate value and check for pruning
+                trial.report(last_value, step)
+                if trial.should_prune():
+                    trial_time = time.perf_counter() - trial_start
+                    all_trials.append(
+                        TrialResult(
+                            trial_number=trial.number,
+                            params=params,
+                            metrics=last_metrics,
+                            training_time_seconds=trial_time,
+                            pruned=True,
+                        )
+                    )
+                    raise optuna.TrialPruned()
+
+            trial_time = time.perf_counter() - trial_start
+            all_trials.append(
+                TrialResult(
+                    trial_number=trial.number,
+                    params=params,
+                    metrics=last_metrics,
+                    training_time_seconds=trial_time,
+                    pruned=False,
+                )
+            )
+            return last_value
+
+        pruner = optuna.pruners.SuccessiveHalvingPruner(
+            min_resource=1,
+            reduction_factor=2,
+            min_early_stopping_rate=0,
+        )
+        study = optuna.create_study(direction=config.direction, pruner=pruner)
+        await loop.run_in_executor(
+            None,
+            lambda: study.optimize(
+                objective, n_trials=config.n_trials, timeout=config.timeout_seconds
+            ),
+        )
+
+        return self._build_result(
+            all_trials,
+            config,
+            "successive_halving",
+            base_model_spec,
             data,
             schema,
-            base_model_spec,
-            search_space,
-            config,
             eval_spec,
             experiment_name,
         )
@@ -596,13 +783,18 @@ class HyperparameterSearch:
                 strategy=strategy,
             )
 
+        # Only consider completed (non-pruned) trials for best selection
+        completed = [t for t in all_trials if not t.pruned]
+        candidates = completed if completed else all_trials
+
         if config.direction == "maximize":
             best = max(
-                all_trials, key=lambda t: t.metrics.get(config.metric_to_optimize, 0.0)
+                candidates,
+                key=lambda t: t.metrics.get(config.metric_to_optimize, 0.0),
             )
         else:
             best = min(
-                all_trials,
+                candidates,
                 key=lambda t: t.metrics.get(config.metric_to_optimize, float("inf")),
             )
 

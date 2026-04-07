@@ -127,6 +127,7 @@ class TrainingResult:
     data_shape: tuple[int, int]
     registered: bool  # True if model was registered
     threshold_met: bool
+    run_id: str | None = None  # ExperimentTracker run ID (set when tracker provided)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -136,6 +137,7 @@ class TrainingResult:
             "data_shape": list(self.data_shape),
             "registered": self.registered,
             "threshold_met": self.threshold_met,
+            "run_id": self.run_id,
         }
 
     @classmethod
@@ -148,6 +150,7 @@ class TrainingResult:
             data_shape=(shape[0], shape[1]) if shape else (0, 0),
             registered=data["registered"],
             threshold_met=data["threshold_met"],
+            run_id=data.get("run_id"),
         )
 
 
@@ -206,6 +209,8 @@ class TrainingPipeline:
         experiment_name: str,
         *,
         agent: AgentInfusionProtocol | None = None,
+        tracker: Any | None = None,
+        parent_run_id: str | None = None,
     ) -> TrainingResult:
         """Full training pipeline.
 
@@ -215,6 +220,17 @@ class TrainingPipeline:
         4. Fit model
         5. Evaluate
         6. If threshold met, register at STAGING
+        7. If tracker provided, log params/metrics to ExperimentTracker
+
+        Parameters
+        ----------
+        tracker:
+            Optional ExperimentTracker instance. When provided, a run is
+            created and all parameters and metrics are logged automatically.
+            Typed as ``Any`` to avoid circular imports.
+        parent_run_id:
+            Optional parent run ID for nested runs (used by
+            HyperparameterSearch and AutoMLEngine).
         """
         # Validate
         self._validate_data(data, schema)
@@ -231,7 +247,7 @@ class TrainingPipeline:
                 logger.debug("Agent model suggestion failed, continuing with spec.")
 
         # Split
-        train_data, test_data = self._split(data, eval_spec)
+        train_data, test_data = self._split(data, eval_spec, target_col)
 
         # Train
         start = time.perf_counter()
@@ -283,6 +299,20 @@ class TrainingPipeline:
             except Exception:
                 logger.debug("Agent result interpretation failed.")
 
+        # Auto-log to ExperimentTracker when provided
+        run_id: str | None = None
+        if tracker is not None:
+            run_id = await self._log_to_tracker(
+                tracker,
+                experiment_name,
+                model_spec,
+                eval_spec,
+                metrics,
+                data,
+                training_time,
+                parent_run_id,
+            )
+
         return TrainingResult(
             model_version=model_version,
             metrics=metrics,
@@ -290,7 +320,114 @@ class TrainingPipeline:
             data_shape=(data.height, data.width),
             registered=model_version is not None,
             threshold_met=threshold_met,
+            run_id=run_id,
         )
+
+    # ------------------------------------------------------------------
+    # Private: experiment tracking
+    # ------------------------------------------------------------------
+
+    async def _log_to_tracker(
+        self,
+        tracker: Any,
+        experiment_name: str,
+        model_spec: ModelSpec,
+        eval_spec: EvalSpec,
+        metrics: dict[str, float],
+        data: pl.DataFrame,
+        training_time: float,
+        parent_run_id: str | None,
+    ) -> str:
+        """Log training run to ExperimentTracker. Returns the run ID."""
+        run_name = model_spec.model_class.rsplit(".", 1)[-1]
+        async with tracker.run(
+            experiment_name,
+            run_name=run_name,
+            parent_run_id=parent_run_id,
+        ) as ctx:
+            # Log params: model spec + eval spec + data shape
+            params: dict[str, str] = {
+                "model_class": model_spec.model_class,
+                "framework": model_spec.framework,
+                "split_strategy": eval_spec.split_strategy,
+                "test_size": str(eval_spec.test_size),
+                "n_rows": str(data.height),
+                "n_cols": str(data.width),
+            }
+            for k, v in model_spec.hyperparameters.items():
+                params[f"hp.{k}"] = str(v)
+            await ctx.log_params(params)
+
+            # Log metrics
+            for key, value in metrics.items():
+                await ctx.log_metric(key, value)
+
+            # Log training time as metric
+            await ctx.log_metric("training_time_seconds", training_time)
+
+            return ctx.run_id
+
+    # ------------------------------------------------------------------
+    # calibrate
+    # ------------------------------------------------------------------
+
+    async def calibrate(
+        self,
+        model: Any,
+        X_val: pl.DataFrame,
+        y_val: pl.Series,
+        *,
+        method: str = "sigmoid",
+    ) -> Any:
+        """Calibrate a classifier's probability estimates.
+
+        Wraps the model with ``CalibratedClassifierCV`` from sklearn,
+        fitting on the provided validation data.  The returned model is
+        a drop-in replacement: it still exposes ``predict()`` and
+        ``predict_proba()`` and is compatible with ModelRegistry and
+        InferenceServer.
+
+        Parameters
+        ----------
+        model:
+            A fitted sklearn-compatible classifier.
+        X_val:
+            Validation features as a polars DataFrame.
+        y_val:
+            Validation labels as a polars Series.
+        method:
+            ``"sigmoid"`` for Platt scaling or ``"isotonic"`` for
+            isotonic regression.
+
+        Returns
+        -------
+        CalibratedClassifierCV
+            The calibrated model wrapping *model*.
+
+        Raises
+        ------
+        ValueError
+            If *method* is not ``"sigmoid"`` or ``"isotonic"``.
+        """
+        _valid_methods = ("sigmoid", "isotonic")
+        if method not in _valid_methods:
+            raise ValueError(f"method must be one of {_valid_methods}, got {method!r}")
+
+        from sklearn.calibration import CalibratedClassifierCV
+        from sklearn.frozen import FrozenEstimator
+
+        X_np, y_np, _ = to_sklearn_input(
+            X_val.with_columns(y_val.alias("__calibrate_target__")),
+            feature_columns=X_val.columns,
+            target_column="__calibrate_target__",
+        )
+
+        # FrozenEstimator prevents re-fitting during cross-validation,
+        # so all validation data is used purely for calibration.
+        frozen = FrozenEstimator(model)
+        calibrated = CalibratedClassifierCV(frozen, method=method, cv=5)
+        calibrated.fit(X_np, y_np)
+        return calibrated
 
     # ------------------------------------------------------------------
     # evaluate (standalone)
@@ -334,9 +471,13 @@ class TrainingPipeline:
         model_spec: ModelSpec,
         eval_spec: EvalSpec,
         data: pl.DataFrame,
+        *,
+        tracker: Any | None = None,
     ) -> TrainingResult:
         """Retrain using new data, register as next version of existing model."""
-        return await self.train(data, schema, model_spec, eval_spec, model_name)
+        return await self.train(
+            data, schema, model_spec, eval_spec, model_name, tracker=tracker
+        )
 
     # ------------------------------------------------------------------
     # Private: training
@@ -502,7 +643,7 @@ class TrainingPipeline:
     # ------------------------------------------------------------------
 
     def _split(
-        self, data: pl.DataFrame, eval_spec: EvalSpec
+        self, data: pl.DataFrame, eval_spec: EvalSpec, target_col: str
     ) -> tuple[pl.DataFrame, pl.DataFrame]:
         """Split data according to eval_spec strategy."""
         if eval_spec.split_strategy == "holdout":
@@ -510,7 +651,9 @@ class TrainingPipeline:
         elif eval_spec.split_strategy == "kfold":
             return self._kfold_first_fold(data, eval_spec.n_splits)
         elif eval_spec.split_strategy == "stratified_kfold":
-            return self._stratified_kfold_first_fold(data, eval_spec.n_splits)
+            return self._stratified_kfold_first_fold(
+                data, eval_spec.n_splits, target_col
+            )
         elif eval_spec.split_strategy == "walk_forward":
             return self._walk_forward_split(data, eval_spec.test_size)
         else:
@@ -532,16 +675,22 @@ class TrainingPipeline:
     def _kfold_first_fold(
         self, data: pl.DataFrame, n_splits: int
     ) -> tuple[pl.DataFrame, pl.DataFrame]:
-        fold_size = data.height // n_splits
-        test_data = data[:fold_size]
-        train_data = data[fold_size:]
-        return train_data, test_data
+        from sklearn.model_selection import KFold
+
+        kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+        indices = np.arange(data.height)
+        train_idx, test_idx = next(kf.split(indices))
+        return data[train_idx.tolist()], data[test_idx.tolist()]
 
     def _stratified_kfold_first_fold(
-        self, data: pl.DataFrame, n_splits: int
+        self, data: pl.DataFrame, n_splits: int, target_col: str
     ) -> tuple[pl.DataFrame, pl.DataFrame]:
-        # Fallback to regular kfold for simplicity in v1
-        return self._kfold_first_fold(data, n_splits)
+        from sklearn.model_selection import StratifiedKFold
+
+        y = data[target_col].to_numpy()
+        skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+        train_idx, test_idx = next(skf.split(np.arange(data.height), y))
+        return data[train_idx.tolist()], data[test_idx.tolist()]
 
     def _walk_forward_split(
         self, data: pl.DataFrame, test_size: float

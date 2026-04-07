@@ -1,5 +1,44 @@
 # kailash-ml Changelog
 
+## [0.7.0] - 2026-04-07
+
+### Added
+
+- **ModelExplainer engine** — SHAP-based model explainability with global, local, and dependence explanations; plotly visualizations; optional `[explain]` extra (`shap>=0.44`)
+- **Model calibration** — `TrainingPipeline.calibrate()` wraps classifiers in `CalibratedClassifierCV` (Platt scaling, isotonic regression)
+- **Auto-logging** — `TrainingPipeline.train(tracker=...)`, `HyperparameterSearch.search(tracker=...)`, and `AutoMLEngine.run(tracker=...)` automatically log params, metrics, and artifacts to ExperimentTracker
+- **Nested experiment runs** — `ExperimentTracker.start_run(parent_run_id=...)` for hierarchical run organization; HPO trials log as children of the search run
+- **Inference signature validation** — `InferenceServer.predict()` validates required features against model signature instead of silently defaulting missing features to 0.0
+- **Preprocessing: 4 normalization methods** — `normalize_method` parameter: zscore, minmax, robust, maxabs
+- **Preprocessing: KNN and iterative imputation** — `imputation_strategy="knn"` and `"iterative"` via sklearn imputers
+- **Preprocessing: multicollinearity removal** — `remove_multicollinearity=True` drops highly correlated features using Pearson correlation
+- **Preprocessing: class imbalance handling** — `fix_imbalance=True` with SMOTE, ADASYN (optional `[imbalance]` extra), or `class_weight` method
+- **New optional extras** — `[imbalance]` (imbalanced-learn>=0.12), `[explain]` (shap>=0.44)
+
+### Fixed
+
+- **Stratified k-fold** — `split_strategy="stratified_kfold"` now uses `sklearn.model_selection.StratifiedKFold` instead of silently falling back to regular k-fold
+- **Successive halving** — `strategy="successive_halving"` now uses Optuna's `SuccessiveHalvingPruner` with progressive resource allocation instead of silently falling back to random search
+- **K-fold shuffling** — `_kfold_first_fold` now shuffles data via `sklearn.model_selection.KFold` instead of naively slicing
+- Silent `except: pass` on `predict_proba` replaced with `logger.debug`
+- Schema migration `except Exception: pass` narrowed to check for "duplicate column"
+- `BaseException` catch in run context manager changed to `Exception`
+- Path traversal guard added to `delete_run` artifact cleanup
+- String target + multicollinearity no longer crashes (falls back to index-based dropping)
+- AutoML deep search now passes `parent_run_id` to nested HPO search
+
+### Changed
+
+- **Breaking**: `scikit-learn>=1.5` (was >=1.4) — required for `FrozenEstimator` in calibration
+- `asyncio.get_event_loop()` replaced with `asyncio.get_running_loop()` (Python 3.12+ deprecation fix)
+
+### Security
+
+- R1 red team converged: 0 CRITICAL, 0 HIGH findings after fixes
+- Inference server no longer silently produces wrong predictions for missing features
+- Experiment tracker artifact deletion has path containment validation
+- 750 tests passing (677 unit + 60 integration + 13 examples), 0 regressions
+
 ## [0.6.0] - 2026-04-07
 
 ### Added

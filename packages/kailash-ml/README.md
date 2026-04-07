@@ -4,7 +4,7 @@ Machine learning lifecycle for the Kailash ecosystem. Train models, store featur
 
 Part of the [Kailash Python SDK](https://github.com/terrene-foundation/kailash-py) by the Terrene Foundation.
 
-**Version**: 0.2.0 | **License**: Apache-2.0 | **Python**: 3.10+
+**Version**: 0.7.0 | **License**: Apache-2.0 | **Python**: 3.11+
 
 ---
 
@@ -36,6 +36,9 @@ pip install kailash-ml[agents]    # + Kaizen (LLM-augmented ML)
 pip install kailash-ml[xgb]       # + XGBoost
 pip install kailash-ml[catboost]  # + CatBoost
 pip install kailash-ml[stats]     # + statsmodels
+pip install kailash-ml[hpo]       # + Optuna (Bayesian HPO, successive halving)
+pip install kailash-ml[imbalance] # + imbalanced-learn (SMOTE, ADASYN)
+pip install kailash-ml[explain]   # + SHAP (model explainability)
 pip install kailash-ml[all]       # Everything above
 pip install kailash-ml[all-gpu]   # Everything + GPU runtime
 ```
@@ -140,6 +143,7 @@ async def main():
     |   |  DataExplorer            |                          |
     |   |  FeatureEngineer         |                          |
     |   |  ModelVisualizer         |                          |
+    |   |  ModelExplainer          |                          |
     |   +------------|-------------+                          |
     |                |                                        |
     |   bridge/      |     compat/       dashboard/           |
@@ -165,7 +169,7 @@ All engines persist through `ConnectionManager` from the core Kailash SDK. The `
 
 ## Engines Reference
 
-kailash-ml provides 13 engines plus a bridge and compatibility layer, organized by purpose and stability.
+kailash-ml provides 14 engines plus a bridge and compatibility layer, organized by purpose and stability.
 
 ### Core Engines (P0 -- stable API, full test coverage)
 
@@ -195,9 +199,9 @@ Key operations: `register_model()`, `promote()`, `get_model()`, `list_models()`,
 from kailash_ml.engines.training_pipeline import TrainingPipeline, ModelSpec, EvalSpec
 ```
 
-Orchestrates the full training lifecycle: load features, train a model, evaluate metrics, and register the result. Supports scikit-learn and LightGBM model classes out of the box. Model class imports are restricted to a security allowlist (`sklearn.*`, `lightgbm.*`, `xgboost.*`, `catboost.*`, `torch.*`, `lightning.*`, `kailash_ml.*`) to prevent arbitrary code execution.
+Orchestrates the full training lifecycle: load features, train a model, evaluate metrics, and register the result. Supports scikit-learn and LightGBM model classes out of the box. Model class imports are restricted to a security allowlist (`sklearn.*`, `lightgbm.*`, `xgboost.*`, `catboost.*`, `torch.*`, `lightning.*`, `kailash_ml.*`) to prevent arbitrary code execution. Includes model calibration (Platt scaling, isotonic regression) and optional auto-logging to ExperimentTracker.
 
-Key operations: `train()`.
+Key operations: `train()`, `calibrate()`, `retrain()`.
 
 #### InferenceServer
 
@@ -205,7 +209,7 @@ Key operations: `train()`.
 from kailash_ml.engines.inference_server import InferenceServer
 ```
 
-Loads models from ModelRegistry, caches them in an LRU memory cache, and serves predictions. Supports single-record and batch prediction. Nexus integration is lazy-loaded -- if kailash-nexus is installed, predictions can be auto-exposed as REST endpoints.
+Loads models from ModelRegistry, caches them in an LRU memory cache, and serves predictions. Supports single-record and batch prediction with model signature validation -- missing or mistyped features raise errors instead of silently defaulting. Nexus integration is lazy-loaded -- if kailash-nexus is installed, predictions can be auto-exposed as REST endpoints.
 
 Key operations: `predict()`, `predict_batch()`, `load_model()`, `evict()`.
 
@@ -225,9 +229,9 @@ Key operations: `set_reference()`, `check_drift()`, `get_drift_history()`, `chec
 from kailash_ml.engines.experiment_tracker import ExperimentTracker
 ```
 
-Provides MLflow-compatible experiment tracking: experiments, runs, parameters, step-based metrics (for training curves), and artifact metadata. Artifacts are stored on the local filesystem; the database holds metadata only -- no binary blobs in SQL.
+Provides MLflow-compatible experiment tracking: experiments, runs, parameters, step-based metrics (for training curves), and artifact metadata. Supports nested runs for hierarchical tracking (parent sweep with child trials). Artifacts are stored on the local filesystem; the database holds metadata only -- no binary blobs in SQL.
 
-Key operations: `create_experiment()`, `run()` (context manager), `log_param()`, `log_metric()`, `log_artifact()`, `get_run()`, `list_runs()`. Standalone usage: `await ExperimentTracker.create("sqlite:///ml.db")`.
+Key operations: `create_experiment()`, `run()` (context manager), `start_run(parent_run_id=...)`, `log_param()`, `log_metric()`, `log_artifact()`, `get_run()`, `list_runs()`, `list_child_runs()`. Standalone usage: `await ExperimentTracker.create("sqlite:///ml.db")`.
 
 ### Search and Optimization Engines (P1 -- tested, API may evolve)
 
@@ -237,7 +241,7 @@ Key operations: `create_experiment()`, `run()` (context manager), `log_param()`,
 from kailash_ml.engines.hyperparameter_search import HyperparameterSearch, SearchSpace, SearchConfig
 ```
 
-Supports four search strategies for hyperparameter optimization: **grid** (exhaustive), **random** (sampling), **bayesian** (surrogate-model guided), and **successive halving** (early stopping of poor candidates). Integrates with TrainingPipeline for execution and ModelRegistry for result tracking.
+Supports four search strategies for hyperparameter optimization: **grid** (exhaustive), **random** (sampling), **bayesian** (surrogate-model guided via Optuna), and **successive halving** (progressive resource allocation with Optuna pruning). Auto-logs trials to ExperimentTracker as nested child runs when a tracker is provided.
 
 Key operations: `search()`.
 
@@ -267,9 +271,9 @@ Key operations: `blend()`, `stack()`, `bag()`, `boost()`.
 from kailash_ml.engines.preprocessing import PreprocessingPipeline
 ```
 
-Automatic data preprocessing for ML workflows. Auto-detects task type, encodes categoricals, scales numerics, imputes missing values, and splits train/test. Returns a `SetupResult` with transformed data ready for training.
+Automatic data preprocessing for ML workflows. Auto-detects task type, encodes categoricals, scales numerics (zscore, minmax, robust, maxabs), imputes missing values (mean, median, mode, KNN, iterative), removes multicollinear features, handles class imbalance (SMOTE, ADASYN, class_weight), and splits train/test with stratification support. Returns a `SetupResult` with transformed data ready for training.
 
-Key operations: `setup()`.
+Key operations: `setup()`, `transform()`, `inverse_transform()`.
 
 ### Experimental Engines (P2 -- functional, API may change)
 
@@ -302,6 +306,16 @@ from kailash_ml.engines.model_visualizer import ModelVisualizer
 Produces interactive plotly visualizations for ML model analysis: confusion matrix, ROC curve, precision-recall curve, feature importance, learning curves, residual plots, calibration curves, metric comparison, and training history. All methods return plotly `Figure` objects.
 
 Key operations: `confusion_matrix()`, `roc_curve()`, `precision_recall()`, `feature_importance()`, `learning_curve()`.
+
+#### ModelExplainer
+
+```python
+from kailash_ml.engines.model_explainer import ModelExplainer
+```
+
+SHAP-based model explainability for global and local feature importance. Requires `pip install kailash-ml[explain]`. Provides per-prediction explanations (why did the model make this specific prediction?) alongside global feature importance (which features matter most overall). All visualizations use plotly for consistency with ModelVisualizer.
+
+Key operations: `explain_global()`, `explain_local()`, `explain_dependence()`, `to_plotly()`.
 
 ### Bridge and Compatibility
 
