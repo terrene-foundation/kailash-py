@@ -1,3 +1,10 @@
+---
+paths:
+  - "**/*.py"
+  - "**/*.ts"
+  - "**/*.js"
+---
+
 # Kailash Pattern Rules
 
 ## Runtime Execution

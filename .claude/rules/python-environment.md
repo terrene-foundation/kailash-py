@@ -1,3 +1,11 @@
+---
+paths:
+  - "**/*.py"
+  - "pyproject.toml"
+  - "conftest.py"
+  - "tests/**"
+---
+
 # Python Environment Rules
 
 Every Python project MUST use `.venv` at the project root, managed by `uv`. Global Python is BLOCKED.
