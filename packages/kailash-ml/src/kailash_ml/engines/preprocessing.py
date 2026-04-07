@@ -138,6 +138,10 @@ class PreprocessingPipeline:
         # Multicollinearity removal
         self._remove_multicollinearity: bool = False
         self._multicollinearity_threshold: float = 0.9
+        # PCA dimensionality reduction
+        self._pca: bool = False
+        # Target transformation
+        self._transform_target: bool = False
         # Class imbalance handling
         self._fix_imbalance: bool = False
         self._imbalance_method: str = "smote"
@@ -161,6 +165,9 @@ class PreprocessingPipeline:
         exclude_columns: list[str] | None = None,
         remove_multicollinearity: bool = False,
         multicollinearity_threshold: float = 0.9,
+        pca: bool = False,
+        pca_components: float | int = 0.99,
+        transform_target: bool = False,
         fix_imbalance: bool = False,
         imbalance_method: str = "smote",
     ) -> SetupResult:
@@ -176,9 +183,11 @@ class PreprocessingPipeline:
         2. Categorical encoding (one-hot, ordinal, or target encoding)
         3. Multicollinearity removal (optional, correlation-based)
         4. Numeric scaling (StandardScaler if ``normalize=True``)
-        5. Optional outlier removal (IQR-based)
-        6. Train/test split
-        7. Class imbalance correction (optional, training data only)
+        4b. PCA dimensionality reduction (optional)
+        5. Target transformation (optional, regression only)
+        6. Optional outlier removal (IQR-based)
+        7. Train/test split
+        8. Class imbalance correction (optional, training data only)
 
         Parameters
         ----------
@@ -227,6 +236,18 @@ class PreprocessingPipeline:
             Absolute Pearson correlation threshold for multicollinearity
             detection.  Column pairs exceeding this value trigger removal.
             Must be between 0 and 1.
+        pca:
+            Whether to apply PCA dimensionality reduction after scaling.
+            Replaces original numeric feature columns with principal
+            components named ``pc_0``, ``pc_1``, etc.
+        pca_components:
+            Number of components to keep.  If float in (0, 1), interpreted
+            as minimum explained variance ratio.  If int >= 1, exact number
+            of components.
+        transform_target:
+            Whether to apply Yeo-Johnson power transformation to the target
+            column.  Only applies for regression tasks; silently skipped for
+            classification.  Use ``inverse_transform()`` to reverse.
         fix_imbalance:
             Whether to apply class imbalance correction on the training
             split.  Only applies for classification tasks.
@@ -297,6 +318,8 @@ class PreprocessingPipeline:
         self._impute_n_neighbors = impute_n_neighbors
         self._remove_multicollinearity = remove_multicollinearity
         self._multicollinearity_threshold = multicollinearity_threshold
+        self._pca = pca
+        self._transform_target = transform_target
         self._fix_imbalance = fix_imbalance
         self._imbalance_method = imbalance_method
         self._use_balanced_class_weight = False
@@ -316,6 +339,9 @@ class PreprocessingPipeline:
             "categorical_columns": list(categorical_cols),
             "remove_multicollinearity": remove_multicollinearity,
             "multicollinearity_threshold": multicollinearity_threshold,
+            "pca": pca,
+            "pca_components": pca_components,
+            "transform_target": transform_target,
             "fix_imbalance": fix_imbalance,
             "imbalance_method": imbalance_method,
         }
@@ -349,16 +375,24 @@ class PreprocessingPipeline:
         if normalize and numeric_cols:
             result_df = self._scale_numerics(result_df, numeric_cols)
 
-        # 5. Outlier removal (before split, so we don't lose test data shape)
-        if remove_outliers and numeric_cols:
+        # 4b. PCA dimensionality reduction
+        if pca:
+            result_df = self._apply_pca(result_df, target, pca_components)
+
+        # 5. Target transformation (regression only)
+        if transform_target and task_type == "regression":
+            result_df = self._apply_target_transform(result_df, target)
+
+        # 6. Outlier removal (before split, so we don't lose test data shape)
+        if remove_outliers and self._numeric_columns:
             result_df = self._remove_outliers(
-                result_df, numeric_cols, outlier_threshold
+                result_df, self._numeric_columns, outlier_threshold
             )
 
-        # 6. Train/test split
+        # 7. Train/test split
         train_df, test_df = self._split(result_df, train_size, seed)
 
-        # 7. Class imbalance correction (on training data only)
+        # 8. Class imbalance correction (on training data only)
         if fix_imbalance and task_type == "classification":
             train_df = self._apply_imbalance_correction(
                 train_df, target, imbalance_method, seed
@@ -380,6 +414,8 @@ class PreprocessingPipeline:
             f"Imputation: {imputation_strategy}",
             f"Outlier removal: {'yes (threshold={:.2f})'.format(outlier_threshold) if remove_outliers else 'no'}",
             f"Multicollinearity removal: {'yes (dropped {})'.format(multicollinear_dropped) if remove_multicollinearity and multicollinear_dropped else 'no'}",
+            f"PCA: {'yes ({} components)'.format(len(self._numeric_columns)) if pca else 'no'}",
+            f"Target transform: {'yes (Yeo-Johnson)' if transform_target and task_type == 'regression' else 'no'}",
             f"Imbalance correction: {imbalance_method if fix_imbalance and task_type == 'classification' else 'no'}",
             f"Train size: {train_df.height} rows",
             f"Test size: {test_df.height} rows",
@@ -412,7 +448,8 @@ class PreprocessingPipeline:
         """Apply fitted transforms to new data (inference time).
 
         Applies the same imputation, encoding, multicollinearity removal,
-        and scaling that were fitted during ``setup()``.
+        scaling, PCA, and target transformation that were fitted during
+        ``setup()``.
 
         Raises ``RuntimeError`` if ``setup()`` has not been called.
         """
@@ -438,14 +475,29 @@ class PreprocessingPipeline:
         if self._normalize and self._numeric_columns:
             result_df = self._apply_fitted_scaling(result_df)
 
+        # 4b. PCA
+        if self._pca and "pca" in self._transformers:
+            result_df = self._apply_fitted_pca(result_df)
+
+        # 5. Target transformation
+        if "target_transformer" in self._transformers:
+            target = self._target_column
+            if target in result_df.columns:
+                pt = self._transformers["target_transformer"]
+                arr = result_df[target].to_numpy().astype(np.float64).reshape(-1, 1)
+                transformed = pt.transform(arr)
+                result_df = result_df.with_columns(
+                    pl.Series(target, transformed.ravel())
+                )
+
         return result_df
 
     def inverse_transform(self, data: pl.DataFrame) -> pl.DataFrame:
         """Reverse transforms (for interpretability).
 
-        Currently supports inverse scaling. Categorical inverse transform
-        is best-effort (ordinal encoding can be reversed; one-hot cannot
-        without the original column names).
+        Supports inverse scaling and inverse target transformation.
+        Categorical inverse transform is best-effort (ordinal encoding
+        can be reversed; one-hot cannot without the original column names).
 
         Raises ``RuntimeError`` if ``setup()`` has not been called.
         """
@@ -453,6 +505,17 @@ class PreprocessingPipeline:
             raise RuntimeError("Pipeline has not been fitted. Call setup() first.")
 
         result_df = data
+
+        # Inverse target transformation
+        if "target_transformer" in self._transformers:
+            target = self._target_column
+            if target in result_df.columns:
+                pt = self._transformers["target_transformer"]
+                arr = result_df[target].to_numpy().astype(np.float64).reshape(-1, 1)
+                inversed_target = pt.inverse_transform(arr)
+                result_df = result_df.with_columns(
+                    pl.Series(target, inversed_target.ravel())
+                )
 
         # Inverse scale
         if self._normalize and "scaler" in self._transformers:
@@ -1042,6 +1105,71 @@ class PreprocessingPipeline:
         for i, col in enumerate(cols_present):
             result = result.with_columns(pl.Series(col, scaled[:, i]))
         return result
+
+    # ------------------------------------------------------------------
+    # Private: PCA dimensionality reduction
+    # ------------------------------------------------------------------
+
+    def _apply_pca(
+        self,
+        data: pl.DataFrame,
+        target: str,
+        pca_components: float | int,
+    ) -> pl.DataFrame:
+        """Fit PCA on numeric feature columns and replace them with PCs."""
+        from sklearn.decomposition import PCA
+
+        cols = [c for c in self._numeric_columns if c in data.columns and c != target]
+        if not cols:
+            return data
+
+        arr = data.select(cols).to_numpy().astype(np.float64)
+        pca_obj = PCA(n_components=pca_components)
+        transformed = pca_obj.fit_transform(arr)
+
+        self._transformers["pca"] = pca_obj
+        self._transformers["pca_columns"] = cols
+
+        # Build new PC columns
+        pc_names = [f"pc_{i}" for i in range(transformed.shape[1])]
+        result = data.drop(cols)
+        for i, name in enumerate(pc_names):
+            result = result.with_columns(pl.Series(name, transformed[:, i]))
+
+        # Update numeric columns to the new PC names
+        self._numeric_columns = pc_names
+        return result
+
+    def _apply_fitted_pca(self, data: pl.DataFrame) -> pl.DataFrame:
+        """Apply previously fitted PCA to new data."""
+        pca_obj = self._transformers["pca"]
+        cols = self._transformers["pca_columns"]
+        cols_present = [c for c in cols if c in data.columns]
+        if not cols_present or len(cols_present) != len(cols):
+            return data
+
+        arr = data.select(cols).to_numpy().astype(np.float64)
+        transformed = pca_obj.transform(arr)
+
+        pc_names = [f"pc_{i}" for i in range(transformed.shape[1])]
+        result = data.drop(cols)
+        for i, name in enumerate(pc_names):
+            result = result.with_columns(pl.Series(name, transformed[:, i]))
+        return result
+
+    # ------------------------------------------------------------------
+    # Private: target transformation
+    # ------------------------------------------------------------------
+
+    def _apply_target_transform(self, data: pl.DataFrame, target: str) -> pl.DataFrame:
+        """Apply Yeo-Johnson power transform to the target column."""
+        from sklearn.preprocessing import PowerTransformer
+
+        arr = data[target].to_numpy().astype(np.float64).reshape(-1, 1)
+        pt = PowerTransformer(method="yeo-johnson", standardize=False)
+        transformed = pt.fit_transform(arr)
+        self._transformers["target_transformer"] = pt
+        return data.with_columns(pl.Series(target, transformed.ravel()))
 
     # ------------------------------------------------------------------
     # Private: outlier removal

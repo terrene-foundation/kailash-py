@@ -1372,3 +1372,174 @@ class TestClassImbalance:
         )
         expected_test = imbalanced_df.height - int(imbalanced_df.height * 0.8)
         assert result.test_data.height == expected_test
+
+
+# ---------------------------------------------------------------------------
+# PCA dimensionality reduction
+# ---------------------------------------------------------------------------
+
+
+class TestPCA:
+    """Tests for PCA dimensionality reduction."""
+
+    @pytest.fixture()
+    def wide_df(self) -> pl.DataFrame:
+        """DataFrame with 100 numeric features (many redundant)."""
+        rng = np.random.RandomState(42)
+        n = 200
+        # Generate 5 independent sources, then expand to 100 features
+        sources = rng.randn(n, 5)
+        # Create 100 features as random linear combinations of 5 sources
+        weights = rng.randn(5, 100)
+        features = sources @ weights + rng.randn(n, 100) * 0.1
+        data: dict[str, list[float]] = {}
+        for i in range(100):
+            data[f"feat_{i}"] = features[:, i].tolist()
+        data["target"] = rng.randn(n).tolist()
+        return pl.DataFrame(data)
+
+    def test_pca_reduces_dimensions(self, wide_df: pl.DataFrame) -> None:
+        """PCA with 100 input features produces fewer components."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            wide_df, "target", pca=True, pca_components=0.99, normalize=True
+        )
+        train_cols = result.train_data.columns
+        pc_cols = [c for c in train_cols if c.startswith("pc_")]
+        feat_cols = [c for c in train_cols if c.startswith("feat_")]
+        assert len(pc_cols) > 0
+        assert len(pc_cols) < 100
+        assert len(feat_cols) == 0
+
+    def test_pca_float_preserves_variance(self, wide_df: pl.DataFrame) -> None:
+        """PCA with float components preserves explained variance."""
+        pipeline = PreprocessingPipeline()
+        pipeline.setup(wide_df, "target", pca=True, pca_components=0.95, normalize=True)
+        pca_obj = pipeline._transformers["pca"]
+        total_variance = sum(pca_obj.explained_variance_ratio_)
+        assert total_variance >= 0.95
+
+    def test_pca_int_gives_exact_count(self, wide_df: pl.DataFrame) -> None:
+        """PCA with int components gives exact number of components."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            wide_df, "target", pca=True, pca_components=3, normalize=True
+        )
+        train_cols = result.train_data.columns
+        pc_cols = [c for c in train_cols if c.startswith("pc_")]
+        assert len(pc_cols) == 3
+
+    def test_pca_disabled_by_default(self, wide_df: pl.DataFrame) -> None:
+        """PCA is off by default -- columns are unchanged."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(wide_df, "target", normalize=False)
+        train_cols = result.train_data.columns
+        feat_cols = [c for c in train_cols if c.startswith("feat_")]
+        pc_cols = [c for c in train_cols if c.startswith("pc_")]
+        assert len(feat_cols) == 100
+        assert len(pc_cols) == 0
+
+    def test_pca_transform_same_structure(self, wide_df: pl.DataFrame) -> None:
+        """transform() on new data produces same PC column structure."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            wide_df, "target", pca=True, pca_components=5, normalize=True
+        )
+        new_data = wide_df.head(10)
+        transformed = pipeline.transform(new_data)
+        pc_cols = [c for c in transformed.columns if c.startswith("pc_")]
+        assert len(pc_cols) == 5
+        feat_cols = [c for c in transformed.columns if c.startswith("feat_")]
+        assert len(feat_cols) == 0
+
+
+# ---------------------------------------------------------------------------
+# Target transformation
+# ---------------------------------------------------------------------------
+
+
+class TestTargetTransformation:
+    """Tests for target column power transformation."""
+
+    @pytest.fixture()
+    def skewed_regression_df(self) -> pl.DataFrame:
+        """DataFrame with a heavily skewed regression target."""
+        rng = np.random.RandomState(42)
+        n = 200
+        # Exponential distribution produces positive skew
+        target = rng.exponential(scale=10.0, size=n)
+        return pl.DataFrame(
+            {
+                "feat_a": rng.randn(n).tolist(),
+                "feat_b": rng.randn(n).tolist(),
+                "target": target.tolist(),
+            }
+        )
+
+    def test_target_transform_applied_for_regression(
+        self, skewed_regression_df: pl.DataFrame
+    ) -> None:
+        """Target values change after power transformation."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            skewed_regression_df,
+            "target",
+            normalize=False,
+            transform_target=True,
+        )
+        assert result.task_type == "regression"
+        assert "target_transformer" in result.transformers
+        # Transformed target should differ from original
+        combined = pl.concat([result.train_data, result.test_data])
+        original_mean = skewed_regression_df["target"].mean()
+        transformed_mean = combined["target"].mean()
+        assert original_mean is not None and transformed_mean is not None
+        assert abs(original_mean - transformed_mean) > 0.01
+
+    def test_target_transform_skipped_for_classification(self) -> None:
+        """Target transform is silently skipped for classification."""
+        rng = np.random.RandomState(42)
+        n = 100
+        df = pl.DataFrame(
+            {
+                "feat": rng.randn(n).tolist(),
+                "target": ([0] * 50 + [1] * 50),
+            }
+        )
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(df, "target", normalize=False, transform_target=True)
+        assert result.task_type == "classification"
+        assert "target_transformer" not in result.transformers
+
+    def test_inverse_transform_reverses_target(
+        self, skewed_regression_df: pl.DataFrame
+    ) -> None:
+        """inverse_transform recovers the original target values."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            skewed_regression_df,
+            "target",
+            normalize=False,
+            transform_target=True,
+        )
+        # Take transformed training data and inverse transform
+        sample = result.train_data.head(10)
+        inversed = pipeline.inverse_transform(sample)
+        # Compare against original data (find matching rows by features)
+        # The inversed target should be close to the original scale
+        inversed_vals = inversed["target"].to_numpy()
+        # Values should be positive (original was exponential)
+        assert all(v > 0 for v in inversed_vals)
+        # Values should be in the original scale range, not the
+        # compressed transformed range
+        orig_max = skewed_regression_df["target"].max()
+        assert orig_max is not None
+        assert inversed_vals.max() > 1.0  # Original scale, not near-zero
+
+    def test_target_transform_disabled_by_default(
+        self, skewed_regression_df: pl.DataFrame
+    ) -> None:
+        """Target transformation is off by default."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(skewed_regression_df, "target", normalize=False)
+        assert "target_transformer" not in result.transformers
