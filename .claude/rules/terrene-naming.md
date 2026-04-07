@@ -1,11 +1,3 @@
----
-paths:
-  - "**/*.md"
-  - "**/README*"
-  - "**/LICENSE*"
-  - "**/CLAUDE.md"
----
-
 # Terrene Foundation Naming
 
 ## Rules
@@ -18,6 +10,8 @@ The Foundation is **Terrene Foundation** (Singapore CLG).
 - Developer portal: `terrene.dev`
 - GitHub org: `terrene-foundation`
 
+**Why:** Incorrect naming creates legal ambiguity and undermines the Foundation's registered identity in official documents and publications.
+
 ### Foundation Independence
 
 The Foundation is a fully independent entity. There is NO structural relationship between the Foundation and any commercial entity.
@@ -29,6 +23,8 @@ The Foundation is a fully independent entity. There is NO structural relationshi
 5. **No contributor has exclusive rights, special access, or structural advantage**
 6. **Never describe any commercial entity as having a "partnership" or "relationship" with the Foundation** — contributors operate under a uniform contributor framework
 
+**Why:** Misrepresenting the Foundation's independence erodes community trust and may violate the constitution's anti-capture provisions.
+
 See `rules/independence.md` for the full no-commercial-coupling policy.
 
 ### License Accuracy
@@ -37,6 +33,8 @@ See `rules/independence.md` for the full no-commercial-coupling policy.
 - Open source code (Kailash Python, EATP SDK, CO Toolkit, CARE Platform, Praxis): **Apache 2.0**
 - BSL 1.1 is **NOT** open source — use "source-available" or "open-core"
 
+**Why:** Wrong license labels create legal liability for downstream users and misrepresent the Foundation's licensing intent.
+
 ### Canonical Terminology
 
 - CARE planes: **Trust Plane** + **Execution Plane** (NOT operational/governance plane)
@@ -44,3 +42,5 @@ See `rules/independence.md` for the full no-commercial-coupling policy.
 - CO = Cognitive Orchestration (domain-agnostic base methodology)
 - COC = Cognitive Orchestration for Codegen (CO applied to software development)
 - CO sits in the trinity: CARE (philosophy) + EATP (protocol) + CO (methodology)
+
+**Why:** Inconsistent terminology across repos fragments institutional knowledge and makes cross-document search unreliable.
