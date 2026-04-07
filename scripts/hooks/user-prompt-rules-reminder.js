@@ -24,6 +24,9 @@ const {
   buildWorkspaceSummary,
   findAllSessionNotes,
 } = require("./lib/workspace-utils");
+const {
+  logObservation: logLearningObservation,
+} = require("./lib/learning-utils");
 
 const TIMEOUT_MS = 3000;
 const timeout = setTimeout(() => {
@@ -164,6 +167,11 @@ function buildReminder(data) {
     );
   }
 
+  // --- User correction detection for learning system ---
+  try {
+    logUserCorrection(data.tool_input?.user_message, cwd, data.session_id);
+  } catch {}
+
   return {
     continue: true,
     hookSpecificOutput: {
@@ -172,4 +180,40 @@ function buildReminder(data) {
       message: lines.join("\n"),
     },
   };
+}
+
+/**
+ * Detect user corrections and log as learning observations.
+ * A correction is when the user pushes back on an approach or redirects.
+ * Pure string matching — no LLM. /codify does semantic analysis later.
+ */
+function logUserCorrection(rawMessage, cwd, sessionId) {
+  if (!rawMessage || rawMessage.length < 10) return;
+
+  // Patterns that indicate the user is correcting the agent's approach.
+  // We check sentence-start positions to avoid false positives like "no problem".
+  const correctionPatterns = [
+    /^no[,.]?\s/im, // "No, use X instead"
+    /^don'?t\s/im, // "Don't do that"
+    /^stop\s/im, // "Stop doing X"
+    /^wrong/im, // "Wrong approach"
+    /^that'?s\s+(not|wrong|incorrect)/im, // "That's not right"
+    /\binstead\s+use\b/i, // "instead use X"
+    /\bnot\s+like\s+that\b/i, // "not like that"
+    /\bwhy\s+did\s+you\b/i, // "why did you do X"
+    /\byou\s+should(n'?t|\s+not)\b/i, // "you shouldn't" / "you should not"
+    /\bthat'?s\s+completely\b/i, // "that's completely wrong"
+    /\bi\s+don'?t\s+understand\b/i, // "I don't understand" (signals confusion with output)
+  ];
+
+  const matched = correctionPatterns.some((p) => p.test(rawMessage));
+  if (!matched) return;
+
+  // Log the correction — /codify will analyze semantically
+  logLearningObservation(
+    cwd,
+    "user_correction",
+    { message: rawMessage.substring(0, 500) },
+    { session_id: sessionId || "unknown" },
+  );
 }

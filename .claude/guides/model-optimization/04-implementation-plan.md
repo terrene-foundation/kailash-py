@@ -37,11 +37,10 @@ Valid values: `opus`, `sonnet`, `haiku`, or omit for inherit.
 
 | File                                        | Change                             |
 | ------------------------------------------- | ---------------------------------- |
-| `.claude/agents/sdk-navigator.md`           | `model: opus` → `model: sonnet`    |
-| `.claude/agents/deployment-specialist.md`   | `model: opus` → `model: sonnet`    |
-| `.claude/agents/documentation-validator.md` | `model: opus` → `model: sonnet`    |
+| `.claude/agents/release-specialist.md`   | `model: opus` → `model: sonnet`    |
+| `.claude/agents/reviewer.md` | `model: opus` → `model: sonnet`    |
 | `.claude/agents/build-fix.md`               | `model: opus` → `model: sonnet`    |
-| `.claude/agents/e2e-runner.md`              | `model: opus` → `model: sonnet`    |
+| `.claude/agents/testing-specialist.md`              | `model: opus` → `model: sonnet`    |
 | `.claude/agents/gh-manager.md`              | Add `model: sonnet` if not present |
 
 ### 3. Kailash Python USE (`<python-use-repo>`)
@@ -50,11 +49,10 @@ Valid values: `opus`, `sonnet`, `haiku`, or omit for inherit.
 
 | File                                        | Change                          |
 | ------------------------------------------- | ------------------------------- |
-| `.claude/agents/sdk-navigator.md`           | `model: opus` → `model: sonnet` |
-| `.claude/agents/deployment-specialist.md`   | `model: opus` → `model: sonnet` |
-| `.claude/agents/documentation-validator.md` | `model: opus` → `model: sonnet` |
+| `.claude/agents/release-specialist.md`   | `model: opus` → `model: sonnet` |
+| `.claude/agents/reviewer.md` | `model: opus` → `model: sonnet` |
 | `.claude/agents/build-fix.md`               | `model: opus` → `model: sonnet` |
-| `.claude/agents/e2e-runner.md`              | `model: opus` → `model: sonnet` |
+| `.claude/agents/testing-specialist.md`              | `model: opus` → `model: sonnet` |
 | `.claude/agents/todo-manager.md`            | `model: opus` → `model: sonnet` |
 
 ### 4. Kailash Rust BUILD/USE (`<rust-repo>`)
@@ -63,11 +61,10 @@ Valid values: `opus`, `sonnet`, `haiku`, or omit for inherit.
 
 | File                                        | Change                          |
 | ------------------------------------------- | ------------------------------- |
-| `.claude/agents/sdk-navigator.md`           | `model: opus` → `model: sonnet` |
-| `.claude/agents/deployment-specialist.md`   | `model: opus` → `model: sonnet` |
-| `.claude/agents/documentation-validator.md` | `model: opus` → `model: sonnet` |
+| `.claude/agents/release-specialist.md`   | `model: opus` → `model: sonnet` |
+| `.claude/agents/reviewer.md` | `model: opus` → `model: sonnet` |
 | `.claude/agents/build-fix.md`               | `model: opus` → `model: sonnet` |
-| `.claude/agents/e2e-runner.md`              | `model: opus` → `model: sonnet` |
+| `.claude/agents/testing-specialist.md`              | `model: opus` → `model: sonnet` |
 | `.claude/agents/todo-manager.md`            | `model: opus` → `model: sonnet` |
 
 ---
@@ -113,8 +110,8 @@ If any agent underperforms on Sonnet:
 | Agent                   | Currently | Watch For                                                    |
 | ----------------------- | --------- | ------------------------------------------------------------ |
 | build-fix               | → Sonnet  | Does it handle complex build errors? If not, revert to Opus  |
-| e2e-runner              | → Sonnet  | Does Playwright orchestration degrade? TerminalBench says no |
-| documentation-validator | → Sonnet  | Missing subtle doc issues? Unlikely given scope              |
+| testing-specialist              | → Sonnet  | Does Playwright orchestration degrade? TerminalBench says no |
+| reviewer | → Sonnet  | Missing subtle doc issues? Unlikely given scope              |
 
 ### Explore subagent optimization
 

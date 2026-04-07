@@ -16,7 +16,6 @@ const {
   resolveLearningDir,
   ensureLearningDir,
   logObservation: logLearningObservation,
-  countObservations,
 } = require("./lib/learning-utils");
 const { detectActiveWorkspace } = require("./lib/workspace-utils");
 
@@ -97,16 +96,7 @@ function savePreCompactState(data) {
       },
     );
 
-    // --- Auto-checkpoint learning state (Phase 3) ---
-    try {
-      if (countObservations(learningDir) > 0) {
-        const checkpointManager = require("../learning/checkpoint-manager");
-        checkpointManager.saveCheckpoint(
-          `pre-compact-${Date.now()}`,
-          learningDir,
-        );
-      }
-    } catch {}
+    // checkpoint-manager removed — learning digest replaces checkpoints
 
     // ── Workspace: remind to save session notes before compaction ──────
     try {

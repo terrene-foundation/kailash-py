@@ -36,12 +36,12 @@ Start with a clear description:
 
 ### Step 2: Analysis Phase
 
-Claude automatically engages `deep-analyst`:
+Claude automatically engages `analyst`:
 
 ```
 Claude: I'll analyze this feature first.
 
-[Delegating to deep-analyst...]
+[Delegating to analyst...]
 
 Analysis Summary:
 - Complexity: Moderate (15/30)
@@ -147,7 +147,7 @@ def test_user_registration(db):
 
 ```
 
-[Delegating to intermediate-reviewer...]
+[Delegating to reviewer...]
 
 Code Review Summary:
 ✅ DataFlow patterns correct
@@ -216,8 +216,6 @@ Found potential issue at line 45. Let me trace it...
 ### Step 2: Investigate with Agents
 
 ```
-
-[Delegating to sdk-navigator for similar issues...]
 
 Found in common-mistakes.md:
 "NoneType errors in workflows often occur when node outputs
@@ -354,7 +352,7 @@ Which type of test do you want to write?
 
 > Review my changes before I commit
 
-[Delegating to intermediate-reviewer...]
+[Delegating to reviewer...]
 
 Reviewing 5 changed files...
 
@@ -423,7 +421,7 @@ Ready to commit with noted warnings.
 
 > Set up local development environment
 
-[Delegating to deployment-specialist...]
+[Delegating to release-specialist...]
 
 Creating Docker Compose configuration...
 
@@ -463,7 +461,7 @@ docker compose up
 
 > Prepare for production deployment
 
-[Delegating to deployment-specialist...]
+[Delegating to release-specialist...]
 
 Production checklist:
 
@@ -569,32 +567,10 @@ Ready. What would you like to work on?
 [Writing session notes to workspaces/my-saas-app/.session-notes...]
 Saved: accomplishments, blockers, next steps.
 
-> /checkpoint
-
-[Saving learning state...]
-Checkpoint created: checkpoint_1706806800000
-
 > /exit
 
 [session-end hook: State persisted]
 Session ended.
-
-```
-
-### Weekly Learning
-
-```
-
-> /evolve
-
-Processing 150 observations from this week...
-
-Updated instincts:
-
-- dataflow_batch_size (confidence: 0.89)
-- error_handling_pattern (confidence: 0.85)
-
-No new components evolved (thresholds not met).
 
 ```
 
@@ -629,7 +605,7 @@ No new components evolved (thresholds not met).
 | Step | Command/Action |
 |------|----------------|
 | Request | "Review my changes" |
-| Receive | intermediate-reviewer findings |
+| Receive | reviewer findings |
 | Address | Fix issues |
 | Security | security-reviewer before commit |
 | Commit | After all reviews pass |
@@ -662,7 +638,7 @@ No new components evolved (thresholds not met).
 
 5. **Security is mandatory** - Always before commit
 
-6. **Learning is continuous** - Checkpoint and evolve regularly
+6. **Learning is continuous** - Observations are captured and codified into skills
 
 ### Daily Habits
 
@@ -684,7 +660,6 @@ During Work:
 End of Day:
 
 - Run /wrapup to save session notes (accomplishments, blockers, next steps)
-- Run /checkpoint if valuable learning work
 - Exit cleanly
 
 ```

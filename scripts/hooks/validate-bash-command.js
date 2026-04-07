@@ -90,9 +90,9 @@ function validateBashCommand(data) {
     if (pattern.test(command)) {
       // Log dangerous command observation
       try {
-        logLearningObservation(cwd, "error_occurrence", {
-          error_type: "dangerous_command",
-          pattern: pattern.source,
+        logLearningObservation(cwd, "rule_violation", {
+          rule: "security-dangerous-command",
+          message: message.substring(0, 200),
           blocked: message.startsWith("Blocked"),
         });
       } catch {}

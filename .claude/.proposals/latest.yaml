@@ -1,26 +1,22 @@
 source_repo: kailash-py
 codify_date: "2026-04-07"
-codify_session: "chore(release): kailash-ml 0.6.0, kaizen-agents 0.7.0 — extras rename [full] → [all], missing deps"
-sdk_version: "2.6.0"
+codify_session: "feat(ml): PyCaret/MLflow parity — 11 features, ModelExplainer engine"
+sdk_version: "0.7.0"
 coc_version: "1.0.0"
 
 changes:
+  - file: skills/34-kailash-ml/SKILL.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Add ModelExplainer engine, preprocessing enhancements (normalization methods, KNN/iterative imputation, multicollinearity removal, SMOTE), nested runs, auto-logging, model calibration, inference validation to ml skill reference"
+    diff_lines: "+80 -0"
+
   - file: agents/frameworks/ml-specialist.md
     action: modified
     suggested_tier: coc-py
-    reason: "Updated install command from [full] to [all]; added EDA/cardinality/factory patterns from #313-318"
-    diff_lines: "+52 -2"
-
-  - file: agents/frameworks/align-specialist.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "Updated install command from [full] to [all]"
-    diff_lines: "+1 -1"
-
-  - file: skills/project/ml-quick-reference.md
-    action: modified
-    suggested_tier: coc-py
-    reason: "Updated install commands from [full]/[full-gpu] to [all]/[all-gpu]"
-    diff_lines: "+2 -2"
+    reason: "Update ml-specialist with knowledge of new engines (ModelExplainer), preprocessing parity features, auto-logging integration pattern, nested runs, and inference validation"
+    diff_lines: "+20 -0"
 
 status: reviewed
+review_date: "2026-04-07"
+review_notes: "SKILL.md → global (rs has variant_only). ml-specialist.md → variant-py. Content authored from source (model_explainer.py, preprocessing.py, training_pipeline.py, experiment_tracker.py)."

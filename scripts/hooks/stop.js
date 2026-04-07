@@ -17,10 +17,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const {
-  resolveLearningDir,
-  ensureLearningDir,
-} = require("./lib/learning-utils");
+// learning-utils no longer needed — stop observations removed
 const { detectActiveWorkspace } = require("./lib/workspace-utils");
 
 // Timeout fallback — prevents hanging the Claude Code session
@@ -75,30 +72,8 @@ function saveCheckpoint(sessionId, cwd, pendingWork) {
   }
 }
 
-/**
- * Log stop observation for learning system
- */
-function logObservation(sessionId, reason, cwd) {
-  try {
-    const learningDir = ensureLearningDir(cwd);
-    const observationsFile = path.join(learningDir, "observations.jsonl");
-
-    const observation = {
-      timestamp: new Date().toISOString(),
-      type: "stop",
-      session_id: sessionId,
-      reason: reason || "unknown",
-      success: true, // Stop itself is successful even if interrupted
-    };
-
-    fs.appendFileSync(observationsFile, JSON.stringify(observation) + "\n");
-
-    return true;
-  } catch (error) {
-    // Don't fail on observation error
-    return false;
-  }
-}
+// Stop observation logging removed — "stop" events were 49% of all observations
+// with zero learning value. Session state is captured by saveCheckpoint().
 
 /**
  * Clean up any temporary resources
@@ -168,7 +143,6 @@ async function main() {
 
   // Perform graceful shutdown tasks
   const checkpointPath = saveCheckpoint(sessionId, cwd, pendingWork);
-  const observationsLogged = logObservation(sessionId, reason, cwd);
   const cleaned = cleanupResources(cwd);
 
   // Output result - Stop hooks only support basic schema (no hookSpecificOutput)

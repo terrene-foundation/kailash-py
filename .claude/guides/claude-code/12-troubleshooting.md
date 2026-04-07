@@ -13,6 +13,7 @@ This guide helps you **diagnose and fix common issues** you may encounter while 
 **Symptom**: Running `claude` in terminal shows command not found.
 
 **Causes**:
+
 1. Claude Code not installed
 2. npm global binaries not in PATH
 
@@ -46,6 +47,7 @@ source ~/.bashrc  # or source ~/.zshrc
 **Solutions**:
 
 1. **Re-authenticate**:
+
 ```bash
 claude --logout
 claude
@@ -53,6 +55,7 @@ claude
 ```
 
 2. **Use API key directly**:
+
 ```bash
 export ANTHROPIC_API_KEY="your-key-here"
 claude
@@ -65,6 +68,7 @@ claude
 **Symptom**: Hooks fail with permission errors.
 
 **Solution**:
+
 ```bash
 # Make hook scripts executable
 chmod +x scripts/hooks/*.js
@@ -79,6 +83,7 @@ chmod +x scripts/hooks/*.js
 **Symptom**: "[HOOK TIMEOUT] hook-name exceeded limit"
 
 **Causes**:
+
 1. Hook script too slow
 2. Network issues in hook
 3. Infinite loop in hook
@@ -86,22 +91,28 @@ chmod +x scripts/hooks/*.js
 **Solutions**:
 
 1. **Increase timeout** in `.claude/settings.json`:
+
 ```json
 {
   "hooks": {
-    "PostToolUse": [{
-      "matcher": "Edit|Write",
-      "hooks": [{
-        "command": "scripts/hooks/slow-hook.js",
-        "timeout": 60  // Increase from default
-      }]
-    }]
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "command": "scripts/hooks/slow-hook.js",
+            "timeout": 60 // Increase from default
+          }
+        ]
+      }
+    ]
   }
 }
 ```
 
 2. **Optimize hook script** - reduce operations
 3. **Add timeout handling** in hook:
+
 ```javascript
 const TIMEOUT_MS = 5000;
 setTimeout(() => {
@@ -117,6 +128,7 @@ setTimeout(() => {
 **Solution**:
 
 Check the hook's blocking patterns:
+
 ```javascript
 // In validate-bash-command.js
 const dangerousPatterns = [
@@ -133,17 +145,20 @@ Add exceptions for your use case or adjust patterns.
 **Solutions**:
 
 1. **Check settings.json syntax**:
+
 ```bash
 # Validate JSON
 python -m json.tool .claude/settings.json
 ```
 
 2. **Check matcher patterns**:
+
 ```json
 "matcher": "Edit|Write"  // Regex pattern
 ```
 
 3. **Verify hook path**:
+
 ```bash
 ls -la scripts/hooks/your-hook.js
 ```
@@ -159,14 +174,16 @@ ls -la scripts/hooks/your-hook.js
 **Solutions**:
 
 1. **Check agent file exists**:
+
 ```bash
 ls .claude/agents/xxx-specialist.md
 ```
 
 2. **Check agent name** in frontmatter:
+
 ```markdown
 ---
-name: xxx-specialist  # Must match
+name: xxx-specialist # Must match
 ---
 ```
 
@@ -187,6 +204,7 @@ name: xxx-specialist  # Must match
 **Solutions**:
 
 1. **Request explicitly**:
+
 ```
 > Use the dataflow-specialist to help with this
 ```
@@ -205,11 +223,13 @@ name: xxx-specialist  # Must match
 **Solutions**:
 
 1. **Check command file** exists:
+
 ```bash
 ls .claude/commands/db.md
 ```
 
 2. **Check SKILL.md** exists:
+
 ```bash
 ls .claude/skills/02-dataflow/SKILL.md
 ```
@@ -223,11 +243,13 @@ ls .claude/skills/02-dataflow/SKILL.md
 **Solutions**:
 
 1. **Clear context**:
+
 ```
 > /clear
 ```
 
 2. **Reload specific skill**:
+
 ```
 > /db
 ```
@@ -245,6 +267,7 @@ ls .claude/skills/02-dataflow/SKILL.md
 **Solutions**:
 
 1. **Remind Claude explicitly**:
+
 ```
 > Remember: security review is required before commits
 ```
@@ -259,8 +282,10 @@ ls .claude/skills/02-dataflow/SKILL.md
 **Solution**:
 
 Add priority in rule file:
+
 ```markdown
 ## Priority
+
 This rule takes precedence over [other rule] when [condition].
 ```
 
@@ -277,6 +302,7 @@ This rule takes precedence over [other rule] when [condition].
 1. **For Tier 1 (unit tests)**: Mocking is allowed, move to `tests/unit/`
 
 2. **For Tier 2-3**: Replace mocks with real infrastructure:
+
 ```python
 # Instead of
 @patch('dataflow.create')
@@ -310,49 +336,35 @@ def test_create(db):
 
 ### Issue: Observations not being logged
 
-**Symptom**: `--stats` shows zero observations.
+**Symptom**: No observations appearing in `learning/observations.jsonl`.
 
 **Solutions**:
 
 1. **Check learning directory** exists:
+
 ```bash
-ls -la ~/.claude/kailash-learning/
+ls -la .claude/learning/
 ```
 
-2. **Initialize manually**:
-```bash
-node scripts/learning/observation-logger.js --stats
-```
+2. **Check session hooks** are running (session-end hook captures observations)
 
-3. **Check session hooks** are running
+3. **Check observation types** - the system captures `user_correction`, `rule_violation`, `session_accomplishment`, and `decision_reference` types
 
-### Issue: Evolution not creating components
+### Issue: Learning digest not updating
 
-**Symptom**: `/evolve` runs but nothing evolves.
+**Symptom**: `learning-digest.json` is stale or empty.
 
 **Solutions**:
 
-1. **Check confidence thresholds** - default is 0.85+
-2. **Lower thresholds temporarily**:
-```bash
-node scripts/learning/instinct-evolver.js --skill-threshold 0.75
-```
-
-3. **Accumulate more observations** first
-
-### Issue: Checkpoint restore fails
-
-**Symptom**: Restore command doesn't work.
-
-**Solution**:
+1. **Run digest-builder manually**:
 
 ```bash
-# List available checkpoints
-node scripts/learning/checkpoint-manager.js --list
-
-# Restore specific one
-node scripts/learning/checkpoint-manager.js --restore checkpoint_1706720400000
+node scripts/learning/digest-builder.js
 ```
+
+2. **Accumulate more observations** first - the digest builder needs sufficient data
+
+3. **Use /codify** to process the digest into real artifacts (skills, rules)
 
 ---
 
@@ -365,11 +377,13 @@ node scripts/learning/checkpoint-manager.js --restore checkpoint_1706720400000
 **Solutions**:
 
 1. **Reduce loaded context**:
+
 ```
 > /clear
 ```
 
 2. **Load only needed skills**:
+
 ```
 > /db  # Instead of /sdk /db /api /ai /test all at once
 ```
@@ -396,6 +410,7 @@ node scripts/learning/checkpoint-manager.js --restore checkpoint_1706720400000
 **Problem**: Using wrong execution pattern.
 
 **Fix**:
+
 ```python
 # Wrong
 workflow.execute(runtime)
@@ -409,6 +424,7 @@ runtime.execute(workflow.build())
 **Problem**: Using relative imports.
 
 **Fix**:
+
 ```python
 # Wrong
 from ..workflow import builder
@@ -422,6 +438,7 @@ from kailash.workflow.builder import WorkflowBuilder
 **Problem**: DataFlow model with wrong primary key.
 
 **Fix**:
+
 ```python
 @db.model
 class User:
@@ -457,6 +474,7 @@ Claude will consult relevant skills and agents.
 ### Reporting Issues
 
 For persistent issues:
+
 1. Document the exact error
 2. Note the steps to reproduce
 3. Check if it's a configuration issue
@@ -483,16 +501,16 @@ When something isn't working:
 
 ### Common Issue Categories
 
-| Category | First Thing to Check |
-|----------|---------------------|
-| Installation | PATH configuration |
-| Hooks | Permissions and timeout |
-| Agents | File existence and name match |
-| Skills | SKILL.md format |
-| Rules | Rule file syntax |
-| Testing | Test tier and mocking |
-| Learning | Directory initialization |
-| Performance | Context loading |
+| Category     | First Thing to Check          |
+| ------------ | ----------------------------- |
+| Installation | PATH configuration            |
+| Hooks        | Permissions and timeout       |
+| Agents       | File existence and name match |
+| Skills       | SKILL.md format               |
+| Rules        | Rule file syntax              |
+| Testing      | Test tier and mocking         |
+| Learning     | observations.jsonl + digest   |
+| Performance  | Context loading               |
 
 ### When All Else Fails
 

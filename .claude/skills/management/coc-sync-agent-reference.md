@@ -17,7 +17,6 @@ For EVERY file in `.claude/` (except exclusions listed in mapping), do:
 
 - `agents/management/coc-sync.md` — sync infrastructure (meta)
 - `skills/management/` — sync infrastructure (meta)
-- `rules/learned-instincts.md` — auto-generated per repo
 - `learning/` — per-repo learning data
   Everything else syncs, with transforms applied.
 
@@ -289,7 +288,6 @@ echo -n "apps/kailash-* refs: "; grep -rl "apps/kailash-" .claude/ 2>/dev/null |
 echo -n "# contrib (removed)/ refs: "; grep -rl "# contrib (removed)/" .claude/ 2>/dev/null | wc -l
 echo -n "Absolute paths: "; grep -rl "" .claude/ 2>/dev/null | wc -l
 echo -n "Sync infra leaked: "; ls .claude/skills/management/ .claude/agents/management/coc-sync.md 2>/dev/null | wc -l
-echo -n "learned-instincts: "; diff -q .claude/rules/learned-instincts.md ../kailash_python_sdk/.claude/rules/learned-instincts.md 2>/dev/null && echo "LEAKED (identical to BUILD)" || echo "OK (per-repo)"
 ```
 
 ### Gemini contamination check
@@ -302,7 +300,6 @@ echo -n "apps/kailash-* refs: "; grep -rl "apps/kailash-" .gemini/ .agent/ 2>/de
 echo -n "# contrib (removed)/ refs: "; grep -rl "# contrib (removed)/" .gemini/ .agent/ 2>/dev/null | wc -l
 echo -n "Absolute paths: "; grep -rl "" .gemini/ .agent/ 2>/dev/null | wc -l
 echo -n "Sync infra leaked: "; ls .agent/skills/management/ .gemini/agents/management/coc-sync.md 2>/dev/null | wc -l
-echo -n "learned-instincts: "; diff -q .gemini/rules/learned-instincts.md ../kailash_python_sdk/.claude/rules/learned-instincts.md 2>/dev/null && echo "LEAKED (identical to BUILD)" || echo "OK (per-repo)"
 
 echo ""
 echo "=== Gemini-Specific Contamination ==="
@@ -328,7 +325,6 @@ Generate a report for each synced target.
 - SYNCED: agents/frontend/react-specialist.md (as-is)
 - SKIPPED: agents/management/coc-sync.md (sync infrastructure)
 - SKIPPED: skills/management/coc-sync-mapping.md (sync infrastructure)
-- SKIPPED: rules/learned-instincts.md (per-repo)
 - NO CHANGE: agents/deep-analyst.md (already up to date)
 
 ### Template: kailash-coc-gemini-py/

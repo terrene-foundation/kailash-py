@@ -820,6 +820,13 @@ function checkStubsAndSimulations(content, filePath, messages) {
  * Runs after validation; overhead is <5ms (fs.appendFileSync of JSONL lines).
  */
 function logFileObservations(content, filePath, cwd, messages) {
+  // Skip hook/script files — observing our own infrastructure is noise
+  if (
+    filePath.includes("/scripts/hooks/") ||
+    filePath.includes("/scripts/learning/")
+  )
+    return;
+
   const basename = path.basename(filePath);
   const ext = path.extname(filePath).toLowerCase();
 
@@ -909,32 +916,21 @@ function logFileObservations(content, filePath, cwd, messages) {
     }
   }
 
-  // --- Error observations from validation messages ---
+  // --- Rule violations from validation messages ---
   const blockMessages = messages.filter(
     (m) => m.startsWith("BLOCKED") || m.startsWith("CRITICAL"),
   );
-  const warnMessages = messages.filter((m) => m.startsWith("WARNING"));
 
   if (blockMessages.length > 0) {
-    logLearningObservation(cwd, "error_occurrence", {
-      error_type: "validation_block",
-      errors: blockMessages,
-      file: basename,
-    });
-  }
-
-  // --- Track error_fix: file was edited and now passes (no blocks) ---
-  if (
-    blockMessages.length === 0 &&
-    warnMessages.length === 0 &&
-    nodeTypes.length > 0
-  ) {
-    // Clean file with actual code patterns = potential fix if prior error existed
-    logLearningObservation(cwd, "error_fix", {
-      fix_type: "clean_validation",
-      file: basename,
-      patterns_present: nodeTypes.length,
-    });
+    // Log each violation with the specific rule that was violated
+    for (const msg of blockMessages) {
+      const rule = inferRuleName(msg);
+      logLearningObservation(cwd, "rule_violation", {
+        rule,
+        message: msg.substring(0, 200),
+        file: basename,
+      });
+    }
   }
 }
 
@@ -1002,6 +998,37 @@ function buildDocCommentLines(lines) {
     }
   }
   return docLines;
+}
+
+/**
+ * Infer the rule name from a validation message.
+ */
+function inferRuleName(msg) {
+  const lower = msg.toLowerCase();
+  if (lower.includes("hardcoded model") || lower.includes("model string"))
+    return "env-models";
+  if (lower.includes("stub") || lower.includes("notimplementederror"))
+    return "zero-tolerance-stubs";
+  if (lower.includes("todo") || lower.includes("fixme"))
+    return "zero-tolerance-stubs";
+  if (
+    lower.includes("mock") ||
+    lower.includes("fake") ||
+    lower.includes("simulated")
+  )
+    return "zero-tolerance-stubs";
+  if (lower.includes("relative import")) return "absolute-imports";
+  if (lower.includes("workflow.execute") || lower.includes("missing .build"))
+    return "patterns-runtime";
+  if (lower.includes("bare except") || lower.includes("except: pass"))
+    return "zero-tolerance-silent-fallback";
+  if (
+    lower.includes("secret") ||
+    lower.includes("api_key") ||
+    lower.includes("password")
+  )
+    return "security-secrets";
+  return "validation-general";
 }
 
 function isTestFile(filePath) {

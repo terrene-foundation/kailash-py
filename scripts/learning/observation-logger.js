@@ -18,12 +18,12 @@ const os = require("os");
 const { resolveLearningDir } = require("../hooks/lib/learning-utils");
 
 // Maximum observations before archiving
-const MAX_OBSERVATIONS = 1000;
+const MAX_OBSERVATIONS = 500;
 
 /**
  * Resolve paths for a given learning directory.
  * @param {string} [learningDir] - Override learning dir; falls back to resolveLearningDir()
- * @returns {{ learningDir: string, observationsFile: string, archiveDir: string, identityFile: string }}
+ * @returns {{ learningDir: string, observationsFile: string, archiveDir: string }}
  */
 function resolvePaths(learningDir) {
   const dir = learningDir || resolveLearningDir();
@@ -31,7 +31,6 @@ function resolvePaths(learningDir) {
     learningDir: dir,
     observationsFile: path.join(dir, "observations.jsonl"),
     archiveDir: path.join(dir, "observations.archive"),
-    identityFile: path.join(dir, "identity.json"),
   };
 }
 
@@ -41,15 +40,7 @@ function resolvePaths(learningDir) {
  */
 function initializeLearningDir(learningDir) {
   const p = resolvePaths(learningDir);
-  const dirs = [
-    p.learningDir,
-    p.archiveDir,
-    path.join(p.learningDir, "instincts", "personal"),
-    path.join(p.learningDir, "instincts", "inherited"),
-    path.join(p.learningDir, "evolved", "skills"),
-    path.join(p.learningDir, "evolved", "commands"),
-    path.join(p.learningDir, "evolved", "agents"),
-  ];
+  const dirs = [p.learningDir, p.archiveDir];
   dirs.forEach((dir) => {
     try {
       fs.mkdirSync(dir, { recursive: true });
@@ -182,17 +173,20 @@ function getStats(learningDir) {
   };
 }
 
-// Observation types for Kailash-specific patterns
+// Observation types — meaningful signals only (noise types removed)
 const OBSERVATION_TYPES = {
-  TOOL_USE: "tool_use",
+  // Kept from original — capture real code patterns
   WORKFLOW_PATTERN: "workflow_pattern",
-  ERROR_OCCURRENCE: "error_occurrence",
-  ERROR_FIX: "error_fix",
   FRAMEWORK_SELECTION: "framework_selection",
   NODE_USAGE: "node_usage",
-  CONNECTION_PATTERN: "connection_pattern",
-  TEST_PATTERN: "test_pattern",
   DATAFLOW_MODEL: "dataflow_model",
+  // Replaced: error_occurrence → rule_violation (with specific rule name)
+  RULE_VIOLATION: "rule_violation",
+  // New — meaningful learning signals
+  USER_CORRECTION: "user_correction",
+  SESSION_ACCOMPLISHMENT: "session_accomplishment",
+  DECISION_REFERENCE: "decision_reference",
+  // Kept but deprioritized
   SESSION_SUMMARY: "session_summary",
 };
 

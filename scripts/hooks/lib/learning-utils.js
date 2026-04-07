@@ -39,42 +39,11 @@ function resolveLearningDir(cwd) {
 function ensureLearningDir(cwd) {
   const learningDir = resolveLearningDir(cwd);
 
-  const dirs = [
-    learningDir,
-    path.join(learningDir, "observations.archive"),
-    path.join(learningDir, "instincts", "personal"),
-    path.join(learningDir, "instincts", "inherited"),
-    path.join(learningDir, "evolved", "skills"),
-    path.join(learningDir, "evolved", "commands"),
-    path.join(learningDir, "evolved", "agents"),
-    path.join(learningDir, "checkpoints"),
-  ];
+  const dirs = [learningDir, path.join(learningDir, "observations.archive")];
 
   for (const dir of dirs) {
     try {
       fs.mkdirSync(dir, { recursive: true });
-    } catch {}
-  }
-
-  // Create identity file if it doesn't exist
-  const identityFile = path.join(learningDir, "identity.json");
-  if (!fs.existsSync(identityFile)) {
-    try {
-      const identity = {
-        system: "kailash-coc-claude-py",
-        version: "2.0.0",
-        created_at: new Date().toISOString(),
-        learning_enabled: true,
-        per_project: true,
-        focus_areas: [
-          "workflow-patterns",
-          "error-fixes",
-          "dataflow-patterns",
-          "testing-patterns",
-          "framework-selection",
-        ],
-      };
-      fs.writeFileSync(identityFile, JSON.stringify(identity, null, 2));
     } catch {}
   }
 
@@ -85,7 +54,7 @@ function ensureLearningDir(cwd) {
  * Append an observation to the per-project observations.jsonl file.
  *
  * @param {string} cwd - Project working directory
- * @param {string} type - Observation type (e.g. "workflow_pattern", "error_occurrence")
+ * @param {string} type - Observation type (e.g. "rule_violation", "user_correction", "workflow_pattern")
  * @param {Object} data - Observation data payload
  * @param {Object} [context] - Additional context (session_id, framework, etc.)
  */

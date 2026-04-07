@@ -22,7 +22,6 @@ Category 5: CLAUDE.md # Full rewrite for user context
 ```
 agents/management/coc-sync.md         # Sync infrastructure (meta)
 skills/management/coc-sync-mapping.md  # Sync infrastructure (meta)
-rules/learned-instincts.md             # Auto-generated per repo
 learning/                              # Per-repo learning data
 ```
 

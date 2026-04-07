@@ -80,7 +80,6 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 | Kailash SDK execution patterns        | `rules/patterns.md`             | `**/*.py`, `**/*.ts`, `**/*.js`                                       |
 | Security (secrets, injection)         | `rules/security.md`             | Global                                                                |
 | 3-tier testing, no mocking Tiers 2-3  | `rules/testing.md`              | `tests/**`, `**/*test*`, `**/*spec*`, `conftest.py`                   |
-| Auto-generated workflow instincts     | `rules/learned-instincts.md`    | Global                                                                |
 | Infrastructure SQL safety             | `rules/infrastructure-sql.md`   | `src/kailash/db/**`, `src/kailash/infrastructure/**`                  |
 | PACT governance security              | `rules/pact-governance.md`      | `packages/kailash-pact/**`                                            |
 

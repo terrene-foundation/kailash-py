@@ -1,88 +1,67 @@
-# /learn - Continuous Learning Command
+# /learn - Learning System Status
 
 ## Purpose
 
-Interact with the Continuous Learning System to view, analyze, and evolve learned patterns.
+View the learning digest and codification history. The learning system captures meaningful signals (user corrections, rule violations, session accomplishments, journal decisions) and feeds them into `/codify` for integration into real artifacts.
 
 ## Quick Reference
 
-| Command           | Action                               |
-| ----------------- | ------------------------------------ |
-| `/learn`          | Show learning status and statistics  |
-| `/learn stats`    | Show detailed observation statistics |
-| `/learn analyze`  | Analyze observations for patterns    |
-| `/learn generate` | Generate instincts from patterns     |
-| `/learn list`     | List all learned instincts           |
+| Command        | Action                                    |
+| -------------- | ----------------------------------------- |
+| `/learn`       | Show learning digest summary              |
+| `/learn stats` | Show observation statistics and breakdown |
 
-## Usage Examples
+## Usage
 
-### Check Learning Status
+### View Learning Digest
 
-```bash
-# Show current learning statistics
-node scripts/learning/observation-logger.js --stats
-```
+Read `.claude/learning/learning-digest.json` and present:
 
-### Analyze Patterns
+1. **Corrections** — Times the user pushed back or redirected. These are the most valuable signals — each represents a gap in the current artifacts.
+2. **Error patterns** — Recurring rule violations (which rules are being violated most?).
+3. **Accomplishments** — What was completed in recent sessions.
+4. **Decisions** — Journal entries (DECISION, DISCOVERY, TRADE-OFF) that may need codification.
+5. **Active frameworks** — Which Kailash frameworks are in use.
 
-```bash
-# Analyze observations for patterns
-node scripts/learning/instinct-processor.js --analyze
-```
+### View Codification History
 
-### Generate Instincts
+Read `.claude/learning/learning-codified.json` to see what `/codify` has already processed from the digest.
+
+### View Stats
 
 ```bash
-# Generate instincts from detected patterns
-node scripts/learning/instinct-processor.js --generate
+node scripts/learning/digest-builder.js --stats
 ```
 
 ## How It Works
 
-1. **Observation Capture**: Hooks automatically capture tool usage, errors, and patterns during every session
-2. **Pattern Detection**: At session end, the analyzer identifies recurring patterns in observations
-3. **Instinct Generation**: Patterns with sufficient occurrences (>= 10) are automatically processed into instincts
-4. **Evolution**: High-confidence instincts are auto-evolved into skills or commands at session end
-5. **Feedback Loop**: Learned instincts are written to `.claude/rules/learned-instincts.md` and auto-loaded by Claude Code on next session
-
-**Note**: Steps 2-5 happen automatically at session end. Manual invocation via `/learn` is still available for on-demand processing or status checks.
-
-## Learning Focus Areas
-
-The system learns project-specific patterns:
-
-| Area                   | What It Learns                                  |
-| ---------------------- | ----------------------------------------------- |
-| **Code Patterns**      | Common sequences, idioms, architectural choices |
-| **Error-Fix Pairs**    | Which errors occur and how they're fixed        |
-| **Framework Patterns** | Framework-specific usage patterns               |
-| **Tool Selection**     | Project type → tool/framework mapping           |
-| **Testing Patterns**   | Test structure preferences                      |
+1. **Hooks capture signals** — User corrections (UserPromptSubmit), rule violations (PostToolUse), session accomplishments (SessionEnd), journal decisions (SessionEnd). Pure file I/O, no LLM.
+2. **Digest builder aggregates** — At session end, observations are summarized into `learning-digest.json`. Pure aggregation, no pattern matching or confidence scores.
+3. **/codify does the thinking** — When `/codify` runs, the LLM reads the digest, journals, and session notes. It decides what to codify into real rules, skills, or agents. No intermediate staging — changes go directly into canonical artifact locations.
 
 ## File Locations
 
-Learning data is stored **per-project** (not globally):
-
 ```
 <project>/.claude/learning/
-├── identity.json           # System identity
-├── observations.jsonl      # Raw observations
-├── observations.archive/   # Archived observations
-├── instincts/
-│   ├── personal/          # Auto-learned instincts
-│   └── inherited/         # Shared from team
-├── evolved/               # Generated skills/commands
-└── checkpoints/           # Learning state snapshots
-
-<project>/.claude/rules/
-└── learned-instincts.md   # Auto-generated, loaded by CC
+  observations.jsonl        # Raw observations (capped at 500, auto-archived)
+  observations.archive/     # Archived observations
+  learning-digest.json      # Structured summary for /codify
+  learning-codified.json    # What /codify has already processed
 ```
 
-## Related Commands
+## Observation Types
 
-- `/evolve` - Evolve instincts into skills
-- `/checkpoint` - Save current learning state
+| Type                     | Source                          | What It Captures                         |
+| ------------------------ | ------------------------------- | ---------------------------------------- |
+| `user_correction`        | UserPromptSubmit hook           | User pushed back or redirected approach  |
+| `rule_violation`         | PostToolUse (validate-workflow) | Specific rule violated in code           |
+| `session_accomplishment` | SessionEnd hook                 | What was completed (from .session-notes) |
+| `decision_reference`     | SessionEnd hook                 | Journal entries created this session     |
+| `workflow_pattern`       | PostToolUse (validate-workflow) | Node types and structure in user code    |
+| `framework_selection`    | PostToolUse (validate-workflow) | Which Kailash framework is being used    |
 
-## Skill Reference
+## Related
 
-This command uses: `scripts/learning/observation-logger.js`, `scripts/learning/instinct-processor.js`
+- `/codify` — Consumes the digest and codifies findings into artifacts
+- `/journal` — Creates DECISION/DISCOVERY entries that feed into learning
+- `/wrapup` — Writes session notes that feed into accomplishments

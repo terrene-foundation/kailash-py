@@ -214,7 +214,7 @@ Every project has these 5+1 commands:
 | `/codify`    | 05    | Capture knowledge for future sessions    |
 | `/ws`        | —     | Check progress anytime                   |
 
-Plus `/wrapup` (session notes) and `/checkpoint` (learning state).
+Plus `/wrapup` (session notes).
 
 ---
 

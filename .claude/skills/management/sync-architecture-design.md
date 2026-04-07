@@ -173,7 +173,6 @@ Layer E: Project-Local (NEVER synced)
   pyproject.toml                         -- Project dependencies (version pins updated, structure preserved)
   .env / .env.example                    -- Project configuration
   .claude/learning/                      -- Per-repo learning data
-  .claude/rules/learned-instincts.md     -- Auto-generated per repo
   .claude/agents/project/                -- Project-specific agents from /codify
   .claude/skills/project/                -- Project-specific skills from /codify
   workspaces/                            -- Project workspace state
@@ -235,7 +234,6 @@ The key missing piece in the current design is a **sync manifest** -- a machine-
     ".claude/agents/management/coc-sync.md",
     ".claude/skills/management/coc-sync-mapping.md",
     ".claude/skills/management/coc-sync-agent-reference.md",
-    ".claude/rules/learned-instincts.md",
     ".claude/learning/",
     ".claude/rules/cross-sdk-inspection.md"
   ],
@@ -341,7 +339,6 @@ Phase 5: VERSION
 Phase 6: VALIDATE
   - Run contamination check (grep for builder-specific patterns)
   - Verify all hooks in settings.json have corresponding scripts in scripts/hooks/
-  - Verify no excluded files leaked through (sync infra, learned-instincts)
   - Verify all cross-references in synced files point to files that exist
   - Report any issues found
   - If contamination detected: BLOCK (exit 1, do not commit manifest)
@@ -405,7 +402,6 @@ Transform Registry:
   exclusion_filter
     Entire files excluded from sync.
     Applied to: coc-sync.md, coc-sync-mapping.md, coc-sync-agent-reference.md,
-                learned-instincts.md, learning/, cross-sdk-inspection.md
 ```
 
 ### 2.6 The Missing scripts/ Problem
@@ -447,7 +443,6 @@ Two exclusion categories:
 .claude/agents/management/coc-sync.md          # Sync infrastructure
 .claude/skills/management/coc-sync-mapping.md   # Sync infrastructure
 .claude/skills/management/coc-sync-agent-reference.md  # Sync infrastructure
-.claude/rules/learned-instincts.md              # Auto-generated per repo
 .claude/rules/cross-sdk-inspection.md           # BUILD-only process rule
 .claude/learning/                               # Per-repo learning data
 ```
@@ -462,7 +457,6 @@ conftest.py                  # Project test configuration
 .claude/agents/project/      # Project-specific agents
 .claude/skills/project/      # Project-specific skills
 .claude/learning/            # Per-repo learning data
-.claude/rules/learned-instincts.md  # Per-repo auto-generated
 workspaces/                  # Project workspace state
 journal/                     # Project journal entries
 ```

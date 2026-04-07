@@ -21,9 +21,9 @@ This is a **merge**, not an overwrite. Three categories of files:
 
 | Category             | Examples                                        | Behavior                      |
 | -------------------- | ----------------------------------------------- | ----------------------------- |
-| **Shared artifacts** | agents/deep-analyst.md, rules/security.md       | **Updated** from template     |
+| **Shared artifacts** | agents/analyst.md, rules/security.md            | **Updated** from template     |
 | **Project-specific** | agents/project/_, skills/project/_, workspaces/ | **Preserved** — never touched |
-| **Per-repo data**    | learning/\*, learned-instincts.md, .proposals/  | **Preserved** — never touched |
+| **Per-repo data**    | learning/\*, .proposals/                        | **Preserved** — never touched |
 
 **Rule**: If a file exists in BOTH the template and this repo, the template version wins (it's the upstream source). If a file exists ONLY in this repo, it's preserved. If a file exists ONLY in the template, it's added.
 
@@ -42,19 +42,26 @@ Search paths (in order):
 
 1. `../{template}/` (sibling directory)
 2. `../../loom/{template}/` (loom parent)
-3. Ask user for path
+3. **GitHub fetch** — if not found locally, shallow-clone from GitHub:
+   ```bash
+   git clone --depth 1 https://github.com/terrene-foundation/kailash-coc-claude-py.git /tmp/kailash-coc-template
+   ```
+   Use `/tmp/kailash-coc-template` as the template path. Clean up after sync with `rm -rf /tmp/kailash-coc-template`.
+4. Ask user for path (last resort)
 
 ### 3. Check SDK version compatibility
 
 Read this project's SDK version from `pyproject.toml` (look for `kailash` or `kailash-enterprise` in `[project.dependencies]` or `[tool.poetry.dependencies]`). Read the template's VERSION file for the `build_version` (the loom/ source version the template was synced from).
 
 Report both in the sync header:
+
 ```
 Project SDK: kailash==2.0.0 (from pyproject.toml)
 Template COC: 1.0.0 (from template .claude/VERSION)
 ```
 
 If the template artifacts were codified from a newer SDK version than the project uses, warn:
+
 ```
 ⚠ Template artifacts may reference SDK features newer than your installed version.
   Consider upgrading: pip install --upgrade kailash
@@ -72,7 +79,7 @@ Compare `.coc-sync-marker` timestamps. If already fresh: "Already up to date."
 
 - `agents/**/*.md` (except `agents/project/`)
 - `commands/*.md`
-- `rules/*.md` (except `rules/learned-instincts.md`)
+- `rules/*.md`
 - `skills/**/*` (except `skills/project/`)
 - `guides/**/*`
 
@@ -85,7 +92,6 @@ Compare `.coc-sync-marker` timestamps. If already fresh: "Already up to date."
 - `agents/project/**` — project-specific agents
 - `skills/project/**` — project-specific skills
 - `learning/**` — per-repo learning data
-- `rules/learned-instincts.md` — auto-generated
 - `.proposals/**` — review artifacts
 - `settings.local.json` — per-repo settings
 - `workspaces/**` — project workspaces

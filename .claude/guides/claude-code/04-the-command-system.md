@@ -404,40 +404,6 @@ These commands replace the manual copy-paste workflow for the 5-phase workspace 
 > DataFlow models should always have descriptive field names
 ```
 
-#### `/evolve` - Instinct Evolution Command
-
-**What it loads**: Pattern processing system
-
-**When to use**:
-
-- Processing accumulated observations
-- Generating new instincts
-- Evolving high-confidence patterns into skills
-
-**Example usage**:
-
-```
-> /evolve
-> Process my recent observations into instincts
-```
-
-#### `/checkpoint` - Learning Checkpoint Command
-
-**What it loads**: State persistence system
-
-**When to use**:
-
-- Saving current learning state
-- Before major changes
-- Creating recovery points
-
-**Example usage**:
-
-```
-> /checkpoint
-> Save current learning state
-```
-
 ---
 
 ## Part 3: Command Structure
@@ -622,8 +588,6 @@ However, **explicit command loading is more reliable**:
 | `/ws` | Workspace state | Status dashboard (read-only) |
 | `/wrapup` | Session notes | Save context before ending |
 | `/learn` | Learning system | Recording observations |
-| `/evolve` | Evolution system | Processing instincts |
-| `/checkpoint` | Checkpointing | Saving state |
 
 ---
 
@@ -768,7 +732,7 @@ Claude will:
 
 1. **Commands are shortcuts** - They load specific skills into Claude's context
 
-2. **Twenty commands exist** - 13 framework (`/sdk`, `/db`, `/api`, `/ai`, `/test`, `/validate`, `/design`, `/i-audit`, `/i-polish`, `/i-harden`, `/learn`, `/evolve`, `/checkpoint`) + 7 workspace (`/analyze`, `/todos`, `/implement`, `/redteam`, `/codify`, `/ws`, `/wrapup`)
+2. **Eighteen commands exist** - 11 framework (`/sdk`, `/db`, `/api`, `/ai`, `/test`, `/validate`, `/design`, `/i-audit`, `/i-polish`, `/i-harden`, `/learn`) + 7 workspace (`/analyze`, `/todos`, `/implement`, `/redteam`, `/codify`, `/ws`, `/wrapup`)
 
 3. **Use commands for focus** - Load only what you need for your current task
 

@@ -22,15 +22,47 @@ This phase executes under the **autonomous execution model** (see `rules/autonom
 
 ## Workflow
 
-### 1. Consume L5 learning artifacts
+### 1. Consume learning digest
 
-Before extracting new knowledge, integrate what the learning system has already discovered:
+Before extracting new knowledge, integrate what the learning system has captured:
 
-1. Read `.claude/learning/evolved/skills/` — if evolved skills exist, integrate them into canonical skill directories
-2. Read `.claude/learning/instincts/personal/` — review high-confidence instincts for patterns worth codifying
-3. Read `.claude/rules/learned-instincts.md` — verify rendered instincts are accurate and actionable
+1. Read `.claude/learning/learning-digest.json` — the structured summary of recent observations
+2. Read `.claude/learning/learning-codified.json` — what was previously codified (avoid re-processing)
+3. Read recent journal entries referenced in the digest (`decisions` array) — DECISION and DISCOVERY entries contain semantic context
+4. Read `.session-notes` — latest session accomplishments and outstanding items
 
-This closes the L5 feedback loop: observe → instinct → evolve → **codify**.
+Analyze the digest for actionable findings:
+
+- **Corrections** → Do any rules or skills need updating to match user preferences? Each correction is a real signal where the user pushed back on an approach.
+- **Error patterns** → Should any recurring rule violations become new rule sections (DO/DO NOT with examples)?
+- **Decisions** → Should any architectural decisions from journals become agent or skill knowledge?
+- **Accomplishments** → Do any completed features need documentation in skills?
+
+For each finding, either:
+
+- Update an existing rule (add DO/DO NOT with example and Why)
+- Update a skill's SKILL.md or sub-files
+- Update an agent's knowledge section
+- Skip (not worth codifying — explain why)
+
+After processing, write `.claude/learning/learning-codified.json` to record what was analyzed:
+
+```json
+{
+  "last_codified": "2026-04-07T12:00:00Z",
+  "digest_hash": "<sha256 of digest at time of processing>",
+  "actions_taken": [
+    { "type": "rule_update", "file": "rules/patterns.md", "reason": "..." },
+    {
+      "type": "skill_update",
+      "file": "skills/03-nexus/SKILL.md",
+      "reason": "..."
+    }
+  ]
+}
+```
+
+This closes the feedback loop: observe → digest → **codify into real artifacts**.
 
 ### 2. Deep knowledge extraction
 
@@ -123,14 +155,14 @@ Deploy these agents as a team for codification:
 
 **Knowledge extraction team:**
 
-- **deep-analyst** — Identify core patterns, architectural decisions, and domain knowledge worth capturing
-- **requirements-analyst** — Distill requirements into reusable agent instructions
-- **coc-expert** — Ensure agents and skills follow COC five-layer architecture (codification IS Layer 5 evolution)
+- **analyst** — Identify core patterns, architectural decisions, and domain knowledge worth capturing
+- **analyst** — Distill requirements into reusable agent instructions
+- `co-reference` skill — Ensure agents and skills follow COC five-layer architecture (codification IS Layer 5 evolution)
 
 **Creation team:**
 
-- **documentation-validator** — Validate that skill examples are correct and runnable
-- **intermediate-reviewer** — Review agent/skill quality before finalizing
+- **reviewer** — Validate that skill examples are correct and runnable
+- **reviewer** — Review agent/skill quality before finalizing
 
 **Validation team (red team the agents and skills):**
 
@@ -147,10 +179,4 @@ Deploy these agents as a team for codification:
 
 ### Journal
 
-Create journal entries for knowledge captured:
-
-- **DECISION** entries for what was codified and why
-- **CONNECTION** entries for patterns that connect across the project
-- **TRADE-OFF** entries for trade-offs in knowledge representation choices
-
-Use sequential naming: check the highest existing `NNNN-` prefix and increment.
+Create **DECISION** entries for codification choices. Use sequential `NNNN-` naming.

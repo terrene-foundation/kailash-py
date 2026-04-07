@@ -31,8 +31,7 @@ All transform categories below (Categories 1-5) apply to BOTH targets. The Gemin
 | --------------------------------------- | ---------------------------------------------------- |
 | `agents/management/coc-sync.md`         | Sync infrastructure (meta)                           |
 | `skills/management/coc-sync-mapping.md` | Sync infrastructure (meta)                           |
-| `rules/learned-instincts.md`            | Auto-generated per repo                              |
-| `learning/`                             | Per-repo learning data (observations, evolution log) |
+| `learning/`                             | Per-repo learning data (observations.jsonl, digest)  |
 
 ## Transform Categories
 
@@ -344,7 +343,6 @@ In addition to the standard exclusions, these are excluded from Gemini sync:
 | --------------------------------------- | ---------------------------------------- |
 | `agents/management/coc-sync.md`         | Sync infrastructure (same as Claude)     |
 | `skills/management/coc-sync-mapping.md` | Sync infrastructure (same as Claude)     |
-| `rules/learned-instincts.md`            | Auto-generated per repo (same as Claude) |
 | `learning/`                             | Per-repo learning data (same as Claude)  |
 
 No additional Gemini-specific exclusions at this time. The same files are excluded for both targets.
