@@ -52,7 +52,6 @@ process.stdin.on("end", () => {
 
 function buildReminder(data) {
   const cwd = data.cwd || process.cwd();
-  const userMessage = (data.tool_input?.user_message || "").toLowerCase();
 
   // ── Always inject env summary (brief, 1-2 lines) ─────────────────
   const envPath = path.join(cwd, ".env");
@@ -82,19 +81,10 @@ function buildReminder(data) {
     );
   }
 
-  // Line 3: Zero-tolerance behavioral rules (always present, survives compression)
-  lines.push(
-    "[ZERO-TOLERANCE] " +
-      "Pre-existing failures MUST be FIXED, not reported. " +
-      "Stubs/TODOs/placeholders are BLOCKED — implement fully or remove. " +
-      "No naive fallbacks hiding errors. " +
-      "No workarounds for SDK bugs — deep dive, reproduce, file GitHub issue. " +
-      "Never hardcode models/keys. " +
-      "Create missing records (god-mode). " +
-      "Implement gaps, don't document them.",
-  );
+  // (Zero-tolerance rules are loaded as an always-on rule file; no need to
+  // duplicate here — doing so costs tokens on every user message.)
 
-  // Line 4: Workspace context (survives compaction — primary anti-amnesia mechanism)
+  // Line 3: Workspace context (survives compaction — primary anti-amnesia mechanism)
   try {
     const wsSummary = buildWorkspaceSummary(cwd);
     if (wsSummary) {
@@ -124,48 +114,8 @@ function buildReminder(data) {
     }
   } catch {}
 
-  // ── Contextual reminders based on user message content ────────────
-  const llmKeywords = [
-    "model",
-    "llm",
-    "agent",
-    "gpt",
-    "claude",
-    "gemini",
-    "openai",
-    "anthropic",
-    "api key",
-    "shadow agent",
-    "objective",
-  ];
-  const e2eKeywords = [
-    "e2e",
-    "test",
-    "playwright",
-    "validate",
-    "red-team",
-    "persona",
-    "rbac",
-    "login",
-  ];
-
-  const mentionsLLM = llmKeywords.some((kw) => userMessage.includes(kw));
-  const mentionsE2E = e2eKeywords.some((kw) => userMessage.includes(kw));
-
-  if (mentionsLLM) {
-    lines.push(
-      "[REMINDER] Read model name from .env (OPENAI_PROD_MODEL or equivalent). " +
-        "Read API key from .env. NEVER hardcode.",
-    );
-  }
-
-  if (mentionsE2E) {
-    lines.push(
-      "[REMINDER] God-mode E2E: Create ALL missing records. " +
-        "Adapt to data changes. Assume correct role. " +
-        "If endpoint missing, implement it.",
-    );
-  }
+  // (Keyword-triggered reminders removed — the corresponding rule files
+  // are always-on and already cover env-models and e2e god-mode.)
 
   // --- User correction detection for learning system ---
   try {

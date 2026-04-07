@@ -1,15 +1,10 @@
----
-paths:
-  - "**/*.py"
-  - "**/*.ts"
-  - "**/*.js"
----
-
 # Kailash Pattern Rules
 
 ## Runtime Execution
 
 MUST use `runtime.execute(workflow.build())`.
+
+**Why:** Calling `runtime.execute(workflow)` without `.build()` passes an unvalidated builder object, causing a cryptic `AttributeError` deep in the runtime instead of a clear validation error.
 
 ```python
 runtime = LocalRuntime()
@@ -22,13 +17,17 @@ results, run_id = runtime.execute(workflow.build())
 ## Node API
 
 - Node IDs MUST be string literals (not variables, not f-strings)
+  **Why:** Dynamic node IDs break workflow graph analysis, checkpoint recovery, and node-level debugging since the ID is only known at runtime.
 - 4-parameter order: `add_node("NodeType", "node_id", {config}, connections)`
 - Absolute imports only (`from kailash.workflow.builder import WorkflowBuilder`)
+  **Why:** Relative imports break when files are moved or when the same module is loaded from different entry points, causing silent import duplication.
 - Load .env before any operation (see `env-models.md`)
 
 ## DataFlow Express (Default for CRUD)
 
 Use `db.express` for all single-record CRUD. WorkflowBuilder only for multi-step operations.
+
+**Why:** WorkflowBuilder for simple CRUD is ~23x slower due to graph construction, validation, and runtime overhead that adds zero value for single-record operations.
 
 ```python
 result = await db.express.create("User", {"name": "Alice", "email": "alice@example.com"})
@@ -78,7 +77,7 @@ from kaizen.core import BaseAgent, Signature, InputField, OutputField
 
 ## Async vs Sync Runtime
 
-- **Docker/FastAPI**: `AsyncLocalRuntime` + `await runtime.execute_workflow_async(workflow.build())`
+- **Docker/Nexus**: `AsyncLocalRuntime` + `await runtime.execute_workflow_async(workflow.build())`
 - **CLI/Scripts**: `LocalRuntime` + `runtime.execute(workflow.build())`
 
 ## SQLite Connection Management
@@ -88,11 +87,15 @@ from kaizen.core import BaseAgent, Signature, InputField, OutputField
 - `async with` for all transactions
 - Default PRAGMAs on every connection (WAL, busy_timeout, synchronous, cache_size, foreign_keys)
 - Always set `max_read_connections` (bounded concurrency)
-- ❌ Never bare `aiosqlite.connect()` — go through the pool
+- MUST NOT use bare `aiosqlite.connect()` — go through the pool
+
+**Why:** Bare `aiosqlite.connect()` bypasses WAL mode, busy_timeout, and connection limits, causing "database is locked" errors under concurrent access.
 
 ## Async Resource Cleanup
 
-- All async resource classes implement `__del__` with `ResourceWarning`
+- All async resource classes MUST implement `__del__` with `ResourceWarning`
 - Use `def __del__(self, _warnings=warnings)` signature (survives interpreter shutdown)
 - Set class-level defaults for `__del__` safety
-- ❌ No `asyncio` in `__del__` — async cleanup in finalizers is unreliable
+- MUST NOT use `asyncio` in `__del__` — async cleanup in finalizers is unreliable
+
+**Why:** Without `__del__` warnings, leaked connections and file handles go undetected until resource exhaustion crashes the process in production.
