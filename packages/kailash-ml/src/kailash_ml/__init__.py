@@ -36,6 +36,7 @@ def __getattr__(name: str):  # noqa: N807
         "ExperimentTracker": "kailash_ml.engines.experiment_tracker",
         "PreprocessingPipeline": "kailash_ml.engines.preprocessing",
         "ModelVisualizer": "kailash_ml.engines.model_visualizer",
+        "ModelExplainer": "kailash_ml.engines.model_explainer",
         # Bridge
         "OnnxBridge": "kailash_ml.bridge.onnx_bridge",
         # Compat
@@ -78,6 +79,7 @@ __all__ = [
     "ExperimentTracker",
     "PreprocessingPipeline",
     "ModelVisualizer",
+    "ModelExplainer",
     "OnnxBridge",
     "MlflowFormatReader",
     "MlflowFormatWriter",

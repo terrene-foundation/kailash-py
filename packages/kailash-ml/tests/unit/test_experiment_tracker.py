@@ -1046,3 +1046,169 @@ class TestFactoryCreate:
             assert conn is not None
         finally:
             await conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Nested runs (#333)
+# ---------------------------------------------------------------------------
+
+
+class TestNestedRuns:
+    """Tests for nested (parent/child) experiment runs (#333)."""
+
+    @pytest.mark.asyncio
+    async def test_start_child_run(self, tracker: ExperimentTracker) -> None:
+        """Child run stores parent_run_id."""
+        parent = await tracker.start_run("nested-exp", run_name="parent")
+        child = await tracker.start_run(
+            "nested-exp", run_name="child", parent_run_id=parent.id
+        )
+        assert child.parent_run_id == parent.id
+        assert parent.parent_run_id is None
+
+    @pytest.mark.asyncio
+    async def test_get_run_includes_parent_run_id(
+        self, tracker: ExperimentTracker
+    ) -> None:
+        """get_run hydrates parent_run_id from the database."""
+        parent = await tracker.start_run("hydrate-exp", run_name="parent")
+        child = await tracker.start_run(
+            "hydrate-exp", run_name="child", parent_run_id=parent.id
+        )
+        fetched = await tracker.get_run(child.id)
+        assert fetched.parent_run_id == parent.id
+
+        # Parent has no parent
+        fetched_parent = await tracker.get_run(parent.id)
+        assert fetched_parent.parent_run_id is None
+
+    @pytest.mark.asyncio
+    async def test_list_child_runs(self, tracker: ExperimentTracker) -> None:
+        """list_child_runs returns only direct children."""
+        parent = await tracker.start_run("children-exp", run_name="parent")
+        child1 = await tracker.start_run(
+            "children-exp", run_name="child-1", parent_run_id=parent.id
+        )
+        child2 = await tracker.start_run(
+            "children-exp", run_name="child-2", parent_run_id=parent.id
+        )
+        # Unrelated run in same experiment
+        await tracker.start_run("children-exp", run_name="standalone")
+
+        children = await tracker.list_child_runs(parent.id)
+        assert len(children) == 2
+        child_ids = {c.id for c in children}
+        assert child1.id in child_ids
+        assert child2.id in child_ids
+
+    @pytest.mark.asyncio
+    async def test_list_child_runs_empty(self, tracker: ExperimentTracker) -> None:
+        """Run with no children returns empty list."""
+        parent = await tracker.start_run("no-children-exp", run_name="lonely")
+        children = await tracker.list_child_runs(parent.id)
+        assert children == []
+
+    @pytest.mark.asyncio
+    async def test_list_child_runs_parent_not_found(
+        self, tracker: ExperimentTracker
+    ) -> None:
+        """list_child_runs raises if parent does not exist."""
+        with pytest.raises(RunNotFoundError, match="not found"):
+            await tracker.list_child_runs("nonexistent-run-id")
+
+    @pytest.mark.asyncio
+    async def test_parent_and_child_same_experiment(
+        self, tracker: ExperimentTracker
+    ) -> None:
+        """Parent and child runs belong to the same experiment."""
+        parent = await tracker.start_run("same-exp", run_name="parent")
+        child = await tracker.start_run(
+            "same-exp", run_name="child", parent_run_id=parent.id
+        )
+        assert child.experiment_id == parent.experiment_id
+
+    @pytest.mark.asyncio
+    async def test_nested_context_manager(self, tracker: ExperimentTracker) -> None:
+        """Context manager supports parent_run_id for nested runs."""
+        async with tracker.run("ctx-nested-exp", run_name="parent") as parent_ctx:
+            await parent_ctx.log_param("model", "rf")
+
+            async with tracker.run(
+                "ctx-nested-exp",
+                run_name="child-fold-1",
+                parent_run_id=parent_ctx.run_id,
+            ) as child_ctx:
+                await child_ctx.log_metric("fold_acc", 0.92)
+
+        # Both runs should be COMPLETED
+        parent_run = await tracker.get_run(parent_ctx.run_id)
+        child_run = await tracker.get_run(child_ctx.run_id)
+        assert parent_run.status == "COMPLETED"
+        assert child_run.status == "COMPLETED"
+        assert child_run.parent_run_id == parent_ctx.run_id
+        assert child_run.metrics["fold_acc"] == 0.92
+        assert parent_run.params["model"] == "rf"
+
+    @pytest.mark.asyncio
+    async def test_child_run_invalid_parent(self, tracker: ExperimentTracker) -> None:
+        """start_run raises if parent_run_id does not exist."""
+        with pytest.raises(RunNotFoundError, match="not found"):
+            await tracker.start_run(
+                "bad-parent-exp", run_name="orphan", parent_run_id="no-such-run"
+            )
+
+    @pytest.mark.asyncio
+    async def test_list_runs_includes_parent_run_id(
+        self, tracker: ExperimentTracker
+    ) -> None:
+        """list_runs returns runs with parent_run_id populated."""
+        parent = await tracker.start_run("list-nested-exp", run_name="parent")
+        await tracker.start_run(
+            "list-nested-exp", run_name="child", parent_run_id=parent.id
+        )
+        runs = await tracker.list_runs("list-nested-exp")
+        child_runs = [r for r in runs if r.parent_run_id is not None]
+        assert len(child_runs) == 1
+        assert child_runs[0].parent_run_id == parent.id
+
+    @pytest.mark.asyncio
+    async def test_run_to_dict_includes_parent_run_id(self) -> None:
+        """Run.to_dict() / from_dict() round-trips parent_run_id."""
+        run = Run(
+            id="child1",
+            experiment_id="exp1",
+            name="child",
+            status="COMPLETED",
+            start_time="2026-01-01T00:00:00",
+            end_time="2026-01-01T01:00:00",
+            tags={},
+            params={},
+            metrics={},
+            artifacts=[],
+            parent_run_id="parent1",
+        )
+        d = run.to_dict()
+        assert d["parent_run_id"] == "parent1"
+        restored = Run.from_dict(d)
+        assert restored.parent_run_id == "parent1"
+        assert restored == run
+
+    @pytest.mark.asyncio
+    async def test_run_to_dict_null_parent(self) -> None:
+        """Run.to_dict() includes None for top-level runs."""
+        run = Run(
+            id="r1",
+            experiment_id="exp1",
+            name="top",
+            status="RUNNING",
+            start_time="2026-01-01T00:00:00",
+            end_time=None,
+            tags={},
+            params={},
+            metrics={},
+            artifacts=[],
+        )
+        d = run.to_dict()
+        assert d["parent_run_id"] is None
+        restored = Run.from_dict(d)
+        assert restored.parent_run_id is None

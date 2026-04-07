@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-ml"
-version = "0.6.0"
+version = "0.7.0"
 description = "Machine learning lifecycle for the Kailash ecosystem"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -34,7 +34,7 @@ dependencies = [
     "pyarrow>=14.0",
     "numpy>=1.24",
     "scipy>=1.11",
-    "scikit-learn>=1.4",
+    "scikit-learn>=1.5",
     "lightgbm>=4.0",
     "plotly>=5.18",
     "skl2onnx>=1.16",
@@ -68,6 +68,8 @@ rl = [
 agents = [
     "kailash-kaizen>=1.0",
 ]
+explain = ["shap>=0.44"]
+imbalance = ["imbalanced-learn>=0.12"]
 xgb = ["xgboost>=2.0"]
 catboost = ["catboost>=1.2"]
 stats = ["statsmodels>=0.14"]
@@ -79,8 +81,8 @@ dashboard = [
     "uvicorn>=0.27",
 ]
 interop = ["pandas>=2.0"]
-all = ["kailash-ml[dl,xgb,catboost,stats,rl,agents,hpo,mlflow,huggingface,dashboard,interop]"]
-all-gpu = ["kailash-ml[dl-gpu,xgb,catboost,stats,rl,agents,hpo,mlflow,huggingface,dashboard,interop]"]
+all = ["kailash-ml[dl,xgb,catboost,stats,rl,agents,hpo,mlflow,huggingface,dashboard,interop,imbalance,explain]"]
+all-gpu = ["kailash-ml[dl-gpu,xgb,catboost,stats,rl,agents,hpo,mlflow,huggingface,dashboard,interop,imbalance,explain]"]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

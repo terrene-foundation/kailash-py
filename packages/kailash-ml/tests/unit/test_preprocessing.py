@@ -773,3 +773,602 @@ class TestCardinalityGuard:
         # Same encoding should be applied
         id_onehot = [c for c in test_cols if c.startswith("id_")]
         assert len(id_onehot) == 0
+
+
+# ---------------------------------------------------------------------------
+# Normalization methods (#330)
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizationMethods:
+    """Tests for normalize_method parameter (#330)."""
+
+    @pytest.fixture()
+    def norm_df(self) -> pl.DataFrame:
+        """DataFrame with known numeric values for normalization checks."""
+        return pl.DataFrame(
+            {
+                "a": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
+                "b": [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0],
+                "target": list(range(10)),
+            }
+        )
+
+    def test_zscore_approximately_zero_mean_unit_var(
+        self, norm_df: pl.DataFrame
+    ) -> None:
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            norm_df, "target", normalize=True, normalize_method="zscore"
+        )
+        combined = pl.concat([result.train_data, result.test_data])
+        for col in ["a", "b"]:
+            mean_val = combined[col].mean()
+            std_val = combined[col].std()
+            assert mean_val is not None and abs(mean_val) < 0.5
+            assert std_val is not None and abs(std_val - 1.0) < 0.5
+
+    def test_minmax_range_zero_to_one(self, norm_df: pl.DataFrame) -> None:
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            norm_df, "target", normalize=True, normalize_method="minmax"
+        )
+        combined = pl.concat([result.train_data, result.test_data])
+        for col in ["a", "b"]:
+            min_val = combined[col].min()
+            max_val = combined[col].max()
+            assert min_val is not None and min_val >= -0.01
+            assert max_val is not None and max_val <= 1.01
+
+    def test_robust_uses_median_centering(self, norm_df: pl.DataFrame) -> None:
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            norm_df, "target", normalize=True, normalize_method="robust"
+        )
+        combined = pl.concat([result.train_data, result.test_data])
+        for col in ["a", "b"]:
+            median_val = combined[col].median()
+            # RobustScaler centers on median; after transform the median
+            # of the full dataset should be close to 0
+            assert median_val is not None and abs(median_val) < 0.5
+
+    def test_maxabs_range_minus_one_to_one(self, norm_df: pl.DataFrame) -> None:
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            norm_df, "target", normalize=True, normalize_method="maxabs"
+        )
+        combined = pl.concat([result.train_data, result.test_data])
+        for col in ["a", "b"]:
+            min_val = combined[col].min()
+            max_val = combined[col].max()
+            assert min_val is not None and min_val >= -1.01
+            assert max_val is not None and max_val <= 1.01
+
+    def test_invalid_normalize_method_raises(self, norm_df: pl.DataFrame) -> None:
+        pipeline = PreprocessingPipeline()
+        with pytest.raises(ValueError, match="normalize_method"):
+            pipeline.setup(norm_df, "target", normalize_method="invalid")
+
+    def test_scaler_stored_in_transformers(self, norm_df: pl.DataFrame) -> None:
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            norm_df, "target", normalize=True, normalize_method="minmax"
+        )
+        assert "scaler" in result.transformers
+        from sklearn.preprocessing import MinMaxScaler
+
+        assert isinstance(result.transformers["scaler"], MinMaxScaler)
+
+    def test_transform_uses_fitted_scaler(self, norm_df: pl.DataFrame) -> None:
+        """transform() on new data uses the same scaler fitted during setup."""
+        pipeline = PreprocessingPipeline()
+        pipeline.setup(norm_df, "target", normalize=True, normalize_method="minmax")
+        new_data = norm_df.head(3)
+        transformed = pipeline.transform(new_data)
+        for col in ["a", "b"]:
+            min_val = transformed[col].min()
+            max_val = transformed[col].max()
+            assert min_val is not None and min_val >= -0.01
+            assert max_val is not None and max_val <= 1.01
+
+
+# ---------------------------------------------------------------------------
+# Advanced imputation (#331)
+# ---------------------------------------------------------------------------
+
+
+class TestAdvancedImputation:
+    """Tests for KNN and iterative imputation (#331)."""
+
+    @pytest.fixture()
+    def impute_df(self) -> pl.DataFrame:
+        """DataFrame with nulls for advanced imputation testing."""
+        return pl.DataFrame(
+            {
+                "a": [1.0, None, 3.0, None, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
+                "b": [10.0, 20.0, None, 40.0, 50.0, None, 70.0, 80.0, 90.0, 100.0],
+                "cat": ["x", None, "y", "x", "y", "x", None, "y", "x", "y"],
+                "target": [0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+            }
+        )
+
+    def test_knn_fills_nulls(self, impute_df: pl.DataFrame) -> None:
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            impute_df,
+            "target",
+            imputation_strategy="knn",
+            normalize=False,
+        )
+        combined = pl.concat([result.train_data, result.test_data])
+        for col in ["a", "b"]:
+            assert combined[col].null_count() == 0
+
+    def test_knn_categorical_gets_mode(self, impute_df: pl.DataFrame) -> None:
+        """Categorical columns still receive mode imputation under knn."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            impute_df,
+            "target",
+            imputation_strategy="knn",
+            categorical_encoding="ordinal",
+            normalize=False,
+        )
+        combined = pl.concat([result.train_data, result.test_data])
+        # cat column should have no nulls after encoding
+        assert combined["cat"].null_count() == 0
+
+    def test_knn_n_neighbors(self, impute_df: pl.DataFrame) -> None:
+        """Custom n_neighbors is respected."""
+        pipeline = PreprocessingPipeline()
+        pipeline.setup(
+            impute_df,
+            "target",
+            imputation_strategy="knn",
+            impute_n_neighbors=3,
+            normalize=False,
+        )
+        imputer = pipeline._transformers["sklearn_imputer"]
+        assert imputer.n_neighbors == 3
+
+    def test_iterative_fills_nulls(self, impute_df: pl.DataFrame) -> None:
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            impute_df,
+            "target",
+            imputation_strategy="iterative",
+            normalize=False,
+        )
+        combined = pl.concat([result.train_data, result.test_data])
+        for col in ["a", "b"]:
+            assert combined[col].null_count() == 0
+
+    def test_iterative_categorical_gets_mode(self, impute_df: pl.DataFrame) -> None:
+        """Categorical columns still receive mode imputation under iterative."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            impute_df,
+            "target",
+            imputation_strategy="iterative",
+            categorical_encoding="ordinal",
+            normalize=False,
+        )
+        combined = pl.concat([result.train_data, result.test_data])
+        assert combined["cat"].null_count() == 0
+
+    def test_knn_transform_uses_fitted_imputer(self, impute_df: pl.DataFrame) -> None:
+        """transform() on new data uses the fitted KNN imputer."""
+        pipeline = PreprocessingPipeline()
+        pipeline.setup(
+            impute_df,
+            "target",
+            imputation_strategy="knn",
+            categorical_encoding="ordinal",
+            normalize=False,
+        )
+        new_data = pl.DataFrame(
+            {
+                "a": [None, 4.0, 6.0],
+                "b": [30.0, None, 80.0],
+                "cat": ["x", "y", "x"],
+                "target": [0, 1, 0],
+            }
+        )
+        transformed = pipeline.transform(new_data)
+        for col in ["a", "b"]:
+            assert transformed[col].null_count() == 0
+
+    def test_iterative_transform_uses_fitted_imputer(
+        self, impute_df: pl.DataFrame
+    ) -> None:
+        """transform() on new data uses the fitted iterative imputer."""
+        pipeline = PreprocessingPipeline()
+        pipeline.setup(
+            impute_df,
+            "target",
+            imputation_strategy="iterative",
+            categorical_encoding="ordinal",
+            normalize=False,
+        )
+        new_data = pl.DataFrame(
+            {
+                "a": [None, 4.0, 6.0],
+                "b": [30.0, None, 80.0],
+                "cat": ["x", "y", "x"],
+                "target": [0, 1, 0],
+            }
+        )
+        transformed = pipeline.transform(new_data)
+        for col in ["a", "b"]:
+            assert transformed[col].null_count() == 0
+
+    def test_sklearn_imputer_stored(self, impute_df: pl.DataFrame) -> None:
+        """The fitted sklearn imputer is stored in transformers."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            impute_df,
+            "target",
+            imputation_strategy="knn",
+            normalize=False,
+        )
+        assert "sklearn_imputer" in result.transformers
+        from sklearn.impute import KNNImputer
+
+        assert isinstance(result.transformers["sklearn_imputer"], KNNImputer)
+
+
+# ---------------------------------------------------------------------------
+# Multicollinearity removal (#332)
+# ---------------------------------------------------------------------------
+
+
+class TestMulticollinearityRemoval:
+    """Tests for remove_multicollinearity parameter (#332)."""
+
+    def test_highly_correlated_feature_dropped(self) -> None:
+        """When two features are nearly identical, the one with lower
+        target correlation is dropped."""
+        rng = np.random.RandomState(42)
+        n = 200
+        base = rng.randn(n)
+        target = (base > 0).astype(int)
+        df = pl.DataFrame(
+            {
+                "feat_a": base.tolist(),
+                # feat_b is a near-perfect copy of feat_a (r ~ 1.0)
+                "feat_b": (base + rng.randn(n) * 0.001).tolist(),
+                # feat_c is independent
+                "feat_c": rng.randn(n).tolist(),
+                "target": target.tolist(),
+            }
+        )
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            df,
+            "target",
+            normalize=False,
+            remove_multicollinearity=True,
+            multicollinearity_threshold=0.9,
+        )
+        dropped = result.transformers.get("multicollinear_dropped", [])
+        # One of feat_a / feat_b should be dropped
+        assert len(dropped) == 1
+        assert dropped[0] in ("feat_a", "feat_b")
+        # The dropped column should not be in train or test data
+        assert dropped[0] not in result.train_data.columns
+        assert dropped[0] not in result.test_data.columns
+        # feat_c (independent) should be kept
+        assert "feat_c" in result.train_data.columns
+
+    def test_weakly_correlated_features_kept(self) -> None:
+        """Features below the threshold are not removed."""
+        rng = np.random.RandomState(42)
+        n = 200
+        df = pl.DataFrame(
+            {
+                "feat_a": rng.randn(n).tolist(),
+                "feat_b": rng.randn(n).tolist(),
+                "target": rng.randint(0, 2, n).tolist(),
+            }
+        )
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            df,
+            "target",
+            normalize=False,
+            remove_multicollinearity=True,
+            multicollinearity_threshold=0.9,
+        )
+        dropped = result.transformers.get("multicollinear_dropped", [])
+        assert len(dropped) == 0
+        assert "feat_a" in result.train_data.columns
+        assert "feat_b" in result.train_data.columns
+
+    def test_disabled_by_default(self) -> None:
+        """Multicollinearity removal is off by default."""
+        rng = np.random.RandomState(42)
+        n = 100
+        base = rng.randn(n)
+        df = pl.DataFrame(
+            {
+                "feat_a": base.tolist(),
+                "feat_b": base.tolist(),  # perfect copy
+                "target": rng.randint(0, 2, n).tolist(),
+            }
+        )
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(df, "target", normalize=False)
+        # Both columns should still be present
+        assert "feat_a" in result.train_data.columns
+        assert "feat_b" in result.train_data.columns
+
+    def test_transform_drops_same_columns(self) -> None:
+        """transform() on new data drops the same columns that were
+        removed during setup."""
+        rng = np.random.RandomState(42)
+        n = 200
+        base = rng.randn(n)
+        df = pl.DataFrame(
+            {
+                "feat_a": base.tolist(),
+                "feat_b": (base + rng.randn(n) * 0.001).tolist(),
+                "feat_c": rng.randn(n).tolist(),
+                "target": rng.randint(0, 2, n).tolist(),
+            }
+        )
+        pipeline = PreprocessingPipeline()
+        pipeline.setup(
+            df,
+            "target",
+            normalize=False,
+            remove_multicollinearity=True,
+            multicollinearity_threshold=0.9,
+        )
+        dropped = pipeline._transformers.get("multicollinear_dropped", [])
+        assert len(dropped) == 1
+
+        new_data = df.head(5)
+        transformed = pipeline.transform(new_data)
+        assert dropped[0] not in transformed.columns
+
+    def test_drops_column_with_lower_target_correlation(self) -> None:
+        """When two features are correlated, the one with lower
+        absolute target correlation is dropped."""
+        rng = np.random.RandomState(42)
+        n = 200
+        target = rng.randint(0, 2, n)
+        # feat_a has strong target correlation
+        feat_a = target.astype(float) + rng.randn(n) * 0.1
+        # feat_b is a near-copy of feat_a with small noise to keep
+        # inter-feature correlation above 0.9 while having slightly
+        # lower target correlation
+        feat_b = feat_a + rng.randn(n) * 0.05
+        df = pl.DataFrame(
+            {
+                "feat_a": feat_a.tolist(),
+                "feat_b": feat_b.tolist(),
+                "target": target.tolist(),
+            }
+        )
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            df,
+            "target",
+            normalize=False,
+            remove_multicollinearity=True,
+            multicollinearity_threshold=0.8,
+        )
+        dropped = result.transformers.get("multicollinear_dropped", [])
+        # feat_b has lower target correlation, so it should be dropped
+        assert dropped == ["feat_b"]
+
+    def test_single_feature_no_removal(self) -> None:
+        """With only one numeric feature, nothing can be removed."""
+        df = pl.DataFrame(
+            {
+                "feat": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
+                "target": [0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+            }
+        )
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            df,
+            "target",
+            normalize=False,
+            remove_multicollinearity=True,
+            multicollinearity_threshold=0.5,
+        )
+        dropped = result.transformers.get("multicollinear_dropped", [])
+        assert len(dropped) == 0
+
+    def test_multicollinear_dropped_in_config(self) -> None:
+        """Config reflects multicollinearity settings."""
+        df = pl.DataFrame(
+            {
+                "a": [1.0, 2.0, 3.0, 4.0, 5.0],
+                "target": [0, 1, 0, 1, 0],
+            }
+        )
+        pipeline = PreprocessingPipeline()
+        pipeline.setup(
+            df,
+            "target",
+            normalize=False,
+            remove_multicollinearity=True,
+            multicollinearity_threshold=0.85,
+        )
+        config = pipeline.get_config()
+        assert config["remove_multicollinearity"] is True
+        assert config["multicollinearity_threshold"] == 0.85
+
+
+# ---------------------------------------------------------------------------
+# Class imbalance handling (#327)
+# ---------------------------------------------------------------------------
+
+
+class TestClassImbalance:
+    """Tests for fix_imbalance parameter (#327)."""
+
+    @pytest.fixture()
+    def imbalanced_df(self) -> pl.DataFrame:
+        """DataFrame with severe class imbalance (90/10 split)."""
+        rng = np.random.RandomState(42)
+        n_majority = 180
+        n_minority = 20
+        n = n_majority + n_minority
+        df = pl.DataFrame(
+            {
+                "feat_a": rng.randn(n).tolist(),
+                "feat_b": rng.randn(n).tolist(),
+                "target": ([0] * n_majority + [1] * n_minority),
+            }
+        )
+        return df
+
+    def test_class_weight_sets_flag(self, imbalanced_df: pl.DataFrame) -> None:
+        """class_weight method sets the flag without resampling."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            imbalanced_df,
+            "target",
+            normalize=False,
+            fix_imbalance=True,
+            imbalance_method="class_weight",
+        )
+        assert pipeline._use_balanced_class_weight is True
+        # No resampling -- row counts should match normal split
+        total = result.train_data.height + result.test_data.height
+        assert total == imbalanced_df.height
+
+    def test_class_weight_no_extra_dependency(
+        self, imbalanced_df: pl.DataFrame
+    ) -> None:
+        """class_weight works without imbalanced-learn installed."""
+        pipeline = PreprocessingPipeline()
+        # Should not raise ImportError
+        result = pipeline.setup(
+            imbalanced_df,
+            "target",
+            normalize=False,
+            fix_imbalance=True,
+            imbalance_method="class_weight",
+        )
+        assert result.train_data.height > 0
+
+    def test_fix_imbalance_disabled_by_default(
+        self, imbalanced_df: pl.DataFrame
+    ) -> None:
+        """Imbalance correction is off by default."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(imbalanced_df, "target", normalize=False)
+        assert pipeline._use_balanced_class_weight is False
+        # Train size should be the normal 80%
+        assert result.train_data.height == int(imbalanced_df.height * 0.8)
+
+    def test_fix_imbalance_skipped_for_regression(self) -> None:
+        """Imbalance correction is not applied for regression tasks."""
+        rng = np.random.RandomState(42)
+        n = 100
+        df = pl.DataFrame(
+            {
+                "feat": rng.randn(n).tolist(),
+                "target": rng.randn(n).tolist(),  # continuous -> regression
+            }
+        )
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            df,
+            "target",
+            normalize=False,
+            fix_imbalance=True,
+            imbalance_method="class_weight",
+        )
+        assert pipeline._use_balanced_class_weight is False
+        assert result.task_type == "regression"
+
+    def test_invalid_imbalance_method_raises(self, imbalanced_df: pl.DataFrame) -> None:
+        """Invalid imbalance_method raises ValueError."""
+        pipeline = PreprocessingPipeline()
+        with pytest.raises(ValueError, match="imbalance_method"):
+            pipeline.setup(
+                imbalanced_df,
+                "target",
+                fix_imbalance=True,
+                imbalance_method="invalid",
+            )
+
+    def test_imbalance_config_stored(self, imbalanced_df: pl.DataFrame) -> None:
+        """Config reflects imbalance settings."""
+        pipeline = PreprocessingPipeline()
+        pipeline.setup(
+            imbalanced_df,
+            "target",
+            normalize=False,
+            fix_imbalance=True,
+            imbalance_method="class_weight",
+        )
+        config = pipeline.get_config()
+        assert config["fix_imbalance"] is True
+        assert config["imbalance_method"] == "class_weight"
+
+    def test_summary_includes_imbalance(self, imbalanced_df: pl.DataFrame) -> None:
+        """Summary mentions imbalance correction."""
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            imbalanced_df,
+            "target",
+            normalize=False,
+            fix_imbalance=True,
+            imbalance_method="class_weight",
+        )
+        assert "class_weight" in result.summary
+
+    def test_smote_resamples_training_data(self, imbalanced_df: pl.DataFrame) -> None:
+        """SMOTE increases the minority class in training data."""
+        imblearn = pytest.importorskip("imblearn")  # noqa: F841
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            imbalanced_df,
+            "target",
+            normalize=False,
+            fix_imbalance=True,
+            imbalance_method="smote",
+        )
+        # After SMOTE, training data should have more rows
+        normal_train_size = int(imbalanced_df.height * 0.8)
+        assert result.train_data.height > normal_train_size
+        # Classes should be balanced in training data
+        class_counts = result.train_data["target"].value_counts()
+        counts = class_counts["count"].to_list()
+        assert counts[0] == counts[1]
+        # Test data should be unmodified
+        assert result.test_data.height == imbalanced_df.height - normal_train_size
+
+    def test_adasyn_resamples_training_data(self, imbalanced_df: pl.DataFrame) -> None:
+        """ADASYN increases the minority class in training data."""
+        imblearn = pytest.importorskip("imblearn")  # noqa: F841
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            imbalanced_df,
+            "target",
+            normalize=False,
+            fix_imbalance=True,
+            imbalance_method="adasyn",
+        )
+        normal_train_size = int(imbalanced_df.height * 0.8)
+        assert result.train_data.height > normal_train_size
+
+    def test_smote_only_on_train_not_test(self, imbalanced_df: pl.DataFrame) -> None:
+        """SMOTE modifies training data only; test data is untouched."""
+        imblearn = pytest.importorskip("imblearn")  # noqa: F841
+        pipeline = PreprocessingPipeline()
+        result = pipeline.setup(
+            imbalanced_df,
+            "target",
+            normalize=False,
+            fix_imbalance=True,
+            imbalance_method="smote",
+        )
+        expected_test = imbalanced_df.height - int(imbalanced_df.height * 0.8)
+        assert result.test_data.height == expected_test

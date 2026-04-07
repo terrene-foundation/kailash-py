@@ -331,6 +331,8 @@ class AutoMLEngine:
         config: AutoMLConfig,
         eval_spec: Any,
         experiment_name: str,
+        *,
+        tracker: Any | None = None,
     ) -> AutoMLResult:
         """Run automated model selection + hyperparameter optimization.
 
@@ -340,6 +342,14 @@ class AutoMLEngine:
         4. Rank candidates by metric
         5. Run HyperparameterSearch on top candidate
         6. Register best model if requested
+
+        Parameters
+        ----------
+        tracker:
+            Optional ExperimentTracker instance. When provided, creates a
+            parent run for the AutoML session and passes the tracker to
+            all training and search calls for hierarchical logging.
+            Typed as ``Any`` to avoid circular imports.
         """
         from kailash_ml.engines.hyperparameter_search import (
             ParamDistribution,
@@ -350,87 +360,124 @@ class AutoMLEngine:
 
         start_time = time.perf_counter()
 
-        # Guardrail 4: baseline recommendation
-        baseline = self._compute_baseline_recommendation(data, schema, config)
+        # Start parent run for AutoML if tracker provided
+        parent_run_id: str | None = None
+        parent_run_obj: Any | None = None
+        if tracker is not None:
+            parent_run_obj = await tracker.start_run(
+                experiment_name,
+                run_name="automl",
+            )
+            parent_run_id = parent_run_obj.id
+            await tracker.log_params(
+                parent_run_id,
+                {
+                    "task_type": config.task_type,
+                    "metric_to_optimize": config.metric_to_optimize,
+                    "direction": config.direction,
+                    "search_strategy": config.search_strategy,
+                    "search_n_trials": str(config.search_n_trials),
+                },
+            )
 
-        # Agent augmentation (not implemented in v1 -- requires kaizen agents)
-        agent_rec: AgentRecommendation | None = None
+        try:
+            # Guardrail 4: baseline recommendation
+            baseline = self._compute_baseline_recommendation(data, schema, config)
 
-        # Determine candidates
-        candidates_spec = self._get_candidates(config)
+            # Agent augmentation (not implemented in v1 -- requires kaizen agents)
+            agent_rec: AgentRecommendation | None = None
 
-        # Quick-train each candidate
-        candidate_results: list[CandidateResult] = []
-        for model_class, framework, default_hp in candidates_spec:
-            try:
-                spec = ModelSpec(model_class, default_hp, framework)
-                train_result = await self._pipeline.train(
-                    data,
-                    schema,
-                    spec,
-                    eval_spec,
-                    f"{experiment_name}_{model_class.split('.')[-1]}",
-                )
-                candidate_results.append(
-                    CandidateResult(
-                        model_class=model_class,
-                        framework=framework,
-                        default_metrics=train_result.metrics,
+            # Determine candidates
+            candidates_spec = self._get_candidates(config)
+
+            # Quick-train each candidate
+            candidate_results: list[CandidateResult] = []
+            for model_class, framework, default_hp in candidates_spec:
+                try:
+                    spec = ModelSpec(model_class, default_hp, framework)
+                    train_result = await self._pipeline.train(
+                        data,
+                        schema,
+                        spec,
+                        eval_spec,
+                        f"{experiment_name}_{model_class.split('.')[-1]}",
+                        tracker=tracker,
+                        parent_run_id=parent_run_id,
                     )
+                    candidate_results.append(
+                        CandidateResult(
+                            model_class=model_class,
+                            framework=framework,
+                            default_metrics=train_result.metrics,
+                        )
+                    )
+                except Exception as exc:
+                    logger.warning("Candidate %s failed: %s", model_class, exc)
+
+            if not candidate_results:
+                raise RuntimeError("All AutoML candidates failed during quick-train")
+
+            # Rank by metric
+            if config.direction == "maximize":
+                candidate_results.sort(
+                    key=lambda c: c.default_metrics.get(config.metric_to_optimize, 0.0),
+                    reverse=True,
                 )
-            except Exception as exc:
-                logger.warning("Candidate %s failed: %s", model_class, exc)
+            else:
+                candidate_results.sort(
+                    key=lambda c: c.default_metrics.get(
+                        config.metric_to_optimize, float("inf")
+                    ),
+                )
 
-        if not candidate_results:
-            raise RuntimeError("All AutoML candidates failed during quick-train")
+            for i, c in enumerate(candidate_results):
+                c.rank = i + 1
 
-        # Rank by metric
-        if config.direction == "maximize":
-            candidate_results.sort(
-                key=lambda c: c.default_metrics.get(config.metric_to_optimize, 0.0),
-                reverse=True,
+            # Deep search on top candidate
+            top = candidate_results[0]
+            search_space = self._default_search_space(top.model_class, top.framework)
+            search_config = SearchConfig(
+                strategy=config.search_strategy,
+                n_trials=config.search_n_trials,
+                metric_to_optimize=config.metric_to_optimize,
+                direction=config.direction,
+                register_best=False,  # We register manually
             )
+
+            base_spec = ModelSpec(top.model_class, {}, top.framework)
+            search_result = await self._search.search(
+                data,
+                schema,
+                base_spec,
+                search_space,
+                search_config,
+                eval_spec,
+                f"{experiment_name}_hp_search",
+                tracker=tracker,
+                parent_run_id=parent_run_id,
+            )
+            top.search_result = search_result
+
+            # Best metrics from search
+            best_metrics = (
+                search_result.best_metrics
+                if search_result.best_metrics
+                else top.default_metrics
+            )
+
+            total_time = time.perf_counter() - start_time
+
+            # Log best metrics on parent run
+            if tracker is not None and parent_run_id is not None and best_metrics:
+                await tracker.log_metrics(parent_run_id, best_metrics)
+
+        except BaseException:
+            if tracker is not None and parent_run_id is not None:
+                await tracker.end_run(parent_run_id, status="FAILED")
+            raise
         else:
-            candidate_results.sort(
-                key=lambda c: c.default_metrics.get(
-                    config.metric_to_optimize, float("inf")
-                ),
-            )
-
-        for i, c in enumerate(candidate_results):
-            c.rank = i + 1
-
-        # Deep search on top candidate
-        top = candidate_results[0]
-        search_space = self._default_search_space(top.model_class, top.framework)
-        search_config = SearchConfig(
-            strategy=config.search_strategy,
-            n_trials=config.search_n_trials,
-            metric_to_optimize=config.metric_to_optimize,
-            direction=config.direction,
-            register_best=False,  # We register manually
-        )
-
-        base_spec = ModelSpec(top.model_class, {}, top.framework)
-        search_result = await self._search.search(
-            data,
-            schema,
-            base_spec,
-            search_space,
-            search_config,
-            eval_spec,
-            f"{experiment_name}_hp_search",
-        )
-        top.search_result = search_result
-
-        # Best metrics from search
-        best_metrics = (
-            search_result.best_metrics
-            if search_result.best_metrics
-            else top.default_metrics
-        )
-
-        total_time = time.perf_counter() - start_time
+            if tracker is not None and parent_run_id is not None:
+                await tracker.end_run(parent_run_id, status="COMPLETED")
 
         return AutoMLResult(
             best_model=top,

@@ -107,6 +107,7 @@ class Run:
     params: dict[str, str]
     metrics: dict[str, float]  # Latest value per key
     artifacts: list[str]  # Artifact paths
+    parent_run_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -120,6 +121,7 @@ class Run:
             "params": dict(self.params),
             "metrics": dict(self.metrics),
             "artifacts": list(self.artifacts),
+            "parent_run_id": self.parent_run_id,
         }
 
     @classmethod
@@ -135,6 +137,7 @@ class Run:
             params=data.get("params", {}),
             metrics=data.get("metrics", {}),
             artifacts=data.get("artifacts", []),
+            parent_run_id=data.get("parent_run_id"),
         )
 
 
@@ -217,9 +220,17 @@ async def _create_tracker_tables(conn: ConnectionManager) -> None:
         "  start_time TEXT NOT NULL,"
         "  end_time TEXT,"
         "  tags_json TEXT DEFAULT '{}',"
-        "  FOREIGN KEY (experiment_id) REFERENCES kailash_experiments(id)"
+        "  parent_run_id TEXT,"
+        "  FOREIGN KEY (experiment_id) REFERENCES kailash_experiments(id),"
+        "  FOREIGN KEY (parent_run_id) REFERENCES kailash_runs(id)"
         ")"
     )
+    # Migration for existing databases that lack parent_run_id column
+    try:
+        await conn.execute("ALTER TABLE kailash_runs ADD COLUMN parent_run_id TEXT")
+    except Exception as exc:
+        if "duplicate column" not in str(exc).lower():
+            logger.warning("Schema migration failed: %s", exc)
     await conn.execute(
         "CREATE TABLE IF NOT EXISTS kailash_run_params ("
         "  run_id TEXT NOT NULL,"
@@ -462,17 +473,31 @@ class ExperimentTracker:
         experiment_name: str,
         run_name: str | None = None,
         tags: dict[str, str] | None = None,
+        parent_run_id: str | None = None,
     ) -> AsyncIterator[RunContext]:
         """Context manager for run lifecycle.
 
         Auto-creates experiment if not exists. Ends run as COMPLETED on
         normal exit, FAILED on exception.
+
+        Parameters
+        ----------
+        experiment_name:
+            Name of the parent experiment.
+        run_name:
+            Optional human-readable run name.
+        tags:
+            Optional key-value tags.
+        parent_run_id:
+            Optional parent run ID for nested runs.
         """
-        run_obj = await self.start_run(experiment_name, run_name, tags)
+        run_obj = await self.start_run(
+            experiment_name, run_name, tags, parent_run_id=parent_run_id
+        )
         ctx = RunContext(self, run_obj)
         try:
             yield ctx
-        except BaseException:
+        except Exception:
             await self.end_run(run_obj.id, status="FAILED")
             raise
         else:
@@ -569,6 +594,8 @@ class ExperimentTracker:
         experiment_name: str,
         run_name: str | None = None,
         tags: dict[str, str] | None = None,
+        *,
+        parent_run_id: str | None = None,
     ) -> Run:
         """Start a new run. Auto-creates experiment if not exists.
 
@@ -580,6 +607,8 @@ class ExperimentTracker:
             Optional human-readable run name.
         tags:
             Optional key-value tags.
+        parent_run_id:
+            Optional parent run ID for nested runs.
 
         Returns
         -------
@@ -591,6 +620,10 @@ class ExperimentTracker:
         # Ensure experiment exists
         experiment_id = await self.create_experiment(experiment_name)
 
+        # Validate parent run exists if specified
+        if parent_run_id is not None:
+            await self._verify_run_exists(parent_run_id)
+
         run_id = str(uuid.uuid4())
         now_iso = datetime.now(timezone.utc).isoformat()
         tags = tags or {}
@@ -599,8 +632,8 @@ class ExperimentTracker:
 
         await self._conn.execute(
             "INSERT INTO kailash_runs "
-            "(id, experiment_id, name, status, start_time, end_time, tags_json) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "(id, experiment_id, name, status, start_time, end_time, tags_json, parent_run_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             run_id,
             experiment_id,
             run_name,
@@ -608,6 +641,7 @@ class ExperimentTracker:
             now_iso,
             None,
             tags_json,
+            parent_run_id,
         )
 
         logger.info(
@@ -628,6 +662,7 @@ class ExperimentTracker:
             params={},
             metrics={},
             artifacts=[],
+            parent_run_id=parent_run_id,
         )
 
     async def end_run(self, run_id: str, status: str = "COMPLETED") -> None:
@@ -723,6 +758,34 @@ class ExperimentTracker:
                 exp.id,
             )
 
+        return [await self._hydrate_run(r) for r in rows]
+
+    async def list_child_runs(self, parent_run_id: str) -> list[Run]:
+        """List all child runs of a given parent run.
+
+        Parameters
+        ----------
+        parent_run_id:
+            The parent run ID whose children to list.
+
+        Returns
+        -------
+        list[Run]
+            Child runs ordered by start time (most recent first).
+
+        Raises
+        ------
+        RunNotFoundError
+            If the parent run does not exist.
+        """
+        await self._ensure_tables()
+        await self._verify_run_exists(parent_run_id)
+
+        rows = await self._conn.fetch(
+            "SELECT * FROM kailash_runs "
+            "WHERE parent_run_id = ? ORDER BY start_time DESC",
+            parent_run_id,
+        )
         return [await self._hydrate_run(r) for r in rows]
 
     async def search_runs(
@@ -1116,7 +1179,10 @@ class ExperimentTracker:
         # Clean up artifact directory
         artifact_dir = self._artifact_root / run_id
         if artifact_dir.exists():
-            shutil.rmtree(artifact_dir)
+            resolved = artifact_dir.resolve()
+            if not str(resolved).startswith(str(self._artifact_root.resolve())):
+                raise ValueError(f"Invalid artifact path: {run_id}")
+            shutil.rmtree(resolved)
 
         logger.info("Deleted run '%s' and all associated data.", run_id)
 
@@ -1210,6 +1276,7 @@ class ExperimentTracker:
             params=params,
             metrics=metrics,
             artifacts=artifacts,
+            parent_run_id=row.get("parent_run_id"),
         )
 
     @staticmethod
