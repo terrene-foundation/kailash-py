@@ -1,3 +1,11 @@
+---
+paths:
+  - ".claude/**"
+  - "sync-manifest.yaml"
+  - "**/VERSION"
+  - "*.md"
+---
+
 # Artifact Flow Rules
 
 ## Authority Chain
