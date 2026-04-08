@@ -80,7 +80,15 @@ repos:
     hooks:
       - id: pytest-check
         name: Run Tier 1 unit tests
-        entry: python -m pytest
+        # Use the project .venv's Python directly. Plain `python -m pytest`
+        # resolves via PATH and can pick up a pyenv or global Python that
+        # does not have the workspace editable installs (kailash_mcp,
+        # kaizen, nexus, etc.), which breaks any test that imports those
+        # packages. `uv run python` would also work but has a side effect
+        # of regenerating uv.lock on every invocation, which pre-commit
+        # flags as "files were modified by this hook". Direct .venv/bin
+        # avoids both problems. See .claude/rules/python-environment.md.
+        entry: .venv/bin/python -m pytest
         language: system
         args: [
             tests/unit/, # Only unit tests

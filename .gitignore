@@ -4,6 +4,22 @@ node_modules/
 # Python
 __pycache__/
 
+# Claude Code ephemeral agent worktrees (local, never committed)
+.claude/worktrees/
+
+# ML runtime artifacts (experiment tracking, models)
+.kailash_ml/
+
+# Self-certifying spec-coverage files are BANNED during audit mode.
+# See .claude/rules/testing.md § Audit Mode Rules and
+# .claude/skills/spec-compliance/SKILL.md.
+# These files are ignored so they cannot accidentally be committed as "proof".
+.spec-coverage
+.spec-coverage.md
+.spec-coverage-*.md
+.test-results
+.test-results.md
+
 # Editable install symlinks (pip install -e creates these)
 src/kailash/runtime.py
 src/kailash/dataflow
