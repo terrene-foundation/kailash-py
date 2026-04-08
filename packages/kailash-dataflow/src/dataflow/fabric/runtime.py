@@ -40,6 +40,7 @@ from dataflow.fabric.cache import (
     _mask_url,
 )
 from dataflow.fabric.change_detector import ChangeDetector
+from dataflow.fabric.config import ProductMode
 from dataflow.fabric.consumers import ConsumerFn, ConsumerRegistry
 from dataflow.fabric.context import FabricContext, PipelineContext
 from dataflow.fabric.leader import LeaderElector
@@ -874,6 +875,25 @@ class FabricRuntime:
                 "fabric.refresh.multi_tenant_skipped",
                 extra={"product": product_name},
             )
+            return
+
+        # Parameterized products: invalidate all cached param combinations.
+        # Cannot re-execute because source-change callback has no param context.
+        # Lazy re-population on next request (same pattern as multi-tenant).
+        if product.mode == ProductMode.PARAMETERIZED:
+            try:
+                cache = self._cache_backend
+                if cache is not None:
+                    await cache.invalidate_all(prefix=f"{product_name}:")
+                logger.info(
+                    "fabric.refresh.parameterized_invalidated",
+                    extra={"product": product_name},
+                )
+            except Exception:
+                logger.exception(
+                    "fabric.refresh.parameterized_invalidation_failed",
+                    extra={"product": product_name},
+                )
             return
 
         try:
