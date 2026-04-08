@@ -6,6 +6,7 @@ persistent model storage, enabling multi-application access to shared model defi
 """
 
 import asyncio
+import concurrent.futures
 import hashlib
 import json
 import logging
@@ -24,6 +25,30 @@ from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_runtime_result(
+    result: Any,
+) -> Tuple[Dict[str, Any], Optional[str]]:
+    """Normalise the several shapes AsyncLocalRuntime can return.
+
+    ``execute_workflow_async`` returns ``Tuple[Dict, str]`` in current
+    builds but older branches return a plain ``Dict`` or a
+    ``{"results": ..., "run_id": ...}`` envelope. The model registry
+    has historically unpacked the tuple form; this helper coerces any
+    of the known shapes into the tuple that callers expect so a single
+    unpack line (``results, _ = self._execute_workflow_sync_safe(wf)``)
+    keeps working.
+    """
+    if isinstance(result, tuple):
+        results = result[0] if len(result) >= 1 else {}
+        run_id = result[1] if len(result) >= 2 else None
+        return results, run_id
+    if isinstance(result, dict):
+        if "results" in result and ("run_id" in result or len(result) <= 2):
+            return result.get("results", {}), result.get("run_id")
+        return result, None
+    return {}, None
 
 
 class ModelRegistry:
@@ -103,6 +128,80 @@ class ModelRegistry:
             logger.warning(
                 "TransactionManager not available, operations will not be transactional"
             )
+
+    def _execute_workflow_sync_safe(
+        self, workflow: Any
+    ) -> Tuple[Dict[str, Any], Optional[str]]:
+        """Execute a workflow safely from both sync and async contexts.
+
+        Fixes gh#352: the ModelRegistry's DDL workflows are called from
+        ``DataFlow.start()`` which may run under an async context
+        (FastAPI startup, uvicorn, pytest-asyncio). When the registry's
+        runtime is :class:`AsyncLocalRuntime`, calling ``runtime.execute``
+        from inside an event loop raises a ``RuntimeError`` that the
+        registry previously swallowed, leaving the
+        ``dataflow_model_registry`` table uncreated.
+
+        This helper dispatches on ``self._is_async``:
+
+        * ``False`` → use the sync :class:`LocalRuntime` path directly.
+        * ``True`` + no running event loop → ``asyncio.run`` the async
+          variant once (safe, no nested loops).
+        * ``True`` + running event loop → offload the async execution to
+          a dedicated worker thread with its own fresh event loop. The
+          worker thread blocks until the DDL workflow completes and
+          returns the result; the calling event loop is unaffected.
+          Bounded to the 13 model-registry DDL call sites — not a
+          general substitute for async-native code.
+
+        Returns:
+            The ``(results, run_id)`` tuple that callers already expect
+            from ``runtime.execute``.
+        """
+        built = workflow.build() if hasattr(workflow, "build") else workflow
+
+        if not self._is_async:
+            # Sync runtime — direct path, nothing to bridge.
+            return self.runtime.execute(built)
+
+        # Async runtime. Check if there's a running event loop.
+        try:
+            asyncio.get_running_loop()
+            in_event_loop = True
+        except RuntimeError:
+            in_event_loop = False
+
+        if not in_event_loop:
+            # Safe to run the async variant directly.
+            result = asyncio.run(self.runtime.execute_workflow_async(built, inputs={}))
+            return _normalize_runtime_result(result)
+
+        # We're inside an event loop; can't call asyncio.run.
+        # Offload to a worker thread that owns a fresh event loop.
+        def _run_in_thread() -> Any:
+            new_loop = asyncio.new_event_loop()
+            try:
+                asyncio.set_event_loop(new_loop)
+                return new_loop.run_until_complete(
+                    self.runtime.execute_workflow_async(built, inputs={})
+                )
+            finally:
+                try:
+                    new_loop.close()
+                except Exception:  # pragma: no cover — shutdown hygiene
+                    logger.debug(
+                        "model_registry.workflow_bridge.loop_close_failed",
+                        exc_info=True,
+                    )
+                asyncio.set_event_loop(None)
+
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="dataflow-model-registry-bridge",
+        ) as executor:
+            future = executor.submit(_run_in_thread)
+            result = future.result()
+        return _normalize_runtime_result(result)
 
     @contextmanager
     def _transaction_context(self, operation_name: str):
@@ -243,7 +342,7 @@ class ModelRegistry:
 
                 # Use shared runtime for DDL operations
                 try:
-                    results, _ = self.runtime.execute(workflow.build())
+                    results, _ = self._execute_workflow_sync_safe(workflow)
                     if f"create_registry_table_{i}" not in results or results[
                         f"create_registry_table_{i}"
                     ].get("error"):
@@ -626,7 +725,7 @@ class ModelRegistry:
                     },
                 )
 
-            results, _ = self.runtime.execute(workflow.build())
+            results, _ = self._execute_workflow_sync_safe(workflow)
 
             if results.get("register_model", {}).get("error"):
                 logger.error(
@@ -702,7 +801,7 @@ class ModelRegistry:
             },
         )
 
-        results, _ = self.runtime.execute(workflow.build())
+        results, _ = self._execute_workflow_sync_safe(workflow)
 
         models = {}
         data = self._extract_query_data(results, "discover")
@@ -775,7 +874,7 @@ class ModelRegistry:
             },
         )
 
-        results, _ = self.runtime.execute(workflow.build())
+        results, _ = self._execute_workflow_sync_safe(workflow)
 
         data = self._extract_query_data(results, "get_version")
         if data and len(data) > 0:
@@ -819,7 +918,7 @@ class ModelRegistry:
             },
         )
 
-        results, _ = self.runtime.execute(workflow.build())
+        results, _ = self._execute_workflow_sync_safe(workflow)
 
         history = []
         data = self._extract_query_data(results, "get_history")
@@ -901,7 +1000,7 @@ class ModelRegistry:
             },
         )
 
-        results, _ = self.runtime.execute(workflow.build())
+        results, _ = self._execute_workflow_sync_safe(workflow)
 
         data = self._extract_query_data(results, "check_checksum")
         if data and len(data) > 0:
@@ -1160,7 +1259,7 @@ class ModelRegistry:
             },
         )
 
-        results, _ = self.runtime.execute(workflow.build())
+        results, _ = self._execute_workflow_sync_safe(workflow)
 
         data = self._extract_query_data(results, "get_models")
         if data:
@@ -1212,7 +1311,7 @@ class ModelRegistry:
             },
         )
 
-        results, _ = self.runtime.execute(workflow.build())
+        results, _ = self._execute_workflow_sync_safe(workflow)
 
         checksums = {}
         data = self._extract_query_data(results, "get_checksums")
@@ -1255,7 +1354,7 @@ class ModelRegistry:
             },
         )
 
-        results, _ = self.runtime.execute(workflow.build())
+        results, _ = self._execute_workflow_sync_safe(workflow)
 
         data = self._extract_query_data(results, "get_model")
         if data and len(data) > 0:
@@ -1294,7 +1393,7 @@ class ModelRegistry:
             },
         )
 
-        results, _ = self.runtime.execute(workflow.build())
+        results, _ = self._execute_workflow_sync_safe(workflow)
         data = self._extract_query_data(results, "list_apps")
 
         if data:
@@ -1341,7 +1440,7 @@ class ModelRegistry:
             },
         )
 
-        results, _ = self.runtime.execute(workflow.build())
+        results, _ = self._execute_workflow_sync_safe(workflow)
         data = self._extract_query_data(results, "get_by_app")
 
         models = []
@@ -1400,7 +1499,7 @@ class ModelRegistry:
             },
         )
 
-        results, _ = self.runtime.execute(workflow.build())
+        results, _ = self._execute_workflow_sync_safe(workflow)
         data = self._extract_query_data(results, "get_by_checksum")
 
         if data and len(data) > 0:
@@ -1453,7 +1552,7 @@ class ModelRegistry:
             },
         )
 
-        results, _ = self.runtime.execute(workflow.build())
+        results, _ = self._execute_workflow_sync_safe(workflow)
 
         if results.get("cleanup", {}).get("error"):
             logger.error(
