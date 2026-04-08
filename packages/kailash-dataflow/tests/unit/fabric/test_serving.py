@@ -40,10 +40,16 @@ class _MockExpress:
 
 
 class _MockPipeline:
+    """Mock pipeline that mirrors the real ``PipelineExecutor.get_cached``
+    signature so the serving layer's calls in production code path
+    (cache fast read with optional ``params`` and ``tenant_id``) work
+    against the test stub without TypeError.
+    """
+
     def __init__(self, cache: dict = None):
         self._cache = cache or {}
 
-    def get_cached(self, name):
+    async def get_cached(self, name, params=None, tenant_id=None):
         return self._cache.get(name)
 
 

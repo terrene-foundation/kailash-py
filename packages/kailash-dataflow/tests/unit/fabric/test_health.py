@@ -28,12 +28,28 @@ def _make_product(name: str = "dashboard") -> ProductRegistration:
 
 
 class _MockPipeline:
-    def __init__(self, cache=None):
+    """Mock pipeline that mirrors the real ``PipelineExecutor`` async
+    surface used by :class:`FabricHealthManager`. Both ``get_cached``
+    and ``get_metadata`` are async; the metadata fast path is what the
+    health endpoint actually invokes (TODO-5.5 Phase 5 wiring).
+    """
+
+    def __init__(self, cache=None, metadata=None):
         self._cache = cache or {}
+        self._metadata = metadata or {}
         self._traces = {}
 
-    def get_cached(self, name):
+    async def get_cached(self, name, params=None, tenant_id=None):
         return self._cache.get(name)
+
+    async def get_metadata(self, name, params=None, tenant_id=None):
+        return self._metadata.get(name)
+
+    async def scan_product_metadata(self, name):
+        # Health manager only invokes this for parameterized products;
+        # the unit tests cover materialized products only, so an empty
+        # list is the correct response.
+        return []
 
 
 class _MockAdapter:
@@ -51,37 +67,34 @@ class _MockAdapter:
 
 
 class TestHealthManager:
-    def test_healthy_status(self):
+    @pytest.mark.asyncio
+    async def test_healthy_status(self):
         sources = {"crm": {"adapter": _MockAdapter()}}
         products = {"dashboard": _make_product()}
         mgr = FabricHealthManager(sources, products, _MockPipeline())
-        health = mgr.get_health()
+        health = await mgr.get_health()
         assert health["status"] == "healthy"
         assert "uptime_seconds" in health
         assert "crm" in health["sources"]
 
-    def test_cold_product(self):
+    @pytest.mark.asyncio
+    async def test_cold_product(self):
         products = {"dashboard": _make_product()}
         mgr = FabricHealthManager({}, products, _MockPipeline())
-        health = mgr.get_health()
+        health = await mgr.get_health()
         assert health["products"]["dashboard"]["freshness"] == "cold"
 
-    def test_cached_product(self):
-        try:
-            import msgpack
-
-            data = msgpack.packb({"total": 1})
-        except ImportError:
-            import json
-
-            data = json.dumps({"total": 1}).encode()
-
-        meta = {"cached_at": datetime.now(timezone.utc).isoformat(), "pipeline_ms": 50}
+    @pytest.mark.asyncio
+    async def test_cached_product(self):
+        meta = {
+            "cached_at": datetime.now(timezone.utc).isoformat(),
+            "pipeline_ms": 50,
+        }
         products = {"dashboard": _make_product()}
         mgr = FabricHealthManager(
-            {}, products, _MockPipeline(cache={"dashboard": (data, meta)})
+            {}, products, _MockPipeline(metadata={"dashboard": meta})
         )
-        health = mgr.get_health()
+        health = await mgr.get_health()
         assert health["products"]["dashboard"]["freshness"] == "fresh"
 
 

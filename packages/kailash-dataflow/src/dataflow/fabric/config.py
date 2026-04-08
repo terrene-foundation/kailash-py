@@ -180,19 +180,49 @@ class RateLimit:
     max_unique_params: int = 50  # max distinct parameter combos cached
 
 
+_WEBHOOK_PROVIDERS = ("generic", "github", "gitlab", "stripe", "slack")
+
+
 @dataclass
 class WebhookConfig:
-    """Webhook configuration for push-based sources."""
+    """Webhook configuration for push-based sources.
+
+    The ``provider`` field selects the signature verification scheme:
+
+    - ``generic`` (default) — ``X-Webhook-Signature: <hex>`` over the
+      raw body using HMAC-SHA256. Used by sources that follow the
+      Kailash webhook conventions.
+    - ``github`` — ``X-Hub-Signature-256: sha256=<hex>`` over the raw
+      body. See https://docs.github.com/en/webhooks/using-webhooks/
+      validating-webhook-deliveries
+    - ``gitlab`` — ``X-Gitlab-Token: <secret>`` plaintext token check
+      (constant-time comparison). See https://docs.gitlab.com/ee/
+      user/project/integrations/webhooks.html#validate-payloads-by-
+      using-a-secret-token
+    - ``stripe`` — ``Stripe-Signature: t=...,v1=...`` with the
+      ``v1`` HMAC computed over ``{timestamp}.{raw_body}``. See
+      https://stripe.com/docs/webhooks/signatures
+    - ``slack`` — ``X-Slack-Signature: v0=<hex>`` plus
+      ``X-Slack-Request-Timestamp``, signed over
+      ``v0:{timestamp}:{raw_body}``. See https://api.slack.com/
+      authentication/verifying-requests-from-slack
+    """
 
     path: str
     secret_env: str
     events: Sequence[str] = ()
+    provider: str = "generic"
 
     def __post_init__(self) -> None:
         if not self.path:
             raise ValueError("WebhookConfig.path must not be empty")
         if not self.secret_env:
             raise ValueError("WebhookConfig.secret_env must not be empty")
+        if self.provider not in _WEBHOOK_PROVIDERS:
+            raise ValueError(
+                f"WebhookConfig.provider must be one of {_WEBHOOK_PROVIDERS}, "
+                f"got: {self.provider!r}"
+            )
 
 
 # ---------------------------------------------------------------------------

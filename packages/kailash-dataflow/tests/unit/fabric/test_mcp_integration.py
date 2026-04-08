@@ -27,7 +27,6 @@ from dataflow.fabric.mcp_integration import (
 )
 from dataflow.fabric.products import ProductRegistration
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -186,9 +185,19 @@ class TestFabricRuntimeGetMcpTools:
 
 
 class TestRegisterWithMcpImportError:
-    def test_raises_import_error_without_kailash_mcp(self):
-        """register_with_mcp raises ImportError with helpful message."""
-        # Ensure kailash_mcp is not importable
+    def test_raises_import_error_without_kailash_mcp(self, monkeypatch):
+        """register_with_mcp raises ImportError with helpful message.
+
+        ``kailash_mcp`` is now installed in the dev environment as a
+        first-party package, so the lazy ``from kailash_mcp import …``
+        no longer raises naturally. We use ``monkeypatch`` to evict the
+        module and force the import to fail, exercising the same
+        fallback path the test was originally written to cover.
+        """
+        # Force the lazy import inside register_with_mcp to fail by
+        # blocking the module from being resolved at import time.
+        monkeypatch.setitem(sys.modules, "kailash_mcp", None)
+
         mock_runtime = MagicMock()
         mock_runtime._products = {}
         mock_server = MagicMock()
