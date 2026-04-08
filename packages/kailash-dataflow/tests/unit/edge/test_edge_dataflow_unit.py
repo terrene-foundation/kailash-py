@@ -1,7 +1,14 @@
-"""End-to-end tests for edge computing with DataFlow integration.
+"""Unit tests for edge computing with DataFlow integration (Tier 1).
 
-Tests complete scenarios including DataFlow models with edge requirements,
-compliance routing, multi-region replication, and edge caching.
+Tests DataFlow + edge orchestration scenarios: compliance routing,
+multi-region replication, and edge caching. The edge infrastructure
+layer is mocked throughout because there is no real multi-region edge
+cluster in CI; the tests validate the wiring from workflow definition
+through edge-node parameter shaping, which is pure Python logic.
+
+Tier 1 (unit) semantics per ``tests/unit/CLAUDE.md``: mocks are allowed.
+A companion Tier 2 suite for real single-region edge behaviour belongs
+under ``tests/integration/edge`` when real infra becomes available.
 """
 
 import asyncio
@@ -11,6 +18,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+pytestmark = [pytest.mark.unit]
 
 from kailash.edge.location import (
     ComplianceZone,

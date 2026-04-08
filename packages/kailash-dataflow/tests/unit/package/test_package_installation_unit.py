@@ -1,8 +1,15 @@
 """
-End-to-end tests for DataFlow package installation and setup.
+Unit tests for DataFlow package installation and setup (Tier 1).
 
 Tests installation scenarios, dependency management, import validation,
-and first-run experiences that users encounter.
+and first-run experiences users encounter. The underlying database call
+``AsyncSQLDatabaseNode.async_run`` is patched throughout because the
+focus of this suite is DataFlow's public API shape (``@db.model``,
+node-generation, workflow composition), not the async-sql backend —
+which is covered end-to-end in ``tests/e2e/dataflow/`` against real
+PostgreSQL.
+
+Tier 1 (unit) semantics per ``tests/unit/CLAUDE.md``: mocks are allowed.
 """
 
 import importlib
@@ -17,6 +24,8 @@ from typing import Any, Dict, List
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+
+pytestmark = [pytest.mark.unit]
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../src"))
 
