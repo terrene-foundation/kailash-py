@@ -306,19 +306,40 @@ class ModelRegistry:
             )
 
     def _create_model_registry_table(self) -> bool:
-        """Create dedicated dataflow_model_registry table using WorkflowBuilder pattern."""
+        """Create dedicated dataflow_model_registry table inside a single
+        SQLAlchemy transaction so partial failure rolls back atomically.
+
+        Phase 6.2: every model-registry mutation MUST be wrapped in a
+        real transaction. The DataFlow ``TransactionManager`` is async
+        and bound to the async adapter pool — but the model registry
+        runs during ``DataFlow.start()`` which may be sync or async.
+
+        Resolution: acquire a connection from SQLDatabaseNode's shared
+        SQLAlchemy engine (the same engine the rest of the registry's
+        sync workflows use) and run all DDL inside a single
+        ``engine.begin()`` block. SQLAlchemy issues an explicit BEGIN
+        on engine.begin() and COMMITs on clean exit / ROLLBACKs on
+        exception, giving the same atomicity guarantee
+        ``TransactionManager.begin()`` provides for async paths.
+
+        MySQL caveat: every DDL statement implicitly commits regardless
+        of the outer transaction (MySQL has no transactional DDL). The
+        DDL is idempotent (CREATE TABLE IF NOT EXISTS + each CREATE
+        INDEX wrapped in a duplicate-key check below) so a partial
+        failure leaves the registry in a state that retries clean. The
+        BEGIN/COMMIT wrapper is still emitted because SQLAlchemy
+        normalises the contract — it just becomes a no-op transaction
+        on MySQL.
+        """
         try:
-            # Get database URL
             db_url = self.dataflow.config.database.get_connection_url(
                 self.dataflow.config.environment
             )
 
-            # Import connection parser and detect database type
             from ..adapters.connection_parser import ConnectionParser
 
             database_type = ConnectionParser.detect_database_type(db_url)
 
-            # Get database-specific statements
             if database_type == "sqlite":
                 statements = self._get_sqlite_registry_table_statements()
             elif database_type == "mysql":
@@ -326,63 +347,142 @@ class ModelRegistry:
             else:
                 statements = self._get_postgresql_registry_table_statements()
 
-            # Execute statements using WorkflowBuilder
-            for i, statement in enumerate(statements):
-                workflow = WorkflowBuilder()
-                workflow.add_node(
-                    "SQLDatabaseNode",
-                    f"create_registry_table_{i}",
-                    {
-                        "connection_string": db_url,
-                        "database_type": database_type,
-                        "query": statement,
-                        "validate_queries": False,
-                    },
+            engine = self._acquire_sync_engine(db_url)
+            if engine is None:
+                # Fallback: legacy per-statement workflow execution.
+                # This path runs when SQLDatabaseNode is unavailable
+                # (e.g. import-time stub during unit tests).
+                return self._create_model_registry_table_legacy(
+                    database_type, statements
                 )
 
-                # Use shared runtime for DDL operations
-                try:
-                    results, _ = self._execute_workflow_sync_safe(workflow)
-                    if f"create_registry_table_{i}" not in results or results[
-                        f"create_registry_table_{i}"
-                    ].get("error"):
-                        error_msg = results.get(f"create_registry_table_{i}", {}).get(
-                            "error", "Unknown error"
-                        )
-                        error_lower = str(error_msg).lower()
-                        # For MySQL, ignore "duplicate key name" errors when creating indexes
-                        # This happens when indexes already exist (MySQL doesn't support IF NOT EXISTS for indexes)
+            from sqlalchemy import text
+
+            with engine.begin() as conn:
+                for i, statement in enumerate(statements):
+                    try:
+                        conn.execute(text(statement))
+                    except Exception as exec_error:
+                        # MySQL has no transactional DDL — duplicate
+                        # index errors mean a previous run created
+                        # them and we should continue rather than
+                        # rollback the entire bundle. The IF NOT
+                        # EXISTS guard on CREATE TABLE protects against
+                        # the same race for the table itself.
+                        error_lower = str(exec_error).lower()
                         if database_type == "mysql" and (
                             "duplicate key name" in error_lower
+                            or "1061" in error_lower
                             or "already exists" in error_lower
                         ):
                             logger.debug(
-                                f"Index already exists (ignoring for MySQL): {error_msg}"
+                                "model_registry.ddl.idempotent_skip",
+                                extra={
+                                    "statement_index": i,
+                                    "error": str(exec_error),
+                                },
                             )
-                            continue  # Continue with next statement
+                            continue
                         logger.error(
-                            f"Failed to execute registry table statement {i}: {error_msg}"
+                            "model_registry.ddl.failed",
+                            extra={
+                                "statement_index": i,
+                                "error": str(exec_error),
+                            },
                         )
-                        return False
-                except Exception as exec_error:
-                    # For MySQL, ignore "duplicate key name" errors when creating indexes
-                    error_lower = str(exec_error).lower()
-                    if database_type == "mysql" and (
-                        "duplicate key name" in error_lower
-                        or "1061" in error_lower  # MySQL error code for duplicate key
-                        or "already exists" in error_lower
-                    ):
-                        logger.debug(
-                            f"Index already exists (ignoring for MySQL): {exec_error}"
-                        )
-                        continue  # Continue with next statement
-                    raise  # Re-raise other errors
+                        # Re-raise so engine.begin() rolls back the
+                        # whole bundle on PostgreSQL/SQLite (the
+                        # platforms that actually support
+                        # transactional DDL).
+                        raise
 
+            logger.info(
+                "model_registry.table_created",
+                extra={"database_type": database_type, "statements": len(statements)},
+            )
             return True
 
         except Exception as e:
-            logger.error(f"Failed to create model registry table and indexes: {e}")
+            logger.error(
+                "model_registry.create_table_failed",
+                extra={"error": str(e)},
+            )
             return False
+
+    def _acquire_sync_engine(self, db_url: str) -> Any:
+        """Return the SQLAlchemy engine SQLDatabaseNode uses for ``db_url``.
+
+        Reuses SQLDatabaseNode's process-wide ``_shared_pools`` so the
+        registry's transactional DDL runs against the same connection
+        pool the rest of its sync workflow path uses. Returns ``None``
+        when SQLDatabaseNode is unavailable so callers can fall back
+        to the legacy per-statement path.
+        """
+        if SQLDatabaseNode is None:
+            return None
+        try:
+            # Instantiate a node solely to materialise the shared
+            # engine for this connection string. The node itself isn't
+            # executed; we only need its _get_shared_engine() method.
+            node = SQLDatabaseNode(connection_string=db_url, query="SELECT 1")
+            return node._get_shared_engine()
+        except Exception:
+            logger.debug(
+                "model_registry.sync_engine_unavailable",
+                exc_info=True,
+            )
+            return None
+
+    def _create_model_registry_table_legacy(
+        self, database_type: str, statements: List[str]
+    ) -> bool:
+        """Legacy per-statement workflow path used when SQLDatabaseNode
+        is not importable. Each statement runs in its own SQLDatabaseNode
+        transaction; partial failure relies on idempotent DDL guards.
+        """
+        db_url = self.dataflow.config.database.get_connection_url(
+            self.dataflow.config.environment
+        )
+        for i, statement in enumerate(statements):
+            workflow = WorkflowBuilder()
+            workflow.add_node(
+                "SQLDatabaseNode",
+                f"create_registry_table_{i}",
+                {
+                    "connection_string": db_url,
+                    "database_type": database_type,
+                    "query": statement,
+                    "validate_queries": False,
+                },
+            )
+            try:
+                results, _ = self._execute_workflow_sync_safe(workflow)
+                if f"create_registry_table_{i}" not in results or results[
+                    f"create_registry_table_{i}"
+                ].get("error"):
+                    error_msg = results.get(f"create_registry_table_{i}", {}).get(
+                        "error", "Unknown error"
+                    )
+                    error_lower = str(error_msg).lower()
+                    if database_type == "mysql" and (
+                        "duplicate key name" in error_lower
+                        or "already exists" in error_lower
+                    ):
+                        continue
+                    logger.error(
+                        f"Failed to execute registry table statement {i}: {error_msg}"
+                    )
+                    return False
+            except Exception as exec_error:
+                error_lower = str(exec_error).lower()
+                if database_type == "mysql" and (
+                    "duplicate key name" in error_lower
+                    or "1061" in error_lower
+                    or "already exists" in error_lower
+                ):
+                    continue
+                raise
+        return True
 
     def _get_sqlite_registry_table_statements(self) -> List[str]:
         """Get SQLite model registry table creation statements."""
@@ -1567,13 +1667,43 @@ class ModelRegistry:
 
     @contextmanager
     def transaction(self):
-        """Context manager for transactional operations."""
-        if self._transaction_manager:
-            with self._transaction_manager.transaction():
-                yield
-        else:
-            # No transaction support, just yield
-            yield
+        """Sync context manager for transactional registry operations.
+
+        Phase 6.2: this method previously tried to enter
+        :meth:`TransactionManager.begin` (an ``@asynccontextmanager``)
+        from a sync ``with`` block, which would have raised
+        ``TypeError: '_GeneratorContextManager' object is not a context
+        manager`` if any caller invoked it. The fix uses the same
+        sync engine + ``engine.begin()`` primitive as
+        :meth:`_create_model_registry_table` so callers get a real
+        BEGIN/COMMIT around grouped statements without crossing the
+        sync/async boundary.
+
+        Yields the SQLAlchemy connection inside the active transaction
+        so callers can issue ``conn.execute(text(sql))``. When no
+        sync engine is available (e.g. SQLDatabaseNode unavailable in a
+        unit-test stub), yields ``None`` and the caller falls back to
+        running mutations without a wrapping transaction.
+        """
+        with self._registry_lock:
+            db_url = self.dataflow.config.database.get_connection_url(
+                self.dataflow.config.environment
+            )
+            engine = self._acquire_sync_engine(db_url)
+            if engine is None:
+                logger.debug("model_registry.transaction.no_engine — yielding None")
+                yield None
+                return
+
+            with engine.begin() as conn:
+                try:
+                    yield conn
+                except Exception as exc:
+                    logger.error(
+                        "model_registry.transaction.rollback",
+                        extra={"error": str(exc)},
+                    )
+                    raise
 
     def close(self):
         """Release the runtime reference.
