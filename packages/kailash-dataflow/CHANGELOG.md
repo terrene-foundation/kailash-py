@@ -101,6 +101,81 @@ model-registry sync-in-async deadlock resolved.
   `dataflow/core/multi_tenancy.py`.
 - **`ModelRegistry._execute_workflow_sync_safe`** — worker-thread
   bridge for async-context DDL execution that resolves #352.
+- **Phase 5.8 — Fabric endpoints registered into Nexus**:
+  `FabricRuntime._register_with_nexus` now wires serving, health,
+  trace, webhook, and `/fabric/metrics` routes onto the supplied
+  Nexus instance. Previously the subsystems existed but were not
+  exposed over HTTP; operators pass `nexus=Nexus(...)` to
+  `db.start()` to enable.
+- **Phase 5.9 — Per-provider webhook signature verifiers**:
+  `WebhookConfig.provider` selects one of five verification schemes
+  (generic, github, gitlab, stripe, slack). Each verifier owns its
+  upstream signature contract (GitHub sha256= prefix, GitLab
+  x-gitlab-token plain token, Stripe `t=,v1=` over
+  `{t}.{body}`, Slack `v0=` over `v0:{ts}:{body}`, generic SHA256)
+  and picks the most reliable per-provider nonce for dedup.
+- **Phase 5.10 — `@classify` redaction wired into Express reads**:
+  the decorator was a no-op pre-2.0; classification metadata was
+  stored but the read path never consulted it. Express
+  `list`/`get`/`find_one` now apply per-row and per-record
+  masking based on the caller's clearance level resolved from
+  `dataflow.core.clearance_context.get_current_clearance()`.
+- **Phase 5.11 — Trust subsystems wired into Express query path**:
+  `TrustAwareQueryExecutor`, `DataFlowAuditStore`, and
+  `TenantTrustManager` were 2,407 LOC of facade code before 2.0
+  with zero production call sites. Express reads now go through
+  `_trust_check_read` (pre-query access check),
+  `_trust_record_success` / `_trust_record_failure` (audit event
+  persistence), and honour `plan.additional_filters` /
+  `plan.row_limit` / `plan.redact_columns` from the trust plan.
+- **Phase 5.12 — FabricMetrics singleton + `/fabric/metrics`**:
+  13 Prometheus metric families (pipeline runs, cache hit/miss/
+  errors/degraded, source health, request duration, webhook
+  received, leader status) exposed through a process-wide
+  `FabricMetrics` singleton. `/fabric/metrics` route registered
+  via `FabricRuntime._register_with_nexus`. `prometheus-client`
+  added to the `fabric` optional extra; missing package logs a
+  single startup WARN and every counter becomes a loud no-op.
+- **Phase 6.2 — Model registry mutations in real transactions**:
+  `_create_model_registry_table` now runs all DDL in a single
+  `engine.begin()` block on the SQLDatabaseNode shared engine, so
+  partial failure rolls back the whole bundle on PostgreSQL/SQLite.
+  The previously broken sync `ModelRegistry.transaction()` context
+  manager (which tried to enter an `@asynccontextmanager` from a
+  sync `with` block) is fixed to yield a real SQLAlchemy
+  Connection inside an active transaction.
+- **Phase 6.3 — Async cascade contract locked in place**:
+  regression suite asserts `FabricRuntime.product_info`,
+  `invalidate`, `invalidate_all` (and their downstream
+  `PipelineExecutor.get_metadata`, `invalidate`, `invalidate_all`
+  counterparts) remain async. Regression here would reintroduce
+  the gh#352 deadlock pattern.
+- **Phase 6.4 — `ResourceWarning` on leaked async resources**:
+  `FabricRuntime`, `PipelineExecutor`, and `ConnectionManager`
+  now implement `__del__` that warns when garbage-collected while
+  still holding live asyncio tasks, DB adapters, or cache
+  backends. Enables `pytest -W error` to catch leaks before they
+  reach production.
+- **Phase 7.1 — Structured logging across 93 source files**: 908
+  f-string logger calls rewritten to `logger.info("event.name",
+extra={"field": value})` form per `rules/observability.md`.
+  Event names use dot.snake.case, every interpolated variable
+  becomes a field, nothing dropped.
+- **Phase 7.2 — Correlation ID propagation**:
+  `dataflow.observability.correlation` provides a ContextVar-based
+  `get/set/clear/with_correlation_id` API scoped per-asyncio-task.
+  Concurrent requests never cross-contaminate; child tasks
+  inherit the parent's binding at spawn time.
+- **Phase 7.6 — Centralized URL masking**: `dataflow.utils.masking`
+  exposes `mask_url` and `mask_secret`; `fabric/cache._mask_url`
+  is a backwards-compatible re-export. Single canonical
+  implementation eliminates the prior three-copy drift risk.
+- **Phase 8.1-8.5 — Test suite hardened with real infrastructure**:
+  89 mock violations removed from Tier 2/3 tests (67 integration
+  - 22 e2e). `no_mocking_policy` fixture wired as autouse to
+    block future regressions. Coverage gate added at
+    `tool.coverage.report.fail_under = 80` with a separate 100%
+    target for security/trust subpackages.
 
 ### Fixed
 
