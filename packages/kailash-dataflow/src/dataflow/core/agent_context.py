@@ -33,7 +33,10 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar, Token
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from dataflow.classification.types import DataClassification
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +45,23 @@ __all__ = [
     "set_current_agent_id",
     "agent_context",
     "async_agent_context",
+    "get_current_clearance",
+    "set_current_clearance",
+    "clearance_context",
+    "async_clearance_context",
 ]
 
 # Thread- and async-safe context variable for the current agent.
 _current_agent: ContextVar[Optional[str]] = ContextVar("_current_agent", default=None)
+
+# Thread- and async-safe context variable for the current caller's data
+# clearance level (Phase 5.10). The value is a
+# ``dataflow.classification.types.DataClassification`` enum; using the
+# string type here keeps this module dependency-free and avoids a
+# circular import with the classification package.
+_current_clearance: ContextVar[Optional["DataClassification"]] = ContextVar(
+    "_current_clearance", default=None
+)
 
 
 def get_current_agent_id() -> Optional[str]:
@@ -116,3 +132,80 @@ async def async_agent_context(agent_id: Optional[str]):
     finally:
         _current_agent.reset(token)
         logger.debug("async_agent_context.exit", extra={"agent_id": agent_id})
+
+
+# ---------------------------------------------------------------------------
+# Clearance context (Phase 5.10 — classification-aware masking)
+# ---------------------------------------------------------------------------
+
+
+def get_current_clearance() -> Optional["DataClassification"]:
+    """Return the data-classification clearance bound to the current context.
+
+    Returns ``None`` when no clearance has been set, which is treated by
+    :mod:`dataflow.classification.policy` as the most restrictive
+    (``PUBLIC``) clearance.
+    """
+    return _current_clearance.get()
+
+
+def set_current_clearance(
+    clearance: Optional["DataClassification"],
+) -> Token[Optional["DataClassification"]]:
+    """Set the current clearance and return the reset token.
+
+    Low-level helper for integrations that manage the context variable
+    directly. Prefer :func:`clearance_context` or
+    :func:`async_clearance_context` for scoped usage.
+    """
+    return _current_clearance.set(clearance)
+
+
+@contextmanager
+def clearance_context(clearance: Optional["DataClassification"]):
+    """Synchronous scoped clearance context.
+
+    Example::
+
+        from dataflow.classification import DataClassification
+
+        with clearance_context(DataClassification.PII):
+            user = db.express_sync.read("User", "u1")
+    """
+    token = _current_clearance.set(clearance)
+    logger.debug(
+        "clearance_context.enter",
+        extra={"clearance": clearance.value if clearance is not None else None},
+    )
+    try:
+        yield clearance
+    finally:
+        _current_clearance.reset(token)
+        logger.debug(
+            "clearance_context.exit",
+            extra={"clearance": clearance.value if clearance is not None else None},
+        )
+
+
+@asynccontextmanager
+async def async_clearance_context(clearance: Optional["DataClassification"]):
+    """Async scoped clearance context.
+
+    Example::
+
+        async with async_clearance_context(DataClassification.PII):
+            user = await db.express.read("User", "u1")
+    """
+    token = _current_clearance.set(clearance)
+    logger.debug(
+        "async_clearance_context.enter",
+        extra={"clearance": clearance.value if clearance is not None else None},
+    )
+    try:
+        yield clearance
+    finally:
+        _current_clearance.reset(token)
+        logger.debug(
+            "async_clearance_context.exit",
+            extra={"clearance": clearance.value if clearance is not None else None},
+        )

@@ -547,6 +547,14 @@ class DataFlow(DataFlowEventMixin):
         else:
             self._multi_tenant_manager = None
 
+        # Phase 5.10: Classification policy. Always instantiated so
+        # ``@classify``-decorated models can be auto-registered at
+        # ``@db.model`` time. When no fields are classified the policy
+        # is effectively a no-op and adds zero overhead to queries.
+        from dataflow.classification.policy import ClassificationPolicy
+
+        self._classification_policy: ClassificationPolicy = ClassificationPolicy()
+
         # Phase 5.11: Trust-plane integration (CARE-019/020/021).
         # Resolve effective trust settings — constructor kwargs override
         # config values when supplied. When neither is set, both subsystems
@@ -1389,6 +1397,19 @@ class DataFlow(DataFlowEventMixin):
                 self._model_registry.register_model(model_name, cls)
             except Exception as e:
                 logger.warning(f"Failed to persist model {model_name}: {e}")
+
+        # Phase 5.10: auto-register ``@classify`` metadata with the
+        # classification policy. A model with no ``@classify`` decorators
+        # has an empty ``__field_classifications__`` attribute and the
+        # registration becomes a no-op that still records the model name
+        # for later programmatic ``set_field`` calls.
+        if hasattr(self, "_classification_policy"):
+            try:
+                self._classification_policy.register_model(cls)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to register classification for {model_name}: {e}"
+                )
 
         # DATAFLOW-ASYNC-MODEL-DECORATOR-001: Defer relationship detection
         # Instead of calling _auto_detect_relationships() here (which fails in async contexts),
@@ -3189,6 +3210,34 @@ class DataFlow(DataFlowEventMixin):
         from .tenant_context import TenantContextSwitch
 
         return self._tenant_context_switch
+
+    @property
+    def classification_policy(self):
+        """Access the DataFlow :class:`ClassificationPolicy` (Phase 5.10).
+
+        Models decorated with ``@classify`` are auto-registered at
+        ``@db.model`` time. Additional classifications may be set
+        programmatically::
+
+            from dataflow.classification import DataClassification, RetentionPolicy, MaskingStrategy
+
+            db.classification_policy.set_field(
+                "User", "ssn",
+                DataClassification.HIGHLY_CONFIDENTIAL,
+                RetentionPolicy.YEARS_7,
+                MaskingStrategy.REDACT,
+            )
+
+        The policy is consulted by the Express read/list/find_one paths
+        on every query: fields the caller's clearance cannot access are
+        masked per their stored :class:`MaskingStrategy`. The caller's
+        clearance is bound via
+        :func:`dataflow.core.agent_context.clearance_context`.
+
+        Returns:
+            ClassificationPolicy: The live classification policy.
+        """
+        return self._classification_policy
 
     def _inspect_database_schema(self) -> Dict[str, Any]:
         """Internal method to inspect database schema.

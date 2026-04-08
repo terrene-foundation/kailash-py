@@ -55,7 +55,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 from dataflow.cache.auto_detection import CacheBackend
 from dataflow.cache.key_generator import CacheKeyGenerator
 from dataflow.cache.memory_cache import InMemoryCache
-from dataflow.core.agent_context import get_current_agent_id
+from dataflow.core.agent_context import get_current_agent_id, get_current_clearance
 from dataflow.core.multi_tenancy import TenantRequiredError
 from dataflow.core.tenant_context import get_current_tenant_id
 
@@ -383,6 +383,47 @@ class DataFlowExpress:
             )
 
     # ========================================================================
+    # Classification masking helpers (Phase 5.10)
+    # ========================================================================
+
+    def _classify_enabled(self, model: str) -> bool:
+        """Return True when the DataFlow instance has a policy with any
+        classified fields for this model.
+
+        Zero-cost short-circuit for the common case of a model with no
+        ``@classify`` decorators: classification masking is skipped
+        entirely and the read path behaves as pre-Phase-5.10 DataFlow.
+        """
+        policy = getattr(self._db, "_classification_policy", None)
+        if policy is None:
+            return False
+        return bool(policy.get_model_fields(model))
+
+    def _apply_classification_mask_record(self, model: str, record: Any) -> Any:
+        """Apply classification masking to a single record if needed.
+
+        The caller's clearance is resolved from the
+        ``clearance_context`` ContextVar. When no clearance is set the
+        masking routine treats the caller as ``PUBLIC`` (the most
+        restrictive).
+        """
+        if not self._classify_enabled(model):
+            return record
+        clearance = get_current_clearance()
+        return self._db._classification_policy.apply_masking_to_record(
+            model, record, clearance
+        )
+
+    def _apply_classification_mask_rows(self, model: str, rows: Any) -> Any:
+        """Apply classification masking to a list of records."""
+        if not self._classify_enabled(model):
+            return rows
+        clearance = get_current_clearance()
+        return self._db._classification_policy.apply_masking_to_rows(
+            model, rows, clearance
+        )
+
+    # ========================================================================
     # CRUD Operations
     # ========================================================================
 
@@ -504,6 +545,10 @@ class DataFlowExpress:
                 # Apply PII/column filter from the trust plan, if any.
                 if plan is not None:
                     result = self._db._trust_executor.apply_result_filter(result, plan)
+
+                # Phase 5.10: apply classification masking based on the
+                # caller's clearance context.
+                result = self._apply_classification_mask_record(model, result)
 
                 # Cache result (TSG-104)
                 await self._cache_set(model, "read", {"id": id}, result, effective_ttl)
@@ -713,6 +758,10 @@ class DataFlowExpress:
             if plan is not None:
                 records = self._db._trust_executor.apply_result_filter(records, plan)
 
+            # Phase 5.10: apply classification masking based on the
+            # caller's clearance context.
+            records = self._apply_classification_mask_rows(model, records)
+
             # Cache result (TSG-104)
             await self._cache_set(model, "list", params, records, effective_ttl)
 
@@ -805,6 +854,10 @@ class DataFlowExpress:
 
             if plan is not None and record is not None:
                 record = self._db._trust_executor.apply_result_filter(record, plan)
+
+            # Phase 5.10: apply classification masking.
+            if record is not None:
+                record = self._apply_classification_mask_record(model, record)
 
             # Cache result (including None for not-found)
             await self._cache_set(model, "find_one", params, record, effective_ttl)
