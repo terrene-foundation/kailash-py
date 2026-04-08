@@ -293,7 +293,10 @@ class SQLiteAdapter(DatabaseAdapter):
                 try:
                     await self._perform_wal_checkpoint()
                 except Exception as e:
-                    logger.warning(f"Failed to perform final WAL checkpoint: {e}")
+                    logger.warning(
+                        "sqlite.failed_to_perform_final_wal_checkpoint",
+                        extra={"error": str(e)},
+                    )
 
             # Export performance metrics if monitoring enabled
             if self.enable_performance_monitoring:
@@ -348,7 +351,9 @@ class SQLiteAdapter(DatabaseAdapter):
                         )
                         await conn.rollback()
                 except Exception as e:
-                    logger.warning(f"Connection reset failed: {e}")
+                    logger.warning(
+                        "sqlite.connection_reset_failed", extra={"error": str(e)}
+                    )
 
                 # Return connection to pool
                 async with self._pool_lock:
@@ -423,7 +428,10 @@ class SQLiteAdapter(DatabaseAdapter):
 
         try:
             results = []
-            logger.debug(f"Starting transaction with {len(queries)} queries")
+            logger.debug(
+                "sqlite.starting_transaction_with_queries",
+                extra={"count": len(queries)},
+            )
 
             # Use connection from pool
             async with self._get_connection() as db:
@@ -466,7 +474,7 @@ class SQLiteAdapter(DatabaseAdapter):
                     raise e
 
         except Exception as e:
-            logger.error(f"Transaction failed: {e}")
+            logger.error("sqlite.transaction_failed", extra={"error": str(e)})
             raise TransactionError(f"Transaction failed: {e}")
 
     async def get_table_schema(self, table_name: str) -> Dict[str, Dict]:
@@ -500,7 +508,10 @@ class SQLiteAdapter(DatabaseAdapter):
                 return schema
 
         except Exception as e:
-            logger.error(f"Failed to get schema for table {table_name}: {e}")
+            logger.error(
+                "sqlite.failed_to_get_schema_for_table",
+                extra={"table_name": table_name, "error": str(e)},
+            )
             return {}
 
     async def create_table(self, table_name: str, schema: Dict[str, Dict]) -> None:
@@ -534,7 +545,7 @@ class SQLiteAdapter(DatabaseAdapter):
                 await db.execute(create_sql)
                 await db.commit()
 
-            logger.info(f"Created table: {table_name}")
+            logger.info("sqlite.created_table", extra={"table_name": table_name})
 
         except Exception as e:
             raise QueryError(f"Failed to create table {table_name}: {e}")
@@ -550,7 +561,7 @@ class SQLiteAdapter(DatabaseAdapter):
                 await db.execute(f"DROP TABLE IF EXISTS {_safe_identifier(table_name)}")
                 await db.commit()
 
-            logger.info(f"Dropped table: {table_name}")
+            logger.info("sqlite.dropped_table", extra={"table_name": table_name})
 
         except Exception as e:
             raise QueryError(f"Failed to drop table {table_name}: {e}")
@@ -640,7 +651,7 @@ class SQLiteAdapter(DatabaseAdapter):
                 return {"lastrowid": cursor.lastrowid, "rowcount": cursor.rowcount}
 
         except Exception as e:
-            logger.error(f"SQLite insert failed: {e}")
+            logger.error("sqlite.sqlite_insert_failed", extra={"error": str(e)})
             raise QueryError(f"Insert failed: {e}")
 
     async def execute_bulk_insert(self, query: str, params_list: List[Tuple]) -> None:
@@ -656,7 +667,7 @@ class SQLiteAdapter(DatabaseAdapter):
                 await db.commit()
 
         except Exception as e:
-            logger.error(f"SQLite bulk insert failed: {e}")
+            logger.error("sqlite.sqlite_bulk_insert_failed", extra={"error": str(e)})
             raise QueryError(f"Bulk insert failed: {e}")
 
     def get_connection_parameters(self) -> Dict[str, Any]:
@@ -692,7 +703,7 @@ class SQLiteAdapter(DatabaseAdapter):
             result = await self.execute_query("SELECT sqlite_version() as version")
             return result[0]["version"]
         except Exception as e:
-            logger.error(f"Failed to get SQLite version: {e}")
+            logger.error("sqlite.failed_to_get_sqlite_version", extra={"error": str(e)})
             return "unknown"
 
     async def get_database_size(self) -> int:
@@ -714,7 +725,7 @@ class SQLiteAdapter(DatabaseAdapter):
                 return 0  # In-memory database
 
         except Exception as e:
-            logger.error(f"Failed to get database size: {e}")
+            logger.error("sqlite.failed_to_get_database_size", extra={"error": str(e)})
             return 0
 
     async def _initialize_connection_pool(self) -> None:
@@ -754,7 +765,10 @@ class SQLiteAdapter(DatabaseAdapter):
                         self._pool_stats.idle_connections += 1
 
                     except Exception as e:
-                        logger.warning(f"Failed to create connection in pool: {e}")
+                        logger.warning(
+                            "sqlite.failed_to_create_connection_in_pool",
+                            extra={"error": str(e)},
+                        )
                         break
 
                 logger.info(
@@ -811,7 +825,9 @@ class SQLiteAdapter(DatabaseAdapter):
                 try:
                     await conn.close()
                 except Exception as e:
-                    logger.warning(f"Error closing connection: {e}")
+                    logger.warning(
+                        "sqlite.error_closing_connection", extra={"error": str(e)}
+                    )
 
             self._connection_pool.clear()
             self._pool_stats.total_connections = 0
@@ -832,7 +848,7 @@ class SQLiteAdapter(DatabaseAdapter):
                 await conn.execute(f"PRAGMA wal_checkpoint({self.wal_checkpoint_mode})")
                 logger.debug("WAL checkpoint completed")
         except Exception as e:
-            logger.warning(f"WAL checkpoint failed: {e}")
+            logger.warning("sqlite.wal_checkpoint_failed", extra={"error": str(e)})
 
     async def _initialize_performance_monitoring(self) -> None:
         """Initialize SQLite performance monitoring."""
@@ -865,7 +881,10 @@ class SQLiteAdapter(DatabaseAdapter):
                 )
 
         except Exception as e:
-            logger.warning(f"Failed to initialize performance monitoring: {e}")
+            logger.warning(
+                "sqlite.failed_to_initialize_performance_monitoring",
+                extra={"error": str(e)},
+            )
 
     async def _export_performance_metrics(self) -> None:
         """Export SQLite performance metrics."""
@@ -881,7 +900,9 @@ class SQLiteAdapter(DatabaseAdapter):
                     f"queries: {self._query_count}"
                 )
         except Exception as e:
-            logger.warning(f"Failed to export performance metrics: {e}")
+            logger.warning(
+                "sqlite.failed_to_export_performance_metrics", extra={"error": str(e)}
+            )
 
     async def _collect_performance_metrics(self) -> Optional[SQLitePerformanceMetrics]:
         """Collect current SQLite performance metrics."""
@@ -951,7 +972,9 @@ class SQLiteAdapter(DatabaseAdapter):
                 )
 
         except Exception as e:
-            logger.error(f"Failed to collect performance metrics: {e}")
+            logger.error(
+                "sqlite.failed_to_collect_performance_metrics", extra={"error": str(e)}
+            )
             return None
 
 

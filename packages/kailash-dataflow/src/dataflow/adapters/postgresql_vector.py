@@ -106,7 +106,10 @@ class PostgreSQLVectorAdapter(PostgreSQLAdapter):
 
         except Exception as e:
             self._pgvector_installed = False
-            logger.error(f"Failed to enable pgvector extension: {e}")
+            logger.error(
+                "postgresql_vector.failed_to_enable_pgvector_extension",
+                extra={"error": str(e)},
+            )
             raise RuntimeError(
                 f"pgvector extension not available. Please install: "
                 f"https://github.com/pgvector/pgvector. Error: {e}"
@@ -299,7 +302,10 @@ class PostgreSQLVectorAdapter(PostgreSQLAdapter):
 
         results = await self.execute_query(query)
 
-        logger.info(f"Vector search on '{table_name}' returned {len(results)} results")
+        logger.info(
+            "postgresql_vector.vector_search_on_returned_results",
+            extra={"table_name": table_name, "count": len(results)},
+        )
 
         return results
 
@@ -372,7 +378,10 @@ class PostgreSQLVectorAdapter(PostgreSQLAdapter):
         try:
             text_results = await self.execute_query(text_query_sql, [text_query])
         except Exception as e:
-            logger.warning(f"Text search failed, falling back to vector search: {e}")
+            logger.warning(
+                "postgresql_vector.text_search_failed_falling_back_to",
+                extra={"error": str(e)},
+            )
             return vector_results[:k]
 
         # Combine using RRF (Reciprocal Rank Fusion)

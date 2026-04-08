@@ -48,7 +48,7 @@ class AdapterFactory:
             adapter_class: Adapter class to register
         """
         self._adapters[scheme] = adapter_class
-        logger.info(f"Registered adapter for scheme: {scheme}")
+        logger.info("factory.registered_adapter_for_scheme", extra={"scheme": scheme})
 
     def detect_database_type(self, connection_string: str) -> str:
         """
@@ -130,7 +130,10 @@ class AdapterFactory:
             # Create adapter instance
             adapter = adapter_class(connection_string, **final_config)
 
-            logger.info(f"Created {db_type} adapter for {connection_string}")
+            logger.info(
+                "factory.created_adapter_for",
+                extra={"db_type": db_type, "connection_string": connection_string},
+            )
             return adapter
 
         except Exception as e:

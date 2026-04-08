@@ -120,10 +120,14 @@ class MongoDBAdapter(BaseAdapter):
             await self._client.admin.command("ping")
 
             self._connected = True
-            logger.info(f"Connected to MongoDB database: {db_name}")
+            logger.info(
+                "mongodb.connected_to_mongodb_database", extra={"db_name": db_name}
+            )
 
         except Exception as e:
-            logger.error(f"Failed to connect to MongoDB: {e}")
+            logger.error(
+                "mongodb.failed_to_connect_to_mongodb", extra={"error": str(e)}
+            )
             raise ConnectionError(f"MongoDB connection failed: {e}") from e
 
     async def disconnect(self) -> None:
@@ -146,7 +150,9 @@ class MongoDBAdapter(BaseAdapter):
             logger.info("Disconnected from MongoDB")
 
         except Exception as e:
-            logger.error(f"Error disconnecting from MongoDB: {e}")
+            logger.error(
+                "mongodb.error_disconnecting_from_mongodb", extra={"error": str(e)}
+            )
             raise
 
     async def health_check(self) -> Dict[str, Any]:
@@ -189,7 +195,7 @@ class MongoDBAdapter(BaseAdapter):
             }
 
         except Exception as e:
-            logger.error(f"Health check failed: {e}")
+            logger.error("mongodb.health_check_failed", extra={"error": str(e)})
             return {
                 "connected": False,
                 "database": self._db.name if self._db else None,
@@ -256,12 +262,18 @@ class MongoDBAdapter(BaseAdapter):
             result = await coll.insert_one(document, **options)
 
             inserted_id = str(result.inserted_id)
-            logger.debug(f"Inserted document with id {inserted_id} into {collection}")
+            logger.debug(
+                "mongodb.inserted_document_with_id_into",
+                extra={"inserted_id": inserted_id, "collection": collection},
+            )
 
             return inserted_id
 
         except Exception as e:
-            logger.error(f"Failed to insert document into {collection}: {e}")
+            logger.error(
+                "mongodb.failed_to_insert_document_into",
+                extra={"collection": collection, "error": str(e)},
+            )
             raise
 
     async def insert_many(
@@ -294,12 +306,18 @@ class MongoDBAdapter(BaseAdapter):
             result = await coll.insert_many(documents, **options)
 
             inserted_ids = [str(oid) for oid in result.inserted_ids]
-            logger.info(f"Inserted {len(inserted_ids)} documents into {collection}")
+            logger.info(
+                "mongodb.inserted_documents_into",
+                extra={"count": len(inserted_ids), "collection": collection},
+            )
 
             return inserted_ids
 
         except Exception as e:
-            logger.error(f"Failed to bulk insert into {collection}: {e}")
+            logger.error(
+                "mongodb.failed_to_bulk_insert_into",
+                extra={"collection": collection, "error": str(e)},
+            )
             raise
 
     async def find_one(
@@ -329,14 +347,22 @@ class MongoDBAdapter(BaseAdapter):
             document = await coll.find_one(filter, **options)
 
             if document:
-                logger.debug(f"Found document in {collection}")
+                logger.debug(
+                    "mongodb.found_document_in", extra={"collection": collection}
+                )
             else:
-                logger.debug(f"No document found in {collection} matching filter")
+                logger.debug(
+                    "mongodb.no_document_found_in_matching_filter",
+                    extra={"collection": collection},
+                )
 
             return document
 
         except Exception as e:
-            logger.error(f"Failed to find document in {collection}: {e}")
+            logger.error(
+                "mongodb.failed_to_find_document_in",
+                extra={"collection": collection, "error": str(e)},
+            )
             raise
 
     async def find(
@@ -391,12 +417,18 @@ class MongoDBAdapter(BaseAdapter):
 
             documents = await cursor.to_list(length=None)
 
-            logger.debug(f"Found {len(documents)} documents in {collection}")
+            logger.debug(
+                "mongodb.found_documents_in",
+                extra={"count": len(documents), "collection": collection},
+            )
 
             return documents
 
         except Exception as e:
-            logger.error(f"Failed to find documents in {collection}: {e}")
+            logger.error(
+                "mongodb.failed_to_find_documents_in",
+                extra={"collection": collection, "error": str(e)},
+            )
             raise
 
     async def update_one(
@@ -449,7 +481,10 @@ class MongoDBAdapter(BaseAdapter):
             }
 
         except Exception as e:
-            logger.error(f"Failed to update document in {collection}: {e}")
+            logger.error(
+                "mongodb.failed_to_update_document_in",
+                extra={"collection": collection, "error": str(e)},
+            )
             raise
 
     async def update_many(
@@ -502,7 +537,10 @@ class MongoDBAdapter(BaseAdapter):
             }
 
         except Exception as e:
-            logger.error(f"Failed to update documents in {collection}: {e}")
+            logger.error(
+                "mongodb.failed_to_update_documents_in",
+                extra={"collection": collection, "error": str(e)},
+            )
             raise
 
     async def delete_one(self, collection: str, filter: dict, **options) -> int:
@@ -539,7 +577,10 @@ class MongoDBAdapter(BaseAdapter):
             return result.deleted_count
 
         except Exception as e:
-            logger.error(f"Failed to delete document from {collection}: {e}")
+            logger.error(
+                "mongodb.failed_to_delete_document_from",
+                extra={"collection": collection, "error": str(e)},
+            )
             raise
 
     async def delete_many(self, collection: str, filter: dict, **options) -> int:
@@ -569,12 +610,18 @@ class MongoDBAdapter(BaseAdapter):
             coll = self._db[collection]
             result = await coll.delete_many(filter, **options)
 
-            logger.info(f"Deleted {result.deleted_count} document(s) from {collection}")
+            logger.info(
+                "mongodb.deleted_document_s_from",
+                extra={"deleted_count": result.deleted_count, "collection": collection},
+            )
 
             return result.deleted_count
 
         except Exception as e:
-            logger.error(f"Failed to delete documents from {collection}: {e}")
+            logger.error(
+                "mongodb.failed_to_delete_documents_from",
+                extra={"collection": collection, "error": str(e)},
+            )
             raise
 
     async def count_documents(
@@ -604,12 +651,18 @@ class MongoDBAdapter(BaseAdapter):
             coll = self._db[collection]
             count = await coll.count_documents(filter, **options)
 
-            logger.debug(f"Counted {count} documents in {collection}")
+            logger.debug(
+                "mongodb.counted_documents_in",
+                extra={"count": count, "collection": collection},
+            )
 
             return count
 
         except Exception as e:
-            logger.error(f"Failed to count documents in {collection}: {e}")
+            logger.error(
+                "mongodb.failed_to_count_documents_in",
+                extra={"collection": collection, "error": str(e)},
+            )
             raise
 
     async def aggregate(
@@ -645,12 +698,18 @@ class MongoDBAdapter(BaseAdapter):
             cursor = coll.aggregate(pipeline, **options)
             results = await cursor.to_list(length=None)
 
-            logger.debug(f"Aggregation on {collection} returned {len(results)} results")
+            logger.debug(
+                "mongodb.aggregation_on_returned_results",
+                extra={"collection": collection, "count": len(results)},
+            )
 
             return results
 
         except Exception as e:
-            logger.error(f"Failed to execute aggregation on {collection}: {e}")
+            logger.error(
+                "mongodb.failed_to_execute_aggregation_on",
+                extra={"collection": collection, "error": str(e)},
+            )
             raise
 
     # ==================== Index Management ====================
@@ -701,12 +760,18 @@ class MongoDBAdapter(BaseAdapter):
                 keys, unique=unique, sparse=sparse, name=name, **options
             )
 
-            logger.info(f"Created index '{index_name}' on {collection}")
+            logger.info(
+                "mongodb.created_index_on",
+                extra={"index_name": index_name, "collection": collection},
+            )
 
             return index_name
 
         except Exception as e:
-            logger.error(f"Failed to create index on {collection}: {e}")
+            logger.error(
+                "mongodb.failed_to_create_index_on",
+                extra={"collection": collection, "error": str(e)},
+            )
             raise
 
     async def list_indexes(self, collection: str) -> List[dict]:
@@ -731,12 +796,18 @@ class MongoDBAdapter(BaseAdapter):
             cursor = coll.list_indexes()
             indexes = await cursor.to_list(length=None)
 
-            logger.debug(f"Listed {len(indexes)} indexes on {collection}")
+            logger.debug(
+                "mongodb.listed_indexes_on",
+                extra={"count": len(indexes), "collection": collection},
+            )
 
             return indexes
 
         except Exception as e:
-            logger.error(f"Failed to list indexes on {collection}: {e}")
+            logger.error(
+                "mongodb.failed_to_list_indexes_on",
+                extra={"collection": collection, "error": str(e)},
+            )
             raise
 
     async def drop_index(self, collection: str, index_name: str) -> None:
@@ -756,10 +827,20 @@ class MongoDBAdapter(BaseAdapter):
             coll = self._db[collection]
             await coll.drop_index(index_name)
 
-            logger.info(f"Dropped index '{index_name}' from {collection}")
+            logger.info(
+                "mongodb.dropped_index_from",
+                extra={"index_name": index_name, "collection": collection},
+            )
 
         except Exception as e:
-            logger.error(f"Failed to drop index {index_name} from {collection}: {e}")
+            logger.error(
+                "mongodb.failed_to_drop_index_from",
+                extra={
+                    "index_name": index_name,
+                    "collection": collection,
+                    "error": str(e),
+                },
+            )
             raise
 
     # ==================== Collection Management ====================
@@ -792,10 +873,13 @@ class MongoDBAdapter(BaseAdapter):
         try:
             await self._db.create_collection(collection, **options)
 
-            logger.info(f"Created collection '{collection}'")
+            logger.info("mongodb.created_collection", extra={"collection": collection})
 
         except Exception as e:
-            logger.error(f"Failed to create collection {collection}: {e}")
+            logger.error(
+                "mongodb.failed_to_create_collection",
+                extra={"collection": collection, "error": str(e)},
+            )
             raise
 
     async def drop_collection(self, collection: str) -> None:
@@ -813,10 +897,13 @@ class MongoDBAdapter(BaseAdapter):
         try:
             await self._db.drop_collection(collection)
 
-            logger.info(f"Dropped collection '{collection}'")
+            logger.info("mongodb.dropped_collection", extra={"collection": collection})
 
         except Exception as e:
-            logger.error(f"Failed to drop collection {collection}: {e}")
+            logger.error(
+                "mongodb.failed_to_drop_collection",
+                extra={"collection": collection, "error": str(e)},
+            )
             raise
 
     async def list_collections(self) -> List[str]:
@@ -835,12 +922,14 @@ class MongoDBAdapter(BaseAdapter):
         try:
             collection_names = await self._db.list_collection_names()
 
-            logger.debug(f"Listed {len(collection_names)} collections")
+            logger.debug(
+                "mongodb.listed_collections", extra={"count": len(collection_names)}
+            )
 
             return collection_names
 
         except Exception as e:
-            logger.error(f"Failed to list collections: {e}")
+            logger.error("mongodb.failed_to_list_collections", extra={"error": str(e)})
             raise
 
     async def collection_exists(self, collection: str) -> bool:
@@ -863,12 +952,17 @@ class MongoDBAdapter(BaseAdapter):
             collection_names = await self._db.list_collection_names()
             exists = collection in collection_names
 
-            logger.debug(f"Collection '{collection}' exists: {exists}")
+            logger.debug(
+                "mongodb.collection_exists",
+                extra={"collection": collection, "exists": exists},
+            )
 
             return exists
 
         except Exception as e:
-            logger.error(f"Failed to check collection existence: {e}")
+            logger.error(
+                "mongodb.failed_to_check_collection_existence", extra={"error": str(e)}
+            )
             raise
 
     # ==================== Utility Methods ====================

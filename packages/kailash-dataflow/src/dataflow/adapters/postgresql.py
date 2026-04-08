@@ -70,7 +70,9 @@ class PostgreSQLAdapter(DatabaseAdapter):
                         )
                         await conn.execute("ROLLBACK")
                 except Exception as e:
-                    logger.warning(f"Connection reset failed: {e}")
+                    logger.warning(
+                        "postgresql.connection_reset_failed", extra={"error": str(e)}
+                    )
 
             # Build connection parameters
             params = self.get_connection_parameters()
@@ -89,7 +91,10 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 "asyncpg is required for PostgreSQL support. Install with: pip install asyncpg"
             )
         except Exception as e:
-            logger.error(f"Failed to create PostgreSQL connection pool: {e}")
+            logger.error(
+                "postgresql.failed_to_create_postgresql_connection_pool",
+                extra={"error": str(e)},
+            )
             raise ConnectionError(f"Connection failed: {e}")
 
     async def close_connection_pool(self) -> None:
@@ -120,7 +125,9 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 return [dict(row) for row in rows]
 
         except Exception as e:
-            logger.error(f"PostgreSQL query execution failed: {e}")
+            logger.error(
+                "postgresql.postgresql_query_execution_failed", extra={"error": str(e)}
+            )
             raise QueryError(f"Query execution failed: {e}")
 
     async def execute_insert(self, query: str, params: List[Any] = None) -> Any:
@@ -138,7 +145,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
                     return await connection.execute(pg_query)
 
         except Exception as e:
-            logger.error(f"PostgreSQL insert failed: {e}")
+            logger.error("postgresql.postgresql_insert_failed", extra={"error": str(e)})
             raise QueryError(f"Insert failed: {e}")
 
     async def execute_bulk_insert(self, query: str, params_list: List[Tuple]) -> None:
@@ -153,7 +160,9 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 await connection.executemany(pg_query, params_list)
 
         except Exception as e:
-            logger.error(f"PostgreSQL bulk insert failed: {e}")
+            logger.error(
+                "postgresql.postgresql_bulk_insert_failed", extra={"error": str(e)}
+            )
             raise QueryError(f"Bulk insert failed: {e}")
 
     def transaction(self):
@@ -271,7 +280,9 @@ class PostgreSQLAdapter(DatabaseAdapter):
             return schema
 
         except Exception as e:
-            logger.error(f"Failed to get table schema: {e}")
+            logger.error(
+                "postgresql.failed_to_get_table_schema", extra={"error": str(e)}
+            )
             raise QueryError(f"Failed to get table schema: {e}")
 
     async def create_table(self, table_name: str, schema: Dict[str, Dict]) -> None:
@@ -318,10 +329,10 @@ class PostgreSQLAdapter(DatabaseAdapter):
             query = f"CREATE TABLE IF NOT EXISTS {_safe_identifier(table_name)} ({', '.join(columns)})"
 
             await self.execute_query(query)
-            logger.info(f"Created table: {table_name}")
+            logger.info("postgresql.created_table", extra={"table_name": table_name})
 
         except Exception as e:
-            logger.error(f"Failed to create table: {e}")
+            logger.error("postgresql.failed_to_create_table", extra={"error": str(e)})
             raise QueryError(f"Failed to create table: {e}")
 
     async def drop_table(self, table_name: str) -> None:
@@ -332,10 +343,10 @@ class PostgreSQLAdapter(DatabaseAdapter):
         try:
             query = f"DROP TABLE IF EXISTS {_safe_identifier(table_name)}"
             await self.execute_query(query)
-            logger.info(f"Dropped table: {table_name}")
+            logger.info("postgresql.dropped_table", extra={"table_name": table_name})
 
         except Exception as e:
-            logger.error(f"Failed to drop table: {e}")
+            logger.error("postgresql.failed_to_drop_table", extra={"error": str(e)})
             raise QueryError(f"Failed to drop table: {e}")
 
     def get_dialect(self) -> str:
@@ -468,7 +479,9 @@ class PostgreSQLAdapter(DatabaseAdapter):
             result = await self.execute_query("SELECT version() as version")
             return result[0]["version"]
         except Exception as e:
-            logger.error(f"Failed to get server version: {e}")
+            logger.error(
+                "postgresql.failed_to_get_server_version", extra={"error": str(e)}
+            )
             return "unknown"
 
     async def get_database_size(self) -> int:
@@ -481,7 +494,9 @@ class PostgreSQLAdapter(DatabaseAdapter):
             result = await self.execute_query(query)
             return result[0]["size_bytes"] or 0
         except Exception as e:
-            logger.error(f"Failed to get database size: {e}")
+            logger.error(
+                "postgresql.failed_to_get_database_size", extra={"error": str(e)}
+            )
             return 0
 
     @property
@@ -553,7 +568,11 @@ class PostgreSQLTransaction:
                     self._rolled_back = True
         except Exception as cleanup_error:
             # Log cleanup error but don't raise (preserve original exception)
-            logger.error(f"Transaction cleanup failed: {cleanup_error}", exc_info=True)
+            logger.error(
+                "postgresql.transaction_cleanup_failed",
+                extra={"cleanup_error": cleanup_error},
+                exc_info=True,
+            )
         finally:
             # CRITICAL: Always release connection to pool
             if self.connection:

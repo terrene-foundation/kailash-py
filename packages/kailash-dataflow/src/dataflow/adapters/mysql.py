@@ -96,7 +96,9 @@ class MySQLAdapter(DatabaseAdapter):
             )
 
         except Exception as e:
-            logger.error(f"Failed to create MySQL connection pool: {e}")
+            logger.error(
+                "mysql.failed_to_create_mysql_connection_pool", extra={"error": str(e)}
+            )
             raise ConnectionError(f"Connection failed: {e}")
 
     async def close_connection_pool(self) -> None:
@@ -132,7 +134,7 @@ class MySQLAdapter(DatabaseAdapter):
                     return list(rows) if rows else []
 
         except Exception as e:
-            logger.error(f"MySQL query execution failed: {e}")
+            logger.error("mysql.mysql_query_execution_failed", extra={"error": str(e)})
             raise QueryError(f"Query execution failed: {e}")
 
     async def execute_insert(self, query: str, params: List[Any] = None) -> Any:
@@ -156,7 +158,7 @@ class MySQLAdapter(DatabaseAdapter):
                     return {"lastrowid": cursor.lastrowid, "rowcount": cursor.rowcount}
 
         except Exception as e:
-            logger.error(f"MySQL insert failed: {e}")
+            logger.error("mysql.mysql_insert_failed", extra={"error": str(e)})
             raise QueryError(f"Insert failed: {e}")
 
     async def execute_bulk_insert(self, query: str, params_list: List[Tuple]) -> None:
@@ -173,7 +175,7 @@ class MySQLAdapter(DatabaseAdapter):
                     await connection.commit()
 
         except Exception as e:
-            logger.error(f"MySQL bulk insert failed: {e}")
+            logger.error("mysql.mysql_bulk_insert_failed", extra={"error": str(e)})
             raise QueryError(f"Bulk insert failed: {e}")
 
     def transaction(self):
@@ -192,7 +194,9 @@ class MySQLAdapter(DatabaseAdapter):
 
         try:
             results = []
-            logger.debug(f"Starting transaction with {len(queries)} queries")
+            logger.debug(
+                "mysql.starting_transaction_with_queries", extra={"count": len(queries)}
+            )
 
             async with self.transaction() as trans:
                 for query, params in queries:
@@ -202,7 +206,7 @@ class MySQLAdapter(DatabaseAdapter):
             logger.debug("Transaction completed successfully")
             return results
         except Exception as e:
-            logger.error(f"Transaction failed: {e}")
+            logger.error("mysql.transaction_failed", extra={"error": str(e)})
             raise TransactionError(f"Transaction failed: {e}")
 
     async def get_table_schema(self, table_name: str) -> Dict[str, Dict]:
@@ -255,7 +259,7 @@ class MySQLAdapter(DatabaseAdapter):
             return schema
 
         except Exception as e:
-            logger.error(f"Failed to get table schema: {e}")
+            logger.error("mysql.failed_to_get_table_schema", extra={"error": str(e)})
             raise QueryError(f"Failed to get table schema: {e}")
 
     async def create_table(self, table_name: str, schema: Dict[str, Dict]) -> None:
@@ -293,10 +297,10 @@ class MySQLAdapter(DatabaseAdapter):
             query += f" ENGINE=InnoDB DEFAULT CHARSET={self.charset} COLLATE={self.collation}"
 
             await self.execute_query(query)
-            logger.info(f"Created table: {table_name}")
+            logger.info("mysql.created_table", extra={"table_name": table_name})
 
         except Exception as e:
-            logger.error(f"Failed to create table: {e}")
+            logger.error("mysql.failed_to_create_table", extra={"error": str(e)})
             raise QueryError(f"Failed to create table: {e}")
 
     async def drop_table(self, table_name: str) -> None:
@@ -308,10 +312,10 @@ class MySQLAdapter(DatabaseAdapter):
             _safe_identifier(table_name)  # validate (MySQL uses backtick quoting)
             query = f"DROP TABLE IF EXISTS `{table_name}`"
             await self.execute_query(query)
-            logger.info(f"Dropped table: {table_name}")
+            logger.info("mysql.dropped_table", extra={"table_name": table_name})
 
         except Exception as e:
-            logger.error(f"Failed to drop table: {e}")
+            logger.error("mysql.failed_to_drop_table", extra={"error": str(e)})
             raise QueryError(f"Failed to drop table: {e}")
 
     def get_dialect(self) -> str:
@@ -443,7 +447,7 @@ class MySQLAdapter(DatabaseAdapter):
             return engines
 
         except Exception as e:
-            logger.error(f"Failed to get storage engines: {e}")
+            logger.error("mysql.failed_to_get_storage_engines", extra={"error": str(e)})
             # Return default engines if query fails
             return {
                 "InnoDB": {
@@ -471,7 +475,7 @@ class MySQLAdapter(DatabaseAdapter):
             result = await self.execute_query("SELECT VERSION() as version")
             return result[0]["version"]
         except Exception as e:
-            logger.error(f"Failed to get server version: {e}")
+            logger.error("mysql.failed_to_get_server_version", extra={"error": str(e)})
             return "unknown"
 
     async def get_database_size(self) -> int:
@@ -488,7 +492,7 @@ class MySQLAdapter(DatabaseAdapter):
             result = await self.execute_query(query, [self.database])
             return result[0]["size_bytes"] or 0
         except Exception as e:
-            logger.error(f"Failed to get database size: {e}")
+            logger.error("mysql.failed_to_get_database_size", extra={"error": str(e)})
             return 0
 
     def encode_string(self, text: str) -> str:
