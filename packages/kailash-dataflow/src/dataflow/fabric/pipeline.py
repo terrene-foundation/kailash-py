@@ -50,6 +50,7 @@ import json
 import logging
 import time
 import uuid
+import warnings
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -253,6 +254,11 @@ class PipelineExecutor:
 
         # Size limit
         self._max_result_bytes = _DEFAULT_MAX_RESULT_BYTES
+
+        # Lifecycle flag — set to True when close() is called. __del__
+        # warns if the executor is GC'd while still "open" (unclosed)
+        # so leaked executors with in-flight pipelines are visible.
+        self._closed = False
 
     # ------------------------------------------------------------------
     # Backend selection
@@ -819,6 +825,44 @@ class PipelineExecutor:
             # original state.
             for _ in range(acquired):
                 self._exec_semaphore.release()
+
+    async def close(self) -> None:
+        """Drain in-flight pipelines and mark the executor as closed.
+
+        Per ``rules/patterns.md`` § Async Resource Cleanup, every async
+        resource class must expose an explicit close() so callers can
+        deterministically signal "I am done with this object". This is
+        the equivalent of ``drain()`` plus a flag flip — once close()
+        has been called, ``__del__`` will not emit a ResourceWarning.
+
+        The cache backend is NOT closed here: it is owned by
+        :class:`FabricRuntime`, which closes it during ``stop()`` along
+        with the shared Redis client.
+        """
+        await self.drain()
+        self._closed = True
+
+    def __del__(self) -> None:
+        """Emit ResourceWarning if PipelineExecutor was not closed.
+
+        ``getattr(..., True)`` defaults to "closed" so __del__ is safe
+        even when __init__ raised before setting the flag — the
+        executor is treated as "never opened" rather than "leaked".
+        """
+        if not getattr(self, "_closed", True):
+            try:
+                warnings.warn(
+                    f"Unclosed PipelineExecutor instance "
+                    f"{getattr(self, '_instance_name', '?')!r}. "
+                    "Call 'await executor.close()' (or stop the parent "
+                    "FabricRuntime) before the executor is garbage "
+                    "collected — pending pipelines and the cache backend "
+                    "reference will leak otherwise.",
+                    ResourceWarning,
+                    source=self,
+                )
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Trace + property accessors

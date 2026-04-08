@@ -7,6 +7,7 @@ Delegates to the adapter layer for actual connections.
 
 import logging
 import time
+import warnings
 from typing import Any, Dict, Optional
 
 from ..adapters.connection_parser import ConnectionParser
@@ -236,3 +237,29 @@ class ConnectionManager:
 
         self._initialized = False
         return {"success": True}
+
+    def __del__(self) -> None:
+        """Emit ResourceWarning if the pool was initialized but never closed.
+
+        Per ``rules/patterns.md`` § Async Resource Cleanup, every async
+        resource class MUST surface leaked instances. A ConnectionManager
+        that is GC'd while ``_initialized=True`` holds an open adapter
+        connection pool — every leaked manager is a real connection leak
+        against the underlying database.
+
+        ``getattr(..., False)`` defaults to "not initialized" so __del__
+        is safe even when __init__ raised before setting the flag.
+        """
+        if getattr(self, "_initialized", False):
+            try:
+                warnings.warn(
+                    "Unclosed ConnectionManager — the adapter pool is "
+                    "still holding database connections. Call "
+                    "'await manager.close_all_connections()' before the "
+                    "manager is garbage collected, or use a context "
+                    "manager so the pool is released deterministically.",
+                    ResourceWarning,
+                    source=self,
+                )
+            except Exception:
+                pass

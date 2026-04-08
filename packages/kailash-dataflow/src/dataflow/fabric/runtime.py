@@ -28,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import warnings
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
@@ -594,6 +595,34 @@ class FabricRuntime:
             "fabric.runtime.stopped",
             extra={"instance_name": self._instance_name},
         )
+
+    def __del__(self) -> None:
+        """Emit ResourceWarning if FabricRuntime was started but not stopped.
+
+        Per ``rules/patterns.md`` § Async Resource Cleanup, every async
+        resource class MUST surface leaked instances. A FabricRuntime that
+        is garbage-collected while ``_started=True`` has live asyncio
+        tasks, an unclosed shared Redis client, and connected source
+        adapters — all of which leak across process lifetime.
+
+        ``getattr(..., False)`` is used so __del__ is safe even if
+        __init__ raised before setting the flag.
+        """
+        if getattr(self, "_started", False):
+            try:
+                warnings.warn(
+                    f"Unclosed FabricRuntime instance "
+                    f"{getattr(self, '_instance_name', '?')!r}. "
+                    "Use 'async with db.fabric(...) as runtime:' or call "
+                    "'await runtime.stop()' before the runtime is garbage "
+                    "collected — pending pipelines, the shared Redis "
+                    "client, and source adapters will leak otherwise.",
+                    ResourceWarning,
+                    source=self,
+                )
+            except Exception:
+                # Interpreter shutdown or recursive GC — best-effort only.
+                pass
 
     async def _connect_sources(self) -> None:
         """Connect all sources in parallel."""
