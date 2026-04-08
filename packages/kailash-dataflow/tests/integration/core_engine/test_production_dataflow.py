@@ -13,14 +13,14 @@ from datetime import datetime
 from typing import Any, Dict
 
 import pytest
-from dataflow.core.config import DatabaseConfig, DataFlowConfig, Environment
-
-# Import production implementation
-from dataflow.core.engine_production import DataFlowProductionEngine as DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow.core.config import DatabaseConfig, DataFlowConfig, Environment
+
+# Import production implementation (moved to tests.fixtures in v0.7.0)
+from tests.fixtures.engine_testing_mocks import DataFlowProductionEngine as DataFlow
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -229,9 +229,9 @@ class TestProductionDataFlowRealDatabase:
                     (product_id,),
                 )
                 row = cursor.fetchone()
-                assert row is None, (
-                    f"Product still exists in {db_type} database after deletion"
-                )
+                assert (
+                    row is None
+                ), f"Product still exists in {db_type} database after deletion"
 
             print(f"✅ All CRUD operations successful with {db_type}")
 
@@ -310,9 +310,9 @@ class TestProductionDataFlowRealDatabase:
                     "SELECT COUNT(*) FROM bulktestmodel WHERE value = 9999"
                 )
                 updated_count = cursor.fetchone()[0]
-                assert updated_count == 200, (
-                    f"Expected 200 updated records, found {updated_count}"
-                )  # Every 5th record
+                assert (
+                    updated_count == 200
+                ), f"Expected 200 updated records, found {updated_count}"  # Every 5th record
 
             print(f"✅ Bulk updated {updated_count} records")
 
@@ -508,9 +508,9 @@ class TestProductionDataFlowRealDatabase:
             total_time = time.time() - start_time
 
             # Verify all operations succeeded
-            assert all(success for _, success in results), (
-                "Some concurrent operations failed"
-            )
+            assert all(
+                success for _, success in results
+            ), "Some concurrent operations failed"
 
             # Calculate throughput
             throughput = 50 / total_time
@@ -519,9 +519,9 @@ class TestProductionDataFlowRealDatabase:
             print(f"  Throughput: {throughput:.0f} ops/sec")
 
             # Verify performance requirements
-            assert throughput > 10, (
-                f"Throughput {throughput:.0f} ops/sec below 10 ops/sec minimum"
-            )
+            assert (
+                throughput > 10
+            ), f"Throughput {throughput:.0f} ops/sec below 10 ops/sec minimum"
 
             print("✅ Concurrent operation requirements met")
 

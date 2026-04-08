@@ -87,7 +87,7 @@ from .validation import (
 )
 
 # Legacy compatibility - maintain the original imports
-__version__ = "2.0.0.dev1"
+__version__ = "2.0.0"
 
 __all__ = [
     "DataFlow",
