@@ -33,7 +33,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 try:
     import asyncpg
-
     import docker
 
     DEPENDENCIES_AVAILABLE = True
@@ -160,7 +159,9 @@ class PostgreSQLTestManager:
             self._docker_client.ping()
             return True
         except Exception as e:
-            logger.error(f"Docker not available: {e}")
+            logger.error(
+                "postgresql_test_manager.docker_not_available", extra={"error": str(e)}
+            )
             return False
 
     def _check_port_available(self, port: int) -> bool:
@@ -186,7 +187,10 @@ class PostgreSQLTestManager:
 
             # Check for port conflicts
             if not self._check_port_available(self.postgres_port):
-                logger.warning(f"Port {self.postgres_port} already in use")
+                logger.warning(
+                    "postgresql_test_manager.port_already_in_use",
+                    extra={"postgres_port": self.postgres_port},
+                )
                 # Try to find existing container
                 existing_container = await self._find_existing_container()
                 if existing_container and existing_container.ready:
@@ -205,7 +209,10 @@ class PostgreSQLTestManager:
             setup_time = time.perf_counter() - start_time
             container_info.performance_metrics["setup_time"] = setup_time
 
-            logger.info(f"PostgreSQL container ready in {setup_time:.3f}s")
+            logger.info(
+                "postgresql_test_manager.postgresql_container_ready_in_s",
+                extra={"setup_time": setup_time},
+            )
 
             # Verify performance target
             if setup_time > self.performance_target:
@@ -217,7 +224,10 @@ class PostgreSQLTestManager:
             return container_info
 
         except Exception as e:
-            logger.error(f"Failed to start PostgreSQL container: {e}")
+            logger.error(
+                "postgresql_test_manager.failed_to_start_postgresql_container",
+                extra={"error": str(e)},
+            )
             return ContainerInfo(
                 container_id=None,
                 status=ContainerStatus.ERROR,
@@ -252,7 +262,10 @@ class PostgreSQLTestManager:
         except docker.errors.NotFound:
             pass
         except Exception as e:
-            logger.warning(f"Error checking existing container: {e}")
+            logger.warning(
+                "postgresql_test_manager.error_checking_existing_container",
+                extra={"error": str(e)},
+            )
 
         return None
 
@@ -266,7 +279,10 @@ class PostgreSQLTestManager:
         except docker.errors.NotFound:
             pass
         except Exception as e:
-            logger.warning(f"Error cleaning up existing container: {e}")
+            logger.warning(
+                "postgresql_test_manager.error_cleaning_up_existing_container",
+                extra={"error": str(e)},
+            )
 
     async def _start_new_container(self) -> ContainerInfo:
         """Start new PostgreSQL container."""
@@ -305,11 +321,17 @@ class PostgreSQLTestManager:
                 **self.database_config,
             )
 
-            logger.info(f"Container started: {container_info.container_id[:12]}")
+            logger.info(
+                "postgresql_test_manager.container_started",
+                extra={"12": container_info.container_id[:12]},
+            )
             return container_info
 
         except Exception as e:
-            logger.error(f"Failed to start container: {e}")
+            logger.error(
+                "postgresql_test_manager.failed_to_start_container",
+                extra={"error": str(e)},
+            )
             raise MigrationTestError(f"Container creation failed: {e}")
 
     def _build_database_url(self) -> str:
@@ -374,7 +396,10 @@ class PostgreSQLTestManager:
             TestExecutionResult with comprehensive results
         """
         test_name = test_case.get("name", "unknown_test")
-        logger.info(f"Running migration integration test: {test_name}")
+        logger.info(
+            "postgresql_test_manager.running_migration_integration_test",
+            extra={"test_name": test_name},
+        )
         start_time = time.perf_counter()
 
         try:
@@ -415,7 +440,10 @@ class PostgreSQLTestManager:
 
                 # Check if migration failed
                 if not result.success:
-                    logger.error(f"Migration {migration.name} failed: {result.error}")
+                    logger.error(
+                        "postgresql_test_manager.migration_failed",
+                        extra={"name": migration.name, "error": result.error},
+                    )
 
             # Run concurrent access tests if enabled
             concurrent_results = {}
@@ -453,7 +481,10 @@ class PostgreSQLTestManager:
 
         except Exception as e:
             execution_time = time.perf_counter() - start_time
-            logger.error(f"Migration integration test failed: {e}")
+            logger.error(
+                "postgresql_test_manager.migration_integration_test_failed",
+                extra={"error": str(e)},
+            )
 
             return PostgreSQLTestExecutionResult(
                 success=False,
@@ -512,7 +543,10 @@ class PostgreSQLTestManager:
             }
 
         except Exception as e:
-            logger.error(f"Concurrent access tests failed: {e}")
+            logger.error(
+                "postgresql_test_manager.concurrent_access_tests_failed",
+                extra={"error": str(e)},
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -523,7 +557,10 @@ class PostgreSQLTestManager:
         self, container_info: ContainerInfo, connection_count: int = 10
     ) -> Dict[str, Any]:
         """Test multiple simultaneous database connections."""
-        logger.info(f"Testing {connection_count} simultaneous connections...")
+        logger.info(
+            "postgresql_test_manager.testing_simultaneous_connections",
+            extra={"connection_count": connection_count},
+        )
 
         try:
             # Create multiple connections simultaneously
@@ -563,7 +600,10 @@ class PostgreSQLTestManager:
             }
 
         except Exception as e:
-            logger.error(f"Multiple connections test failed: {e}")
+            logger.error(
+                "postgresql_test_manager.multiple_connections_test_failed",
+                extra={"error": str(e)},
+            )
             return {"success": False, "error": str(e)}
 
     async def _test_concurrent_read_write(
@@ -649,7 +689,10 @@ class PostgreSQLTestManager:
             }
 
         except Exception as e:
-            logger.error(f"Concurrent read/write test failed: {e}")
+            logger.error(
+                "postgresql_test_manager.concurrent_read_write_test_failed",
+                extra={"error": str(e)},
+            )
             return {"success": False, "error": str(e)}
 
     async def _test_concurrent_schema_operations(
@@ -749,7 +792,10 @@ class PostgreSQLTestManager:
             }
 
         except Exception as e:
-            logger.error(f"Concurrent schema operations test failed: {e}")
+            logger.error(
+                "postgresql_test_manager.concurrent_schema_operations_test_failed",
+                extra={"error": str(e)},
+            )
             return {"success": False, "error": str(e)}
 
     async def cleanup_test_environment(self) -> None:
@@ -771,7 +817,10 @@ class PostgreSQLTestManager:
                             else:
                                 conn.close()
                     except Exception as e:
-                        logger.warning(f"Error closing connection: {e}")
+                        logger.warning(
+                            "postgresql_test_manager.error_closing_connection",
+                            extra={"error": str(e)},
+                        )
 
                 self._active_connections.clear()
 
@@ -783,7 +832,10 @@ class PostgreSQLTestManager:
                     self._container.remove()
                     logger.info("Container removed successfully")
                 except Exception as e:
-                    logger.warning(f"Error removing container: {e}")
+                    logger.warning(
+                        "postgresql_test_manager.error_removing_container",
+                        extra={"error": str(e)},
+                    )
 
                 self._container = None
 
@@ -794,7 +846,9 @@ class PostgreSQLTestManager:
             logger.info("Test environment cleanup completed")
 
         except Exception as e:
-            logger.error(f"Cleanup error: {e}")
+            logger.error(
+                "postgresql_test_manager.cleanup_error", extra={"error": str(e)}
+            )
             raise MigrationTestError(f"Cleanup failed: {e}")
 
     async def get_container_status(self) -> ContainerInfo:
@@ -838,7 +892,10 @@ class PostgreSQLTestManager:
             return container_info
 
         except Exception as e:
-            logger.error(f"Error getting container status: {e}")
+            logger.error(
+                "postgresql_test_manager.error_getting_container_status",
+                extra={"error": str(e)},
+            )
             return ContainerInfo(
                 container_id=None,
                 status=ContainerStatus.ERROR,
@@ -865,7 +922,10 @@ class PostgreSQLTestManager:
         Returns:
             Database URL for the new test database
         """
-        logger.info(f"Creating test database: {database_name}")
+        logger.info(
+            "postgresql_test_manager.creating_test_database",
+            extra={"database_name": database_name},
+        )
 
         try:
             # Connect to main database
@@ -885,12 +945,18 @@ class PostgreSQLTestManager:
             )
 
             self._test_databases.append(database_name)
-            logger.info(f"Test database '{database_name}' created successfully")
+            logger.info(
+                "postgresql_test_manager.test_database_created_successfully",
+                extra={"database_name": database_name},
+            )
 
             return new_db_url
 
         except Exception as e:
-            logger.error(f"Failed to create test database '{database_name}': {e}")
+            logger.error(
+                "postgresql_test_manager.failed_to_create_test_database",
+                extra={"database_name": database_name, "error": str(e)},
+            )
             raise MigrationTestError(f"Database creation failed: {e}")
 
     async def drop_test_database(self, database_name: str) -> bool:
@@ -903,7 +969,10 @@ class PostgreSQLTestManager:
         Returns:
             True if successful
         """
-        logger.info(f"Dropping test database: {database_name}")
+        logger.info(
+            "postgresql_test_manager.dropping_test_database",
+            extra={"database_name": database_name},
+        )
 
         try:
             # Connect to main database
@@ -916,9 +985,15 @@ class PostgreSQLTestManager:
             if database_name in self._test_databases:
                 self._test_databases.remove(database_name)
 
-            logger.info(f"Test database '{database_name}' dropped successfully")
+            logger.info(
+                "postgresql_test_manager.test_database_dropped_successfully",
+                extra={"database_name": database_name},
+            )
             return True
 
         except Exception as e:
-            logger.error(f"Failed to drop test database '{database_name}': {e}")
+            logger.error(
+                "postgresql_test_manager.failed_to_drop_test_database",
+                extra={"database_name": database_name, "error": str(e)},
+            )
             return False

@@ -423,7 +423,10 @@ class NotNullColumnHandler:
         Returns:
             NotNullAdditionPlan with execution strategy and safety analysis
         """
-        self.logger.info(f"Planning NOT NULL addition: {table_name}.{column.name}")
+        self.logger.info(
+            "not_null_handler.planning_not_null_addition",
+            extra={"table_name": table_name, "name": column.name},
+        )
 
         if connection is None:
             connection = await self._get_connection()
@@ -479,7 +482,10 @@ class NotNullColumnHandler:
             return plan
 
         except Exception as e:
-            self.logger.error(f"Planning failed for {table_name}.{column.name}: {e}")
+            self.logger.error(
+                "not_null_handler.planning_failed_for",
+                extra={"table_name": table_name, "name": column.name, "error": str(e)},
+            )
             raise
 
     async def validate_addition_safety(
@@ -574,7 +580,9 @@ class NotNullColumnHandler:
             return result
 
         except Exception as e:
-            self.logger.error(f"Validation failed: {e}")
+            self.logger.error(
+                "not_null_handler.validation_failed", extra={"error": str(e)}
+            )
             issues.append(f"Validation error: {str(e)}")
             return ValidationResult(is_safe=False, issues=issues, warnings=warnings)
 
@@ -675,7 +683,9 @@ class NotNullColumnHandler:
 
         except Exception as e:
             execution_time = (datetime.now() - start_time).total_seconds()
-            self.logger.error(f"Addition failed: {e}")
+            self.logger.error(
+                "not_null_handler.addition_failed", extra={"error": str(e)}
+            )
 
             return AdditionExecutionResult(
                 result=AdditionResult.ROLLBACK_REQUIRED,
@@ -751,7 +761,9 @@ class NotNullColumnHandler:
 
         except Exception as e:
             execution_time = (datetime.now() - start_time).total_seconds()
-            self.logger.error(f"Rollback failed: {e}")
+            self.logger.error(
+                "not_null_handler.rollback_failed", extra={"error": str(e)}
+            )
 
             return AdditionExecutionResult(
                 result=AdditionResult.VALIDATION_FAILED,
@@ -1121,5 +1133,8 @@ class NotNullColumnHandler:
 
             return violations == 0
         except Exception as e:
-            self.logger.error(f"Post-addition constraint validation failed: {e}")
+            self.logger.error(
+                "not_null_handler.post_addition_constraint_validation_failed",
+                extra={"error": str(e)},
+            )
             return False

@@ -314,7 +314,10 @@ class MigrationValidationPipeline:
                     error_type="VALIDATION_TIMEOUT",
                 )
             )
-            logger.error(f"Migration validation timed out for {result.migration_id}")
+            logger.error(
+                "migration_validation_pipeline.migration_validation_timed_out_for",
+                extra={"migration_id": result.migration_id},
+            )
 
         except Exception as e:
             result.validation_status = ValidationStatus.FAILED
@@ -325,7 +328,10 @@ class MigrationValidationPipeline:
                     details={"exception": str(e)},
                 )
             )
-            logger.error(f"Migration validation failed for {result.migration_id}: {e}")
+            logger.error(
+                "migration_validation_pipeline.migration_validation_failed_for",
+                extra={"migration_id": result.migration_id, "error": str(e)},
+            )
 
         finally:
             # Clean up active validation tracking
@@ -449,11 +455,17 @@ class MigrationValidationPipeline:
                 timeout=self.config.staging_timeout_seconds,
             )
 
-            logger.info(f"Created staging environment: {staging_env.staging_id}")
+            logger.info(
+                "migration_validation_pipeline.created_staging_environment",
+                extra={"staging_id": staging_env.staging_id},
+            )
             return staging_env
 
         except Exception as e:
-            logger.error(f"Failed to create staging environment: {e}")
+            logger.error(
+                "migration_validation_pipeline.failed_to_create_staging_environment",
+                extra={"error": str(e)},
+            )
             raise
 
     async def _replicate_production_schema(
@@ -478,7 +490,10 @@ class MigrationValidationPipeline:
             )
 
         except Exception as e:
-            logger.error(f"Schema replication failed: {e}")
+            logger.error(
+                "migration_validation_pipeline.schema_replication_failed",
+                extra={"error": str(e)},
+            )
             raise
 
     async def _execute_validation_checkpoints(
@@ -696,7 +711,10 @@ class MigrationValidationPipeline:
             )
 
         except Exception as e:
-            logger.warning(f"Failed to update risk assessment: {e}")
+            logger.warning(
+                "migration_validation_pipeline.failed_to_update_risk_assessment",
+                extra={"error": str(e)},
+            )
             # Don't fail validation due to risk assessment issues
 
     def _extract_risk_factors_from_validation(

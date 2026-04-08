@@ -270,7 +270,10 @@ class MigrationConnectionManager:
                     # Execute without timeout
                     result = await operation()
 
-                logger.debug(f"Operation succeeded on attempt {attempt + 1}")
+                logger.debug(
+                    "migration_connection_manager.operation_succeeded_on_attempt",
+                    extra={"attempt_1": attempt + 1},
+                )
                 return result
 
             except asyncio.TimeoutError:
@@ -279,12 +282,18 @@ class MigrationConnectionManager:
             except Exception as e:
                 # Check if this is the last attempt
                 if attempt == retries:
-                    logger.error(f"Operation failed after {attempt + 1} attempts: {e}")
+                    logger.error(
+                        "migration_connection_manager.operation_failed_after_attempts",
+                        extra={"attempt_1": attempt + 1, "error": str(e)},
+                    )
                     raise e
 
                 # Check if error is retryable
                 if not self._is_retryable_error(e):
-                    logger.error(f"Non-retryable error: {e}")
+                    logger.error(
+                        "migration_connection_manager.non_retryable_error",
+                        extra={"error": str(e)},
+                    )
                     raise e
 
                 # Wait before retry with exponential backoff
@@ -387,7 +396,10 @@ class MigrationConnectionManager:
                 return self._create_async_sql_wrapper()
 
         except Exception as e:
-            logger.error(f"Failed to create database connection: {e}")
+            logger.error(
+                "migration_connection_manager.failed_to_create_database_connection",
+                extra={"error": str(e)},
+            )
             # Ultimate fallback - SQLite memory
             # check_same_thread=False allows use with async_safe_run thread pool
             import sqlite3
@@ -484,7 +496,10 @@ class MigrationConnectionManager:
             return AsyncSQLConnectionWrapper(safe_connection_string)
 
         except Exception as e:
-            logger.error(f"Failed to create AsyncSQL wrapper: {e}")
+            logger.error(
+                "migration_connection_manager.failed_to_create_asyncsql_wrapper",
+                extra={"error": str(e)},
+            )
             # Ultimate fallback
             # check_same_thread=False allows use with async_safe_run thread pool
             import sqlite3
@@ -497,7 +512,10 @@ class MigrationConnectionManager:
             if hasattr(connection, "close"):
                 connection.close()
         except Exception as e:
-            logger.warning(f"Error closing connection: {e}")
+            logger.warning(
+                "migration_connection_manager.error_closing_connection",
+                extra={"error": str(e)},
+            )
 
     def get_pool_stats(self) -> ConnectionPoolStats:
         """Get current connection pool statistics."""
@@ -530,7 +548,10 @@ class MigrationConnectionManager:
         # Close expired connections outside the lock
         for connection_id, connection in expired_connections:
             self._close_connection(connection)
-            logger.debug(f"Cleaned up expired connection {connection_id}")
+            logger.debug(
+                "migration_connection_manager.cleaned_up_expired_connection",
+                extra={"connection_id": connection_id},
+            )
 
     def close_all_connections(self):
         """Close all connections in the pool."""
@@ -547,7 +568,10 @@ class MigrationConnectionManager:
         for connection in connections_to_close:
             self._close_connection(connection)
 
-        logger.info(f"Closed {len(connections_to_close)} connections")
+        logger.info(
+            "migration_connection_manager.closed_connections",
+            extra={"count": len(connections_to_close)},
+        )
 
     @contextmanager
     def get_connection(self):

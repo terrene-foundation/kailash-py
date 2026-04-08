@@ -262,7 +262,10 @@ class PerformanceValidator:
         query_baselines = {}
 
         for query in queries:
-            logger.debug(f"Establishing baseline for query: {query[:100]}...")
+            logger.debug(
+                "performance_validator.establishing_baseline_for_query",
+                extra={"query": query[:100]},
+            )
 
             # Execute query multiple times to get stable baseline
             execution_results = []
@@ -317,7 +320,10 @@ class PerformanceValidator:
         query_benchmarks = {}
 
         for query, baseline_metrics in baseline.query_baselines.items():
-            logger.debug(f"Running benchmark for query: {query[:100]}...")
+            logger.debug(
+                "performance_validator.running_benchmark_for_query",
+                extra={"query": query[:100]},
+            )
 
             # Execute query multiple times for benchmark
             execution_results = []

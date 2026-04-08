@@ -146,7 +146,10 @@ class MigrationTestFramework:
         Returns:
             Database connection for testing
         """
-        logger.info(f"Setting up {self.database_type} test database")
+        logger.info(
+            "migration_test_framework.setting_up_test_database",
+            extra={"database_type": self.database_type},
+        )
         start_time = time.perf_counter()
 
         try:
@@ -161,12 +164,18 @@ class MigrationTestFramework:
             await self._initialize_migration_components(connection)
 
             setup_time = time.perf_counter() - start_time
-            logger.info(f"Test database setup completed in {setup_time:.3f}s")
+            logger.info(
+                "migration_test_framework.test_database_setup_completed_in_s",
+                extra={"setup_time": setup_time},
+            )
 
             return connection
 
         except Exception as e:
-            logger.error(f"Failed to setup test database: {e}")
+            logger.error(
+                "migration_test_framework.failed_to_setup_test_database",
+                extra={"error": str(e)},
+            )
             raise MigrationTestError(f"Database setup failed: {e}")
 
     async def _setup_sqlite_database(self) -> sqlite3.Connection:
@@ -208,7 +217,10 @@ class MigrationTestFramework:
             await connection.execute(clean_sql)
             logger.info("PostgreSQL test database cleaned")
         except Exception as e:
-            logger.warning(f"Database cleanup warning: {e}")
+            logger.warning(
+                "migration_test_framework.database_cleanup_warning",
+                extra={"error": str(e)},
+            )
 
     async def _initialize_migration_components(self, connection):
         """Initialize migration system components."""
@@ -240,7 +252,10 @@ class MigrationTestFramework:
             logger.info("Migration components initialized successfully")
 
         except Exception as e:
-            logger.error(f"Failed to initialize migration components: {e}")
+            logger.error(
+                "migration_test_framework.failed_to_initialize_migration_components",
+                extra={"error": str(e)},
+            )
             raise MigrationTestError(f"Component initialization failed: {e}")
 
     def create_test_migration(
@@ -339,7 +354,10 @@ class MigrationTestFramework:
         Returns:
             TestResult with execution details
         """
-        logger.info(f"Executing test migration: {migration.name}")
+        logger.info(
+            "migration_test_framework.executing_test_migration",
+            extra={"name": migration.name},
+        )
         start_time = time.perf_counter()
 
         try:
@@ -379,7 +397,10 @@ class MigrationTestFramework:
 
         except Exception as e:
             execution_time = time.perf_counter() - start_time
-            logger.error(f"Migration execution failed: {e}")
+            logger.error(
+                "migration_test_framework.migration_execution_failed",
+                extra={"error": str(e)},
+            )
 
             return MigrationTestResult(
                 success=False,
@@ -404,7 +425,10 @@ class MigrationTestFramework:
 
         try:
             for operation in migration.operations:
-                logger.info(f"Executing: {operation.description}")
+                logger.info(
+                    "migration_test_framework.executing",
+                    extra={"description": operation.description},
+                )
 
                 if self.database_type == "postgresql":
                     # Use asyncpg interface
@@ -418,12 +442,18 @@ class MigrationTestFramework:
                         # Async SQLite interface
                         await connection.execute(operation.sql_up)
 
-                logger.info(f"Completed: {operation.description}")
+                logger.info(
+                    "migration_test_framework.completed",
+                    extra={"description": operation.description},
+                )
 
             return True
 
         except Exception as e:
-            logger.error(f"Direct migration execution failed: {e}")
+            logger.error(
+                "migration_test_framework.direct_migration_execution_failed",
+                extra={"error": str(e)},
+            )
             return False
 
     async def verify_migration_result(
@@ -452,7 +482,10 @@ class MigrationTestFramework:
             return self._compare_schemas(current_schema, expected_schema)
 
         except Exception as e:
-            logger.error(f"Schema verification failed: {e}")
+            logger.error(
+                "migration_test_framework.schema_verification_failed",
+                extra={"error": str(e)},
+            )
             return False
 
     async def _get_postgresql_schema_direct(
@@ -508,11 +541,17 @@ class MigrationTestFramework:
                     )
                     schema[table_name].columns.append(column)
 
-            logger.info(f"Found {len(schema)} tables in PostgreSQL schema")
+            logger.info(
+                "migration_test_framework.found_tables_in_postgresql_schema",
+                extra={"count": len(schema)},
+            )
             return schema
 
         except Exception as e:
-            logger.error(f"PostgreSQL schema inspection error: {e}")
+            logger.error(
+                "migration_test_framework.postgresql_schema_inspection_error",
+                extra={"error": str(e)},
+            )
             return {}
 
     async def _get_sqlite_schema(self, connection) -> Dict[str, TableDefinition]:
@@ -538,10 +577,10 @@ class MigrationTestFramework:
                     columns = []
                     for col_info in columns_info:
                         column = ColumnDefinition(
-                            name=col_info[1],  # name
-                            type=col_info[2],  # type
-                            nullable=not col_info[3],  # not null
-                            primary_key=bool(col_info[5]),  # pk
+                            name=col_info[1],
+                            type=col_info[2],
+                            nullable=not col_info[3],
+                            primary_key=bool(col_info[5]),
                         )
                         columns.append(column)
 
@@ -550,7 +589,10 @@ class MigrationTestFramework:
                     )
 
         except Exception as e:
-            logger.warning(f"SQLite schema inspection error: {e}")
+            logger.warning(
+                "migration_test_framework.sqlite_schema_inspection_error",
+                extra={"error": str(e)},
+            )
 
         return schema
 
@@ -681,7 +723,10 @@ class MigrationTestFramework:
             logger.info("Rollback testing disabled")
             return True
 
-        logger.info(f"Testing rollback for migration: {migration_version}")
+        logger.info(
+            "migration_test_framework.testing_rollback_for_migration",
+            extra={"migration_version": migration_version},
+        )
 
         try:
             if not self._migration_system:
@@ -697,7 +742,9 @@ class MigrationTestFramework:
             return success
 
         except Exception as e:
-            logger.error(f"Rollback test failed: {e}")
+            logger.error(
+                "migration_test_framework.rollback_test_failed", extra={"error": str(e)}
+            )
             return False
 
     async def teardown_test_database(self, connection: Any):
@@ -725,7 +772,9 @@ class MigrationTestFramework:
             logger.info("Test database teardown completed")
 
         except Exception as e:
-            logger.warning(f"Teardown warning: {e}")
+            logger.warning(
+                "migration_test_framework.teardown_warning", extra={"error": str(e)}
+            )
 
     async def run_comprehensive_test(
         self,
@@ -744,7 +793,10 @@ class MigrationTestFramework:
         Returns:
             Complete TestResult with all test phases
         """
-        logger.info(f"Running comprehensive test for: {migration.name}")
+        logger.info(
+            "migration_test_framework.running_comprehensive_test_for",
+            extra={"name": migration.name},
+        )
 
         # Setup test database
         connection = await self.setup_test_database()
