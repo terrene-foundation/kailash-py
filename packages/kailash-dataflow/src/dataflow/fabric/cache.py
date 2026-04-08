@@ -39,7 +39,6 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
 
@@ -89,30 +88,16 @@ class _FabricCacheEntry:
 
 
 # ---------------------------------------------------------------------------
-# URL masking helper (no secrets in logs)
+# URL masking helper — re-exported from dataflow.utils.masking
 # ---------------------------------------------------------------------------
+#
+# Phase 7.6 centralized the masker in ``dataflow/utils/masking.py``
+# so every module can import the canonical implementation. The
+# ``_mask_url`` name is retained here as a backwards-compatible
+# re-export for existing fabric callers.
 
 
-def _mask_url(url: Optional[str]) -> str:
-    """Replace the userinfo section of a URL with ``***``.
-
-    Used in every log line that touches a Redis URL. Returns the original
-    string when parsing fails (e.g. ``unix://``) but masks anything that
-    looks like ``user:password``.
-    """
-    if not url:
-        return ""
-    try:
-        parsed = urlparse(url)
-        if parsed.username or parsed.password:
-            netloc = "***@" + (parsed.hostname or "")
-            if parsed.port:
-                netloc = f"{netloc}:{parsed.port}"
-            return urlunparse(parsed._replace(netloc=netloc))
-        return url
-    except (ValueError, AttributeError):
-        return "<unparseable>"
-
+from dataflow.utils.masking import mask_url as _mask_url  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Metric dispatchers (Phase 5.12 — wired to FabricMetrics singleton)
