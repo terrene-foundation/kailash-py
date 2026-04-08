@@ -1,12 +1,20 @@
-"""Integration test for bulk parameter mapping fix."""
+"""Integration test for bulk parameter mapping fix.
 
-from unittest.mock import MagicMock
+Uses a real DataFlow instance backed by PostgreSQL (via IntegrationTestSuite)
+so bulk-node parameter mapping is exercised end-to-end against real infra
+with NO mocking.
+"""
+
+import os
+import random
+import time
 
 import pytest
-from dataflow.core.nodes import NodeGenerator
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow
+from dataflow.core.nodes import NodeGenerator
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -24,18 +32,46 @@ def runtime():
     return LocalRuntime()
 
 
+@pytest.fixture
+def real_dataflow(test_suite):
+    """Create a real DataFlow instance backed by shared test PostgreSQL."""
+    df = DataFlow(
+        database_url=test_suite.config.url,
+        auto_migrate=True,
+        migration_enabled=True,
+        cache_enabled=False,
+    )
+    yield df
+    try:
+        df.close()
+    except Exception:
+        pass
+
+
 class TestBulkParameterMappingIntegration:
     """Integration tests for bulk node parameter mapping."""
 
-    def setup_method(self):
-        """Set up integration test environment."""
-        # Create mock DataFlow instance
-        self.mock_dataflow = MagicMock()
-        self.mock_dataflow.config.security.multi_tenant = False
-        self.mock_dataflow._tenant_context = {}
+    @pytest.fixture(autouse=True)
+    def _setup(self, real_dataflow):
+        """Set up integration test environment with real DataFlow."""
+        self.dataflow = real_dataflow
 
-        # Create node generator
-        self.node_generator = NodeGenerator(self.mock_dataflow)
+        # Register a unique model backed by the real database
+        suffix = f"_{int(time.time())}_{random.randint(1000, 9999)}"
+        table_name = f"test_users{suffix}"
+
+        @self.dataflow.model
+        class User:
+            name: str
+            email: str
+            age: int
+
+        User.__name__ = f"User{suffix}"
+        User.__tablename__ = table_name
+        self._model_cls = User
+
+        # Node generator binds to the real DataFlow instance
+        self.node_generator = NodeGenerator(self.dataflow)
 
         # Define test model fields
         self.test_fields = {
@@ -115,15 +151,15 @@ class TestBulkParameterMappingIntegration:
             # Test with 'records' parameter for each operation
             try:
                 result = node.run(records=test_data)
-                assert isinstance(result, dict), (
-                    f"{operation} failed to handle 'records' parameter"
-                )
+                assert isinstance(
+                    result, dict
+                ), f"{operation} failed to handle 'records' parameter"
             except Exception as e:
                 # Some operations might fail due to missing required parameters
                 # but they should not fail due to parameter mapping issues
-                assert "data" not in str(e).lower(), (
-                    f"{operation} failed due to parameter mapping: {e}"
-                )
+                assert (
+                    "data" not in str(e).lower()
+                ), f"{operation} failed due to parameter mapping: {e}"
 
     def test_parameter_validation_consistency(self):
         """Test that parameter validation is consistent across operations."""
@@ -135,9 +171,9 @@ class TestBulkParameterMappingIntegration:
             assert "data" in params, f"{node_name} missing 'data' parameter"
 
             data_param = params["data"]
-            assert hasattr(data_param, "auto_map_from"), (
-                f"{node_name} missing auto_map_from"
-            )
+            assert hasattr(
+                data_param, "auto_map_from"
+            ), f"{node_name} missing auto_map_from"
             assert data_param.auto_map_from == [
                 "records",
                 "rows",

@@ -15,7 +15,6 @@ import asyncio
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from dataflow.adapters.sqlite_enterprise import (
@@ -33,7 +32,6 @@ from dataflow.performance.sqlite_monitor import SQLitePerformanceMonitor
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
-
 @pytest.fixture
 async def test_suite():
     """Create complete integration test suite with infrastructure."""
@@ -41,12 +39,10 @@ async def test_suite():
     async with suite.session():
         yield suite
 
-
 @pytest.fixture
 def runtime():
     """Create LocalRuntime for workflow execution."""
     return LocalRuntime()
-
 
 @pytest.fixture
 async def temp_sqlite_db():
@@ -65,7 +61,6 @@ async def temp_sqlite_db():
     except Exception:
         pass
 
-
 @pytest.fixture
 async def enterprise_adapter(temp_sqlite_db):
     """Create SQLite enterprise adapter with full features enabled."""
@@ -82,7 +77,6 @@ async def enterprise_adapter(temp_sqlite_db):
     await adapter.connect()
     yield adapter
     await adapter.disconnect()
-
 
 @pytest.fixture
 def sample_optimization_opportunities():
@@ -116,7 +110,6 @@ def sample_optimization_opportunities():
         ),
     ]
 
-
 @pytest.fixture
 def sample_optimized_queries():
     """Create sample optimized queries for testing."""
@@ -138,7 +131,6 @@ def sample_optimized_queries():
             execution_plan_changes=["Composite index recommended"],
         ),
     ]
-
 
 class TestSQLiteEnterpriseAdapter:
     """Test the SQLite Enterprise Adapter functionality."""
@@ -513,7 +505,6 @@ class TestSQLiteEnterpriseAdapter:
         result = await enterprise_adapter.execute_query("PRAGMA temp_store")
         assert result[0]["temp_store"] == 2  # MEMORY
 
-
 class TestSQLiteQueryOptimizer:
     """Test the SQLite-specific query optimizer."""
 
@@ -637,7 +628,6 @@ class TestSQLiteQueryOptimizer:
         assert "EXECUTIVE SUMMARY" in report
         assert "INDEX RECOMMENDATIONS" in report or "PRAGMA OPTIMIZATIONS" in report
         assert "IMPLEMENTATION PRIORITY" in report
-
 
 class TestSQLitePerformanceMonitor:
     """Test the SQLite performance monitoring system."""
@@ -831,7 +821,6 @@ class TestSQLitePerformanceMonitor:
         assert "query_metrics" in export_data
         assert "optimization_recommendations" in export_data
         assert len(export_data["optimization_recommendations"]) == 2
-
 
 class TestIntegrationScenarios:
     """Test complete integration scenarios combining all features."""
@@ -1107,7 +1096,6 @@ class TestIntegrationScenarios:
 
         # Verify optimization recommendations were generated
         assert len(monitor.optimization_recommendations) >= 0
-
 
 if __name__ == "__main__":
     # Run tests with pytest

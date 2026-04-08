@@ -22,7 +22,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Any, Callable, Coroutine, Dict, List, Optional
+from typing import Any, Callable, Coroutine, Dict, List, Mapping, Optional
 
 from dataflow.adapters.source_adapter import BaseSourceAdapter
 
@@ -55,11 +55,15 @@ class ChangeDetector:
 
     def __init__(
         self,
-        sources: Dict[str, BaseSourceAdapter],
-        products: Dict[str, Dict[str, Any]],
+        sources: Mapping[str, BaseSourceAdapter],
+        products: Mapping[str, Any],
         pipeline_executor: Any,
         dev_mode: bool = False,
     ) -> None:
+        # ``products`` is ``Mapping[str, Any]`` rather than
+        # ``Dict[str, ProductRegistration]`` because the legacy in-memory
+        # tests still pass plain dicts with a ``depends_on`` key, and
+        # ``_get_affected_products`` handles both shapes.
         self._sources = sources
         self._products = products
         self._pipeline_executor = pipeline_executor
@@ -271,29 +275,14 @@ class ChangeDetector:
                 )
             return
 
-        # Fallback: push to the pipeline executor queue if it has one.
-        queue = getattr(self._pipeline_executor, "_queue", None)
-        if queue is not None:
-            msg = {
-                "product_name": product_name,
-                "triggered_by": triggered_by,
-                "detected_at": datetime.now(timezone.utc).isoformat(),
-            }
-            try:
-                queue.put_nowait(msg)
-            except asyncio.QueueFull:
-                logger.warning(
-                    "ChangeDetector: pipeline queue full — dropping change event "
-                    "for product '%s' (triggered by '%s')",
-                    product_name,
-                    triggered_by,
-                )
-        else:
-            logger.warning(
-                "ChangeDetector: no dispatch target for product '%s' "
-                "(no on_change callback and no pipeline queue)",
-                product_name,
-            )
+        # No dispatch target. on_change should always be set via
+        # FabricRuntime.start() -> set_on_change().
+        logger.warning(
+            "ChangeDetector: no on_change callback for product '%s' "
+            "(triggered by '%s'). Call set_on_change() during startup.",
+            product_name,
+            triggered_by,
+        )
 
     # ------------------------------------------------------------------
     # Helpers

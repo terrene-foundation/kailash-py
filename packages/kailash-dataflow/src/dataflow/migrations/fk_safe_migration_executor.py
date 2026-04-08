@@ -206,7 +206,10 @@ class FKSafeMigrationExecutor:
         if connection is None:
             connection = await self._get_connection()
 
-        self.logger.info(f"Starting FK-aware column modification: {operation_id}")
+        self.logger.info(
+            "fk_safe_migration_executor.starting_fk_aware_column_modification",
+            extra={"operation_id": operation_id},
+        )
 
         result = FKMigrationResult(operation_id=operation_id, success=False)
 
@@ -223,7 +226,10 @@ class FKSafeMigrationExecutor:
             self._operation_savepoints[operation_id].append(initial_savepoint)
 
             # Stage 1: Analysis
-            self.logger.info(f"[{operation_id}] Stage 1: Analysis")
+            self.logger.info(
+                "fk_safe_migration_executor.stage_1_analysis",
+                extra={"operation_id": operation_id},
+            )
             analysis_success = await self._execute_analysis_stage(
                 plan, connection, result
             )
@@ -234,7 +240,10 @@ class FKSafeMigrationExecutor:
                 return result
 
             # Stage 2: Backup (if required)
-            self.logger.info(f"[{operation_id}] Stage 2: Backup")
+            self.logger.info(
+                "fk_safe_migration_executor.stage_2_backup",
+                extra={"operation_id": operation_id},
+            )
             backup_success = await self._execute_backup_stage(plan, connection, result)
             result.stage_results[FKMigrationStage.BACKUP] = backup_success
 
@@ -243,7 +252,10 @@ class FKSafeMigrationExecutor:
                 return result
 
             # Stage 3: FK Constraint Disable
-            self.logger.info(f"[{operation_id}] Stage 3: FK Constraint Disable")
+            self.logger.info(
+                "fk_safe_migration_executor.stage_3_fk_constraint_disable",
+                extra={"operation_id": operation_id},
+            )
             disable_success = await self._execute_fk_disable_stage(
                 plan, connection, result
             )
@@ -261,7 +273,10 @@ class FKSafeMigrationExecutor:
             result.constraints_disabled = len(self._disabled_constraints[operation_id])
 
             # Stage 4: Schema Modification
-            self.logger.info(f"[{operation_id}] Stage 4: Schema Modification")
+            self.logger.info(
+                "fk_safe_migration_executor.stage_4_schema_modification",
+                extra={"operation_id": operation_id},
+            )
             schema_success = await self._execute_schema_modification_stage(
                 plan, connection, result
             )
@@ -274,7 +289,10 @@ class FKSafeMigrationExecutor:
             self._active_transactions[operation_id] = FKTransactionState.SCHEMA_MODIFIED
 
             # Stage 5: Data Migration (if needed)
-            self.logger.info(f"[{operation_id}] Stage 5: Data Migration")
+            self.logger.info(
+                "fk_safe_migration_executor.stage_5_data_migration",
+                extra={"operation_id": operation_id},
+            )
             data_success = await self._execute_data_migration_stage(
                 plan, connection, result
             )
@@ -287,7 +305,10 @@ class FKSafeMigrationExecutor:
             self._active_transactions[operation_id] = FKTransactionState.DATA_MIGRATED
 
             # Stage 6: FK Constraint Restore
-            self.logger.info(f"[{operation_id}] Stage 6: FK Constraint Restore")
+            self.logger.info(
+                "fk_safe_migration_executor.stage_6_fk_constraint_restore",
+                extra={"operation_id": operation_id},
+            )
             restore_success = await self._execute_fk_restore_stage(
                 plan, connection, result
             )
@@ -305,7 +326,10 @@ class FKSafeMigrationExecutor:
             result.constraints_restored = len(self._disabled_constraints[operation_id])
 
             # Stage 7: Validation
-            self.logger.info(f"[{operation_id}] Stage 7: Validation")
+            self.logger.info(
+                "fk_safe_migration_executor.stage_7_validation",
+                extra={"operation_id": operation_id},
+            )
             validation_success = await self._execute_validation_stage(
                 plan, connection, result
             )
@@ -316,7 +340,10 @@ class FKSafeMigrationExecutor:
                 return result
 
             # Stage 8: Cleanup and Commit
-            self.logger.info(f"[{operation_id}] Stage 8: Cleanup and Commit")
+            self.logger.info(
+                "fk_safe_migration_executor.stage_8_cleanup_and_commit",
+                extra={"operation_id": operation_id},
+            )
             cleanup_success = await self._execute_cleanup_stage(
                 plan, connection, result
             )
@@ -431,7 +458,10 @@ class FKSafeMigrationExecutor:
             )
 
         except Exception as e:
-            self.logger.error(f"Error handling FK constraints: {e}")
+            self.logger.error(
+                "fk_safe_migration_executor.error_handling_fk_constraints",
+                extra={"error": str(e)},
+            )
             result.failed_operations.append(f"Constraint handling error: {e}")
             result.success = False
 
@@ -472,7 +502,10 @@ class FKSafeMigrationExecutor:
                 savepoint_name = f"table_change_{operation_id}_0"
                 await connection.execute(f"SAVEPOINT {savepoint_name}")
                 result.transaction_savepoints.append(savepoint_name)
-                self.logger.debug(f"Created savepoint: {savepoint_name}")
+                self.logger.debug(
+                    "fk_safe_migration_executor.created_savepoint",
+                    extra={"savepoint_name": savepoint_name},
+                )
             except Exception as e:
                 if "SAVEPOINT can only be used in transaction blocks" in str(e):
                     # Start transaction and create savepoint
@@ -506,7 +539,10 @@ class FKSafeMigrationExecutor:
                             table, table_changes, connection
                         )
                         result.tables_modified.append(table)
-                        self.logger.info(f"Applied changes to table: {table}")
+                        self.logger.info(
+                            "fk_safe_migration_executor.applied_changes_to_table",
+                            extra={"table": table},
+                        )
 
                     except Exception as e:
                         self.logger.error(
@@ -533,7 +569,10 @@ class FKSafeMigrationExecutor:
             )
 
         except Exception as e:
-            self.logger.error(f"Error coordinating multi-table changes: {e}")
+            self.logger.error(
+                "fk_safe_migration_executor.error_coordinating_multi_table_changes",
+                extra={"error": str(e)},
+            )
             result.rollback_required = True
             result.success = False
 
@@ -833,14 +872,20 @@ class FKSafeMigrationExecutor:
     ):
         """Rollback transaction and restore FK constraints."""
         try:
-            self.logger.info(f"Rolling back transaction for operation: {operation_id}")
+            self.logger.info(
+                "fk_safe_migration_executor.rolling_back_transaction_for_operation",
+                extra={"operation_id": operation_id},
+            )
 
             # Try to rollback to the initial savepoint
             savepoints = self._operation_savepoints.get(operation_id, [])
             if savepoints:
                 initial_savepoint = savepoints[0]
                 await connection.execute(f"ROLLBACK TO SAVEPOINT {initial_savepoint}")
-                self.logger.info(f"Rolled back to savepoint: {initial_savepoint}")
+                self.logger.info(
+                    "fk_safe_migration_executor.rolled_back_to_savepoint",
+                    extra={"initial_savepoint": initial_savepoint},
+                )
             else:
                 # Full rollback
                 await connection.execute("ROLLBACK")
@@ -849,7 +894,10 @@ class FKSafeMigrationExecutor:
             self._active_transactions[operation_id] = FKTransactionState.ROLLED_BACK
 
         except Exception as e:
-            self.logger.error(f"Error during rollback: {e}")
+            self.logger.error(
+                "fk_safe_migration_executor.error_during_rollback",
+                extra={"error": str(e)},
+            )
             self._active_transactions[operation_id] = FKTransactionState.FAILED
 
     def _cleanup_operation_state(self, operation_id: str):
@@ -921,7 +969,10 @@ class FKSafeMigrationExecutor:
                 )
             return None
         except Exception as e:
-            self.logger.error(f"Error getting constraint info: {e}")
+            self.logger.error(
+                "fk_safe_migration_executor.error_getting_constraint_info",
+                extra={"error": str(e)},
+            )
             return None
 
     async def _verify_constraint_exists(
@@ -957,7 +1008,10 @@ class FKSafeMigrationExecutor:
     ):
         """Apply changes to a specific table."""
         # Implementation would depend on the type of changes
-        self.logger.info(f"Applied changes to table: {table}")
+        self.logger.info(
+            "fk_safe_migration_executor.applied_changes_to_table",
+            extra={"table": table},
+        )
 
     async def _detect_orphaned_records(
         self, table: str, column: str, operation: Any, connection: asyncpg.Connection

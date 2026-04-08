@@ -201,7 +201,10 @@ class SQLRewriter:
 
             # Additional validation
             if modifications == 0:
-                self.logger.info(f"No modifications needed for view {view_name}")
+                self.logger.info(
+                    "sql_rewriter.no_modifications_needed_for_view",
+                    extra={"view_name": view_name},
+                )
 
             return ViewRewriteResult(
                 success=True,
@@ -213,7 +216,10 @@ class SQLRewriter:
             )
 
         except Exception as e:
-            self.logger.error(f"Failed to rewrite view SQL for {view_name}: {e}")
+            self.logger.error(
+                "sql_rewriter.failed_to_rewrite_view_sql_for",
+                extra={"view_name": view_name, "error": str(e)},
+            )
             raise SQLRewriteError(f"View SQL rewrite failed: {str(e)}")
 
     def rewrite_trigger_sql(
@@ -287,7 +293,10 @@ class SQLRewriter:
             )
 
         except Exception as e:
-            self.logger.error(f"Failed to rewrite trigger SQL for {trigger_name}: {e}")
+            self.logger.error(
+                "sql_rewriter.failed_to_rewrite_trigger_sql_for",
+                extra={"trigger_name": trigger_name, "error": str(e)},
+            )
             raise SQLRewriteError(f"Trigger SQL rewrite failed: {str(e)}")
 
     def validate_sql_syntax(self, sql: str) -> Tuple[bool, List[str]]:

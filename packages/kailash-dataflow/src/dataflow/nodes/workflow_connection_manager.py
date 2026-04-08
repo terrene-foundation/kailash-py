@@ -218,7 +218,10 @@ class DataFlowConnectionManager(Node):
             # For now, we'll store the config and defer initialization
             self.pool_config = pool_config
 
-            logger.info(f"DataFlow connection pool initialized: {pool_config['name']}")
+            logger.info(
+                "workflow_connection_manager.dataflow_connection_pool_initialized",
+                extra={"name": pool_config["name"]},
+            )
 
             return {
                 "status": "initialized",
@@ -231,7 +234,10 @@ class DataFlowConnectionManager(Node):
             }
 
         except Exception as e:
-            logger.error(f"Failed to initialize DataFlow connection pool: {e}")
+            logger.error(
+                "workflow_connection_manager.failed_to_initialize_dataflow_connection_pool",
+                extra={"error": str(e)},
+            )
             return {"status": "error", "error": str(e), "pool_id": self.id}
 
     def _get_connection(self) -> Dict[str, Any]:
@@ -379,7 +385,10 @@ class SmartNodeConnectionMixin:
                 self._pool_manager = pool_manager
                 return self.connection_id
         except Exception as e:
-            logger.warning(f"Failed to acquire connection from pool: {e}")
+            logger.warning(
+                "workflow_connection_manager.failed_to_acquire_connection_from_pool",
+                extra={"error": str(e)},
+            )
 
         return None
 
@@ -391,7 +400,10 @@ class SmartNodeConnectionMixin:
                     operation="release_connection", connection_id=self.connection_id
                 )
             except Exception as e:
-                logger.warning(f"Failed to release connection: {e}")
+                logger.warning(
+                    "workflow_connection_manager.failed_to_release_connection",
+                    extra={"error": str(e)},
+                )
             finally:
                 self.connection_id = None
                 self._pool_manager = None

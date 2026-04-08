@@ -161,7 +161,10 @@ class FKAwareModelTracker:
             model_class: The model class to track
             model_name: Name of the model
         """
-        self.logger.info(f"Tracking model: {model_name}")
+        self.logger.info(
+            "fk_aware_model_integration.tracking_model",
+            extra={"model_name": model_name},
+        )
 
         # Analyze model fields
         field_info = self._analyze_model_fields(model_class)
@@ -486,13 +489,19 @@ class FKAwareModelIntegrator:
         Returns:
             Dict with handling results, or None if no changes
         """
-        self.logger.info(f"Handling model change for: {model_name}")
+        self.logger.info(
+            "fk_aware_model_integration.handling_model_change_for",
+            extra={"model_name": model_name},
+        )
 
         # Detect model changes
         change_info = self.model_tracker.detect_model_changes(model_class, model_name)
 
         if not change_info:
-            self.logger.debug(f"No changes detected for model: {model_name}")
+            self.logger.debug(
+                "fk_aware_model_integration.no_changes_detected_for_model",
+                extra={"model_name": model_name},
+            )
             return None
 
         # Check if changes affect FK relationships
@@ -581,7 +590,10 @@ class FKAwareModelIntegrator:
         Returns:
             Dict with validation results
         """
-        self.logger.info(f"Validating FK safety for model: {model_name}")
+        self.logger.info(
+            "fk_aware_model_integration.validating_fk_safety_for_model",
+            extra={"model_name": model_name},
+        )
 
         if model_name not in self.model_tracker._tracked_models:
             return {"is_safe": False, "error": f"Model {model_name} not tracked"}
@@ -773,17 +785,29 @@ async def demonstrate_fk_aware_models():
     change_result = await integrator.handle_model_change(ModifiedProduct, "Product")
 
     if change_result:
-        logger.info(f"Model change handled: {change_result['fk_aware_handling']}")
+        logger.info(
+            "fk_aware_model_integration.model_change_handled",
+            extra={"fk_aware_handling": change_result["fk_aware_handling"]},
+        )
         if change_result["fk_aware_handling"]:
-            logger.info(f"FK-aware workflow created: {change_result['workflow_id']}")
+            logger.info(
+                "fk_aware_model_integration.fk_aware_workflow_created",
+                extra={"workflow_id": change_result["workflow_id"]},
+            )
 
     # Validate FK safety
     safety_result = integrator.validate_model_fk_safety("Product")
-    logger.info(f"FK safety validation: {safety_result['is_safe']}")
+    logger.info(
+        "fk_aware_model_integration.fk_safety_validation",
+        extra={"is_safe": safety_result["is_safe"]},
+    )
 
     # Show relationships
     relationships = integrator.get_model_fk_relationships("Product")
-    logger.info(f"Product FK relationships: {len(relationships)}")
+    logger.info(
+        "fk_aware_model_integration.product_fk_relationships",
+        extra={"count": len(relationships)},
+    )
 
     logger.info("FK-aware model integration demonstration completed")
 

@@ -27,7 +27,6 @@ from kailash.runtime import AsyncLocalRuntime
 from kailash.servers.gateway import create_gateway
 from kailash.workflow import Workflow
 from kailash.workflow.builder import WorkflowBuilder
-
 from nexus.background import BackgroundService
 from nexus.events import EventBus, NexusEvent, NexusEventType
 from nexus.registry import HandlerDef, HandlerParam, HandlerRegistry
@@ -977,6 +976,61 @@ Check the documentation or explore available resources.
 
     # Multi-channel registration is handled automatically by the enterprise gateway
     # No need for custom channel registry - the gateway provides this natively
+
+    def register_endpoint(
+        self,
+        path: str,
+        methods: List[str],
+        handler: Callable,
+        **fastapi_kwargs: Any,
+    ) -> None:
+        """Programmatically register a custom HTTP endpoint.
+
+        Unlike :meth:`endpoint` (a decorator that requires the gateway
+        to be running), this method works **before** ``start()`` by
+        queueing the registration on the underlying
+        :class:`HTTPTransport`. Once the transport's gateway comes up,
+        all queued endpoints are applied. After ``start()``, calls
+        register immediately.
+
+        This is the canonical hook used by DataFlow's fabric runtime
+        (Phase 5.8) to expose product/health/SSE/webhook handlers when
+        Nexus is passed as the platform process.
+
+        Args:
+            path: URL path with optional FastAPI path parameters
+                (e.g., ``"/fabric/{product_name}"``).
+            methods: HTTP verbs to register (``["GET"]``, ``["POST"]``,
+                etc.). At least one method is required.
+            handler: An async or sync callable matching FastAPI's
+                signature conventions. Path parameters become
+                positional kwargs; query parameters and body fields
+                are resolved by FastAPI dependency injection.
+            **fastapi_kwargs: Forwarded to FastAPI's ``add_api_route``
+                (e.g., ``status_code``, ``response_model``, ``tags``,
+                ``summary``).
+
+        Raises:
+            RuntimeError: If the HTTP transport has not been initialised
+                (e.g., ``Nexus`` was constructed without HTTP support).
+            ValueError: If ``methods`` is empty.
+
+        Example:
+            >>> async def health() -> dict:
+            ...     return {"ok": True}
+            >>> nexus.register_endpoint("/_health", ["GET"], health)
+        """
+        if not methods:
+            raise ValueError("register_endpoint requires at least one HTTP method")
+        if not hasattr(self, "_http_transport") or self._http_transport is None:
+            raise RuntimeError(
+                "Nexus HTTP transport is not initialised; cannot register endpoint"
+            )
+        self._http_transport.register_endpoint(path, methods, handler, **fastapi_kwargs)
+        logger.info(
+            "nexus.endpoint.registered",
+            extra={"path": path, "methods": methods},
+        )
 
     def endpoint(
         self,

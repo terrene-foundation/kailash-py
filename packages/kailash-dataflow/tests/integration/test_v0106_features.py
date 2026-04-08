@@ -12,7 +12,6 @@ import os
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
-from unittest.mock import patch
 
 import pytest
 from kailash.runtime import AsyncLocalRuntime, LocalRuntime
@@ -26,7 +25,6 @@ TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
     "postgresql://kaizen_dev:kaizen_dev_password@localhost:5432/kaizen_studio",
 )
-
 
 class TestTimestampAutoStripping:
     """Test that auto-managed timestamp fields are auto-stripped with warnings."""
@@ -203,7 +201,6 @@ class TestTimestampAutoStripping:
 
             # Should NOT have auto-stripped warning
             assert "AUTO-STRIPPED" not in caplog.text
-
 
 class TestSoftDeleteAutoFilter:
     """Test that soft_delete auto-filters queries by default."""
@@ -453,7 +450,6 @@ class TestSoftDeleteAutoFilter:
         assert result is not None
         assert result.get("id") == test_id or result.get("found") is True
 
-
 class TestModelWithoutSoftDelete:
     """Test that models without soft_delete behave normally."""
 
@@ -513,7 +509,6 @@ class TestModelWithoutSoftDelete:
         # Should have all 3 records (soft_delete NOT enabled)
         assert len(records) == 3
 
-
 class TestAsyncRuntime:
     """Test that features work with AsyncLocalRuntime."""
 
@@ -565,7 +560,6 @@ class TestAsyncRuntime:
             )
             results, _ = await runtime.execute_workflow_async(update_workflow.build())
             assert results["update"]["name"] == "Updated"
-
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

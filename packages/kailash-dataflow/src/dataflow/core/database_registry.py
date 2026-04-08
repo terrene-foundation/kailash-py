@@ -54,7 +54,10 @@ class DatabaseRegistry:
         elif config.is_read_replica:
             self._read_replicas.append(config.name)
 
-        logger.info(f"Registered database: {config.name} ({config.database_type})")
+        logger.info(
+            "database_registry.registered_database",
+            extra={"name": config.name, "database_type": config.database_type},
+        )
 
     def get_database(self, name: str) -> Optional[DatabaseConfig]:
         """Get database configuration by name."""
@@ -90,7 +93,10 @@ class DatabaseRegistry:
                 max_size=db_config.pool_size,
             )
             self._connection_pools[name] = pool
-            logger.info(f"Created async PostgreSQL connection pool for {name}")
+            logger.info(
+                "database_registry.created_async_postgresql_connection_pool_for",
+                extra={"name": name},
+            )
 
         return self._connection_pools[name]
 
@@ -123,12 +129,16 @@ class DatabaseRegistry:
     def mark_database_unhealthy(self, name: str):
         """Mark a database as unhealthy."""
         self._health_status[name] = False
-        logger.warning(f"Database {name} marked as unhealthy")
+        logger.warning(
+            "database_registry.database_marked_as_unhealthy", extra={"name": name}
+        )
 
     def mark_database_healthy(self, name: str):
         """Mark a database as healthy."""
         self._health_status[name] = True
-        logger.info(f"Database {name} marked as healthy")
+        logger.info(
+            "database_registry.database_marked_as_healthy", extra={"name": name}
+        )
 
     def is_database_healthy(self, name: str) -> bool:
         """Check if a database is healthy."""
@@ -140,9 +150,14 @@ class DatabaseRegistry:
             try:
                 if conn and not conn.closed:
                     conn.close()
-                    logger.info(f"Closed connection for {name}")
+                    logger.info(
+                        "database_registry.closed_connection_for", extra={"name": name}
+                    )
             except Exception as e:
-                logger.error(f"Error closing connection for {name}: {e}")
+                logger.error(
+                    "database_registry.error_closing_connection_for",
+                    extra={"name": name, "error": str(e)},
+                )
         self._connection_pools.clear()
 
     def get_database_by_url(self, url: str) -> Optional[DatabaseConfig]:
@@ -164,7 +179,7 @@ class DatabaseRegistry:
             if name in self._read_replicas:
                 self._read_replicas.remove(name)
 
-            logger.info(f"Removed database: {name}")
+            logger.info("database_registry.removed_database", extra={"name": name})
 
     def get_connection_info(self) -> Dict[str, any]:
         """Get connection information for all databases."""

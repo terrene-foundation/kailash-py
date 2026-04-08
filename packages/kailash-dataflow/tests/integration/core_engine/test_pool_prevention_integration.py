@@ -15,12 +15,33 @@ M4 (pool monitor), M5 (leak detection), M10 (lightweight pool).
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import time
-from unittest.mock import patch
 
 import pytest
+
+
+@contextlib.contextmanager
+def env_override(updates: dict, clear: bool = False):
+    """Temporarily override environment variables.
+
+    Real-infrastructure replacement for ``unittest.mock.patch.dict`` — mutates
+    ``os.environ`` in place and restores the prior state on exit, so tests
+    remain fully isolated from the process environment without relying on
+    ``unittest.mock`` in Tier 2.
+    """
+    previous = os.environ.copy()
+    try:
+        if clear:
+            os.environ.clear()
+        os.environ.update(updates)
+        yield
+    finally:
+        os.environ.clear()
+        os.environ.update(previous)
+
 
 # Database URL for integration tests
 PG_URL = "postgresql://test_user:test_password@localhost:5434/kailash_test"
@@ -72,7 +93,7 @@ class TestAutoScalingIntegration:
             for k, v in os.environ.items()
             if k not in ("DATAFLOW_POOL_SIZE", "DB_POOL_SIZE")
         }
-        with patch.dict(os.environ, env, clear=True):
+        with env_override(env, clear=True):
             config = DatabaseConfig(url=PG_URL)
             pool_size = config.get_pool_size()
 
@@ -91,7 +112,7 @@ class TestAutoScalingIntegration:
         """DATAFLOW_POOL_SIZE env var should override auto-scaling."""
         from dataflow.core.config import DatabaseConfig
 
-        with patch.dict(os.environ, {"DATAFLOW_POOL_SIZE": "15"}):
+        with env_override({"DATAFLOW_POOL_SIZE": "15"}):
             config = DatabaseConfig(url=PG_URL)
             assert config.get_pool_size() == 15
 
@@ -105,15 +126,11 @@ class TestAutoScalingIntegration:
             if k not in ("DATAFLOW_POOL_SIZE", "DB_POOL_SIZE", "DATAFLOW_WORKER_COUNT")
         }
 
-        with patch.dict(
-            os.environ, {**env_base, "DATAFLOW_WORKER_COUNT": "1"}, clear=True
-        ):
+        with env_override({**env_base, "DATAFLOW_WORKER_COUNT": "1"}, clear=True):
             config1 = DatabaseConfig(url=PG_URL)
             size_1_worker = config1.get_pool_size()
 
-        with patch.dict(
-            os.environ, {**env_base, "DATAFLOW_WORKER_COUNT": "4"}, clear=True
-        ):
+        with env_override({**env_base, "DATAFLOW_WORKER_COUNT": "4"}, clear=True):
             config4 = DatabaseConfig(url=PG_URL)
             size_4_workers = config4.get_pool_size()
 
@@ -145,7 +162,7 @@ class TestStartupValidationIntegration:
         """Pool_size=50 x 4 workers should trigger ERROR."""
         from dataflow.core.pool_validator import validate_pool_config
 
-        with patch.dict(os.environ, {"DATAFLOW_WORKER_COUNT": "4"}):
+        with env_override({"DATAFLOW_WORKER_COUNT": "4"}):
             with caplog.at_level(logging.ERROR):
                 result = validate_pool_config(PG_URL, pool_size=50, max_overflow=10)
 
@@ -157,7 +174,7 @@ class TestStartupValidationIntegration:
         """75% utilization should trigger WARNING."""
         from dataflow.core.pool_validator import validate_pool_config
 
-        with patch.dict(os.environ, {"DATAFLOW_WORKER_COUNT": "1"}):
+        with env_override({"DATAFLOW_WORKER_COUNT": "1"}):
             with caplog.at_level(logging.WARNING):
                 # 75 out of 100 = 75%, above safe threshold of 70%
                 result = validate_pool_config(PG_URL, pool_size=60, max_overflow=15)
@@ -169,7 +186,7 @@ class TestStartupValidationIntegration:
         """ERROR log should include correct suggested pool_size."""
         from dataflow.core.pool_validator import validate_pool_config
 
-        with patch.dict(os.environ, {"DATAFLOW_WORKER_COUNT": "4"}):
+        with env_override({"DATAFLOW_WORKER_COUNT": "4"}):
             result = validate_pool_config(PG_URL, pool_size=50, max_overflow=10)
 
         # Suggested: max(2, int(100 * 0.7) // 4) = 17

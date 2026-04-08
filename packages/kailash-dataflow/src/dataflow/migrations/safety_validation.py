@@ -212,7 +212,10 @@ class SchemaIntegrityValidator:
                 )
 
         except Exception as e:
-            self.logger.error(f"Foreign key validation failed: {e}")
+            self.logger.error(
+                "safety_validation.foreign_key_validation_failed",
+                extra={"error": str(e)},
+            )
             return SafetyCheckResult(
                 check_name="foreign_key_constraints",
                 passed=False,
@@ -274,7 +277,10 @@ class SchemaIntegrityValidator:
                         )
 
         except Exception as e:
-            self.logger.error(f"PostgreSQL FK validation query failed: {e}")
+            self.logger.error(
+                "safety_validation.postgresql_fk_validation_query_failed",
+                extra={"error": str(e)},
+            )
             violations.append(f"Database query error: {str(e)}")
 
         return violations
@@ -347,7 +353,9 @@ class SchemaIntegrityValidator:
                             )
 
         except Exception as e:
-            self.logger.error(f"SQLite FK validation failed: {e}")
+            self.logger.error(
+                "safety_validation.sqlite_fk_validation_failed", extra={"error": str(e)}
+            )
             violations.append(f"Database query error: {str(e)}")
 
         return violations
@@ -446,7 +454,9 @@ class ApplicationCompatibilityValidator:
                 )
 
         except Exception as e:
-            self.logger.error(f"View validation failed: {e}")
+            self.logger.error(
+                "safety_validation.view_validation_failed", extra={"error": str(e)}
+            )
             return SafetyCheckResult(
                 check_name="view_references",
                 passed=False,
@@ -498,7 +508,10 @@ class ApplicationCompatibilityValidator:
                     )
 
         except Exception as e:
-            self.logger.error(f"PostgreSQL view validation failed: {e}")
+            self.logger.error(
+                "safety_validation.postgresql_view_validation_failed",
+                extra={"error": str(e)},
+            )
             violations.append(f"Database query error: {str(e)}")
 
         return violations
@@ -535,7 +548,10 @@ class ApplicationCompatibilityValidator:
                         )
 
         except Exception as e:
-            self.logger.error(f"SQLite view validation failed: {e}")
+            self.logger.error(
+                "safety_validation.sqlite_view_validation_failed",
+                extra={"error": str(e)},
+            )
             violations.append(f"Database query error: {str(e)}")
 
         return violations

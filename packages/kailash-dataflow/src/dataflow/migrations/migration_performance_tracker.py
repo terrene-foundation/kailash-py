@@ -254,7 +254,10 @@ class MigrationPerformanceTracker:
         self._load_baselines()
         self._load_history()
 
-        logger.info(f"MigrationPerformanceTracker initialized for {database_type}")
+        logger.info(
+            "migration_performance_tracker.migrationperformancetracker_initialized_for",
+            extra={"database_type": database_type},
+        )
 
     def integrate_with_components(
         self,
@@ -298,7 +301,10 @@ class MigrationPerformanceTracker:
         Returns:
             Comprehensive performance metrics
         """
-        logger.info(f"Benchmarking migration: {migration.name} (v{migration.version})")
+        logger.info(
+            "migration_performance_tracker.benchmarking_migration_v",
+            extra={"name": migration.name, "version": migration.version},
+        )
 
         # Start performance monitoring
         await self._start_monitoring(migration)
@@ -335,7 +341,10 @@ class MigrationPerformanceTracker:
                     error_message = str(direct_error)
 
         except Exception as e:
-            logger.error(f"Migration benchmark failed: {e}")
+            logger.error(
+                "migration_performance_tracker.migration_benchmark_failed",
+                extra={"error": str(e)},
+            )
             success = False
             error_message = str(e)
 
@@ -616,7 +625,10 @@ class MigrationPerformanceTracker:
             return True
 
         except Exception as e:
-            logger.error(f"Direct execution failed: {e}")
+            logger.error(
+                "migration_performance_tracker.direct_execution_failed",
+                extra={"error": str(e)},
+            )
             raise e  # Re-raise to be caught by benchmark_migration
 
     def detect_performance_regression(
@@ -637,7 +649,10 @@ class MigrationPerformanceTracker:
         if not metrics:
             return []
 
-        logger.info(f"Analyzing {len(metrics)} performance metrics for regressions")
+        logger.info(
+            "migration_performance_tracker.analyzing_performance_metrics_for_regressions",
+            extra={"count": len(metrics)},
+        )
 
         regressions = []
 
@@ -679,7 +694,10 @@ class MigrationPerformanceTracker:
                 if regression and regression.is_regression():
                     regressions.append(regression)
 
-        logger.info(f"Found {len(regressions)} performance regressions")
+        logger.info(
+            "migration_performance_tracker.found_performance_regressions",
+            extra={"count": len(regressions)},
+        )
         return regressions
 
     def _analyze_metric_regression(
@@ -1190,10 +1208,16 @@ class MigrationPerformanceTracker:
                     )
                     self.baselines[key] = baseline
 
-                logger.info(f"Loaded {len(self.baselines)} performance baselines")
+                logger.info(
+                    "migration_performance_tracker.loaded_performance_baselines",
+                    extra={"count": len(self.baselines)},
+                )
 
             except Exception as e:
-                logger.warning(f"Failed to load baselines: {e}")
+                logger.warning(
+                    "migration_performance_tracker.failed_to_load_baselines",
+                    extra={"error": str(e)},
+                )
 
     def _save_baselines(self):
         """Save performance baselines to file."""
@@ -1213,7 +1237,10 @@ class MigrationPerformanceTracker:
                 json.dump(data, f, indent=2)
 
         except Exception as e:
-            logger.warning(f"Failed to save baselines: {e}")
+            logger.warning(
+                "migration_performance_tracker.failed_to_save_baselines",
+                extra={"error": str(e)},
+            )
 
     def _load_history(self):
         """Load performance history from file."""
@@ -1231,7 +1258,10 @@ class MigrationPerformanceTracker:
                 )
 
             except Exception as e:
-                logger.warning(f"Failed to load history: {e}")
+                logger.warning(
+                    "migration_performance_tracker.failed_to_load_history",
+                    extra={"error": str(e)},
+                )
 
     def _save_history_entry(self, metrics: PerformanceMetrics):
         """Save a single history entry to file."""
@@ -1239,7 +1269,10 @@ class MigrationPerformanceTracker:
             with open(self.history_file, "a") as f:
                 f.write(json.dumps(metrics.to_dict()) + "\n")
         except Exception as e:
-            logger.warning(f"Failed to save history entry: {e}")
+            logger.warning(
+                "migration_performance_tracker.failed_to_save_history_entry",
+                extra={"error": str(e)},
+            )
 
     def export_performance_report(
         self,
@@ -1297,11 +1330,17 @@ class MigrationPerformanceTracker:
             with open(output_file, "w") as f:
                 json.dump(report, f, indent=2)
 
-            logger.info(f"Performance report exported to {output_file}")
+            logger.info(
+                "migration_performance_tracker.performance_report_exported_to",
+                extra={"output_file": output_file},
+            )
             return True
 
         except Exception as e:
-            logger.error(f"Failed to export performance report: {e}")
+            logger.error(
+                "migration_performance_tracker.failed_to_export_performance_report",
+                extra={"error": str(e)},
+            )
             return False
 
     def reset_baselines(self):
@@ -1330,7 +1369,13 @@ class MigrationPerformanceTracker:
                     f.write(json.dumps(metrics.to_dict()) + "\n")
 
             removed_count = original_count - len(self.performance_history)
-            logger.info(f"Cleaned up {removed_count} old performance history entries")
+            logger.info(
+                "migration_performance_tracker.cleaned_up_old_performance_history_entries",
+                extra={"removed_count": removed_count},
+            )
 
         except Exception as e:
-            logger.warning(f"Failed to cleanup history: {e}")
+            logger.warning(
+                "migration_performance_tracker.failed_to_cleanup_history",
+                extra={"error": str(e)},
+            )

@@ -10,7 +10,6 @@ import os
 
 # Import actual classes
 import sys
-from unittest.mock import Mock
 
 import pytest
 
@@ -20,7 +19,6 @@ from dataflow.database.query_builder import DatabaseType, QueryBuilder
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
-
 @pytest.fixture
 async def test_suite():
     """Create complete integration test suite with infrastructure."""
@@ -28,12 +26,10 @@ async def test_suite():
     async with suite.session():
         yield suite
 
-
 @pytest.fixture
 def runtime():
     """Create LocalRuntime for workflow execution."""
     return LocalRuntime()
-
 
 # @pytest.mark.tier2
 # @pytest.mark.requires_docker
@@ -235,7 +231,6 @@ class TestQueryBuilderPostgreSQLIntegration:
             assert "WHERE" in sql
             assert "LIMIT 10" in sql
             assert len(params) == 2  # active=True and age>=N
-
 
 # @pytest.mark.tier2
 # @pytest.mark.requires_docker

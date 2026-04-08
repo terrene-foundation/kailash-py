@@ -364,28 +364,32 @@ class TestCriticalWriteProtectionE2E:
         # Verify runtime is protected type
         from dataflow.core.protection_middleware import ProtectedDataFlowRuntime
 
-        assert isinstance(protected_runtime, ProtectedDataFlowRuntime), (
-            "Runtime is not ProtectedDataFlowRuntime"
-        )
+        assert isinstance(
+            protected_runtime, ProtectedDataFlowRuntime
+        ), "Runtime is not ProtectedDataFlowRuntime"
 
-        # The runtime should intercept and enforce protection
+        # The runtime should intercept and enforce protection. Rather than
+        # patching ``datetime.now`` (mocking is forbidden in Tier 3), query
+        # the real clock and accept either outcome: during business hours
+        # the runtime MUST block; outside business hours it MUST allow.
+        from datetime import datetime as _real_datetime
+
+        now = _real_datetime.now()
+        in_business_hours = 9 <= now.hour < 17
         try:
-            # Mock it being outside business hours for testing
-            import unittest.mock as mock
-
-            with mock.patch("dataflow.core.protection.datetime") as mock_dt:
-                # Set time to 8 PM (outside business hours)
-                mock_dt.now.return_value = datetime(2024, 1, 15, 20, 0)
-
-                results_data, run_id = protected_runtime.execute(
-                    workflow_runtime.build()
-                )
+            results_data, run_id = protected_runtime.execute(workflow_runtime.build())
+            if in_business_hours:
                 print(
-                    "✅ Runtime protection WORKING: Operation allowed outside business hours"
+                    "❌ Runtime protection issue: operation allowed "
+                    "inside business hours"
+                )
+            else:
+                print(
+                    "✅ Runtime protection WORKING: operation allowed "
+                    "outside business hours"
                 )
                 results["Level 6: Runtime Protection"] = True
         except Exception as e:
-            # During business hours it would be blocked
             if "business hours" in str(e).lower():
                 print(f"✅ Runtime protection WORKING: {e}")
                 results["Level 6: Runtime Protection"] = True
@@ -418,9 +422,9 @@ class TestCriticalWriteProtectionE2E:
             )
 
         # Assert all levels pass for test success
-        assert passed_count >= 5, (
-            f"Critical capability verification failed: only {passed_count}/6 levels working"
-        )
+        assert (
+            passed_count >= 5
+        ), f"Critical capability verification failed: only {passed_count}/6 levels working"
 
         return results
 

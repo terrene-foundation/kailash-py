@@ -176,7 +176,9 @@ class ConnectionParser:
         # Validate charset
         charset = components.get("query_params", {}).get("charset")
         if charset and charset not in ["utf8", "utf8mb4", "latin1"]:
-            logger.warning(f"Non-standard charset: {charset}")
+            logger.warning(
+                "connection_parser.non_standard_charset", extra={"charset": charset}
+            )
 
         # Validate port
         port = components.get("port")

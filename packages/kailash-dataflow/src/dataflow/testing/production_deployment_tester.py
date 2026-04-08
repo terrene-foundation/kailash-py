@@ -127,7 +127,10 @@ class ProductionDeploymentTester:
                 )
 
             for test_name, test_func in test_suites:
-                logger.info(f"📊 Running: {test_name}")
+                logger.info(
+                    "production_deployment_tester.running",
+                    extra={"test_name": test_name},
+                )
                 try:
                     result = await test_func()
                     self.test_results.append(result)
@@ -138,7 +141,9 @@ class ProductionDeploymentTester:
                     )
 
                 except Exception as e:
-                    logger.error(f"   ❌ FAILED - {e}")
+                    logger.error(
+                        "production_deployment_tester.failed", extra={"error": str(e)}
+                    )
                     self.test_results.append(
                         ProductionTestResult(
                             test_name=test_name,
@@ -338,7 +343,10 @@ class ProductionDeploymentTester:
                 await conn.execute("DROP TABLE IF EXISTS prod_products CASCADE;")
                 await conn.execute("DROP TABLE IF EXISTS prod_customers CASCADE;")
         except Exception as e:
-            logger.warning(f"Error cleaning up test data: {e}")
+            logger.warning(
+                "production_deployment_tester.error_cleaning_up_test_data",
+                extra={"error": str(e)},
+            )
 
     def _start_resource_monitoring(self):
         """Start monitoring system resources."""
@@ -366,7 +374,10 @@ class ProductionDeploymentTester:
 
                     await asyncio.sleep(5)  # Monitor every 5 seconds
                 except Exception as e:
-                    logger.warning(f"Monitoring error: {e}")
+                    logger.warning(
+                        "production_deployment_tester.monitoring_error",
+                        extra={"error": str(e)},
+                    )
 
         # Start monitoring in background
         asyncio.create_task(monitor())
@@ -494,7 +505,10 @@ class ProductionDeploymentTester:
 
     async def _test_concurrent_users(self) -> ProductionTestResult:
         """Test performance under concurrent user load."""
-        logger.info(f"👥 Testing {self.config.concurrent_users} concurrent users")
+        logger.info(
+            "production_deployment_tester.testing_concurrent_users",
+            extra={"concurrent_users": self.config.concurrent_users},
+        )
 
         start_time = time.time()
         total_operations = 0
@@ -823,7 +837,10 @@ class ProductionDeploymentTester:
                 operations += 1
                 await asyncio.sleep(0.1)
             except Exception as e:
-                logger.warning(f"Resource test error: {e}")
+                logger.warning(
+                    "production_deployment_tester.resource_test_error",
+                    extra={"error": str(e)},
+                )
 
         duration = time.time() - start_time
 
@@ -1322,8 +1339,8 @@ class ProductionDeploymentTester:
         with open(report_file, "w") as f:
             f.write(report)
 
-        logger.info(f"📄 Production testing report saved to: {report_file}")
-        print(f"\n{report}")
+        logger.info("production_test.report_saved", extra={"report_file": report_file})
+        logger.info("production_test.report_output", extra={"report": report})
 
 
 async def main():
@@ -1347,23 +1364,20 @@ async def main():
         passed = sum(1 for r in results if r.success)
         total = len(results)
 
-        print("\n🎯 Production Testing Complete!")
-        print(f"Results: {passed}/{total} tests passed ({(passed / total * 100):.1f}%)")
+        logger.info(
+            "production_test.complete",
+            extra={"passed": passed, "total": total, "pass_rate": passed / total * 100},
+        )
 
         if passed / total >= 0.8:
-            print(
-                "✅ PRODUCTION READY: DataFlow optimizations validated for production deployment"
-            )
+            logger.info("production_test.production_ready")
             return 0
         else:
-            print("⚠️ NEEDS IMPROVEMENT: Some production tests failed")
+            logger.warning("production_test.needs_improvement")
             return 1
 
     except Exception as e:
-        print(f"❌ Production testing failed: {e}")
-        import traceback
-
-        traceback.print_exc()
+        logger.exception("production_test.failed", extra={"error": str(e)})
         return 1
 
 

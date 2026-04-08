@@ -263,7 +263,10 @@ class ForeignKeyAnalyzer:
         if not safe_operation:
             raise ValueError(f"Invalid operation type: {operation}")
 
-        self.logger.info(f"Analyzing FK impact for {safe_table}.{safe_operation}")
+        self.logger.info(
+            "foreign_key_analyzer.analyzing_fk_impact_for",
+            extra={"safe_table": safe_table, "safe_operation": safe_operation},
+        )
 
         if connection is None:
             connection = await self._get_connection()
@@ -337,7 +340,10 @@ class ForeignKeyAnalyzer:
         if connection is None:
             connection = await self._get_connection()
 
-        self.logger.info(f"Finding FK chains for table: {safe_table}")
+        self.logger.info(
+            "foreign_key_analyzer.finding_fk_chains_for_table",
+            extra={"safe_table": safe_table},
+        )
 
         chains = []
         visited_tables = set()
@@ -357,7 +363,10 @@ class ForeignKeyAnalyzer:
                 f"Circular FK dependency detected involving table: {safe_table}"
             )
 
-        self.logger.info(f"Found {len(chains)} FK chains for {safe_table}")
+        self.logger.info(
+            "foreign_key_analyzer.found_fk_chains_for",
+            extra={"count": len(chains), "safe_table": safe_table},
+        )
 
         return chains
 
@@ -543,7 +552,10 @@ class ForeignKeyAnalyzer:
             risk_level=risk_level,
         )
 
-        self.logger.info(f"Generated FK-safe migration plan with {len(steps)} steps")
+        self.logger.info(
+            "foreign_key_analyzer.generated_fk_safe_migration_plan_with",
+            extra={"count": len(steps)},
+        )
 
         return plan
 
@@ -650,7 +662,10 @@ class ForeignKeyAnalyzer:
             return result
 
         except Exception as e:
-            self.logger.warning(f"Could not determine primary key for {table}: {e}")
+            self.logger.warning(
+                "foreign_key_analyzer.could_not_determine_primary_key_for",
+                extra={"table": table, "error": str(e)},
+            )
             return None
 
     async def _build_fk_chain_recursive(
@@ -724,7 +739,10 @@ class ForeignKeyAnalyzer:
             return chain
 
         except Exception as e:
-            self.logger.error(f"Error building FK chain for {table}: {e}")
+            self.logger.error(
+                "foreign_key_analyzer.error_building_fk_chain_for",
+                extra={"table": table, "error": str(e)},
+            )
             visited.remove(table)
             # Check if this is a recursion-related error
             if "recursion" in str(e).lower() or isinstance(e, RecursionError):

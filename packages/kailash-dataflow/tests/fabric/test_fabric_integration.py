@@ -59,7 +59,7 @@ class _FailingSource(BaseSourceAdapter):
         self._preloaded: Dict[str, Any] = {}
 
     @property
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         return "failing_test"
 
     async def _connect(self) -> None:
@@ -193,7 +193,7 @@ async def test_source_registration_and_prewarm():
     assert result.data["summary"] == "aggregated"
 
     # --- Read-back from cache (state persistence verification) ---
-    cached = pipeline.get_cached("dashboard")
+    cached = await pipeline.get_cached("dashboard")
     assert cached is not None
     raw_bytes, metadata = cached
     assert len(raw_bytes) > 0
@@ -276,7 +276,7 @@ async def test_file_change_triggers_pipeline():
     assert len(execution_log) == 2
 
     # --- Read-back: verify cached data matches latest execution ---
-    from_cache = pipeline.get_product_from_cache("file_report")
+    from_cache = await pipeline.get_product_from_cache("file_report")
     assert from_cache is not None
     assert from_cache.data["file_count"] == 2
     assert from_cache.data["total_rows"] == 300
@@ -341,7 +341,7 @@ async def test_write_through_event_triggers_refresh():
     )
 
     # Verify initial state
-    from_cache = pipeline.get_product_from_cache("inventory_report")
+    from_cache = await pipeline.get_product_from_cache("inventory_report")
     assert from_cache is not None
     assert from_cache.data["item_count"] == 1
 
@@ -407,7 +407,7 @@ async def test_write_through_event_triggers_refresh():
     assert "inventory_report" in refresh_log
 
     # --- Read-back: cache should reflect updated data ---
-    updated_cache = pipeline.get_product_from_cache("inventory_report")
+    updated_cache = await pipeline.get_product_from_cache("inventory_report")
     assert updated_cache is not None
     assert updated_cache.data["item_count"] == 2
     assert updated_cache.data["total_qty"] == 30
@@ -476,7 +476,7 @@ async def test_circuit_breaker_serves_stale():
     assert result.data["degraded"] is True
 
     # --- Read-back: verify pipeline cached even with degraded data ---
-    cached = pipeline.get_cached("stale_product")
+    cached = await pipeline.get_cached("stale_product")
     assert cached is not None
 
 
@@ -552,9 +552,9 @@ async def test_parameterized_product_cache_isolation():
     assert result_all.data["count"] == 3
 
     # --- Verify cache isolation: each param combo has its own entry ---
-    cached_eng = pipeline.get_cached("filtered_users", params={"dept": "eng"})
-    cached_sales = pipeline.get_cached("filtered_users", params={"dept": "sales"})
-    cached_all = pipeline.get_cached("filtered_users", params={})
+    cached_eng = await pipeline.get_cached("filtered_users", params={"dept": "eng"})
+    cached_sales = await pipeline.get_cached("filtered_users", params={"dept": "sales"})
+    cached_all = await pipeline.get_cached("filtered_users", params={})
 
     assert cached_eng is not None
     assert cached_sales is not None
@@ -569,8 +569,12 @@ async def test_parameterized_product_cache_isolation():
     assert eng_hash != all_hash, "eng and all should have different hashes"
 
     # --- Verify cardinality limit (LRU eviction) ---
-    # Set a small max to test eviction
-    pipeline._max_cache_entries = 5
+    # The cache backend is the source of truth for the max-entries cap;
+    # reach in and reduce it for this test scenario.
+    from dataflow.fabric.cache import InMemoryFabricCacheBackend
+
+    assert isinstance(pipeline.cache_backend, InMemoryFabricCacheBackend)
+    pipeline.cache_backend._max_entries = 5
 
     # Generate 6 more cache entries to exceed the limit
     for i in range(6):
@@ -581,15 +585,13 @@ async def test_parameterized_product_cache_isolation():
             params={"dept": f"dept_{i}"},
         )
 
-    # Total entries should be capped at max_cache_entries
-    total_entries = len(pipeline._cache_data)
-    assert (
-        total_entries <= 5
-    ), f"Expected at most 5 cache entries (max_cache_entries), got {total_entries}"
+    # Total entries should be capped at max_entries
+    total_entries = len(pipeline.cache_backend)
+    assert total_entries <= 5, f"Expected at most 5 cache entries, got {total_entries}"
 
     # The oldest entries (eng, sales, all) should have been evicted
     assert (
-        pipeline.get_cached("filtered_users", params={"dept": "eng"}) is None
+        await pipeline.get_cached("filtered_users", params={"dept": "eng"}) is None
     ), "Expected 'eng' entry to be evicted by LRU"
 
 

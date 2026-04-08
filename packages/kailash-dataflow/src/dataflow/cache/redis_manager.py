@@ -100,7 +100,9 @@ class RedisCacheManager:
                 self._circuit_breaker_failures = 0
                 self._circuit_breaker_open = False
             except Exception as e:
-                logger.error(f"Failed to connect to Redis: {e}")
+                logger.error(
+                    "redis_manager.failed_to_connect_to_redis", extra={"error": str(e)}
+                )
                 self._handle_connection_failure()
                 return None
 
@@ -131,10 +133,12 @@ class RedisCacheManager:
             # Deserialize JSON
             return json.loads(value)
         except json.JSONDecodeError:
-            logger.error(f"Failed to decode cached value for key: {key}")
+            logger.error(
+                "redis_manager.failed_to_decode_cached_value_for", extra={"key": key}
+            )
             return None
         except Exception as e:
-            logger.error(f"Cache get error: {e}")
+            logger.error("redis_manager.cache_get_error", extra={"error": str(e)})
             self._handle_operation_failure()
             return None
 
@@ -168,7 +172,7 @@ class RedisCacheManager:
             self._circuit_breaker_failures = 0
             return bool(result)
         except Exception as e:
-            logger.error(f"Cache set error: {e}")
+            logger.error("redis_manager.cache_set_error", extra={"error": str(e)})
             self._handle_operation_failure()
             return False
 
@@ -192,7 +196,7 @@ class RedisCacheManager:
 
             return client.delete(key)
         except Exception as e:
-            logger.error(f"Cache delete error: {e}")
+            logger.error("redis_manager.cache_delete_error", extra={"error": str(e)})
             self._handle_operation_failure()
             return 0
 
@@ -216,7 +220,9 @@ class RedisCacheManager:
 
             return client.delete(*keys)
         except Exception as e:
-            logger.error(f"Cache delete_many error: {e}")
+            logger.error(
+                "redis_manager.cache_delete_many_error", extra={"error": str(e)}
+            )
             self._handle_operation_failure()
             return 0
 
@@ -240,7 +246,7 @@ class RedisCacheManager:
 
             return client.exists(key) > 0
         except Exception as e:
-            logger.error(f"Cache exists error: {e}")
+            logger.error("redis_manager.cache_exists_error", extra={"error": str(e)})
             self._handle_operation_failure()
             return False
 
@@ -270,7 +276,9 @@ class RedisCacheManager:
             # Delete in batch
             return client.delete(*keys)
         except Exception as e:
-            logger.error(f"Cache clear_pattern error: {e}")
+            logger.error(
+                "redis_manager.cache_clear_pattern_error", extra={"error": str(e)}
+            )
             self._handle_operation_failure()
             return 0
 
@@ -302,7 +310,7 @@ class RedisCacheManager:
             results = pipeline.execute()
             return all(results)
         except Exception as e:
-            logger.error(f"Cache set_many error: {e}")
+            logger.error("redis_manager.cache_set_many_error", extra={"error": str(e)})
             self._handle_operation_failure()
             return False
 
@@ -340,7 +348,7 @@ class RedisCacheManager:
 
             return result
         except Exception as e:
-            logger.error(f"Cache get_many error: {e}")
+            logger.error("redis_manager.cache_get_many_error", extra={"error": str(e)})
             self._handle_operation_failure()
             return {}
 
@@ -356,7 +364,7 @@ class RedisCacheManager:
 
             return client.ttl(key)
         except Exception as e:
-            logger.error(f"Cache get_ttl error: {e}")
+            logger.error("redis_manager.cache_get_ttl_error", extra={"error": str(e)})
             return -1
 
     def extend_ttl(self, key: str, ttl: int) -> bool:
@@ -371,7 +379,9 @@ class RedisCacheManager:
 
             return client.expire(key, ttl)
         except Exception as e:
-            logger.error(f"Cache extend_ttl error: {e}")
+            logger.error(
+                "redis_manager.cache_extend_ttl_error", extra={"error": str(e)}
+            )
             return False
 
     def get_stats(self) -> Dict[str, Any]:
@@ -403,7 +413,7 @@ class RedisCacheManager:
                 "circuit_breaker_open": self._circuit_breaker_open,
             }
         except Exception as e:
-            logger.error(f"Cache get_stats error: {e}")
+            logger.error("redis_manager.cache_get_stats_error", extra={"error": str(e)})
             return {"status": "error", "error": str(e)}
 
     def warmup(self, data: List[Tuple[str, Any]]) -> bool:
@@ -434,7 +444,7 @@ class RedisCacheManager:
             stats = self.get_stats()
             current_mb = stats.get("memory_usage_mb", 0)
             return current_mb < self.config.max_memory_mb
-        except:
+        except Exception:
             return True
 
     def ping(self) -> bool:
@@ -444,7 +454,7 @@ class RedisCacheManager:
             if client is None:
                 return False
             return client.ping()
-        except:
+        except Exception:
             return False
 
     def _json_serializer(self, obj):

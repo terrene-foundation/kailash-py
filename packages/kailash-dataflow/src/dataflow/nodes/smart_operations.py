@@ -112,7 +112,10 @@ class SmartMergeNode(SmartNodeConnectionMixin, Node):
         enrich_fields = kwargs.get("enrich_fields", [])
         natural_language_spec = kwargs.get("natural_language_spec")
 
-        logger.info(f"Executing SmartMergeNode with merge_type: {merge_type}")
+        logger.info(
+            "smart_operations.executing_smartmergenode_with_merge_type",
+            extra={"merge_type": merge_type},
+        )
 
         # Normalize data to lists
         if isinstance(left_data, dict):
@@ -127,7 +130,10 @@ class SmartMergeNode(SmartNodeConnectionMixin, Node):
             )
             if detected_conditions:
                 join_conditions = detected_conditions
-                logger.info(f"Auto-detected join conditions: {join_conditions}")
+                logger.info(
+                    "smart_operations.auto_detected_join_conditions",
+                    extra={"join_conditions": join_conditions},
+                )
             else:
                 logger.warning(
                     "Could not auto-detect join conditions, falling back to inner join on 'id'"
@@ -139,7 +145,10 @@ class SmartMergeNode(SmartNodeConnectionMixin, Node):
             nl_conditions = self._parse_natural_language_spec(natural_language_spec)
             if nl_conditions:
                 join_conditions.update(nl_conditions)
-                logger.info(f"Applied natural language conditions: {nl_conditions}")
+                logger.info(
+                    "smart_operations.applied_natural_language_conditions",
+                    extra={"nl_conditions": nl_conditions},
+                )
 
         # Perform the merge based on type
         if merge_type in ["auto", "inner"]:

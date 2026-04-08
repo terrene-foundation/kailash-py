@@ -112,7 +112,9 @@ class ModelProtection:
                     if not condition(context):
                         return False, f"Custom condition failed: {condition.__name__}"
                 except Exception as e:
-                    logger.warning(f"Protection condition error: {e}")
+                    logger.warning(
+                        "protection.protection_condition_error", extra={"error": str(e)}
+                    )
                     return False, f"Protection condition error: {str(e)}"
 
         # Check field-level protection first
@@ -200,7 +202,7 @@ class ProtectionAuditor:
             "context": context or {},
         }
         self.events.append(event)
-        logger.warning(f"Protection violation: {event}")
+        logger.warning("protection.protection_violation", extra={"event": event})
 
     def log_allowed(
         self,
@@ -219,7 +221,7 @@ class ProtectionAuditor:
             "reason": reason,
         }
         self.events.append(event)
-        logger.debug(f"Protection check passed: {event}")
+        logger.debug("protection.protection_check_passed", extra={"event": event})
 
 
 @dataclass
@@ -418,4 +420,6 @@ class WriteProtectionEngine:
         if violation.level in (ProtectionLevel.BLOCK, ProtectionLevel.AUDIT):
             raise violation
         elif violation.level == ProtectionLevel.WARN:
-            logger.warning(f"Protection warning: {violation}")
+            logger.warning(
+                "protection.protection_warning", extra={"violation": violation}
+            )

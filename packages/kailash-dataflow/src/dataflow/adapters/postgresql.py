@@ -11,7 +11,16 @@ import warnings
 from typing import Any, Dict, List, Tuple
 
 from .base import DatabaseAdapter
+from .dialect import DialectManager
 from .exceptions import AdapterError, ConnectionError, QueryError, TransactionError
+
+_pg_dialect = DialectManager.get_dialect("postgresql")
+
+
+def _safe_identifier(name: str) -> str:
+    """Validate and quote a SQL identifier (PostgreSQL double-quote style)."""
+    return _pg_dialect.quote_identifier(name)
+
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +70,9 @@ class PostgreSQLAdapter(DatabaseAdapter):
                         )
                         await conn.execute("ROLLBACK")
                 except Exception as e:
-                    logger.warning(f"Connection reset failed: {e}")
+                    logger.warning(
+                        "postgresql.connection_reset_failed", extra={"error": str(e)}
+                    )
 
             # Build connection parameters
             params = self.get_connection_parameters()
@@ -80,7 +91,10 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 "asyncpg is required for PostgreSQL support. Install with: pip install asyncpg"
             )
         except Exception as e:
-            logger.error(f"Failed to create PostgreSQL connection pool: {e}")
+            logger.error(
+                "postgresql.failed_to_create_postgresql_connection_pool",
+                extra={"error": str(e)},
+            )
             raise ConnectionError(f"Connection failed: {e}")
 
     async def close_connection_pool(self) -> None:
@@ -111,7 +125,9 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 return [dict(row) for row in rows]
 
         except Exception as e:
-            logger.error(f"PostgreSQL query execution failed: {e}")
+            logger.error(
+                "postgresql.postgresql_query_execution_failed", extra={"error": str(e)}
+            )
             raise QueryError(f"Query execution failed: {e}")
 
     async def execute_insert(self, query: str, params: List[Any] = None) -> Any:
@@ -129,7 +145,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
                     return await connection.execute(pg_query)
 
         except Exception as e:
-            logger.error(f"PostgreSQL insert failed: {e}")
+            logger.error("postgresql.postgresql_insert_failed", extra={"error": str(e)})
             raise QueryError(f"Insert failed: {e}")
 
     async def execute_bulk_insert(self, query: str, params_list: List[Tuple]) -> None:
@@ -144,7 +160,9 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 await connection.executemany(pg_query, params_list)
 
         except Exception as e:
-            logger.error(f"PostgreSQL bulk insert failed: {e}")
+            logger.error(
+                "postgresql.postgresql_bulk_insert_failed", extra={"error": str(e)}
+            )
             raise QueryError(f"Bulk insert failed: {e}")
 
     def transaction(self):
@@ -157,22 +175,52 @@ class PostgreSQLAdapter(DatabaseAdapter):
     async def execute_transaction(
         self, queries: List[Tuple[str, List[Any]]]
     ) -> List[Any]:
-        """Execute multiple queries in PostgreSQL transaction."""
-        if not self.is_connected:
+        """Execute multiple queries in a single PostgreSQL transaction.
+
+        All queries run on the SAME connection within an explicit transaction
+        block. On success, all queries are committed atomically. On failure,
+        all queries are rolled back — no partial commits.
+
+        Args:
+            queries: List of (query_string, params_list) tuples.
+
+        Returns:
+            List of result sets, one per query.
+
+        Raises:
+            TransactionError: If any query fails (all rolled back).
+        """
+        if not self.is_connected or not self.connection_pool:
             raise ConnectionError("Not connected to database")
 
         try:
             results = []
-            logger.debug(f"Starting transaction with {len(queries)} queries")
+            logger.debug(
+                "transaction.start",
+                extra={"query_count": len(queries)},
+            )
 
-            for query, params in queries:
-                result = await self.execute_query(query, params)
-                results.append(result)
+            # Acquire a SINGLE connection and run all queries within its transaction
+            async with self.connection_pool.acquire() as connection:
+                async with connection.transaction():
+                    for query, params in queries:
+                        pg_query, pg_params = self.format_query(query, params)
+                        if pg_params:
+                            rows = await connection.fetch(pg_query, *pg_params)
+                        else:
+                            rows = await connection.fetch(pg_query)
+                        results.append([dict(row) for row in rows])
 
-            logger.debug("Transaction completed successfully")
+            logger.debug(
+                "transaction.ok",
+                extra={"query_count": len(queries)},
+            )
             return results
         except Exception as e:
-            logger.error(f"Transaction failed: {e}")
+            logger.error(
+                "transaction.error",
+                extra={"error": str(e), "query_count": len(queries)},
+            )
             raise TransactionError(f"Transaction failed: {e}")
 
     async def get_table_schema(self, table_name: str) -> Dict[str, Dict]:
@@ -232,7 +280,9 @@ class PostgreSQLAdapter(DatabaseAdapter):
             return schema
 
         except Exception as e:
-            logger.error(f"Failed to get table schema: {e}")
+            logger.error(
+                "postgresql.failed_to_get_table_schema", extra={"error": str(e)}
+            )
             raise QueryError(f"Failed to get table schema: {e}")
 
     async def create_table(self, table_name: str, schema: Dict[str, Dict]) -> None:
@@ -276,13 +326,13 @@ class PostgreSQLAdapter(DatabaseAdapter):
             if primary_keys:
                 columns.append(f"PRIMARY KEY ({', '.join(primary_keys)})")
 
-            query = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(columns)})"
+            query = f"CREATE TABLE IF NOT EXISTS {_safe_identifier(table_name)} ({', '.join(columns)})"
 
             await self.execute_query(query)
-            logger.info(f"Created table: {table_name}")
+            logger.info("postgresql.created_table", extra={"table_name": table_name})
 
         except Exception as e:
-            logger.error(f"Failed to create table: {e}")
+            logger.error("postgresql.failed_to_create_table", extra={"error": str(e)})
             raise QueryError(f"Failed to create table: {e}")
 
     async def drop_table(self, table_name: str) -> None:
@@ -291,12 +341,12 @@ class PostgreSQLAdapter(DatabaseAdapter):
             raise ConnectionError("Not connected to database")
 
         try:
-            query = f"DROP TABLE IF EXISTS {table_name}"
+            query = f"DROP TABLE IF EXISTS {_safe_identifier(table_name)}"
             await self.execute_query(query)
-            logger.info(f"Dropped table: {table_name}")
+            logger.info("postgresql.dropped_table", extra={"table_name": table_name})
 
         except Exception as e:
-            logger.error(f"Failed to drop table: {e}")
+            logger.error("postgresql.failed_to_drop_table", extra={"error": str(e)})
             raise QueryError(f"Failed to drop table: {e}")
 
     def get_dialect(self) -> str:
@@ -338,8 +388,14 @@ class PostgreSQLAdapter(DatabaseAdapter):
         return formatted_query, params
 
     def get_connection_parameters(self) -> Dict[str, Any]:
-        """Get asyncpg connection parameters."""
-        return {
+        """Get asyncpg connection parameters.
+
+        Forwards all URL-parsed parameters to asyncpg, including:
+        - ssl: derived from sslmode (disable→False, require→True, prefer→None)
+        - server_settings: application_name for pg_stat_activity visibility
+        - command_timeout: from pool_timeout
+        """
+        params: Dict[str, Any] = {
             "host": self.host,
             "port": self.port,
             "database": self.database,
@@ -349,6 +405,39 @@ class PostgreSQLAdapter(DatabaseAdapter):
             "max_size": self.pool_size + self.max_overflow,
             "command_timeout": self.pool_timeout,
         }
+
+        # SSL mode translation for asyncpg
+        # asyncpg uses ssl=bool|SSLContext, not sslmode=str
+        if self.ssl_mode == "disable":
+            params["ssl"] = False
+        elif self.ssl_mode == "require":
+            params["ssl"] = True
+        elif self.ssl_mode in ("verify-ca", "verify-full"):
+            import ssl
+
+            ssl_ctx = ssl.create_default_context()
+            # Load client certificates if specified in URL query params
+            sslrootcert = self.query_params.get("sslrootcert")
+            sslcert = self.query_params.get("sslcert")
+            sslkey = self.query_params.get("sslkey")
+            if sslrootcert:
+                ssl_ctx.load_verify_locations(sslrootcert)
+            if sslcert and sslkey:
+                ssl_ctx.load_cert_chain(sslcert, sslkey)
+            if self.ssl_mode == "verify-full":
+                ssl_ctx.check_hostname = True
+            else:
+                ssl_ctx.check_hostname = False
+            params["ssl"] = ssl_ctx
+        # sslmode=prefer (default): asyncpg default behavior (attempt upgrade)
+
+        # Application name for pg_stat_activity visibility
+        if self.application_name:
+            params["server_settings"] = {
+                "application_name": self.application_name,
+            }
+
+        return params
 
     def get_tables_query(self) -> str:
         """Get query to list all tables."""
@@ -361,7 +450,13 @@ class PostgreSQLAdapter(DatabaseAdapter):
         """
 
     def get_columns_query(self, table_name: str) -> str:
-        """Get query to list table columns."""
+        """Get query to list table columns.
+
+        Note: table_name is validated via _safe_identifier to prevent injection.
+        The value is used in a WHERE clause string literal, not as a SQL identifier,
+        but validation ensures it contains only safe characters.
+        """
+        _safe_identifier(table_name)  # validate, discard quoted form
         return f"""
         SELECT
             column_name,
@@ -384,7 +479,9 @@ class PostgreSQLAdapter(DatabaseAdapter):
             result = await self.execute_query("SELECT version() as version")
             return result[0]["version"]
         except Exception as e:
-            logger.error(f"Failed to get server version: {e}")
+            logger.error(
+                "postgresql.failed_to_get_server_version", extra={"error": str(e)}
+            )
             return "unknown"
 
     async def get_database_size(self) -> int:
@@ -397,7 +494,9 @@ class PostgreSQLAdapter(DatabaseAdapter):
             result = await self.execute_query(query)
             return result[0]["size_bytes"] or 0
         except Exception as e:
-            logger.error(f"Failed to get database size: {e}")
+            logger.error(
+                "postgresql.failed_to_get_database_size", extra={"error": str(e)}
+            )
             return 0
 
     @property
@@ -469,7 +568,11 @@ class PostgreSQLTransaction:
                     self._rolled_back = True
         except Exception as cleanup_error:
             # Log cleanup error but don't raise (preserve original exception)
-            logger.error(f"Transaction cleanup failed: {cleanup_error}", exc_info=True)
+            logger.error(
+                "postgresql.transaction_cleanup_failed",
+                extra={"cleanup_error": cleanup_error},
+                exc_info=True,
+            )
         finally:
             # CRITICAL: Always release connection to pool
             if self.connection:

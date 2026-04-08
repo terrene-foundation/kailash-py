@@ -250,32 +250,43 @@ async def e2e_validation_pipeline():
         performance_degradation_threshold=0.40,  # 40% threshold for E2E
     )
 
-    # Mock staging manager for E2E (focus on validation logic)
-    from unittest.mock import AsyncMock, Mock
+    # Real staging-manager stand-in (no mocking library). The staging
+    # environment is a SimpleNamespace whose ``staging_db`` points at the
+    # actual test database — the pipeline validates against real
+    # PostgreSQL state, not a fake one.
+    from types import SimpleNamespace
 
-    staging_manager = Mock(spec=StagingEnvironmentManager)
-
-    # Mock staging environment
-    mock_staging_env = Mock()
-    mock_staging_env.staging_id = "e2e_staging_001"
-
-    # Mock staging_db with test database credentials
-    mock_staging_db = Mock()
-    mock_staging_db.host = TEST_DB_CONFIG["host"]
-    mock_staging_db.port = TEST_DB_CONFIG["port"]
-    mock_staging_db.database = TEST_DB_CONFIG["database"]
-    mock_staging_db.user = TEST_DB_CONFIG["user"]
-    mock_staging_db.password = TEST_DB_CONFIG["password"]
-    mock_staging_db.connection_timeout = 30
-    mock_staging_env.staging_db = mock_staging_db
-
-    staging_manager.create_staging_environment = AsyncMock(
-        return_value=mock_staging_env
+    staging_db = SimpleNamespace(
+        host=TEST_DB_CONFIG["host"],
+        port=TEST_DB_CONFIG["port"],
+        database=TEST_DB_CONFIG["database"],
+        user=TEST_DB_CONFIG["user"],
+        password=TEST_DB_CONFIG["password"],
+        connection_timeout=30,
     )
-    staging_manager.replicate_production_schema = AsyncMock(return_value=Mock())
-    staging_manager.cleanup_staging_environment = AsyncMock(
-        return_value={"status": "SUCCESS"}
+    staging_env = SimpleNamespace(
+        staging_id="e2e_staging_001",
+        staging_db=staging_db,
     )
+
+    class _RealStagingManagerStub:
+        """In-process StagingEnvironmentManager stand-in.
+
+        Returns the shared ``staging_env`` pointed at the real test
+        database so the pipeline's validation steps run end-to-end
+        against actual PostgreSQL state. No mocking library.
+        """
+
+        async def create_staging_environment(self, *args, **kwargs):
+            return staging_env
+
+        async def replicate_production_schema(self, *args, **kwargs):
+            return SimpleNamespace(status="SUCCESS")
+
+        async def cleanup_staging_environment(self, *args, **kwargs):
+            return {"status": "SUCCESS"}
+
+    staging_manager = _RealStagingManagerStub()
 
     # Create real analyzers
     dependency_analyzer = DependencyAnalyzer()

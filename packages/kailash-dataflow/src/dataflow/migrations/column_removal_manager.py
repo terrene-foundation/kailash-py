@@ -260,7 +260,10 @@ class ColumnOnlyBackupHandler(BackupHandler):
             )
             return True
         except Exception as e:
-            logger.error(f"Failed to cleanup backup {backup_info.backup_location}: {e}")
+            logger.error(
+                "column_removal_manager.failed_to_cleanup_backup",
+                extra={"backup_location": backup_info.backup_location, "error": str(e)},
+            )
             return False
 
 
@@ -308,7 +311,10 @@ class TableSnapshotBackupHandler(BackupHandler):
             )
             return True
         except Exception as e:
-            logger.error(f"Failed to cleanup backup {backup_info.backup_location}: {e}")
+            logger.error(
+                "column_removal_manager.failed_to_cleanup_backup",
+                extra={"backup_location": backup_info.backup_location, "error": str(e)},
+            )
             return False
 
 
@@ -360,7 +366,10 @@ class ColumnRemovalManager:
         Returns:
             RemovalPlan with execution stages and safety analysis
         """
-        self.logger.info(f"Planning column removal: {table}.{column}")
+        self.logger.info(
+            "column_removal_manager.planning_column_removal",
+            extra={"table": table, "column": column},
+        )
 
         if connection is None:
             connection = await self._get_connection()
@@ -404,7 +413,10 @@ class ColumnRemovalManager:
             return plan
 
         except Exception as e:
-            self.logger.error(f"Planning failed for {table}.{column}: {e}")
+            self.logger.error(
+                "column_removal_manager.planning_failed_for",
+                extra={"table": table, "column": column, "error": str(e)},
+            )
             raise
 
     async def validate_removal_safety(
@@ -626,7 +638,9 @@ class ColumnRemovalManager:
 
         except Exception as e:
             execution_time = (datetime.now() - start_time).total_seconds()
-            self.logger.error(f"Column removal failed: {e}")
+            self.logger.error(
+                "column_removal_manager.column_removal_failed", extra={"error": str(e)}
+            )
 
             return RemovalResult(
                 plan=plan,
@@ -719,7 +733,9 @@ class ColumnRemovalManager:
     ) -> RemovalStageResult:
         """Execute a single removal stage."""
         stage_start = datetime.now()
-        self.logger.info(f"Executing stage: {stage.value}")
+        self.logger.info(
+            "column_removal_manager.executing_stage", extra={"value": stage.value}
+        )
 
         try:
             if stage == RemovalStage.BACKUP_CREATION:
@@ -741,7 +757,10 @@ class ColumnRemovalManager:
 
         except Exception as e:
             duration = (datetime.now() - stage_start).total_seconds()
-            self.logger.error(f"Stage {stage.value} failed after {duration:.2f}s: {e}")
+            self.logger.error(
+                "column_removal_manager.stage_failed_after_s",
+                extra={"value": stage.value, "duration": duration, "error": str(e)},
+            )
 
             return RemovalStageResult(
                 stage=stage, success=False, duration=duration, errors=[str(e)]

@@ -9,16 +9,12 @@ import logging
 import warnings
 from typing import Any, Dict, List, Optional, Union
 
-from nexus import Nexus, create_nexus
-
 from kailash.runtime import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+from nexus import Nexus, create_nexus
 
 # Import DataFlow nodes
-from .nodes.bulk_create import BulkCreateNode
-from .nodes.bulk_delete import BulkDeleteNode
-from .nodes.bulk_update import BulkUpdateNode
 from .nodes.bulk_upsert import BulkUpsertNode
 from .nodes.monitoring_integration import (
     DataFlowComprehensiveMonitoringNode,
@@ -686,13 +682,18 @@ class DataFlowGateway:
         if not self.nexus:
             await self.create_nexus_gateway(**kwargs)
 
-        logger.info(f"Starting DataFlow Gateway: {self.name}")
+        logger.info(
+            "gateway_integration.starting_dataflow_gateway", extra={"name": self.name}
+        )
         await self.nexus.start()
 
     async def stop(self) -> None:
         """Stop the DataFlow gateway."""
         if self.nexus:
-            logger.info(f"Stopping DataFlow Gateway: {self.name}")
+            logger.info(
+                "gateway_integration.stopping_dataflow_gateway",
+                extra={"name": self.name},
+            )
             await self.nexus.stop()
 
     def close(self):

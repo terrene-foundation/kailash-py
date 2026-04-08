@@ -34,10 +34,10 @@ from __future__ import annotations
 import logging
 import re
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
     # Avoid hard dependencies - use TYPE_CHECKING for type annotations only
@@ -220,7 +220,10 @@ class ConstraintEnvelopeWrapper:
             part = part.strip()
             if ":" not in part:
                 # Invalid format, skip
-                logger.debug(f"Invalid data scope format, skipping: {part}")
+                logger.debug(
+                    "query_wrapper.invalid_data_scope_format_skipping",
+                    extra={"part": part},
+                )
                 continue
 
             # Split on first colon only
@@ -313,7 +316,10 @@ class ConstraintEnvelopeWrapper:
             return {"created_at": {"$gte": cutoff}}
 
         # Unknown format
-        logger.debug(f"Unknown time window format: {constraint_value}")
+        logger.debug(
+            "query_wrapper.unknown_time_window_format",
+            extra={"constraint_value": constraint_value},
+        )
         return {}
 
     def translate_row_limit(self, constraint_value: str) -> Optional[int]:
@@ -340,11 +346,16 @@ class ConstraintEnvelopeWrapper:
         try:
             limit = int(value_str)
             if limit < 0:
-                logger.debug(f"Negative row limit not allowed: {limit}")
+                logger.debug(
+                    "query_wrapper.negative_row_limit_not_allowed",
+                    extra={"limit": limit},
+                )
                 return None
             return limit
         except ValueError:
-            logger.debug(f"Invalid row limit value: {value_str}")
+            logger.debug(
+                "query_wrapper.invalid_row_limit_value", extra={"value_str": value_str}
+            )
             return None
 
     def detect_pii_columns(self, columns: List[str]) -> List[str]:
@@ -458,7 +469,10 @@ class ConstraintEnvelopeWrapper:
             constraint_value = str(getattr(constraint, "value", ""))
 
             if constraint_type is None:
-                logger.debug(f"Constraint has no type: {constraint}")
+                logger.debug(
+                    "query_wrapper.constraint_has_no_type",
+                    extra={"constraint": constraint},
+                )
                 continue
 
             # Get type value (handle both enum and string)
@@ -610,7 +624,10 @@ class TrustAwareQueryExecutor:
         try:
             return await self._trust_operations.get_agent_constraints(agent_id)
         except Exception as e:
-            logger.warning(f"Failed to get agent constraints for {agent_id}: {e}")
+            logger.warning(
+                "query_wrapper.failed_to_get_agent_constraints_for",
+                extra={"agent_id": agent_id, "error": str(e)},
+            )
             return []
 
     async def _verify_table_access(
@@ -656,7 +673,10 @@ class TrustAwareQueryExecutor:
         except PermissionError:
             raise
         except Exception as e:
-            logger.warning(f"Table access verification failed: {e}")
+            logger.warning(
+                "query_wrapper.table_access_verification_failed",
+                extra={"error": str(e)},
+            )
             # In case of verification failure, deny in enforcing mode
             if self._enforcement_mode == "enforcing":
                 raise PermissionError(
@@ -682,7 +702,9 @@ class TrustAwareQueryExecutor:
                 if schema and "columns" in schema:
                     return list(schema["columns"].keys())
         except Exception as e:
-            logger.debug(f"Could not get model columns: {e}")
+            logger.debug(
+                "query_wrapper.could_not_get_model_columns", extra={"error": str(e)}
+            )
 
         # Return empty list if we can't determine columns
         return []
@@ -739,6 +761,13 @@ class TrustAwareQueryExecutor:
     ) -> Optional[str]:
         """Record audit event if audit generator is available.
 
+        Passes ``agent_id`` through to the audit generator when the
+        generator supports it (``resource_accessed`` accepts an
+        ``agent_id`` kwarg). Older generators that do not accept the
+        kwarg still receive the core event fields via the legacy
+        signature; the agent is still recoverable from
+        ``trust_context.delegation_chain`` on such backends.
+
         Args:
             model_name: Model/table accessed
             operation: Operation performed
@@ -752,17 +781,29 @@ class TrustAwareQueryExecutor:
         if self._audit_generator is None:
             return None
 
+        call_kwargs: Dict[str, Any] = dict(
+            run_id=trust_context.trace_id if trust_context else "unknown",
+            resource=f"table:{model_name}",
+            action=operation,
+            result=result,
+            trust_context=trust_context,
+        )
         try:
-            event = await self._audit_generator.resource_accessed(
-                run_id=trust_context.trace_id if trust_context else "unknown",
-                resource=f"table:{model_name}",
-                action=operation,
-                result=result,
-                trust_context=trust_context,
-            )
+            if agent_id is not None:
+                try:
+                    event = await self._audit_generator.resource_accessed(
+                        **call_kwargs, agent_id=agent_id
+                    )
+                except TypeError:
+                    # Legacy generator without ``agent_id`` kwarg.
+                    event = await self._audit_generator.resource_accessed(**call_kwargs)
+            else:
+                event = await self._audit_generator.resource_accessed(**call_kwargs)
             return getattr(event, "event_id", None)
         except Exception as e:
-            logger.warning(f"Failed to record audit event: {e}")
+            logger.warning(
+                "query_wrapper.failed_to_record_audit_event", extra={"error": str(e)}
+            )
             return None
 
     async def execute_read(
@@ -1031,3 +1072,320 @@ class TrustAwareQueryExecutor:
                 audit_event_id=None,
                 execution_time_ms=execution_time,
             )
+
+    # ========================================================================
+    # Express-facing helpers (Phase 5.11 wiring)
+    #
+    # These methods decouple "access check" from "query execution" so the
+    # Express API can call them directly without needing a synthetic
+    # ``DataFlow.execute(dict)`` method. Call sequence from Express:
+    #
+    #   plan = await executor.check_read_access(model, filter, agent_id, ctx)
+    #   if not plan.allowed:   raise PermissionError(plan.denied_reason)
+    #   merged_filter = {**filter, **plan.additional_filters}
+    #   result = await real_express_read(...)
+    #   result = executor.apply_result_filter(result, plan)
+    #   await executor.record_query_success(model, "read", plan, agent_id, ctx,
+    #                                       rows_affected=len(result))
+    # ========================================================================
+
+    async def check_read_access(
+        self,
+        model_name: str,
+        filter: Optional[Dict[str, Any]] = None,
+        agent_id: Optional[str] = None,
+        trust_context: Optional[Any] = None,
+    ) -> QueryAccessResult:
+        """Return the access plan for a read query without executing it.
+
+        Runs the table-access and constraint-envelope checks in the
+        executor's current ``enforcement_mode`` and returns a
+        :class:`QueryAccessResult` that the caller uses to shape the
+        real query (additional filters, row limit, PII filtering on the
+        result, allowed/denied verdict).
+
+        In ``disabled`` mode the result is always ``allowed=True`` with
+        no filters or constraints — callers can still invoke this
+        method unconditionally and get a pass-through plan.
+
+        In ``enforcing`` mode, constraint violations raise
+        :class:`PermissionError`; in ``permissive`` mode they are logged
+        and the plan is returned with ``allowed=True``.
+        """
+        filter = filter or {}
+
+        # Disabled mode — synthesize a pass-through access plan.
+        if self._enforcement_mode == "disabled":
+            return QueryAccessResult(
+                allowed=True,
+                filtered_columns=[],
+                additional_filters={},
+                row_limit=None,
+                denied_reason=None,
+                applied_constraints=[],
+                pii_columns_filtered=[],
+                sensitive_columns_flagged=[],
+            )
+
+        # Verify table access if a verifier is wired.
+        if agent_id:
+            await self._verify_table_access(model_name, agent_id, "read")
+
+        if not agent_id:
+            # No agent → no per-agent constraints to resolve.
+            return QueryAccessResult(
+                allowed=True,
+                filtered_columns=[],
+                additional_filters={},
+                row_limit=None,
+                denied_reason=None,
+                applied_constraints=[],
+                pii_columns_filtered=[],
+                sensitive_columns_flagged=[],
+            )
+
+        constraints = await self._get_agent_constraints(agent_id)
+        if not constraints:
+            return QueryAccessResult(
+                allowed=True,
+                filtered_columns=[],
+                additional_filters={},
+                row_limit=None,
+                denied_reason=None,
+                applied_constraints=[],
+                pii_columns_filtered=[],
+                sensitive_columns_flagged=[],
+            )
+
+        model_columns = self._get_model_columns(model_name)
+        access_result = self._constraint_wrapper.apply_constraints(
+            constraints, model_columns, "read"
+        )
+
+        if not access_result.allowed:
+            if self._enforcement_mode == "enforcing":
+                await self._record_audit(
+                    model_name, "read", "denied", agent_id, trust_context
+                )
+                raise PermissionError(
+                    access_result.denied_reason or "Read access denied"
+                )
+            logger.warning(
+                "trust.read.permissive_denied",
+                extra={
+                    "model": model_name,
+                    "agent_id": agent_id,
+                    "reason": access_result.denied_reason,
+                },
+            )
+            # In permissive mode, override to allowed so the caller proceeds.
+            return QueryAccessResult(
+                allowed=True,
+                filtered_columns=access_result.filtered_columns,
+                additional_filters=access_result.additional_filters,
+                row_limit=access_result.row_limit,
+                denied_reason=access_result.denied_reason,
+                applied_constraints=access_result.applied_constraints,
+                pii_columns_filtered=access_result.pii_columns_filtered,
+                sensitive_columns_flagged=access_result.sensitive_columns_flagged,
+            )
+
+        return access_result
+
+    async def check_write_access(
+        self,
+        model_name: str,
+        operation: str,
+        agent_id: Optional[str] = None,
+        trust_context: Optional[Any] = None,
+    ) -> QueryAccessResult:
+        """Return the access plan for a write query without executing it.
+
+        ``operation`` should be one of ``create``, ``update``, ``delete``,
+        ``upsert``, ``bulk_create``, ``bulk_update``, ``bulk_delete``.
+        Semantics mirror :meth:`check_read_access`.
+        """
+        if self._enforcement_mode == "disabled":
+            return QueryAccessResult(
+                allowed=True,
+                filtered_columns=[],
+                additional_filters={},
+                row_limit=None,
+                denied_reason=None,
+                applied_constraints=[],
+                pii_columns_filtered=[],
+                sensitive_columns_flagged=[],
+            )
+
+        if agent_id:
+            await self._verify_table_access(model_name, agent_id, operation)
+
+        if not agent_id:
+            return QueryAccessResult(
+                allowed=True,
+                filtered_columns=[],
+                additional_filters={},
+                row_limit=None,
+                denied_reason=None,
+                applied_constraints=[],
+                pii_columns_filtered=[],
+                sensitive_columns_flagged=[],
+            )
+
+        constraints = await self._get_agent_constraints(agent_id)
+        if not constraints:
+            return QueryAccessResult(
+                allowed=True,
+                filtered_columns=[],
+                additional_filters={},
+                row_limit=None,
+                denied_reason=None,
+                applied_constraints=[],
+                pii_columns_filtered=[],
+                sensitive_columns_flagged=[],
+            )
+
+        model_columns = self._get_model_columns(model_name)
+        access_result = self._constraint_wrapper.apply_constraints(
+            constraints, model_columns, operation
+        )
+
+        if not access_result.allowed:
+            if self._enforcement_mode == "enforcing":
+                await self._record_audit(
+                    model_name, operation, "denied", agent_id, trust_context
+                )
+                raise PermissionError(
+                    access_result.denied_reason or f"{operation} access denied"
+                )
+            logger.warning(
+                "trust.write.permissive_denied",
+                extra={
+                    "model": model_name,
+                    "operation": operation,
+                    "agent_id": agent_id,
+                    "reason": access_result.denied_reason,
+                },
+            )
+            return QueryAccessResult(
+                allowed=True,
+                filtered_columns=access_result.filtered_columns,
+                additional_filters=access_result.additional_filters,
+                row_limit=access_result.row_limit,
+                denied_reason=access_result.denied_reason,
+                applied_constraints=access_result.applied_constraints,
+                pii_columns_filtered=access_result.pii_columns_filtered,
+                sensitive_columns_flagged=access_result.sensitive_columns_flagged,
+            )
+
+        return access_result
+
+    def apply_result_filter(self, data: Any, plan: QueryAccessResult) -> Any:
+        """Apply the access plan's PII filter to a query result.
+
+        Public wrapper around the internal PII filter so Express can
+        strip filtered columns from rows returned by the real query.
+        """
+        if not plan.pii_columns_filtered:
+            return data
+        return self._filter_pii_from_data(data, plan.pii_columns_filtered)
+
+    async def record_query_success(
+        self,
+        model_name: str,
+        operation: str,
+        plan: QueryAccessResult,
+        agent_id: Optional[str] = None,
+        trust_context: Optional[Any] = None,
+        rows_affected: int = 0,
+        query_params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
+        """Record a successful audit event for a trust-aware query.
+
+        Delegates to the legacy ``audit_generator`` path (if wired) and
+        the DataFlow-native ``audit_store`` (CARE-020) if one is
+        attached to ``self._dataflow`` as ``_audit_store``. Returns the
+        audit event ID from whichever backend recorded it (legacy
+        generator wins when both are configured).
+        """
+        legacy_event_id = await self._record_audit(
+            model_name, operation, "success", agent_id, trust_context
+        )
+        store_event_id = await self._record_to_audit_store(
+            model_name=model_name,
+            operation=operation,
+            result="success",
+            agent_id=agent_id,
+            trust_context=trust_context,
+            rows_affected=rows_affected,
+            query_params=query_params,
+            constraints_applied=plan.applied_constraints,
+        )
+        return legacy_event_id or store_event_id
+
+    async def record_query_failure(
+        self,
+        model_name: str,
+        operation: str,
+        plan: Optional[QueryAccessResult],
+        agent_id: Optional[str] = None,
+        trust_context: Optional[Any] = None,
+        error: Optional[str] = None,
+        query_params: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Record a failed audit event for a trust-aware query."""
+        await self._record_audit(
+            model_name, operation, "failure", agent_id, trust_context
+        )
+        await self._record_to_audit_store(
+            model_name=model_name,
+            operation=operation,
+            result="failure",
+            agent_id=agent_id,
+            trust_context=trust_context,
+            rows_affected=0,
+            query_params=query_params,
+            constraints_applied=(plan.applied_constraints if plan is not None else []),
+            error=error,
+        )
+
+    async def _record_to_audit_store(
+        self,
+        model_name: str,
+        operation: str,
+        result: str,
+        agent_id: Optional[str],
+        trust_context: Optional[Any],
+        rows_affected: int,
+        query_params: Optional[Dict[str, Any]],
+        constraints_applied: Optional[List[str]] = None,
+        error: Optional[str] = None,
+    ) -> Optional[str]:
+        """Record a query event into the DataFlow audit store (CARE-020)."""
+        store = getattr(self._dataflow, "_audit_store", None)
+        if store is None:
+            return None
+        try:
+            human_origin_id: Optional[str] = None
+            if trust_context is not None and hasattr(trust_context, "human_origin"):
+                origin = getattr(trust_context, "human_origin", None)
+                if origin is not None:
+                    human_origin_id = getattr(origin, "human_id", None)
+
+            record = store.record_query(
+                agent_id=agent_id or "system",
+                model=model_name,
+                operation=operation,
+                row_count=rows_affected,
+                query_params=query_params,
+                constraints_applied=constraints_applied or [],
+                result=result if error is None else f"failure:{error}",
+                human_origin_id=human_origin_id,
+            )
+            return record.event_id if record is not None else None
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning(
+                "trust.audit_store.record_failed",
+                extra={"model": model_name, "operation": operation, "error": str(e)},
+            )
+            return None

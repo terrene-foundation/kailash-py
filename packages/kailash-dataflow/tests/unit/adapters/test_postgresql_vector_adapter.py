@@ -7,6 +7,7 @@ Unit tests for PostgreSQL vector similarity search adapter.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from dataflow.adapters import (
     BaseAdapter,
     DatabaseAdapter,
@@ -118,8 +119,8 @@ class TestPostgreSQLVectorAdapter:
 
         # Should execute ALTER TABLE
         call_args = adapter.execute_query.call_args[0][0]
-        assert "ALTER TABLE documents" in call_args
-        assert "ADD COLUMN IF NOT EXISTS embedding vector(1536)" in call_args
+        assert 'ALTER TABLE "documents"' in call_args
+        assert 'ADD COLUMN IF NOT EXISTS "embedding" vector(1536)' in call_args
 
     @pytest.mark.asyncio
     async def test_create_vector_column_default_dimensions(self):
@@ -220,7 +221,7 @@ class TestPostgreSQLVectorAdapter:
 
         # Check SQL query
         call_args = adapter.execute_query.call_args[0][0]
-        assert "ORDER BY embedding <=>" in call_args  # Cosine operator
+        assert 'ORDER BY "embedding" <=>' in call_args  # Cosine operator
         assert "LIMIT 2" in call_args
 
     @pytest.mark.asyncio
@@ -381,8 +382,8 @@ class TestPostgreSQLVectorAdapter:
         # Check SQL query
         call_args = adapter.execute_query.call_args[0][0]
         assert "COUNT(*)" in call_args
-        assert "COUNT(embedding)" in call_args
-        assert "array_length(embedding, 1)" in call_args
+        assert 'COUNT("embedding")' in call_args
+        assert 'array_length("embedding", 1)' in call_args
 
     def test_adapter_repr(self):
         """Test __repr__ method."""

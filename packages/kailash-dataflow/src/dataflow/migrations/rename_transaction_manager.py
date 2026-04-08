@@ -143,11 +143,17 @@ class RenameTransactionManager:
             await self.connection.execute("BEGIN")
             self.current_state = TransactionState.ACTIVE
 
-            self.logger.info(f"Transaction started: {self.transaction_id}")
+            self.logger.info(
+                "rename_transaction_manager.transaction_started",
+                extra={"transaction_id": self.transaction_id},
+            )
             return self.transaction_id
 
         except Exception as e:
-            self.logger.error(f"Failed to begin transaction: {e}")
+            self.logger.error(
+                "rename_transaction_manager.failed_to_begin_transaction",
+                extra={"error": str(e)},
+            )
             self.current_state = TransactionState.FAILED
             raise TransactionError(f"Failed to begin transaction: {str(e)}")
 
@@ -173,11 +179,16 @@ class RenameTransactionManager:
             await self.connection.execute(f"SAVEPOINT {name}")
             self.savepoint_manager.add_savepoint(name)
 
-            self.logger.debug(f"Savepoint created: {name}")
+            self.logger.debug(
+                "rename_transaction_manager.savepoint_created", extra={"name": name}
+            )
             return name
 
         except Exception as e:
-            self.logger.error(f"Failed to create savepoint {name}: {e}")
+            self.logger.error(
+                "rename_transaction_manager.failed_to_create_savepoint",
+                extra={"name": name, "error": str(e)},
+            )
             raise TransactionError(f"Failed to create savepoint: {str(e)}")
 
     async def rollback_to_savepoint(self, savepoint_name: str) -> RollbackResult:
@@ -234,7 +245,10 @@ class RenameTransactionManager:
             )
 
         except Exception as e:
-            self.logger.error(f"Failed to rollback to savepoint {savepoint_name}: {e}")
+            self.logger.error(
+                "rename_transaction_manager.failed_to_rollback_to_savepoint",
+                extra={"savepoint_name": savepoint_name, "error": str(e)},
+            )
             return RollbackResult(
                 success=False,
                 error_message=str(e),
@@ -269,7 +283,10 @@ class RenameTransactionManager:
             )
 
         except Exception as e:
-            self.logger.error(f"Failed to commit transaction: {e}")
+            self.logger.error(
+                "rename_transaction_manager.failed_to_commit_transaction",
+                extra={"error": str(e)},
+            )
             self.current_state = TransactionState.FAILED
             raise TransactionError(f"Failed to commit transaction: {str(e)}")
 
@@ -281,7 +298,10 @@ class RenameTransactionManager:
             RollbackResult with rollback details
         """
         if self.current_state not in [TransactionState.ACTIVE, TransactionState.FAILED]:
-            self.logger.warning(f"Attempting rollback with state: {self.current_state}")
+            self.logger.warning(
+                "rename_transaction_manager.attempting_rollback_with_state",
+                extra={"current_state": self.current_state},
+            )
 
         start_time = time.time()
         rolled_back_operations = []
@@ -315,7 +335,10 @@ class RenameTransactionManager:
             )
 
         except Exception as e:
-            self.logger.error(f"Failed to rollback transaction: {e}")
+            self.logger.error(
+                "rename_transaction_manager.failed_to_rollback_transaction",
+                extra={"error": str(e)},
+            )
             return RollbackResult(
                 success=False,
                 error_message=str(e),

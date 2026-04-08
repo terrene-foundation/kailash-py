@@ -39,3 +39,9 @@ class SchemaError(AdapterError):
     """Raised when schema operations fail."""
 
     pass
+
+
+class InvalidIdentifierError(AdapterError):
+    """Raised when a SQL identifier fails safety validation."""
+
+    pass

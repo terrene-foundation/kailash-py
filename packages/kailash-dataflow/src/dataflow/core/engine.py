@@ -114,6 +114,16 @@ class DataFlow(DataFlowEventMixin):
         read_url: Optional[str] = None,  # TSG-105: Read replica URL
         read_pool_size: Optional[int] = None,  # TSG-105: Separate pool size for reads
         redis_url: Optional[str] = None,  # TSG-107: Redis URL for Express cache backend
+        # Phase 5.11: Trust-plane integration (CARE-019/020/021).
+        # ``trust_enforcement_mode`` controls constraint checking on every
+        # Express/Workflow query (disabled|permissive|enforcing). The audit
+        # flags control whether a ``DataFlowAuditStore`` is attached and
+        # whether it uses Ed25519 signing keys. Defaults preserve pre-trust
+        # behavior when the caller does not opt in.
+        trust_enforcement_mode: Optional[str] = None,
+        trust_audit_enabled: Optional[bool] = None,
+        trust_audit_signing_key: Optional[bytes] = None,
+        trust_audit_verify_key: Optional[bytes] = None,
         **kwargs,
     ):
         """Initialize DataFlow.
@@ -290,7 +300,9 @@ class DataFlow(DataFlowEventMixin):
         if hasattr(self.config, "validate"):
             issues = self.config.validate()
             if issues:
-                logger.warning(f"Configuration issues detected: {issues}")
+                logger.warning(
+                    "engine.configuration_issues_detected", extra={"issues": issues}
+                )
 
         # DF-CFG-001: Validate unknown kwargs to prevent silent configuration failures
         # This catches typos and removed parameters like 'skip_registry' early
@@ -481,6 +493,11 @@ class DataFlow(DataFlowEventMixin):
             redis_url=_express_redis_url,
         )
 
+        # Store redis_url for fabric runtime (fixes #354 deepest wiring bug).
+        # Previously this was never assigned, making the hasattr check at
+        # DataFlow.start() line ~2018 always False.
+        self._redis_url = _express_redis_url
+
         # TSG-103: Validation on write flag
         self._validate_on_write = validate_on_write
 
@@ -531,6 +548,74 @@ class DataFlow(DataFlowEventMixin):
             self._multi_tenant_manager = MultiTenantManager(self)
         else:
             self._multi_tenant_manager = None
+
+        # Phase 5.10: Classification policy. Always instantiated so
+        # ``@classify``-decorated models can be auto-registered at
+        # ``@db.model`` time. When no fields are classified the policy
+        # is effectively a no-op and adds zero overhead to queries.
+        from dataflow.classification.policy import ClassificationPolicy
+
+        self._classification_policy: ClassificationPolicy = ClassificationPolicy()
+
+        # Phase 5.11: Trust-plane integration (CARE-019/020/021).
+        # Resolve effective trust settings — constructor kwargs override
+        # config values when supplied. When neither is set, both subsystems
+        # stay dormant and the Express/Workflow paths behave exactly as
+        # pre-trust DataFlow.
+        _resolved_trust_mode = (
+            trust_enforcement_mode
+            if trust_enforcement_mode is not None
+            else getattr(self.config.security, "trust_enforcement_mode", "disabled")
+        )
+        _resolved_trust_audit = (
+            trust_audit_enabled
+            if trust_audit_enabled is not None
+            else getattr(self.config.security, "trust_audit_enabled", False)
+        )
+        self.config.security.trust_enforcement_mode = _resolved_trust_mode
+        self.config.security.trust_audit_enabled = _resolved_trust_audit
+
+        self._trust_executor: Optional[Any] = None
+        self._audit_store: Optional[Any] = None
+        self._tenant_trust_manager: Optional[Any] = None
+
+        if _resolved_trust_mode != "disabled" or _resolved_trust_audit:
+            # Import lazily so workspaces that never enable trust pay no
+            # import cost and never pull in the ``cryptography`` dependency
+            # implicitly via the signed-audit path.
+            from dataflow.trust.query_wrapper import TrustAwareQueryExecutor
+
+            self._trust_executor = TrustAwareQueryExecutor(
+                dataflow_instance=self,
+                enforcement_mode=(
+                    _resolved_trust_mode
+                    if _resolved_trust_mode != "disabled"
+                    else "permissive"
+                ),
+            )
+            logger.info(
+                "trust.executor.initialised",
+                extra={"mode": _resolved_trust_mode},
+            )
+
+        if _resolved_trust_audit:
+            from dataflow.trust.audit import DataFlowAuditStore
+
+            self._audit_store = DataFlowAuditStore(
+                signing_key=trust_audit_signing_key,
+                verify_key=trust_audit_verify_key,
+                enabled=True,
+            )
+            logger.info(
+                "trust.audit_store.initialised",
+                extra={"signed": trust_audit_signing_key is not None},
+            )
+
+        if self.config.security.multi_tenant and _resolved_trust_mode != "disabled":
+            from dataflow.trust.multi_tenant import TenantTrustManager
+
+            self._tenant_trust_manager = TenantTrustManager(strict_mode=True)
+            logger.info("trust.tenant_manager.initialised")
 
         # Initialize model registry for multi-application support
         from .model_registry import ModelRegistry
@@ -833,7 +918,10 @@ class DataFlow(DataFlowEventMixin):
                         await self._migration_system._ensure_migration_table()
                         logger.debug("Migration table verification completed")
                     except Exception as e:
-                        logger.debug(f"Migration table setup encountered issue: {e}")
+                        logger.debug(
+                            "engine.migration_table_setup_encountered_issue",
+                            extra={"error": str(e)},
+                        )
                         # Don't fail initialization for migration table issues in existing_schema_mode
                         if not self._existing_schema_mode:
                             return False
@@ -845,7 +933,9 @@ class DataFlow(DataFlowEventMixin):
                     # In existing_schema_mode, this should be very fast
                     logger.debug("Schema state manager verified")
                 except Exception as e:
-                    logger.debug(f"Schema state manager issue: {e}")
+                    logger.debug(
+                        "engine.schema_state_manager_issue", extra={"error": str(e)}
+                    )
                     # Don't fail initialization for schema state issues in existing_schema_mode
                     if not self._existing_schema_mode:
                         return False
@@ -873,7 +963,9 @@ class DataFlow(DataFlowEventMixin):
             return True
 
         except Exception as e:
-            logger.error(f"DataFlow initialization failed: {e}")
+            logger.error(
+                "engine.dataflow_initialization_failed", extra={"error": str(e)}
+            )
             return False
 
     async def _validate_database_connection(self) -> bool:
@@ -927,14 +1019,19 @@ class DataFlow(DataFlowEventMixin):
                         # For connection wrappers
                         return True
                 except Exception as query_error:
-                    logger.debug(f"Database query test failed: {query_error}")
+                    logger.debug(
+                        "engine.database_query_test_failed",
+                        extra={"query_error": query_error},
+                    )
                     if hasattr(connection, "close"):
                         connection.close()
                     # In existing_schema_mode, be more lenient with connection issues
                     return self._existing_schema_mode
 
         except Exception as e:
-            logger.debug(f"Database connection validation error: {e}")
+            logger.debug(
+                "engine.database_connection_validation_error", extra={"error": str(e)}
+            )
             # In existing_schema_mode, be more lenient with connection issues
             return self._existing_schema_mode
 
@@ -1001,7 +1098,9 @@ class DataFlow(DataFlowEventMixin):
                 )
 
         except Exception as e:
-            logger.error(f"Failed to initialize cache integration: {e}")
+            logger.error(
+                "engine.failed_to_initialize_cache_integration", extra={"error": str(e)}
+            )
             self._cache_integration = None
 
     def _initialize_migration_system(self):
@@ -1055,7 +1154,10 @@ class DataFlow(DataFlowEventMixin):
                 runtime=self.runtime,
             )
 
-            logger.debug(f"Migration system initialized successfully for {dialect}")
+            logger.debug(
+                "engine.migration_system_initialized_successfully_for",
+                extra={"dialect": dialect},
+            )
 
         except Exception as e:
             # Issue #74: Warn loudly instead of silently disabling
@@ -1094,7 +1196,10 @@ class DataFlow(DataFlowEventMixin):
             )
 
         except Exception as e:
-            logger.error(f"Failed to initialize schema state management system: {e}")
+            logger.error(
+                "engine.failed_to_initialize_schema_state_management",
+                extra={"error": str(e)},
+            )
             self._schema_state_manager = None
 
     def _initialize_tdd_mode(self):
@@ -1134,7 +1239,9 @@ class DataFlow(DataFlowEventMixin):
             logger.debug("TDD mode requested but TDD support not available")
             self._tdd_mode = False
         except Exception as e:
-            logger.error(f"Failed to initialize TDD mode: {e}")
+            logger.error(
+                "engine.failed_to_initialize_tdd_mode", extra={"error": str(e)}
+            )
             self._tdd_mode = False
 
     def _configure_tdd_connection_manager(self):
@@ -1222,8 +1329,9 @@ class DataFlow(DataFlowEventMixin):
     def _initialize_database(self):
         """Initialize database connection and setup."""
         # Initialize connection pool (unless in TDD mode with existing connection)
+        # initialize_pool() is async; bridge to sync via async_safe_run.
         if not (self._tdd_mode and self._test_context):
-            self._connection_manager.initialize_pool()
+            async_safe_run(self._connection_manager.initialize_pool())
 
         # In a real implementation, this would:
         # 1. Create SQLAlchemy engine with all config options
@@ -1312,7 +1420,23 @@ class DataFlow(DataFlowEventMixin):
             try:
                 self._model_registry.register_model(model_name, cls)
             except Exception as e:
-                logger.warning(f"Failed to persist model {model_name}: {e}")
+                logger.warning(
+                    "engine.failed_to_persist_model",
+                    extra={"model_name": model_name, "error": str(e)},
+                )
+
+        # Phase 5.10: auto-register ``@classify`` metadata with the
+        # classification policy. A model with no ``@classify`` decorators
+        # has an empty ``__field_classifications__`` attribute and the
+        # registration becomes a no-op that still records the model name
+        # for later programmatic ``set_field`` calls.
+        if hasattr(self, "_classification_policy"):
+            try:
+                self._classification_policy.register_model(cls)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to register classification for {model_name}: {e}"
+                )
 
         # DATAFLOW-ASYNC-MODEL-DECORATOR-001: Defer relationship detection
         # Instead of calling _auto_detect_relationships() here (which fails in async contexts),
@@ -1452,7 +1576,10 @@ class DataFlow(DataFlowEventMixin):
         if self._schema_cache.is_table_ensured(
             model_name, database_url, schema_checksum
         ):
-            logger.debug(f"Table '{model_name}' found in cache, skipping check")
+            logger.debug(
+                "engine.table_found_in_cache_skipping_check",
+                extra={"model_name": model_name},
+            )
             return True
 
         # Early exit conditions (cache these too)
@@ -1471,7 +1598,9 @@ class DataFlow(DataFlowEventMixin):
         # Get model info
         model_info = self._models.get(model_name)
         if not model_info:
-            logger.error(f"Model '{model_name}' not found in registry")
+            logger.error(
+                "engine.model_not_found_in_registry", extra={"model_name": model_name}
+            )
             return False
 
         fields = model_info["fields"]
@@ -1479,7 +1608,10 @@ class DataFlow(DataFlowEventMixin):
         try:
             # Detect database type and route appropriately
             if "postgresql" in database_url or "postgres" in database_url:
-                logger.debug(f"Ensuring PostgreSQL table for model {model_name}")
+                logger.debug(
+                    "engine.ensuring_postgresql_table_for_model",
+                    extra={"model_name": model_name},
+                )
                 await self._execute_postgresql_schema_management_async(
                     model_name, fields
                 )
@@ -1488,7 +1620,10 @@ class DataFlow(DataFlowEventMixin):
                 or database_url == ":memory:"
                 or database_url.endswith(".db")
             ):
-                logger.debug(f"Ensuring SQLite table for model {model_name}")
+                logger.debug(
+                    "engine.ensuring_sqlite_table_for_model",
+                    extra={"model_name": model_name},
+                )
                 # For SQLite, use the migration system to ensure table exists
                 if self._migration_system is not None:
                     await self._execute_sqlite_migration_system_async(
@@ -1513,11 +1648,17 @@ class DataFlow(DataFlowEventMixin):
                 model_name, database_url, schema_checksum
             )
 
-            logger.debug(f"Table for model '{model_name}' ensured successfully")
+            logger.debug(
+                "engine.table_for_model_ensured_successfully",
+                extra={"model_name": model_name},
+            )
             return True
 
         except Exception as e:
-            logger.error(f"Failed to ensure table exists for model '{model_name}': {e}")
+            logger.error(
+                "engine.failed_to_ensure_table_exists_for",
+                extra={"model_name": model_name, "error": str(e)},
+            )
 
             # ADR-001: Mark as failed in cache
             self._schema_cache.mark_table_failed(model_name, database_url, str(e))
@@ -1593,7 +1734,10 @@ class DataFlow(DataFlowEventMixin):
                 )
 
         except Exception as e:
-            logger.error(f"SQLite migration error for model '{model_name}': {e}")
+            logger.error(
+                "engine.sqlite_migration_error_for_model",
+                extra={"model_name": model_name, "error": str(e)},
+            )
             # Don't fail the entire process - table will be created on-demand
 
     async def _execute_postgresql_schema_management_async(
@@ -1723,7 +1867,10 @@ class DataFlow(DataFlowEventMixin):
                 )
 
         except Exception as e:
-            logger.error(f"PostgreSQL migration error for model '{model_name}': {e}")
+            logger.error(
+                "engine.postgresql_migration_error_for_model",
+                extra={"model_name": model_name, "error": str(e)},
+            )
 
     async def auto_migrate(
         self,
@@ -2150,7 +2297,9 @@ class DataFlow(DataFlowEventMixin):
             )
 
         except Exception as e:
-            logger.error(f"Failed to initialize model registry: {e}")
+            logger.error(
+                "engine.failed_to_initialize_model_registry", extra={"error": str(e)}
+            )
             # Continue without model sync - don't fail startup
 
     def _configure_logging(
@@ -2524,7 +2673,9 @@ class DataFlow(DataFlowEventMixin):
             cleanup_failures += 1
             error_msg = f"Stale pool cleanup failed: {str(e)}"
             cleanup_errors.append(error_msg)
-            logger.warning(f"DataFlow: {error_msg}", exc_info=True)
+            logger.warning(
+                "engine.dataflow", extra={"error_msg": error_msg}, exc_info=True
+            )
 
         duration_ms = (time.time() - start_time) * 1000
 
@@ -2574,7 +2725,9 @@ class DataFlow(DataFlowEventMixin):
             cleanup_failures = total_pools
             error_msg = f"Pool cleanup failed: {str(e)}"
             cleanup_errors.append(error_msg)
-            logger.error(f"DataFlow: {error_msg}", exc_info=True)
+            logger.error(
+                "engine.dataflow", extra={"error_msg": error_msg}, exc_info=True
+            )
 
         duration_ms = (time.time() - start_time) * 1000
 
@@ -3114,6 +3267,34 @@ class DataFlow(DataFlowEventMixin):
 
         return self._tenant_context_switch
 
+    @property
+    def classification_policy(self):
+        """Access the DataFlow :class:`ClassificationPolicy` (Phase 5.10).
+
+        Models decorated with ``@classify`` are auto-registered at
+        ``@db.model`` time. Additional classifications may be set
+        programmatically::
+
+            from dataflow.classification import DataClassification, RetentionPolicy, MaskingStrategy
+
+            db.classification_policy.set_field(
+                "User", "ssn",
+                DataClassification.HIGHLY_CONFIDENTIAL,
+                RetentionPolicy.YEARS_7,
+                MaskingStrategy.REDACT,
+            )
+
+        The policy is consulted by the Express read/list/find_one paths
+        on every query: fields the caller's clearance cannot access are
+        masked per their stored :class:`MaskingStrategy`. The caller's
+        clearance is bound via
+        :func:`dataflow.core.agent_context.clearance_context`.
+
+        Returns:
+            ClassificationPolicy: The live classification policy.
+        """
+        return self._classification_policy
+
     def _inspect_database_schema(self) -> Dict[str, Any]:
         """Internal method to inspect database schema.
 
@@ -3445,7 +3626,9 @@ class DataFlow(DataFlowEventMixin):
             return schema
 
         except Exception as e:
-            logger.error(f"PostgreSQL schema discovery failed: {e}")
+            logger.error(
+                "engine.postgresql_schema_discovery_failed", extra={"error": str(e)}
+            )
             raise
 
     async def _inspect_sqlite_schema_real(self, database_url: str) -> Dict[str, Any]:
@@ -3576,7 +3759,9 @@ class DataFlow(DataFlowEventMixin):
             return schema
 
         except Exception as e:
-            logger.error(f"SQLite schema discovery failed: {e}")
+            logger.error(
+                "engine.sqlite_schema_discovery_failed", extra={"error": str(e)}
+            )
             raise
 
     def _normalize_sqlite_type(self, sqlite_type: str) -> str:
@@ -3725,7 +3910,10 @@ class DataFlow(DataFlowEventMixin):
                     # Re-raise our async context error
                     raise
                 # Other RuntimeErrors fall through to error handling
-                logger.error(f"Runtime error during schema discovery: {e}")
+                logger.error(
+                    "engine.runtime_error_during_schema_discovery",
+                    extra={"error": str(e)},
+                )
                 raise
             except (ConnectionError, asyncio.TimeoutError, Exception) as e:
                 # Import ConnectionError from adapters if available
@@ -3745,7 +3933,10 @@ class DataFlow(DataFlowEventMixin):
                     # Fall through to mock data below
                 else:
                     # Log unexpected errors but don't fallback - let them bubble up
-                    logger.error(f"Unexpected error during real schema discovery: {e}")
+                    logger.error(
+                        "engine.unexpected_error_during_real_schema_discovery",
+                        extra={"error": str(e)},
+                    )
                     raise
         else:
             logger.warning(
@@ -3813,7 +4004,10 @@ class DataFlow(DataFlowEventMixin):
                     logger.warning("Falling back to mock schema data")
                     # Fall through to mock data below
                 else:
-                    logger.error(f"Unexpected error during async schema discovery: {e}")
+                    logger.error(
+                        "engine.unexpected_error_during_async_schema_discovery",
+                        extra={"error": str(e)},
+                    )
                     raise
         else:
             logger.warning(
@@ -3902,7 +4096,9 @@ class DataFlow(DataFlowEventMixin):
                 schema = self.discover_schema(use_real_inspection=True)
                 return list(schema.keys())
             except Exception as e:
-                logger.error(f"Real table discovery failed: {e}")
+                logger.error(
+                    "engine.real_table_discovery_failed", extra={"error": str(e)}
+                )
                 logger.warning("Falling back to mock table list")
         else:
             logger.warning(
@@ -3946,7 +4142,7 @@ class DataFlow(DataFlowEventMixin):
                 "Use scaffold(use_real_inspection=True) for models based on real database schema."
             )
 
-        logger.debug(f"Generating models to {output_file}...")
+        logger.debug("engine.generating_models_to", extra={"output_file": output_file})
 
         schema = self.discover_schema(use_real_inspection=use_real_inspection)
 
@@ -4105,7 +4301,10 @@ class DataFlow(DataFlowEventMixin):
 
                 # Skip if model already registered
                 if model_name in self._models:
-                    logger.debug(f"Model {model_name} already registered, skipping")
+                    logger.debug(
+                        "engine.model_already_registered_skipping",
+                        extra={"model_name": model_name},
+                    )
                     continue
 
                 # Extract fields from table columns
@@ -4414,7 +4613,10 @@ class DataFlow(DataFlowEventMixin):
                 generated_nodes[model_name] = self.get_generated_nodes(model_name)
                 reconstructed_models.append(model_name)
 
-                logger.debug(f"Successfully reconstructed model: {model_name}")
+                logger.debug(
+                    "engine.successfully_reconstructed_model",
+                    extra={"model_name": model_name},
+                )
 
             except Exception as e:
                 error_msg = f"Failed to reconstruct model {model_name}: {str(e)}"
@@ -4847,7 +5049,10 @@ class DataFlow(DataFlowEventMixin):
                 schema_sql["foreign_keys"].extend(constraints)
 
             except Exception as e:
-                logger.error(f"Error generating SQL for model {model_name}: {e}")
+                logger.error(
+                    "engine.error_generating_sql_for_model",
+                    extra={"model_name": model_name, "error": str(e)},
+                )
 
         return schema_sql
 
@@ -4881,7 +5086,9 @@ class DataFlow(DataFlowEventMixin):
             return self._get_async_sql_connection()
 
         except Exception as e:
-            logger.error(f"Failed to get database connection: {e}")
+            logger.error(
+                "engine.failed_to_get_database_connection", extra={"error": str(e)}
+            )
             # Return a basic connection that supports basic operations
             # check_same_thread=False allows use with async_safe_run thread pool
             import sqlite3
@@ -4996,7 +5203,10 @@ class DataFlow(DataFlowEventMixin):
 
         except Exception as e:
             # Use debug logging for expected non-SQL database scenarios
-            logger.debug(f"AsyncSQL connection wrapper not available: {e}")
+            logger.debug(
+                "engine.asyncsql_connection_wrapper_not_available",
+                extra={"error": str(e)},
+            )
             logger.debug("Using SQLite fallback (this is normal for non-SQL databases)")
             # check_same_thread=False allows use with async_safe_run thread pool
             import sqlite3
@@ -5018,13 +5228,18 @@ class DataFlow(DataFlowEventMixin):
             # Commit transaction
             transaction.commit()
 
-            logger.debug(f"DDL executed successfully: {ddl_statement[:100]}...")
+            logger.debug(
+                "engine.ddl_executed_successfully",
+                extra={"ddl_statement": ddl_statement[:100]},
+            )
 
         except Exception as e:
             # Rollback transaction on error
             if transaction:
                 transaction.rollback()
-                logger.error(f"DDL transaction rolled back due to error: {e}")
+                logger.error(
+                    "engine.ddl_transaction_rolled_back_due_to", extra={"error": str(e)}
+                )
             raise e
         finally:
             if connection:
@@ -5074,14 +5289,20 @@ class DataFlow(DataFlowEventMixin):
 
         # Detect database type and route to appropriate schema management
         if "postgresql" in database_url or "postgres" in database_url:
-            logger.debug(f"Using PostgreSQL schema management for model {model_name}")
+            logger.debug(
+                "engine.using_postgresql_schema_management_for_model",
+                extra={"model_name": model_name},
+            )
             self._trigger_postgresql_schema_management(model_name, fields)
         elif (
             "sqlite" in database_url
             or database_url == ":memory:"
             or database_url.endswith(".db")
         ):
-            logger.debug(f"Using SQLite schema management for model {model_name}")
+            logger.debug(
+                "engine.using_sqlite_schema_management_for_model",
+                extra={"model_name": model_name},
+            )
             self._trigger_sqlite_schema_management(model_name, fields)
         else:
             # Extract scheme from URL for better error message
@@ -5188,11 +5409,18 @@ class DataFlow(DataFlowEventMixin):
             try:
                 # Check if table already exists by trying to create it
                 # The migration system will handle the actual table creation
+                # Auto-migrate requires explicit opt-in via DATAFLOW_AUTO_MIGRATE env var
+                import os
+
+                auto_migrate_enabled = os.environ.get(
+                    "DATAFLOW_AUTO_MIGRATE", "false"
+                ).lower() in ("true", "1", "yes")
+
                 success, migrations = await self._migration_system.auto_migrate(
                     target_schema=target_schema,
-                    dry_run=False,
-                    interactive=False,  # Non-interactive for SQLite
-                    auto_confirm=True,  # Auto-confirm for SQLite simplicity
+                    dry_run=not auto_migrate_enabled,
+                    interactive=False,
+                    auto_confirm=auto_migrate_enabled,
                 )
 
                 if success:
@@ -5207,9 +5435,15 @@ class DataFlow(DataFlowEventMixin):
                 return success, migrations
 
             except Exception as e:
-                logger.error(f"SQLite migration error for model '{model_name}': {e}")
-                # Don't fail model registration - table will be created on-demand
-                return False, []
+                logger.error(
+                    "migration.error",
+                    extra={"model": model_name, "error": str(e)},
+                )
+                raise RuntimeError(
+                    f"Auto-migration failed for model '{model_name}': {e}. "
+                    f"Set DATAFLOW_AUTO_MIGRATE=true to enable DDL execution, "
+                    f"or fix the migration error."
+                ) from e
 
         # Run migration with async-safe execution (works in sync and async contexts)
         # Phase 6: Replaced manual thread pool handling with async_safe_run
@@ -5485,7 +5719,10 @@ class DataFlow(DataFlowEventMixin):
                 f"PostgreSQL migration system failed for model {model_name}: {e}"
             )
             # Don't raise - allow model registration to continue
-            logger.debug(f"Model {model_name} registered without migration")
+            logger.debug(
+                "engine.model_registered_without_migration",
+                extra={"model_name": model_name},
+            )
 
     def _build_incremental_target_schema(
         self, model_name: str, fields: Dict[str, Any]
@@ -5532,7 +5769,10 @@ class DataFlow(DataFlowEventMixin):
                 return current_schema
 
             except Exception as schema_error:
-                logger.warning(f"DataFlow schema discovery failed: {schema_error}")
+                logger.warning(
+                    "engine.dataflow_schema_discovery_failed",
+                    extra={"schema_error": schema_error},
+                )
 
                 # Fallback: try the migration system inspector if available
                 if self._migration_system and hasattr(
@@ -5571,7 +5811,10 @@ class DataFlow(DataFlowEventMixin):
                 return {}
 
         except Exception as e:
-            logger.error(f"Failed to build incremental target schema: {e}")
+            logger.error(
+                "engine.failed_to_build_incremental_target_schema",
+                extra={"error": str(e)},
+            )
             # Fallback to empty schema to avoid breaking model registration
             return {}
 
@@ -5618,7 +5861,10 @@ class DataFlow(DataFlowEventMixin):
             return ModelSchema(tables=model_schema_tables)
 
         except Exception as e:
-            logger.error(f"Failed to build incremental model schema: {e}")
+            logger.error(
+                "engine.failed_to_build_incremental_model_schema",
+                extra={"error": str(e)},
+            )
             # Fallback to single-table schema
             from ..migrations.schema_state_manager import ModelSchema
 
@@ -5705,17 +5951,29 @@ class DataFlow(DataFlowEventMixin):
         self, model_name: str, operations, safety_assessment
     ):
         """Show enhanced migration preview with safety assessment."""
-        logger.debug(f"\n Enhanced Migration Preview for {model_name}")
-        logger.debug(f"Operations: {len(operations)}")
-        logger.debug(f"Safety Level: {safety_assessment.overall_risk.value.upper()}")
+        logger.debug(
+            "engine.n_enhanced_migration_preview_for", extra={"model_name": model_name}
+        )
+        logger.debug("engine.operations", extra={"count": len(operations)})
+        logger.debug(
+            "engine.safety_level",
+            extra={"upper": safety_assessment.overall_risk.value.upper()},
+        )
 
         if not safety_assessment.is_safe:
             logger.warning("WARNING: This migration has potential risks!")
             for warning in safety_assessment.warnings:
-                logger.warning(f"   - {warning}")
+                logger.warning("engine.event", extra={"warning": warning})
 
         for i, operation in enumerate(operations, 1):
-            logger.debug(f"  {i}. {operation.operation_type} on {operation.table_name}")
+            logger.debug(
+                "engine.on",
+                extra={
+                    "i": i,
+                    "operation_type": operation.operation_type,
+                    "table_name": operation.table_name,
+                },
+            )
 
     def _request_enhanced_user_confirmation(
         self, operations, safety_assessment
@@ -5775,7 +6033,7 @@ class DataFlow(DataFlowEventMixin):
             # Execute migration SQL statements
             try:
                 for sql in migration_sqls:
-                    logger.debug(f"Executing migration SQL: {sql}")
+                    logger.debug("engine.executing_migration_sql", extra={"sql": sql})
 
                     if is_sqlite:
                         # SQLite doesn't support cursor context manager
@@ -5825,7 +6083,10 @@ class DataFlow(DataFlowEventMixin):
                 f"PostgreSQL migration execution failed for model {model_name}: {e}"
             )
             # Don't raise - allow model registration to continue
-            logger.debug(f"Model {model_name} registered without PostgreSQL migration")
+            logger.debug(
+                "engine.model_registered_without_postgresql_migration",
+                extra={"model_name": model_name},
+            )
 
     def _generate_migration_sql(
         self, operation, table_name: str, database_type: str
@@ -5919,11 +6180,11 @@ class DataFlow(DataFlowEventMixin):
 
     def _show_migration_preview(self, preview: str):
         """Show migration preview to user."""
-        logger.debug(f"Migration Preview:\n{preview}")
+        logger.debug("engine.migration_preview_n", extra={"preview": preview})
 
     def _notify_user_error(self, error_message: str):
         """Notify user of migration errors."""
-        logger.error(f"Migration Error: {error_message}")
+        logger.error("engine.migration_error", extra={"error_message": error_message})
 
     def create_tables(self, database_type: str = None):
         """Create database tables for all registered models (sync version).
@@ -5966,11 +6227,20 @@ class DataFlow(DataFlowEventMixin):
         # Generate complete schema SQL
         schema_sql = self.generate_complete_schema_sql(database_type)
 
-        logger.debug(f"Creating database schema for {len(self._models)} models")
+        logger.debug(
+            "engine.creating_database_schema_for_models",
+            extra={"count": len(self._models)},
+        )
 
         # Log generated SQL for debugging
-        logger.debug(f"Generated {len(schema_sql['tables'])} table statements")
-        logger.debug(f"Generated {len(schema_sql['indexes'])} index statements")
+        logger.debug(
+            "engine.generated_table_statements",
+            extra={"count": len(schema_sql["tables"])},
+        )
+        logger.debug(
+            "engine.generated_index_statements",
+            extra={"count": len(schema_sql["indexes"])},
+        )
         logger.debug(
             f"Generated {len(schema_sql['foreign_keys'])} foreign key statements"
         )
@@ -6013,11 +6283,20 @@ class DataFlow(DataFlowEventMixin):
         # Generate complete schema SQL
         schema_sql = self.generate_complete_schema_sql(database_type)
 
-        logger.debug(f"Creating database schema for {len(self._models)} models (async)")
+        logger.debug(
+            "engine.creating_database_schema_for_models_async",
+            extra={"count": len(self._models)},
+        )
 
         # Log generated SQL for debugging
-        logger.debug(f"Generated {len(schema_sql['tables'])} table statements")
-        logger.debug(f"Generated {len(schema_sql['indexes'])} index statements")
+        logger.debug(
+            "engine.generated_table_statements",
+            extra={"count": len(schema_sql["tables"])},
+        )
+        logger.debug(
+            "engine.generated_index_statements",
+            extra={"count": len(schema_sql["indexes"])},
+        )
         logger.debug(
             f"Generated {len(schema_sql['foreign_keys'])} foreign key statements"
         )
@@ -6165,7 +6444,9 @@ class DataFlow(DataFlowEventMixin):
         except Exception as e:
             if "_ensure_migration_tables()" in str(e):
                 raise  # Re-raise our async context error
-            logger.error(f"Error ensuring migration tables: {e}")
+            logger.error(
+                "engine.error_ensuring_migration_tables", extra={"error": str(e)}
+            )
             # Don't fail the whole operation if table creation fails
 
     async def _ensure_migration_tables_async(self, database_type: str = None):
@@ -6296,7 +6577,9 @@ class DataFlow(DataFlowEventMixin):
             logger.debug("Migration tables ensured successfully (async)")
 
         except Exception as e:
-            logger.error(f"Error ensuring migration tables (async): {e}")
+            logger.error(
+                "engine.error_ensuring_migration_tables_async", extra={"error": str(e)}
+            )
             # Don't fail the whole operation if table creation fails
 
     def _generate_insert_sql(
@@ -6404,7 +6687,10 @@ class DataFlow(DataFlowEventMixin):
                 return []
             raise
         except Exception as e:
-            logger.debug(f"Failed to get table columns for {table_name}: {e}")
+            logger.debug(
+                "engine.failed_to_get_table_columns_for",
+                extra={"table_name": table_name, "error": str(e)},
+            )
             return []
 
     async def _get_table_columns_async(self, table_name: str) -> List[str]:
@@ -6430,7 +6716,10 @@ class DataFlow(DataFlowEventMixin):
             return []
 
         except Exception as e:
-            logger.debug(f"Failed to get table columns async for {table_name}: {e}")
+            logger.debug(
+                "engine.failed_to_get_table_columns_async",
+                extra={"table_name": table_name, "error": str(e)},
+            )
             return []
 
     def _generate_select_sql(
@@ -6928,7 +7217,9 @@ class DataFlow(DataFlowEventMixin):
 
                     # Execute the DDL statement
                     result = ddl_node.execute()
-                    logger.debug(f"Executed DDL: {statement[:100]}...")
+                    logger.debug(
+                        "engine.executed_ddl", extra={"statement": statement[:100]}
+                    )
 
                     # Check if this was a successful CREATE TABLE
                     if "CREATE TABLE" in statement and result:
@@ -7005,7 +7296,10 @@ class DataFlow(DataFlowEventMixin):
                         workflow.build(), inputs={}
                     )
 
-                    logger.debug(f"Executed DDL (async): {statement[:100]}...")
+                    logger.debug(
+                        "engine.executed_ddl_async",
+                        extra={"statement": statement[:100]},
+                    )
 
                     # Check if this was a successful CREATE TABLE
                     if "CREATE TABLE" in statement:
@@ -7124,14 +7418,20 @@ class DataFlow(DataFlowEventMixin):
                 # Check if it's "table already exists" - that's OK
                 error = result.get("error", "")
                 if "already exists" in error.lower():
-                    logger.debug(f"Table for model '{model_name}' already exists (OK)")
+                    logger.debug(
+                        "engine.table_for_model_already_exists_ok",
+                        extra={"model_name": model_name},
+                    )
                     # Mark as ensured in cache
                     self._schema_cache.mark_table_ensured(
                         model_name, database_url, None
                     )
                     return True
 
-                logger.warning(f"Sync DDL failed for model '{model_name}': {error}")
+                logger.warning(
+                    "engine.sync_ddl_failed_for_model",
+                    extra={"model_name": model_name, "error": error},
+                )
                 return False
 
         except ImportError as e:
@@ -7332,7 +7632,10 @@ class DataFlow(DataFlowEventMixin):
                     result = executor.execute_ddl(statement)
                     if result.get("success"):
                         success_count += 1
-                        logger.debug(f"Sync DDL executed: {statement[:60]}...")
+                        logger.debug(
+                            "engine.sync_ddl_executed",
+                            extra={"statement": statement[:60]},
+                        )
                     else:
                         error = result.get("error", "")
                         # "already exists" is OK
@@ -7342,7 +7645,9 @@ class DataFlow(DataFlowEventMixin):
                                 f"Table/index already exists (OK): {statement[:60]}..."
                             )
                         else:
-                            logger.warning(f"Sync DDL failed: {error}")
+                            logger.warning(
+                                "engine.sync_ddl_failed", extra={"error": error}
+                            )
 
             logger.debug(
                 f"Sync DDL: Successfully executed {success_count}/{len(all_statements)} statements"
@@ -7362,7 +7667,7 @@ class DataFlow(DataFlowEventMixin):
             return False
 
         except Exception as e:
-            logger.error(f"Sync table creation failed: {e}")
+            logger.error("engine.sync_table_creation_failed", extra={"error": str(e)})
             return False
 
     def _register_specialized_nodes(self):
@@ -7410,7 +7715,10 @@ class DataFlow(DataFlowEventMixin):
 
         # The NodeGenerator already stores nodes in self._nodes, so we don't need fallback
         if not nodes:
-            logger.warning(f"Failed to generate CRUD nodes for model {model_name}")
+            logger.warning(
+                "engine.failed_to_generate_crud_nodes_for",
+                extra={"model_name": model_name},
+            )
             # Enhanced error with catalog-based solutions (DF-703)
             if ErrorEnhancer is not None:
                 raise ErrorEnhancer.enhance_node_generation_failed(
@@ -7432,7 +7740,10 @@ class DataFlow(DataFlowEventMixin):
 
         # The NodeGenerator already stores nodes in self._nodes, so we don't need fallback
         if not nodes:
-            logger.warning(f"Failed to generate bulk nodes for model {model_name}")
+            logger.warning(
+                "engine.failed_to_generate_bulk_nodes_for",
+                extra={"model_name": model_name},
+            )
             # Enhanced error with catalog-based solutions (DF-703)
             if ErrorEnhancer is not None:
                 raise ErrorEnhancer.enhance_node_generation_failed(
@@ -7653,7 +7964,7 @@ class DataFlow(DataFlowEventMixin):
             return True
 
         except Exception as e:
-            logger.error(f"Schema validation failed: {e}")
+            logger.error("engine.schema_validation_failed", extra={"error": str(e)})
             return False
 
     async def _get_current_schema_via_workflow(self) -> Dict[str, Any]:
@@ -7707,7 +8018,10 @@ class DataFlow(DataFlowEventMixin):
         results, _ = runtime.execute(workflow.build())
 
         if results.get("get_schema", {}).get("error"):
-            logger.error(f"Failed to fetch schema: {results['get_schema']['error']}")
+            logger.error(
+                "engine.failed_to_fetch_schema",
+                extra={"get_schema": results["get_schema"]["error"]},
+            )
             return {}
 
         # Extract data from results
@@ -8507,7 +8821,10 @@ class DataFlow(DataFlowEventMixin):
                                 await conn.execute(
                                     f'DROP TABLE IF EXISTS "{table_name}" CASCADE'
                                 )
-                                logger.debug(f"Dropped test table: {table_name}")
+                                logger.debug(
+                                    "engine.dropped_test_table",
+                                    extra={"table_name": table_name},
+                                )
                             except Exception as e:
                                 logger.debug(
                                     f"Failed to drop test table {table_name}: {e}"
@@ -8519,7 +8836,7 @@ class DataFlow(DataFlowEventMixin):
 
             await conn.close()
         except Exception as e:
-            logger.debug(f"Test table cleanup failed: {e}")
+            logger.debug("engine.test_table_cleanup_failed", extra={"error": str(e)})
             # Don't raise - cleanup failures shouldn't break tests
 
     def _test_database_connection(self) -> bool:
@@ -8675,14 +8992,18 @@ class DataFlow(DataFlowEventMixin):
             try:
                 self._model_registry.close()
             except Exception as e:
-                logger.debug(f"Error closing model registry: {e}")
+                logger.debug(
+                    "engine.error_closing_model_registry", extra={"error": str(e)}
+                )
 
         if hasattr(self, "_migration_system") and self._migration_system is not None:
             try:
                 if hasattr(self._migration_system, "close"):
                     self._migration_system.close()
             except Exception as e:
-                logger.debug(f"Error closing migration system: {e}")
+                logger.debug(
+                    "engine.error_closing_migration_system", extra={"error": str(e)}
+                )
 
         # Stop pool monitor
         if self._pool_monitor is not None:
@@ -8701,12 +9022,15 @@ class DataFlow(DataFlowEventMixin):
             self._lightweight_pool = None
 
         # Clean up connection manager
+        # close_all_connections() is async; bridge to sync via async_safe_run.
         if hasattr(self, "_connection_manager") and self._connection_manager:
             try:
                 if hasattr(self._connection_manager, "close_all_connections"):
-                    self._connection_manager.close_all_connections()
+                    async_safe_run(self._connection_manager.close_all_connections())
             except Exception as e:
-                logger.debug(f"Error closing connection manager: {e}")
+                logger.debug(
+                    "engine.error_closing_connection_manager", extra={"error": str(e)}
+                )
 
         # Clean up persistent :memory: connection
         # Phase 6: Use async_safe_run for proper cleanup in both sync and async contexts
@@ -8714,7 +9038,9 @@ class DataFlow(DataFlowEventMixin):
             try:
                 async_safe_run(self._memory_connection.close())
             except Exception as e:
-                logger.debug(f"Failed to close memory connection: {e}")
+                logger.debug(
+                    "engine.failed_to_close_memory_connection", extra={"error": str(e)}
+                )
             finally:
                 self._memory_connection = None
 
@@ -8723,7 +9049,9 @@ class DataFlow(DataFlowEventMixin):
             try:
                 self.runtime.close()
             except Exception as e:
-                logger.debug(f"Error closing shared runtime: {e}")
+                logger.debug(
+                    "engine.error_closing_shared_runtime", extra={"error": str(e)}
+                )
             finally:
                 self.runtime = None
 
@@ -8756,7 +9084,10 @@ class DataFlow(DataFlowEventMixin):
             try:
                 self._model_registry.close()
             except Exception as e:
-                logger.debug(f"Error releasing model registry runtime: {e}")
+                logger.debug(
+                    "engine.error_releasing_model_registry_runtime",
+                    extra={"error": str(e)},
+                )
 
         # Stop pool monitor (same cleanup as sync close())
         if self._pool_monitor is not None:
@@ -8781,23 +9112,30 @@ class DataFlow(DataFlowEventMixin):
                     if hasattr(node, "close") and callable(node.close):
                         await node.close()
                 except Exception as e:
-                    logger.debug(f"Error closing cached SQL node for {db_type}: {e}")
+                    logger.debug(
+                        "engine.error_closing_cached_sql_node_for",
+                        extra={"db_type": db_type, "error": str(e)},
+                    )
             self._async_sql_node_cache.clear()
 
         # Clean up connection manager
         if hasattr(self, "_connection_manager") and self._connection_manager:
             try:
                 if hasattr(self._connection_manager, "close_all_connections"):
-                    self._connection_manager.close_all_connections()
+                    await self._connection_manager.close_all_connections()
             except Exception as e:
-                logger.debug(f"Error closing connection manager: {e}")
+                logger.debug(
+                    "engine.error_closing_connection_manager", extra={"error": str(e)}
+                )
 
         # Clean up persistent :memory: connection
         if hasattr(self, "_memory_connection") and self._memory_connection:
             try:
                 await self._memory_connection.close()
             except Exception as e:
-                logger.debug(f"Failed to close memory connection: {e}")
+                logger.debug(
+                    "engine.failed_to_close_memory_connection", extra={"error": str(e)}
+                )
             finally:
                 self._memory_connection = None
 
@@ -8806,7 +9144,9 @@ class DataFlow(DataFlowEventMixin):
             try:
                 await self._audit_backend.close()
             except Exception as e:
-                logger.debug(f"Error closing audit backend: {e}")
+                logger.debug(
+                    "engine.error_closing_audit_backend", extra={"error": str(e)}
+                )
             finally:
                 self._audit_backend = None
 
@@ -8815,11 +9155,16 @@ class DataFlow(DataFlowEventMixin):
             try:
                 self.runtime.close()
             except Exception as e:
-                logger.debug(f"Error closing shared runtime: {e}")
+                logger.debug(
+                    "engine.error_closing_shared_runtime", extra={"error": str(e)}
+                )
             finally:
                 self.runtime = None
 
-        logger.debug(f"DataFlow instance {self._instance_id} closed (async)")
+        logger.debug(
+            "engine.dataflow_instance_closed_async",
+            extra={"instance_id": self._instance_id},
+        )
 
     def get_node(self, node_name: str) -> Optional[Type]:
         """Get a generated node class by name.
@@ -8838,11 +9183,17 @@ class DataFlow(DataFlowEventMixin):
             if hasattr(self, "_node_generator") and self._node_generator:
                 return getattr(self._node_generator, node_name, None)
 
-            logger.warning(f"Node '{node_name}' not found in DataFlow instance")
+            logger.warning(
+                "engine.node_not_found_in_dataflow_instance",
+                extra={"node_name": node_name},
+            )
             return None
 
         except Exception as e:
-            logger.error(f"Error retrieving node '{node_name}': {e}")
+            logger.error(
+                "engine.error_retrieving_node",
+                extra={"node_name": node_name, "error": str(e)},
+            )
             return None
 
     def _is_valid_database_url(self, url: str) -> bool:
@@ -8950,7 +9301,9 @@ class DataFlow(DataFlowEventMixin):
             # Re-raise validation errors with clear message
             raise
         except Exception as e:
-            logger.error(f"Database URL validation failed: {e}")
+            logger.error(
+                "engine.database_url_validation_failed", extra={"error": str(e)}
+            )
             return False
 
     # ADR-001: Schema cache management methods

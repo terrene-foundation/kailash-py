@@ -141,9 +141,7 @@ async def test_virtual_product_returns_data_batch_handler():
     db = DataFlow("sqlite:///:memory:", auto_migrate=False)
     pipeline = PipelineExecutor(dataflow=db, dev_mode=True)
 
-    sources_dict = {
-        "metrics": {"adapter": source, "config": None, "name": "metrics"}
-    }
+    sources_dict = {"metrics": {"adapter": source, "config": None, "name": "metrics"}}
 
     serving = FabricServingLayer(
         products=products,
@@ -260,10 +258,10 @@ async def test_dev_mode_prewarm_true_warms_products():
 
     # Product should be cached from pre-warming
     assert runtime.pipeline is not None
-    cached = runtime.pipeline.get_cached("my_product")
-    assert cached is not None, (
-        "Product was not pre-warmed despite dev_mode=True, prewarm=True"
-    )
+    cached = await runtime.pipeline.get_cached("my_product")
+    assert (
+        cached is not None
+    ), "Product was not pre-warmed despite dev_mode=True, prewarm=True"
 
     await runtime.stop()
 
@@ -311,7 +309,7 @@ async def test_dev_mode_prewarm_false_skips_warming():
 
     # Product should NOT be cached
     assert runtime.pipeline is not None
-    cached = runtime.pipeline.get_cached("my_product")
+    cached = await runtime.pipeline.get_cached("my_product")
     assert cached is None, "Product was pre-warmed despite prewarm=False"
 
     await runtime.stop()
@@ -465,9 +463,7 @@ async def test_runtime_start_stop_with_change_detection():
 
     db = DataFlow("sqlite:///:memory:", auto_migrate=False)
 
-    sources = {
-        "events": {"name": "events", "config": None, "adapter": source}
-    }
+    sources = {"events": {"name": "events", "config": None, "adapter": source}}
     products = {"event_summary": product_reg}
 
     runtime = FabricRuntime(
@@ -488,7 +484,7 @@ async def test_runtime_start_stop_with_change_detection():
     assert status["leader"] is True
 
     # Verify product was pre-warmed (dev_mode + prewarm=True default)
-    cached = runtime.pipeline.get_cached("event_summary")
+    cached = await runtime.pipeline.get_cached("event_summary")
     assert cached is not None, "Product not pre-warmed after runtime.start()"
 
     # Let change detection run at least one poll cycle without crashing

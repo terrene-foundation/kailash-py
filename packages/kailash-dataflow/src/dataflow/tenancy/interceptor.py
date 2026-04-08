@@ -261,7 +261,9 @@ class QueryInterceptor:
         except Exception as e:
             with self._lock:
                 self._query_stats["errors"] += 1
-            logger.error(f"Error injecting tenant conditions: {e}")
+            logger.error(
+                "interceptor.error_injecting_tenant_conditions", extra={"error": str(e)}
+            )
             raise TenantIsolationError(f"Failed to inject tenant conditions: {str(e)}")
 
     def is_tenant_table(self, table_name: str) -> bool:
@@ -345,7 +347,10 @@ class QueryInterceptor:
                     }
                 )
         except Exception as e:
-            logger.warning(f"Failed to generate optimization suggestions: {e}")
+            logger.warning(
+                "interceptor.failed_to_generate_optimization_suggestions",
+                extra={"error": str(e)},
+            )
 
         return suggestions
 
@@ -394,7 +399,10 @@ class QueryInterceptor:
             }
 
         except Exception as e:
-            logger.warning(f"Failed to analyze query complexity: {e}")
+            logger.warning(
+                "interceptor.failed_to_analyze_query_complexity",
+                extra={"error": str(e)},
+            )
             return {
                 "complexity_score": 0,
                 "complexity_level": "unknown",
@@ -431,7 +439,10 @@ class QueryInterceptor:
             }
 
         except Exception as e:
-            logger.warning(f"Failed to validate tenant security: {e}")
+            logger.warning(
+                "interceptor.failed_to_validate_tenant_security",
+                extra={"error": str(e)},
+            )
             return {"secure": False, "error": str(e)}
 
     def validate_cross_tenant_access(
@@ -470,7 +481,10 @@ class QueryInterceptor:
             }
 
         except Exception as e:
-            logger.warning(f"Failed to validate cross-tenant access: {e}")
+            logger.warning(
+                "interceptor.failed_to_validate_cross_tenant_access",
+                extra={"error": str(e)},
+            )
             return {"cross_tenant_access_prevented": False, "error": str(e)}
 
     def get_query_stats(self) -> Dict[str, int]:

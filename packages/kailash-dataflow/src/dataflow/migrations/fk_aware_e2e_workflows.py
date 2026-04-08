@@ -30,16 +30,16 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-# DataFlow imports
-from dataflow.core.engine import DataFlow
-from dataflow.migrations.schema_state_manager import ChangeType
-from dataflow.migrations.schema_state_manager import MigrationOperation as SchemaChange
-
 from kailash.runtime import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
 
 # Core SDK imports (conceptual)
 from kailash.workflow.builder import WorkflowBuilder
+
+# DataFlow imports
+from dataflow.core.engine import DataFlow
+from dataflow.migrations.schema_state_manager import ChangeType
+from dataflow.migrations.schema_state_manager import MigrationOperation as SchemaChange
 
 from .fk_aware_nodes import register_fk_aware_nodes
 
@@ -974,15 +974,29 @@ async def demonstrate_all_patterns():
     factory = E2EWorkflowPatternFactory()
 
     for pattern_name in factory.get_available_patterns():
-        logger.info(f"\n=== Demonstrating {pattern_name} pattern ===")
+        logger.info(
+            "fk_aware_e2e_workflows.n_demonstrating_pattern",
+            extra={"pattern_name": pattern_name},
+        )
 
         pattern = factory.create_pattern(pattern_name)
         description = pattern.get_pattern_description()
 
-        logger.info(f"Pattern: {description['name']}")
-        logger.info(f"Description: {description['description']}")
-        logger.info(f"SDK Compliance: {description['sdk_compliance']}")
-        logger.info(f"Safety Level: {description['safety_level']}")
+        logger.info(
+            "fk_aware_e2e_workflows.pattern", extra={"name": description["name"]}
+        )
+        logger.info(
+            "fk_aware_e2e_workflows.description",
+            extra={"description": description["description"]},
+        )
+        logger.info(
+            "fk_aware_e2e_workflows.sdk_compliance",
+            extra={"sdk_compliance": description["sdk_compliance"]},
+        )
+        logger.info(
+            "fk_aware_e2e_workflows.safety_level",
+            extra={"safety_level": description["safety_level"]},
+        )
 
         # Create and show workflow structure
         try:
@@ -1028,10 +1042,16 @@ async def demonstrate_all_patterns():
                     rollback_scope="complete",
                 )
 
-            logger.info(f"✅ {pattern_name} workflow created successfully")
+            logger.info(
+                "fk_aware_e2e_workflows.workflow_created_successfully",
+                extra={"pattern_name": pattern_name},
+            )
 
         except Exception as e:
-            logger.error(f"❌ Failed to create {pattern_name} workflow: {e}")
+            logger.error(
+                "fk_aware_e2e_workflows.failed_to_create_workflow",
+                extra={"pattern_name": pattern_name, "error": str(e)},
+            )
 
     logger.info("\n=== All patterns demonstrated ===")
 

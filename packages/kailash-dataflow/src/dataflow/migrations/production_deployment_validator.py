@@ -416,7 +416,10 @@ class ProductionDeploymentValidator:
         )
         migration_info["deployment_id"] = deployment_id
 
-        logger.info(f"Starting production deployment validation: {deployment_id}")
+        logger.info(
+            "production_deployment_validator.starting_production_deployment_validation",
+            extra={"deployment_id": deployment_id},
+        )
         start_time = time.time()
 
         try:
@@ -552,7 +555,10 @@ class ProductionDeploymentValidator:
         Returns:
             DeploymentResult: Rollback execution results
         """
-        logger.info(f"Starting rollback execution for deployment: {deployment_id}")
+        logger.info(
+            "production_deployment_validator.starting_rollback_execution_for_deployment",
+            extra={"deployment_id": deployment_id},
+        )
         start_time = time.time()
 
         try:
@@ -590,7 +596,10 @@ class ProductionDeploymentValidator:
 
         except Exception as e:
             duration = time.time() - start_time
-            logger.error(f"Rollback execution failed: {e}")
+            logger.error(
+                "production_deployment_validator.rollback_execution_failed",
+                extra={"error": str(e)},
+            )
 
             return DeploymentResult(
                 deployment_id=f"rollback_{deployment_id}",
@@ -1045,7 +1054,10 @@ class ProductionDeploymentValidator:
         self, deployment_plan: DeploymentPlan
     ) -> DeploymentResult:
         """Execute the deployment plan in production."""
-        logger.info(f"Executing production deployment: {deployment_plan.deployment_id}")
+        logger.info(
+            "production_deployment_validator.executing_production_deployment",
+            extra={"deployment_id": deployment_plan.deployment_id},
+        )
 
         completed_phases = []
         errors = []
@@ -1053,7 +1065,10 @@ class ProductionDeploymentValidator:
 
         try:
             for phase in deployment_plan.deployment_phases:
-                logger.info(f"Executing deployment phase: {phase.phase_name}")
+                logger.info(
+                    "production_deployment_validator.executing_deployment_phase",
+                    extra={"phase_name": phase.phase_name},
+                )
 
                 # Simulate phase execution
                 await asyncio.sleep(0.01)  # Minimal delay for testing
@@ -1089,7 +1104,10 @@ class ProductionDeploymentValidator:
 
     async def _execute_rollback_step(self, step: RollbackStep) -> None:
         """Execute individual rollback step."""
-        logger.info(f"Executing rollback step {step.step_number}: {step.description}")
+        logger.info(
+            "production_deployment_validator.executing_rollback_step",
+            extra={"step_number": step.step_number, "description": step.description},
+        )
 
         # In real implementation, this would execute the actual rollback
         await asyncio.sleep(0.01)  # Minimal delay for testing
@@ -1124,7 +1142,10 @@ class ProductionDeploymentValidator:
                 "warnings": len(deployment_result.warnings),
             }
 
-            logger.info(f"Deployment report generated: {report_summary}")
+            logger.info(
+                "production_deployment_validator.deployment_report_generated",
+                extra={"report_summary": report_summary},
+            )
 
     def _create_deployment_result(
         self, deployment_info: Dict[str, Any], success: bool, message: str

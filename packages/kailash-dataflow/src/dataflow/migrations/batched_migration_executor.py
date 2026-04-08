@@ -151,7 +151,10 @@ class BatchedMigrationExecutor:
         if not operations:
             return []
 
-        logger.info(f"Batching {len(operations)} DDL operations")
+        logger.info(
+            "batched_migration_executor.batching_ddl_operations",
+            extra={"count": len(operations)},
+        )
 
         # Build dependency graph
         dependency_graph = self._build_dependency_graph(operations)
@@ -499,11 +502,17 @@ class BatchedMigrationExecutor:
                     sequential_batches += 1
 
                 if not success:
-                    logger.error(f"Batch {i + 1} execution failed")
+                    logger.error(
+                        "batched_migration_executor.batch_execution_failed",
+                        extra={"i_1": i + 1},
+                    )
                     return False
 
         except Exception as e:
-            logger.error(f"Batch execution failed: {e}")
+            logger.error(
+                "batched_migration_executor.batch_execution_failed",
+                extra={"error": str(e)},
+            )
             return False
 
         execution_time = time.time() - start_time
@@ -518,7 +527,10 @@ class BatchedMigrationExecutor:
             sequential_batches=sequential_batches,
         )
 
-        logger.info(f"All batches executed successfully in {execution_time:.2f}s")
+        logger.info(
+            "batched_migration_executor.all_batches_executed_successfully_in_s",
+            extra={"execution_time": execution_time},
+        )
         return True
 
     async def _execute_batch_sequential(self, sql_statements: List[str]) -> bool:
@@ -547,7 +559,10 @@ class BatchedMigrationExecutor:
                             if hasattr(cursor, "execute"):
                                 await cursor.execute(sql)
 
-                        logger.debug(f"Mock executed: {sql[:100]}...")
+                        logger.debug(
+                            "batched_migration_executor.mock_executed",
+                            extra={"sql": sql[:100]},
+                        )
                 return True
             else:
                 # Real database connection with retry logic if connection manager available
@@ -561,7 +576,10 @@ class BatchedMigrationExecutor:
                                 for sql in sql_statements:
                                     if sql.strip():
                                         await connection.execute(sql)
-                                        logger.debug(f"Executed: {sql[:100]}...")
+                                        logger.debug(
+                                            "batched_migration_executor.executed",
+                                            extra={"sql": sql[:100]},
+                                        )
                         else:
                             # Traditional connection style
                             cursor = connection.cursor()
@@ -569,7 +587,10 @@ class BatchedMigrationExecutor:
                                 for sql in sql_statements:
                                     if sql.strip():
                                         cursor.execute(sql)
-                                        logger.debug(f"Executed: {sql[:100]}...")
+                                        logger.debug(
+                                            "batched_migration_executor.executed",
+                                            extra={"sql": sql[:100]},
+                                        )
                                 connection.commit()
                             except Exception:
                                 connection.rollback()
@@ -586,14 +607,20 @@ class BatchedMigrationExecutor:
                             for sql in sql_statements:
                                 if sql.strip():
                                     await connection.execute(sql)
-                                    logger.debug(f"Executed: {sql[:100]}...")
+                                    logger.debug(
+                                        "batched_migration_executor.executed",
+                                        extra={"sql": sql[:100]},
+                                    )
                     else:
                         cursor = connection.cursor()
                         try:
                             for sql in sql_statements:
                                 if sql.strip():
                                     cursor.execute(sql)
-                                    logger.debug(f"Executed: {sql[:100]}...")
+                                    logger.debug(
+                                        "batched_migration_executor.executed",
+                                        extra={"sql": sql[:100]},
+                                    )
                             connection.commit()
                         except Exception:
                             connection.rollback()
@@ -604,7 +631,10 @@ class BatchedMigrationExecutor:
                 return True
 
         except Exception as e:
-            logger.error(f"Sequential batch execution failed: {e}")
+            logger.error(
+                "batched_migration_executor.sequential_batch_execution_failed",
+                extra={"error": str(e)},
+            )
             return False
         finally:
             # Return connection to pool if using connection manager
@@ -633,13 +663,19 @@ class BatchedMigrationExecutor:
             # Check for any failures
             for result in results:
                 if isinstance(result, Exception):
-                    logger.error(f"Parallel execution failed: {result}")
+                    logger.error(
+                        "batched_migration_executor.parallel_execution_failed",
+                        extra={"result": result},
+                    )
                     return False
 
             return True
 
         except Exception as e:
-            logger.error(f"Parallel batch execution failed: {e}")
+            logger.error(
+                "batched_migration_executor.parallel_batch_execution_failed",
+                extra={"error": str(e)},
+            )
             return False
         finally:
             # Return all connections to pool
@@ -707,10 +743,15 @@ class BatchedMigrationExecutor:
                         finally:
                             cursor.close()
 
-            logger.debug(f"Executed: {sql[:100]}...")
+            logger.debug(
+                "batched_migration_executor.executed", extra={"sql": sql[:100]}
+            )
 
         except Exception as e:
-            logger.error(f"Failed to execute statement: {sql[:100]}... Error: {e}")
+            logger.error(
+                "batched_migration_executor.failed_to_execute_statement_error",
+                extra={"sql": sql[:100], "error": str(e)},
+            )
             raise
 
     def estimate_execution_time(self, batches: List[List[str]]) -> float:

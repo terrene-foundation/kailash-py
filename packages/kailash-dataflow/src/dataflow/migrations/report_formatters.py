@@ -180,12 +180,17 @@ class ReportFormatter:
                 raise ValueError(f"Unsupported format type: {format_type}")
 
             format_time = time.time() - start_time
-            self.logger.debug(f"Report formatted in {format_time:.3f}s")
+            self.logger.debug(
+                "report_formatters.report_formatted_in_s",
+                extra={"format_time": format_time},
+            )
 
             return formatted
 
         except Exception as e:
-            self.logger.error(f"Failed to format report: {e}")
+            self.logger.error(
+                "report_formatters.failed_to_format_report", extra={"error": str(e)}
+            )
             raise
 
     # Console formatting methods

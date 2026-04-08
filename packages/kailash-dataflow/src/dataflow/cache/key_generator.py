@@ -99,16 +99,35 @@ class CacheKeyGenerator:
         model_name: str,
         operation: str,
         params: Any = None,
+        tenant_id: Optional[str] = None,
     ) -> str:
         """Generate cache key for Express operations (no SQL).
 
-        Produces keys like ``dataflow:v1:User:list:a1b2c3d4`` where the
-        trailing segment is a short hash of the serialised *params*.
+        Produces keys like ``dataflow:v1:<tenant>:<model>:<op>:<hash>``
+        where ``<tenant>`` is only included when a ``tenant_id`` is
+        provided (or the generator was constructed with a namespace).
+        The trailing segment is a short hash of the serialised *params*.
+
+        Shape:
+
+        * Without tenant/namespace: ``dataflow:v1:User:list:a1b2c3d4``
+        * With tenant_id: ``dataflow:v1:tenant-a:User:list:a1b2c3d4``
+        * With namespace: ``dataflow:v1:<namespace>:User:list:a1b2c3d4``
+
+        The ``tenant_id`` argument takes precedence over the
+        constructor ``namespace`` when both are supplied, so a
+        multi-tenant DataFlow instance can share a single key generator
+        across requests and bind the tenant per-call.
 
         Args:
             model_name: Name of the model (e.g. ``"User"``).
-            operation: Express operation name (``"read"``, ``"list"``, etc.).
+            operation: Express operation name (``"read"``, ``"list"``,
+                etc.).
             params: Arbitrary JSON-serialisable parameters (optional).
+            tenant_id: Per-call tenant identifier for multi-tenant
+                cache partitioning. Callers that hit a ``multi_tenant``
+                DataFlow MUST supply this; the Express wrapper enforces
+                it before calling into the generator.
 
         Returns:
             Deterministic cache key.
@@ -122,7 +141,9 @@ class CacheKeyGenerator:
             raise ValueError("Operation is required")
 
         parts: list[str] = [self.prefix, self.version]
-        if self.namespace:
+        if tenant_id is not None:
+            parts.append(str(tenant_id))
+        elif self.namespace:
             parts.append(self.namespace)
         parts.append(model_name)
         parts.append(operation)

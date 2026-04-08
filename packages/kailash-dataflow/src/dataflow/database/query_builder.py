@@ -214,11 +214,15 @@ class QueryBuilder:
 
     def limit(self, limit: int) -> "QueryBuilder":
         """Set result limit."""
+        if not isinstance(limit, int) or limit < 0:
+            raise ValueError("limit must be a non-negative integer")
         self.limit_value = limit
         return self
 
     def offset(self, offset: int) -> "QueryBuilder":
         """Set result offset."""
+        if not isinstance(offset, int) or offset < 0:
+            raise ValueError("offset must be a non-negative integer")
         self.offset_value = offset
         return self
 
@@ -305,12 +309,16 @@ class QueryBuilder:
         if self.order_by_fields:
             order_by_clause = f"ORDER BY {', '.join(self.order_by_fields)}"
 
-        # Build LIMIT/OFFSET clause
+        # Build LIMIT/OFFSET clause (parameterized to prevent injection)
         limit_clause = ""
         if self.limit_value is not None:
-            limit_clause = f"LIMIT {self.limit_value}"
+            limit_placeholder = self._get_parameter_placeholder()
+            limit_clause = f"LIMIT {limit_placeholder}"
+            self.parameters.append(self.limit_value)
         if self.offset_value is not None:
-            limit_clause += f" OFFSET {self.offset_value}"
+            offset_placeholder = self._get_parameter_placeholder()
+            limit_clause += f" OFFSET {offset_placeholder}"
+            self.parameters.append(self.offset_value)
 
         # Combine all clauses
         query_parts = [

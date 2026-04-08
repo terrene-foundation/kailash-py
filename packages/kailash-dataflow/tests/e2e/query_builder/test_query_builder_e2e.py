@@ -12,13 +12,11 @@ import os
 import sys
 import tempfile
 import time
-from unittest.mock import Mock
 
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../src"))
 from dataflow.database.query_builder import DatabaseType, QueryBuilder
-
 
 # @pytest.mark.tier3
 # @pytest.mark.requires_docker
@@ -409,7 +407,6 @@ class TestQueryBuilderEndToEndWorkflows:
         # assert len(verified_orders) == 1
         # assert verified_orders[0]["order_number"] == "WF-TEST-001"
         pytest.skip("QueryBuilder E2E not implemented yet")
-
 
 @pytest.mark.tier3
 @pytest.mark.requires_docker

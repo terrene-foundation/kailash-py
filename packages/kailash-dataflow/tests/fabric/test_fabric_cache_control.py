@@ -1,14 +1,20 @@
 """Tests for PR 5B: Fabric Cache Control + Shutdown (#246, #247, #251).
 
 Tests cache invalidation, drain(), and refresh bypass on PipelineExecutor.
+
+Phase 5 (DataFlow 2.0): cache methods are now async and delegate to a
+FabricCacheBackend. Tests use the backend directly to seed state instead
+of mutating the removed ``_cache_data``/``_cache_hash``/``_cache_metadata``
+dicts.
 """
 
 import asyncio
-from collections import OrderedDict
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
 
+from dataflow.fabric.cache import _FabricCacheEntry
 
 # ---------------------------------------------------------------------------
 # Fixtures — build a minimal PipelineExecutor without full DataFlow init
@@ -31,6 +37,21 @@ def pipeline():
     return pe
 
 
+def _seeded_entry(product_name: str) -> _FabricCacheEntry:
+    """Build a minimal cache entry for direct backend seeding."""
+    now = datetime.now(timezone.utc)
+    return _FabricCacheEntry(
+        product_name=product_name,
+        tenant_id=None,
+        data_bytes=b"value",
+        content_hash=f"hash-{product_name}",
+        metadata={"ts": 1},
+        cached_at=now,
+        run_started_at=now,
+        size_bytes=5,
+    )
+
+
 # ---------------------------------------------------------------------------
 # #246 — Cache invalidation
 # ---------------------------------------------------------------------------
@@ -39,45 +60,40 @@ def pipeline():
 class TestCacheInvalidation:
     """Tests for PipelineExecutor.invalidate() and invalidate_all()."""
 
+    @pytest.mark.asyncio
     @pytest.mark.regression
-    def test_invalidate_existing_entry(self, pipeline):
+    async def test_invalidate_existing_entry(self, pipeline):
         """Invalidating a cached product returns True and removes entry."""
-        pipeline._cache_data["test_product"] = {"value": 42}
-        pipeline._cache_hash["test_product"] = b"hash123"
-        pipeline._cache_metadata["test_product"] = {"ts": 1}
+        await pipeline.cache_backend.set("test_product", _seeded_entry("test_product"))
 
-        result = pipeline.invalidate("test_product")
+        result = await pipeline.invalidate("test_product")
         assert result is True
-        assert "test_product" not in pipeline._cache_data
-        assert "test_product" not in pipeline._cache_hash
-        assert "test_product" not in pipeline._cache_metadata
+        assert await pipeline.cache_backend.get("test_product") is None
 
+    @pytest.mark.asyncio
     @pytest.mark.regression
-    def test_invalidate_nonexistent_entry(self, pipeline):
+    async def test_invalidate_nonexistent_entry(self, pipeline):
         """Invalidating a non-cached product returns False."""
-        result = pipeline.invalidate("nonexistent")
+        result = await pipeline.invalidate("nonexistent")
         assert result is False
 
+    @pytest.mark.asyncio
     @pytest.mark.regression
-    def test_invalidate_all_clears_everything(self, pipeline):
-        """invalidate_all() clears all caches and returns count."""
-        pipeline._cache_data["p1"] = {"a": 1}
-        pipeline._cache_data["p2"] = {"b": 2}
-        pipeline._cache_data["p3"] = {"c": 3}
-        pipeline._cache_hash["p1"] = b"h1"
-        pipeline._cache_hash["p2"] = b"h2"
-        pipeline._cache_hash["p3"] = b"h3"
+    async def test_invalidate_all_clears_everything(self, pipeline):
+        """invalidate_all() clears every cached entry."""
+        for key in ("p1", "p2", "p3"):
+            await pipeline.cache_backend.set(key, _seeded_entry(key))
 
-        count = pipeline.invalidate_all()
-        assert count == 3
-        assert len(pipeline._cache_data) == 0
-        assert len(pipeline._cache_hash) == 0
+        await pipeline.invalidate_all()
+        for key in ("p1", "p2", "p3"):
+            assert await pipeline.cache_backend.get(key) is None
 
+    @pytest.mark.asyncio
     @pytest.mark.regression
-    def test_invalidate_all_empty_cache(self, pipeline):
-        """invalidate_all() on empty cache returns 0."""
-        count = pipeline.invalidate_all()
-        assert count == 0
+    async def test_invalidate_all_empty_cache(self, pipeline):
+        """invalidate_all() on empty cache is a no-op that succeeds."""
+        await pipeline.invalidate_all()
+        assert await pipeline.cache_backend.get("anything") is None
 
 
 # ---------------------------------------------------------------------------

@@ -55,6 +55,9 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 from dataflow.cache.auto_detection import CacheBackend
 from dataflow.cache.key_generator import CacheKeyGenerator
 from dataflow.cache.memory_cache import InMemoryCache
+from dataflow.core.agent_context import get_current_agent_id, get_current_clearance
+from dataflow.core.multi_tenancy import TenantRequiredError
+from dataflow.core.tenant_context import get_current_tenant_id
 
 if TYPE_CHECKING:
     from dataflow import DataFlow
@@ -177,10 +180,15 @@ class DataFlowExpress:
                 if hasattr(self._db, "ensure_table_exists"):
                     await self._db.ensure_table_exists(model)
                     results[model] = True
-                    logger.debug(f"Warmed schema cache for {model}")
+                    logger.debug(
+                        "express.warmed_schema_cache_for", extra={"model": model}
+                    )
             except Exception as e:
                 results[model] = False
-                logger.warning(f"Failed to warm cache for {model}: {e}")
+                logger.warning(
+                    "express.failed_to_warm_cache_for",
+                    extra={"model": model, "error": str(e)},
+                )
 
         self._schema_warmed = True
         return results
@@ -219,7 +227,9 @@ class DataFlowExpress:
         finally:
             elapsed = (time.perf_counter() - start) * 1000  # ms
             self._operation_times.append(elapsed)
-            logger.debug(f"Express {operation}: {elapsed:.2f}ms")
+            logger.debug(
+                "express.express_ms", extra={"operation": operation, "elapsed": elapsed}
+            )
 
     # ========================================================================
     # Validation Helper (TSG-103)
@@ -268,6 +278,159 @@ class DataFlowExpress:
             raise DataFlowError(f"Validation failed for {model}: {error_msgs}")
 
     # ========================================================================
+    # Trust-plane integration helpers (Phase 5.11)
+    # ========================================================================
+
+    def _trust_enabled(self) -> bool:
+        """Return True when a trust executor is wired on the DataFlow instance.
+
+        When this is False, every other ``_trust_*`` helper short-circuits
+        and Express behaves identically to pre-trust DataFlow — no access
+        checks, no audit recording, no per-call overhead.
+        """
+        return getattr(self._db, "_trust_executor", None) is not None
+
+    def _trust_agent_id(self) -> Optional[str]:
+        """Resolve the agent ID for the current query from context."""
+        return get_current_agent_id()
+
+    async def _trust_check_read(
+        self, model: str, filter: Optional[Dict[str, Any]] = None
+    ):
+        """Run the trust access check for a read-shaped query.
+
+        Returns the ``QueryAccessResult`` plan when trust is enabled, or
+        ``None`` when trust is not wired (caller should bypass all trust
+        logic in that case).
+        """
+        if not self._trust_enabled():
+            return None
+        executor = self._db._trust_executor
+        return await executor.check_read_access(
+            model_name=model,
+            filter=filter or {},
+            agent_id=self._trust_agent_id(),
+            trust_context=None,
+        )
+
+    async def _trust_check_write(self, model: str, operation: str):
+        """Run the trust access check for a write-shaped query."""
+        if not self._trust_enabled():
+            return None
+        executor = self._db._trust_executor
+        return await executor.check_write_access(
+            model_name=model,
+            operation=operation,
+            agent_id=self._trust_agent_id(),
+            trust_context=None,
+        )
+
+    async def _trust_record_success(
+        self,
+        model: str,
+        operation: str,
+        plan: Any,
+        rows_affected: int,
+        query_params: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Record a success audit event via the trust executor."""
+        if plan is None or not self._trust_enabled():
+            return
+        executor = self._db._trust_executor
+        try:
+            await executor.record_query_success(
+                model_name=model,
+                operation=operation,
+                plan=plan,
+                agent_id=self._trust_agent_id(),
+                trust_context=None,
+                rows_affected=rows_affected,
+                query_params=query_params,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "trust.audit.success_failed",
+                extra={
+                    "model": model,
+                    "operation": operation,
+                    "error": str(exc),
+                },
+            )
+
+    async def _trust_record_failure(
+        self,
+        model: str,
+        operation: str,
+        plan: Any,
+        error: BaseException,
+        query_params: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Record a failure audit event via the trust executor."""
+        if not self._trust_enabled():
+            return
+        executor = self._db._trust_executor
+        try:
+            await executor.record_query_failure(
+                model_name=model,
+                operation=operation,
+                plan=plan,
+                agent_id=self._trust_agent_id(),
+                trust_context=None,
+                error=str(error),
+                query_params=query_params,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "trust.audit.failure_failed",
+                extra={
+                    "model": model,
+                    "operation": operation,
+                    "error": str(exc),
+                },
+            )
+
+    # ========================================================================
+    # Classification masking helpers (Phase 5.10)
+    # ========================================================================
+
+    def _classify_enabled(self, model: str) -> bool:
+        """Return True when the DataFlow instance has a policy with any
+        classified fields for this model.
+
+        Zero-cost short-circuit for the common case of a model with no
+        ``@classify`` decorators: classification masking is skipped
+        entirely and the read path behaves as pre-Phase-5.10 DataFlow.
+        """
+        policy = getattr(self._db, "_classification_policy", None)
+        if policy is None:
+            return False
+        return bool(policy.get_model_fields(model))
+
+    def _apply_classification_mask_record(self, model: str, record: Any) -> Any:
+        """Apply classification masking to a single record if needed.
+
+        The caller's clearance is resolved from the
+        ``clearance_context`` ContextVar. When no clearance is set the
+        masking routine treats the caller as ``PUBLIC`` (the most
+        restrictive).
+        """
+        if not self._classify_enabled(model):
+            return record
+        clearance = get_current_clearance()
+        return self._db._classification_policy.apply_masking_to_record(
+            model, record, clearance
+        )
+
+    def _apply_classification_mask_rows(self, model: str, rows: Any) -> Any:
+        """Apply classification masking to a list of records."""
+        if not self._classify_enabled(model):
+            return rows
+        clearance = get_current_clearance()
+        return self._db._classification_policy.apply_masking_to_rows(
+            model, rows, clearance
+        )
+
+    # ========================================================================
     # CRUD Operations
     # ========================================================================
 
@@ -292,8 +455,16 @@ class DataFlowExpress:
 
         async def _create():
             await self._validate_if_enabled(model, data)
-            node = self._create_node(model, "Create")
-            result = await node.async_run(**data)
+            # Phase 5.11: trust access check before the write.
+            plan = await self._trust_check_write(model, "create")
+            try:
+                node = self._create_node(model, "Create")
+                result = await node.async_run(**data)
+            except Exception as exc:
+                await self._trust_record_failure(
+                    model, "create", plan, exc, query_params=data
+                )
+                raise
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
@@ -335,6 +506,9 @@ class DataFlowExpress:
                 )
                 self._db._emit_write_event(model, "create", record_id=record_id)
 
+            await self._trust_record_success(
+                model, "create", plan, rows_affected=1, query_params=data
+            )
             return result
 
         return await self._execute_with_timing(f"{model}.create", _create())
@@ -365,17 +539,34 @@ class DataFlowExpress:
         # Check cache first
         cached_result = await self._cache_get(model, "read", {"id": id}, effective_ttl)
         if cached_result is not None:
-            logger.debug(f"Cache hit for {model}.read({id})")
+            logger.debug("express.cache_hit_for_read", extra={"model": model, "id": id})
             return cached_result
 
         async def _read():
+            # Phase 5.11: trust access check before the read.
+            plan = await self._trust_check_read(model, {"id": id})
             try:
                 node = self._create_node(model, "Read")
                 result = await node.async_run(id=id)
 
+                # Apply PII/column filter from the trust plan, if any.
+                if plan is not None:
+                    result = self._db._trust_executor.apply_result_filter(result, plan)
+
+                # Phase 5.10: apply classification masking based on the
+                # caller's clearance context.
+                result = self._apply_classification_mask_record(model, result)
+
                 # Cache result (TSG-104)
                 await self._cache_set(model, "read", {"id": id}, result, effective_ttl)
 
+                await self._trust_record_success(
+                    model,
+                    "read",
+                    plan,
+                    rows_affected=1 if result is not None else 0,
+                    query_params={"id": id},
+                )
                 return result
             except Exception as e:
                 # Check if this is a "not found" error - return None instead of raising
@@ -385,9 +576,22 @@ class DataFlowExpress:
                     or "no record" in error_str
                     or "does not exist" in error_str
                 ):
-                    logger.debug(f"Record not found for {model}.read({id})")
+                    logger.debug(
+                        "express.record_not_found_for_read",
+                        extra={"model": model, "id": id},
+                    )
+                    await self._trust_record_success(
+                        model,
+                        "read",
+                        plan,
+                        rows_affected=0,
+                        query_params={"id": id},
+                    )
                     return None
                 # Re-raise other errors
+                await self._trust_record_failure(
+                    model, "read", plan, e, query_params={"id": id}
+                )
                 raise
 
         return await self._execute_with_timing(f"{model}.read", _read())
@@ -412,8 +616,20 @@ class DataFlowExpress:
 
         async def _update():
             await self._validate_if_enabled(model, fields)
-            node = self._create_node(model, "Update")
-            result = await node.async_run(filter={"id": id}, fields=fields)
+            # Phase 5.11: trust access check before the write.
+            plan = await self._trust_check_write(model, "update")
+            try:
+                node = self._create_node(model, "Update")
+                result = await node.async_run(filter={"id": id}, fields=fields)
+            except Exception as exc:
+                await self._trust_record_failure(
+                    model,
+                    "update",
+                    plan,
+                    exc,
+                    query_params={"id": id, "fields": fields},
+                )
+                raise
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
@@ -422,6 +638,13 @@ class DataFlowExpress:
             if hasattr(self._db, "_emit_write_event"):
                 self._db._emit_write_event(model, "update", record_id=str(id))
 
+            await self._trust_record_success(
+                model,
+                "update",
+                plan,
+                rows_affected=1,
+                query_params={"id": id, "fields": fields},
+            )
             return result
 
         return await self._execute_with_timing(f"{model}.update", _update())
@@ -442,8 +665,16 @@ class DataFlowExpress:
         """
 
         async def _delete():
-            node = self._create_node(model, "Delete")
-            result = await node.async_run(id=id)
+            # Phase 5.11: trust access check before the write.
+            plan = await self._trust_check_write(model, "delete")
+            try:
+                node = self._create_node(model, "Delete")
+                result = await node.async_run(id=id)
+            except Exception as exc:
+                await self._trust_record_failure(
+                    model, "delete", plan, exc, query_params={"id": id}
+                )
+                raise
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
@@ -452,11 +683,19 @@ class DataFlowExpress:
             if hasattr(self._db, "_emit_write_event"):
                 self._db._emit_write_event(model, "delete", record_id=str(id))
 
-            return (
+            deleted = (
                 result.get("deleted", False)
                 if isinstance(result, dict)
                 else bool(result)
             )
+            await self._trust_record_success(
+                model,
+                "delete",
+                plan,
+                rows_affected=1 if deleted else 0,
+                query_params={"id": id},
+            )
+            return deleted
 
         return await self._execute_with_timing(f"{model}.delete", _delete())
 
@@ -495,18 +734,54 @@ class DataFlowExpress:
         # Check cache first
         cached_result = await self._cache_get(model, "list", params, effective_ttl)
         if cached_result is not None:
-            logger.debug(f"Cache hit for {model}.list")
+            logger.debug("express.cache_hit_for_list", extra={"model": model})
             return cached_result
 
         async def _list():
-            node = self._create_node(model, "List")
-            result = await node.async_run(**params)
+            # Phase 5.11: trust access check before the read.
+            plan = await self._trust_check_read(model, filter)
+            try:
+                effective_params = dict(params)
+                if plan is not None:
+                    # Merge constraint-derived filters into the query filter.
+                    if plan.additional_filters:
+                        merged_filter = dict(effective_params.get("filter") or {})
+                        merged_filter.update(plan.additional_filters)
+                        effective_params["filter"] = merged_filter
+                    # Honour row_limit constraints by tightening the limit.
+                    if plan.row_limit is not None:
+                        current_limit = effective_params.get("limit", limit)
+                        effective_params["limit"] = min(
+                            int(current_limit), plan.row_limit
+                        )
+                node = self._create_node(model, "List")
+                result = await node.async_run(**effective_params)
+            except Exception as exc:
+                await self._trust_record_failure(
+                    model, "list", plan, exc, query_params=params
+                )
+                raise
 
             records = result if isinstance(result, list) else result.get("records", [])
+
+            # Apply PII/column filter from the trust plan, if any.
+            if plan is not None:
+                records = self._db._trust_executor.apply_result_filter(records, plan)
+
+            # Phase 5.10: apply classification masking based on the
+            # caller's clearance context.
+            records = self._apply_classification_mask_rows(model, records)
 
             # Cache result (TSG-104)
             await self._cache_set(model, "list", params, records, effective_ttl)
 
+            await self._trust_record_success(
+                model,
+                "list",
+                plan,
+                rows_affected=len(records) if hasattr(records, "__len__") else 0,
+                query_params=params,
+            )
             return records
 
         return await self._execute_with_timing(f"{model}.list", _list())
@@ -563,20 +838,47 @@ class DataFlowExpress:
         # Check cache first
         cached_result = await self._cache_get(model, "find_one", params, effective_ttl)
         if cached_result is not None:
-            logger.debug(f"Cache hit for {model}.find_one")
+            logger.debug("express.cache_hit_for_find_one", extra={"model": model})
             return cached_result
 
         async def _find_one():
-            node = self._create_node(model, "List")
-            result = await node.async_run(**params)
+            # Phase 5.11: trust access check (find_one is a read).
+            plan = await self._trust_check_read(model, filter)
+            try:
+                effective_params = dict(params)
+                if plan is not None and plan.additional_filters:
+                    merged_filter = dict(effective_params.get("filter") or {})
+                    merged_filter.update(plan.additional_filters)
+                    effective_params["filter"] = merged_filter
+                node = self._create_node(model, "List")
+                result = await node.async_run(**effective_params)
+            except Exception as exc:
+                await self._trust_record_failure(
+                    model, "find_one", plan, exc, query_params=params
+                )
+                raise
 
             # Extract first record from list result
             records = result if isinstance(result, list) else result.get("records", [])
             record = records[0] if records else None
 
+            if plan is not None and record is not None:
+                record = self._db._trust_executor.apply_result_filter(record, plan)
+
+            # Phase 5.10: apply classification masking.
+            if record is not None:
+                record = self._apply_classification_mask_record(model, record)
+
             # Cache result (including None for not-found)
             await self._cache_set(model, "find_one", params, record, effective_ttl)
 
+            await self._trust_record_success(
+                model,
+                "find_one",
+                plan,
+                rows_affected=1 if record is not None else 0,
+                query_params=params,
+            )
             return record
 
         return await self._execute_with_timing(f"{model}.find_one", _find_one())
@@ -610,17 +912,37 @@ class DataFlowExpress:
         # Check cache first
         cached_result = await self._cache_get(model, "count", params, effective_ttl)
         if cached_result is not None:
-            logger.debug(f"Cache hit for {model}.count")
+            logger.debug("express.cache_hit_for_count", extra={"model": model})
             return cached_result
 
         async def _count():
-            node = self._create_node(model, "Count")
-            result = await node.async_run(**params)
+            # Phase 5.11: trust access check (count is a read).
+            plan = await self._trust_check_read(model, filter)
+            try:
+                effective_params = dict(params)
+                if plan is not None and plan.additional_filters:
+                    merged_filter = dict(effective_params.get("filter") or {})
+                    merged_filter.update(plan.additional_filters)
+                    effective_params["filter"] = merged_filter
+                node = self._create_node(model, "Count")
+                result = await node.async_run(**effective_params)
+            except Exception as exc:
+                await self._trust_record_failure(
+                    model, "count", plan, exc, query_params=params
+                )
+                raise
             count = result.get("count", 0) if isinstance(result, dict) else result
 
             # Cache result (TSG-104)
             await self._cache_set(model, "count", params, count, effective_ttl)
 
+            await self._trust_record_success(
+                model,
+                "count",
+                plan,
+                rows_affected=int(count or 0),
+                query_params=params,
+            )
             return count
 
         return await self._execute_with_timing(f"{model}.count", _count())
@@ -951,6 +1273,46 @@ class DataFlowExpress:
     # Cache Helpers (TSG-104)
     # ========================================================================
 
+    def _resolve_tenant_id(self) -> Optional[str]:
+        """Return the tenant_id for cache partitioning, or ``None``.
+
+        Enforces multi-tenant key isolation on every Express cache read
+        and write. When the DataFlow instance is configured with
+        ``multi_tenant=True``, the caller MUST have set a tenant via
+        :class:`dataflow.core.tenant_context.TenantContextSwitch` (or
+        the ContextVar bound by middleware) before invoking any Express
+        method. A missing tenant is an invariant violation — falling
+        back to a shared ``default`` namespace would leak data across
+        tenants, so we raise.
+
+        Returns:
+            The current tenant_id when multi-tenant mode is on; ``None``
+            in single-tenant mode.
+
+        Raises:
+            TenantRequiredError: If multi-tenant mode is on and no
+                tenant is bound to the current async context.
+        """
+        config = getattr(self._db, "config", None)
+        security = getattr(config, "security", None) if config is not None else None
+        # ``is True`` (strict identity) rather than ``bool(...)`` so that
+        # MagicMock-based test fixtures, which return a truthy Mock for
+        # any attribute access, do not accidentally activate the
+        # multi-tenant code path. Real SecurityConfig always stores a
+        # plain bool.
+        multi_tenant = getattr(security, "multi_tenant", False) is True
+        if not multi_tenant:
+            return None
+        tenant_id = get_current_tenant_id()
+        if tenant_id is None:
+            raise TenantRequiredError(
+                "DataFlow is configured with multi_tenant=True but no "
+                "tenant_id is bound to the current context. Bind one via "
+                "`db.tenant_context.switch(tenant_id)` / "
+                "`aswitch(tenant_id)` before calling Express methods."
+            )
+        return tenant_id
+
     async def _cache_get(
         self,
         model: str,
@@ -961,7 +1323,10 @@ class DataFlowExpress:
         """Return cached value or ``None``.  Increments hit/miss counters."""
         if not self._cache_enabled or not self._cache_manager or effective_ttl <= 0:
             return None
-        cache_key = self._key_gen.generate_express_key(model, operation, params)
+        tenant_id = self._resolve_tenant_id()
+        cache_key = self._key_gen.generate_express_key(
+            model, operation, params, tenant_id=tenant_id
+        )
         cached = await self._cache_manager.get(cache_key)
         if cached is not None:
             self._cache_hits += 1
@@ -985,15 +1350,50 @@ class DataFlowExpress:
             or value is None
         ):
             return
-        cache_key = self._key_gen.generate_express_key(model, operation, params)
+        tenant_id = self._resolve_tenant_id()
+        cache_key = self._key_gen.generate_express_key(
+            model, operation, params, tenant_id=tenant_id
+        )
         await self._cache_manager.set(cache_key, value, ttl=effective_ttl)
 
     async def _invalidate_model_cache(self, model: str) -> None:
-        """Clear all cache entries scoped to *model*."""
+        """Clear all cache entries scoped to *model*.
+
+        Delegates to the cache backend's ``invalidate_model`` method so
+        that key-format matching logic lives in exactly one place per
+        backend (InMemoryCache or AsyncRedisCacheAdapter).
+
+        In multi-tenant mode, invalidation is scoped to the current
+        tenant so a write from tenant A cannot drop tenant B's cache
+        entries. The backend's ``invalidate_model`` is expected to
+        accept an optional ``tenant_id`` kwarg; backends that do not
+        yet support it fall back to a model-wide invalidation (safe
+        but over-aggressive).
+        """
         if not self._cache_enabled or not self._cache_manager:
             return
-        pattern = f"{self._key_gen.prefix}:{self._key_gen.version}:{model}:*"
-        await self._cache_manager.clear_pattern(pattern)
+        tenant_id = self._resolve_tenant_id()
+        invalidate_fn = self._cache_manager.invalidate_model
+        try:
+            await invalidate_fn(model, tenant_id=tenant_id)
+        except TypeError:
+            # Backend predates tenant-scoped invalidation — fall back
+            # to model-wide (conservative: drops the current tenant's
+            # entries plus every other tenant's entries for this
+            # model). Logged as a warning so the gap is visible.
+            if tenant_id is not None:
+                logger.warning(
+                    "express.cache.invalidate_model.tenant_fallback",
+                    extra={
+                        "model": model,
+                        "tenant_id": tenant_id,
+                        "reason": (
+                            "cache backend does not accept tenant_id kwarg; "
+                            "falling back to model-wide invalidation"
+                        ),
+                    },
+                )
+            await invalidate_fn(model)
 
     # ========================================================================
     # Cache Management

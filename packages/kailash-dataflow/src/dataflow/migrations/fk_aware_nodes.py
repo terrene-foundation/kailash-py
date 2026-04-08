@@ -223,7 +223,9 @@ class ForeignKeyAnalyzerNode(BaseNode):
             return result
 
         except Exception as e:
-            self.logger.error(f"FK analysis failed: {e}")
+            self.logger.error(
+                "fk_aware_nodes.fk_analysis_failed", extra={"error": str(e)}
+            )
             return {
                 "fk_impact_reports": [],
                 "overall_safety": "error",
@@ -381,7 +383,10 @@ class FKSafeMigrationExecutorNode(BaseNode):
 
                 if not result.success:
                     overall_success = False
-                    self.logger.error(f"Migration plan {i + 1} failed: {result.errors}")
+                    self.logger.error(
+                        "fk_aware_nodes.migration_plan_failed",
+                        extra={"i_1": i + 1, "errors": result.errors},
+                    )
                     if enable_rollback:
                         break  # Stop execution on first failure
 
@@ -403,7 +408,10 @@ class FKSafeMigrationExecutorNode(BaseNode):
             return result
 
         except Exception as e:
-            self.logger.error(f"FK-safe migration execution failed: {e}")
+            self.logger.error(
+                "fk_aware_nodes.fk_safe_migration_execution_failed",
+                extra={"error": str(e)},
+            )
             return {
                 "execution_results": execution_results,
                 "overall_success": False,
@@ -477,7 +485,10 @@ class ImpactAssessmentNode(BaseNode):
         workflow_type = kwargs["workflow_type"]
         safety_threshold = kwargs["safety_threshold"]
 
-        self.logger.info(f"Assessing migration impact for {workflow_type} workflow")
+        self.logger.info(
+            "fk_aware_nodes.assessing_migration_impact_for_workflow",
+            extra={"workflow_type": workflow_type},
+        )
 
         # Extract impact metrics
         overall_safety = impact_data.get("overall_safety", "unknown")
@@ -584,7 +595,10 @@ class MigrationPlannerNode(BaseNode):
         execution_mode = kwargs["execution_mode"]
         multi_table_coordination = kwargs["multi_table_coordination"]
 
-        self.logger.info(f"Generating FK-safe migration plans in {execution_mode} mode")
+        self.logger.info(
+            "fk_aware_nodes.generating_fk_safe_migration_plans_in",
+            extra={"execution_mode": execution_mode},
+        )
 
         # Extract assessment data
         risk_level = impact_assessment.get("risk_level", "unknown")
@@ -623,7 +637,10 @@ class MigrationPlannerNode(BaseNode):
             "planning_timestamp": datetime.now().isoformat(),
         }
 
-        self.logger.info(f"Generated {len(migration_plans)} migration plans")
+        self.logger.info(
+            "fk_aware_nodes.generated_migration_plans",
+            extra={"count": len(migration_plans)},
+        )
 
         return planning_result
 
@@ -861,7 +878,10 @@ class RollbackNode(BaseNode):
                 f"Rollback completed successfully for workflow {workflow_id}"
             )
         else:
-            self.logger.error(f"Rollback failed for workflow {workflow_id}")
+            self.logger.error(
+                "fk_aware_nodes.rollback_failed_for_workflow",
+                extra={"workflow_id": workflow_id},
+            )
 
         return rollback_result
 

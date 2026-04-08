@@ -321,7 +321,10 @@ class TableRenameAnalyzer:
         if not validation.is_valid:
             raise TableRenameError(f"Invalid rename operation: {validation.violations}")
 
-        self.logger.info(f"Analyzing table rename: {safe_old_name} -> {safe_new_name}")
+        self.logger.info(
+            "table_rename_analyzer.analyzing_table_rename",
+            extra={"safe_old_name": safe_old_name, "safe_new_name": safe_new_name},
+        )
 
         try:
             if connection is None:
@@ -355,7 +358,10 @@ class TableRenameAnalyzer:
             return report
 
         except Exception as e:
-            self.logger.error(f"Table rename analysis failed: {e}")
+            self.logger.error(
+                "table_rename_analyzer.table_rename_analysis_failed",
+                extra={"error": str(e)},
+            )
             raise TableRenameError(f"Analysis failed: {str(e)}")
 
     async def discover_schema_objects(
@@ -410,7 +416,10 @@ class TableRenameAnalyzer:
             )
 
         except Exception as e:
-            self.logger.error(f"Schema object discovery failed: {e}")
+            self.logger.error(
+                "table_rename_analyzer.schema_object_discovery_failed",
+                extra={"error": str(e)},
+            )
             raise TableRenameError(f"Object discovery failed: {str(e)}")
 
         return all_objects
@@ -475,7 +484,10 @@ class TableRenameAnalyzer:
             return fk_objects
 
         except Exception as e:
-            self.logger.error(f"Error finding FK references: {e}")
+            self.logger.error(
+                "table_rename_analyzer.error_finding_fk_references",
+                extra={"error": str(e)},
+            )
             raise RuntimeError(
                 f"Failed to discover foreign key constraints for table '{table_name}'. "
                 f"Cannot safely proceed with rename operation without complete FK information. "
@@ -546,7 +558,10 @@ class TableRenameAnalyzer:
             return fk_objects
 
         except Exception as e:
-            self.logger.error(f"Error finding outgoing FK references: {e}")
+            self.logger.error(
+                "table_rename_analyzer.error_finding_outgoing_fk_references",
+                extra={"error": str(e)},
+            )
             raise RuntimeError(
                 f"Failed to discover outgoing foreign key constraints for table '{table_name}'. "
                 f"Cannot safely proceed with rename operation without complete FK information. "
@@ -624,7 +639,10 @@ class TableRenameAnalyzer:
             return view_objects
 
         except Exception as e:
-            self.logger.error(f"Error finding view dependencies: {e}")
+            self.logger.error(
+                "table_rename_analyzer.error_finding_view_dependencies",
+                extra={"error": str(e)},
+            )
             raise RuntimeError(
                 f"Failed to discover view dependencies for table '{table_name}'. "
                 f"Cannot safely proceed with rename operation without complete dependency information. "
@@ -672,7 +690,10 @@ class TableRenameAnalyzer:
             return index_objects
 
         except Exception as e:
-            self.logger.error(f"Error finding index dependencies: {e}")
+            self.logger.error(
+                "table_rename_analyzer.error_finding_index_dependencies",
+                extra={"error": str(e)},
+            )
             raise RuntimeError(
                 f"Failed to discover index dependencies for table '{table_name}'. "
                 f"Cannot safely proceed with rename operation without complete dependency information. "
@@ -717,7 +738,10 @@ class TableRenameAnalyzer:
             return trigger_objects
 
         except Exception as e:
-            self.logger.error(f"Error finding trigger dependencies: {e}")
+            self.logger.error(
+                "table_rename_analyzer.error_finding_trigger_dependencies",
+                extra={"error": str(e)},
+            )
             raise RuntimeError(
                 f"Failed to discover trigger dependencies for table '{table_name}'. "
                 f"Cannot safely proceed with rename operation without complete dependency information. "
@@ -1066,7 +1090,13 @@ class TableRenameAnalyzer:
                     )
 
                 except Exception as step_error:
-                    self.logger.error(f"Step failed: {step.description} - {step_error}")
+                    self.logger.error(
+                        "table_rename_analyzer.step_failed",
+                        extra={
+                            "description": step.description,
+                            "step_error": step_error,
+                        },
+                    )
                     result.failed_step = step
                     result.error_message = str(step_error)
 
@@ -1092,11 +1122,13 @@ class TableRenameAnalyzer:
             )
 
         except Exception as e:
-            self.logger.error(f"Rename execution failed: {e}")
+            self.logger.error(
+                "table_rename_analyzer.rename_execution_failed", extra={"error": str(e)}
+            )
 
             try:
                 await connection.execute("ROLLBACK")
-            except:
+            except Exception:
                 pass
 
             result.success = False
@@ -1125,7 +1157,10 @@ class TableRenameAnalyzer:
             if step.rollback_sql:
                 try:
                     await connection.execute(step.rollback_sql)
-                    self.logger.debug(f"Rolled back step: {step.description}")
+                    self.logger.debug(
+                        "table_rename_analyzer.rolled_back_step",
+                        extra={"description": step.description},
+                    )
                 except Exception as e:
                     self.logger.error(
                         f"Rollback failed for step {step.description}: {e}"
@@ -1165,5 +1200,7 @@ class TableRenameAnalyzer:
             return new_exists and not old_exists
 
         except Exception as e:
-            self.logger.error(f"Validation failed: {e}")
+            self.logger.error(
+                "table_rename_analyzer.validation_failed", extra={"error": str(e)}
+            )
             return False

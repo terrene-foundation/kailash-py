@@ -233,7 +233,10 @@ class RenameCoordinationEngine:
                 connection = await self._get_connection()
 
             # Phase 1: Analyze table rename requirements
-            self.logger.info(f"Analyzing rename requirements for {old_table_name}")
+            self.logger.info(
+                "rename_coordination_engine.analyzing_rename_requirements_for",
+                extra={"old_table_name": old_table_name},
+            )
             report = await self.table_analyzer.analyze_table_rename(
                 old_table_name, new_table_name, connection
             )
@@ -266,13 +269,19 @@ class RenameCoordinationEngine:
             return result
 
         except Exception as e:
-            self.logger.error(f"Rename coordination failed: {e}")
+            self.logger.error(
+                "rename_coordination_engine.rename_coordination_failed",
+                extra={"error": str(e)},
+            )
             # Attempt rollback if we have transaction manager
             if self.transaction_manager:
                 try:
                     await self.transaction_manager.rollback_transaction()
                 except Exception as rollback_error:
-                    self.logger.error(f"Rollback failed: {rollback_error}")
+                    self.logger.error(
+                        "rename_coordination_engine.rollback_failed",
+                        extra={"rollback_error": rollback_error},
+                    )
 
             raise RenameCoordinationError(f"Coordination failed: {str(e)}")
 
@@ -392,7 +401,10 @@ class RenameCoordinationEngine:
 
             # Execute each step in order
             for step in workflow.steps:
-                self.logger.info(f"Executing step: {step.description}")
+                self.logger.info(
+                    "rename_coordination_engine.executing_step",
+                    extra={"description": step.description},
+                )
 
                 try:
                     if step.step_type == WorkflowStepType.DROP_FK_CONSTRAINTS:
@@ -410,7 +422,10 @@ class RenameCoordinationEngine:
                     completed_steps.append(step.step_id)
 
                 except Exception as step_error:
-                    self.logger.error(f"Step {step.step_id} failed: {step_error}")
+                    self.logger.error(
+                        "rename_coordination_engine.step_failed",
+                        extra={"step_id": step.step_id, "step_error": step_error},
+                    )
                     raise step_error
 
             # Commit transaction if using transaction manager
@@ -418,7 +433,10 @@ class RenameCoordinationEngine:
                 try:
                     await self.transaction_manager.commit_transaction()
                 except Exception as e:
-                    self.logger.warning(f"Transaction manager failed to commit: {e}")
+                    self.logger.warning(
+                        "rename_coordination_engine.transaction_manager_failed_to_commit",
+                        extra={"error": str(e)},
+                    )
 
             workflow.status = WorkflowStatus.COMPLETED
 
@@ -429,7 +447,10 @@ class RenameCoordinationEngine:
             )
 
         except Exception as e:
-            self.logger.error(f"Workflow execution failed: {e}")
+            self.logger.error(
+                "rename_coordination_engine.workflow_execution_failed",
+                extra={"error": str(e)},
+            )
             workflow.status = WorkflowStatus.FAILED
 
             # Attempt rollback if using transaction manager
@@ -440,7 +461,10 @@ class RenameCoordinationEngine:
                     rollback_performed = True
                     workflow.status = WorkflowStatus.ROLLED_BACK
                 except Exception as rollback_error:
-                    self.logger.error(f"Rollback failed: {rollback_error}")
+                    self.logger.error(
+                        "rename_coordination_engine.rollback_failed",
+                        extra={"rollback_error": rollback_error},
+                    )
 
             return CoordinationResult(
                 success=False,
@@ -456,7 +480,10 @@ class RenameCoordinationEngine:
         """Execute FK constraint drop step."""
         # For now, just execute a simple comment to validate the workflow
         # In production, this would use FK analyzer to coordinate FK operations
-        self.logger.info(f"Simulating FK drop coordination for {step.description}")
+        self.logger.info(
+            "rename_coordination_engine.simulating_fk_drop_coordination_for",
+            extra={"description": step.description},
+        )
         await connection.execute("-- FK drop step completed")
 
     async def _execute_rename_step(

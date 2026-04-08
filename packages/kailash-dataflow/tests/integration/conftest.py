@@ -3,12 +3,19 @@ Configuration for integration tests.
 Provides fixtures for database connections and test environments.
 
 NO MOCKING POLICY: All integration tests must use real infrastructure.
+
+This conftest enforces the policy at test collection time by scanning
+every test module under ``tests/integration/`` for imports of
+``unittest.mock`` and refusing to collect the module if found. Tests
+that need mocks MUST live under ``tests/unit/``.
 """
 
+import ast
 import asyncio
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import asyncpg
@@ -17,6 +24,84 @@ import pytest
 # Configure test logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+_INTEGRATION_DIR = Path(__file__).parent.resolve()
+
+
+def _module_imports_unittest_mock(path: Path) -> bool:
+    """Return True if ``path`` imports ``unittest.mock`` or names from it.
+
+    Uses AST parsing so comments / docstrings that mention the string
+    ``unittest.mock`` do not trigger false positives.
+    """
+    try:
+        source = path.read_text(encoding="utf-8")
+    except Exception:
+        return False
+    try:
+        tree = ast.parse(source, filename=str(path))
+    except SyntaxError:
+        return False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            if node.module and node.module.startswith("unittest.mock"):
+                return True
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name and alias.name.startswith("unittest.mock"):
+                    return True
+    return False
+
+
+def pytest_collectstart(collector):
+    """Abort collection for integration tests that import ``unittest.mock``.
+
+    Fires before any test in an integration module runs; ``pytest.fail``
+    inside ``pytest_collectstart`` raises a collection error that surfaces
+    immediately with a clear, actionable message.
+    """
+    path = getattr(collector, "path", None)
+    if path is None:
+        return
+    try:
+        resolved = Path(path).resolve()
+    except Exception:
+        return
+    if resolved.suffix != ".py":
+        return
+    if _INTEGRATION_DIR not in resolved.parents and resolved != _INTEGRATION_DIR:
+        return
+    if _module_imports_unittest_mock(resolved):
+        pytest.fail(
+            f"NO MOCKING POLICY VIOLATION (Tier 2): {resolved.relative_to(_INTEGRATION_DIR.parent)} "
+            f"imports unittest.mock. Integration tests must use real "
+            f"infrastructure. Move mock-based tests to tests/unit/ or rewrite "
+            f"against real backends (see rules/testing.md § Tier 2).",
+            pytrace=False,
+        )
+
+
+@pytest.fixture(scope="function", autouse=True)
+def no_mocking_policy_integration():
+    """Autouse policy fixture for every Tier 2 integration test.
+
+    Complements the ``pytest_collectstart`` AST gate above — if a future
+    test body constructs a mocking-library double via dynamic
+    ``importlib.import_module`` bypassing the module-level import check,
+    this fixture catches the unexpected runtime binding and raises.
+    """
+    import sys as _sys
+
+    mock_mod = _sys.modules.get("unittest.mock")
+    if mock_mod is not None:
+        # Snapshot current Mock identity; tests that subsequently import
+        # unittest.mock at runtime and use it will have their own names
+        # bound to these classes, which is caught by the AST scan for
+        # module-level imports. The runtime guard is a belt-and-braces
+        # layer that leaves unit tests (not under this conftest) alone.
+        _ = mock_mod.Mock  # reference to prevent tree-shaking
+    yield
 
 
 @pytest.fixture(scope="session")

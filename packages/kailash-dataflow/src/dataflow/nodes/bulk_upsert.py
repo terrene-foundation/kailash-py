@@ -1,7 +1,10 @@
 """DataFlow Bulk Upsert Node - SDK Compliant Implementation."""
 
 import asyncio
+import logging
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
@@ -344,7 +347,9 @@ class BulkUpsertNode(SmartNodeConnectionMixin, AsyncNode):
 
                 except Exception as batch_error:
                     # For batch errors, log but continue (could implement fallback logic here)
-                    print(f"Batch upsert error: {str(batch_error)}")
+                    logger.warning(
+                        "bulk_upsert.batch_error", extra={"error": str(batch_error)}
+                    )
                     # For now, skip failed batches but could implement retry or individual processing
                     continue
 

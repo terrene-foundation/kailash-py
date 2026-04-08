@@ -120,7 +120,10 @@ class BaseAdapter(ABC):
                 "connected": self.is_connected,
             }
         except Exception as e:
-            logger.error(f"Health check failed for {self.source_type}: {e}")
+            logger.error(
+                "base_adapter.health_check_failed_for",
+                extra={"source_type": self.source_type, "error": str(e)},
+            )
             return {
                 "healthy": False,
                 "source_type": self.source_type,

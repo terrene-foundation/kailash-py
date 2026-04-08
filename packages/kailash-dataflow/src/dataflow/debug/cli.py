@@ -9,9 +9,12 @@ Usage:
 """
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from dataflow.debug.cli_formatter import CLIFormatter
 from dataflow.debug.debug_agent import DebugAgent
@@ -166,10 +169,10 @@ def main():
 
         # Format output
         if args.format == "json":
-            print(report.to_json())
+            sys.stdout.write(report.to_json() + "\n")
         else:
             formatter = CLIFormatter()
-            print(formatter.format_report(report))
+            sys.stdout.write(formatter.format_report(report) + "\n")
 
         # Exit with appropriate code
         # 0 = solutions found
@@ -177,14 +180,11 @@ def main():
         sys.exit(0 if report.suggested_solutions else 1)
 
     except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        logger.error("debug_cli.validation_error", extra={"error": str(e)})
         parser.print_help()
         sys.exit(2)
     except Exception as e:
-        print(f"Unexpected error: {e}", file=sys.stderr)
-        import traceback
-
-        traceback.print_exc()
+        logger.exception("debug_cli.unexpected_error", extra={"error": str(e)})
         sys.exit(3)
 
 

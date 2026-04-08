@@ -163,8 +163,14 @@ def protect_dataflow_node(original_class: Type[Node]) -> Type[Node]:
     class ProtectedNode(original_class):
         def run(self, **kwargs) -> Dict[str, Any]:
             """Override run to add protection checks."""
-            logger.debug(f"ProtectedNode.run called for {self.__class__.__name__}")
-            logger.debug(f"Has dataflow_instance: {hasattr(self, 'dataflow_instance')}")
+            logger.debug(
+                "protection_middleware.protectednode_run_called_for",
+                extra={"name": self.__class__.__name__},
+            )
+            logger.debug(
+                "protection_middleware.has_dataflow_instance",
+                extra={"hasattr": hasattr(self, "dataflow_instance")},
+            )
 
             # Get protection engine from DataFlow instance
             if hasattr(self, "dataflow_instance"):

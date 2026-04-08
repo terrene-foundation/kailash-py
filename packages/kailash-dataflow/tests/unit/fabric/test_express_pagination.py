@@ -15,12 +15,27 @@ class TestExpressListOrderBy:
     """Verify order_by parameter on async Express.list() and sync express_sync.list()."""
 
     def _make_express(self):
-        """Create a minimal DataFlowExpress instance with a mocked DataFlow db."""
+        """Create a minimal DataFlowExpress instance with a mocked DataFlow db.
+
+        ``_trust_executor`` is explicitly set to ``None`` so the trust
+        integration added in Phase 5.11 short-circuits — otherwise the
+        ambient ``MagicMock`` attribute would be truthy and the read
+        path would try to ``await`` a MagicMock, which is not awaitable.
+        ``_classification_enabled`` is similarly cleared so the
+        Phase 5.10 redaction path stays out of the unit test scope.
+        """
         from dataflow.features.express import DataFlowExpress
 
         db = MagicMock()
         db._nodes = {}
         db._cache = None
+        # Disable Phase 5.10 / 5.11 wiring for the unit-level test —
+        # the classification policy and trust executor are real-infra
+        # concerns covered by their own integration suites. Without
+        # these explicit Nones, MagicMock attribute access returns a
+        # truthy MagicMock that the read path tries to await.
+        db._trust_executor = None
+        db._classification_policy = None
         express = DataFlowExpress.__new__(DataFlowExpress)
         express._db = db
         express._default_cache_ttl = None
@@ -37,9 +52,14 @@ class TestExpressListOrderBy:
         express._create_node = MagicMock(return_value=node)
         express._cache_get = AsyncMock(return_value=None)
         express._cache_set = AsyncMock()
-        express._execute_with_timing = AsyncMock(
-            return_value=[{"id": 1, "name": "Alice"}]
-        )
+
+        # Real async wrapper instead of AsyncMock — AsyncMock never
+        # awaits its positional argument, leaking the inner _list()
+        # coroutine and triggering RuntimeWarning under -W error.
+        async def fake_execute(operation, coro):
+            return await coro
+
+        express._execute_with_timing = fake_execute
 
         # Should not raise
         result = await express.list("User", order_by="name")
@@ -107,7 +127,16 @@ class TestExpressListOrderBy:
 
         sync = SyncExpress.__new__(SyncExpress)
         sync._express = async_express
-        sync._run_sync = lambda coro: [{"id": 1}]
+
+        def fake_run_sync(coro):
+            # Consume the coroutine so pytest doesn't emit a
+            # RuntimeWarning about an un-awaited coroutine; the
+            # AsyncMock's actual return value is what we assert against
+            # at the call site.
+            coro.close()
+            return [{"id": 1}]
+
+        sync._run_sync = fake_run_sync
 
         # Should not raise
         result = sync.list("User", order_by="name")

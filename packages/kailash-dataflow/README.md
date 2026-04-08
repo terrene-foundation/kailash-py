@@ -1,10 +1,31 @@
 # Kailash DataFlow
 
-**Multi-Database Data Operations Framework** - Django simplicity meets enterprise-grade production quality with PostgreSQL, MySQL, SQLite, and MongoDB support, plus external data source integration via the Data Fabric Engine.
+**Multi-Database Data Operations Framework** — Django simplicity meets enterprise-grade production quality with PostgreSQL, MySQL, SQLite, and MongoDB support, plus external data source integration via the Data Fabric Engine.
 
 > ✅ **Database Support**: DataFlow supports PostgreSQL (full features), MySQL (100% feature parity since v0.5.6), SQLite (near-complete parity), and MongoDB (document database with flexible schema).
->
-> ✅ **v0.7.6+ Improvements**: String IDs preserved, multi-instance isolation, deferred schema operations, Optional field handling, dict/list serialization fixes
+
+## 🚨 2.0.0 Breaking Changes — Read Before Upgrading
+
+DataFlow 2.0.0 is the result of a full Phase 5-9 wiring sweep that closed 9 CRITICAL security findings and ~11,800 lines of non-functional code. The fabric subsystem in particular has material breaking changes. Full details in [CHANGELOG.md](CHANGELOG.md); the operational highlights:
+
+- **Fabric cache is now pluggable** — `PipelineExecutor` delegates storage to `FabricCacheBackend` (`InMemoryFabricCacheBackend` or `RedisFabricCacheBackend`). Dev-mode deployments keep working unchanged; production Redis deployments MUST pass `redis_url=` when constructing the runtime.
+- **Fabric cache keys include `tenant_id`** — every product with `multi_tenant=True` requires an explicit tenant extractor. Reads without a tenant now raise `FabricTenantRequiredError` instead of silently defaulting to a global cache slot. See `docs/fabric/` for migration guidance.
+- **`FabricRuntime.product_info / invalidate / invalidate_all` are now async** — wrap existing call sites in `await` or `asyncio.run(...)`. Sync wrappers have been removed so the Redis backend can participate without deadlocking.
+- **Express cache keys are tenant-scoped** — `db.express.list("User", filter={...})` against a `multi_tenant=True` model now requires `tenant_id` context; missing tenant raises `TenantRequiredError`.
+- **`@classify("field", PII, REDACT)` actually redacts on read** — the decorator was a no-op before 2.0.0. Every existing read of a classified field will now return `[REDACTED]` for callers whose clearance level doesn't include the field. Set per-request clearance via `set_current_clearance(CONFIDENTIAL)`.
+- **Trust executor runs on every query** — `TrustAwareQueryExecutor`, `DataFlowAuditStore`, and `TenantTrustManager` were exposed on `db.*` but unused until 2.0.0. Queries now emit audit events and enforce tenant boundaries. Disable per-model by setting `enable_trust=False` on `DataFlow.__init__`.
+- **`rules/security.md` §No secrets in logs** — Redis/Postgres/Mongo URLs are now masked via `dataflow.utils.masking.mask_url`; downstream consumers importing `fabric.cache._mask_url` still work via a backward-compatible re-export.
+- **Prometheus metrics at `/fabric/metrics`** — 13 metric families exposed via the FabricMetrics singleton. Requires the `fabric` optional extra for `prometheus-client`; without the extra the endpoint returns a plain-text explanation and counters become loud no-ops.
+
+**Migration checklist before upgrading**:
+
+- [ ] Audit every `db.express` read of a `multi_tenant=True` model for an explicit `tenant_id` context.
+- [ ] Audit every `FabricRuntime.invalidate(...)` / `.product_info(...)` call site and wrap in `await`.
+- [ ] Install the fabric extra if you scrape `/fabric/metrics`: `pip install 'kailash-dataflow[fabric]'`.
+- [ ] Set a per-request clearance via `set_current_clearance(...)` before any query that should see PII fields.
+- [ ] If you rely on the pre-2.0 silent-default behavior for missing tenants, revisit — that path is now a hard error.
+
+See [CHANGELOG.md](CHANGELOG.md) § 2.0.0 for the full list, commit SHAs, and test coverage.
 
 ## ⚠️ Common Mistakes (Read This First!)
 
@@ -67,11 +88,13 @@ pip install kailash-dataflow
 #### Optional Extras (Data Fabric Engine)
 
 ```bash
-pip install kailash-dataflow[fabric]        # REST, file, and core fabric support (httpx, watchdog, msgpack)
+pip install kailash-dataflow[fabric]        # REST, file, core fabric support + Prometheus metrics (httpx, watchdog, msgpack, prometheus-client)
 pip install kailash-dataflow[cloud]          # Cloud storage adapters (S3, GCS, Azure)
 pip install kailash-dataflow[streaming]      # Streaming adapters (Kafka, WebSocket)
 pip install kailash-dataflow[fabric-all]     # All fabric dependencies (fabric + cloud + excel + streaming)
 ```
+
+The `fabric` extra is required if you want to scrape `/fabric/metrics` for Prometheus observability. Without it, the endpoint returns a plain-text explanation and fabric counters silently no-op.
 
 ### Basic Usage
 

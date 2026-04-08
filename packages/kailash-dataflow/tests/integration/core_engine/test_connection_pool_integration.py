@@ -14,7 +14,6 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List
-from unittest.mock import Mock, patch
 
 import pytest
 
@@ -27,14 +26,12 @@ from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
-
 @pytest.fixture
 async def test_suite():
     """Create complete integration test suite with infrastructure."""
     suite = IntegrationTestSuite()
     async with suite.session():
         yield suite
-
 
 class TestConnectionPoolIntegration:
     """Test connection pool integration with DataFlow operations."""

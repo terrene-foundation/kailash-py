@@ -259,34 +259,34 @@ class DependencyAnalyzer:
             # Analyze all dependency types sequentially to avoid connection conflicts
             # Running in parallel causes "another operation in progress" errors with asyncpg
 
-            report.dependencies[
-                DependencyType.FOREIGN_KEY
-            ] = await self.find_foreign_key_dependencies(
-                safe_table_name, safe_column_name, connection
+            report.dependencies[DependencyType.FOREIGN_KEY] = (
+                await self.find_foreign_key_dependencies(
+                    safe_table_name, safe_column_name, connection
+                )
             )
 
-            report.dependencies[
-                DependencyType.VIEW
-            ] = await self.find_view_dependencies(
-                safe_table_name, safe_column_name, connection
+            report.dependencies[DependencyType.VIEW] = (
+                await self.find_view_dependencies(
+                    safe_table_name, safe_column_name, connection
+                )
             )
 
-            report.dependencies[
-                DependencyType.TRIGGER
-            ] = await self.find_trigger_dependencies(
-                safe_table_name, safe_column_name, connection
+            report.dependencies[DependencyType.TRIGGER] = (
+                await self.find_trigger_dependencies(
+                    safe_table_name, safe_column_name, connection
+                )
             )
 
-            report.dependencies[
-                DependencyType.INDEX
-            ] = await self.find_index_dependencies(
-                safe_table_name, safe_column_name, connection
+            report.dependencies[DependencyType.INDEX] = (
+                await self.find_index_dependencies(
+                    safe_table_name, safe_column_name, connection
+                )
             )
 
-            report.dependencies[
-                DependencyType.CONSTRAINT
-            ] = await self.find_constraint_dependencies(
-                safe_table_name, safe_column_name, connection
+            report.dependencies[DependencyType.CONSTRAINT] = (
+                await self.find_constraint_dependencies(
+                    safe_table_name, safe_column_name, connection
+                )
             )
 
             analysis_time = time.time() - start_time
@@ -300,7 +300,10 @@ class DependencyAnalyzer:
             return report
 
         except Exception as e:
-            self.logger.error(f"Dependency analysis failed: {e}")
+            self.logger.error(
+                "dependency_analyzer.dependency_analysis_failed",
+                extra={"error": str(e)},
+            )
             raise
 
     async def find_foreign_key_dependencies(
@@ -369,7 +372,10 @@ class DependencyAnalyzer:
             return dependencies
 
         except Exception as e:
-            self.logger.error(f"Error finding foreign key dependencies: {e}")
+            self.logger.error(
+                "dependency_analyzer.error_finding_foreign_key_dependencies",
+                extra={"error": str(e)},
+            )
             return []
 
     async def find_view_dependencies(
@@ -431,7 +437,10 @@ class DependencyAnalyzer:
             return dependencies
 
         except Exception as e:
-            self.logger.error(f"Error finding view dependencies: {e}")
+            self.logger.error(
+                "dependency_analyzer.error_finding_view_dependencies",
+                extra={"error": str(e)},
+            )
             return []
 
     async def find_trigger_dependencies(
@@ -486,7 +495,10 @@ class DependencyAnalyzer:
             return dependencies
 
         except Exception as e:
-            self.logger.error(f"Error finding trigger dependencies: {e}")
+            self.logger.error(
+                "dependency_analyzer.error_finding_trigger_dependencies",
+                extra={"error": str(e)},
+            )
             return []
 
     async def find_index_dependencies(
@@ -544,7 +556,10 @@ class DependencyAnalyzer:
             return dependencies
 
         except Exception as e:
-            self.logger.error(f"Error finding index dependencies: {e}")
+            self.logger.error(
+                "dependency_analyzer.error_finding_index_dependencies",
+                extra={"error": str(e)},
+            )
             return []
 
     async def find_constraint_dependencies(
@@ -605,7 +620,10 @@ class DependencyAnalyzer:
             return dependencies
 
         except Exception as e:
-            self.logger.error(f"Error finding constraint dependencies: {e}")
+            self.logger.error(
+                "dependency_analyzer.error_finding_constraint_dependencies",
+                extra={"error": str(e)},
+            )
             return []
 
     # Helper methods

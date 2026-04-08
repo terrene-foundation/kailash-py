@@ -280,7 +280,10 @@ class MitigationStrategyEngine:
         start_time = time.time()
         constraints = constraints or {}
 
-        self.logger.info(f"Prioritizing {len(strategies)} mitigation strategies")
+        self.logger.info(
+            "mitigation_strategy_engine.prioritizing_mitigation_strategies",
+            extra={"count": len(strategies)},
+        )
 
         # Assess effectiveness for each strategy
         effectiveness_assessments = {}

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar
 
 from dataflow.classification.types import (
@@ -214,9 +214,7 @@ class ClassificationPolicy:
             model: A DataFlowModel subclass decorated with ``@classify``.
         """
         model_name = model.__name__
-        entries: List[_ClassEntry] = getattr(
-            model, "__field_classifications__", []
-        )
+        entries: List[_ClassEntry] = getattr(model, "__field_classifications__", [])
         with self._lock:
             if model_name not in self._registry:
                 self._registry[model_name] = {}
@@ -289,3 +287,130 @@ class ClassificationPolicy:
             Number of days, or ``None`` for indefinite / consent-based.
         """
         return self._RETENTION_DAYS.get(policy.value)
+
+    # -- Read-time masking (Phase 5.10) -------------------------------------
+
+    # Canonical order from least to most sensitive. A caller with
+    # clearance X is allowed to see any field whose classification
+    # has an index less than or equal to X's index.
+    _CLEARANCE_ORDER: Tuple[DataClassification, ...] = (
+        DataClassification.PUBLIC,
+        DataClassification.INTERNAL,
+        DataClassification.SENSITIVE,
+        DataClassification.PII,
+        DataClassification.GDPR,
+        DataClassification.HIGHLY_CONFIDENTIAL,
+    )
+
+    @classmethod
+    def caller_can_access(
+        cls,
+        field_level: DataClassification,
+        caller_clearance: DataClassification,
+    ) -> bool:
+        """Return True when a caller with ``caller_clearance`` may see a
+        field classified at ``field_level``.
+
+        Clearance is ordered PUBLIC < INTERNAL < SENSITIVE < PII < GDPR
+        < HIGHLY_CONFIDENTIAL. A caller with PII clearance can see all
+        fields classified up to and including PII, but nothing marked
+        GDPR or HIGHLY_CONFIDENTIAL.
+        """
+        try:
+            field_idx = cls._CLEARANCE_ORDER.index(field_level)
+            caller_idx = cls._CLEARANCE_ORDER.index(caller_clearance)
+        except ValueError:
+            # Unknown classification — fail closed.
+            return False
+        return caller_idx >= field_idx
+
+    @staticmethod
+    def apply_masking_strategy(value: Any, strategy: MaskingStrategy) -> Any:
+        """Apply a ``MaskingStrategy`` to a single value.
+
+        ``NONE`` returns the value unchanged. ``REDACT`` replaces with
+        the literal string ``"[REDACTED]"``. ``HASH`` replaces with a
+        SHA-256 hex digest. ``LAST_FOUR`` masks all but the final 4
+        characters of the string form. ``ENCRYPT`` is a read-time
+        sentinel ``"[ENCRYPTED]"`` — true ciphertext is produced at
+        the storage layer, not here.
+        """
+        if value is None:
+            return None
+        if strategy == MaskingStrategy.NONE:
+            return value
+        if strategy == MaskingStrategy.REDACT:
+            return "[REDACTED]"
+        if strategy == MaskingStrategy.ENCRYPT:
+            return "[ENCRYPTED]"
+        if strategy == MaskingStrategy.HASH:
+            import hashlib
+
+            return hashlib.sha256(str(value).encode("utf-8")).hexdigest()
+        if strategy == MaskingStrategy.LAST_FOUR:
+            text = str(value)
+            if len(text) <= 4:
+                return "*" * len(text)
+            return "*" * (len(text) - 4) + text[-4:]
+        # Unknown strategy — fail closed.
+        return "[REDACTED]"
+
+    def apply_masking_to_record(
+        self,
+        model_name: str,
+        record: Any,
+        caller_clearance: Optional[DataClassification],
+    ) -> Any:
+        """Mask classified fields on a single record.
+
+        Walks ``self._registry[model_name]`` and, for every field the
+        caller cannot access, replaces the value with the result of
+        :meth:`apply_masking_strategy` applied to the field's stored
+        masking strategy. Fields with ``MaskingStrategy.NONE`` are
+        only masked when the caller's clearance is strictly below the
+        field's classification *and* the strategy is non-trivial.
+
+        When ``caller_clearance`` is ``None`` the caller is treated as
+        having ``PUBLIC`` clearance (the most restrictive). Non-dict
+        records pass through unchanged.
+        """
+        if not isinstance(record, dict):
+            return record
+        fields = self.get_model_fields(model_name)
+        if not fields:
+            return record
+        effective_clearance = caller_clearance or DataClassification.PUBLIC
+
+        masked: Dict[str, Any] = dict(record)
+        for field_name, fc in fields.items():
+            if field_name not in masked:
+                continue
+            if self.caller_can_access(fc.classification, effective_clearance):
+                continue
+            # Caller is below the required clearance — apply masking.
+            strategy = (
+                fc.masking
+                if fc.masking != MaskingStrategy.NONE
+                else MaskingStrategy.REDACT
+            )
+            masked[field_name] = self.apply_masking_strategy(
+                masked[field_name], strategy
+            )
+        return masked
+
+    def apply_masking_to_rows(
+        self,
+        model_name: str,
+        rows: Any,
+        caller_clearance: Optional[DataClassification],
+    ) -> Any:
+        """Apply :meth:`apply_masking_to_record` to a list of records.
+
+        Returns the input unchanged if ``rows`` is not a list.
+        """
+        if not isinstance(rows, list):
+            return rows
+        return [
+            self.apply_masking_to_record(model_name, row, caller_clearance)
+            for row in rows
+        ]

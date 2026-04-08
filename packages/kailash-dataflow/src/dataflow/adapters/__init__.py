@@ -11,11 +11,23 @@ Multi-database support for DataFlow with tiered adapter hierarchy:
 
 from .base import DatabaseAdapter
 from .base_adapter import BaseAdapter
-from .mongodb import MongoDBAdapter
 from .mysql import MySQLAdapter
 from .postgresql import PostgreSQLAdapter
-from .postgresql_vector import PostgreSQLVectorAdapter
 from .sqlite import SQLiteAdapter
+
+
+def __getattr__(name: str):
+    """Lazy-load adapters that require optional driver packages."""
+    if name == "MongoDBAdapter":
+        from .mongodb import MongoDBAdapter
+
+        return MongoDBAdapter
+    if name == "PostgreSQLVectorAdapter":
+        from .postgresql_vector import PostgreSQLVectorAdapter
+
+        return PostgreSQLVectorAdapter
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "BaseAdapter",

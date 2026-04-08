@@ -116,7 +116,7 @@ class HealthMonitor:
         Example:
             >>> health = await monitor.health_check()
             >>> if health.status == HealthStatus.UNHEALTHY:
-            ...     logger.error(f"Unhealthy: {health.details}")
+            ...     logger.error("health.unhealthy", extra={"details": health.details})
         """
         results = {}
         overall_status = HealthStatus.HEALTHY
@@ -136,7 +136,10 @@ class HealthMonitor:
                     overall_status = HealthStatus.DEGRADED
 
             except Exception as e:
-                logger.error(f"Health check '{name}' failed with exception: {e}")
+                logger.error(
+                    "health.health_check_failed_with_exception",
+                    extra={"name": name, "error": str(e)},
+                )
                 results[name] = {"status": HealthStatus.UNHEALTHY, "error": str(e)}
                 overall_status = HealthStatus.UNHEALTHY
 
@@ -189,7 +192,7 @@ class HealthMonitor:
                 "message": "Database connection healthy",
             }
         except Exception as e:
-            logger.error(f"Database health check failed: {e}")
+            logger.error("health.database_health_check_failed", extra={"error": str(e)})
             return {
                 "status": HealthStatus.UNHEALTHY,
                 "message": f"Database connection failed: {e}",
@@ -224,7 +227,9 @@ class HealthMonitor:
                 "message": f"Cache hit rate: {hit_rate:.2%}",
             }
         except Exception as e:
-            logger.error(f"Schema cache health check failed: {e}")
+            logger.error(
+                "health.schema_cache_health_check_failed", extra={"error": str(e)}
+            )
             return {
                 "status": HealthStatus.DEGRADED,
                 "message": f"Schema cache check failed: {e}",
@@ -281,7 +286,9 @@ class HealthMonitor:
                 "message": f"Pool utilization: {utilization:.2%}",
             }
         except Exception as e:
-            logger.error(f"Connection pool health check failed: {e}")
+            logger.error(
+                "health.connection_pool_health_check_failed", extra={"error": str(e)}
+            )
             return {
                 "status": HealthStatus.DEGRADED,
                 "message": f"Connection pool check failed: {e}",

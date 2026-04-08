@@ -16,7 +16,6 @@ Following Tier 2 testing guidelines:
 import asyncio
 import time
 from datetime import datetime
-from unittest.mock import AsyncMock
 
 import asyncpg
 import pytest
@@ -36,7 +35,6 @@ from dataflow.migrations.table_rename_analyzer import (
 from kailash.runtime.local import LocalRuntime
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
-
 @pytest.fixture
 async def test_suite():
     """Create complete integration test suite with infrastructure."""
@@ -44,12 +42,10 @@ async def test_suite():
     async with suite.session():
         yield suite
 
-
 @pytest.fixture
 def runtime():
     """Create LocalRuntime for workflow execution."""
     return LocalRuntime()
-
 
 class TestTableRenameAnalyzerIntegration:
     """Integration tests for TableRenameAnalyzer with real database."""
