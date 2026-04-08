@@ -360,7 +360,7 @@ class DataFlowAuditStore:
             # Return base64-encoded signature
             return base64.b64encode(signature).decode("utf-8")
         except Exception as e:
-            logger.error(f"Failed to sign audit record: {e}")
+            logger.error("audit.failed_to_sign_audit_record", extra={"error": str(e)})
             return "unsigned"
 
     def _verify_signature(self, payload: bytes, signature_b64: str) -> bool:
@@ -425,7 +425,7 @@ class DataFlowAuditStore:
             public_key.verify(signature, payload)
             return True
         except Exception as e:
-            logger.debug(f"Signature verification failed: {e}")
+            logger.debug("audit.signature_verification_failed", extra={"error": str(e)})
             return False
 
     def record_query(
@@ -671,5 +671,5 @@ class DataFlowAuditStore:
             full_hash = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
             return full_hash[:16]
         except Exception as e:
-            logger.warning(f"Failed to compute query hash: {e}")
+            logger.warning("audit.failed_to_compute_query_hash", extra={"error": str(e)})
             return "0" * 16

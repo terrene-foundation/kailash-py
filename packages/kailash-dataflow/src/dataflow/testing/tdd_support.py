@@ -194,7 +194,7 @@ class TDDDatabaseManager:
         self.active_connections[context.test_id] = connection
         context.connection = connection
 
-        logger.debug(f"Created database connection for test {context.test_id}")
+        logger.debug("tdd_support.created_database_connection_for_test", extra={"test_id": context.test_id})
         return connection
 
     async def cleanup_test_connection(self, context: TDDTestContext) -> None:
@@ -220,7 +220,7 @@ class TDDDatabaseManager:
                 del self.active_connections[context.test_id]
                 context.connection = None
 
-            logger.debug(f"Cleaned up database connection for test {context.test_id}")
+            logger.debug("tdd_support.cleaned_up_database_connection_for_test", extra={"test_id": context.test_id})
 
     async def cleanup_all_test_connections(self) -> None:
         """Clean up all active test connections."""
@@ -232,7 +232,7 @@ class TDDDatabaseManager:
                 else:
                     await connection.close()
             except Exception as e:
-                logger.warning(f"Error closing connection for test {test_id}: {e}")
+                logger.warning("tdd_support.error_closing_connection_for_test", extra={"test_id": test_id, "error": str(e)})
 
         self.active_connections.clear()
         logger.debug("Cleaned up all test database connections")
@@ -284,7 +284,7 @@ class TDDTransactionManager:
             )
 
         except Exception as e:
-            logger.error(f"Failed to create savepoint for test {context.test_id}: {e}")
+            logger.error("tdd_support.failed_to_create_savepoint_for_test", extra={"test_id": context.test_id, "error": str(e)})
             context.savepoint_created = False
             raise
 
@@ -299,7 +299,7 @@ class TDDTransactionManager:
             context: Test context
         """
         if not context.savepoint_created:
-            logger.debug(f"No savepoint to rollback for test {context.test_id}")
+            logger.debug("tdd_support.no_savepoint_to_rollback_for_test", extra={"test_id": context.test_id})
             return
 
         try:
@@ -325,7 +325,7 @@ class TDDTransactionManager:
             context: Test context
         """
         if not context.savepoint_created:
-            logger.debug(f"No savepoint to release for test {context.test_id}")
+            logger.debug("tdd_support.no_savepoint_to_release_for_test", extra={"test_id": context.test_id})
             return
 
         try:
@@ -340,7 +340,7 @@ class TDDTransactionManager:
             )
 
         except Exception as e:
-            logger.error(f"Failed to release savepoint for test {context.test_id}: {e}")
+            logger.error("tdd_support.failed_to_release_savepoint_for_test", extra={"test_id": context.test_id, "error": str(e)})
             raise
 
     async def begin_test_transaction(
@@ -364,7 +364,7 @@ class TDDTransactionManager:
             # Create savepoint for test isolation
             await self.create_savepoint(connection, context)
 
-            logger.debug(f"Started test transaction for test {context.test_id}")
+            logger.debug("tdd_support.started_test_transaction_for_test", extra={"test_id": context.test_id})
 
         except Exception as e:
             logger.error(
@@ -484,7 +484,7 @@ async def tdd_test_context(
         yield context
 
     except Exception as e:
-        logger.error(f"Error in test context {context.test_id}: {e}")
+        logger.error("tdd_support.error_in_test_context", extra={"test_id": context.test_id, "error": str(e)})
         # Rollback on error
         if context.connection and context.savepoint_created:
             try:

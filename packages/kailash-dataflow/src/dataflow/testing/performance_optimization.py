@@ -135,7 +135,7 @@ class ConnectionPoolManager:
         if preheat:
             await self._preheat_pool(pool_id, pool)
 
-        logger.debug(f"Created optimized pool {pool_id}: {creation_time:.2f}ms")
+        logger.debug("performance_optimization.created_optimized_pool_ms", extra={"pool_id": pool_id, "creation_time": creation_time})
         return pool
 
     async def _preheat_pool(self, pool_id: str, pool: asyncpg.Pool):
@@ -158,10 +158,10 @@ class ConnectionPoolManager:
             preheat_time = (time.time() - preheat_start) * 1000
             self.preheated_connections.add(pool_id)
 
-            logger.debug(f"Preheated pool {pool_id}: {preheat_time:.2f}ms")
+            logger.debug("performance_optimization.preheated_pool_ms", extra={"pool_id": pool_id, "preheat_time": preheat_time})
 
         except Exception as e:
-            logger.error(f"Failed to preheat pool {pool_id}: {e}")
+            logger.error("performance_optimization.failed_to_preheat_pool", extra={"pool_id": pool_id, "error": str(e)})
             # Release any acquired connections
             for conn in connections:
                 try:
@@ -192,7 +192,7 @@ class ConnectionPoolManager:
 
         # Log slow acquisitions
         if acquisition_time > 10.0:  # 10ms threshold
-            logger.warning(f"Slow connection acquisition: {acquisition_time:.2f}ms")
+            logger.warning("performance_optimization.slow_connection_acquisition_ms", extra={"acquisition_time": acquisition_time})
 
         return connection
 
@@ -230,7 +230,7 @@ class ConnectionPoolManager:
                 del self.pools[pool_id]
                 del self.pool_configs[pool_id]
                 self.preheated_connections.discard(pool_id)
-                logger.debug(f"Cleaned up pool {pool_id}")
+                logger.debug("performance_optimization.cleaned_up_pool", extra={"pool_id": pool_id})
 
     async def cleanup_all_pools(self):
         """Clean up all pools."""
@@ -238,7 +238,7 @@ class ConnectionPoolManager:
             try:
                 await callback()
             except Exception as e:
-                logger.warning(f"Cleanup callback failed: {e}")
+                logger.warning("performance_optimization.cleanup_callback_failed", extra={"error": str(e)})
 
         pool_ids = list(self.pools.keys())
         for pool_id in pool_ids:
@@ -284,7 +284,7 @@ class SchemaCache:
             }
             self.schema_versions[schema_id] = version
 
-        logger.debug(f"Cached schema {schema_id} with {len(tables)} tables")
+        logger.debug("performance_optimization.cached_schema_with_tables", extra={"schema_id": schema_id, "count": len(tables)})
 
     def get_cached_schema(self, schema_id: str) -> Optional[Dict[str, Any]]:
         """Get a cached schema definition."""
@@ -333,7 +333,7 @@ class SchemaCache:
             if schema_id in self.cached_schemas:
                 del self.cached_schemas[schema_id]
                 del self.schema_versions[schema_id]
-                logger.debug(f"Invalidated schema cache for {schema_id}")
+                logger.debug("performance_optimization.invalidated_schema_cache_for", extra={"schema_id": schema_id})
 
     def clear_cache(self):
         """Clear all cached schemas."""
@@ -573,7 +573,7 @@ class PerformanceMonitor:
             try:
                 callback(alert_data)
             except Exception as e:
-                logger.error(f"Alert callback failed: {e}")
+                logger.error("performance_optimization.alert_callback_failed", extra={"error": str(e)})
 
     def add_alert_callback(self, callback: Callable):
         """Add a callback for performance alerts."""
@@ -720,7 +720,7 @@ class MemoryOptimizer:
                 callback()
                 cleaned_count += 1
             except Exception as e:
-                logger.warning(f"Cleanup callback failed: {e}")
+                logger.warning("performance_optimization.cleanup_callback_failed", extra={"error": str(e)})
 
         # Force cleanup of tracked objects
         self.tracked_objects.clear()
@@ -728,7 +728,7 @@ class MemoryOptimizer:
         # Optimize memory after cleanup
         self.optimize_memory()
 
-        logger.debug(f"Cleaned up {cleaned_count} objects")
+        logger.debug("performance_optimization.cleaned_up_objects", extra={"cleaned_count": cleaned_count})
 
     def get_memory_report(self) -> Dict[str, Any]:
         """Get memory usage report."""
@@ -857,7 +857,7 @@ async def optimized_test_context(
         yield context
 
     except Exception as e:
-        logger.error(f"Error in optimized test context {test_id}: {e}")
+        logger.error("performance_optimization.error_in_optimized_test_context", extra={"test_id": test_id, "error": str(e)})
         raise
 
     finally:
@@ -895,7 +895,7 @@ async def cleanup_optimization_infrastructure():
             _memory_optimizer.cleanup_tracked_objects()
 
     except Exception as e:
-        logger.error(f"Error during optimization cleanup: {e}")
+        logger.error("performance_optimization.error_during_optimization_cleanup", extra={"error": str(e)})
 
     finally:
         # Reset global instances

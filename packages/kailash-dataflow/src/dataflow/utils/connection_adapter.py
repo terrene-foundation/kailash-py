@@ -141,9 +141,9 @@ class ConnectionManagerAdapter:
             return self._normalize_result(raw_result, sql)
 
         except Exception as e:
-            logger.error(f"ConnectionManagerAdapter query execution failed: {e}")
-            logger.error(f"SQL: {sql}")
-            logger.error(f"Params: {params}")
+            logger.error("connection_adapter.connectionmanageradapter_query_execution_failed", extra={"error": str(e)})
+            logger.error("connection_adapter.sql", extra={"sql": sql})
+            logger.error("connection_adapter.params", extra={"params": params})
             raise
 
     async def begin_transaction(self) -> None:
@@ -180,7 +180,7 @@ class ConnectionManagerAdapter:
             self._transaction_started = True
             logger.debug("Transaction started via ConnectionManagerAdapter")
         except Exception as e:
-            logger.error(f"Failed to begin transaction: {e}")
+            logger.error("connection_adapter.failed_to_begin_transaction", extra={"error": str(e)})
             raise
 
     async def commit_transaction(self) -> None:
@@ -216,7 +216,7 @@ class ConnectionManagerAdapter:
             self._transaction_started = False
             logger.debug("Transaction committed via ConnectionManagerAdapter")
         except Exception as e:
-            logger.error(f"Failed to commit transaction: {e}")
+            logger.error("connection_adapter.failed_to_commit_transaction", extra={"error": str(e)})
             raise
 
     async def rollback_transaction(self) -> None:
@@ -252,7 +252,7 @@ class ConnectionManagerAdapter:
             self._transaction_started = False
             logger.debug("Transaction rolled back via ConnectionManagerAdapter")
         except Exception as e:
-            logger.error(f"Failed to rollback transaction: {e}")
+            logger.error("connection_adapter.failed_to_rollback_transaction", extra={"error": str(e)})
             raise
 
     def close(self):
@@ -335,7 +335,7 @@ class ConnectionManagerAdapter:
 
         else:
             # Unknown parameter style - return as-is
-            logger.warning(f"Unknown parameter style: {self._parameter_style}")
+            logger.warning("connection_adapter.unknown_parameter_style", extra={"parameter_style": self._parameter_style})
             return sql, params
 
     def _normalize_result(self, result: Any, original_sql: str) -> List[Dict[str, Any]]:
@@ -408,7 +408,7 @@ class ConnectionManagerAdapter:
             logger.warning(
                 f"Unexpected result type from AsyncSQLDatabaseNode: {type(result)}"
             )
-            logger.debug(f"Raw result: {result}")
+            logger.debug("connection_adapter.raw_result", extra={"result": result})
             return []
 
     def is_transaction_active(self) -> bool:
