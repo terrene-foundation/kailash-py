@@ -156,26 +156,36 @@ class SchemaCache:
 
             if entry is None:
                 self._misses += 1
-                logger.debug(f"Cache MISS: {model_name}")
+                logger.debug(
+                    "schema_cache.cache_miss", extra={"model_name": model_name}
+                )
                 return False
 
             # Check if entry is expired
             if self._is_expired(entry):
                 self._evictions += 1
                 del self._cache[cache_key]
-                logger.debug(f"Cache EXPIRED: {model_name}")
+                logger.debug(
+                    "schema_cache.cache_expired", extra={"model_name": model_name}
+                )
                 return False
 
             # Check if in failure state with backoff
             if entry.state == TableState.FAILED:
                 if self._should_retry_after_failure(entry):
                     self._misses += 1
-                    logger.debug(f"Cache RETRY after failure: {model_name}")
+                    logger.debug(
+                        "schema_cache.cache_retry_after_failure",
+                        extra={"model_name": model_name},
+                    )
                     return False
                 else:
                     # Still in backoff period
                     self._hits += 1
-                    logger.debug(f"Cache HIT (failure state, in backoff): {model_name}")
+                    logger.debug(
+                        "schema_cache.cache_hit_failure_state_in_backoff",
+                        extra={"model_name": model_name},
+                    )
                     return False  # Force caller to skip retry
 
             # Check schema checksum if validation enabled
@@ -194,7 +204,7 @@ class SchemaCache:
                 self._hits += 1
                 entry.validation_count += 1
                 entry.last_validated_at = time.time()
-                logger.debug(f"Cache HIT: {model_name}")
+                logger.debug("schema_cache.cache_hit", extra={"model_name": model_name})
                 return True
 
             # Unknown state
@@ -234,7 +244,9 @@ class SchemaCache:
                 existing.last_failure_reason = None
                 if schema_checksum:
                     existing.schema_checksum = schema_checksum
-                logger.debug(f"Cache UPDATED: {model_name}")
+                logger.debug(
+                    "schema_cache.cache_updated", extra={"model_name": model_name}
+                )
             else:
                 # Create new entry
                 self._cache[cache_key] = TableCacheEntry(
@@ -246,7 +258,9 @@ class SchemaCache:
                     validation_count=1,
                     schema_checksum=schema_checksum,
                 )
-                logger.debug(f"Cache ADDED: {model_name}")
+                logger.debug(
+                    "schema_cache.cache_added", extra={"model_name": model_name}
+                )
 
             # Check cache size limit
             self._enforce_size_limit()
@@ -310,7 +324,9 @@ class SchemaCache:
         with self._lock:
             count = len(self._cache)
             self._cache.clear()
-            logger.info(f"Cache cleared: {count} entries removed")
+            logger.info(
+                "schema_cache.cache_cleared_entries_removed", extra={"count": count}
+            )
 
     def clear_table(self, model_name: str, database_url: str) -> bool:
         """
@@ -332,7 +348,9 @@ class SchemaCache:
             cache_key = self._get_cache_key(model_name, database_url)
             if cache_key in self._cache:
                 del self._cache[cache_key]
-                logger.debug(f"Cache entry removed: {model_name}")
+                logger.debug(
+                    "schema_cache.cache_entry_removed", extra={"model_name": model_name}
+                )
                 return True
             return False
 

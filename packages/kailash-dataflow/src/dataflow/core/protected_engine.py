@@ -153,7 +153,10 @@ class ProtectedDataFlow(DataFlowProtectionMixin, DataFlow):
                     original_node = self._nodes[node_name]
                     protected_node = protect_dataflow_node(original_node)
                     self._nodes[node_name] = protected_node
-                    logger.debug(f"Applied protection to {node_name}")
+                    logger.debug(
+                        "protected_engine.applied_protection_to",
+                        extra={"node_name": node_name},
+                    )
 
         return result
 

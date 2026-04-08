@@ -62,14 +62,20 @@ class DatabaseQueryRouter:
         Returns:
             Database configuration to use, or None if no suitable database found
         """
-        logger.debug(f"Routing {query_type.value} query with strategy {strategy}")
+        logger.debug(
+            "query_router.routing_query_with_strategy",
+            extra={"value": query_type.value, "strategy": strategy},
+        )
 
         # If specific database requested, try to use it
         if preferred_database:
             db = self.registry.get_database(preferred_database)
             if db and self.registry.is_database_healthy(preferred_database):
                 return db
-            logger.warning(f"Preferred database {preferred_database} not available")
+            logger.warning(
+                "query_router.preferred_database_not_available",
+                extra={"preferred_database": preferred_database},
+            )
 
         # Filter databases by type if specified
         available_dbs = self.registry.get_available_databases()
@@ -79,7 +85,10 @@ class DatabaseQueryRouter:
             ]
 
         if not available_dbs:
-            logger.error(f"No available databases found for type: {database_type}")
+            logger.error(
+                "query_router.no_available_databases_found_for_type",
+                extra={"database_type": database_type},
+            )
             return None
 
         # Choose strategy based on query type
@@ -123,7 +132,9 @@ class DatabaseQueryRouter:
             return self._select_least_connections(available_dbs)
 
         else:
-            logger.error(f"Unknown routing strategy: {strategy}")
+            logger.error(
+                "query_router.unknown_routing_strategy", extra={"strategy": strategy}
+            )
             return available_dbs[0] if available_dbs else None
 
     def _select_primary(

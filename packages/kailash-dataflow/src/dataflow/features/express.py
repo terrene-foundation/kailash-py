@@ -180,10 +180,15 @@ class DataFlowExpress:
                 if hasattr(self._db, "ensure_table_exists"):
                     await self._db.ensure_table_exists(model)
                     results[model] = True
-                    logger.debug(f"Warmed schema cache for {model}")
+                    logger.debug(
+                        "express.warmed_schema_cache_for", extra={"model": model}
+                    )
             except Exception as e:
                 results[model] = False
-                logger.warning(f"Failed to warm cache for {model}: {e}")
+                logger.warning(
+                    "express.failed_to_warm_cache_for",
+                    extra={"model": model, "error": str(e)},
+                )
 
         self._schema_warmed = True
         return results
@@ -222,7 +227,9 @@ class DataFlowExpress:
         finally:
             elapsed = (time.perf_counter() - start) * 1000  # ms
             self._operation_times.append(elapsed)
-            logger.debug(f"Express {operation}: {elapsed:.2f}ms")
+            logger.debug(
+                "express.express_ms", extra={"operation": operation, "elapsed": elapsed}
+            )
 
     # ========================================================================
     # Validation Helper (TSG-103)
@@ -532,7 +539,7 @@ class DataFlowExpress:
         # Check cache first
         cached_result = await self._cache_get(model, "read", {"id": id}, effective_ttl)
         if cached_result is not None:
-            logger.debug(f"Cache hit for {model}.read({id})")
+            logger.debug("express.cache_hit_for_read", extra={"model": model, "id": id})
             return cached_result
 
         async def _read():
@@ -569,7 +576,10 @@ class DataFlowExpress:
                     or "no record" in error_str
                     or "does not exist" in error_str
                 ):
-                    logger.debug(f"Record not found for {model}.read({id})")
+                    logger.debug(
+                        "express.record_not_found_for_read",
+                        extra={"model": model, "id": id},
+                    )
                     await self._trust_record_success(
                         model,
                         "read",
@@ -724,7 +734,7 @@ class DataFlowExpress:
         # Check cache first
         cached_result = await self._cache_get(model, "list", params, effective_ttl)
         if cached_result is not None:
-            logger.debug(f"Cache hit for {model}.list")
+            logger.debug("express.cache_hit_for_list", extra={"model": model})
             return cached_result
 
         async def _list():
@@ -828,7 +838,7 @@ class DataFlowExpress:
         # Check cache first
         cached_result = await self._cache_get(model, "find_one", params, effective_ttl)
         if cached_result is not None:
-            logger.debug(f"Cache hit for {model}.find_one")
+            logger.debug("express.cache_hit_for_find_one", extra={"model": model})
             return cached_result
 
         async def _find_one():
@@ -902,7 +912,7 @@ class DataFlowExpress:
         # Check cache first
         cached_result = await self._cache_get(model, "count", params, effective_ttl)
         if cached_result is not None:
-            logger.debug(f"Cache hit for {model}.count")
+            logger.debug("express.cache_hit_for_count", extra={"model": model})
             return cached_result
 
         async def _count():

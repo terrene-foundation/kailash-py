@@ -255,7 +255,10 @@ class UnifiedSchemaComparator:
                 # This is a fallback that shouldn't normally be needed
                 return table_data
         else:
-            logger.warning(f"Unknown schema input format: {type(schema_input)}")
+            logger.warning(
+                "schema_comparator.unknown_schema_input_format",
+                extra={"type": type(schema_input)},
+            )
             return None
 
     def _detect_table_changes(

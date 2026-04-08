@@ -682,13 +682,18 @@ class DataFlowGateway:
         if not self.nexus:
             await self.create_nexus_gateway(**kwargs)
 
-        logger.info(f"Starting DataFlow Gateway: {self.name}")
+        logger.info(
+            "gateway_integration.starting_dataflow_gateway", extra={"name": self.name}
+        )
         await self.nexus.start()
 
     async def stop(self) -> None:
         """Stop the DataFlow gateway."""
         if self.nexus:
-            logger.info(f"Stopping DataFlow Gateway: {self.name}")
+            logger.info(
+                "gateway_integration.stopping_dataflow_gateway",
+                extra={"name": self.name},
+            )
             await self.nexus.stop()
 
     def close(self):

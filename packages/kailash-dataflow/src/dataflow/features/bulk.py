@@ -389,7 +389,7 @@ class BulkOperations:
                     transaction_mode="auto",
                 )
 
-                logger.warning(f"BULK_CREATE: SQL result={result}")
+                logger.warning("bulk.bulk_create_sql_result", extra={"result": result})
 
                 # Use shared result processor for consistent behavior
                 # This applies the Phase 1 fix: fallback to batch_size when rows_affected=0
@@ -417,7 +417,9 @@ class BulkOperations:
                 "batches": batches_processed,
                 "batch_size": batch_size,
             }
-            logger.warning(f"BULK_CREATE SUCCESS: {success_result}")
+            logger.warning(
+                "bulk.bulk_create_success", extra={"success_result": success_result}
+            )
             return success_result
 
         except Exception as e:
@@ -426,8 +428,12 @@ class BulkOperations:
                 "error": f"Bulk create operation failed: {str(e)}",
                 "records_processed": 0,
             }
-            logger.error(f"BULK_CREATE EXCEPTION: {e}", exc_info=True)
-            logger.error(f"BULK_CREATE ERROR RESULT: {error_result}")
+            logger.error(
+                "bulk.bulk_create_exception", extra={"error": str(e)}, exc_info=True
+            )
+            logger.error(
+                "bulk.bulk_create_error_result", extra={"error_result": error_result}
+            )
             return error_result
 
     async def bulk_update(
@@ -473,7 +479,10 @@ class BulkOperations:
                     "Set confirmed=True to proceed or provide a specific filter.",
                     "records_processed": 0,
                 }
-                logger.error(f"BULK_UPDATE VALIDATION FAILED: {error_result}")
+                logger.error(
+                    "bulk.bulk_update_validation_failed",
+                    extra={"error_result": error_result},
+                )
                 return error_result
 
         if is_filter_based:
@@ -564,7 +573,7 @@ class BulkOperations:
                     transaction_mode="auto",
                 )
 
-                logger.warning(f"BULK_UPDATE: SQL result={result}")
+                logger.warning("bulk.bulk_update_sql_result", extra={"result": result})
 
                 # Extract rows_affected from result
                 # NEW format: {'result': {'data': {'rows_affected': N}, ...}}
@@ -589,7 +598,9 @@ class BulkOperations:
                     "failure_count": 0,
                     "success": True,
                 }
-                logger.warning(f"BULK_UPDATE SUCCESS: {success_result}")
+                logger.warning(
+                    "bulk.bulk_update_success", extra={"success_result": success_result}
+                )
                 return success_result
             except Exception as e:
                 error_result = {
@@ -597,8 +608,13 @@ class BulkOperations:
                     "error": f"Bulk update operation failed: {str(e)}",
                     "records_processed": 0,
                 }
-                logger.error(f"BULK_UPDATE EXCEPTION: {e}", exc_info=True)
-                logger.error(f"BULK_UPDATE ERROR RESULT: {error_result}")
+                logger.error(
+                    "bulk.bulk_update_exception", extra={"error": str(e)}, exc_info=True
+                )
+                logger.error(
+                    "bulk.bulk_update_error_result",
+                    extra={"error_result": error_result},
+                )
                 return error_result
         elif data is not None:
             # Data-based bulk update - update records by id
@@ -749,7 +765,9 @@ class BulkOperations:
                     "batch_size": batch_size,
                     "success": True,
                 }
-                logger.warning(f"BULK_UPDATE SUCCESS: {success_result}")
+                logger.warning(
+                    "bulk.bulk_update_success", extra={"success_result": success_result}
+                )
                 return success_result
             except Exception as e:
                 error_result = {
@@ -757,8 +775,13 @@ class BulkOperations:
                     "error": f"Bulk update operation failed: {str(e)}",
                     "records_processed": 0,
                 }
-                logger.error(f"BULK_UPDATE EXCEPTION: {e}", exc_info=True)
-                logger.error(f"BULK_UPDATE ERROR RESULT: {error_result}")
+                logger.error(
+                    "bulk.bulk_update_exception", extra={"error": str(e)}, exc_info=True
+                )
+                logger.error(
+                    "bulk.bulk_update_error_result",
+                    extra={"error_result": error_result},
+                )
                 return error_result
 
         return {"success": False, "error": "Either data or filter+update required"}
@@ -800,7 +823,10 @@ class BulkOperations:
                     "Set confirmed=True to proceed or provide a specific filter.",
                     "records_processed": 0,
                 }
-                logger.error(f"BULK_DELETE VALIDATION FAILED: {error_result}")
+                logger.error(
+                    "bulk.bulk_delete_validation_failed",
+                    extra={"error_result": error_result},
+                )
                 return error_result
 
         if filter_criteria is not None:
@@ -848,7 +874,10 @@ class BulkOperations:
                     validate_queries=False,
                     transaction_mode="auto",
                 )
-                logger.warning(f"BULK_DELETE: Pre-delete count check: {check_result}")
+                logger.warning(
+                    "bulk.bulk_delete_pre_delete_count_check",
+                    extra={"check_result": check_result},
+                )
 
                 query = f"DELETE FROM {table_name} {where_clause}"
                 logger.warning(
@@ -863,7 +892,7 @@ class BulkOperations:
                     transaction_mode="auto",
                 )
 
-                logger.warning(f"BULK_DELETE: SQL result={result}")
+                logger.warning("bulk.bulk_delete_sql_result", extra={"result": result})
 
                 # Extract rows_affected from result
                 # NEW format: {'result': {'data': {'rows_affected': N}, ...}}
@@ -887,7 +916,9 @@ class BulkOperations:
                     "failure_count": 0,
                     "success": True,
                 }
-                logger.warning(f"BULK_DELETE SUCCESS: {success_result}")
+                logger.warning(
+                    "bulk.bulk_delete_success", extra={"success_result": success_result}
+                )
                 return success_result
             except Exception as e:
                 error_result = {
@@ -895,8 +926,13 @@ class BulkOperations:
                     "error": f"Bulk delete operation failed: {str(e)}",
                     "records_processed": 0,
                 }
-                logger.error(f"BULK_DELETE EXCEPTION: {e}", exc_info=True)
-                logger.error(f"BULK_DELETE ERROR RESULT: {error_result}")
+                logger.error(
+                    "bulk.bulk_delete_exception", extra={"error": str(e)}, exc_info=True
+                )
+                logger.error(
+                    "bulk.bulk_delete_error_result",
+                    extra={"error_result": error_result},
+                )
                 return error_result
         elif data is not None:
             # Data-based bulk delete (empty list [] is valid)
@@ -1069,7 +1105,7 @@ class BulkOperations:
                     transaction_mode="auto",
                 )
 
-                logger.warning(f"BULK_UPSERT: SQL result={result}")
+                logger.warning("bulk.bulk_upsert_sql_result", extra={"result": result})
 
                 # Extract operation counts from result
                 # For UPSERT operations, we need to parse the result to determine
@@ -1096,7 +1132,9 @@ class BulkOperations:
                 "conflict_resolution": conflict_resolution,
                 "success": True,
             }
-            logger.warning(f"BULK_UPSERT SUCCESS: {success_result}")
+            logger.warning(
+                "bulk.bulk_upsert_success", extra={"success_result": success_result}
+            )
             return success_result
 
         except Exception as e:
@@ -1108,8 +1146,12 @@ class BulkOperations:
                 "updated": 0,
                 "skipped": 0,
             }
-            logger.error(f"BULK_UPSERT EXCEPTION: {e}", exc_info=True)
-            logger.error(f"BULK_UPSERT ERROR RESULT: {error_result}")
+            logger.error(
+                "bulk.bulk_upsert_exception", extra={"error": str(e)}, exc_info=True
+            )
+            logger.error(
+                "bulk.bulk_upsert_error_result", extra={"error_result": error_result}
+            )
             return error_result
 
     def _build_postgresql_upsert(

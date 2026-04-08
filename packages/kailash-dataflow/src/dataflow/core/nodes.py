@@ -8,30 +8,39 @@ from typing import Any, Dict, List, Optional, Type, Union
 
 try:
     from kailash.nodes.base import Node, NodeParameter, NodeRegistry
+
     if not hasattr(NodeRegistry, "register"):
         # kailash 3.x Rust NodeRegistry — provide a no-op stub
         class NodeRegistry:  # type: ignore[no-redef]
             @staticmethod
             def register(*args, **kwargs):
                 pass
+
             @staticmethod
             def unregister_nodes(*args, **kwargs):
                 pass
+
 except ImportError:
+
     class Node:  # type: ignore[no-redef]
         def __init__(self, **kwargs):
             pass
+
     class NodeParameter:  # type: ignore[no-redef]
         def __init__(self, **kwargs):
             for k, v in kwargs.items():
                 setattr(self, k, v)
+
     class NodeRegistry:  # type: ignore[no-redef]
         @staticmethod
         def register(*args, **kwargs):
             pass
+
         @staticmethod
         def unregister_nodes(*args, **kwargs):
             pass
+
+
 try:
     from kailash.nodes.base_async import AsyncNode
 except ImportError:
@@ -1238,7 +1247,10 @@ class NodeGenerator:
                 if self.dataflow_instance and hasattr(
                     self.dataflow_instance, "ensure_table_exists"
                 ):
-                    logger.debug(f"Ensuring table exists for model {self.model_name}")
+                    logger.debug(
+                        "nodes.ensuring_table_exists_for_model",
+                        extra={"model_name": self.model_name},
+                    )
                     try:
                         table_created = (
                             await self.dataflow_instance.ensure_table_exists(
@@ -1501,7 +1513,9 @@ class NodeGenerator:
 
                         # ADR-002: Changed from WARNING to DEBUG - SQLite result tracing
                         if database_type == "sqlite":
-                            logger.debug(f"SQLite INSERT result: {result}")
+                            logger.debug(
+                                "nodes.sqlite_insert_result", extra={"result": result}
+                            )
 
                         if result and "result" in result and "data" in result["result"]:
                             row = result["result"]["data"]
@@ -1785,7 +1799,9 @@ class NodeGenerator:
                             )
                             logger.error(error_msg)
                         else:
-                            logger.error(f"Create operation failed: {e}")
+                            logger.error(
+                                "nodes.create_operation_failed", extra={"error": str(e)}
+                            )
                             error_msg = str(e)
 
                         return {"success": False, "error": error_msg}
@@ -2470,7 +2486,7 @@ class NodeGenerator:
                         validate_queries=False,
                         transaction_mode="auto",  # Ensure auto-commit for delete operations
                     )
-                    logger.debug(f"DELETE result: {result}")
+                    logger.debug("nodes.delete_result", extra={"result": result})
 
                     # Check if delete was successful
                     if result and "result" in result:
@@ -2585,9 +2601,14 @@ class NodeGenerator:
                             )
 
                     # Debug logging
-                    logger.debug(f"List operation - filter_dict: {filter_dict}")
-                    logger.debug(f"List operation - sort: {sort}")
-                    logger.debug(f"List operation - order_by: {order_by}")
+                    logger.debug(
+                        "nodes.list_operation_filter_dict",
+                        extra={"filter_dict": filter_dict},
+                    )
+                    logger.debug("nodes.list_operation_sort", extra={"sort": sort})
+                    logger.debug(
+                        "nodes.list_operation_order_by", extra={"order_by": order_by}
+                    )
 
                     # Use QueryBuilder if filters are provided
                     # FIXED: Changed from truthiness check to key existence check
@@ -2707,8 +2728,13 @@ class NodeGenerator:
                         )
 
                         # Debug logging
-                        logger.debug(f"List operation - Executing query: {query}")
-                        logger.debug(f"List operation - With params: {params}")
+                        logger.debug(
+                            "nodes.list_operation_executing_query",
+                            extra={"query": query},
+                        )
+                        logger.debug(
+                            "nodes.list_operation_with_params", extra={"params": params}
+                        )
                         logger.debug(
                             f"List operation - Connection: {mask_sensitive_values(connection_string[:50])}..."
                         )
@@ -2782,13 +2808,19 @@ class NodeGenerator:
                             cache_ttl=cache_ttl,
                             cache_key_override=cache_key_override,
                         )
-                        logger.debug(f"List operation - Cache result: {result}")
+                        logger.debug(
+                            "nodes.list_operation_cache_result",
+                            extra={"result": result},
+                        )
                         return result
                     else:
                         # Execute directly without caching
                         logger.debug("List operation - Executing without cache")
                         result = await execute_query()
-                        logger.debug(f"List operation - Direct result: {result}")
+                        logger.debug(
+                            "nodes.list_operation_direct_result",
+                            extra={"result": result},
+                        )
                         return result
 
                 elif operation == "upsert":
@@ -3161,7 +3193,10 @@ class NodeGenerator:
                             )
 
                     # Debug logging
-                    logger.debug(f"Count operation - filter_dict: {filter_dict}")
+                    logger.debug(
+                        "nodes.count_operation_filter_dict",
+                        extra={"filter_dict": filter_dict},
+                    )
 
                     # Use QueryBuilder if filters are provided
                     has_filters = "filter" in kwargs or has_soft_delete
@@ -3229,9 +3264,16 @@ class NodeGenerator:
                     db_type = ConnectionParser.detect_database_type(connection_string)
 
                     # Debug logging
-                    logger.debug(f"Count operation - Executing query: {query}")
-                    logger.debug(f"Count operation - With params: {params}")
-                    logger.debug(f"Count operation - Database type: {db_type}")
+                    logger.debug(
+                        "nodes.count_operation_executing_query", extra={"query": query}
+                    )
+                    logger.debug(
+                        "nodes.count_operation_with_params", extra={"params": params}
+                    )
+                    logger.debug(
+                        "nodes.count_operation_database_type",
+                        extra={"db_type": db_type},
+                    )
 
                     # Apply tenant isolation to the count query
                     query, params = self._apply_tenant_isolation(query, params)
@@ -3248,7 +3290,10 @@ class NodeGenerator:
                         transaction_mode="auto",
                     )
 
-                    logger.debug(f"Count operation - Result from SQL: {result}")
+                    logger.debug(
+                        "nodes.count_operation_result_from_sql",
+                        extra={"result": result},
+                    )
 
                     # Extract count from result
                     if result and "result" in result and "data" in result["result"]:
@@ -3370,7 +3415,10 @@ class NodeGenerator:
                                 result["error"] = bulk_result["error"]
                             return result
                         except Exception as e:
-                            logger.error(f"Bulk create operation failed: {e}")
+                            logger.error(
+                                "nodes.bulk_create_operation_failed",
+                                extra={"error": str(e)},
+                            )
                             return {
                                 "processed": 0,
                                 "inserted": 0,
@@ -3489,7 +3537,10 @@ class NodeGenerator:
                                 result["error"] = bulk_result["error"]
                             return result
                         except Exception as e:
-                            logger.error(f"Bulk update operation failed: {e}")
+                            logger.error(
+                                "nodes.bulk_update_operation_failed",
+                                extra={"error": str(e)},
+                            )
                             return {
                                 "processed": 0,
                                 "updated": 0,
@@ -3591,7 +3642,10 @@ class NodeGenerator:
                                 result["error"] = bulk_result["error"]
                             return result
                         except Exception as e:
-                            logger.error(f"Bulk delete operation failed: {e}")
+                            logger.error(
+                                "nodes.bulk_delete_operation_failed",
+                                extra={"error": str(e)},
+                            )
                             return {
                                 "processed": 0,
                                 "deleted": 0,  # Alias for compatibility
@@ -3668,7 +3722,10 @@ class NodeGenerator:
                                 result["error"] = bulk_result["error"]
                             return result
                         except Exception as e:
-                            logger.error(f"Bulk upsert operation failed: {e}")
+                            logger.error(
+                                "nodes.bulk_upsert_operation_failed",
+                                extra={"error": str(e)},
+                            )
                             return {
                                 "processed": 0,
                                 "upserted": 0,  # Alias for compatibility
@@ -3730,7 +3787,10 @@ class NodeGenerator:
                             )
                     except Exception as e:
                         # FIXED Bug 011: Use self.logger instead of logger
-                        self.logger.debug(f"Failed to extract TDD connection info: {e}")
+                        self.logger.debug(
+                            "nodes.failed_to_extract_tdd_connection_info",
+                            extra={"error": str(e)},
+                        )
                         return None
 
                 return None
