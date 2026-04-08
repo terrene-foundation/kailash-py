@@ -340,30 +340,46 @@ class AsyncRedisCacheAdapter:
             "memory_usage_mb": stats.get("memory_usage_mb", 0),
         }
 
-    async def invalidate_model(self, model_name: str) -> int:
+    async def invalidate_model(
+        self,
+        model_name: str,
+        tenant_id: Optional[str] = None,
+    ) -> int:
         """
         Invalidate all cache entries for a model (async).
 
-        The key generator produces two key formats:
+        The key generator produces three key formats depending on
+        whether caching runs in single- or multi-tenant mode:
 
-        - Express keys: ``dataflow:v1:{model}:{op}:...``
+        - Express keys (single tenant): ``dataflow:v1:{model}:{op}:...``
+        - Express keys (multi-tenant): ``dataflow:v1:{tenant}:{model}:{op}:...``
         - SQL query keys: ``dataflow:{model}:v1:...``
 
-        Both patterns are scanned so that all entries for the model are
-        removed regardless of which code path created them.
+        All relevant patterns are scanned so that entries for the model
+        are removed regardless of which code path created them.
 
         Args:
-            model_name: Name of the model
+            model_name: Name of the model.
+            tenant_id: Optional per-call tenant identifier for scoped
+                invalidation. When ``None``, invalidation is
+                model-wide; when provided, only the current tenant's
+                Express entries are dropped and SQL-query entries are
+                dropped model-wide (the SQL query key shape has no
+                tenant segment).
 
         Returns:
             Number of keys invalidated
 
         Example:
             >>> deleted = await adapter.invalidate_model("User")
+            >>> deleted = await adapter.invalidate_model("User", tenant_id="acme")
         """
-        # Express keys: dataflow:v1:{model}:*
-        express_pattern = f"dataflow:v1:{model_name}:*"
-        # SQL query keys: dataflow:{model}:v1:*
+        if tenant_id is not None:
+            express_pattern = f"dataflow:v1:{tenant_id}:{model_name}:*"
+        else:
+            express_pattern = f"dataflow:v1:{model_name}:*"
+        # SQL query keys: dataflow:{model}:v1:* — no tenant segment in
+        # the legacy key shape; clearing model-wide is the safe default.
         query_pattern = f"dataflow:{model_name}:v1:*"
 
         express_count = await self.clear_pattern(express_pattern)

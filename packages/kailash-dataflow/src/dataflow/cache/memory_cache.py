@@ -177,7 +177,11 @@ class InMemoryCache:
         async with self.lock:
             self.cache.clear()
 
-    async def invalidate_model(self, model_name: str) -> int:
+    async def invalidate_model(
+        self,
+        model_name: str,
+        tenant_id: Optional[str] = None,
+    ) -> int:
         """
         Invalidate all entries for a model.
 
@@ -186,22 +190,34 @@ class InMemoryCache:
         The key generator produces two formats:
 
         - Express keys: ``dataflow:v1:{model}:{op}:...``
+        - Express keys with tenant: ``dataflow:v1:{tenant}:{model}:{op}:...``
         - SQL query keys: ``dataflow:{model}:v1:...``
 
-        Both are matched by looking for the model name bounded by ``:``
-        delimiters (i.e. ``:{model_name}:``).
+        Matching strategy:
+
+        * Without ``tenant_id``: match keys that contain ``:{model_name}:``
+          as an exact segment. Drops entries for every tenant.
+        * With ``tenant_id``: match keys that contain
+          ``:{tenant_id}:{model_name}:`` so tenant A's write cannot
+          invalidate tenant B's entries. A tenant-less cache layout
+          still matches when the ``tenant_id`` happens to equal the
+          namespace, which is the intended behaviour for single-tenant
+          fallback.
 
         Args:
-            model_name: Name of the model
+            model_name: Name of the model.
+            tenant_id: Optional per-call tenant identifier for scoped
+                invalidation. When ``None``, invalidation is
+                model-wide (every tenant's entries are dropped).
 
         Returns:
             Number of keys invalidated
         """
         async with self.lock:
-            # Match keys containing :{model_name}: as an exact segment.
-            # This prevents "User" from matching "UserAudit" because the
-            # latter would appear as ":UserAudit:" which != ":User:".
-            segment = f":{model_name}:"
+            if tenant_id is not None:
+                segment = f":{tenant_id}:{model_name}:"
+            else:
+                segment = f":{model_name}:"
             keys_to_remove = [k for k in self.cache.keys() if segment in k]
 
             # Remove them
@@ -210,9 +226,12 @@ class InMemoryCache:
 
             self._invalidations += len(keys_to_remove)
             logger.info(
-                "Invalidated %d cache entries for model %s",
-                len(keys_to_remove),
-                model_name,
+                "express.cache.invalidate_model",
+                extra={
+                    "model": model_name,
+                    "tenant_id": tenant_id,
+                    "count": len(keys_to_remove),
+                },
             )
             return len(keys_to_remove)
 

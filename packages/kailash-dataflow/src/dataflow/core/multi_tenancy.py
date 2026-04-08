@@ -36,6 +36,29 @@ class InvalidTenantIdError(Exception):
     pass
 
 
+class TenantRequiredError(Exception):
+    """Raised when a tenant-scoped operation is attempted without a tenant_id.
+
+    DataFlow instances configured with ``multi_tenant=True`` MUST receive a
+    tenant_id for every cache read/write, query interceptor, and audit
+    event. Missing tenant_id is an invariant violation (per
+    ``rules/zero-tolerance.md`` — silent fallback to a "default" tenant
+    would cross-tenant leak data), not an operational failure, so the
+    raise semantics match ``FabricTenantRequiredError``.
+
+    Used by:
+
+    * :class:`DataFlowExpress` — raised from Express CRUD when the
+      caller is in a multi-tenant DataFlow and no tenant is set via
+      :func:`dataflow.core.tenant_context.get_current_tenant_id`.
+    * :class:`FabricCacheBackend` callers — re-exported as
+      ``FabricTenantRequiredError`` for historical reasons; both names
+      refer to the same semantic.
+    """
+
+    pass
+
+
 def _validate_tenant_id(tenant_id: str) -> str:
     """Validate a tenant_id for safe use in SQL identifiers.
 

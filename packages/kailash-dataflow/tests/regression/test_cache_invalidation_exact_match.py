@@ -233,5 +233,7 @@ async def test_express_delegates_invalidation_to_cache_backend():
 
     await express._invalidate_model_cache("User")
 
-    # Must call invalidate_model, NOT clear_pattern
-    mock_cache.invalidate_model.assert_called_once_with("User")
+    # Must call invalidate_model, NOT clear_pattern. Phase 5.7 added a
+    # ``tenant_id`` kwarg to the backend contract; Express passes
+    # ``tenant_id=None`` in single-tenant mode.
+    mock_cache.invalidate_model.assert_called_once_with("User", tenant_id=None)

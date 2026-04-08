@@ -55,6 +55,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 from dataflow.cache.auto_detection import CacheBackend
 from dataflow.cache.key_generator import CacheKeyGenerator
 from dataflow.cache.memory_cache import InMemoryCache
+from dataflow.core.multi_tenancy import TenantRequiredError
+from dataflow.core.tenant_context import get_current_tenant_id
 
 if TYPE_CHECKING:
     from dataflow import DataFlow
@@ -951,6 +953,46 @@ class DataFlowExpress:
     # Cache Helpers (TSG-104)
     # ========================================================================
 
+    def _resolve_tenant_id(self) -> Optional[str]:
+        """Return the tenant_id for cache partitioning, or ``None``.
+
+        Enforces multi-tenant key isolation on every Express cache read
+        and write. When the DataFlow instance is configured with
+        ``multi_tenant=True``, the caller MUST have set a tenant via
+        :class:`dataflow.core.tenant_context.TenantContextSwitch` (or
+        the ContextVar bound by middleware) before invoking any Express
+        method. A missing tenant is an invariant violation — falling
+        back to a shared ``default`` namespace would leak data across
+        tenants, so we raise.
+
+        Returns:
+            The current tenant_id when multi-tenant mode is on; ``None``
+            in single-tenant mode.
+
+        Raises:
+            TenantRequiredError: If multi-tenant mode is on and no
+                tenant is bound to the current async context.
+        """
+        config = getattr(self._db, "config", None)
+        security = getattr(config, "security", None) if config is not None else None
+        # ``is True`` (strict identity) rather than ``bool(...)`` so that
+        # MagicMock-based test fixtures, which return a truthy Mock for
+        # any attribute access, do not accidentally activate the
+        # multi-tenant code path. Real SecurityConfig always stores a
+        # plain bool.
+        multi_tenant = getattr(security, "multi_tenant", False) is True
+        if not multi_tenant:
+            return None
+        tenant_id = get_current_tenant_id()
+        if tenant_id is None:
+            raise TenantRequiredError(
+                "DataFlow is configured with multi_tenant=True but no "
+                "tenant_id is bound to the current context. Bind one via "
+                "`db.tenant_context.switch(tenant_id)` / "
+                "`aswitch(tenant_id)` before calling Express methods."
+            )
+        return tenant_id
+
     async def _cache_get(
         self,
         model: str,
@@ -961,7 +1003,10 @@ class DataFlowExpress:
         """Return cached value or ``None``.  Increments hit/miss counters."""
         if not self._cache_enabled or not self._cache_manager or effective_ttl <= 0:
             return None
-        cache_key = self._key_gen.generate_express_key(model, operation, params)
+        tenant_id = self._resolve_tenant_id()
+        cache_key = self._key_gen.generate_express_key(
+            model, operation, params, tenant_id=tenant_id
+        )
         cached = await self._cache_manager.get(cache_key)
         if cached is not None:
             self._cache_hits += 1
@@ -985,7 +1030,10 @@ class DataFlowExpress:
             or value is None
         ):
             return
-        cache_key = self._key_gen.generate_express_key(model, operation, params)
+        tenant_id = self._resolve_tenant_id()
+        cache_key = self._key_gen.generate_express_key(
+            model, operation, params, tenant_id=tenant_id
+        )
         await self._cache_manager.set(cache_key, value, ttl=effective_ttl)
 
     async def _invalidate_model_cache(self, model: str) -> None:
@@ -994,10 +1042,38 @@ class DataFlowExpress:
         Delegates to the cache backend's ``invalidate_model`` method so
         that key-format matching logic lives in exactly one place per
         backend (InMemoryCache or AsyncRedisCacheAdapter).
+
+        In multi-tenant mode, invalidation is scoped to the current
+        tenant so a write from tenant A cannot drop tenant B's cache
+        entries. The backend's ``invalidate_model`` is expected to
+        accept an optional ``tenant_id`` kwarg; backends that do not
+        yet support it fall back to a model-wide invalidation (safe
+        but over-aggressive).
         """
         if not self._cache_enabled or not self._cache_manager:
             return
-        await self._cache_manager.invalidate_model(model)
+        tenant_id = self._resolve_tenant_id()
+        invalidate_fn = self._cache_manager.invalidate_model
+        try:
+            await invalidate_fn(model, tenant_id=tenant_id)
+        except TypeError:
+            # Backend predates tenant-scoped invalidation — fall back
+            # to model-wide (conservative: drops the current tenant's
+            # entries plus every other tenant's entries for this
+            # model). Logged as a warning so the gap is visible.
+            if tenant_id is not None:
+                logger.warning(
+                    "express.cache.invalidate_model.tenant_fallback",
+                    extra={
+                        "model": model,
+                        "tenant_id": tenant_id,
+                        "reason": (
+                            "cache backend does not accept tenant_id kwarg; "
+                            "falling back to model-wide invalidation"
+                        ),
+                    },
+                )
+            await invalidate_fn(model)
 
     # ========================================================================
     # Cache Management
