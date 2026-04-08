@@ -194,7 +194,10 @@ class SQLitePerformanceMonitor:
                     await self._check_alert_conditions()
 
                 except Exception as e:
-                    logger.error(f"Error in monitoring loop: {e}")
+                    logger.error(
+                        "sqlite_monitor.error_in_monitoring_loop",
+                        extra={"error": str(e)},
+                    )
 
                 # Calculate sleep time to maintain consistent interval
                 elapsed = time.time() - start_time
@@ -213,7 +216,10 @@ class SQLitePerformanceMonitor:
             self._baseline_metrics = await self.adapter.get_performance_metrics()
             logger.info("Collected baseline SQLite performance metrics")
         except Exception as e:
-            logger.warning(f"Failed to collect baseline metrics: {e}")
+            logger.warning(
+                "sqlite_monitor.failed_to_collect_baseline_metrics",
+                extra={"error": str(e)},
+            )
 
     async def _collect_performance_snapshot(self) -> None:
         """Collect a comprehensive performance snapshot."""
@@ -254,7 +260,10 @@ class SQLitePerformanceMonitor:
             self._last_monitoring_time = current_time
 
         except Exception as e:
-            logger.error(f"Failed to collect performance snapshot: {e}")
+            logger.error(
+                "sqlite_monitor.failed_to_collect_performance_snapshot",
+                extra={"error": str(e)},
+            )
 
     async def _collect_wal_metrics(self) -> SQLiteWALMetrics:
         """Collect WAL-specific performance metrics."""
@@ -300,7 +309,9 @@ class SQLitePerformanceMonitor:
             )
 
         except Exception as e:
-            logger.warning(f"Failed to collect WAL metrics: {e}")
+            logger.warning(
+                "sqlite_monitor.failed_to_collect_wal_metrics", extra={"error": str(e)}
+            )
             return SQLiteWALMetrics(
                 wal_size_mb=0.0,
                 wal_pages=0,
@@ -367,7 +378,10 @@ class SQLitePerformanceMonitor:
                 )
 
         except Exception as e:
-            logger.warning(f"Failed to analyze fragmentation: {e}")
+            logger.warning(
+                "sqlite_monitor.failed_to_analyze_fragmentation",
+                extra={"error": str(e)},
+            )
             return SQLiteFragmentationAnalysis(
                 total_pages=0,
                 free_pages=0,
@@ -427,7 +441,10 @@ class SQLitePerformanceMonitor:
                 )
 
         except Exception as e:
-            logger.warning(f"Failed to collect index metrics: {e}")
+            logger.warning(
+                "sqlite_monitor.failed_to_collect_index_metrics",
+                extra={"error": str(e)},
+            )
 
     async def track_query_performance(
         self,
@@ -504,7 +521,10 @@ class SQLitePerformanceMonitor:
                     del self.query_metrics[query_hash]
 
         except Exception as e:
-            logger.warning(f"Failed to track query performance: {e}")
+            logger.warning(
+                "sqlite_monitor.failed_to_track_query_performance",
+                extra={"error": str(e)},
+            )
 
     def _normalize_query(self, query: str) -> str:
         """Normalize query for template grouping."""
@@ -587,7 +607,10 @@ class SQLitePerformanceMonitor:
             )
 
         except Exception as e:
-            logger.warning(f"Failed to analyze performance trends: {e}")
+            logger.warning(
+                "sqlite_monitor.failed_to_analyze_performance_trends",
+                extra={"error": str(e)},
+            )
 
     async def _generate_optimization_recommendations(self) -> None:
         """Generate optimization recommendations based on current metrics."""
@@ -659,7 +682,10 @@ class SQLitePerformanceMonitor:
             ]  # Keep last 50 recommendations
 
         except Exception as e:
-            logger.warning(f"Failed to generate optimization recommendations: {e}")
+            logger.warning(
+                "sqlite_monitor.failed_to_generate_optimization_recommendations",
+                extra={"error": str(e)},
+            )
 
     async def _check_alert_conditions(self) -> None:
         """Check for alert conditions and log warnings."""
@@ -695,10 +721,16 @@ class SQLitePerformanceMonitor:
             )
 
             if slow_query_count > 0:
-                logger.warning(f"Detected {slow_query_count} slow query patterns")
+                logger.warning(
+                    "sqlite_monitor.detected_slow_query_patterns",
+                    extra={"slow_query_count": slow_query_count},
+                )
 
         except Exception as e:
-            logger.warning(f"Failed to check alert conditions: {e}")
+            logger.warning(
+                "sqlite_monitor.failed_to_check_alert_conditions",
+                extra={"error": str(e)},
+            )
 
     def get_performance_report(self) -> Dict[str, Any]:
         """Generate comprehensive performance report."""
@@ -769,9 +801,15 @@ class SQLitePerformanceMonitor:
             with open(output_file, "w") as f:
                 json.dump(export_data, f, indent=2)
 
-            logger.info(f"Performance data exported to {output_file}")
+            logger.info(
+                "sqlite_monitor.performance_data_exported_to",
+                extra={"output_file": output_file},
+            )
             return True
 
         except Exception as e:
-            logger.error(f"Failed to export performance data: {e}")
+            logger.error(
+                "sqlite_monitor.failed_to_export_performance_data",
+                extra={"error": str(e)},
+            )
             return False

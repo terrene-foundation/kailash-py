@@ -104,7 +104,10 @@ class WorkflowAnalyzer:
         Returns:
             List of optimization opportunities ordered by estimated impact
         """
-        logger.info(f"Analyzing workflow with {len(workflow.get('nodes', {}))} nodes")
+        logger.info(
+            "workflow_analyzer.analyzing_workflow_with_nodes",
+            extra={"count": len(workflow.get("nodes", {}))},
+        )
 
         # Convert workflow to internal representation
         nodes = self._parse_workflow(workflow)
@@ -121,7 +124,10 @@ class WorkflowAnalyzer:
             reverse=True,
         )
 
-        logger.info(f"Found {len(opportunities)} optimization opportunities")
+        logger.info(
+            "workflow_analyzer.found_optimization_opportunities",
+            extra={"count": len(opportunities)},
+        )
         return opportunities
 
     def _parse_workflow(self, workflow: Dict[str, Any]) -> List[WorkflowNode]:

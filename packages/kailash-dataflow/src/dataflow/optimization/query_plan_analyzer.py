@@ -228,7 +228,10 @@ class QueryPlanAnalyzer:
         Returns:
             Comprehensive analysis of the query plan
         """
-        logger.info(f"Analyzing query plan for {self.dialect.value} query")
+        logger.info(
+            "query_plan_analyzer.analyzing_query_plan_for_query",
+            extra={"value": self.dialect.value},
+        )
 
         # Parse the execution plan
         plan_nodes = self._parse_execution_plan(execution_plan)
@@ -294,7 +297,10 @@ class QueryPlanAnalyzer:
                 )
                 analyses.append(analysis)
             except Exception as e:
-                logger.warning(f"Failed to analyze plan for query: {e}")
+                logger.warning(
+                    "query_plan_analyzer.failed_to_analyze_plan_for_query",
+                    extra={"error": str(e)},
+                )
 
         return analyses
 
@@ -801,9 +807,7 @@ class QueryPlanAnalyzer:
             status = (
                 "✅"
                 if analysis.optimization_score >= 80
-                else "⚠️"
-                if analysis.optimization_score >= 60
-                else "❌"
+                else "⚠️" if analysis.optimization_score >= 60 else "❌"
             )
             report += f"{i}. {status} Score: {analysis.optimization_score:.1f} - {analysis.execution_time_ms:.1f}ms\n"
             if len(analysis.query_sql) > 50:

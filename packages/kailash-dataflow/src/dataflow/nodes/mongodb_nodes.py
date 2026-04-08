@@ -7,10 +7,10 @@ Provides workflow nodes for MongoDB document database operations.
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from dataflow.adapters.mongodb import MongoDBAdapter
-
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
+
+from dataflow.adapters.mongodb import MongoDBAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,9 @@ class DocumentInsertNode(AsyncNode):
             }
 
         except Exception as e:
-            logger.error(f"Document insert failed: {e}")
+            logger.error(
+                "mongodb_nodes.document_insert_failed", extra={"error": str(e)}
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -233,7 +235,7 @@ class DocumentFindNode(AsyncNode):
             }
 
         except Exception as e:
-            logger.error(f"Document find failed: {e}")
+            logger.error("mongodb_nodes.document_find_failed", extra={"error": str(e)})
             return {
                 "documents": [],
                 "count": 0,
@@ -357,7 +359,9 @@ class DocumentUpdateNode(AsyncNode):
             }
 
         except Exception as e:
-            logger.error(f"Document update failed: {e}")
+            logger.error(
+                "mongodb_nodes.document_update_failed", extra={"error": str(e)}
+            )
             return {
                 "matched_count": 0,
                 "modified_count": 0,
@@ -456,7 +460,9 @@ class DocumentDeleteNode(AsyncNode):
             }
 
         except Exception as e:
-            logger.error(f"Document delete failed: {e}")
+            logger.error(
+                "mongodb_nodes.document_delete_failed", extra={"error": str(e)}
+            )
             return {
                 "deleted_count": 0,
                 "error": str(e),
@@ -559,7 +565,7 @@ class AggregateNode(AsyncNode):
             }
 
         except Exception as e:
-            logger.error(f"Aggregation failed: {e}")
+            logger.error("mongodb_nodes.aggregation_failed", extra={"error": str(e)})
             return {
                 "results": [],
                 "count": 0,
@@ -672,7 +678,9 @@ class BulkDocumentInsertNode(AsyncNode):
             }
 
         except Exception as e:
-            logger.error(f"Bulk document insert failed: {e}")
+            logger.error(
+                "mongodb_nodes.bulk_document_insert_failed", extra={"error": str(e)}
+            )
             return {
                 "success": False,
                 "inserted_ids": [],
@@ -788,7 +796,7 @@ class CreateIndexNode(AsyncNode):
             }
 
         except Exception as e:
-            logger.error(f"Index creation failed: {e}")
+            logger.error("mongodb_nodes.index_creation_failed", extra={"error": str(e)})
             return {
                 "success": False,
                 "error": str(e),
@@ -869,7 +877,7 @@ class DocumentCountNode(AsyncNode):
             return {"count": count, "collection": validated_inputs["collection"]}
 
         except Exception as e:
-            logger.error(f"Document count failed: {e}")
+            logger.error("mongodb_nodes.document_count_failed", extra={"error": str(e)})
             return {
                 "count": 0,
                 "error": str(e),

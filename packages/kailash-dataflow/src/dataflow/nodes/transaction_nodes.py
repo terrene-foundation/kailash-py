@@ -159,7 +159,9 @@ class TransactionScopeNode(AsyncNode):
             }
 
         except Exception as e:
-            logger.error(f"Failed to begin transaction: {e}")
+            logger.error(
+                "transaction_nodes.failed_to_begin_transaction", extra={"error": str(e)}
+            )
             raise NodeExecutionError(f"Failed to begin transaction: {e}") from e
 
 
@@ -200,7 +202,10 @@ class TransactionCommitNode(AsyncNode):
             self.set_workflow_context("transaction_id", None)
             self.set_workflow_context("savepoints", None)
 
-            logger.info(f"Transaction {transaction_id} committed successfully")
+            logger.info(
+                "transaction_nodes.transaction_committed_successfully",
+                extra={"transaction_id": transaction_id},
+            )
 
             return {
                 "status": "committed",
@@ -209,7 +214,10 @@ class TransactionCommitNode(AsyncNode):
             }
 
         except Exception as e:
-            logger.error(f"Failed to commit transaction {transaction_id}: {e}")
+            logger.error(
+                "transaction_nodes.failed_to_commit_transaction",
+                extra={"transaction_id": transaction_id, "error": str(e)},
+            )
             # Attempt cleanup on commit failure
             try:
                 if txn_ctx is not None:
@@ -272,7 +280,10 @@ class TransactionRollbackNode(AsyncNode):
             self.set_workflow_context("transaction_id", None)
             self.set_workflow_context("savepoints", None)
 
-            logger.info(f"Transaction {transaction_id} rolled back (reason: {reason})")
+            logger.info(
+                "transaction_nodes.transaction_rolled_back_reason",
+                extra={"transaction_id": transaction_id, "reason": reason},
+            )
 
             return {
                 "status": "rolled_back",
@@ -282,7 +293,10 @@ class TransactionRollbackNode(AsyncNode):
             }
 
         except Exception as e:
-            logger.error(f"Failed to rollback transaction {transaction_id}: {e}")
+            logger.error(
+                "transaction_nodes.failed_to_rollback_transaction",
+                extra={"transaction_id": transaction_id, "error": str(e)},
+            )
             # Attempt cleanup
             try:
                 if txn_ctx is not None:

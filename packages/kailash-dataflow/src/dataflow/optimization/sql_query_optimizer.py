@@ -196,9 +196,15 @@ FROM {primary_table} p
                 if optimized_query:
                     optimized_queries.append(optimized_query)
             except Exception as e:
-                logger.warning(f"Failed to optimize {opportunity.pattern_type}: {e}")
+                logger.warning(
+                    "sql_query_optimizer.failed_to_optimize",
+                    extra={"pattern_type": opportunity.pattern_type, "error": str(e)},
+                )
 
-        logger.info(f"Generated {len(optimized_queries)} optimized queries")
+        logger.info(
+            "sql_query_optimizer.generated_optimized_queries",
+            extra={"count": len(optimized_queries)},
+        )
         return optimized_queries
 
     def _optimize_single_opportunity(
@@ -216,7 +222,10 @@ FROM {primary_table} p
         elif pattern_type == PatternType.INEFFICIENT_JOINS:
             return self._optimize_inefficient_joins_pattern(opportunity)
         else:
-            logger.warning(f"No optimizer for pattern type: {pattern_type}")
+            logger.warning(
+                "sql_query_optimizer.no_optimizer_for_pattern_type",
+                extra={"pattern_type": pattern_type},
+            )
             return None
 
     def _optimize_qma_pattern(

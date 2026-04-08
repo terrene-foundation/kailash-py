@@ -167,13 +167,22 @@ class RetryHandler:
 
         for attempt in range(1, self.config.max_attempts + 1):
             try:
-                logger.debug(f"Retry attempt {attempt}/{self.config.max_attempts}")
+                logger.debug(
+                    "resilience.retry_attempt",
+                    extra={
+                        "attempt": attempt,
+                        "max_attempts": self.config.max_attempts,
+                    },
+                )
                 result = await func(*args, **kwargs)
 
                 # Success!
                 self._record_success(attempt)
                 if attempt > 1:
-                    logger.info(f"Operation succeeded after {attempt} attempts")
+                    logger.info(
+                        "resilience.operation_succeeded_after_attempts",
+                        extra={"attempt": attempt},
+                    )
                 return result
 
             except Exception as e:
@@ -450,7 +459,9 @@ class CircuitBreaker:
         self.state = CircuitState.OPEN
         self.success_count = 0
         self._metrics["state_changes"] += 1
-        logger.error(f"Circuit breaker: {old_state.value} -> OPEN")
+        logger.error(
+            "resilience.circuit_breaker_open", extra={"value": old_state.value}
+        )
 
     def _transition_to_half_open(self):
         """Transition to HALF_OPEN state (must hold lock)."""
@@ -469,7 +480,10 @@ class CircuitBreaker:
         self.failure_count = 0
         self.success_count = 0
         self._metrics["state_changes"] += 1
-        logger.info(f"Circuit breaker: {old_state.value} -> CLOSED (recovered)")
+        logger.info(
+            "resilience.circuit_breaker_closed_recovered",
+            extra={"value": old_state.value},
+        )
 
     def get_metrics(self) -> Dict[str, Any]:
         """

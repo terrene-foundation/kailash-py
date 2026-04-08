@@ -91,7 +91,10 @@ class AggregateNode(Node):
         numeric_fields = kwargs.get("numeric_fields", [])
         return_details = kwargs.get("return_details", False)
 
-        logger.info(f"Executing AggregateNode with expression: {aggregate_expression}")
+        logger.info(
+            "aggregate_operations.executing_aggregatenode_with_expression",
+            extra={"aggregate_expression": aggregate_expression},
+        )
 
         if not data:
             return {
@@ -134,7 +137,10 @@ class AggregateNode(Node):
             }
 
         except Exception as e:
-            logger.error(f"Failed to execute aggregation '{aggregate_expression}': {e}")
+            logger.error(
+                "aggregate_operations.failed_to_execute_aggregation",
+                extra={"aggregate_expression": aggregate_expression, "error": str(e)},
+            )
             return {
                 "result": None,
                 "aggregate_expression": aggregate_expression,
