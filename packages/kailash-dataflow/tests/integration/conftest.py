@@ -87,7 +87,7 @@ def no_mocking_policy_integration():
     """Autouse policy fixture for every Tier 2 integration test.
 
     Complements the ``pytest_collectstart`` AST gate above — if a future
-    test body constructs ``Mock()`` or ``MagicMock()`` via dynamic
+    test body constructs a mocking-library double via dynamic
     ``importlib.import_module`` bypassing the module-level import check,
     this fixture catches the unexpected runtime binding and raises.
     """
