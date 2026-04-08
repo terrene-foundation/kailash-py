@@ -382,6 +382,9 @@ class PipelineExecutor:
         returned before the backend rewrite, so existing callers do not
         need to change.
         """
+        from dataflow.fabric.metrics import get_fabric_metrics
+
+        metrics = get_fabric_metrics()
         key = _cache_key(product_name, params, tenant_id)
         entry = await self._cache.get(key)
         if entry is None:
@@ -393,6 +396,7 @@ class PipelineExecutor:
                     "mode": "real",
                 },
             )
+            metrics.record_cache_miss(product=product_name)
             return None
 
         logger.debug(
@@ -403,6 +407,7 @@ class PipelineExecutor:
                 "mode": "cached",
             },
         )
+        metrics.record_cache_hit(product=product_name)
 
         # Reconstruct the legacy metadata dict the callers expect.
         meta: Dict[str, Any] = dict(entry.metadata)
@@ -410,6 +415,17 @@ class PipelineExecutor:
         meta.setdefault("content_hash", entry.content_hash)
         meta.setdefault("size_bytes", entry.size_bytes)
         meta.setdefault("schema_version", entry.schema_version)
+
+        # Surface product age via the gauge so /fabric/metrics shows
+        # how stale the cached entry is at scrape time.
+        try:
+            age_s = (datetime.now(timezone.utc) - entry.cached_at).total_seconds()
+            metrics.record_product_age(product=product_name, age_seconds=age_s)
+        except Exception:
+            # Age tracking is best-effort observability — never break
+            # a successful cache read because the gauge update failed.
+            logger.debug("fabric.metrics.product_age.failed", exc_info=True)
+
         return entry.data_bytes, meta
 
     async def set_cached(
@@ -541,6 +557,9 @@ class PipelineExecutor:
         Raises:
             ValueError: If the serialized result exceeds the 10 MB limit.
         """
+        from dataflow.fabric.metrics import get_fabric_metrics
+
+        metrics = get_fabric_metrics()
         run_id = uuid.uuid4().hex[:12]
         steps: List[Dict[str, Any]] = []
         started_at = datetime.now(timezone.utc)
@@ -581,6 +600,11 @@ class PipelineExecutor:
                     content_changed=False,
                 )
                 self._traces.append(trace)
+                metrics.record_pipeline_run(
+                    product=product_name,
+                    duration_s=duration_ms / 1000.0,
+                    success=False,
+                )
                 raise
 
             steps.append(
@@ -617,6 +641,11 @@ class PipelineExecutor:
                     content_changed=False,
                 )
                 self._traces.append(trace)
+                metrics.record_pipeline_run(
+                    product=product_name,
+                    duration_s=duration_ms / 1000.0,
+                    success=False,
+                )
                 raise ValueError(
                     f"Pipeline result for '{product_name}' exceeds maximum size: "
                     f"{len(data_bytes)} bytes > {self._max_result_bytes} bytes "
@@ -683,6 +712,15 @@ class PipelineExecutor:
                 content_changed=content_changed,
             )
             self._traces.append(trace)
+
+            # Record successful pipeline run on the fabric metrics
+            # singleton so /fabric/metrics surfaces both run counts and
+            # duration histograms.
+            metrics.record_pipeline_run(
+                product=product_name,
+                duration_s=duration_ms / 1000.0,
+                success=True,
+            )
 
             return PipelineResult(
                 product_name=product_name,

@@ -189,7 +189,14 @@ class FabricServingLayer:
     def _make_product_handler(
         self, name: str, product: ProductRegistration
     ) -> Callable:
-        """Create a handler for GET /fabric/{name}."""
+        """Create a handler for GET /fabric/{name}.
+
+        The returned handler is wrapped by :meth:`_record_request_metrics`
+        so every served product contributes to
+        ``fabric_request_total{product, freshness}`` and
+        ``fabric_request_duration_seconds{product}`` on the
+        :class:`FabricMetrics` singleton.
+        """
 
         async def handler(request: Any = None, **kwargs: Any) -> Dict[str, Any]:
             # Parse query params for parameterized products
@@ -418,7 +425,48 @@ class FabricServingLayer:
             }
 
         handler.__name__ = f"fabric_get_{name}"
-        return handler
+        return self._record_request_metrics(name, handler)
+
+    def _record_request_metrics(self, product_name: str, inner: Callable) -> Callable:
+        """Wrap a product handler so each call increments request metrics.
+
+        Records:
+        - ``fabric_request_total{product, freshness}`` — incremented on
+          every non-error response. ``freshness`` is read from the
+          ``X-Fabric-Freshness`` header the inner handler sets so the
+          metric label matches the user-facing freshness contract.
+        - ``fabric_request_duration_seconds{product}`` — observed on
+          every call regardless of outcome.
+
+        On exception the metric is recorded with ``freshness=error`` so
+        operators can graph error rates per product.
+        """
+        from dataflow.fabric.metrics import get_fabric_metrics
+
+        async def wrapper(request: Any = None, **kwargs: Any) -> Dict[str, Any]:
+            metrics = get_fabric_metrics()
+            t0 = time.monotonic()
+            freshness = "error"
+            try:
+                response = await inner(request=request, **kwargs)
+                # Read the freshness header the inner handler stamped on
+                # the response so the metric label tracks the canonical
+                # freshness value users see in HTTP headers.
+                headers = (
+                    response.get("_headers", {}) if isinstance(response, dict) else {}
+                )
+                freshness = str(headers.get(_HEADER_FRESHNESS, "unknown"))
+                return response
+            finally:
+                duration_s = time.monotonic() - t0
+                metrics.record_request(
+                    product=product_name,
+                    duration_s=duration_s,
+                    freshness=freshness,
+                )
+
+        wrapper.__name__ = f"{inner.__name__}_metrics"
+        return wrapper
 
     def _make_batch_handler(self) -> Callable:
         """Create handler for GET /fabric/_batch?products=a,b,c."""

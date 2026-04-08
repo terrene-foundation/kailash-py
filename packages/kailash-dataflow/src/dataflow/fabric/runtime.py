@@ -131,6 +131,10 @@ class FabricRuntime:
         self._health_manager: Optional[Any] = None
         # Phase 5.8: track registered Nexus routes for graceful shutdown.
         self._registered_nexus_routes: List[Dict[str, Any]] = []
+        # Phase 5.12: FabricMetrics singleton handle. Materialized in
+        # ``start()`` so unit tests that build FabricRuntime without
+        # starting it do not register Prometheus counters.
+        self._metrics: Optional[Any] = None
 
     def _validate_params(self) -> None:
         """Validate parameter combinations at startup (TODO-38)."""
@@ -177,6 +181,14 @@ class FabricRuntime:
         self._shutting_down = False
         self._started_at = datetime.now(timezone.utc)
 
+        # 0. Materialize the FabricMetrics singleton so every subsystem
+        # downstream (cache, pipeline, leader, webhook, serving) records
+        # against the same Prometheus registry. The singleton is lazy
+        # so this is the first call that actually registers counters.
+        from dataflow.fabric.metrics import get_fabric_metrics
+
+        self._metrics = get_fabric_metrics()
+
         # 1. Ensure DataFlow is initialized (with timeout to prevent hung startup)
         if hasattr(self._dataflow, "initialize"):
             try:
@@ -222,6 +234,14 @@ class FabricRuntime:
         )
         await self._leader.try_elect()
         await self._leader.start_heartbeat()
+
+        # Surface leader status on the fabric metrics gauge so
+        # /fabric/metrics shows which replica holds the lock.
+        if self._metrics is not None:
+            self._metrics.record_leader_status(
+                instance=self._instance_name,
+                is_leader=self._leader.is_leader,
+            )
 
         # 6. Pre-warm materialized products (leader only)
         # In dev mode we always run serially. In production with a
@@ -384,6 +404,18 @@ class FabricRuntime:
             except Exception as exc:  # pragma: no cover - defensive
                 logger.exception(
                     "fabric.nexus.webhook.failed", extra={"error": str(exc)}
+                )
+
+        # Phase 5.12: Prometheus exposition at /fabric/metrics. Always
+        # registered when a Nexus instance is bound — operators rely on
+        # the well-known path even when the no-op fallback is active.
+        if self._metrics is not None:
+            try:
+                metrics_route = self._metrics.get_metrics_route()
+                registered.extend(register_route_dicts(self._nexus, [metrics_route]))
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.exception(
+                    "fabric.nexus.metrics.failed", extra={"error": str(exc)}
                 )
 
         self._registered_nexus_routes = registered

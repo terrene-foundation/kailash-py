@@ -115,28 +115,33 @@ def _mask_url(url: Optional[str]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Metric stubs (TODO-5.12 wires real Prometheus counters)
+# Metric dispatchers (Phase 5.12 — wired to FabricMetrics singleton)
 # ---------------------------------------------------------------------------
 
 
 def _record_cache_error(backend: str, operation: str) -> None:
-    """Increment ``fabric_cache_errors_total{backend=, operation=}``.
+    """Increment ``fabric_cache_errors_total{backend, operation}``.
 
-    Real Prometheus wiring lands in TODO-5.12; until then we record at
-    DEBUG so the call site is observable in tests via ``caplog``.
+    Logs at DEBUG and dispatches to the FabricMetrics singleton. The
+    log line is retained so tests can assert via ``caplog`` even when
+    prometheus_client is not installed.
     """
     logger.debug(
         "fabric.cache.error_recorded",
         extra={"backend": backend, "operation": operation},
     )
+    # Local import avoids a circular dependency between metrics and
+    # cache (metrics.py only imports stdlib and prometheus_client).
+    from dataflow.fabric.metrics import get_fabric_metrics
+
+    get_fabric_metrics().record_cache_error(backend=backend, operation=operation)
 
 
 def _set_cache_degraded(backend: str, value: int) -> None:
-    """Set ``fabric_cache_degraded{backend=}`` to 0 or 1.
+    """Set ``fabric_cache_degraded{backend}`` to 0 or 1.
 
-    Real Prometheus wiring lands in TODO-5.12; until then we record the
-    transition at INFO/WARN so it appears in normal logs and tests can
-    grep for the transition.
+    Logs the transition at WARN/INFO and dispatches to the
+    FabricMetrics singleton so the gauge is visible at /fabric/metrics.
     """
     if value:
         logger.warning(
@@ -148,6 +153,10 @@ def _set_cache_degraded(backend: str, value: int) -> None:
             "fabric.cache.degraded.flipped_off",
             extra={"backend": backend, "fabric_cache_degraded": value},
         )
+
+    from dataflow.fabric.metrics import get_fabric_metrics
+
+    get_fabric_metrics().record_cache_degraded(backend=backend, value=value)
 
 
 # ---------------------------------------------------------------------------
