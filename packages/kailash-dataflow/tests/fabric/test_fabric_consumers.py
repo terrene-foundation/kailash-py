@@ -25,7 +25,6 @@ from dataflow.fabric.consumers import ConsumerFn, ConsumerRegistry
 from dataflow.fabric.products import ProductRegistration
 from dataflow.fabric.serving import FabricServingLayer
 
-
 # ---------------------------------------------------------------------------
 # Consumer transform functions — real, pure functions (not mocks)
 # ---------------------------------------------------------------------------
@@ -313,7 +312,12 @@ class TestServingLayerConsumers:
     async def test_unknown_consumer_returns_400(
         self, pipeline: InMemoryPipeline
     ) -> None:
-        """Consumer not in product's consumers list returns 400."""
+        """Consumer not in product's consumers list returns 400.
+
+        Security: error MUST NOT leak the registry list (see serving.py:194
+        comment "don't leak registry list"). Just name the rejected consumer
+        and the product, no enumeration of available options.
+        """
         product = _make_product("portfolio", consumers=["report"])
         products = {"portfolio": product}
         pipeline.put_cached("portfolio", {"score": 85})
@@ -325,7 +329,9 @@ class TestServingLayerConsumers:
         result = await handler(consumer="nonexistent")
         assert result["_status"] == 400
         assert "nonexistent" in result["error"]
-        assert "report" in result["error"]  # shows available consumers
+        assert "portfolio" in result["error"]
+        # Security: must NOT enumerate available consumers
+        assert "report" not in result["error"]
 
     @pytest.mark.asyncio
     async def test_consumer_not_in_product_list_returns_400(
@@ -362,7 +368,8 @@ class TestServingLayerConsumers:
 
         result = await handler(consumer="missing_adapter")
         assert result["_status"] == 400
-        assert "no adapter function is registered" in result["error"]
+        assert "no adapter is registered" in result["error"]
+        assert "missing_adapter" in result["error"]
 
     @pytest.mark.asyncio
     async def test_product_with_no_consumers_rejects_consumer_param(

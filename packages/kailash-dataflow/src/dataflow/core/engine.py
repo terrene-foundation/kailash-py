@@ -1227,8 +1227,9 @@ class DataFlow(DataFlowEventMixin):
     def _initialize_database(self):
         """Initialize database connection and setup."""
         # Initialize connection pool (unless in TDD mode with existing connection)
+        # initialize_pool() is async; bridge to sync via async_safe_run.
         if not (self._tdd_mode and self._test_context):
-            self._connection_manager.initialize_pool()
+            async_safe_run(self._connection_manager.initialize_pool())
 
         # In a real implementation, this would:
         # 1. Create SQLAlchemy engine with all config options
@@ -8719,10 +8720,11 @@ class DataFlow(DataFlowEventMixin):
             self._lightweight_pool = None
 
         # Clean up connection manager
+        # close_all_connections() is async; bridge to sync via async_safe_run.
         if hasattr(self, "_connection_manager") and self._connection_manager:
             try:
                 if hasattr(self._connection_manager, "close_all_connections"):
-                    self._connection_manager.close_all_connections()
+                    async_safe_run(self._connection_manager.close_all_connections())
             except Exception as e:
                 logger.debug(f"Error closing connection manager: {e}")
 
@@ -8806,7 +8808,7 @@ class DataFlow(DataFlowEventMixin):
         if hasattr(self, "_connection_manager") and self._connection_manager:
             try:
                 if hasattr(self._connection_manager, "close_all_connections"):
-                    self._connection_manager.close_all_connections()
+                    await self._connection_manager.close_all_connections()
             except Exception as e:
                 logger.debug(f"Error closing connection manager: {e}")
 

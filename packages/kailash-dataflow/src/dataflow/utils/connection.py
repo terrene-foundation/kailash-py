@@ -75,8 +75,10 @@ class ConnectionManager:
         db_url = self._get_db_url()
         db_type = ConnectionParser.detect_database_type(db_url)
 
-        adapter_class = AdapterFactory.get_adapter(db_type)
-        self._adapter = adapter_class(
+        # AdapterFactory is an instance-based registry; create_adapter
+        # builds the dialect-specific adapter from the connection string.
+        factory = AdapterFactory()
+        self._adapter = factory.create_adapter(
             db_url,
             pool_size=self._pool_size,
             max_overflow=max(2, self._pool_size // 2),

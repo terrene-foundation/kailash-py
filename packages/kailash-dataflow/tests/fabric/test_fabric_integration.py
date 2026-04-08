@@ -59,7 +59,7 @@ class _FailingSource(BaseSourceAdapter):
         self._preloaded: Dict[str, Any] = {}
 
     @property
-    def database_type(self) -> str:
+    def source_type(self) -> str:
         return "failing_test"
 
     async def _connect(self) -> None:
