@@ -1,5 +1,167 @@
 # DataFlow Changelog
 
+## [2.0.0] - unreleased — DataFlow 2.0 Perfection Sprint
+
+Comprehensive rework of DataFlow's core, cache, fabric, security, and
+observability surfaces. ~11,800 net LOC removed, 9 CRITICAL security
+vectors closed, every "manager" facade replaced with a real
+implementation, fabric Redis cache shipped, parameterized products
+fixed, full tenant partitioning across Express and fabric, and the
+model-registry sync-in-async deadlock resolved.
+
+### Breaking changes
+
+1. **`FabricRuntime` cache methods are now async.** `product_info`,
+   `invalidate`, `invalidate_all`, `_get_products_cache` became
+   `async def` to support the Redis-backed fabric cache. Wrap
+   existing callers in `async def` or use `asyncio.run()`.
+
+2. **`multi_tenant=True` DataFlow instances MUST bind a tenant.**
+   Express CRUD operations now resolve `tenant_id` from
+   `dataflow.core.tenant_context.get_current_tenant_id()` and raise
+   `TenantRequiredError` when none is set. Fabric products declared
+   `multi_tenant=True` raise `FabricTenantRequiredError` when the
+   serving layer cannot extract a tenant. Silent fallback to a shared
+   cache partition is blocked.
+
+3. **Fabric parameterized products REQUIRE params in the cache-read
+   path.** `serving.py` now passes the request's query params to
+   `get_cached(name, params=...)`; the batch endpoint returns an
+   explicit routing error for parameterized products instead of
+   silently returning `null`.
+
+4. **`DataFlowExpress._cache_manager.invalidate_model`** now accepts
+   an optional `tenant_id` kwarg. Custom cache backends that override
+   the method must add the kwarg or Express falls back to model-wide
+   invalidation with a WARN log.
+
+5. **Dynamic update node (`nodes/dynamic_update.py`) deleted.** The
+   223-line module executed user-supplied code via `exec()` — a
+   critical RCE vector with zero consumers. Any caller must migrate
+   to the generated `UpdateNode` with field whitelists.
+
+6. **`TransactionManager`, `ConnectionManager`, and related facade
+   managers rewritten.** They now hold real BEGIN/COMMIT/ROLLBACK
+   state, SELECT 1 health checks, and adapter-delegated pool stats.
+   External callers that depended on the old dict-returning stubs
+   will see real data for the first time.
+
+### Security fixes (9 CRITICAL vectors closed)
+
+- **SQL injection (13 sites) in `core/multi_tenancy.py`** — every
+  f-string DDL migrated to `dialect.quote_identifier()` with strict
+  regex validation on tenant_id.
+- **`eval()` RCE in `semantic/search.py`** — replaced with
+  msgpack/json deserialization (then the module was deleted in the
+  orphan sweep).
+- **`exec()` RCE in `nodes/dynamic_update.py`** — entire 223-line
+  file deleted, zero consumers.
+- **DDL identifier injection (25 sites across adapters)** — all
+  migrated to `dialect.quote_identifier()` with strict validation.
+- **Fake `encrypt_tenant_data`** — `f"encrypted_{key}_{data}"` with
+  a hardcoded constant replaced with real
+  `cryptography.fernet.Fernet` + env-sourced keys
+  (`TenantKeyProvider` abstraction for HSM/KMS).
+- **`UpdateNode` field whitelist** — unknown fields raise
+  `UnknownFieldError`; whitelist sourced from `self.model_fields`.
+- **`LIMIT`/`OFFSET` parameterization** in `database/query_builder.py`.
+- **`validate_queries=True`** flipped to the default at every DML
+  call site.
+- **Redis URL masking** — every log line touching a URL now goes
+  through `mask_sensitive_values()`.
+
+### Added
+
+- **`FabricCacheBackend` ABC + two implementations**
+  (`InMemoryFabricCacheBackend`, `RedisFabricCacheBackend`). The
+  Redis backend uses a Lua CAS script keyed on `run_started_at` so
+  stale data cannot overwrite fresh data under the R3 last-writer-
+  wins model, offers a metadata-only HGET fast path, SCAN (not KEYS)
+  for non-blocking invalidation, and degrades gracefully on Redis
+  outage (flips `fabric_cache_degraded` gauge, returns cache miss).
+- **`FabricCacheBackend.scan_prefix(prefix)`** primitive for fabric
+  health probes to aggregate parameterized product freshness without
+  transferring payload bytes.
+- **`PipelineExecutor.scan_product_metadata`** — wraps `scan_prefix`
+  with the proper product-name + tenant_id prefix.
+- **Leader-side warm-cache on election** — new leader checks Redis
+  metadata for each materialized product and skips execution if
+  `cached_at + max_age > now`.
+- **Shared Redis client** (`FabricRuntime._get_or_create_redis_client`)
+  — one connection per replica shared across cache backend, leader
+  elector, and webhook receiver.
+- **Fabric webhook Redis nonce deduplication** now actually uses the
+  shared Redis client.
+- **Express cache tenant dimension** — keys become
+  `dataflow:v1:{tenant}:{model}:{op}:{hash}` when
+  `multi_tenant=True`. `InMemoryCache.invalidate_model` and
+  `AsyncRedisCacheAdapter.invalidate_model` accept an optional
+  `tenant_id` kwarg for scoped invalidation.
+- **`TenantRequiredError`** shared exception in
+  `dataflow/core/multi_tenancy.py`.
+- **`ModelRegistry._execute_workflow_sync_safe`** — worker-thread
+  bridge for async-context DDL execution that resolves #352.
+
+### Fixed
+
+- **#352** — model_registry sync-in-async: DataFlow.start() under
+  FastAPI no longer deadlocks trying to call
+  `AsyncLocalRuntime.execute()` from inside an event loop.
+- **#353** — `adapters/postgresql.py` now parses and forwards every
+  URL parameter (`sslmode`, `application_name`, `command_timeout`,
+  `sslrootcert`, `sslcert`, `sslkey`) correctly to asyncpg.
+- **#354** — `DataFlow(redis_url=...)` now actually drives the
+  fabric product cache. Previously the parameter was accepted and
+  silently ignored; fabric ran with a per-process `OrderedDict`
+  regardless of configuration.
+- **#358** — parameterized fabric products can now be read from
+  cache via HTTP. Previously `serving.py` dropped query params on
+  the cache lookup, so parameterized products always returned
+  `data=null`. Health endpoint now aggregates freshness across every
+  cached param combination via the new `scan_product_metadata`
+  helper and reports `param_combinations_cached` per product.
+- **PostgreSQL `execute_transaction`** — previously executed each
+  query on a separate connection, so "transactions" had no
+  atomicity. Now uses asyncpg's `connection.transaction()` context
+  manager matching MySQL/SQLite semantics.
+- **Dialect consolidation** — three parallel dialect systems
+  collapsed into one `adapters/dialect.py` with the full
+  `rules/infrastructure-sql.md` helper set.
+- **SQLite adapters merged** — `sqlite_enterprise.py` deleted, all
+  features folded into `sqlite.py`. `factory.py` default no longer
+  points at the deleted class.
+- **Cache invalidation exact-match** — `InMemoryCache.invalidate_model`
+  now matches keys by exact `:{model_name}:` segment, not substring.
+
+### Removed
+
+- `nodes/dynamic_update.py` (223 LOC, RCE risk, zero consumers)
+- `semantic/` subsystem (1,239 LOC)
+- `web/` orphan subsystem (1,958 LOC, WebMigrationAPI never wired)
+- `compatibility/` (1,327 LOC, `unittest.mock.Mock` in production at
+  `legacy_support.py:79`)
+- `performance/` duplicate `MigrationConnectionManager` class
+- `migration/` singular (dead duplicate of `migrations/`)
+- `validators/` (dead duplicate of `validation/`)
+- `core/cache_integration.py` (886 LOC, dead parallel init path)
+- `adapters/sqlite_enterprise.py` (folded into `sqlite.py`)
+- `InMemoryDebouncer` class (zero instantiations)
+- `utils/suppress_warnings.py` and the underlying
+  `pytest.ini --disable-warnings` suppression
+
+**Net LOC delta: approximately −11,800 lines, 86 files changed.**
+
+### Migration
+
+```python
+# FabricRuntime cache methods are async now
+info = await runtime.product_info("users")
+
+# Multi-tenant Express requires a tenant binding
+async with db.tenant_context.aswitch("acme"):
+    users = await db.express.list("User", {"active": True})
+```
+
 ## [1.6.0] - 2026-04-03
 
 ### Added
