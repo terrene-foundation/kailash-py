@@ -107,6 +107,40 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
 asyncio_mode = "auto"
+markers = [
+    "unit: tier 1 unit tests (mocks allowed)",
+    "integration: tier 2 integration tests (real infrastructure)",
+    "e2e: tier 3 end-to-end tests (real infrastructure)",
+    "regression: permanent bug reproduction",
+    "security: security-critical path",
+    "trust: trust-plane path",
+]
+
+[tool.coverage.run]
+source = ["src/dataflow"]
+branch = true
+omit = [
+    "tests/*",
+    "*/__init__.py",
+    "*/_vendor/*",
+]
+
+[tool.coverage.report]
+# General coverage floor per rules/testing.md § Coverage Requirements.
+# Security-critical subpackages (src/dataflow/security,
+# src/dataflow/trust) are gated to 100% separately — run pytest with
+# --cov=src/dataflow/security --cov=src/dataflow/trust
+# --cov-fail-under=100 for that target.
+fail_under = 80
+show_missing = true
+skip_covered = false
+precision = 2
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
 
 [tool.black]
 line-length = 88

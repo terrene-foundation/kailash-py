@@ -385,29 +385,29 @@ class TestHealthMonitorIntegration:
 
         execution_time = time.time() - start_time
 
-            # Verify results
-            assert len(results) == 10  # 5 db + 3 memory + 2 custom
+        # Verify results
+        assert len(results) == 10  # 5 db + 3 memory + 2 custom
 
-            # All should be healthy
-            for result in results:
-                assert result.status == HealthStatus.HEALTHY
+        # All should be healthy
+        for result in results:
+            assert result.status == HealthStatus.HEALTHY
 
-            # Performance should be reasonable (parallel execution)
-            # With parallel execution, should be much faster than sequential
-            assert (
-                execution_time < 2.0
-            ), f"Health checks took too long: {execution_time:.2f}s"
+        # Performance should be reasonable (parallel execution)
+        # With parallel execution, should be much faster than sequential
+        assert (
+            execution_time < 2.0
+        ), f"Health checks took too long: {execution_time:.2f}s"
 
-            # Verify parallel execution was faster than sequential would be
-            # (Each DB check takes ~10ms + memory checks ~1ms each + custom checks ~1ms each)
-            # Sequential would be ~55ms minimum, parallel should be much faster
-            total_individual_time = sum(r.response_time_ms for r in results) / 1000
-            parallel_efficiency = total_individual_time / execution_time
+        # Verify parallel execution was faster than sequential would be
+        # (Each DB check takes ~10ms + memory checks ~1ms each + custom checks ~1ms each)
+        # Sequential would be ~55ms minimum, parallel should be much faster
+        total_individual_time = sum(r.response_time_ms for r in results) / 1000
+        parallel_efficiency = total_individual_time / execution_time
 
-            # Should have significant parallel efficiency (>2x speedup)
-            assert (
-                parallel_efficiency > 2.0
-            ), f"Parallel efficiency too low: {parallel_efficiency:.2f}x"
+        # Should have significant parallel efficiency (>2x speedup)
+        assert (
+            parallel_efficiency > 2.0
+        ), f"Parallel efficiency too low: {parallel_efficiency:.2f}x"
 
     @pytest.mark.asyncio
     async def test_health_monitoring_error_resilience(
