@@ -252,7 +252,10 @@ class TenantSecurityManager:
                 error_message=str(e),
             )
 
-            logger.warning("security.security_validation_failed_for_tenant", extra={"tenant_id": tenant_id, "error": str(e)})
+            logger.warning(
+                "security.security_validation_failed_for_tenant",
+                extra={"tenant_id": tenant_id, "error": str(e)},
+            )
 
             return {
                 "valid": False,
@@ -335,7 +338,9 @@ class TenantSecurityManager:
             success=True,
         )
 
-        logger.warning("security.tenant_blocked", extra={"tenant_id": tenant_id, "reason": reason})
+        logger.warning(
+            "security.tenant_blocked", extra={"tenant_id": tenant_id, "reason": reason}
+        )
 
     def unblock_tenant(self, tenant_id: str, reason: str) -> None:
         """
@@ -356,7 +361,10 @@ class TenantSecurityManager:
             success=True,
         )
 
-        logger.info("security.tenant_unblocked", extra={"tenant_id": tenant_id, "reason": reason})
+        logger.info(
+            "security.tenant_unblocked",
+            extra={"tenant_id": tenant_id, "reason": reason},
+        )
 
     def get_security_policy(self, tenant_id: str) -> Optional[SecurityPolicy]:
         """Get security policy for a tenant."""
@@ -379,7 +387,10 @@ class TenantSecurityManager:
             if hasattr(policy, key):
                 setattr(policy, key, value)
 
-        logger.info("security.updated_security_policy_for_tenant", extra={"tenant_id": tenant_id})
+        logger.info(
+            "security.updated_security_policy_for_tenant",
+            extra={"tenant_id": tenant_id},
+        )
 
     def get_audit_logs(
         self,

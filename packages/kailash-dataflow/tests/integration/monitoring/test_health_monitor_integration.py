@@ -2,14 +2,14 @@
 Integration tests for DataFlow Health Monitoring System
 
 Tests integration between health monitoring and actual DataFlow components,
-including real database connections and monitoring workflows.
+including real database connections and monitoring workflows. Uses the shared
+PostgreSQL test infrastructure (port 5434) via ``IntegrationTestSuite`` and
+the real ``psutil`` module — NO mocking per Tier 2 rules.
 """
 
 import asyncio
-from unittest.mock import MagicMock, patch
 
 import pytest
-
 from kailash.core.resilience.health_monitor import (
     CustomHealthCheck,
     DatabaseHealthCheck,
@@ -26,6 +26,7 @@ from kailash.core.resilience.health_monitor import (
 from kailash.nodes.data import AsyncSQLDatabaseNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 
@@ -54,31 +55,36 @@ class TestHealthMonitorIntegration:
         await runtime.shutdown()
 
     @pytest.fixture
-    async def database_node(self):
-        """Create mock database node that simulates real database behavior."""
+    async def database_node(self, test_suite):
+        """Create a real AsyncSQLDatabaseNode wrapper backed by PostgreSQL.
 
-        class MockAsyncDatabaseNode:
-            def __init__(self):
+        Wraps the real asyncpg pool in a thin adapter exposing ``execute`` /
+        ``shutdown`` so the HealthMonitor can exercise a real connection.
+        The adapter short-circuits once ``shutdown`` has been called so tests
+        can verify the unhealthy state transition without killing the
+        underlying pool.
+        """
+
+        class RealAsyncDatabaseNode:
+            def __init__(self, suite):
+                self._suite = suite
                 self.connection_active = True
 
             async def execute(self, query: str, result_format: str = "dict"):
-                """Mock execute method that simulates real database behavior."""
                 if not self.connection_active:
                     raise ConnectionError("Database connection closed")
 
-                # Simulate database response time
-                await asyncio.sleep(0.01)
-
-                if "SELECT 1" in query.upper():
-                    return {"success": True, "data": [{"health_check": 1}]}
-                else:
-                    return {"success": True, "data": []}
+                async with self._suite.get_connection() as conn:
+                    rows = await conn.fetch(query)
+                    return {
+                        "success": True,
+                        "data": [dict(r) for r in rows],
+                    }
 
             async def shutdown(self):
-                """Mock shutdown method."""
                 self.connection_active = False
 
-        node = MockAsyncDatabaseNode()
+        node = RealAsyncDatabaseNode(test_suite)
         yield node
         await node.shutdown()
 
@@ -129,44 +135,39 @@ class TestHealthMonitorIntegration:
         db_health_check = DatabaseHealthCheck("main_db", database_node)
         health_manager.register_health_check(db_health_check, interval=2.0)
 
-        # Register memory health check with mocked psutil
-        with patch("psutil.virtual_memory") as mock_memory:
-            mock_memory.return_value = MagicMock(
-                percent=45.0,
-                total=8 * 1024 * 1024 * 1024,
-                available=4 * 1024 * 1024 * 1024,
-                used=4 * 1024 * 1024 * 1024,
-            )
+        # Register memory health check using real psutil. Thresholds are
+        # generous so the test is deterministic regardless of host load.
+        memory_health_check = MemoryHealthCheck(
+            "system_memory", warning_threshold=99.0, critical_threshold=99.5
+        )
+        health_manager.register_health_check(memory_health_check, interval=3.0)
 
-            memory_health_check = MemoryHealthCheck("system_memory")
-            health_manager.register_health_check(memory_health_check, interval=3.0)
+        # Register custom health check
+        async def service_health_check():
+            return {
+                "status": "healthy",
+                "message": "Service responding normally",
+                "metadata": {"latency_ms": 25},
+            }
 
-            # Register custom health check
-            async def service_health_check():
-                return {
-                    "status": "healthy",
-                    "message": "Service responding normally",
-                    "metadata": {"latency_ms": 25},
-                }
+        custom_health_check = CustomHealthCheck("service_api", service_health_check)
+        health_manager.register_health_check(custom_health_check, interval=1.5)
 
-            custom_health_check = CustomHealthCheck("service_api", service_health_check)
-            health_manager.register_health_check(custom_health_check, interval=1.5)
+        # Run all health checks
+        results = await health_manager.run_all_health_checks()
 
-            # Run all health checks
-            results = await health_manager.run_all_health_checks()
+        # Verify all checks completed
+        assert len(results) == 3
 
-            # Verify all checks completed
-            assert len(results) == 3
+        # Verify each check
+        check_names = {r.check_name for r in results}
+        assert "main_db" in check_names
+        assert "system_memory" in check_names
+        assert "service_api" in check_names
 
-            # Verify each check
-            check_names = {r.check_name for r in results}
-            assert "main_db" in check_names
-            assert "system_memory" in check_names
-            assert "service_api" in check_names
-
-            # All should be healthy
-            for result in results:
-                assert result.status == HealthStatus.HEALTHY
+        # All should be healthy (memory thresholds set intentionally high)
+        for result in results:
+            assert result.status == HealthStatus.HEALTHY
 
     @pytest.mark.asyncio
     async def test_health_summary_integration(self, health_manager, database_node):
@@ -311,21 +312,14 @@ class TestHealthMonitorIntegration:
         # Test database health check registration
         await register_database_health_check("conv_db", database_node, interval=5.0)
 
-        # Test memory health check registration (with mocked psutil)
-        with patch("psutil.virtual_memory") as mock_memory:
-            mock_memory.return_value = MagicMock(
-                percent=60.0,
-                total=16 * 1024 * 1024 * 1024,
-                available=6 * 1024 * 1024 * 1024,
-                used=10 * 1024 * 1024 * 1024,
-            )
-
-            await register_memory_health_check(
-                "conv_memory",
-                warning_threshold=70.0,
-                critical_threshold=90.0,
-                interval=10.0,
-            )
+        # Test memory health check registration using real psutil.
+        # Thresholds are intentionally high so the check is always healthy.
+        await register_memory_health_check(
+            "conv_memory",
+            warning_threshold=99.0,
+            critical_threshold=99.5,
+            interval=10.0,
+        )
 
         # Test custom health check registration
         async def custom_check():
@@ -375,27 +369,21 @@ class TestHealthMonitorIntegration:
             custom_check = CustomHealthCheck(f"custom_{i}", fast_check)
             health_manager.register_health_check(custom_check)
 
-        # Add memory checks with mocked psutil and run tests within the patch
-        with patch("psutil.virtual_memory") as mock_memory:
-            mock_memory.return_value = MagicMock(
-                percent=50.0,
-                total=16 * 1024 * 1024 * 1024,
-                available=8 * 1024 * 1024 * 1024,
-                used=8 * 1024 * 1024 * 1024,
+        # Add memory checks using real psutil with generous thresholds
+        for i in range(3):
+            memory_check = MemoryHealthCheck(
+                f"memory_{i}", warning_threshold=99.0, critical_threshold=99.5
             )
+            health_manager.register_health_check(memory_check)
 
-            for i in range(3):
-                memory_check = MemoryHealthCheck(f"memory_{i}")
-                health_manager.register_health_check(memory_check)
+        # Measure performance of running all checks
+        import time
 
-            # Measure performance of running all checks
-            import time
+        start_time = time.time()
 
-            start_time = time.time()
+        results = await health_manager.run_all_health_checks()
 
-            results = await health_manager.run_all_health_checks()
-
-            execution_time = time.time() - start_time
+        execution_time = time.time() - start_time
 
             # Verify results
             assert len(results) == 10  # 5 db + 3 memory + 2 custom
@@ -406,9 +394,9 @@ class TestHealthMonitorIntegration:
 
             # Performance should be reasonable (parallel execution)
             # With parallel execution, should be much faster than sequential
-            assert execution_time < 2.0, (
-                f"Health checks took too long: {execution_time:.2f}s"
-            )
+            assert (
+                execution_time < 2.0
+            ), f"Health checks took too long: {execution_time:.2f}s"
 
             # Verify parallel execution was faster than sequential would be
             # (Each DB check takes ~10ms + memory checks ~1ms each + custom checks ~1ms each)
@@ -417,9 +405,9 @@ class TestHealthMonitorIntegration:
             parallel_efficiency = total_individual_time / execution_time
 
             # Should have significant parallel efficiency (>2x speedup)
-            assert parallel_efficiency > 2.0, (
-                f"Parallel efficiency too low: {parallel_efficiency:.2f}x"
-            )
+            assert (
+                parallel_efficiency > 2.0
+            ), f"Parallel efficiency too low: {parallel_efficiency:.2f}x"
 
     @pytest.mark.asyncio
     async def test_health_monitoring_error_resilience(

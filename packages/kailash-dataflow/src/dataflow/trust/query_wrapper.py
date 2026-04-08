@@ -220,7 +220,10 @@ class ConstraintEnvelopeWrapper:
             part = part.strip()
             if ":" not in part:
                 # Invalid format, skip
-                logger.debug("query_wrapper.invalid_data_scope_format_skipping", extra={"part": part})
+                logger.debug(
+                    "query_wrapper.invalid_data_scope_format_skipping",
+                    extra={"part": part},
+                )
                 continue
 
             # Split on first colon only
@@ -313,7 +316,10 @@ class ConstraintEnvelopeWrapper:
             return {"created_at": {"$gte": cutoff}}
 
         # Unknown format
-        logger.debug("query_wrapper.unknown_time_window_format", extra={"constraint_value": constraint_value})
+        logger.debug(
+            "query_wrapper.unknown_time_window_format",
+            extra={"constraint_value": constraint_value},
+        )
         return {}
 
     def translate_row_limit(self, constraint_value: str) -> Optional[int]:
@@ -340,11 +346,16 @@ class ConstraintEnvelopeWrapper:
         try:
             limit = int(value_str)
             if limit < 0:
-                logger.debug("query_wrapper.negative_row_limit_not_allowed", extra={"limit": limit})
+                logger.debug(
+                    "query_wrapper.negative_row_limit_not_allowed",
+                    extra={"limit": limit},
+                )
                 return None
             return limit
         except ValueError:
-            logger.debug("query_wrapper.invalid_row_limit_value", extra={"value_str": value_str})
+            logger.debug(
+                "query_wrapper.invalid_row_limit_value", extra={"value_str": value_str}
+            )
             return None
 
     def detect_pii_columns(self, columns: List[str]) -> List[str]:
@@ -458,7 +469,10 @@ class ConstraintEnvelopeWrapper:
             constraint_value = str(getattr(constraint, "value", ""))
 
             if constraint_type is None:
-                logger.debug("query_wrapper.constraint_has_no_type", extra={"constraint": constraint})
+                logger.debug(
+                    "query_wrapper.constraint_has_no_type",
+                    extra={"constraint": constraint},
+                )
                 continue
 
             # Get type value (handle both enum and string)
@@ -610,7 +624,10 @@ class TrustAwareQueryExecutor:
         try:
             return await self._trust_operations.get_agent_constraints(agent_id)
         except Exception as e:
-            logger.warning("query_wrapper.failed_to_get_agent_constraints_for", extra={"agent_id": agent_id, "error": str(e)})
+            logger.warning(
+                "query_wrapper.failed_to_get_agent_constraints_for",
+                extra={"agent_id": agent_id, "error": str(e)},
+            )
             return []
 
     async def _verify_table_access(
@@ -656,7 +673,10 @@ class TrustAwareQueryExecutor:
         except PermissionError:
             raise
         except Exception as e:
-            logger.warning("query_wrapper.table_access_verification_failed", extra={"error": str(e)})
+            logger.warning(
+                "query_wrapper.table_access_verification_failed",
+                extra={"error": str(e)},
+            )
             # In case of verification failure, deny in enforcing mode
             if self._enforcement_mode == "enforcing":
                 raise PermissionError(
@@ -682,7 +702,9 @@ class TrustAwareQueryExecutor:
                 if schema and "columns" in schema:
                     return list(schema["columns"].keys())
         except Exception as e:
-            logger.debug("query_wrapper.could_not_get_model_columns", extra={"error": str(e)})
+            logger.debug(
+                "query_wrapper.could_not_get_model_columns", extra={"error": str(e)}
+            )
 
         # Return empty list if we can't determine columns
         return []
@@ -779,7 +801,9 @@ class TrustAwareQueryExecutor:
                 event = await self._audit_generator.resource_accessed(**call_kwargs)
             return getattr(event, "event_id", None)
         except Exception as e:
-            logger.warning("query_wrapper.failed_to_record_audit_event", extra={"error": str(e)})
+            logger.warning(
+                "query_wrapper.failed_to_record_audit_event", extra={"error": str(e)}
+            )
             return None
 
     async def execute_read(

@@ -127,7 +127,10 @@ class ProductionDeploymentTester:
                 )
 
             for test_name, test_func in test_suites:
-                logger.info("production_deployment_tester.running", extra={"test_name": test_name})
+                logger.info(
+                    "production_deployment_tester.running",
+                    extra={"test_name": test_name},
+                )
                 try:
                     result = await test_func()
                     self.test_results.append(result)
@@ -138,7 +141,9 @@ class ProductionDeploymentTester:
                     )
 
                 except Exception as e:
-                    logger.error("production_deployment_tester.failed", extra={"error": str(e)})
+                    logger.error(
+                        "production_deployment_tester.failed", extra={"error": str(e)}
+                    )
                     self.test_results.append(
                         ProductionTestResult(
                             test_name=test_name,
@@ -338,7 +343,10 @@ class ProductionDeploymentTester:
                 await conn.execute("DROP TABLE IF EXISTS prod_products CASCADE;")
                 await conn.execute("DROP TABLE IF EXISTS prod_customers CASCADE;")
         except Exception as e:
-            logger.warning("production_deployment_tester.error_cleaning_up_test_data", extra={"error": str(e)})
+            logger.warning(
+                "production_deployment_tester.error_cleaning_up_test_data",
+                extra={"error": str(e)},
+            )
 
     def _start_resource_monitoring(self):
         """Start monitoring system resources."""
@@ -366,7 +374,10 @@ class ProductionDeploymentTester:
 
                     await asyncio.sleep(5)  # Monitor every 5 seconds
                 except Exception as e:
-                    logger.warning("production_deployment_tester.monitoring_error", extra={"error": str(e)})
+                    logger.warning(
+                        "production_deployment_tester.monitoring_error",
+                        extra={"error": str(e)},
+                    )
 
         # Start monitoring in background
         asyncio.create_task(monitor())
@@ -494,7 +505,10 @@ class ProductionDeploymentTester:
 
     async def _test_concurrent_users(self) -> ProductionTestResult:
         """Test performance under concurrent user load."""
-        logger.info("production_deployment_tester.testing_concurrent_users", extra={"concurrent_users": self.config.concurrent_users})
+        logger.info(
+            "production_deployment_tester.testing_concurrent_users",
+            extra={"concurrent_users": self.config.concurrent_users},
+        )
 
         start_time = time.time()
         total_operations = 0
@@ -823,7 +837,10 @@ class ProductionDeploymentTester:
                 operations += 1
                 await asyncio.sleep(0.1)
             except Exception as e:
-                logger.warning("production_deployment_tester.resource_test_error", extra={"error": str(e)})
+                logger.warning(
+                    "production_deployment_tester.resource_test_error",
+                    extra={"error": str(e)},
+                )
 
         duration = time.time() - start_time
 

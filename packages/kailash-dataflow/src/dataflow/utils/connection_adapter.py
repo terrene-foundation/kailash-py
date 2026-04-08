@@ -141,7 +141,10 @@ class ConnectionManagerAdapter:
             return self._normalize_result(raw_result, sql)
 
         except Exception as e:
-            logger.error("connection_adapter.connectionmanageradapter_query_execution_failed", extra={"error": str(e)})
+            logger.error(
+                "connection_adapter.connectionmanageradapter_query_execution_failed",
+                extra={"error": str(e)},
+            )
             logger.error("connection_adapter.sql", extra={"sql": sql})
             logger.error("connection_adapter.params", extra={"params": params})
             raise
@@ -180,7 +183,10 @@ class ConnectionManagerAdapter:
             self._transaction_started = True
             logger.debug("Transaction started via ConnectionManagerAdapter")
         except Exception as e:
-            logger.error("connection_adapter.failed_to_begin_transaction", extra={"error": str(e)})
+            logger.error(
+                "connection_adapter.failed_to_begin_transaction",
+                extra={"error": str(e)},
+            )
             raise
 
     async def commit_transaction(self) -> None:
@@ -216,7 +222,10 @@ class ConnectionManagerAdapter:
             self._transaction_started = False
             logger.debug("Transaction committed via ConnectionManagerAdapter")
         except Exception as e:
-            logger.error("connection_adapter.failed_to_commit_transaction", extra={"error": str(e)})
+            logger.error(
+                "connection_adapter.failed_to_commit_transaction",
+                extra={"error": str(e)},
+            )
             raise
 
     async def rollback_transaction(self) -> None:
@@ -252,7 +261,10 @@ class ConnectionManagerAdapter:
             self._transaction_started = False
             logger.debug("Transaction rolled back via ConnectionManagerAdapter")
         except Exception as e:
-            logger.error("connection_adapter.failed_to_rollback_transaction", extra={"error": str(e)})
+            logger.error(
+                "connection_adapter.failed_to_rollback_transaction",
+                extra={"error": str(e)},
+            )
             raise
 
     def close(self):
@@ -335,7 +347,10 @@ class ConnectionManagerAdapter:
 
         else:
             # Unknown parameter style - return as-is
-            logger.warning("connection_adapter.unknown_parameter_style", extra={"parameter_style": self._parameter_style})
+            logger.warning(
+                "connection_adapter.unknown_parameter_style",
+                extra={"parameter_style": self._parameter_style},
+            )
             return sql, params
 
     def _normalize_result(self, result: Any, original_sql: str) -> List[Dict[str, Any]]:

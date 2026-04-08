@@ -671,5 +671,7 @@ class DataFlowAuditStore:
             full_hash = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
             return full_hash[:16]
         except Exception as e:
-            logger.warning("audit.failed_to_compute_query_hash", extra={"error": str(e)})
+            logger.warning(
+                "audit.failed_to_compute_query_hash", extra={"error": str(e)}
+            )
             return "0" * 16

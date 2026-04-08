@@ -10,11 +10,11 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-from dataflow import DataFlow
-
 from kailash.runtime import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,10 @@ def drop_tables_if_exist(database_url: str, table_names: List[str]) -> None:
     try:
         for table_name in table_names:
             if not _TABLE_NAME_RE.match(table_name):
-                logger.warning("simple_test_utils.skipping_invalid_table_name", extra={"table_name": table_name})
+                logger.warning(
+                    "simple_test_utils.skipping_invalid_table_name",
+                    extra={"table_name": table_name},
+                )
                 continue
             workflow = WorkflowBuilder()
             drop_query = f"DROP TABLE IF EXISTS {table_name} CASCADE"
@@ -54,9 +57,14 @@ def drop_tables_if_exist(database_url: str, table_names: List[str]) -> None:
 
             try:
                 runtime.execute(workflow.build())
-                logger.info("simple_test_utils.dropped_table", extra={"table_name": table_name})
+                logger.info(
+                    "simple_test_utils.dropped_table", extra={"table_name": table_name}
+                )
             except Exception as e:
-                logger.warning("simple_test_utils.failed_to_drop_table", extra={"table_name": table_name, "error": str(e)})
+                logger.warning(
+                    "simple_test_utils.failed_to_drop_table",
+                    extra={"table_name": table_name, "error": str(e)},
+                )
     finally:
         runtime.close()
 

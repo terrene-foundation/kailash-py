@@ -33,6 +33,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 import asyncpg
 import pytest
+
 from dataflow.testing.performance_optimization import (
     PerformanceMetrics,
     get_memory_optimizer,
@@ -83,7 +84,10 @@ class OptimizedModelFactory:
         if self.schema_cache.is_schema_cached(model_key):
             # Use cached schema
             cached = self.schema_cache.get_cached_schema(model_key)
-            logger.debug("enhanced_tdd_fixtures.using_cached_schema_for_user_model", extra={"model_key": model_key})
+            logger.debug(
+                "enhanced_tdd_fixtures.using_cached_schema_for_user_model",
+                extra={"model_key": model_key},
+            )
 
         class User:
             id: int = None
@@ -442,7 +446,10 @@ async def performance_monitored_test():
 
         def handle_alert(self, alert_data: Dict[str, Any]):
             self.alerts.append(alert_data)
-            logger.warning("enhanced_tdd_fixtures.performance_alert", extra={"alert_data": alert_data})
+            logger.warning(
+                "enhanced_tdd_fixtures.performance_alert",
+                extra={"alert_data": alert_data},
+            )
 
         def get_alerts(self) -> List[Dict[str, Any]]:
             return self.alerts.copy()
@@ -514,7 +521,10 @@ async def memory_optimized_test():
                 try:
                     callback()
                 except Exception as e:
-                    logger.warning("enhanced_tdd_fixtures.cleanup_callback_failed", extra={"error": str(e)})
+                    logger.warning(
+                        "enhanced_tdd_fixtures.cleanup_callback_failed",
+                        extra={"error": str(e)},
+                    )
 
             self.optimizer.optimize_memory()
 
@@ -531,7 +541,10 @@ async def memory_optimized_test():
 
         memory_delta = final_snapshot["rss_mb"] - initial_snapshot["rss_mb"]
         if memory_delta > 5.0:  # 5MB threshold
-            logger.warning("enhanced_tdd_fixtures.memory_leak_detected_mb_increase", extra={"memory_delta": memory_delta})
+            logger.warning(
+                "enhanced_tdd_fixtures.memory_leak_detected_mb_increase",
+                extra={"memory_delta": memory_delta},
+            )
 
 
 @pytest.fixture

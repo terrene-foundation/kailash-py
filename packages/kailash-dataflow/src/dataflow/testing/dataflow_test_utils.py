@@ -80,7 +80,10 @@ class DataFlowTestUtils:
         migration = migration_builder.build()
         if migration.operations:
             for operation in migration.operations:
-                logger.info("dataflow_test_utils.executing", extra={"description": operation.description})
+                logger.info(
+                    "dataflow_test_utils.executing",
+                    extra={"description": operation.description},
+                )
                 # Execute the SQL using DataFlow's connection
                 self._execute_sql(operation.sql_up)
 
@@ -122,9 +125,13 @@ class DataFlowTestUtils:
         # Execute the workflow
         try:
             results, _ = self.runtime.execute(workflow.build())
-            logger.info("dataflow_test_utils.sql_executed_successfully", extra={"sql": sql[:50]})
+            logger.info(
+                "dataflow_test_utils.sql_executed_successfully", extra={"sql": sql[:50]}
+            )
         except Exception as e:
-            logger.error("dataflow_test_utils.failed_to_execute_sql", extra={"error": str(e)})
+            logger.error(
+                "dataflow_test_utils.failed_to_execute_sql", extra={"error": str(e)}
+            )
             raise
 
     def setup_test_models(self, models: List[type]) -> DataFlow:
@@ -269,7 +276,10 @@ class DataFlowTestUtils:
         # Apply migration
         migration = migration_builder.build()
         for operation in migration.operations:
-            logger.info("dataflow_test_utils.running_migration", extra={"description": operation.description})
+            logger.info(
+                "dataflow_test_utils.running_migration",
+                extra={"description": operation.description},
+            )
             self._execute_sql(operation.sql_up)
 
     def close(self):
@@ -304,8 +314,12 @@ class DataFlowTestUtils:
         extra = actual_tables - expected_set
 
         if missing:
-            logger.error("dataflow_test_utils.missing_tables", extra={"missing": missing})
+            logger.error(
+                "dataflow_test_utils.missing_tables", extra={"missing": missing}
+            )
         if extra:
-            logger.warning("dataflow_test_utils.extra_tables_found", extra={"extra": extra})
+            logger.warning(
+                "dataflow_test_utils.extra_tables_found", extra={"extra": extra}
+            )
 
         return len(missing) == 0

@@ -452,7 +452,10 @@ class TenantTrustManager:
         # ROUND7-001: Thread-safe revocation
         with self._lock:
             if delegation_id not in self._delegations:
-                logger.warning("multi_tenant.cannot_revoke_delegation_not_found", extra={"delegation_id": delegation_id})
+                logger.warning(
+                    "multi_tenant.cannot_revoke_delegation_not_found",
+                    extra={"delegation_id": delegation_id},
+                )
                 return False
 
             delegation = self._delegations[delegation_id]
