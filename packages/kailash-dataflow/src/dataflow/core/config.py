@@ -178,20 +178,33 @@ class LoggingConfig:
             LoggingConfig instance configured from environment.
         """
 
-        def parse_level(env_var: str, default: Optional[int] = None) -> Optional[int]:
+        def parse_required_level(env_var: str, default: int) -> int:
+            """Parse an env-var log level with a mandatory int fallback.
+
+            Guarantees an ``int`` return even when the env var is unset or
+            names an attribute on :mod:`logging` that is not an integer level.
+            """
             value = os.getenv(env_var)
             if value is None:
                 return default
-            level_name = value.upper()
-            return getattr(logging, level_name, default)
+            resolved = getattr(logging, value.upper(), None)
+            return resolved if isinstance(resolved, int) else default
+
+        def parse_optional_level(env_var: str) -> Optional[int]:
+            """Parse an env-var log level that is optional (may return None)."""
+            value = os.getenv(env_var)
+            if value is None:
+                return None
+            resolved = getattr(logging, value.upper(), None)
+            return resolved if isinstance(resolved, int) else None
 
         return cls(
-            level=parse_level("DATAFLOW_LOG_LEVEL", logging.WARNING),
-            node_execution=parse_level("DATAFLOW_LOG_NODE_EXECUTION"),
-            sql_generation=parse_level("DATAFLOW_LOG_SQL_GENERATION"),
-            list_operations=parse_level("DATAFLOW_LOG_LIST_OPERATIONS"),
-            migration=parse_level("DATAFLOW_LOG_MIGRATION"),
-            core=parse_level("DATAFLOW_LOG_CORE"),
+            level=parse_required_level("DATAFLOW_LOG_LEVEL", logging.WARNING),
+            node_execution=parse_optional_level("DATAFLOW_LOG_NODE_EXECUTION"),
+            sql_generation=parse_optional_level("DATAFLOW_LOG_SQL_GENERATION"),
+            list_operations=parse_optional_level("DATAFLOW_LOG_LIST_OPERATIONS"),
+            migration=parse_optional_level("DATAFLOW_LOG_MIGRATION"),
+            core=parse_optional_level("DATAFLOW_LOG_CORE"),
             mask_sensitive_values=os.getenv("DATAFLOW_MASK_SENSITIVE", "true").lower()
             == "true",
         )
@@ -368,10 +381,7 @@ class DatabaseConfig:
                 )
 
         # 3. Auto-detect from database server
-        from dataflow.core.pool_utils import (
-            detect_worker_count,
-            probe_max_connections,
-        )
+        from dataflow.core.pool_utils import detect_worker_count, probe_max_connections
 
         db_url = (
             self.get_connection_url(environment)
@@ -513,6 +523,19 @@ class SecurityConfig:
     # Audit
     audit_enabled: bool = True
     audit_log_retention_days: int = 90
+
+    # Trust-plane integration (CARE-019/020/021)
+    # When ``trust_enforcement_mode`` is "disabled" (the default) the trust
+    # subsystem is not instantiated and the Express/Workflow query paths
+    # behave identically to pre-trust DataFlow. In "permissive" mode,
+    # constraint violations are logged but queries still execute. In
+    # "enforcing" mode, violating queries raise ``PermissionError``.
+    trust_enforcement_mode: str = "disabled"  # disabled, permissive, enforcing
+    # Independent switch for signed audit trail (CARE-020). When enabled,
+    # every DataFlow query records a ``SignedAuditRecord`` via the
+    # ``DataFlowAuditStore``. Keys are Ed25519 bytes; when both are None
+    # the store runs unsigned (record hashes only, no verification).
+    trust_audit_enabled: bool = False
 
     # Compliance
     gdpr_mode: bool = False

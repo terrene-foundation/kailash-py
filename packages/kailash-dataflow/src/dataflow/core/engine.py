@@ -114,6 +114,16 @@ class DataFlow(DataFlowEventMixin):
         read_url: Optional[str] = None,  # TSG-105: Read replica URL
         read_pool_size: Optional[int] = None,  # TSG-105: Separate pool size for reads
         redis_url: Optional[str] = None,  # TSG-107: Redis URL for Express cache backend
+        # Phase 5.11: Trust-plane integration (CARE-019/020/021).
+        # ``trust_enforcement_mode`` controls constraint checking on every
+        # Express/Workflow query (disabled|permissive|enforcing). The audit
+        # flags control whether a ``DataFlowAuditStore`` is attached and
+        # whether it uses Ed25519 signing keys. Defaults preserve pre-trust
+        # behavior when the caller does not opt in.
+        trust_enforcement_mode: Optional[str] = None,
+        trust_audit_enabled: Optional[bool] = None,
+        trust_audit_signing_key: Optional[bytes] = None,
+        trust_audit_verify_key: Optional[bytes] = None,
         **kwargs,
     ):
         """Initialize DataFlow.
@@ -536,6 +546,66 @@ class DataFlow(DataFlowEventMixin):
             self._multi_tenant_manager = MultiTenantManager(self)
         else:
             self._multi_tenant_manager = None
+
+        # Phase 5.11: Trust-plane integration (CARE-019/020/021).
+        # Resolve effective trust settings — constructor kwargs override
+        # config values when supplied. When neither is set, both subsystems
+        # stay dormant and the Express/Workflow paths behave exactly as
+        # pre-trust DataFlow.
+        _resolved_trust_mode = (
+            trust_enforcement_mode
+            if trust_enforcement_mode is not None
+            else getattr(self.config.security, "trust_enforcement_mode", "disabled")
+        )
+        _resolved_trust_audit = (
+            trust_audit_enabled
+            if trust_audit_enabled is not None
+            else getattr(self.config.security, "trust_audit_enabled", False)
+        )
+        self.config.security.trust_enforcement_mode = _resolved_trust_mode
+        self.config.security.trust_audit_enabled = _resolved_trust_audit
+
+        self._trust_executor: Optional[Any] = None
+        self._audit_store: Optional[Any] = None
+        self._tenant_trust_manager: Optional[Any] = None
+
+        if _resolved_trust_mode != "disabled" or _resolved_trust_audit:
+            # Import lazily so workspaces that never enable trust pay no
+            # import cost and never pull in the ``cryptography`` dependency
+            # implicitly via the signed-audit path.
+            from dataflow.trust.query_wrapper import TrustAwareQueryExecutor
+
+            self._trust_executor = TrustAwareQueryExecutor(
+                dataflow_instance=self,
+                enforcement_mode=(
+                    _resolved_trust_mode
+                    if _resolved_trust_mode != "disabled"
+                    else "permissive"
+                ),
+            )
+            logger.info(
+                "trust.executor.initialised",
+                extra={"mode": _resolved_trust_mode},
+            )
+
+        if _resolved_trust_audit:
+            from dataflow.trust.audit import DataFlowAuditStore
+
+            self._audit_store = DataFlowAuditStore(
+                signing_key=trust_audit_signing_key,
+                verify_key=trust_audit_verify_key,
+                enabled=True,
+            )
+            logger.info(
+                "trust.audit_store.initialised",
+                extra={"signed": trust_audit_signing_key is not None},
+            )
+
+        if self.config.security.multi_tenant and _resolved_trust_mode != "disabled":
+            from dataflow.trust.multi_tenant import TenantTrustManager
+
+            self._tenant_trust_manager = TenantTrustManager(strict_mode=True)
+            logger.info("trust.tenant_manager.initialised")
 
         # Initialize model registry for multi-application support
         from .model_registry import ModelRegistry

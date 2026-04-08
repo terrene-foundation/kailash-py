@@ -55,6 +55,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union
 from dataflow.cache.auto_detection import CacheBackend
 from dataflow.cache.key_generator import CacheKeyGenerator
 from dataflow.cache.memory_cache import InMemoryCache
+from dataflow.core.agent_context import get_current_agent_id
 from dataflow.core.multi_tenancy import TenantRequiredError
 from dataflow.core.tenant_context import get_current_tenant_id
 
@@ -270,6 +271,118 @@ class DataFlowExpress:
             raise DataFlowError(f"Validation failed for {model}: {error_msgs}")
 
     # ========================================================================
+    # Trust-plane integration helpers (Phase 5.11)
+    # ========================================================================
+
+    def _trust_enabled(self) -> bool:
+        """Return True when a trust executor is wired on the DataFlow instance.
+
+        When this is False, every other ``_trust_*`` helper short-circuits
+        and Express behaves identically to pre-trust DataFlow — no access
+        checks, no audit recording, no per-call overhead.
+        """
+        return getattr(self._db, "_trust_executor", None) is not None
+
+    def _trust_agent_id(self) -> Optional[str]:
+        """Resolve the agent ID for the current query from context."""
+        return get_current_agent_id()
+
+    async def _trust_check_read(
+        self, model: str, filter: Optional[Dict[str, Any]] = None
+    ):
+        """Run the trust access check for a read-shaped query.
+
+        Returns the ``QueryAccessResult`` plan when trust is enabled, or
+        ``None`` when trust is not wired (caller should bypass all trust
+        logic in that case).
+        """
+        if not self._trust_enabled():
+            return None
+        executor = self._db._trust_executor
+        return await executor.check_read_access(
+            model_name=model,
+            filter=filter or {},
+            agent_id=self._trust_agent_id(),
+            trust_context=None,
+        )
+
+    async def _trust_check_write(self, model: str, operation: str):
+        """Run the trust access check for a write-shaped query."""
+        if not self._trust_enabled():
+            return None
+        executor = self._db._trust_executor
+        return await executor.check_write_access(
+            model_name=model,
+            operation=operation,
+            agent_id=self._trust_agent_id(),
+            trust_context=None,
+        )
+
+    async def _trust_record_success(
+        self,
+        model: str,
+        operation: str,
+        plan: Any,
+        rows_affected: int,
+        query_params: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Record a success audit event via the trust executor."""
+        if plan is None or not self._trust_enabled():
+            return
+        executor = self._db._trust_executor
+        try:
+            await executor.record_query_success(
+                model_name=model,
+                operation=operation,
+                plan=plan,
+                agent_id=self._trust_agent_id(),
+                trust_context=None,
+                rows_affected=rows_affected,
+                query_params=query_params,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "trust.audit.success_failed",
+                extra={
+                    "model": model,
+                    "operation": operation,
+                    "error": str(exc),
+                },
+            )
+
+    async def _trust_record_failure(
+        self,
+        model: str,
+        operation: str,
+        plan: Any,
+        error: BaseException,
+        query_params: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Record a failure audit event via the trust executor."""
+        if not self._trust_enabled():
+            return
+        executor = self._db._trust_executor
+        try:
+            await executor.record_query_failure(
+                model_name=model,
+                operation=operation,
+                plan=plan,
+                agent_id=self._trust_agent_id(),
+                trust_context=None,
+                error=str(error),
+                query_params=query_params,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "trust.audit.failure_failed",
+                extra={
+                    "model": model,
+                    "operation": operation,
+                    "error": str(exc),
+                },
+            )
+
+    # ========================================================================
     # CRUD Operations
     # ========================================================================
 
@@ -294,8 +407,16 @@ class DataFlowExpress:
 
         async def _create():
             await self._validate_if_enabled(model, data)
-            node = self._create_node(model, "Create")
-            result = await node.async_run(**data)
+            # Phase 5.11: trust access check before the write.
+            plan = await self._trust_check_write(model, "create")
+            try:
+                node = self._create_node(model, "Create")
+                result = await node.async_run(**data)
+            except Exception as exc:
+                await self._trust_record_failure(
+                    model, "create", plan, exc, query_params=data
+                )
+                raise
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
@@ -337,6 +458,9 @@ class DataFlowExpress:
                 )
                 self._db._emit_write_event(model, "create", record_id=record_id)
 
+            await self._trust_record_success(
+                model, "create", plan, rows_affected=1, query_params=data
+            )
             return result
 
         return await self._execute_with_timing(f"{model}.create", _create())
@@ -371,13 +495,26 @@ class DataFlowExpress:
             return cached_result
 
         async def _read():
+            # Phase 5.11: trust access check before the read.
+            plan = await self._trust_check_read(model, {"id": id})
             try:
                 node = self._create_node(model, "Read")
                 result = await node.async_run(id=id)
 
+                # Apply PII/column filter from the trust plan, if any.
+                if plan is not None:
+                    result = self._db._trust_executor.apply_result_filter(result, plan)
+
                 # Cache result (TSG-104)
                 await self._cache_set(model, "read", {"id": id}, result, effective_ttl)
 
+                await self._trust_record_success(
+                    model,
+                    "read",
+                    plan,
+                    rows_affected=1 if result is not None else 0,
+                    query_params={"id": id},
+                )
                 return result
             except Exception as e:
                 # Check if this is a "not found" error - return None instead of raising
@@ -388,8 +525,18 @@ class DataFlowExpress:
                     or "does not exist" in error_str
                 ):
                     logger.debug(f"Record not found for {model}.read({id})")
+                    await self._trust_record_success(
+                        model,
+                        "read",
+                        plan,
+                        rows_affected=0,
+                        query_params={"id": id},
+                    )
                     return None
                 # Re-raise other errors
+                await self._trust_record_failure(
+                    model, "read", plan, e, query_params={"id": id}
+                )
                 raise
 
         return await self._execute_with_timing(f"{model}.read", _read())
@@ -414,8 +561,20 @@ class DataFlowExpress:
 
         async def _update():
             await self._validate_if_enabled(model, fields)
-            node = self._create_node(model, "Update")
-            result = await node.async_run(filter={"id": id}, fields=fields)
+            # Phase 5.11: trust access check before the write.
+            plan = await self._trust_check_write(model, "update")
+            try:
+                node = self._create_node(model, "Update")
+                result = await node.async_run(filter={"id": id}, fields=fields)
+            except Exception as exc:
+                await self._trust_record_failure(
+                    model,
+                    "update",
+                    plan,
+                    exc,
+                    query_params={"id": id, "fields": fields},
+                )
+                raise
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
@@ -424,6 +583,13 @@ class DataFlowExpress:
             if hasattr(self._db, "_emit_write_event"):
                 self._db._emit_write_event(model, "update", record_id=str(id))
 
+            await self._trust_record_success(
+                model,
+                "update",
+                plan,
+                rows_affected=1,
+                query_params={"id": id, "fields": fields},
+            )
             return result
 
         return await self._execute_with_timing(f"{model}.update", _update())
@@ -444,8 +610,16 @@ class DataFlowExpress:
         """
 
         async def _delete():
-            node = self._create_node(model, "Delete")
-            result = await node.async_run(id=id)
+            # Phase 5.11: trust access check before the write.
+            plan = await self._trust_check_write(model, "delete")
+            try:
+                node = self._create_node(model, "Delete")
+                result = await node.async_run(id=id)
+            except Exception as exc:
+                await self._trust_record_failure(
+                    model, "delete", plan, exc, query_params={"id": id}
+                )
+                raise
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)
@@ -454,11 +628,19 @@ class DataFlowExpress:
             if hasattr(self._db, "_emit_write_event"):
                 self._db._emit_write_event(model, "delete", record_id=str(id))
 
-            return (
+            deleted = (
                 result.get("deleted", False)
                 if isinstance(result, dict)
                 else bool(result)
             )
+            await self._trust_record_success(
+                model,
+                "delete",
+                plan,
+                rows_affected=1 if deleted else 0,
+                query_params={"id": id},
+            )
+            return deleted
 
         return await self._execute_with_timing(f"{model}.delete", _delete())
 
@@ -501,14 +683,46 @@ class DataFlowExpress:
             return cached_result
 
         async def _list():
-            node = self._create_node(model, "List")
-            result = await node.async_run(**params)
+            # Phase 5.11: trust access check before the read.
+            plan = await self._trust_check_read(model, filter)
+            try:
+                effective_params = dict(params)
+                if plan is not None:
+                    # Merge constraint-derived filters into the query filter.
+                    if plan.additional_filters:
+                        merged_filter = dict(effective_params.get("filter") or {})
+                        merged_filter.update(plan.additional_filters)
+                        effective_params["filter"] = merged_filter
+                    # Honour row_limit constraints by tightening the limit.
+                    if plan.row_limit is not None:
+                        current_limit = effective_params.get("limit", limit)
+                        effective_params["limit"] = min(
+                            int(current_limit), plan.row_limit
+                        )
+                node = self._create_node(model, "List")
+                result = await node.async_run(**effective_params)
+            except Exception as exc:
+                await self._trust_record_failure(
+                    model, "list", plan, exc, query_params=params
+                )
+                raise
 
             records = result if isinstance(result, list) else result.get("records", [])
+
+            # Apply PII/column filter from the trust plan, if any.
+            if plan is not None:
+                records = self._db._trust_executor.apply_result_filter(records, plan)
 
             # Cache result (TSG-104)
             await self._cache_set(model, "list", params, records, effective_ttl)
 
+            await self._trust_record_success(
+                model,
+                "list",
+                plan,
+                rows_affected=len(records) if hasattr(records, "__len__") else 0,
+                query_params=params,
+            )
             return records
 
         return await self._execute_with_timing(f"{model}.list", _list())
@@ -569,16 +783,39 @@ class DataFlowExpress:
             return cached_result
 
         async def _find_one():
-            node = self._create_node(model, "List")
-            result = await node.async_run(**params)
+            # Phase 5.11: trust access check (find_one is a read).
+            plan = await self._trust_check_read(model, filter)
+            try:
+                effective_params = dict(params)
+                if plan is not None and plan.additional_filters:
+                    merged_filter = dict(effective_params.get("filter") or {})
+                    merged_filter.update(plan.additional_filters)
+                    effective_params["filter"] = merged_filter
+                node = self._create_node(model, "List")
+                result = await node.async_run(**effective_params)
+            except Exception as exc:
+                await self._trust_record_failure(
+                    model, "find_one", plan, exc, query_params=params
+                )
+                raise
 
             # Extract first record from list result
             records = result if isinstance(result, list) else result.get("records", [])
             record = records[0] if records else None
 
+            if plan is not None and record is not None:
+                record = self._db._trust_executor.apply_result_filter(record, plan)
+
             # Cache result (including None for not-found)
             await self._cache_set(model, "find_one", params, record, effective_ttl)
 
+            await self._trust_record_success(
+                model,
+                "find_one",
+                plan,
+                rows_affected=1 if record is not None else 0,
+                query_params=params,
+            )
             return record
 
         return await self._execute_with_timing(f"{model}.find_one", _find_one())
@@ -616,13 +853,33 @@ class DataFlowExpress:
             return cached_result
 
         async def _count():
-            node = self._create_node(model, "Count")
-            result = await node.async_run(**params)
+            # Phase 5.11: trust access check (count is a read).
+            plan = await self._trust_check_read(model, filter)
+            try:
+                effective_params = dict(params)
+                if plan is not None and plan.additional_filters:
+                    merged_filter = dict(effective_params.get("filter") or {})
+                    merged_filter.update(plan.additional_filters)
+                    effective_params["filter"] = merged_filter
+                node = self._create_node(model, "Count")
+                result = await node.async_run(**effective_params)
+            except Exception as exc:
+                await self._trust_record_failure(
+                    model, "count", plan, exc, query_params=params
+                )
+                raise
             count = result.get("count", 0) if isinstance(result, dict) else result
 
             # Cache result (TSG-104)
             await self._cache_set(model, "count", params, count, effective_ttl)
 
+            await self._trust_record_success(
+                model,
+                "count",
+                plan,
+                rows_affected=int(count or 0),
+                query_params=params,
+            )
             return count
 
         return await self._execute_with_timing(f"{model}.count", _count())
