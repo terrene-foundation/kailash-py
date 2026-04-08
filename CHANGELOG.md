@@ -13,6 +13,51 @@ The changelog has been reorganized into individual files for better management. 
 - **[sdk-users/6-reference/changelogs/unreleased/](sdk-users/6-reference/changelogs/unreleased/)** - Unreleased changes
 - **[sdk-users/6-reference/changelogs/releases/](sdk-users/6-reference/changelogs/releases/)** - Individual release changelogs
 
+## Unreleased — Platform Architecture Convergence (v3.0)
+
+Major architectural refactor across all Kailash framework packages. See `docs/migration/v2-to-v3.md` for full migration guide.
+
+### Added
+
+- **`kailash-mcp`** — New extracted package consolidating all MCP code from 8+ scattered locations (16,500+ LOC)
+- **`kaizen.providers.*`** — Per-provider modules (14 providers split from 5,001-line monolith)
+- **`kailash.trust.envelope.ConstraintEnvelope`** — Canonical envelope with `intersect()`, `is_tighter_than()`, posture_ceiling, HMAC signing
+- **Composition wrappers** — `WrapperBase`, `StreamingAgent`, `MonitoredAgent`, `L3GovernedAgent` for composing agents over inheritance
+- **`kailash.trust.audit_store`** — Canonical AuditStore with InMemory and SQLite backends, Merkle hash chain
+- **`kailash.trust.posture.AgentPosture`** — Five posture levels (PSEUDO, TOOL, SUPERVISED, AUTONOMOUS, DELEGATED)
+- **`kailash.trust.auth.*`** — Extracted auth infrastructure (JWT, RBAC, TenantContext, AuthMiddlewareChain, sessions, SSO providers for Google/Azure/GitHub/Apple)
+- **`kailash.trust.rate_limit.*`** — Extracted rate limiting with memory and Redis backends
+- **Cross-SDK test vectors** — `tests/fixtures/cross-sdk/` for byte-identical parity validation with `kailash-rs`
+- **Cross-SDK issue template** — `.github/ISSUE_TEMPLATE/cross-sdk-convergence.md`
+
+### Changed
+
+- **`BaseAgent`** slimmed from 3,698 → 891 LOC (75.9% reduction). MCP/A2A/AgentLoop extracted into mixins.
+- **`Delegate`** rewritten as composition facade — internally stacks `BaseAgent → L3GovernedAgent → MonitoredAgent`. User-facing API unchanged.
+- **`ai_providers.py`** monolith reduced from 5,001 → 82 LOC (now a backward-compat shim)
+- 5+ scattered audit implementations consolidated into one canonical store
+
+### Deprecated
+
+- `from kailash.mcp_server import ...` → use `from kailash_mcp import ...`
+- `from kaizen.nodes.ai.ai_providers import ...` → use `from kaizen.providers import ...`
+- `BaseAgent` extension points (7 hooks) → use composition wrappers
+- Legacy `ConstraintEnvelope` types in chain.py / plane/models.py / pact/config.py — use `kailash.trust.envelope.ConstraintEnvelope`
+
+### Backward Compatibility
+
+All v2.x public APIs preserved through Layer 1-3 shims per ADR-009. Tests verify zero net regressions across the existing ~3,200 unit tests.
+
+### Tests
+
+- Baseline: 3,212 unit tests passing
+- Post-convergence: 3,220 unit tests + 2,738 trust tests + 8 cross-SDK tests = **5,958 tests passing, 0 failures**
+- New tests added: +148 across envelope, audit store, BaseAgent slimming, cross-SDK round-trip
+
+### Convergence Verification
+
+39/39 architectural checks passing via `scripts/convergence-verify.py --all`.
+
 ## Recent Releases
 
 ### kailash 2.6.0 + kailash-pact 0.8.0 + kailash-dataflow 1.8.0 + kailash-ml 0.5.0 + kailash-align 0.3.0 — 2026-04-06

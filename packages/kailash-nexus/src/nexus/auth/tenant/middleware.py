@@ -9,12 +9,13 @@ import logging
 from typing import Callable, Optional
 
 from fastapi import Request, Response
-from nexus.auth.tenant.config import TenantConfig
-from nexus.auth.tenant.context import TenantContext, _current_tenant
-from nexus.auth.tenant.exceptions import (
+from kailash.trust.auth.context import (
     TenantAccessDeniedError,
+    TenantConfig,
+    TenantContext,
     TenantInactiveError,
     TenantNotFoundError,
+    _current_tenant,
 )
 from nexus.auth.tenant.resolver import TenantResolver
 from starlette.middleware.base import BaseHTTPMiddleware

@@ -4,23 +4,70 @@ paths:
   - "**/*test*"
   - "**/*spec*"
   - "conftest.py"
+  - "**/.spec-coverage*"
+  - "**/.test-results*"
+  - "**/02-plans/**"
+  - "**/04-validate/**"
 ---
 
 # Testing Rules
 
-## Test-Once Protocol
+## Test-Once Protocol (Implementation Mode)
 
-Tests run ONCE per code change, not once per phase.
+During `/implement`, tests run ONCE per code change, not once per phase.
 
-**Why:** Running the full test suite in every phase wastes 2-5 minutes per cycle, compounding to significant delays across a multi-phase session.
+**Why:** Running the full test suite in every implementation phase wastes 2-5 minutes per cycle, compounding to significant delays across a multi-phase session.
 
 1. `/implement` runs full suite ONCE per todo, writes `.test-results` to workspace
-2. `/redteam` READS `.test-results` — does NOT re-run existing tests
-3. `/redteam` runs only NEW tests it creates (E2E, Playwright, Marionette)
-4. Pre-commit runs Tier 1 unit tests as fast safety net
-5. CI runs the full matrix as final gate
+2. Pre-commit runs Tier 1 unit tests as fast safety net
+3. CI runs the full matrix as final gate
 
-**Re-run only when:** commit hash mismatch, infrastructure change, or specific test suspected wrong.
+**Re-run during /implement only when:** commit hash mismatch, infrastructure change, or specific test suspected wrong.
+
+## Audit Mode Rules (Red Team / /redteam)
+
+When auditing test coverage, the rules invert: do NOT trust prior round outputs. Re-derive everything.
+
+### MUST: Re-derive coverage from scratch each audit round
+
+```bash
+# DO: re-derive
+pytest --collect-only -q tests/
+
+# DO NOT: trust the file
+cat .test-results  # BLOCKED in audit mode
+```
+
+**Why:** A previous round may have written `.test-results` claiming "5950 tests pass" — true, but those tests covered the OLD code, while new spec modules have zero tests. Without re-derivation, the audit certifies test counts that don't correspond to the new functionality.
+
+### MUST: Verify NEW modules have NEW tests
+
+For every new module a spec creates, grep the test directory for an import of that module. Zero importing tests = HIGH finding regardless of "tests pass".
+
+```bash
+# DO
+grep -rln "from kaizen_agents.wrapper_base\|import wrapper_base" tests/
+# Empty → HIGH: new module has zero test coverage
+
+# DO NOT
+cat .test-results | grep -c PASSED  # Suite-level count tells you nothing about new modules
+```
+
+**Why:** Counting passing tests at the suite level lets new functionality ship with zero coverage as long as legacy tests still pass. Per-module test verification catches this.
+
+### MUST: Verify security mitigations have tests
+
+For every § Security Threats subsection in any spec, grep for a corresponding `test_<threat>` function. Missing = HIGH.
+
+```bash
+# Spec § Threat: prompt injection via tool description
+grep -rln "test.*prompt.*injection\|test.*tool.*description.*injection" tests/
+# Empty → HIGH: documented threat has no test
+```
+
+**Why:** Documented threats with no test become "we said we'd handle it" claims that nothing actually verifies. Threats without tests are unmitigated.
+
+See `skills/spec-compliance/SKILL.md` for the full spec compliance verification protocol.
 
 ## Regression Testing
 

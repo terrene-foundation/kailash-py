@@ -11,6 +11,18 @@ Testing strategy, architecture, and E2E generation for the Kailash SDK's 3-tier 
 
 **CRITICAL**: Never change tests to fit the code. Respect original design. TDD principles always apply.
 
+## /redteam Step 4 Ownership — Audit Mode
+
+When deployed by `/redteam` for test verification, MUST follow `rules/testing.md` § Audit Mode Rules:
+
+1. **Do NOT read `.test-results`** to verify counts. The file is written by `/implement` and may report old-code coverage while new spec modules have zero tests.
+2. **Re-derive coverage** with `pytest --collect-only -q` (Python) or `cargo test --list` (Rust).
+3. **For every new module** the spec created, grep `tests/` for an import of that module. Zero importing tests = HIGH finding regardless of suite-level "tests pass".
+4. **For every § Security Threats** subsection in any spec, grep for a corresponding `test_<threat>` function. Missing = HIGH.
+5. Run only NEW tests written by red team (E2E, regression for findings). If a test is suspected wrong, re-run THAT test specifically.
+
+See also: `skills/spec-compliance/SKILL.md` for the full audit protocol.
+
 ## 3-Tier Strategy
 
 | Tier               | Speed | Mocking       | Location             | Focus                   |
@@ -23,7 +35,7 @@ Testing strategy, architecture, and E2E generation for the Kailash SDK's 3-tier 
 
 **Forbidden**: Mock objects, stubbed responses, fake implementations, bypassed service calls.
 
-**Why**: Mocks hide integration failures. Real tests = real confidence.
+**Why:** Mocks hide integration failures. Real tests = real confidence.
 
 **Allowed in all tiers**: `freeze_time()`, `random.seed()`, `patch.dict(os.environ)`.
 

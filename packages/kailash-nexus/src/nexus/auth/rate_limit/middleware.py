@@ -11,10 +11,10 @@ from datetime import datetime, timezone
 from typing import Callable, Optional
 
 from fastapi import Request, Response
-from nexus.auth.rate_limit.backends.base import RateLimitBackend
-from nexus.auth.rate_limit.backends.memory import InMemoryBackend
-from nexus.auth.rate_limit.config import RateLimitConfig
-from nexus.auth.rate_limit.result import RateLimitResult
+from kailash.trust.rate_limit.backends.base import RateLimitBackend
+from kailash.trust.rate_limit.backends.memory import InMemoryBackend
+from kailash.trust.rate_limit.config import RateLimitConfig
+from kailash.trust.rate_limit.result import RateLimitResult
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
@@ -75,7 +75,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return
 
         if self.config.backend == "redis":
-            from nexus.auth.rate_limit.backends.redis import RedisBackend
+            from kailash.trust.rate_limit.backends.redis import RedisBackend
 
             self._backend = RedisBackend(
                 redis_url=self.config.redis_url,

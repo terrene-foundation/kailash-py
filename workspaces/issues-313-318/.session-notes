@@ -1,0 +1,11 @@
+# Session Notes — 2026-04-07 (Issues #313-318 Complete)
+
+### Read These Files First (in order)
+
+1. `.spec-coverage` — 43/43 verified, all PRs merged
+2. `04-validate/01-redteam-convergence.md` — convergence in 2 rounds
+3. `01-analysis/04-cross-sdk-analysis.md` — kailash-rs issues #226, #227 filed
+
+## Status: COMPLETE
+
+All 6 issues resolved. 5 PRs merged (#319-323). Red-team converged. Knowledge codified. Upstream proposal created. Only #308 remains open (tracking-only).

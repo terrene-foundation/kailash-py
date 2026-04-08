@@ -21,6 +21,7 @@ Posture levels (lowest to highest autonomy):
 
 from __future__ import annotations
 
+from kailash.trust.envelope import AgentPosture
 from kailash.trust.posture.postures import (
     PostureConstraints,
     PostureEvaluationResult,
@@ -39,6 +40,8 @@ from kailash.trust.posture.postures import (
 )
 
 __all__ = [
+    # Agent posture ceiling (SPEC-08, re-exported from envelope)
+    "AgentPosture",
     # Core posture enum
     "TrustPosture",
     # Transition types

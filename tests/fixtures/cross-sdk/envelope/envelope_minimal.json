@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "name": "envelope_minimal",
+  "input": {
+    "metadata": {}
+  },
+  "expected_canonical_json": "{\"metadata\":{}}",
+  "metadata": {
+    "description": "Minimal empty ConstraintEnvelope",
+    "spec_reference": "SPEC-07 §5.1"
+  }
+}

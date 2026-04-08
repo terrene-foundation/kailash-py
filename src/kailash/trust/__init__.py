@@ -169,6 +169,25 @@ from kailash.trust.vocabulary import (
     constraint_from_eatp,
 )
 
+# Canonical envelope (SPEC-07 unification)
+from kailash.trust.envelope import (
+    AgentPosture,
+    CommunicationConstraint,
+    ConstraintEnvelope as CanonicalConstraintEnvelope,
+    DataAccessConstraint,
+    EnvelopeValidationError,
+    FinancialConstraint,
+    GradientThresholds,
+    OperationalConstraint,
+    SecretRef,
+    TemporalConstraint,
+    UnknownEnvelopeFieldError,
+    from_plane_envelope,
+    sign_envelope as sign_canonical_envelope,
+    to_plane_envelope,
+    verify_envelope as verify_canonical_envelope,
+)
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -347,6 +366,22 @@ __all__ = [
     "posture_from_eatp",
     "constraint_to_eatp",
     "constraint_from_eatp",
+    # --- Canonical Envelope (SPEC-07) ---
+    "AgentPosture",
+    "CanonicalConstraintEnvelope",
+    "CommunicationConstraint",
+    "DataAccessConstraint",
+    "EnvelopeValidationError",
+    "FinancialConstraint",
+    "GradientThresholds",
+    "OperationalConstraint",
+    "SecretRef",
+    "TemporalConstraint",
+    "UnknownEnvelopeFieldError",
+    "from_plane_envelope",
+    "sign_canonical_envelope",
+    "to_plane_envelope",
+    "verify_canonical_envelope",
     # --- Crypto (lazy-loaded, requires pynacl) ---
     "generate_keypair",
     "sign",

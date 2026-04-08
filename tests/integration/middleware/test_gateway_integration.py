@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 # Import middleware components
 from kailash.middleware import (
     AgentUIMiddleware,
-    AIChatMiddleware,
     APIGateway,
     EventStream,
     EventType,

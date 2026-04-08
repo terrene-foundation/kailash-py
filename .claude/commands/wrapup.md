@@ -5,6 +5,40 @@ description: "Write session notes before ending. Captures context for next sessi
 
 Write session notes to preserve context for the next session. The next session starts from zero — these notes are its only link to your work.
 
+## Deploy State Check (MUST run first)
+
+Before writing session notes, classify `deploy/deployment-config.md` into one of four states and act accordingly:
+
+### State A: File exists with YAML frontmatter declaring `deploy.type: application`
+
+1. Run `/deploy --check` (or directly: read `deploy/.last-deployed`, compare to `git rev-parse HEAD`, run `git diff <last_deployed> HEAD -- <production_paths>`)
+2. If drift is detected on production paths:
+   - **STOP** — do NOT write session notes yet
+   - Present the drift: which commits, which files, how many production-touching changes
+   - Require one of:
+     - **Run `/deploy` now** to actually ship the code (preferred)
+     - **Explicit deferral** with documented reason in session notes (`Deploy deferred: <why>`)
+3. Only after deploy runs OR deferral is documented, proceed.
+
+### State B: File exists with YAML frontmatter declaring `deploy.type: sdk`
+
+This is a BUILD repo / SDK. `/deploy` is not the right command here — `/release` is. Note in session notes: `Deploy state check skipped: SDK repo (use /release for publishing).` Proceed to write session notes.
+
+### State C: File exists but lacks YAML frontmatter (legacy prose-only config)
+
+The file is human-readable documentation but not machine-parseable. The agent cannot run `/deploy --check` or determine `type:`.
+
+- Note in session notes: `[ ] Migrate deploy/deployment-config.md to YAML frontmatter (currently legacy prose-only). Run /deploy --onboard to regenerate.`
+- Do NOT block wrapup, but DO flag this prominently.
+- If git diff against `git log -1 --format=%H deploy/deployment-config.md` shows the prose has been hand-edited recently, that further suggests the project is using a manual deploy workflow that loom's automation cannot verify — flag it explicitly.
+
+### State D: File does NOT exist
+
+- Note in session notes: `[ ] Run /deploy --onboard to create deployment config (no config exists, deploy state cannot be checked).`
+- Do NOT block wrapup — onboarding is a first-time setup, not a session blocker.
+
+**Why:** See `rules/deploy-hygiene.md`. The single most common failure mode is ending a session with committed-but-not-deployed production code, which makes the next session inherit unverifiable state. The four-state classification prevents two false positives: SDK repos that legitimately use /release (State B), and legacy prose configs that fall through both "exists" and "missing" branches (State C — exactly the kailash-py situation).
+
 ## Workspace Resolution
 
 1. If `$ARGUMENTS` specifies a project name, use `workspaces/$ARGUMENTS/`

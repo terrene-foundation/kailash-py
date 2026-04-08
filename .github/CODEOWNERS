@@ -10,3 +10,19 @@ packages/ @terrene-foundation/maintainers
 
 # Documentation
 docs/ @terrene-foundation/maintainers
+
+# Cross-SDK lockstep enforcement per ADR-008:
+# Test vectors require explicit review to ensure parity with kailash-rs.
+/tests/fixtures/cross-sdk/    @terrene-foundation/maintainers
+
+# Canonical envelope and trust types — high-impact architectural changes
+/src/kailash/trust/envelope.py     @terrene-foundation/maintainers
+/src/kailash/trust/audit_store.py  @terrene-foundation/maintainers
+/src/kailash/trust/posture/        @terrene-foundation/maintainers
+
+# Auth infrastructure — security review required
+/src/kailash/trust/auth/           @terrene-foundation/maintainers
+/src/kailash/trust/rate_limit/     @terrene-foundation/maintainers
+
+# kailash-mcp package — Phase 1 convergence
+/packages/kailash-mcp/             @terrene-foundation/maintainers

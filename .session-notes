@@ -1,47 +1,40 @@
-# Session Notes — 2026-04-04 (23 GH Issues Sprint + Release)
+# Session Notes — 2026-04-07 (Release: kailash-ml 0.7.0 + PCA/target-transform follow-up)
 
 ### Read These Files First (in order)
 
-1. `workspaces/gh-issues-consolidation/02-plans/01-implementation-plan.md` — full plan for 23 issues across 5 workstreams
-2. `workspaces/gh-issues-consolidation/.spec-coverage` — red team verification of all 23 issues against codebase
-3. `workspaces/gh-issues-consolidation/04-validate/01-redteam-convergence.md` — red team results (3 regressions found+fixed)
-4. `CHANGELOG.md` — release notes for v2.5.0 (all 4 packages)
-5. `deploy/deployment-config.md` — updated with lightweight tag convention (annotated tags don't trigger CI)
+1. `deploy/deployment-config.md` — version table for all 8 packages (ml=0.7.0)
+2. `packages/kailash-ml/CHANGELOG.md` — full 0.7.0 release notes (11 parity features)
+3. `packages/kailash-ml/pyproject.toml` — extras: [imbalance], [explain], [hpo]; sklearn>=1.5
+4. `.claude/.proposals/latest.yaml` — loom `/sync` proposal (status: reviewed, synced)
 
 ## Accomplished
 
-- **23 GH issues** (#231-#253) analyzed, planned, implemented, red-teamed, codified, released
-- **4 packages released**: kailash 2.5.0, kailash-pact 0.7.0, kailash-dataflow 1.7.0, kailash-nexus 1.8.0
-- **12 PRs** merged via PR #258 (implementation) and PR #260 (version bump)
-- **~6,500 lines** implementation + ~180 new tests across all packages
-- **5 cross-SDK issues** filed on kailash-rs (#173-#177)
-- **3 project skills** codified + upstream proposal at `.claude/.proposals/latest.yaml`
-- **FastAPI skill contamination** identified and filed as #259 (global COC skills show raw FastAPI instead of Nexus)
+- **Released kailash-ml 0.7.0** — PR #337 merged, tag ml-v0.7.0, PyPI live
+  - ModelExplainer (SHAP), model calibration, auto-logging, nested runs
+  - Preprocessing: 4 normalizers, KNN/iterative imputation, multicollinearity, SMOTE
+  - Inference signature validation, stratified k-fold fix, successive halving fix
+  - Red team R1 converged, 10 findings fixed
+- **PCA + target transformation** — PR #338 merged (follow-up to #336)
+  - `setup(pca=True, pca_components=0.99)` for dimensionality reduction
+  - `setup(transform_target=True)` for skewed regression targets (Yeo-Johnson)
+  - Unknown category handling verified already working (default fallbacks)
+- **All 12 GitHub issues closed** (#325-#336), #308 closed (cross-SDK tracking)
+- **Zero open issues** on terrene-foundation/kailash-py (verified)
+- **759 tests passing**, 0 failures
+- Loom proposal reviewed and synced
 
 ## Outstanding
 
-- [ ] **#254-#257** — 4 Kaizen/Azure issues (json_object format, provider_config dual purpose, cognitiveservices.azure.com detection, AZURE_OPENAI_API_VERSION env var). All in `packages/kailash-kaizen/`
-- [ ] **#259** — Fix FastAPI examples in global COC skills → replace with Nexus patterns. Fix at loom/ via `/sync`
-- [ ] **#251 PARTIAL** — Fabric-only mode works at FabricRuntime level but DataFlow constructor path not fully gated
-- [ ] **#232 sub-items** not in child issues: input validation in submit() (Tier 1), budget_allocated/audit_trail in WorkResult (Tier 2)
-- [ ] **Security recommendation**: serving.py consumer/refresh params need jsonschema validation (HIGH from red team)
-- [ ] **Worktree cleanup**: 11 worktrees in `.claude/worktrees/` — run `git worktree prune`
-- [ ] **`.proposals/latest.yaml`** — 6 changes pending `/sync py` at loom/
+Nothing. Zero open issues, zero active workspace todos.
 
 ### Oversight — Verify Before Starting
 
-- [ ] `pip install -e . && pip install -e packages/kailash-pact` — ensure editable installs current
-- [ ] `python -m pytest packages/kailash-pact/tests/unit/test_pact_engine.py -q` — 65+ tests pass
-- [ ] `git tag --sort=-creatordate | head -4` — shows v2.5.0, pact-v0.7.0, dataflow-v1.7.0, nexus-v1.8.0
-- [ ] PyPI: `pip install kailash==2.5.0 --dry-run` — version available
+- [ ] `pip install kailash-ml==0.7.0` works (verified: available on PyPI)
+- [ ] Version: pyproject.toml=0.7.0, _version.py=0.7.0 (verified: match)
+- [ ] Tests: `cd packages/kailash-ml && uv run pytest tests/ -x -q` → 759 passed
 
 ### Oversight — Verify After Completing
 
-- [ ] All Kaizen Azure tests pass: `pytest packages/kailash-kaizen/tests/ -x`
-- [ ] No hardcoded model strings: `grep -rn '"gpt-4\|"claude-' packages/kailash-kaizen/src/`
-- [ ] Cross-SDK: file kailash-rs issues for any Azure fixes that apply to Rust
-
-### Blockers
-
-- `.proposals/latest.yaml` needs human to run `/sync py` at loom/ to distribute to USE template
-- #259 (FastAPI in skills) needs fixing at loom/ — affects kailash-rs agents generating wrong code
+- [ ] `deploy/deployment-config.md` shows ml=0.7.0 (verified: yes)
+- [ ] Root pins: `grep 'kailash-ml' pyproject.toml` → >=0.7.0 (verified: yes)
+- [ ] Zero open issues: `gh issue list --state open` → [] (verified: empty)

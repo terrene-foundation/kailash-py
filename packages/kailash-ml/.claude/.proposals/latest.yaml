@@ -1,0 +1,20 @@
+source_repo: kailash-py
+codify_date: 2026-04-07
+codify_session: "feat(ml): PyCaret/MLflow parity — 11 features, ModelExplainer engine"
+sdk_version: "0.7.0"
+coc_version: "1.0.0"
+
+changes:
+  - file: skills/34-kailash-ml/SKILL.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Add ModelExplainer engine, preprocessing enhancements (normalization methods, KNN/iterative imputation, multicollinearity removal, SMOTE), nested runs, auto-logging, model calibration, inference validation to ml-specialist skill reference"
+    diff_lines: "+80 -0"
+
+  - file: agents/frameworks/ml-specialist.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Update ml-specialist with knowledge of new engines (ModelExplainer), preprocessing parity features, auto-logging integration pattern, nested runs, and inference validation"
+    diff_lines: "+20 -0"
+
+status: pending_review

@@ -1,12 +1,28 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "coc-build",
   "variant": "py",
-  "updated": "2026-03-30",
+  "updated": "2026-04-08",
   "description": "Kailash Python SDK BUILD repo",
   "upstream": {
-    "source": "kailash",
-    "build_version": "1.0.0",
-    "synced_at": "2026-03-30T00:00:00Z"
-  }
+    "source": "loom",
+    "version": "2.6.2",
+    "build_version": "2.6.2",
+    "synced_at": "2026-04-08T12:00:00Z"
+  },
+  "changelog": [
+    {
+      "version": "1.0.1",
+      "date": "2026-04-08",
+      "summary": "Sync loom 2.6.2 — spec-compliance skill + deploy hygiene refusals + Rust leak removal. BUILD-py is Python; deploy artifacts intentionally absent (BUILD repos use /release).",
+      "changes": [
+        "NEW: skills/spec-compliance/SKILL.md (Python-only)",
+        "REWRITE: commands/redteam.md (semantic verification, language-agnostic phrasing)",
+        "UPDATE: rules/testing.md (Audit Mode Rules — pytest --collect-only, no cargo)",
+        "UPDATE: agents/analysis/analyst.md, agents/testing/testing-specialist.md (/redteam ownership)",
+        "UPDATE: commands/wrapup.md (4-state deploy classification — Python BUILD falls under State C/D as expected)",
+        "ABSENT: commands/deploy.md, rules/deploy-hygiene.md, skills/10-deployment-git/application-deployment.md (build_exclude — BUILD repos use /release for SDK publishing, not /deploy for application shipping)"
+      ]
+    }
+  ]
 }

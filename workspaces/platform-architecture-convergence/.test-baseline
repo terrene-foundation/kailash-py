@@ -1,0 +1,15 @@
+# Test Baseline — Platform Architecture Convergence
+# Captured: 2026-04-08
+# Commit: feat/platform-architecture-convergence (pre-Phase 2)
+# Python: 3.12.9 (pyenv)
+
+## Unit tests (tests/unit/ excluding trust)
+passed: 3212
+skipped: 3
+failed: 0
+errors: 0
+
+## Notes
+- Full suite (tests/) needs aligned Python env to run all packages
+- tier_2 tests need PostgreSQL (excluded from baseline)
+- Baseline captured after pre-existing fixes (AIChatMiddleware, CoreErrorEnhancer, tier_2 models)
