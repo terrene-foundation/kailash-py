@@ -27,9 +27,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
+from dataflow.fabric.cache import (
+    FabricCacheBackend,
+    FabricTenantRequiredError,
+    InMemoryFabricCacheBackend,
+    RedisFabricCacheBackend,
+    _mask_url,
+)
 from dataflow.fabric.change_detector import ChangeDetector
 from dataflow.fabric.consumers import ConsumerFn, ConsumerRegistry
 from dataflow.fabric.context import FabricContext, PipelineContext
@@ -44,6 +52,20 @@ logger = logging.getLogger(__name__)
 __all__ = ["FabricRuntime"]
 
 _DEFAULT_SHUTDOWN_TIMEOUT = 30  # seconds
+
+
+def _resolve_instance_name(explicit: Optional[str]) -> str:
+    """Resolve the fabric instance name with env-var fallback.
+
+    Used as the Redis key prefix segment so two FabricRuntime processes
+    can share a Redis instance without colliding. The default value
+    ``"default"`` is sufficient for single-instance deployments; the
+    env var ``FABRIC_INSTANCE_NAME`` lets operators set it per replica
+    set.
+    """
+    if explicit:
+        return explicit
+    return os.environ.get("FABRIC_INSTANCE_NAME", "default")
 
 
 class FabricRuntime:
@@ -72,6 +94,7 @@ class FabricRuntime:
         enable_writes: bool = False,
         tenant_extractor: Optional[Callable] = None,
         nexus: Optional[Any] = None,
+        instance_name: Optional[str] = None,
     ) -> None:
         self._dataflow = dataflow
         self._sources = sources
@@ -84,6 +107,7 @@ class FabricRuntime:
         self._enable_writes = enable_writes
         self._tenant_extractor = tenant_extractor
         self._nexus = nexus
+        self._instance_name = _resolve_instance_name(instance_name)
 
         # Consumer adapter registry
         self._consumer_registry = ConsumerRegistry()
@@ -97,6 +121,8 @@ class FabricRuntime:
         self._leader: Optional[LeaderElector] = None
         self._serving: Optional[FabricServingLayer] = None
         self._webhook_receiver: Optional[WebhookReceiver] = None
+        self._cache_backend: Optional[FabricCacheBackend] = None
+        self._redis_client: Optional[Any] = None
         self._tasks: List[asyncio.Task[None]] = []
         self._shutting_down = False
         self._started = False
@@ -166,29 +192,48 @@ class FabricRuntime:
         # 2. Connect all registered sources (parallel)
         await self._connect_sources()
 
-        # 3. Initialize pipeline executor
+        # 3. Resolve shared Redis client (one per replica) and build the
+        # cache backend. The same client is reused for the leader elector
+        # and the webhook receiver below so cache + leader + webhook all
+        # share a single connection per replica.
+        self._cache_backend = await self._build_cache_backend()
+
+        # 4. Initialize pipeline executor with the chosen backend.
         self._pipeline = PipelineExecutor(
             dataflow=self._dataflow,
-            redis_url=self._redis_url,
+            cache_backend=self._cache_backend,
             dev_mode=self._dev_mode,
+            instance_name=self._instance_name,
         )
 
-        # 4. Elect leader
+        # 5. Elect leader. When we have a shared Redis client, hand it
+        # to a RedisLeaderBackend so the leader does not open a second
+        # Redis connection per replica.
+        leader_backend = None
+        if self._redis_client is not None:
+            leader_backend = self._build_redis_leader_backend(self._redis_client)
         self._leader = LeaderElector(
-            redis_url=self._redis_url,
+            backend=leader_backend,
+            redis_url=self._redis_url if leader_backend is None else None,
             dev_mode=self._dev_mode,
         )
         await self._leader.try_elect()
         await self._leader.start_heartbeat()
 
-        # 5. Pre-warm materialized products (leader only)
+        # 6. Pre-warm materialized products (leader only)
+        # In dev mode we always run serially. In production with a
+        # shared cache, _prewarm_products consults the cache backend
+        # via get_metadata before re-executing — this is the
+        # leader-side warm-cache-on-election path that prevents the
+        # impact-verse rolling-deploy regression where every new
+        # leader re-ran the full prewarm serially.
         if self._leader.is_leader and prewarm:
             if self._dev_mode:
                 await self._prewarm_products_serial()
             else:
                 await self._prewarm_products()
 
-        # 6. Start change detection (leader only)
+        # 7. Start change detection (leader only)
         #    Extract adapter objects from source info dicts (#253).
         #    ChangeDetector expects Dict[str, BaseSourceAdapter], but
         #    self._sources is Dict[str, Dict[str, Any]].
@@ -207,13 +252,18 @@ class FabricRuntime:
             self._change_detector.set_on_change(self._on_source_change_with_trigger)
             await self._change_detector.start()
 
-        # 7. Set up webhook receiver (all workers — RT-2)
+        # 8. Set up webhook receiver (all workers — RT-2). Pass the
+        # shared Redis client so the nonce dedup set is cross-replica
+        # when Redis is configured.
         self._webhook_receiver = WebhookReceiver(
             sources=self._sources,
             on_webhook_event=self._on_source_change,
+            redis_client=self._redis_client,
         )
 
-        # 8. Set up serving layer (all workers)
+        # 9. Set up serving layer (all workers). Forward the
+        # tenant_extractor so per-request tenant_id reaches the cache
+        # key construction (red-team amendment A).
         self._serving = FabricServingLayer(
             products=self._products,
             pipeline_executor=self._pipeline,
@@ -222,19 +272,109 @@ class FabricRuntime:
             enable_writes=self._enable_writes,
             on_product_refresh=self._on_source_change,
             consumer_registry=self._consumer_registry,
+            tenant_extractor=self._tenant_extractor,
         )
 
         # 9. Subscribe to DataFlow event bus for model writes (TODO-18)
         self._subscribe_to_events()
 
         self._started = True
-        logger.debug(
-            "FabricRuntime started (leader=%s, sources=%d, products=%d, dev=%s)",
-            self._leader.is_leader,
-            len(self._sources),
-            len(self._products),
-            self._dev_mode,
+        logger.info(
+            "fabric.runtime.started",
+            extra={
+                "leader": self._leader.is_leader,
+                "sources": len(self._sources),
+                "products": len(self._products),
+                "dev_mode": self._dev_mode,
+                "instance_name": self._instance_name,
+                "redis_url_masked": _mask_url(self._redis_url),
+            },
         )
+
+    # ------------------------------------------------------------------
+    # Shared Redis client + cache backend builders
+    # ------------------------------------------------------------------
+
+    async def _get_or_create_redis_client(self) -> Optional[Any]:
+        """Lazily build the shared Redis client for this replica.
+
+        Returns ``None`` when no ``redis_url`` was supplied or when
+        ``dev_mode=True`` forces in-memory backends. The same client
+        instance is returned to the cache backend, leader elector, and
+        webhook receiver so a single replica holds exactly one Redis
+        connection across all fabric subsystems.
+        """
+        if self._redis_client is not None:
+            return self._redis_client
+        if self._dev_mode or not self._redis_url:
+            return None
+        try:
+            import redis.asyncio as aioredis
+        except ImportError as exc:
+            raise ImportError(
+                "redis[asyncio] is required when redis_url is set. "
+                "Install with: pip install redis"
+            ) from exc
+
+        client = aioredis.from_url(
+            self._redis_url,
+            decode_responses=False,
+            health_check_interval=30,
+        )
+        self._redis_client = client
+        logger.info(
+            "fabric.redis_client.created",
+            extra={
+                "redis_url_masked": _mask_url(self._redis_url),
+                "instance_name": self._instance_name,
+                "decode_responses": False,
+                "health_check_interval": 30,
+            },
+        )
+        return client
+
+    async def _build_cache_backend(self) -> FabricCacheBackend:
+        """Choose the cache backend for this replica.
+
+        Mirrors the selection rules in :class:`PipelineExecutor` but
+        uses the shared Redis client when available.
+        """
+        if self._dev_mode:
+            if self._redis_url:
+                logger.warning(
+                    "fabric.cache.dev_mode_overrides_redis_url",
+                    extra={
+                        "backend": "memory",
+                        "redis_url_masked": _mask_url(self._redis_url),
+                        "instance_name": self._instance_name,
+                    },
+                )
+            return InMemoryFabricCacheBackend()
+
+        client = await self._get_or_create_redis_client()
+        if client is None:
+            return InMemoryFabricCacheBackend()
+        return RedisFabricCacheBackend(
+            redis_client=client,
+            key_prefix="fabric",
+            instance_name=self._instance_name,
+            redis_url_for_logging=self._redis_url,
+        )
+
+    def _build_redis_leader_backend(self, redis_client: Any) -> Any:
+        """Wrap an existing Redis client in a LeaderBackend.
+
+        We deliberately do NOT call ``LeaderElector(redis_url=...)`` when
+        the runtime already owns a client — that path opens a second
+        Redis connection per replica. Instead we construct a thin
+        ``RedisLeaderBackend`` from the existing client.
+        """
+        from dataflow.fabric.leader import RedisLeaderBackend
+
+        backend = RedisLeaderBackend.__new__(RedisLeaderBackend)
+        backend._redis_url = self._redis_url or ""
+        backend._client = redis_client
+        return backend
 
     async def stop(self) -> None:
         """Graceful shutdown of the fabric runtime."""
@@ -281,10 +421,44 @@ class FabricRuntime:
                 try:
                     await adapter.disconnect()
                 except Exception:
-                    logger.exception("Failed to disconnect source '%s'", name)
+                    logger.exception(
+                        "fabric.source.disconnect_failed",
+                        extra={"source": name},
+                    )
+
+        # 6. Close the cache backend (no-op for in-memory; Redis backend
+        # leaves the shared client to us so we close it next).
+        if self._cache_backend is not None:
+            try:
+                await self._cache_backend.close()
+            except Exception:
+                logger.exception("fabric.cache.close_failed")
+
+        # 7. Close the shared Redis client (cache + leader + webhook
+        # all referenced this single client).
+        if self._redis_client is not None:
+            try:
+                aclose = getattr(self._redis_client, "aclose", None)
+                if aclose is not None:
+                    await aclose()
+                else:
+                    close = getattr(self._redis_client, "close", None)
+                    if close is not None:
+                        result = close()
+                        if asyncio.iscoroutine(result):
+                            await result
+            except Exception:
+                logger.exception(
+                    "fabric.redis_client.close_failed",
+                    extra={"redis_url_masked": _mask_url(self._redis_url)},
+                )
+            self._redis_client = None
 
         self._started = False
-        logger.debug("FabricRuntime stopped")
+        logger.info(
+            "fabric.runtime.stopped",
+            extra={"instance_name": self._instance_name},
+        )
 
     async def _connect_sources(self) -> None:
         """Connect all sources in parallel."""
@@ -315,7 +489,19 @@ class FabricRuntime:
             raise
 
     async def _prewarm_products(self) -> None:
-        """Pre-warm all materialized products by running their pipelines."""
+        """Pre-warm all materialized products with leader-side warm-cache.
+
+        For each materialized product, the leader first checks the cache
+        backend's metadata (cheap HMGET on Redis, dict lookup on memory).
+        If a cached entry exists AND ``cached_at + staleness.max_age``
+        is still in the future, the leader records ``cache_action=
+        warm_skipped`` and does NOT re-execute the pipeline.
+
+        This is the impact-verse regression guard: when a leader dies
+        during a rolling deploy and a new leader elects, the new leader
+        reads the still-fresh entries the old leader wrote and only
+        re-executes products whose cache is missing or stale.
+        """
         materialized = [
             (name, product)
             for name, product in self._products.items()
@@ -325,11 +511,49 @@ class FabricRuntime:
         if not materialized:
             return
 
-        logger.debug("Pre-warming %d materialized products", len(materialized))
+        skipped = 0
+        executed = 0
+        now_utc = datetime.now(timezone.utc)
 
         for name, product in materialized:
+            # Multi-tenant products cannot be pre-warmed without a tenant.
+            # Skip them — the first per-tenant request will populate the
+            # cache lazily.
+            if product.multi_tenant:
+                logger.debug(
+                    "fabric.prewarm.multi_tenant_skipped",
+                    extra={"product": name, "reason": "no_system_tenant"},
+                )
+                continue
+
             try:
-                # Build context for this product
+                metadata = await self._pipeline.get_metadata(name)
+            except Exception:
+                logger.exception(
+                    "fabric.prewarm.metadata_lookup_failed",
+                    extra={"product": name},
+                )
+                metadata = None
+
+            if metadata is not None:
+                cached_at = metadata.get("cached_at")
+                if isinstance(cached_at, datetime):
+                    age = (now_utc - cached_at).total_seconds()
+                    max_age = product.staleness.max_age.total_seconds()
+                    if age <= max_age:
+                        skipped += 1
+                        logger.info(
+                            "fabric.prewarm.warm_skipped",
+                            extra={
+                                "product": name,
+                                "age_seconds": int(age),
+                                "max_age_seconds": int(max_age),
+                                "cache_action": "warm_skipped",
+                            },
+                        )
+                        continue
+
+            try:
                 source_adapters = {
                     n: info["adapter"]
                     for n, info in self._sources.items()
@@ -338,16 +562,33 @@ class FabricRuntime:
                 ctx = PipelineContext(
                     express=getattr(self._dataflow, "_express_dataflow", None),
                     sources=source_adapters,
-                    products_cache=self._get_products_cache(),
+                    products_cache=await self._get_products_cache(),
                 )
                 await self._pipeline.execute_product(
                     product_name=name,
                     product_fn=product.fn,
                     context=ctx,
                 )
-                logger.debug("Pre-warmed product '%s'", name)
+                executed += 1
+                logger.debug(
+                    "fabric.prewarm.executed",
+                    extra={"product": name},
+                )
             except Exception:
-                logger.exception("Failed to pre-warm product '%s'", name)
+                logger.exception(
+                    "fabric.prewarm.failed",
+                    extra={"product": name},
+                )
+
+        logger.info(
+            "fabric.prewarm.complete",
+            extra={
+                "prewarm_skipped": skipped,
+                "prewarm_executed": executed,
+                "total_products": len(materialized),
+                "instance_name": self._instance_name,
+            },
+        )
 
     async def _prewarm_products_serial(self) -> None:
         """Pre-warm all materialized products one at a time (dev mode).
@@ -381,16 +622,22 @@ class FabricRuntime:
                 ctx = PipelineContext(
                     express=getattr(self._dataflow, "_express_dataflow", None),
                     sources=source_adapters,
-                    products_cache=self._get_products_cache(),
+                    products_cache=await self._get_products_cache(),
                 )
                 await self._pipeline.execute_product(
                     product_name=name,
                     product_fn=product.fn,
                     context=ctx,
                 )
-                logger.debug("Pre-warmed product '%s' (serial)", name)
+                logger.debug(
+                    "fabric.prewarm.serial_executed",
+                    extra={"product": name},
+                )
             except Exception:
-                logger.exception("Failed to pre-warm product '%s'", name)
+                logger.exception(
+                    "fabric.prewarm.serial_failed",
+                    extra={"product": name},
+                )
 
     async def _on_source_change_with_trigger(
         self, product_name: str, triggered_by: str = ""
@@ -407,6 +654,17 @@ class FabricRuntime:
         if product is None:
             return
 
+        # Multi-tenant products require a tenant_id we cannot supply
+        # from a source-change callback (the source change applies to
+        # all tenants). Skip refresh; per-request fabric serving will
+        # populate the cache lazily.
+        if product.multi_tenant:
+            logger.debug(
+                "fabric.refresh.multi_tenant_skipped",
+                extra={"product": product_name},
+            )
+            return
+
         try:
             source_adapters = {
                 n: info["adapter"]
@@ -416,7 +674,7 @@ class FabricRuntime:
             ctx = PipelineContext(
                 express=getattr(self._dataflow, "_express_dataflow", None),
                 sources=source_adapters,
-                products_cache=self._get_products_cache(),
+                products_cache=await self._get_products_cache(),
             )
             await self._pipeline.execute_product(
                 product_name=product_name,
@@ -424,7 +682,10 @@ class FabricRuntime:
                 context=ctx,
             )
         except Exception:
-            logger.exception("Pipeline execution failed for product '%s'", product_name)
+            logger.exception(
+                "fabric.refresh.failed",
+                extra={"product": product_name},
+            )
 
     def _subscribe_to_events(self) -> None:
         """Subscribe to DataFlow event bus for write notifications (TODO-18).
@@ -469,24 +730,36 @@ class FabricRuntime:
             if model_name in product.depends_on:
                 await self._on_source_change(pname)
 
-    def _get_products_cache(self) -> Dict[str, Any]:
-        """Build a products cache dict from pipeline cached data."""
+    async def _get_products_cache(
+        self, tenant_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Build a products cache dict from pipeline cached data.
+
+        Multi-tenant products are skipped when ``tenant_id`` is None
+        because we cannot pick a tenant for them. When ``tenant_id``
+        is supplied, multi-tenant products use that tenant's view.
+        """
         cache: Dict[str, Any] = {}
         if self._pipeline is None:
             return cache
 
-        for name in self._products:
-            cached = self._pipeline.get_cached(name)
+        for name, product in self._products.items():
+            if product.multi_tenant and tenant_id is None:
+                # Cannot pick a tenant for the upstream-product cache
+                # without a request context. Leave it absent.
+                continue
+            effective_tenant = tenant_id if product.multi_tenant else None
+            cached = await self._pipeline.get_cached(name, tenant_id=effective_tenant)
             if cached is not None:
-                data_bytes, metadata = cached
+                data_bytes, _metadata = cached
                 try:
                     import msgpack
 
                     cache[name] = msgpack.unpackb(data_bytes, raw=False)
                 except ImportError:
-                    import json
+                    import json as _json
 
-                    cache[name] = json.loads(data_bytes.decode("utf-8"))
+                    cache[name] = _json.loads(data_bytes.decode("utf-8"))
 
         return cache
 
@@ -494,21 +767,37 @@ class FabricRuntime:
         self,
         product_name: str,
         params: Optional[Dict[str, Any]] = None,
+        tenant_id: Optional[str] = None,
     ) -> Optional[Any]:
         """Retrieve a cached product result without executing the pipeline.
 
-        Called by ProductInvokeNode to read fabric products from within workflows.
+        Called by ProductInvokeNode to read fabric products from within
+        workflows.
 
         Args:
             product_name: Name of the registered product.
             params: Optional parameters for parameterized products.
+            tenant_id: Optional tenant scope. Required when the product
+                was declared ``multi_tenant=True``.
 
         Returns:
             The cached product data, or None if not cached.
+
+        Raises:
+            FabricTenantRequiredError: When the product is multi_tenant
+                but no tenant_id was supplied.
         """
         if self._pipeline is None:
             return None
-        result = self._pipeline.get_product_from_cache(product_name, params)
+        product = self._products.get(product_name)
+        if product is not None and product.multi_tenant and tenant_id is None:
+            raise FabricTenantRequiredError(
+                f"Product '{product_name}' is multi_tenant=True; "
+                f"caller must pass tenant_id."
+            )
+        result = await self._pipeline.get_product_from_cache(
+            product_name, params, tenant_id
+        )
         if result is None:
             return None
         return result.data if hasattr(result, "data") else result
@@ -557,46 +846,81 @@ class FabricRuntime:
             ),
         }
 
-    def product_info(self, name: str) -> Dict[str, Any]:
-        """Get info for a specific product."""
+    async def product_info(
+        self, name: str, tenant_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Get info for a specific product.
+
+        Uses the cache backend's metadata fast path so this call does
+        not transfer payload bytes from Redis (HMGET, not HGETALL).
+
+        Multi-tenant products require an explicit ``tenant_id``;
+        without it the call raises :class:`FabricTenantRequiredError`.
+
+        BREAKING CHANGE in 2.0: this method is now async to support
+        the Redis-backed cache. Wrap callers in ``await`` or
+        ``asyncio.run()``.
+        """
         product = self._products.get(name)
         if product is None:
             raise KeyError(f"Product '{name}' not found")
 
-        cached = self._pipeline.get_cached(name) if self._pipeline else None
+        if product.multi_tenant and tenant_id is None:
+            raise FabricTenantRequiredError(
+                f"Product '{name}' is multi_tenant=True; product_info() "
+                f"requires an explicit tenant_id."
+            )
+
+        meta = None
+        if self._pipeline is not None:
+            meta = await self._pipeline.get_metadata(name, tenant_id=tenant_id)
+
+        cached_at_value = meta.get("cached_at") if meta else None
+        cached_at_iso: Optional[str] = None
+        if isinstance(cached_at_value, datetime):
+            cached_at_iso = cached_at_value.isoformat()
+        elif isinstance(cached_at_value, str):
+            cached_at_iso = cached_at_value
+
         return {
             "name": name,
             "mode": product.mode.value,
             "depends_on": product.depends_on,
-            "cached": cached is not None,
-            "cached_at": cached[1].get("cached_at") if cached else None,
+            "cached": meta is not None,
+            "cached_at": cached_at_iso,
+            "tenant_id": tenant_id,
         }
 
-    def invalidate(
-        self, product_name: str, params: Optional[Dict[str, Any]] = None
+    async def invalidate(
+        self,
+        product_name: str,
+        params: Optional[Dict[str, Any]] = None,
+        tenant_id: Optional[str] = None,
     ) -> bool:
         """Invalidate cached data for a specific product.
 
-        Args:
-            product_name: Name of the product to invalidate.
-            params: Optional parameters (for parameterized products).
-
-        Returns:
-            ``True`` if the cache entry existed and was removed.
+        BREAKING CHANGE in 2.0: now async — wrap callers in ``await``.
         """
         if self._pipeline is None:
             return False
-        return self._pipeline.invalidate(product_name, params)
+        product = self._products.get(product_name)
+        if product is not None and product.multi_tenant and tenant_id is None:
+            raise FabricTenantRequiredError(
+                f"Product '{product_name}' is multi_tenant=True; "
+                f"invalidate() requires an explicit tenant_id."
+            )
+        return await self._pipeline.invalidate(product_name, params, tenant_id)
 
-    def invalidate_all(self) -> int:
+    async def invalidate_all(self) -> int:
         """Invalidate all cached product data.
 
-        Returns:
-            The number of cache entries that were cleared.
+        BREAKING CHANGE in 2.0: now async. The return value is no
+        longer a count — Redis cannot reliably count keys without an
+        extra round-trip — and the method returns ``-1`` on completion.
         """
         if self._pipeline is None:
             return 0
-        return self._pipeline.invalidate_all()
+        return await self._pipeline.invalidate_all()
 
     def last_trace(self, name: str) -> Dict[str, Any]:
         """Get the last pipeline trace for a product."""

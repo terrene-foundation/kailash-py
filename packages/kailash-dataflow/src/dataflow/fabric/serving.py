@@ -20,8 +20,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
-from dataflow.fabric.context import PipelineContext
 from dataflow.fabric.consumers import ConsumerRegistry
+from dataflow.fabric.context import PipelineContext
 from dataflow.fabric.products import ProductRegistration
 
 logger = logging.getLogger(__name__)
@@ -97,6 +97,7 @@ class FabricServingLayer:
         enable_writes: bool = False,
         on_product_refresh: Optional[Callable] = None,
         consumer_registry: Optional[ConsumerRegistry] = None,
+        tenant_extractor: Optional[Callable[[Any], Optional[str]]] = None,
     ) -> None:
         self._products = products
         self._pipeline = pipeline_executor
@@ -105,6 +106,29 @@ class FabricServingLayer:
         self._enable_writes = enable_writes
         self._on_product_refresh = on_product_refresh
         self._consumer_registry = consumer_registry or ConsumerRegistry()
+        self._tenant_extractor = tenant_extractor
+
+    def _extract_tenant(self, request: Any) -> Optional[str]:
+        """Resolve the tenant_id for a request via the configured extractor.
+
+        Returns ``None`` when no extractor is configured. The serving
+        layer requires the per-request tenant_id for any product
+        declared ``multi_tenant=True``; ``handle_request`` raises a
+        :class:`FabricTenantRequiredError` if a multi-tenant product is
+        requested without a tenant_id.
+        """
+        if self._tenant_extractor is None or request is None:
+            return None
+        try:
+            tenant = self._tenant_extractor(request)
+        except Exception:
+            logger.exception(
+                "fabric.serving.tenant_extractor_failed",
+            )
+            return None
+        if tenant is None:
+            return None
+        return str(tenant)
 
     def get_routes(self) -> List[Dict[str, Any]]:
         """Generate route definitions for all products.
@@ -235,6 +259,26 @@ class FabricServingLayer:
                             "error": "limit must be a positive integer",
                         }
 
+            # Resolve tenant_id from the request and enforce the
+            # multi-tenant invariant before any cache lookup or fresh
+            # execution can happen.
+            tenant_id = self._extract_tenant(request)
+            if product.multi_tenant and tenant_id is None:
+                logger.warning(
+                    "fabric.serving.tenant_required",
+                    extra={
+                        "product": name,
+                        "multi_tenant": True,
+                    },
+                )
+                return {
+                    "_status": 400,
+                    "error": (
+                        f"Product '{name}' requires a tenant identifier. "
+                        f"Configure tenant_extractor on db.start()."
+                    ),
+                }
+
             # Refresh: bypass cache and execute fresh
             if refresh:
                 try:
@@ -253,6 +297,7 @@ class FabricServingLayer:
                         product_fn=product.fn,
                         context=ctx,
                         params=params if params else None,
+                        tenant_id=tenant_id,
                     )
                     return {
                         "_status": 200,
@@ -265,7 +310,8 @@ class FabricServingLayer:
                     }
                 except Exception as e:
                     logger.error(
-                        "Refresh execution failed for product '%s': %s", name, e
+                        "fabric.serving.refresh_failed",
+                        extra={"product": name, "error": str(e)},
                     )
                     return {
                         "_status": 500,
@@ -273,7 +319,7 @@ class FabricServingLayer:
                     }
 
             # Try to get cached data
-            cached = self._pipeline.get_cached(name)
+            cached = await self._pipeline.get_cached(name, tenant_id=tenant_id)
 
             if cached is not None:
                 data_bytes, metadata = cached
@@ -344,7 +390,9 @@ class FabricServingLayer:
                     sources=source_adapters,
                     products_cache={},
                 )
-                result = await self._pipeline.execute_product(name, product.fn, ctx)
+                result = await self._pipeline.execute_product(
+                    name, product.fn, ctx, tenant_id=tenant_id
+                )
                 return {
                     "_status": 200,
                     "_headers": {
@@ -384,13 +432,23 @@ class FabricServingLayer:
             results: Dict[str, Any] = {}
             overall_freshness = "fresh"
 
+            tenant_id = self._extract_tenant(request)
+
             for name in product_names:
                 if name not in self._products:
                     results[name] = {"error": f"Product '{name}' not found"}
                     continue
 
                 product = self._products[name]
-                cached = self._pipeline.get_cached(name)
+                if product.multi_tenant and tenant_id is None:
+                    results[name] = {
+                        "error": (f"Product '{name}' requires a tenant identifier.")
+                    }
+                    continue
+                effective_tenant = tenant_id if product.multi_tenant else None
+                cached = await self._pipeline.get_cached(
+                    name, tenant_id=effective_tenant
+                )
                 if cached is not None:
                     data_bytes, metadata = cached
                     try:
@@ -416,7 +474,7 @@ class FabricServingLayer:
                         products_cache={},
                     )
                     pipe_result = await self._pipeline.execute_product(
-                        name, product.fn, ctx
+                        name, product.fn, ctx, tenant_id=effective_tenant
                     )
                     results[name] = {
                         "data": pipe_result.data,

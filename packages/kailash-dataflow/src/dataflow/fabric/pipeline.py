@@ -5,18 +5,46 @@ PipelineExecutor — executes data product pipelines with caching and dedup.
 
 Manages concurrent pipeline execution with bounded semaphores, content-hash
 deduplication, serialization via msgpack (with json fallback), and bounded
-trace storage. Supports both in-memory (dev) and Redis (production) cache.
+trace storage.
+
+Cache storage is delegated to a :class:`FabricCacheBackend` (in-memory or
+Redis-backed). The executor itself holds no per-product cache state — the
+backend is the single source of truth. This replaces the three parallel
+dicts (data/hash/metadata) the executor used before, eliminating an
+entire class of "dicts drift" bugs documented in the
+``workspaces/issue-354/`` analysis.
+
+Backend selection rules:
+
+* If a ``cache_backend`` is provided, it is used directly.
+* If ``dev_mode=True``, force :class:`InMemoryFabricCacheBackend`. Logs
+  a WARN if a ``redis_url`` was also provided so operators see why their
+  Redis URL is being ignored.
+* If neither a backend nor a ``redis_url`` is provided, default to
+  :class:`InMemoryFabricCacheBackend`.
+* If ``redis_url`` is provided **without** a ``cache_backend``, raise
+  :class:`ValueError`. The shared Redis client lives on
+  :class:`FabricRuntime` (so the cache, leader elector, and webhook
+  receiver share one connection per replica); the executor must NOT
+  construct its own client.
+
+Tenant isolation:
+
+* The executor itself does not know which products are
+  ``multi_tenant=True``. Callers (FabricRuntime, FabricServingLayer)
+  enforce the invariant by passing ``tenant_id``. The cache key always
+  includes the tenant prefix when ``tenant_id`` is non-None.
 
 Design references:
 - TODO-11 in ``workspaces/data-fabric-engine/todos/active/02-products-and-pipeline.md``
 - doc runtime-redteam RT-6 (10MB result size limit)
 - doc layer-redteam F5 (DB connection budget = 20% of pool)
+- ``workspaces/issue-354/02-plans/01-fix-plan.md`` Phases 4, 4a, 4b
 """
 
 from __future__ import annotations
 
 import asyncio
-import collections
 import hashlib
 import json
 import logging
@@ -26,6 +54,13 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
+
+from dataflow.fabric.cache import (
+    FabricCacheBackend,
+    InMemoryFabricCacheBackend,
+    _FabricCacheEntry,
+    _mask_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +123,8 @@ def _serialize(data: Any) -> bytes:
         return msgpack.packb(data, use_bin_type=True)
     except ImportError:
         logger.warning(
-            "msgpack not installed; falling back to json serialization. "
-            "Install msgpack for better performance: pip install msgpack"
+            "fabric.pipeline.msgpack_missing",
+            extra={"fallback": "json"},
         )
         return json.dumps(data, sort_keys=True, default=str).encode("utf-8")
 
@@ -116,9 +151,29 @@ def _canonical_params(params: Optional[Dict[str, Any]]) -> str:
     return json.dumps(params, sort_keys=True, default=str)
 
 
-def _cache_key(product_name: str, params: Optional[Dict[str, Any]] = None) -> str:
-    """Build a cache key, incorporating params for parameterized products."""
+def _cache_key(
+    product_name: str,
+    params: Optional[Dict[str, Any]] = None,
+    tenant_id: Optional[str] = None,
+) -> str:
+    """Build a cache key, incorporating tenant and params.
+
+    Shape:
+    * No tenant, no params: ``product_name``
+    * No tenant, with params: ``product_name:<canonical-params>``
+    * With tenant, no params: ``<tenant_id>:product_name``
+    * With tenant + params: ``<tenant_id>:product_name:<canonical-params>``
+
+    Tenant isolation lives in the key prefix; the backend is opaque to
+    tenants. Callers MUST pass ``tenant_id`` for ``multi_tenant=True``
+    products — the executor does not enforce this directly because it
+    does not know the product registration.
+    """
     canonical = _canonical_params(params)
+    if tenant_id is not None:
+        if canonical:
+            return f"{tenant_id}:{product_name}:{canonical}"
+        return f"{tenant_id}:{product_name}"
     if canonical:
         return f"{product_name}:{canonical}"
     return product_name
@@ -130,15 +185,22 @@ def _cache_key(product_name: str, params: Optional[Dict[str, Any]] = None) -> st
 
 
 class PipelineExecutor:
-    """Execute data product pipelines with caching, dedup, and bounded concurrency.
+    """Execute data product pipelines with bounded concurrency, content-hash
+    dedup, and a delegated cache backend.
 
     Args:
         dataflow: The DataFlow instance providing DB access and config.
-        redis_url: Optional Redis URL for production caching. When ``None``,
-            an in-memory cache is used (suitable for development).
-        max_concurrent: Maximum concurrent pipeline executions (semaphore bound).
-        dev_mode: When ``True``, forces in-memory cache even if ``redis_url``
-            is provided.
+        redis_url: Reserved for backend selection diagnostics. The
+            executor never instantiates a Redis client itself; pass a
+            constructed ``cache_backend`` from FabricRuntime instead.
+        max_concurrent: Maximum concurrent pipeline executions
+            (semaphore bound).
+        dev_mode: When ``True``, forces in-memory cache and logs a WARN
+            if a ``redis_url`` was also provided.
+        cache_backend: Optional pre-built cache backend. When provided,
+            ``redis_url`` and ``dev_mode`` are ignored for backend
+            selection (the caller has already chosen).
+        instance_name: Logical instance identifier for metrics and logs.
     """
 
     def __init__(
@@ -147,42 +209,109 @@ class PipelineExecutor:
         redis_url: Optional[str] = None,
         max_concurrent: int = 3,
         dev_mode: bool = False,
+        cache_backend: Optional[FabricCacheBackend] = None,
+        instance_name: str = "default",
     ) -> None:
         self._dataflow = dataflow
-        self._redis_url = redis_url
         self._max_concurrent = max_concurrent
-        self._dev_mode = dev_mode
+        self._instance_name = instance_name
+
+        # Backend selection — see module docstring.
+        self._cache: FabricCacheBackend = self._select_backend(
+            cache_backend=cache_backend,
+            redis_url=redis_url,
+            dev_mode=dev_mode,
+        )
 
         # Execution concurrency
         self._exec_semaphore = asyncio.Semaphore(max_concurrent)
 
-        # DB connection budget — 20% of pool (F5). Fall back to 2 if pool
+        # DB connection budget — 20% of pool (F5). Falls back to 1 if pool
         # size is not available on the config.
         pool_size = self._resolve_pool_size()
         pool_fraction = int(pool_size * 0.2)
         db_budget = max(1, pool_fraction)
         self._db_semaphore = asyncio.Semaphore(db_budget)
         logger.debug(
-            "PipelineExecutor: max_concurrent=%d, db_budget=%d (pool_size=%d)",
-            max_concurrent,
-            db_budget,
-            pool_size,
+            "fabric.pipeline.constructed",
+            extra={
+                "max_concurrent": max_concurrent,
+                "db_budget": db_budget,
+                "pool_size": pool_size,
+                "instance_name": instance_name,
+            },
         )
-
-        # In-memory cache (used when dev_mode or no redis_url)
-        # Bounded to prevent OOM from high-cardinality parameterized products
-        self._cache_data: collections.OrderedDict[str, bytes] = (
-            collections.OrderedDict()
-        )
-        self._cache_hash: Dict[str, str] = {}
-        self._cache_metadata: Dict[str, Dict[str, Any]] = {}
-        self._max_cache_entries = 10_000
 
         # Bounded trace storage
         self._traces: Deque[PipelineTrace] = deque(maxlen=_DEFAULT_MAX_TRACES)
 
         # Size limit
         self._max_result_bytes = _DEFAULT_MAX_RESULT_BYTES
+
+    # ------------------------------------------------------------------
+    # Backend selection
+    # ------------------------------------------------------------------
+
+    def _select_backend(
+        self,
+        cache_backend: Optional[FabricCacheBackend],
+        redis_url: Optional[str],
+        dev_mode: bool,
+    ) -> FabricCacheBackend:
+        if cache_backend is not None:
+            logger.info(
+                "fabric.cache.backend_selected",
+                extra={
+                    "backend": "injected",
+                    "backend_class": type(cache_backend).__name__,
+                    "dev_mode": dev_mode,
+                    "instance_name": self._instance_name,
+                },
+            )
+            return cache_backend
+
+        if dev_mode:
+            if redis_url:
+                logger.warning(
+                    "fabric.cache.dev_mode_overrides_redis_url",
+                    extra={
+                        "backend": "memory",
+                        "redis_url_masked": _mask_url(redis_url),
+                        "instance_name": self._instance_name,
+                    },
+                )
+            backend: FabricCacheBackend = InMemoryFabricCacheBackend()
+            logger.info(
+                "fabric.cache.backend_selected",
+                extra={
+                    "backend": "memory",
+                    "dev_mode": True,
+                    "instance_name": self._instance_name,
+                },
+            )
+            return backend
+
+        if redis_url is None:
+            backend = InMemoryFabricCacheBackend()
+            logger.info(
+                "fabric.cache.backend_selected",
+                extra={
+                    "backend": "memory",
+                    "dev_mode": False,
+                    "instance_name": self._instance_name,
+                },
+            )
+            return backend
+
+        # Redis URL provided but no backend wired — programmer error.
+        # The shared client lives on FabricRuntime so cache + leader +
+        # webhook receiver use ONE connection per replica.
+        raise ValueError(
+            "PipelineExecutor refuses to construct its own Redis client. "
+            "Pass `cache_backend=RedisFabricCacheBackend(redis_client=...)` "
+            "from FabricRuntime, which owns the shared client. "
+            f"redis_url provided: {_mask_url(redis_url)}"
+        )
 
     # ------------------------------------------------------------------
     # Pool size resolution
@@ -210,7 +339,8 @@ class PipelineExecutor:
                         return int(pool_size)
         except Exception:
             logger.debug(
-                "Could not resolve pool_size from DataFlow config; using DatabaseConfig default"
+                "fabric.pipeline.pool_size_fallback",
+                extra={"reason": "config_resolution_failed"},
             )
         # Fall back to DatabaseConfig canonical default
         try:
@@ -221,48 +351,114 @@ class PipelineExecutor:
             return 5  # Minimal safe fallback — yields db_budget = max(1, 1) = 1
 
     # ------------------------------------------------------------------
-    # Cache operations (in-memory; Redis is a future extension)
+    # Cache operations — delegate to FabricCacheBackend
     # ------------------------------------------------------------------
 
-    def get_cached(
-        self, product_name: str, params: Optional[Dict[str, Any]] = None
+    async def get_cached(
+        self,
+        product_name: str,
+        params: Optional[Dict[str, Any]] = None,
+        tenant_id: Optional[str] = None,
     ) -> Optional[Tuple[bytes, Dict[str, Any]]]:
-        """Return cached data bytes and metadata, or ``None`` if not cached."""
-        key = _cache_key(product_name, params)
-        raw = self._cache_data.get(key)
-        if raw is None:
-            return None
-        meta = self._cache_metadata.get(key, {})
-        return raw, meta
+        """Return cached data bytes and metadata, or ``None`` if not cached.
 
-    def set_cached(
+        Returns the same ``(bytes, metadata_dict)`` shape the executor
+        returned before the backend rewrite, so existing callers do not
+        need to change.
+        """
+        key = _cache_key(product_name, params, tenant_id)
+        entry = await self._cache.get(key)
+        if entry is None:
+            logger.debug(
+                "fabric.cache.miss",
+                extra={
+                    "product": product_name,
+                    "tenant_id": tenant_id,
+                    "mode": "real",
+                },
+            )
+            return None
+
+        logger.debug(
+            "fabric.cache.hit",
+            extra={
+                "product": product_name,
+                "tenant_id": tenant_id,
+                "mode": "cached",
+            },
+        )
+
+        # Reconstruct the legacy metadata dict the callers expect.
+        meta: Dict[str, Any] = dict(entry.metadata)
+        meta.setdefault("cached_at", entry.cached_at.isoformat())
+        meta.setdefault("content_hash", entry.content_hash)
+        meta.setdefault("size_bytes", entry.size_bytes)
+        meta.setdefault("schema_version", entry.schema_version)
+        return entry.data_bytes, meta
+
+    async def set_cached(
         self,
         product_name: str,
         data_bytes: bytes,
         content_hash: str,
         metadata: Dict[str, Any],
         params: Optional[Dict[str, Any]] = None,
-    ) -> None:
-        """Store serialized data, hash, and metadata in the cache."""
-        key = _cache_key(product_name, params)
-        if key in self._cache_data:
-            self._cache_data.move_to_end(key)
-        self._cache_data[key] = data_bytes
-        self._cache_hash[key] = content_hash
-        self._cache_metadata[key] = metadata
-        # LRU eviction for high-cardinality parameterized products
-        while len(self._cache_data) > self._max_cache_entries:
-            evicted_key = next(iter(self._cache_data))
-            del self._cache_data[evicted_key]
-            self._cache_hash.pop(evicted_key, None)
-            self._cache_metadata.pop(evicted_key, None)
+        tenant_id: Optional[str] = None,
+        run_started_at: Optional[datetime] = None,
+    ) -> bool:
+        """Store serialized data, hash, and metadata in the cache.
 
-    def _get_cached_hash(
-        self, product_name: str, params: Optional[Dict[str, Any]] = None
+        Returns ``True`` if the entry was written, ``False`` if the
+        backend's CAS check refused the write (existing entry has a
+        newer ``run_started_at``).
+        """
+        key = _cache_key(product_name, params, tenant_id)
+        now = datetime.now(timezone.utc)
+        cached_at_value = metadata.get("cached_at")
+        cached_at = self._parse_iso(cached_at_value) or now
+        entry = _FabricCacheEntry(
+            product_name=product_name,
+            tenant_id=tenant_id,
+            data_bytes=data_bytes,
+            content_hash=content_hash,
+            metadata=metadata,
+            cached_at=cached_at,
+            run_started_at=run_started_at or now,
+            size_bytes=len(data_bytes),
+        )
+        return await self._cache.set(key, entry)
+
+    async def _get_cached_hash(
+        self,
+        product_name: str,
+        params: Optional[Dict[str, Any]] = None,
+        tenant_id: Optional[str] = None,
     ) -> Optional[str]:
         """Return the cached content hash for a product, or ``None``."""
-        key = _cache_key(product_name, params)
-        return self._cache_hash.get(key)
+        key = _cache_key(product_name, params, tenant_id)
+        return await self._cache.get_hash(key)
+
+    async def get_metadata(
+        self,
+        product_name: str,
+        params: Optional[Dict[str, Any]] = None,
+        tenant_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Fast path: return only the metadata fields without payload bytes."""
+        key = _cache_key(product_name, params, tenant_id)
+        return await self._cache.get_metadata(key)
+
+    @staticmethod
+    def _parse_iso(value: Any) -> Optional[datetime]:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        try:
+            dt = datetime.fromisoformat(str(value))
+        except (TypeError, ValueError):
+            return None
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
     # ------------------------------------------------------------------
     # Pipeline execution
@@ -274,18 +470,21 @@ class PipelineExecutor:
         product_fn: Callable[..., Any],
         context: Any,
         params: Optional[Dict[str, Any]] = None,
+        tenant_id: Optional[str] = None,
     ) -> PipelineResult:
         """Execute a data product pipeline with caching and content-hash dedup.
 
         Args:
             product_name: Name of the data product.
-            product_fn: The async (or sync) callable that produces the product data.
-                Receives ``context`` as the first argument, and ``params`` as the
-                second if provided.
-            context: A ``PipelineContext`` (or any context object) passed to the
-                product function.
-            params: Optional parameters for parameterized products. When
-                provided, the cache key includes a canonical representation.
+            product_fn: The async (or sync) callable that produces the
+                product data.
+            context: A ``PipelineContext`` (or any context object).
+            params: Optional parameters for parameterized products.
+            tenant_id: Optional tenant identifier — required for
+                ``multi_tenant=True`` products. The caller (FabricRuntime
+                or FabricServingLayer) is responsible for raising
+                :class:`FabricTenantRequiredError` when a multi-tenant
+                product receives no tenant_id.
 
         Returns:
             A :class:`PipelineResult` with execution outcome and cache status.
@@ -386,8 +585,8 @@ class PipelineExecutor:
                 }
             )
 
-            # Step 5: Compare with existing hash
-            existing_hash = self._get_cached_hash(product_name, params)
+            # Step 5: Compare with existing hash (dedup fast path)
+            existing_hash = await self._get_cached_hash(product_name, params, tenant_id)
             content_changed = existing_hash != new_hash
             now = datetime.now(timezone.utc)
 
@@ -401,7 +600,15 @@ class PipelineExecutor:
                     "size_bytes": len(data_bytes),
                     "run_id": run_id,
                 }
-                self.set_cached(product_name, data_bytes, new_hash, metadata, params)
+                await self.set_cached(
+                    product_name,
+                    data_bytes,
+                    new_hash,
+                    metadata,
+                    params=params,
+                    tenant_id=tenant_id,
+                    run_started_at=started_at,
+                )
                 cache_action = "write"
                 steps.append(
                     {
@@ -442,24 +649,24 @@ class PipelineExecutor:
     # Cache retrieval (serve from cache without re-executing)
     # ------------------------------------------------------------------
 
-    def get_product_from_cache(
-        self, product_name: str, params: Optional[Dict[str, Any]] = None
+    async def get_product_from_cache(
+        self,
+        product_name: str,
+        params: Optional[Dict[str, Any]] = None,
+        tenant_id: Optional[str] = None,
     ) -> Optional[PipelineResult]:
         """Retrieve a product from cache without executing the pipeline.
 
         Returns ``None`` if the product is not cached.
         """
-        cached = self.get_cached(product_name, params)
+        cached = await self.get_cached(product_name, params, tenant_id)
         if cached is None:
             return None
 
         raw_bytes, meta = cached
         data = _deserialize(raw_bytes)
-        cached_at_str = meta.get("cached_at", "")
-        try:
-            cached_at = datetime.fromisoformat(cached_at_str)
-        except (ValueError, TypeError):
-            cached_at = datetime.now(timezone.utc)
+        cached_at_value = meta.get("cached_at", "")
+        cached_at = self._parse_iso(cached_at_value) or datetime.now(timezone.utc)
 
         return PipelineResult(
             product_name=product_name,
@@ -475,42 +682,46 @@ class PipelineExecutor:
     # Cache invalidation
     # ------------------------------------------------------------------
 
-    def invalidate(
-        self, product_name: str, params: Optional[Dict[str, Any]] = None
+    async def invalidate(
+        self,
+        product_name: str,
+        params: Optional[Dict[str, Any]] = None,
+        tenant_id: Optional[str] = None,
     ) -> bool:
         """Remove cached data for a specific product.
 
         Args:
             product_name: Name of the product to invalidate.
             params: Optional parameters (for parameterized products).
+            tenant_id: Optional tenant scope.
 
         Returns:
-            ``True`` if the cache entry existed and was removed, ``False`` otherwise.
+            ``True`` if the cache entry existed and was removed, ``False``
+            otherwise.
         """
-        key = _cache_key(product_name, params)
-        existed = key in self._cache_data
-        self._cache_data.pop(key, None)
-        self._cache_hash.pop(key, None)
-        self._cache_metadata.pop(key, None)
+        key = _cache_key(product_name, params, tenant_id)
+        existed = await self._cache.get_hash(key) is not None
+        await self._cache.invalidate(key)
         if existed:
             logger.debug(
-                "Invalidated cache for product '%s' (key=%s)", product_name, key
+                "fabric.cache.invalidated",
+                extra={
+                    "product": product_name,
+                    "tenant_id": tenant_id,
+                },
             )
         return existed
 
-    def invalidate_all(self) -> int:
+    async def invalidate_all(self) -> int:
         """Clear all cached product data.
 
-        Returns:
-            The number of cache entries that were cleared.
+        Returns ``-1`` because the in-memory backend used to return a
+        count, but the Redis backend cannot reliably count keys without
+        an extra round-trip. Callers that need a count must iterate.
         """
-        count = len(self._cache_data)
-        self._cache_data.clear()
-        self._cache_hash.clear()
-        self._cache_metadata.clear()
-        if count:
-            logger.debug("Invalidated all cache entries (count=%d)", count)
-        return count
+        await self._cache.invalidate_all()
+        logger.debug("fabric.cache.invalidated_all")
+        return -1
 
     # ------------------------------------------------------------------
     # Graceful drain
@@ -520,8 +731,8 @@ class PipelineExecutor:
         """Wait for in-flight pipeline executions to complete.
 
         Acquires all semaphore slots to ensure no executions are running,
-        then releases them. If the timeout expires before all slots can be
-        acquired, a warning is logged and the method returns.
+        then releases them. If the timeout expires before all slots can
+        be acquired, a warning is logged and the method returns.
 
         Args:
             timeout: Maximum seconds to wait for in-flight work to finish.
@@ -533,10 +744,12 @@ class PipelineExecutor:
                 remaining = deadline - asyncio.get_event_loop().time()
                 if remaining <= 0:
                     logger.warning(
-                        "Pipeline drain timed out after %.1fs with %d/%d slots acquired",
-                        timeout,
-                        acquired,
-                        self._max_concurrent,
+                        "fabric.pipeline.drain_timeout",
+                        extra={
+                            "timeout_s": timeout,
+                            "acquired": acquired,
+                            "max_concurrent": self._max_concurrent,
+                        },
                     )
                     return
                 try:
@@ -546,22 +759,26 @@ class PipelineExecutor:
                     acquired += 1
                 except asyncio.TimeoutError:
                     logger.warning(
-                        "Pipeline drain timed out after %.1fs with %d/%d slots acquired",
-                        timeout,
-                        acquired,
-                        self._max_concurrent,
+                        "fabric.pipeline.drain_timeout",
+                        extra={
+                            "timeout_s": timeout,
+                            "acquired": acquired,
+                            "max_concurrent": self._max_concurrent,
+                        },
                     )
                     return
             logger.debug(
-                "Pipeline drained successfully (%d slots)", self._max_concurrent
+                "fabric.pipeline.drained",
+                extra={"max_concurrent": self._max_concurrent},
             )
         finally:
-            # Release all acquired slots so the semaphore returns to its original state
+            # Release all acquired slots so the semaphore returns to its
+            # original state.
             for _ in range(acquired):
                 self._exec_semaphore.release()
 
     # ------------------------------------------------------------------
-    # Trace access
+    # Trace + property accessors
     # ------------------------------------------------------------------
 
     @property
@@ -574,57 +791,7 @@ class PipelineExecutor:
         """The DB connection budget semaphore for pipeline-scoped DB access."""
         return self._db_semaphore
 
-
-class InMemoryDebouncer:
-    """Fallback debouncer for dev mode when Redis is not available.
-
-    Uses asyncio timer handles to coalesce rapid source-change events.
-    Debounce state does not survive process restart.
-    """
-
-    def __init__(self) -> None:
-        self._timers: Dict[str, asyncio.TimerHandle] = {}
-        logger.debug(
-            "Using in-memory debounce (dev mode). "
-            "Debounce state will not survive process restart."
-        )
-
-    async def enqueue(
-        self,
-        product_name: str,
-        debounce_seconds: float,
-        callback: Callable[[str], Any],
-    ) -> None:
-        """Enqueue a debounced product refresh.
-
-        If called again for the same product within debounce_seconds,
-        the previous timer is cancelled and a new one starts.
-        """
-        if product_name in self._timers:
-            self._timers[product_name].cancel()
-
-        loop = asyncio.get_running_loop()
-        self._timers[product_name] = loop.call_later(
-            debounce_seconds,
-            lambda: asyncio.ensure_future(self._fire(product_name, callback)),
-        )
-
-    async def _fire(self, product_name: str, callback: Callable[[str], Any]) -> None:
-        """Execute the debounced callback."""
-        self._timers.pop(product_name, None)
-        try:
-            result = callback(product_name)
-            if asyncio.iscoroutine(result):
-                await result
-        except Exception:
-            logger.exception("Debounced callback failed for '%s'", product_name)
-
-    def cancel_all(self) -> None:
-        """Cancel all pending debounce timers."""
-        for timer in self._timers.values():
-            timer.cancel()
-        self._timers.clear()
-
     @property
-    def pending_count(self) -> int:
-        return len(self._timers)
+    def cache_backend(self) -> FabricCacheBackend:
+        """The cache backend in use (in-memory or Redis)."""
+        return self._cache

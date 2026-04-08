@@ -63,7 +63,10 @@ class InMemoryPipeline:
     """Minimal pipeline executor that stores cached data in memory.
 
     Not a mock — it is a concrete implementation with deterministic
-    behaviour for testing the serving layer.
+    behaviour for testing the serving layer. Mirrors the async cache
+    contract the real PipelineExecutor exposes post-Phase-5 so the
+    serving layer's ``await self._pipeline.get_cached(...)`` path
+    exercises the same code paths the real implementation would.
     """
 
     def __init__(self) -> None:
@@ -87,8 +90,27 @@ class InMemoryPipeline:
         }
         self._cache[name] = (data_bytes, metadata)
 
-    def get_cached(self, name: str) -> Any:
-        return self._cache.get(name)
+    async def get_cached(
+        self,
+        name: str,
+        params: Dict[str, Any] | None = None,
+        tenant_id: str | None = None,
+    ) -> Any:
+        key = name if tenant_id is None else f"{tenant_id}:{name}"
+        return self._cache.get(key)
+
+    async def get_metadata(
+        self,
+        name: str,
+        params: Dict[str, Any] | None = None,
+        tenant_id: str | None = None,
+    ) -> Any:
+        key = name if tenant_id is None else f"{tenant_id}:{name}"
+        cached = self._cache.get(key)
+        if cached is None:
+            return None
+        _data_bytes, metadata = cached
+        return dict(metadata)
 
 
 # ---------------------------------------------------------------------------
