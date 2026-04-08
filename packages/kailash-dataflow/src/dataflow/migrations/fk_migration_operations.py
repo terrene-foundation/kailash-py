@@ -309,7 +309,10 @@ class FKMigrationOperations:
 
                 await connection.execute(restore_sql)
                 restored_constraints += 1
-                self.logger.info(f"Restored FK constraint: {fk_dep.constraint_name}")
+                self.logger.info(
+                    "fk_migration_operations.restored_fk_constraint",
+                    extra={"constraint_name": fk_dep.constraint_name},
+                )
 
             except Exception as e:
                 return FKMigrationResult(
@@ -367,7 +370,10 @@ class FKMigrationOperations:
             )
 
         all_tables = list(chain.get_all_tables())
-        self.logger.info(f"FK chain involves {len(all_tables)} tables: {all_tables}")
+        self.logger.info(
+            "fk_migration_operations.fk_chain_involves_tables",
+            extra={"count": len(all_tables), "all_tables": all_tables},
+        )
 
         # Phase 2: Plan cascading changes
         cascading_changes = {}
@@ -579,7 +585,10 @@ class FKMigrationOperations:
                 }
             return None
         except Exception as e:
-            self.logger.error(f"Error getting composite constraint info: {e}")
+            self.logger.error(
+                "fk_migration_operations.error_getting_composite_constraint_info",
+                extra={"error": str(e)},
+            )
             return None
 
     async def _execute_composite_fk_modification(

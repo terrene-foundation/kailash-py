@@ -261,7 +261,10 @@ class ImpactAnalysisReporter:
         start_time = time.time()
         report_id = f"impact_report_{int(start_time)}"
 
-        self.logger.info(f"Generating comprehensive impact report {report_id}")
+        self.logger.info(
+            "impact_analysis_reporter.generating_comprehensive_impact_report",
+            extra={"report_id": report_id},
+        )
 
         try:
             # Generate executive risk summary
@@ -307,7 +310,10 @@ class ImpactAnalysisReporter:
             return comprehensive_report
 
         except Exception as e:
-            self.logger.error(f"Failed to generate comprehensive impact report: {e}")
+            self.logger.error(
+                "impact_analysis_reporter.failed_to_generate_comprehensive_impact_report",
+                extra={"error": str(e)},
+            )
             raise
 
     def generate_executive_risk_summary(

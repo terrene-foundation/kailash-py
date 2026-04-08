@@ -183,7 +183,10 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             results["foreign_key_analyzer"] = False
-            self.logger.error(f"❌ ForeignKeyAnalyzer validation failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.foreignkeyanalyzer_validation_failed",
+                extra={"error": str(e)},
+            )
 
         # 2. FKSafeMigrationExecutor validation
         try:
@@ -205,7 +208,10 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             results["fk_safe_migration_executor"] = False
-            self.logger.error(f"❌ FKSafeMigrationExecutor validation failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.fksafemigrationexecutor_validation_failed",
+                extra={"error": str(e)},
+            )
 
         # 3. FKAwareWorkflowOrchestrator validation
         try:
@@ -225,7 +231,10 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             results["fk_aware_workflow_orchestrator"] = False
-            self.logger.error(f"❌ FKAwareWorkflowOrchestrator validation failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.fkawareworkfloworchestrator_validation_failed",
+                extra={"error": str(e)},
+            )
 
         # 4. FK-Aware Nodes validation
         try:
@@ -235,12 +244,12 @@ class FKAwareSystemDemo:
 
             # Validate node structure
             for node_name, node_class in fk_nodes.items():
-                assert hasattr(node_class, "execute"), (
-                    f"Node {node_name} should have execute method"
-                )
-                assert hasattr(node_class, "get_parameters"), (
-                    f"Node {node_name} should have get_parameters"
-                )
+                assert hasattr(
+                    node_class, "execute"
+                ), f"Node {node_name} should have execute method"
+                assert hasattr(
+                    node_class, "get_parameters"
+                ), f"Node {node_name} should have get_parameters"
 
             results["fk_aware_nodes"] = True
             self.logger.info(
@@ -249,7 +258,10 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             results["fk_aware_nodes"] = False
-            self.logger.error(f"❌ FK-Aware Nodes validation failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.fk_aware_nodes_validation_failed",
+                extra={"error": str(e)},
+            )
 
         # 5. Model Integration validation
         try:
@@ -282,7 +294,10 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             results["fk_aware_model_integration"] = False
-            self.logger.error(f"❌ Model Integration validation failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.model_integration_validation_failed",
+                extra={"error": str(e)},
+            )
 
         success_count = sum(1 for success in results.values() if success)
         self.logger.info(
@@ -311,9 +326,9 @@ class FKAwareSystemDemo:
 
             # Test enable_fk_aware_dataflow
             integrator = enable_fk_aware_dataflow(mock_dataflow)
-            assert hasattr(mock_dataflow, "_fk_integrator"), (
-                "DataFlow should have FK integrator"
-            )
+            assert hasattr(
+                mock_dataflow, "_fk_integrator"
+            ), "DataFlow should have FK integrator"
 
             results["dataflow_integration"] = True
             self.logger.info(
@@ -322,7 +337,10 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             results["dataflow_integration"] = False
-            self.logger.error(f"❌ DataFlow Integration validation failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.dataflow_integration_validation_failed",
+                extra={"error": str(e)},
+            )
 
         # 2. Core SDK Workflow Integration
         try:
@@ -359,7 +377,10 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             results["core_sdk_integration"] = False
-            self.logger.error(f"❌ Core SDK Integration validation failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.core_sdk_integration_validation_failed",
+                extra={"error": str(e)},
+            )
 
         # 3. E2E Workflow Patterns
         try:
@@ -372,9 +393,9 @@ class FKAwareSystemDemo:
             for pattern_name in patterns[:2]:  # Test first 2 for speed
                 pattern = factory.create_pattern(pattern_name)
                 description = pattern.get_pattern_description()
-                assert "name" in description, (
-                    f"Pattern {pattern_name} should have description"
-                )
+                assert (
+                    "name" in description
+                ), f"Pattern {pattern_name} should have description"
 
             results["e2e_workflow_patterns"] = True
             self.logger.info(
@@ -383,7 +404,10 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             results["e2e_workflow_patterns"] = False
-            self.logger.error(f"❌ E2E Workflow Patterns validation failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.e2e_workflow_patterns_validation_failed",
+                extra={"error": str(e)},
+            )
 
         # 4. Safety and Rollback Systems
         try:
@@ -403,7 +427,10 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             results["safety_rollback_systems"] = False
-            self.logger.error(f"❌ Safety & Rollback validation failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.safety_rollback_validation_failed",
+                extra={"error": str(e)},
+            )
 
         # 5. Production Readiness
         try:
@@ -427,7 +454,10 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             results["production_readiness"] = False
-            self.logger.error(f"❌ Production Readiness validation failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.production_readiness_validation_failed",
+                extra={"error": str(e)},
+            )
 
         success_count = sum(1 for success in results.values() if success)
         self.logger.info(
@@ -454,11 +484,17 @@ class FKAwareSystemDemo:
             creation_time = (datetime.now() - start_time).total_seconds()
             metrics["workflow_creation_time"] = creation_time
 
-            self.logger.info(f"✅ Workflow Creation: {creation_time:.3f}s")
+            self.logger.info(
+                "fk_aware_system_demo.workflow_creation_s",
+                extra={"creation_time": creation_time},
+            )
 
         except Exception as e:
             metrics["workflow_creation_time"] = float("inf")
-            self.logger.error(f"❌ Workflow Creation performance test failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.workflow_creation_performance_test_failed",
+                extra={"error": str(e)},
+            )
 
         # 2. Node Registration Performance
         try:
@@ -475,7 +511,10 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             metrics["node_registration_time"] = float("inf")
-            self.logger.error(f"❌ Node Registration performance test failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.node_registration_performance_test_failed",
+                extra={"error": str(e)},
+            )
 
         # 3. Model Tracking Performance
         try:
@@ -497,11 +536,17 @@ class FKAwareSystemDemo:
             tracking_time = (datetime.now() - start_time).total_seconds()
             metrics["model_tracking_time"] = tracking_time
 
-            self.logger.info(f"✅ Model Tracking: {tracking_time:.3f}s for 10 models")
+            self.logger.info(
+                "fk_aware_system_demo.model_tracking_s_for_10_models",
+                extra={"tracking_time": tracking_time},
+            )
 
         except Exception as e:
             metrics["model_tracking_time"] = float("inf")
-            self.logger.error(f"❌ Model Tracking performance test failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.model_tracking_performance_test_failed",
+                extra={"error": str(e)},
+            )
 
         # 4. Pattern Creation Performance
         try:
@@ -523,7 +568,10 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             metrics["pattern_creation_time"] = float("inf")
-            self.logger.error(f"❌ Pattern Creation performance test failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.pattern_creation_performance_test_failed",
+                extra={"error": str(e)},
+            )
 
         # Calculate overall performance score
         valid_metrics = {k: v for k, v in metrics.items() if v != float("inf")}
@@ -556,16 +604,19 @@ class FKAwareSystemDemo:
 
             # Should add FK-aware capabilities to DataFlow
             assert hasattr(mock_dataflow, "_fk_integrator"), "Should add FK integrator"
-            assert hasattr(mock_dataflow, "validate_fk_safety"), (
-                "Should add validation method"
-            )
+            assert hasattr(
+                mock_dataflow, "validate_fk_safety"
+            ), "Should add validation method"
 
             ux_scores.append(1.0)  # Perfect zero-config experience
             self.logger.info("✅ Zero Configuration: One-line FK-aware enablement")
 
         except Exception as e:
             ux_scores.append(0.0)
-            self.logger.error(f"❌ Zero Configuration experience failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.zero_configuration_experience_failed",
+                extra={"error": str(e)},
+            )
 
         # 2. Seamless Model Integration
         try:
@@ -595,7 +646,10 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             ux_scores.append(0.0)
-            self.logger.error(f"❌ Seamless Model integration failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.seamless_model_integration_failed",
+                extra={"error": str(e)},
+            )
 
         # 3. Developer-Friendly Error Messages
         try:
@@ -628,7 +682,10 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             ux_scores.append(0.0)
-            self.logger.error(f"❌ Error Messages validation failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.error_messages_validation_failed",
+                extra={"error": str(e)},
+            )
 
         # 4. Core SDK Pattern Compatibility
         try:
@@ -656,7 +713,10 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             ux_scores.append(0.0)
-            self.logger.error(f"❌ Core SDK Compatibility failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.core_sdk_compatibility_failed",
+                extra={"error": str(e)},
+            )
 
         # 5. Production Safety Transparency
         try:
@@ -671,9 +731,9 @@ class FKAwareSystemDemo:
             validation = await orchestrator.validate_complete_fk_workflow(workflow_id)
 
             assert hasattr(validation, "safety_score"), "Should provide safety score"
-            assert hasattr(validation, "recommendations"), (
-                "Should provide recommendations"
-            )
+            assert hasattr(
+                validation, "recommendations"
+            ), "Should provide recommendations"
 
             ux_scores.append(1.0)  # Perfect safety transparency
             self.logger.info(
@@ -682,12 +742,18 @@ class FKAwareSystemDemo:
 
         except Exception as e:
             ux_scores.append(0.0)
-            self.logger.error(f"❌ Safety Transparency validation failed: {e}")
+            self.logger.error(
+                "fk_aware_system_demo.safety_transparency_validation_failed",
+                extra={"error": str(e)},
+            )
 
         # Calculate overall UX score
         overall_ux_score = sum(ux_scores) / len(ux_scores) if ux_scores else 0.0
 
-        self.logger.info(f"User Experience Validation: Score {overall_ux_score:.2f}")
+        self.logger.info(
+            "fk_aware_system_demo.user_experience_validation_score",
+            extra={"overall_ux_score": overall_ux_score},
+        )
 
         return overall_ux_score
 
@@ -696,29 +762,57 @@ class FKAwareSystemDemo:
         self.logger.info("=== FK-Aware Operations System Validation Report ===")
 
         # Summary
-        self.logger.info(f"Overall Success: {result.overall_success}")
-        self.logger.info(f"Success Rate: {result.success_rate:.1%}")
-        self.logger.info(f"User Experience Score: {result.user_experience_score:.2f}")
+        self.logger.info(
+            "fk_aware_system_demo.overall_success",
+            extra={"overall_success": result.overall_success},
+        )
+        self.logger.info(
+            "fk_aware_system_demo.success_rate",
+            extra={"success_rate": result.success_rate},
+        )
+        self.logger.info(
+            "fk_aware_system_demo.user_experience_score",
+            extra={"user_experience_score": result.user_experience_score},
+        )
 
         # Component Results
         self.logger.info("\n--- Core Components ---")
         for component, success in result.component_validations.items():
             status = "✅" if success else "❌"
-            self.logger.info(f"{status} {component}: {'PASS' if success else 'FAIL'}")
+            self.logger.info(
+                "fk_aware_system_demo.event",
+                extra={
+                    "status": status,
+                    "component": component,
+                    "pass_if_success_else_fail": "PASS" if success else "FAIL",
+                },
+            )
 
         # Integration Results
         self.logger.info("\n--- System Integrations ---")
         for integration, success in result.integration_validations.items():
             status = "✅" if success else "❌"
-            self.logger.info(f"{status} {integration}: {'PASS' if success else 'FAIL'}")
+            self.logger.info(
+                "fk_aware_system_demo.event",
+                extra={
+                    "status": status,
+                    "integration": integration,
+                    "pass_if_success_else_fail": "PASS" if success else "FAIL",
+                },
+            )
 
         # Performance Metrics
         self.logger.info("\n--- Performance Metrics ---")
         for metric, value in result.performance_metrics.items():
             if metric.endswith("_time"):
-                self.logger.info(f"⏱️ {metric}: {value:.3f}s")
+                self.logger.info(
+                    "fk_aware_system_demo.s", extra={"metric": metric, "value": value}
+                )
             else:
-                self.logger.info(f"📊 {metric}: {value:.3f}")
+                self.logger.info(
+                    "fk_aware_system_demo.event",
+                    extra={"metric": metric, "value": value},
+                )
 
         # Final Assessment
         self.logger.info("\n--- FINAL ASSESSMENT ---")
@@ -734,7 +828,10 @@ class FKAwareSystemDemo:
             self.logger.warning("⚠️ FK-Aware Operations System: PARTIAL VALIDATION")
             self.logger.warning("Some components require attention")
 
-        self.logger.info(f"Validation completed at: {result.validation_timestamp}")
+        self.logger.info(
+            "fk_aware_system_demo.validation_completed_at",
+            extra={"validation_timestamp": result.validation_timestamp},
+        )
 
         return result
 
@@ -780,7 +877,10 @@ async def demonstrate_complete_user_experience():
 
     if change_result and change_result.get("fk_aware_handling"):
         logger.info("✅ FK-aware migration workflow created automatically")
-        logger.info(f"   Workflow ID: {change_result['workflow_id']}")
+        logger.info(
+            "fk_aware_system_demo.workflow_id",
+            extra={"workflow_id": change_result["workflow_id"]},
+        )
 
         if change_result.get("auto_executed"):
             logger.info("✅ Migration executed automatically (auto_migrate=True)")
@@ -801,7 +901,10 @@ async def demonstrate_complete_user_experience():
     logger.info("\nStep 5: System provides complete transparency")
 
     relationships = fk_integrator.get_model_fk_relationships("Product")
-    logger.info(f"✅ Product has {len(relationships)} FK relationships")
+    logger.info(
+        "fk_aware_system_demo.product_has_fk_relationships",
+        extra={"count": len(relationships)},
+    )
 
     logger.info("\n🎉 COMPLETE USER EXPERIENCE DEMONSTRATED")
     logger.info("Users get:")
@@ -837,7 +940,10 @@ async def main():
         logger.info("✅ Ready for production use")
     else:
         logger.warning("⚠️ PARTIAL: Some components need attention")
-        logger.info(f"Success Rate: {validation_result.success_rate:.1%}")
+        logger.info(
+            "fk_aware_system_demo.success_rate",
+            extra={"success_rate": validation_result.success_rate},
+        )
 
     logger.info(
         f"User Experience Score: {validation_result.user_experience_score:.2f}/1.0"

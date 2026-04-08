@@ -300,10 +300,16 @@ class IntegratedRiskAssessmentSystem:
         )
         if self.result_cache is not None and cache_key in self.result_cache:
             self.stats["cache_hits"] += 1
-            self.logger.info(f"Returning cached assessment result for {cache_key}")
+            self.logger.info(
+                "integrated_risk_assessment_system.returning_cached_assessment_result_for",
+                extra={"cache_key": cache_key},
+            )
             return self.result_cache[cache_key]
 
-        self.logger.info(f"Starting integrated risk assessment {assessment_id}")
+        self.logger.info(
+            "integrated_risk_assessment_system.starting_integrated_risk_assessment",
+            extra={"assessment_id": assessment_id},
+        )
 
         # Initialize result container with a placeholder risk assessment
         # The actual risk assessment will be set later if RISK_ANALYSIS phase is executed
@@ -385,7 +391,10 @@ class IntegratedRiskAssessmentSystem:
                 result.phase_timings[AssessmentPhase.IMPACT_REPORTING] = phase_time
                 result.completed_phases.add(AssessmentPhase.IMPACT_REPORTING)
 
-                self.logger.info(f"Impact reporting completed in {phase_time:.3f}s")
+                self.logger.info(
+                    "integrated_risk_assessment_system.impact_reporting_completed_in_s",
+                    extra={"phase_time": phase_time},
+                )
 
                 # Generate multi-format reports
                 if result.impact_report:
@@ -441,7 +450,10 @@ class IntegratedRiskAssessmentSystem:
                 fk_impact_report=fk_impact_report,
             )
         except Exception as e:
-            self.logger.error(f"Risk analysis failed: {e}")
+            self.logger.error(
+                "integrated_risk_assessment_system.risk_analysis_failed",
+                extra={"error": str(e)},
+            )
             raise
 
     def _execute_mitigation_planning(
@@ -466,7 +478,10 @@ class IntegratedRiskAssessmentSystem:
                 strategies=strategies, risk_assessment=risk_assessment
             )
         except Exception as e:
-            self.logger.error(f"Mitigation planning failed: {e}")
+            self.logger.error(
+                "integrated_risk_assessment_system.mitigation_planning_failed",
+                extra={"error": str(e)},
+            )
             # Continue without mitigation plan - don't fail the entire assessment
             return None
 
@@ -486,7 +501,10 @@ class IntegratedRiskAssessmentSystem:
                 business_context=business_context,
             )
         except Exception as e:
-            self.logger.error(f"Impact reporting failed: {e}")
+            self.logger.error(
+                "integrated_risk_assessment_system.impact_reporting_failed",
+                extra={"error": str(e)},
+            )
             raise
 
     def _generate_formatted_reports(
@@ -514,7 +532,10 @@ class IntegratedRiskAssessmentSystem:
             return formatted_reports
 
         except Exception as e:
-            self.logger.error(f"Multi-format report generation failed: {e}")
+            self.logger.error(
+                "integrated_risk_assessment_system.multi_format_report_generation_failed",
+                extra={"error": str(e)},
+            )
             return {
                 ReportFormat.JSON: f'{{"error": "Report generation failed: {str(e)}"}}'
             }
@@ -609,7 +630,10 @@ class IntegratedRiskAssessmentSystem:
         if self.result_cache:
             cache_size = len(self.result_cache)
             self.result_cache.clear()
-            self.logger.info(f"Cleared result cache ({cache_size} entries)")
+            self.logger.info(
+                "integrated_risk_assessment_system.cleared_result_cache_entries",
+                extra={"cache_size": cache_size},
+            )
 
     # Helper methods
 

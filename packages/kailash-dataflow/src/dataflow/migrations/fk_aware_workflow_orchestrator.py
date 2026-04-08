@@ -205,7 +205,10 @@ class FKAwareWorkflowOrchestrator:
             Workflow ID for tracking the created workflow
         """
         workflow_id = str(uuid.uuid4())
-        self.logger.info(f"Creating FK-aware migration workflow: {workflow_id}")
+        self.logger.info(
+            "fk_aware_workflow_orchestrator.creating_fk_aware_migration_workflow",
+            extra={"workflow_id": workflow_id},
+        )
 
         # Create workflow context
         context = E2EWorkflowContext(
@@ -251,7 +254,10 @@ class FKAwareWorkflowOrchestrator:
         context = self._active_workflows[workflow_id]
         workflow = WorkflowBuilder()
 
-        self.logger.info(f"Building Core SDK workflow for {workflow_id}")
+        self.logger.info(
+            "fk_aware_workflow_orchestrator.building_core_sdk_workflow_for",
+            extra={"workflow_id": workflow_id},
+        )
 
         # Node 1: ForeignKeyAnalyzerNode - Analyze FK impact
         workflow.add_node(
@@ -403,9 +409,9 @@ class FKAwareWorkflowOrchestrator:
 
             # Update workflow context with DataFlow instance
             if workflow_id in self._active_workflows:
-                self._active_workflows[
-                    workflow_id
-                ].dataflow_instance = dataflow_instance
+                self._active_workflows[workflow_id].dataflow_instance = (
+                    dataflow_instance
+                )
 
             # Analyze DataFlow models for FK dependencies
             models_analyzed = await self._analyze_dataflow_models(dataflow_instance)
@@ -441,7 +447,10 @@ class FKAwareWorkflowOrchestrator:
             )
 
         except Exception as e:
-            self.logger.error(f"DataFlow integration failed: {e}")
+            self.logger.error(
+                "fk_aware_workflow_orchestrator.dataflow_integration_failed",
+                extra={"error": str(e)},
+            )
             result.integration_errors.append(str(e))
             result.integration_successful = False
 
@@ -473,7 +482,10 @@ class FKAwareWorkflowOrchestrator:
         if connection is None:
             connection = await self._get_connection()
 
-        self.logger.info(f"Executing complete E2E workflow: {workflow_id}")
+        self.logger.info(
+            "fk_aware_workflow_orchestrator.executing_complete_e2e_workflow",
+            extra={"workflow_id": workflow_id},
+        )
 
         try:
             # Stage 1: Initialization
@@ -512,7 +524,10 @@ class FKAwareWorkflowOrchestrator:
             )
 
         except Exception as e:
-            self.logger.error(f"E2E workflow execution failed: {workflow_id} - {e}")
+            self.logger.error(
+                "fk_aware_workflow_orchestrator.e2e_workflow_execution_failed",
+                extra={"workflow_id": workflow_id, "error": str(e)},
+            )
             result.errors.append(str(e))
             result.success = False
             result.execution_time = (datetime.now() - start_time).total_seconds()
@@ -540,7 +555,10 @@ class FKAwareWorkflowOrchestrator:
         if connection is None:
             connection = await self._get_connection()
 
-        self.logger.info(f"Validating complete FK workflow: {workflow_id}")
+        self.logger.info(
+            "fk_aware_workflow_orchestrator.validating_complete_fk_workflow",
+            extra={"workflow_id": workflow_id},
+        )
 
         validation = WorkflowValidationResult(is_valid=True, safety_score=1.0)
 
@@ -600,7 +618,10 @@ class FKAwareWorkflowOrchestrator:
             )
 
         except Exception as e:
-            self.logger.error(f"Workflow validation failed: {workflow_id} - {e}")
+            self.logger.error(
+                "fk_aware_workflow_orchestrator.workflow_validation_failed",
+                extra={"workflow_id": workflow_id, "error": str(e)},
+            )
             validation.is_valid = False
             validation.safety_score = 0.0
             validation.critical_issues.append(f"Validation error: {e}")
@@ -617,7 +638,10 @@ class FKAwareWorkflowOrchestrator:
     ) -> bool:
         """Execute initialization stage."""
         try:
-            self.logger.info(f"[{context.workflow_id}] Initialization stage")
+            self.logger.info(
+                "fk_aware_workflow_orchestrator.initialization_stage",
+                extra={"workflow_id": context.workflow_id},
+            )
 
             # Initialize safety metrics
             result.safety_metrics["initialization_score"] = 1.0
@@ -630,7 +654,10 @@ class FKAwareWorkflowOrchestrator:
             result.stage_results[WorkflowStage.INITIALIZATION] = True
             return True
         except Exception as e:
-            self.logger.error(f"Initialization stage failed: {e}")
+            self.logger.error(
+                "fk_aware_workflow_orchestrator.initialization_stage_failed",
+                extra={"error": str(e)},
+            )
             result.errors.append(f"Initialization: {e}")
             result.stage_results[WorkflowStage.INITIALIZATION] = False
             return False
@@ -643,7 +670,10 @@ class FKAwareWorkflowOrchestrator:
     ) -> bool:
         """Execute FK analysis stage."""
         try:
-            self.logger.info(f"[{context.workflow_id}] FK Analysis stage")
+            self.logger.info(
+                "fk_aware_workflow_orchestrator.fk_analysis_stage",
+                extra={"workflow_id": context.workflow_id},
+            )
 
             # Analyze FK impact for each table
             for table in context.target_tables:
@@ -664,7 +694,10 @@ class FKAwareWorkflowOrchestrator:
             result.stage_results[WorkflowStage.FK_ANALYSIS] = True
             return True
         except Exception as e:
-            self.logger.error(f"FK analysis stage failed: {e}")
+            self.logger.error(
+                "fk_aware_workflow_orchestrator.fk_analysis_stage_failed",
+                extra={"error": str(e)},
+            )
             result.errors.append(f"FK Analysis: {e}")
             result.stage_results[WorkflowStage.FK_ANALYSIS] = False
             return False
@@ -677,7 +710,10 @@ class FKAwareWorkflowOrchestrator:
     ) -> bool:
         """Execute impact assessment stage."""
         try:
-            self.logger.info(f"[{context.workflow_id}] Impact Assessment stage")
+            self.logger.info(
+                "fk_aware_workflow_orchestrator.impact_assessment_stage",
+                extra={"workflow_id": context.workflow_id},
+            )
 
             # Assess overall impact
             total_impact_score = (
@@ -695,7 +731,10 @@ class FKAwareWorkflowOrchestrator:
             result.stage_results[WorkflowStage.IMPACT_ASSESSMENT] = True
             return True
         except Exception as e:
-            self.logger.error(f"Impact assessment stage failed: {e}")
+            self.logger.error(
+                "fk_aware_workflow_orchestrator.impact_assessment_stage_failed",
+                extra={"error": str(e)},
+            )
             result.errors.append(f"Impact Assessment: {e}")
             result.stage_results[WorkflowStage.IMPACT_ASSESSMENT] = False
             return False
@@ -708,7 +747,10 @@ class FKAwareWorkflowOrchestrator:
     ) -> bool:
         """Execute migration planning stage."""
         try:
-            self.logger.info(f"[{context.workflow_id}] Migration Planning stage")
+            self.logger.info(
+                "fk_aware_workflow_orchestrator.migration_planning_stage",
+                extra={"workflow_id": context.workflow_id},
+            )
 
             # Create mock operation for planning
             mock_operation = type(
@@ -740,7 +782,10 @@ class FKAwareWorkflowOrchestrator:
             result.stage_results[WorkflowStage.MIGRATION_PLANNING] = True
             return True
         except Exception as e:
-            self.logger.error(f"Migration planning stage failed: {e}")
+            self.logger.error(
+                "fk_aware_workflow_orchestrator.migration_planning_stage_failed",
+                extra={"error": str(e)},
+            )
             result.errors.append(f"Migration Planning: {e}")
             result.stage_results[WorkflowStage.MIGRATION_PLANNING] = False
             return False
@@ -753,7 +798,10 @@ class FKAwareWorkflowOrchestrator:
     ) -> bool:
         """Execute safety validation stage."""
         try:
-            self.logger.info(f"[{context.workflow_id}] Safety Validation stage")
+            self.logger.info(
+                "fk_aware_workflow_orchestrator.safety_validation_stage",
+                extra={"workflow_id": context.workflow_id},
+            )
 
             # Perform safety validation
             result.safety_metrics["safety_validation_score"] = 0.8
@@ -761,7 +809,10 @@ class FKAwareWorkflowOrchestrator:
             result.stage_results[WorkflowStage.SAFETY_VALIDATION] = True
             return True
         except Exception as e:
-            self.logger.error(f"Safety validation stage failed: {e}")
+            self.logger.error(
+                "fk_aware_workflow_orchestrator.safety_validation_stage_failed",
+                extra={"error": str(e)},
+            )
             result.errors.append(f"Safety Validation: {e}")
             result.stage_results[WorkflowStage.SAFETY_VALIDATION] = False
             return False
@@ -774,7 +825,10 @@ class FKAwareWorkflowOrchestrator:
     ) -> bool:
         """Execute orchestration stage."""
         try:
-            self.logger.info(f"[{context.workflow_id}] Execution Orchestration stage")
+            self.logger.info(
+                "fk_aware_workflow_orchestrator.execution_orchestration_stage",
+                extra={"workflow_id": context.workflow_id},
+            )
 
             # Execute migrations with FK safety
             result.safety_metrics["execution_score"] = 0.85
@@ -782,7 +836,10 @@ class FKAwareWorkflowOrchestrator:
             result.stage_results[WorkflowStage.EXECUTION_ORCHESTRATION] = True
             return True
         except Exception as e:
-            self.logger.error(f"Execution orchestration stage failed: {e}")
+            self.logger.error(
+                "fk_aware_workflow_orchestrator.execution_orchestration_stage_failed",
+                extra={"error": str(e)},
+            )
             result.errors.append(f"Execution Orchestration: {e}")
             result.stage_results[WorkflowStage.EXECUTION_ORCHESTRATION] = False
             return False
@@ -795,7 +852,10 @@ class FKAwareWorkflowOrchestrator:
     ) -> bool:
         """Execute rollback preparation stage."""
         try:
-            self.logger.info(f"[{context.workflow_id}] Rollback Preparation stage")
+            self.logger.info(
+                "fk_aware_workflow_orchestrator.rollback_preparation_stage",
+                extra={"workflow_id": context.workflow_id},
+            )
 
             if context.rollback_enabled:
                 result.safety_metrics["rollback_preparation_score"] = 0.9
@@ -806,7 +866,10 @@ class FKAwareWorkflowOrchestrator:
             result.stage_results[WorkflowStage.ROLLBACK_PREPARATION] = True
             return True
         except Exception as e:
-            self.logger.error(f"Rollback preparation stage failed: {e}")
+            self.logger.error(
+                "fk_aware_workflow_orchestrator.rollback_preparation_stage_failed",
+                extra={"error": str(e)},
+            )
             result.errors.append(f"Rollback Preparation: {e}")
             result.stage_results[WorkflowStage.ROLLBACK_PREPARATION] = False
             return False
@@ -819,7 +882,10 @@ class FKAwareWorkflowOrchestrator:
     ) -> bool:
         """Execute completion validation stage."""
         try:
-            self.logger.info(f"[{context.workflow_id}] Completion Validation stage")
+            self.logger.info(
+                "fk_aware_workflow_orchestrator.completion_validation_stage",
+                extra={"workflow_id": context.workflow_id},
+            )
 
             # Validate completion
             result.safety_metrics["completion_validation_score"] = 0.9
@@ -827,7 +893,10 @@ class FKAwareWorkflowOrchestrator:
             result.stage_results[WorkflowStage.COMPLETION_VALIDATION] = True
             return True
         except Exception as e:
-            self.logger.error(f"Completion validation stage failed: {e}")
+            self.logger.error(
+                "fk_aware_workflow_orchestrator.completion_validation_stage_failed",
+                extra={"error": str(e)},
+            )
             result.errors.append(f"Completion Validation: {e}")
             result.stage_results[WorkflowStage.COMPLETION_VALIDATION] = False
             return False
@@ -840,7 +909,10 @@ class FKAwareWorkflowOrchestrator:
     ) -> bool:
         """Execute cleanup stage."""
         try:
-            self.logger.info(f"[{context.workflow_id}] Cleanup stage")
+            self.logger.info(
+                "fk_aware_workflow_orchestrator.cleanup_stage",
+                extra={"workflow_id": context.workflow_id},
+            )
 
             # Cleanup workflow state
             result.safety_metrics["cleanup_score"] = 1.0
@@ -848,7 +920,10 @@ class FKAwareWorkflowOrchestrator:
             result.stage_results[WorkflowStage.CLEANUP] = True
             return True
         except Exception as e:
-            self.logger.error(f"Cleanup stage failed: {e}")
+            self.logger.error(
+                "fk_aware_workflow_orchestrator.cleanup_stage_failed",
+                extra={"error": str(e)},
+            )
             result.errors.append(f"Cleanup: {e}")
             result.stage_results[WorkflowStage.CLEANUP] = False
             return False
@@ -870,7 +945,10 @@ class FKAwareWorkflowOrchestrator:
         """Map FK dependencies between models."""
         mappings = []
         # This would create actual FK mappings in full implementation
-        self.logger.info(f"Mapping FK dependencies for {len(models)} models")
+        self.logger.info(
+            "fk_aware_workflow_orchestrator.mapping_fk_dependencies_for_models",
+            extra={"count": len(models)},
+        )
         return mappings
 
     async def _enable_fk_aware_auto_migration(
@@ -878,7 +956,10 @@ class FKAwareWorkflowOrchestrator:
     ):
         """Enable FK-aware auto-migration for DataFlow."""
         # This would integrate with DataFlow's auto-migration system
-        self.logger.info(f"Enabled FK-aware auto-migration for workflow {workflow_id}")
+        self.logger.info(
+            "fk_aware_workflow_orchestrator.enabled_fk_aware_auto_migration_for",
+            extra={"workflow_id": workflow_id},
+        )
 
     async def _generate_model_migrations(
         self, models: List[Dict[str, Any]], fk_mappings: List[Dict[str, Any]]
@@ -886,7 +967,10 @@ class FKAwareWorkflowOrchestrator:
         """Generate migrations for models with FK dependencies."""
         migrations = []
         # This would generate actual migration plans
-        self.logger.info(f"Generated migrations for {len(models)} models")
+        self.logger.info(
+            "fk_aware_workflow_orchestrator.generated_migrations_for_models",
+            extra={"count": len(models)},
+        )
         return migrations
 
     # Validation helpers
