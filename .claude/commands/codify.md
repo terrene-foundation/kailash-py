@@ -177,6 +177,6 @@ Deploy these agents as a team for codification:
 - Downstream project repos: skip proposal creation, changes stay local
 - See `rules/artifact-flow.md` for the controlled flow: BUILD repo → loom/ → templates
 
-### Journal
+### Journal (MUST — phase-complete gate)
 
-Create **DECISION** entries for codification choices. Use sequential `NNNN-` naming.
+Before reporting `/codify` complete, create `/journal new <TYPE> <slug>` entries for: **DECISION** (which rules/skills/agents were updated and why), **DISCOVERY** (patterns extracted into institutional knowledge that the next session should inherit). Skip only if nothing is journal-worthy; do not batch.
