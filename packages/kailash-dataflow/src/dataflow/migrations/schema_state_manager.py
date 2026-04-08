@@ -747,9 +747,15 @@ class MigrationHistoryManager:
 
         for attempt_name, attempt_func in attempts:
             try:
-                logger.debug(f"Attempting migration recording via {attempt_name}")
+                logger.debug(
+                    "schema_state_manager.attempting_migration_recording_via",
+                    extra={"attempt_name": attempt_name},
+                )
                 attempt_func(migration)
-                logger.debug(f"Migration recording successful via {attempt_name}")
+                logger.debug(
+                    "schema_state_manager.migration_recording_successful_via",
+                    extra={"attempt_name": attempt_name},
+                )
                 return
             except Exception as e:
                 # Enhanced error messages with context (Bug #3 fix)
@@ -881,10 +887,16 @@ class MigrationHistoryManager:
             results, _ = await self.runtime.execute_async(workflow.build())
             if results.get("record_migration", {}).get("error"):
                 error_msg = results["record_migration"]["error"]
-                logger.error(f"Failed to record migration: {error_msg}")
+                logger.error(
+                    "schema_state_manager.failed_to_record_migration",
+                    extra={"error_msg": error_msg},
+                )
                 raise Exception(f"Database error: {error_msg}")
         except Exception as e:
-            logger.error(f"Failed to record migration: {e}")
+            logger.error(
+                "schema_state_manager.failed_to_record_migration",
+                extra={"error": str(e)},
+            )
             raise
 
     def _record_migration_with_thread_pool(self, migration: MigrationRecord) -> None:
@@ -910,7 +922,10 @@ class MigrationHistoryManager:
             return result
 
         except Exception as e:
-            logger.error(f"Migration recording failed: {e}")
+            logger.error(
+                "schema_state_manager.migration_recording_failed",
+                extra={"error": str(e)},
+            )
             raise
 
     def _record_migration_sync(self, migration: MigrationRecord) -> None:
@@ -979,10 +994,16 @@ class MigrationHistoryManager:
 
             if results.get("record_migration", {}).get("error"):
                 error_msg = results["record_migration"]["error"]
-                logger.error(f"Failed to record migration: {error_msg}")
+                logger.error(
+                    "schema_state_manager.failed_to_record_migration",
+                    extra={"error_msg": error_msg},
+                )
                 raise Exception(f"Database error: {error_msg}")
         except Exception as e:
-            logger.error(f"Failed to record migration: {e}")
+            logger.error(
+                "schema_state_manager.failed_to_record_migration",
+                extra={"error": str(e)},
+            )
             raise
 
     def get_migration_history(self, limit: int = 50) -> List[MigrationRecord]:
@@ -1069,7 +1090,10 @@ class MigrationHistoryManager:
 
             return records
         except Exception as e:
-            logger.error(f"Failed to retrieve migration history: {e}")
+            logger.error(
+                "schema_state_manager.failed_to_retrieve_migration_history",
+                extra={"error": str(e)},
+            )
             return []
 
     def prepare_rollback(self, migration_id: str) -> RollbackPlan:
@@ -1124,7 +1148,10 @@ class MigrationHistoryManager:
 
             if results.get("get_migration", {}).get("error"):
                 error_msg = results["get_migration"]["error"]
-                logger.error(f"Failed to get migration for rollback: {error_msg}")
+                logger.error(
+                    "schema_state_manager.failed_to_get_migration_for_rollback",
+                    extra={"error_msg": error_msg},
+                )
                 raise Exception(f"Database error: {error_msg}")
 
             data = self._extract_query_data(results, "get_migration")
@@ -1192,7 +1219,10 @@ class MigrationHistoryManager:
                 irreversible_operations=irreversible_operations,
             )
         except Exception as e:
-            logger.error(f"Failed to prepare rollback plan: {e}")
+            logger.error(
+                "schema_state_manager.failed_to_prepare_rollback_plan",
+                extra={"error": str(e)},
+            )
             raise
 
     def _ensure_history_table(self):
@@ -1269,7 +1299,10 @@ class MigrationHistoryManager:
             if results.get("create_history_table", {}).get("error"):
                 error = results["create_history_table"]["error"]
                 if "already exists" not in str(error).lower():
-                    logger.error(f"Failed to create migration history table: {error}")
+                    logger.error(
+                        "schema_state_manager.failed_to_create_migration_history_table",
+                        extra={"error": error},
+                    )
                     return False
 
             # Create indexes in separate operations
@@ -1319,14 +1352,23 @@ class MigrationHistoryManager:
                         "duplicate key name" in error_lower
                         or "already exists" in error_lower
                     ):
-                        logger.debug(f"Index already exists (ignoring): {error}")
+                        logger.debug(
+                            "schema_state_manager.index_already_exists_ignoring",
+                            extra={"error": error},
+                        )
                     else:
-                        logger.error(f"Failed to create index: {error}")
+                        logger.error(
+                            "schema_state_manager.failed_to_create_index",
+                            extra={"error": error},
+                        )
                         return False
             return True
 
         except Exception as e:
-            logger.error(f"Failed to create migration history table: {e}")
+            logger.error(
+                "schema_state_manager.failed_to_create_migration_history_table",
+                extra={"error": str(e)},
+            )
             raise
 
     def _estimate_operation_duration(self, operation_type: str) -> int:
@@ -1458,7 +1500,10 @@ class SchemaStateManager:
             if cached_schema:
                 return cached_schema
         except Exception as e:
-            logger.warning(f"Cache error for connection {connection_id}: {e}")
+            logger.warning(
+                "schema_state_manager.cache_error_for_connection",
+                extra={"connection_id": connection_id, "error": str(e)},
+            )
             # Continue to fetch fresh schema
 
         # Fetch fresh schema (this would integrate with existing schema inspection)
@@ -1605,7 +1650,9 @@ class SchemaStateManager:
             return DatabaseSchema(tables=tables)
 
         except Exception as e:
-            logger.error(f"Failed to fetch schema: {e}")
+            logger.error(
+                "schema_state_manager.failed_to_fetch_schema", extra={"error": str(e)}
+            )
             # Return empty schema on error
             return DatabaseSchema()
 

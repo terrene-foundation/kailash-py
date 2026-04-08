@@ -108,7 +108,10 @@ class StagingUtilities:
             else:
                 staging_name = staging_name[:max_length]
 
-        logger.debug(f"Generated staging database name: {staging_name}")
+        logger.debug(
+            "staging_utilities.generated_staging_database_name",
+            extra={"staging_name": staging_name},
+        )
         return staging_name
 
     @staticmethod
@@ -354,7 +357,10 @@ class StagingUtilities:
             estimated_duration_seconds=total_duration,
         )
 
-        logger.debug(f"Estimated staging environment resources: {stats}")
+        logger.debug(
+            "staging_utilities.estimated_staging_environment_resources",
+            extra={"stats": stats},
+        )
         return stats
 
     @staticmethod
@@ -400,7 +406,10 @@ class StagingUtilities:
             sampling_strategy="RANDOM",
         )
 
-        logger.debug(f"Calculated data sampling estimates: {stats}")
+        logger.debug(
+            "staging_utilities.calculated_data_sampling_estimates",
+            extra={"stats": stats},
+        )
         return stats
 
     @staticmethod

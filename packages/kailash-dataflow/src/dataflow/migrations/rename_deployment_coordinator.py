@@ -151,7 +151,10 @@ class ApplicationRestartManager:
         Returns:
             True if restart was successful
         """
-        self.logger.info(f"Restarting application instance: {instance.instance_id}")
+        self.logger.info(
+            "rename_deployment_coordinator.restarting_application_instance",
+            extra={"instance_id": instance.instance_id},
+        )
 
         try:
             # In real implementation, this would make HTTP requests to restart endpoint
@@ -180,7 +183,10 @@ class ApplicationRestartManager:
             return False
 
         except Exception as e:
-            self.logger.error(f"Failed to restart instance {instance.instance_id}: {e}")
+            self.logger.error(
+                "rename_deployment_coordinator.failed_to_restart_instance",
+                extra={"instance_id": instance.instance_id, "error": str(e)},
+            )
             raise ApplicationRestartError(f"Restart failed: {str(e)}")
 
     async def execute_rolling_restart(
@@ -336,7 +342,10 @@ class RenameDeploymentCoordinator:
             )
 
         except Exception as e:
-            self.logger.error(f"Application restart coordination failed: {e}")
+            self.logger.error(
+                "rename_deployment_coordinator.application_restart_coordination_failed",
+                extra={"error": str(e)},
+            )
             return DeploymentCoordinationResult(
                 success=False,
                 deployment_id=deployment_id,
@@ -366,7 +375,10 @@ class RenameDeploymentCoordinator:
 
         for phase in deployment_phases:
             phase_start_time = time.time()
-            self.logger.info(f"Validating health for deployment phase: {phase.value}")
+            self.logger.info(
+                "rename_deployment_coordinator.validating_health_for_deployment_phase",
+                extra={"value": phase.value},
+            )
 
             health_checks = []
             phase_healthy = True
@@ -387,7 +399,10 @@ class RenameDeploymentCoordinator:
 
                 except Exception as e:
                     phase_healthy = False
-                    self.logger.error(f"Health check error for {endpoint}: {e}")
+                    self.logger.error(
+                        "rename_deployment_coordinator.health_check_error_for",
+                        extra={"endpoint": endpoint, "error": str(e)},
+                    )
                     health_checks.append(
                         HealthCheckResult(
                             is_healthy=False,
@@ -429,7 +444,10 @@ class RenameDeploymentCoordinator:
         deployment_id = deployment_plan.deployment_id
         start_time = time.time()
 
-        self.logger.info(f"Executing coordinated deployment: {deployment_id}")
+        self.logger.info(
+            "rename_deployment_coordinator.executing_coordinated_deployment",
+            extra={"deployment_id": deployment_id},
+        )
         self._active_deployments[deployment_id] = deployment_plan
 
         try:
@@ -466,7 +484,10 @@ class RenameDeploymentCoordinator:
             )
 
         except Exception as e:
-            self.logger.error(f"Coordinated deployment failed: {e}")
+            self.logger.error(
+                "rename_deployment_coordinator.coordinated_deployment_failed",
+                extra={"error": str(e)},
+            )
 
             rollback_triggered = False
             if enable_rollback:
@@ -490,7 +511,10 @@ class RenameDeploymentCoordinator:
         self, phase: DeploymentPhase, deployment_plan: DeploymentPlan
     ):
         """Execute a single deployment phase."""
-        self.logger.info(f"Executing deployment phase: {phase.value}")
+        self.logger.info(
+            "rename_deployment_coordinator.executing_deployment_phase",
+            extra={"value": phase.value},
+        )
 
         if phase == DeploymentPhase.APPLICATION_RESTART:
             # Coordinate application restarts
@@ -548,7 +572,10 @@ class RenameDeploymentCoordinator:
             return True
 
         except Exception as e:
-            self.logger.error(f"Deployment rollback failed: {e}")
+            self.logger.error(
+                "rename_deployment_coordinator.deployment_rollback_failed",
+                extra={"error": str(e)},
+            )
             return False
 
     def _generate_deployment_id(self) -> str:

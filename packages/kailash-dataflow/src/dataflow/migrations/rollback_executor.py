@@ -284,7 +284,9 @@ class RollbackExecutor:
             rollback_execution.overall_status = RollbackStatus.FAILED
             rollback_execution.error_log.append(f"Rollback execution failed: {str(e)}")
 
-            self.logger.error(f"Rollback execution failed: {e}")
+            self.logger.error(
+                "rollback_executor.rollback_execution_failed", extra={"error": str(e)}
+            )
 
             return {
                 "success": False,
@@ -356,7 +358,10 @@ class RollbackExecutor:
         Returns:
             Feasibility validation results
         """
-        self.logger.info(f"Validating rollback feasibility: {rollback_plan.plan_id}")
+        self.logger.info(
+            "rollback_executor.validating_rollback_feasibility",
+            extra={"plan_id": rollback_plan.plan_id},
+        )
 
         validation_results = {
             "feasible": True,
@@ -489,14 +494,20 @@ class RollbackExecutor:
                     await self.database_executor.execute_sql(step.sql_statement)
                     await self.database_executor.commit_transaction()
 
-                self.logger.info(f"SQL rollback step executed: {step.description}")
+                self.logger.info(
+                    "rollback_executor.sql_rollback_step_executed",
+                    extra={"description": step.description},
+                )
 
             elif step.rollback_type == RollbackType.DATA_RESTORATION:
                 if not dry_run:
                     # Simulate data restoration
                     await asyncio.sleep(0.1)
 
-                self.logger.info(f"Data restoration step executed: {step.description}")
+                self.logger.info(
+                    "rollback_executor.data_restoration_step_executed",
+                    extra={"description": step.description},
+                )
 
             elif step.rollback_type == RollbackType.SCHEMA_REVERSION:
                 if not dry_run and self.database_executor and step.sql_statement:
@@ -504,10 +515,16 @@ class RollbackExecutor:
                     await self.database_executor.execute_sql(step.sql_statement)
                     await self.database_executor.commit_transaction()
 
-                self.logger.info(f"Schema reversion step executed: {step.description}")
+                self.logger.info(
+                    "rollback_executor.schema_reversion_step_executed",
+                    extra={"description": step.description},
+                )
 
             elif step.rollback_type == RollbackType.EMERGENCY_STOP:
-                self.logger.critical(f"Emergency stop executed: {step.description}")
+                self.logger.critical(
+                    "rollback_executor.emergency_stop_executed",
+                    extra={"description": step.description},
+                )
 
             # Execute step validations
             if step.validation_queries and not dry_run:
@@ -525,7 +542,10 @@ class RollbackExecutor:
 
         except Exception as e:
             execution.error_log.append(f"Step {step.step_number} failed: {str(e)}")
-            self.logger.error(f"Rollback step {step.step_number} failed: {e}")
+            self.logger.error(
+                "rollback_executor.rollback_step_failed",
+                extra={"step_number": step.step_number, "error": str(e)},
+            )
 
             # Rollback transaction if it was started
             if self.database_executor and not dry_run:
@@ -585,7 +605,10 @@ class RollbackExecutor:
         self, execution: RollbackExecution
     ) -> Dict[str, Any]:
         """Request approval for rollback execution."""
-        self.logger.info(f"Rollback approval required: {execution.execution_id}")
+        self.logger.info(
+            "rollback_executor.rollback_approval_required",
+            extra={"execution_id": execution.execution_id},
+        )
 
         return {
             "success": False,

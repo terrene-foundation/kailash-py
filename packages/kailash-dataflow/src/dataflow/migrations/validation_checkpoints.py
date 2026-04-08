@@ -205,7 +205,10 @@ class DependencyAnalysisCheckpoint(BaseValidationCheckpoint):
 
         except Exception as e:
             execution_time = time.time() - start_time
-            logger.error(f"Dependency analysis checkpoint failed: {e}")
+            logger.error(
+                "validation_checkpoints.dependency_analysis_checkpoint_failed",
+                extra={"error": str(e)},
+            )
             return self._create_result(
                 CheckpointStatus.FAILED,
                 f"Dependency analysis failed with error: {str(e)}",
@@ -302,7 +305,10 @@ class PerformanceValidationCheckpoint(BaseValidationCheckpoint):
 
         except Exception as e:
             execution_time = time.time() - start_time
-            logger.error(f"Performance validation checkpoint failed: {e}")
+            logger.error(
+                "validation_checkpoints.performance_validation_checkpoint_failed",
+                extra={"error": str(e)},
+            )
             return self._create_result(
                 CheckpointStatus.FAILED,
                 f"Performance validation failed with error: {str(e)}",
@@ -323,7 +329,10 @@ class PerformanceValidationCheckpoint(BaseValidationCheckpoint):
                 )
                 formatted_queries.append(formatted_query)
             except KeyError as e:
-                logger.warning(f"Could not format query template {query_template}: {e}")
+                logger.warning(
+                    "validation_checkpoints.could_not_format_query_template",
+                    extra={"query_template": query_template, "error": str(e)},
+                )
                 # Use original query if formatting fails
                 formatted_queries.append(query_template)
 
@@ -349,7 +358,10 @@ class PerformanceValidationCheckpoint(BaseValidationCheckpoint):
         try:
             # Execute migration SQL in staging
             await conn.execute(migration_sql)
-            logger.debug(f"Executed migration SQL in staging: {migration_sql}")
+            logger.debug(
+                "validation_checkpoints.executed_migration_sql_in_staging",
+                extra={"migration_sql": migration_sql},
+            )
         finally:
             await conn.close()
 
@@ -453,7 +465,10 @@ class RollbackValidationCheckpoint(BaseValidationCheckpoint):
 
         except Exception as e:
             execution_time = time.time() - start_time
-            logger.error(f"Rollback validation checkpoint failed: {e}")
+            logger.error(
+                "validation_checkpoints.rollback_validation_checkpoint_failed",
+                extra={"error": str(e)},
+            )
             return self._create_result(
                 CheckpointStatus.FAILED,
                 f"Rollback validation failed with error: {str(e)}",
@@ -603,7 +618,10 @@ class DataIntegrityCheckpoint(BaseValidationCheckpoint):
 
         except Exception as e:
             execution_time = time.time() - start_time
-            logger.error(f"Data integrity checkpoint failed: {e}")
+            logger.error(
+                "validation_checkpoints.data_integrity_checkpoint_failed",
+                extra={"error": str(e)},
+            )
             return self._create_result(
                 CheckpointStatus.FAILED,
                 f"Data integrity validation failed with error: {str(e)}",
@@ -692,7 +710,10 @@ class DataIntegrityCheckpoint(BaseValidationCheckpoint):
             # Basic constraint validation (could be enhanced for specific checks)
             for constraint in constraints:
                 # This is a simplified check - real implementation would validate specific constraints
-                logger.debug(f"Checking constraint: {constraint['constraint_name']}")
+                logger.debug(
+                    "validation_checkpoints.checking_constraint",
+                    extra={"constraint_name": constraint["constraint_name"]},
+                )
 
             return {
                 "valid": len(violations) == 0,
@@ -835,7 +856,10 @@ class SchemaConsistencyCheckpoint(BaseValidationCheckpoint):
 
         except Exception as e:
             execution_time = time.time() - start_time
-            logger.error(f"Schema consistency checkpoint failed: {e}")
+            logger.error(
+                "validation_checkpoints.schema_consistency_checkpoint_failed",
+                extra={"error": str(e)},
+            )
             return self._create_result(
                 CheckpointStatus.FAILED,
                 f"Schema consistency validation failed with error: {str(e)}",
@@ -967,7 +991,10 @@ class ValidationCheckpointManager:
             )
 
         self.checkpoints[checkpoint_type] = checkpoint
-        logger.debug(f"Registered checkpoint: {checkpoint_type.value}")
+        logger.debug(
+            "validation_checkpoints.registered_checkpoint",
+            extra={"value": checkpoint_type.value},
+        )
 
     async def execute_checkpoint(
         self,
@@ -982,7 +1009,10 @@ class ValidationCheckpointManager:
         checkpoint = self.checkpoints[checkpoint_type]
 
         try:
-            logger.info(f"Executing checkpoint: {checkpoint_type.value}")
+            logger.info(
+                "validation_checkpoints.executing_checkpoint",
+                extra={"value": checkpoint_type.value},
+            )
             result = await checkpoint.execute(staging_environment, migration_info)
             logger.info(
                 f"Checkpoint {checkpoint_type.value} completed: {result.status.value}"

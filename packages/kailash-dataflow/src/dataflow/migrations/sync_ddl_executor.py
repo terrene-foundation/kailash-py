@@ -129,7 +129,10 @@ class SyncDDLExecutor:
             db_path = ":memory:"
 
         conn = sqlite3.connect(db_path, check_same_thread=False)
-        logger.debug(f"Created sync SQLite connection for DDL: {db_path}")
+        logger.debug(
+            "sync_ddl_executor.created_sync_sqlite_connection_for_ddl",
+            extra={"db_path": db_path},
+        )
         return conn
 
     def _get_mysql_connection(self):
@@ -183,11 +186,15 @@ class SyncDDLExecutor:
                 conn.commit()
 
             cursor.close()
-            logger.debug(f"Successfully executed DDL: {sql[:100]}...")
+            logger.debug(
+                "sync_ddl_executor.successfully_executed_ddl", extra={"sql": sql[:100]}
+            )
             return {"success": True, "sql": sql}
 
         except Exception as e:
-            logger.error(f"DDL execution failed: {e}")
+            logger.error(
+                "sync_ddl_executor.ddl_execution_failed", extra={"error": str(e)}
+            )
             return {"success": False, "error": str(e), "sql": sql}
 
         finally:
@@ -224,11 +231,17 @@ class SyncDDLExecutor:
                 conn.commit()
 
             cursor.close()
-            logger.debug(f"Successfully executed {executed} DDL statements")
+            logger.debug(
+                "sync_ddl_executor.successfully_executed_ddl_statements",
+                extra={"executed": executed},
+            )
             return {"success": True, "executed_count": executed}
 
         except Exception as e:
-            logger.error(f"DDL batch execution failed at statement {executed + 1}: {e}")
+            logger.error(
+                "sync_ddl_executor.ddl_batch_execution_failed_at_statement",
+                extra={"executed_1": executed + 1, "error": str(e)},
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -278,7 +291,9 @@ class SyncDDLExecutor:
             return {"result": rows, "columns": columns}
 
         except Exception as e:
-            logger.error(f"Query execution failed: {e}")
+            logger.error(
+                "sync_ddl_executor.query_execution_failed", extra={"error": str(e)}
+            )
             return {"error": str(e), "sql": sql}
 
         finally:
@@ -317,7 +332,10 @@ class SyncDDLExecutor:
             return False
 
         if "error" in result:
-            logger.error(f"Failed to check table existence: {result['error']}")
+            logger.error(
+                "sync_ddl_executor.failed_to_check_table_existence",
+                extra={"error": result["error"]},
+            )
             return False
 
         rows = result.get("result", [])
@@ -356,7 +374,10 @@ class SyncDDLExecutor:
             return []
 
         if "error" in result:
-            logger.error(f"Failed to get columns: {result['error']}")
+            logger.error(
+                "sync_ddl_executor.failed_to_get_columns",
+                extra={"error": result["error"]},
+            )
             return []
 
         columns = []

@@ -237,7 +237,10 @@ class StagingEnvironmentManager:
         self.foreign_key_analyzer = ForeignKeyAnalyzer()
         self.risk_engine = RiskAssessmentEngine()
 
-        logger.info(f"StagingEnvironmentManager initialized with config: {self.config}")
+        logger.info(
+            "staging_environment_manager.stagingenvironmentmanager_initialized_with_config",
+            extra={"config": self.config},
+        )
 
     async def create_staging_environment(
         self,
@@ -306,14 +309,20 @@ class StagingEnvironmentManager:
             # Update status to active
             staging_env.status = StagingEnvironmentStatus.ACTIVE
 
-            logger.info(f"Successfully created staging environment: {staging_id}")
+            logger.info(
+                "staging_environment_manager.successfully_created_staging_environment",
+                extra={"staging_id": staging_id},
+            )
             return staging_env
 
         except Exception as e:
             # Clean up on failure
             if staging_id in self.active_environments:
                 del self.active_environments[staging_id]
-            logger.error(f"Failed to create staging environment: {e}")
+            logger.error(
+                "staging_environment_manager.failed_to_create_staging_environment",
+                extra={"error": str(e)},
+            )
             raise
 
     async def replicate_production_schema(
@@ -426,12 +435,18 @@ class StagingEnvironmentManager:
                 datetime.now() - start_time
             ).total_seconds()
 
-            logger.info(f"Schema replication completed for {staging_id}: {result}")
+            logger.info(
+                "staging_environment_manager.schema_replication_completed_for",
+                extra={"staging_id": staging_id, "result": result},
+            )
             return result
 
         except Exception as e:
             result.errors.append(f"Schema replication failed: {str(e)}")
-            logger.error(f"Schema replication failed for {staging_id}: {e}")
+            logger.error(
+                "staging_environment_manager.schema_replication_failed_for",
+                extra={"staging_id": staging_id, "error": str(e)},
+            )
             raise RuntimeError(f"Schema replication failed: {e}")
 
     async def sample_production_data(
@@ -481,11 +496,21 @@ class StagingEnvironmentManager:
                         constraints_preserved=True,
                     )
 
-                    logger.info(f"Data sampling completed for {table_name}: {result}")
+                    logger.info(
+                        "staging_environment_manager.data_sampling_completed_for",
+                        extra={"table_name": table_name, "result": result},
+                    )
                     return result
 
         except Exception as e:
-            logger.error(f"Data sampling failed for {table_name} in {staging_id}: {e}")
+            logger.error(
+                "staging_environment_manager.data_sampling_failed_for_in",
+                extra={
+                    "table_name": table_name,
+                    "staging_id": staging_id,
+                    "error": str(e),
+                },
+            )
             raise RuntimeError(f"Data sampling failed: {e}")
 
     async def cleanup_staging_environment(self, staging_id: str) -> Dict[str, Any]:
@@ -533,12 +558,18 @@ class StagingEnvironmentManager:
                 "cleanup_time_seconds": cleanup_time,
             }
 
-            logger.info(f"Successfully cleaned up staging environment: {staging_id}")
+            logger.info(
+                "staging_environment_manager.successfully_cleaned_up_staging_environment",
+                extra={"staging_id": staging_id},
+            )
             return result
 
         except Exception as e:
             staging_env.status = StagingEnvironmentStatus.ERROR
-            logger.error(f"Cleanup failed for staging environment {staging_id}: {e}")
+            logger.error(
+                "staging_environment_manager.cleanup_failed_for_staging_environment",
+                extra={"staging_id": staging_id, "error": str(e)},
+            )
             raise RuntimeError(f"Cleanup failed: {e}")
 
     async def get_staging_environment_info(
@@ -645,13 +676,19 @@ class StagingEnvironmentManager:
         """Create the staging database."""
         # This would create the actual staging database
         # For now, we simulate successful creation
-        logger.info(f"Created staging database: {staging_env.staging_db.database}")
+        logger.info(
+            "staging_environment_manager.created_staging_database",
+            extra={"database": staging_env.staging_db.database},
+        )
 
     async def _drop_staging_database(self, staging_env: StagingEnvironment) -> None:
         """Drop the staging database."""
         # This would drop the actual staging database
         # For now, we simulate successful cleanup
-        logger.info(f"Dropped staging database: {staging_env.staging_db.database}")
+        logger.info(
+            "staging_environment_manager.dropped_staging_database",
+            extra={"database": staging_env.staging_db.database},
+        )
 
     async def _get_production_tables(
         self, conn: asyncpg.Connection, tables_filter: Optional[List[str]]
@@ -672,7 +709,10 @@ class StagingEnvironmentManager:
     ) -> None:
         """Replicate table schema to staging."""
         # This would create table schema in staging database
-        logger.debug(f"Replicated table schema: {table_info['table_name']}")
+        logger.debug(
+            "staging_environment_manager.replicated_table_schema",
+            extra={"table_name": table_info["table_name"]},
+        )
 
     async def _get_production_constraints(
         self, conn: asyncpg.Connection, tables_filter: Optional[List[str]]
@@ -684,7 +724,10 @@ class StagingEnvironmentManager:
         self, conn: asyncpg.Connection, constraint: Dict
     ) -> None:
         """Replicate constraint to staging."""
-        logger.debug(f"Replicated constraint: {constraint}")
+        logger.debug(
+            "staging_environment_manager.replicated_constraint",
+            extra={"constraint": constraint},
+        )
 
     async def _get_production_indexes(
         self, conn: asyncpg.Connection, tables_filter: Optional[List[str]]
@@ -694,7 +737,9 @@ class StagingEnvironmentManager:
 
     async def _replicate_index(self, conn: asyncpg.Connection, index: Dict) -> None:
         """Replicate index to staging."""
-        logger.debug(f"Replicated index: {index}")
+        logger.debug(
+            "staging_environment_manager.replicated_index", extra={"index": index}
+        )
 
     async def _get_production_views(self, conn: asyncpg.Connection) -> List[Dict]:
         """Get production view information."""
@@ -702,7 +747,9 @@ class StagingEnvironmentManager:
 
     async def _replicate_view(self, conn: asyncpg.Connection, view: Dict) -> None:
         """Replicate view to staging."""
-        logger.debug(f"Replicated view: {view}")
+        logger.debug(
+            "staging_environment_manager.replicated_view", extra={"view": view}
+        )
 
     async def _get_production_triggers(self, conn: asyncpg.Connection) -> List[Dict]:
         """Get production trigger information."""
@@ -710,7 +757,9 @@ class StagingEnvironmentManager:
 
     async def _replicate_trigger(self, conn: asyncpg.Connection, trigger: Dict) -> None:
         """Replicate trigger to staging."""
-        logger.debug(f"Replicated trigger: {trigger}")
+        logger.debug(
+            "staging_environment_manager.replicated_trigger", extra={"trigger": trigger}
+        )
 
     async def _sample_table_data(
         self,
@@ -723,7 +772,10 @@ class StagingEnvironmentManager:
         # This would perform actual data sampling
         # For now, simulate sampling
         estimated_rows = int(1000 * sample_size)
-        logger.debug(f"Sampled {estimated_rows} rows from {table_name}")
+        logger.debug(
+            "staging_environment_manager.sampled_rows_from",
+            extra={"estimated_rows": estimated_rows, "table_name": table_name},
+        )
         return estimated_rows
 
     async def measure_performance_baselines(
@@ -881,7 +933,10 @@ class StagingEnvironmentManager:
             return result
 
         except Exception as e:
-            logger.error(f"Performance validation failed for {staging_id}: {e}")
+            logger.error(
+                "staging_environment_manager.performance_validation_failed_for",
+                extra={"staging_id": staging_id, "error": str(e)},
+            )
             return PerformanceValidationResult(
                 validation_id=validation_id,
                 staging_id=staging_id,
