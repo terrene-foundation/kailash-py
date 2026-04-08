@@ -22,7 +22,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Any, Callable, Coroutine, Dict, List, Optional
+from typing import Any, Callable, Coroutine, Dict, List, Mapping, Optional
 
 from dataflow.adapters.source_adapter import BaseSourceAdapter
 
@@ -55,11 +55,15 @@ class ChangeDetector:
 
     def __init__(
         self,
-        sources: Dict[str, BaseSourceAdapter],
-        products: Dict[str, Dict[str, Any]],
+        sources: Mapping[str, BaseSourceAdapter],
+        products: Mapping[str, Any],
         pipeline_executor: Any,
         dev_mode: bool = False,
     ) -> None:
+        # ``products`` is ``Mapping[str, Any]`` rather than
+        # ``Dict[str, ProductRegistration]`` because the legacy in-memory
+        # tests still pass plain dicts with a ``depends_on`` key, and
+        # ``_get_affected_products`` handles both shapes.
         self._sources = sources
         self._products = products
         self._pipeline_executor = pipeline_executor

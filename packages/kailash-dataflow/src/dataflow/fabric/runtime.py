@@ -502,6 +502,15 @@ class FabricRuntime:
         reads the still-fresh entries the old leader wrote and only
         re-executes products whose cache is missing or stale.
         """
+        pipeline = self._pipeline
+        if pipeline is None:
+            # start() builds the pipeline before calling _prewarm_products;
+            # this guard satisfies type checkers and raises loudly if the
+            # invariant is ever violated.
+            raise RuntimeError(
+                "FabricRuntime._prewarm_products called before pipeline init"
+            )
+
         materialized = [
             (name, product)
             for name, product in self._products.items()
@@ -527,7 +536,7 @@ class FabricRuntime:
                 continue
 
             try:
-                metadata = await self._pipeline.get_metadata(name)
+                metadata = await pipeline.get_metadata(name)
             except Exception:
                 logger.exception(
                     "fabric.prewarm.metadata_lookup_failed",
@@ -564,7 +573,7 @@ class FabricRuntime:
                     sources=source_adapters,
                     products_cache=await self._get_products_cache(),
                 )
-                await self._pipeline.execute_product(
+                await pipeline.execute_product(
                     product_name=name,
                     product_fn=product.fn,
                     context=ctx,
@@ -598,6 +607,12 @@ class FabricRuntime:
         database connections and CPU spikes that are unnecessary in a
         single-developer environment.
         """
+        pipeline = self._pipeline
+        if pipeline is None:
+            raise RuntimeError(
+                "FabricRuntime._prewarm_products_serial called before " "pipeline init"
+            )
+
         materialized = [
             (name, product)
             for name, product in self._products.items()
@@ -624,7 +639,7 @@ class FabricRuntime:
                     sources=source_adapters,
                     products_cache=await self._get_products_cache(),
                 )
-                await self._pipeline.execute_product(
+                await pipeline.execute_product(
                     product_name=name,
                     product_fn=product.fn,
                     context=ctx,
@@ -924,13 +939,14 @@ class FabricRuntime:
 
     def last_trace(self, name: str) -> Dict[str, Any]:
         """Get the last pipeline trace for a product."""
-        if self._health_manager is None:
-            from dataflow.fabric.health import FabricHealthManager
+        from dataflow.fabric.health import FabricHealthManager
 
+        if self._health_manager is None:
             self._health_manager = FabricHealthManager(
                 self._sources, self._products, self._pipeline, self._started_at
             )
-        return self._health_manager.get_trace(name)
+        manager: FabricHealthManager = self._health_manager
+        return manager.get_trace(name)
 
     def register_consumer(self, name: str, fn: ConsumerFn) -> None:
         """Register a consumer adapter function.

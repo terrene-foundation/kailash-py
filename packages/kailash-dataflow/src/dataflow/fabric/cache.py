@@ -38,7 +38,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
@@ -193,6 +193,21 @@ class FabricCacheBackend(ABC):
         """Remove every key, or every key matching ``prefix``. Idempotent."""
 
     @abstractmethod
+    async def scan_prefix(self, prefix: str) -> List[Tuple[str, Dict[str, Any]]]:
+        """Return ``(relative_key, metadata_dict)`` pairs for every entry
+        whose key starts with ``prefix``.
+
+        Metadata-only (no payload bytes) — mirrors the :meth:`get_metadata`
+        contract but across multiple keys at once. Used by fabric health
+        probes to aggregate parameterized product freshness without
+        transferring payload bytes.
+
+        The returned keys are relative to the backend (not the backend's
+        internal namespace prefix), so callers can pass them directly to
+        :meth:`get` / :meth:`get_metadata` / :meth:`invalidate`.
+        """
+
+    @abstractmethod
     async def close(self) -> None:
         """Release any backend-side resources (Redis client, etc.)."""
 
@@ -289,6 +304,28 @@ class InMemoryFabricCacheBackend(FabricCacheBackend):
         # Iterate over a snapshot since we're mutating
         for key in [k for k in self._store if k.startswith(prefix)]:
             self._store.pop(key, None)
+
+    async def scan_prefix(self, prefix: str) -> List[Tuple[str, Dict[str, Any]]]:
+        """Return metadata for every stored key that starts with ``prefix``.
+
+        Used by fabric health probes to aggregate parameterized product
+        freshness across every param combination without loading payload
+        bytes. Iterates the OrderedDict without mutating it.
+        """
+        results: List[Tuple[str, Dict[str, Any]]] = []
+        for key, entry in self._store.items():
+            if not key.startswith(prefix):
+                continue
+            metadata: Dict[str, Any] = {
+                "cached_at": entry.cached_at,
+                "content_hash": entry.content_hash,
+                "size_bytes": entry.size_bytes,
+                "run_started_at": entry.run_started_at,
+                "schema_version": entry.schema_version,
+                **entry.metadata,
+            }
+            results.append((key, metadata))
+        return results
 
     async def close(self) -> None:
         # Nothing to release.
@@ -435,9 +472,12 @@ class RedisFabricCacheBackend(FabricCacheBackend):
 
     async def _ensure_cas_script(self) -> str:
         """Lazy-load the Lua CAS script and cache its SHA."""
-        if self._cas_script_sha is None:
-            self._cas_script_sha = await self._redis.script_load(_REDIS_CAS_SET_LUA)
-        return self._cas_script_sha
+        sha = self._cas_script_sha
+        if sha is None:
+            loaded = await self._redis.script_load(_REDIS_CAS_SET_LUA)
+            sha = str(loaded) if not isinstance(loaded, str) else loaded
+            self._cas_script_sha = sha
+        return sha
 
     @staticmethod
     def _decode(value: Any) -> Optional[str]:
@@ -722,6 +762,86 @@ class RedisFabricCacheBackend(FabricCacheBackend):
                 return
             raise
         self._on_redis_success()
+
+    async def scan_prefix(self, prefix: str) -> List[Tuple[str, Dict[str, Any]]]:
+        """SCAN + HMGET metadata for every key starting with ``prefix``.
+
+        Uses Redis SCAN (not KEYS) for non-blocking iteration, followed by
+        per-key HMGET for metadata-only fields. Returns relative keys (the
+        backend's internal namespace prefix is stripped) so callers can
+        pass them to :meth:`get` / :meth:`get_metadata` directly.
+        """
+        namespace = f"{self._key_prefix}:product:{self._instance_name}:"
+        match = f"{namespace}{prefix}*"
+        results: List[Tuple[str, Dict[str, Any]]] = []
+        keys_found: List[bytes | str] = []
+
+        try:
+            cursor = 0
+            while True:
+                cursor, batch = await self._redis.scan(
+                    cursor=cursor, match=match, count=200
+                )
+                if batch:
+                    keys_found.extend(batch)
+                if cursor == 0:
+                    break
+        except (asyncio.TimeoutError, OSError) as exc:
+            self._on_redis_error("scan_prefix", exc)
+            return results
+        except Exception as exc:
+            if _is_redis_runtime_error(exc):
+                self._on_redis_error("scan_prefix", exc)
+                return results
+            raise
+
+        for full_key_raw in keys_found:
+            full_key = self._decode(full_key_raw) or ""
+            if not full_key.startswith(namespace):
+                continue
+            relative_key = full_key[len(namespace) :]
+            try:
+                values = await self._redis.hmget(
+                    full_key,
+                    "cached_at",
+                    "content_hash",
+                    "size_bytes",
+                    "run_started_at",
+                    "schema_version",
+                )
+            except (asyncio.TimeoutError, OSError) as exc:
+                self._on_redis_error("scan_prefix", exc)
+                return results
+            except Exception as exc:
+                if _is_redis_runtime_error(exc):
+                    self._on_redis_error("scan_prefix", exc)
+                    return results
+                raise
+
+            (
+                cached_at_raw,
+                content_hash,
+                size_bytes,
+                run_started_at_raw,
+                schema_version,
+            ) = values
+            cached_at = self._parse_iso(cached_at_raw)
+            run_started_at = self._parse_iso(run_started_at_raw)
+            if cached_at is None or run_started_at is None:
+                # Entry was evicted between SCAN and HMGET, or the hash
+                # is malformed — skip it.
+                continue
+            metadata: Dict[str, Any] = {
+                "cached_at": cached_at,
+                "content_hash": self._decode(content_hash) or "",
+                "size_bytes": self._decode_int(size_bytes, 0),
+                "run_started_at": run_started_at,
+                "schema_version": self._decode_int(schema_version, 2),
+            }
+            results.append((relative_key, metadata))
+
+        self._on_redis_success()
+        return results
 
     async def close(self) -> None:
         # The Redis client is owned by FabricRuntime; do NOT close it

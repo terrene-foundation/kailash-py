@@ -120,7 +120,13 @@ def _serialize(data: Any) -> bytes:
     try:
         import msgpack  # type: ignore[import-untyped]
 
-        return msgpack.packb(data, use_bin_type=True)
+        packed = msgpack.packb(data, use_bin_type=True)
+        if packed is None:
+            # msgpack should never return None for valid input; this branch
+            # exists only to satisfy type checkers because the untyped stub
+            # declares the return as Optional[bytes].
+            return json.dumps(data, sort_keys=True, default=str).encode("utf-8")
+        return bytes(packed)
     except ImportError:
         logger.warning(
             "fabric.pipeline.msgpack_missing",
@@ -332,7 +338,10 @@ class PipelineExecutor:
                     # Canonical path: DatabaseConfig.get_pool_size()
                     get_fn = getattr(db_config, "get_pool_size", None)
                     if get_fn is not None:
-                        env = getattr(config, "environment", "development")
+                        # DatabaseConfig.get_pool_size takes Optional[Environment];
+                        # pass through whatever the DataFlow config carries
+                        # (may be an Environment enum or None).
+                        env = getattr(config, "environment", None)
                         return int(get_fn(env))
                     pool_size = getattr(db_config, "pool_size", None)
                     if pool_size is not None:
@@ -342,11 +351,12 @@ class PipelineExecutor:
                 "fabric.pipeline.pool_size_fallback",
                 extra={"reason": "config_resolution_failed"},
             )
-        # Fall back to DatabaseConfig canonical default
+        # Fall back to DatabaseConfig canonical default (no explicit env →
+        # auto-detection inside get_pool_size).
         try:
             from dataflow.core.config import DatabaseConfig
 
-            return DatabaseConfig().get_pool_size("development")
+            return DatabaseConfig().get_pool_size()
         except Exception:
             return 5  # Minimal safe fallback — yields db_budget = max(1, 1) = 1
 
@@ -447,6 +457,39 @@ class PipelineExecutor:
         """Fast path: return only the metadata fields without payload bytes."""
         key = _cache_key(product_name, params, tenant_id)
         return await self._cache.get_metadata(key)
+
+    async def scan_product_metadata(
+        self,
+        product_name: str,
+        tenant_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return metadata for every cache entry belonging to ``product_name``.
+
+        Aggregates across every parameter combination of a parameterized
+        product without transferring payload bytes. Used by
+        :class:`FabricHealthManager` so parameterized product health no
+        longer reports ``cold`` when entries exist under param-specific
+        cache keys (gh#358).
+
+        The prefix is constructed so it only matches the product's own
+        keys:
+
+        * With tenant: ``{tenant_id}:{product_name}:`` (trailing colon
+          required so that ``product_name`` does not also match a sibling
+          like ``{product_name}_history`` that happens to share a stem).
+        * Without tenant: ``{product_name}:`` — same rationale.
+
+        The trailing colon also excludes the non-parameterized (bare)
+        cache entry for the same product, because a non-parameterized
+        product's key is exactly ``product_name`` (no colon). Callers
+        that want the bare entry should also call :meth:`get_metadata`.
+        """
+        if tenant_id is not None:
+            prefix = f"{tenant_id}:{product_name}:"
+        else:
+            prefix = f"{product_name}:"
+        pairs = await self._cache.scan_prefix(prefix)
+        return [metadata for _key, metadata in pairs]
 
     @staticmethod
     def _parse_iso(value: Any) -> Optional[datetime]:

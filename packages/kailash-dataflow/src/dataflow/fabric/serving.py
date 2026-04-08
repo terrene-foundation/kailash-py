@@ -93,7 +93,7 @@ class FabricServingLayer:
         products: Dict[str, ProductRegistration],
         pipeline_executor: Any,
         express: Any = None,
-        sources: Dict[str, Any] = None,
+        sources: Optional[Dict[str, Any]] = None,
         enable_writes: bool = False,
         on_product_refresh: Optional[Callable] = None,
         consumer_registry: Optional[ConsumerRegistry] = None,
@@ -318,8 +318,13 @@ class FabricServingLayer:
                         "error": "Product refresh failed",
                     }
 
-            # Try to get cached data
-            cached = await self._pipeline.get_cached(name, tenant_id=tenant_id)
+            # Try to get cached data — params MUST flow through so that
+            # parameterized products look up the per-param cache slot and
+            # not the parameter-less cache slot (gh#358).
+            cache_params = params if params else None
+            cached = await self._pipeline.get_cached(
+                name, params=cache_params, tenant_id=tenant_id
+            )
 
             if cached is not None:
                 data_bytes, metadata = cached
@@ -443,6 +448,20 @@ class FabricServingLayer:
                 if product.multi_tenant and tenant_id is None:
                     results[name] = {
                         "error": (f"Product '{name}' requires a tenant identifier.")
+                    }
+                    continue
+                # Parameterized products cannot be looked up via the batch
+                # endpoint because the batch contract has no place to carry
+                # per-product parameters. Returning a parameter-less cache
+                # miss would silently lie to the caller (gh#358); raise an
+                # explicit routing error instead.
+                if product.mode.value == "parameterized":
+                    results[name] = {
+                        "error": (
+                            f"product '{name}' is parameterized; use single-"
+                            f"product GET /fabric/{name} with query params "
+                            f"instead of /fabric/_batch"
+                        )
                     }
                     continue
                 effective_tenant = tenant_id if product.multi_tenant else None

@@ -13,7 +13,9 @@ import logging
 import re
 from collections import deque
 from datetime import datetime, timezone
-from typing import Any, Deque, Dict, List, Optional
+from typing import Any, Dict, List, Optional
+
+from dataflow.fabric.config import ProductMode
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +42,29 @@ def _sanitize_error(error: Optional[str]) -> Optional[str]:
     if "\n" in sanitized:
         sanitized = sanitized.split("\n")[0]
     return sanitized[:500]  # Hard cap
+
+
+def _as_datetime(value: Any) -> Optional[datetime]:
+    """Coerce a cache metadata ``cached_at`` value into a timezone-aware datetime.
+
+    Accepts ``datetime`` (returned as-is, aware if already aware) or an
+    ISO-8601 string. Returns ``None`` on unrecognised input.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
+    if isinstance(value, str) and value:
+        try:
+            dt = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    return None
 
 
 class FabricHealthManager:
@@ -92,6 +117,12 @@ class FabricHealthManager:
         # Multi-tenant products are reported cold; per-tenant health
         # checks would need a separate /fabric/_health endpoint that
         # accepts a tenant filter.
+        #
+        # Parameterized products (gh#358) are reported by aggregating
+        # metadata across every param combination via scan_prefix. The
+        # bare-name metadata lookup would always miss because the keys
+        # include the canonical params JSON, so parameterized products
+        # previously all reported ``cold`` regardless of cache state.
         product_health: Dict[str, Any] = {}
         now_utc = datetime.now(timezone.utc)
         for name, product in self._products.items():
@@ -103,21 +134,55 @@ class FabricHealthManager:
                 }
                 continue
 
-            try:
-                metadata = await self._pipeline.get_metadata(name)
-            except Exception:
-                logger.exception(
-                    "fabric.health.metadata_lookup_failed",
-                    extra={"product": name},
-                )
-                metadata = None
+            product_mode = getattr(product, "mode", None)
+            is_parameterized = product_mode == ProductMode.PARAMETERIZED
+
+            metadata: Optional[Dict[str, Any]] = None
+            param_combinations_cached: Optional[int] = None
+
+            if is_parameterized:
+                # Scan every cached entry for this product and aggregate
+                # the freshest one. Report the count of cached param
+                # combinations so operators can see breadth, not just
+                # freshness of the single newest entry.
+                try:
+                    metadata_entries = await self._pipeline.scan_product_metadata(name)
+                except Exception:
+                    logger.exception(
+                        "fabric.health.scan_prefix_failed",
+                        extra={"product": name},
+                    )
+                    metadata_entries = []
+
+                param_combinations_cached = len(metadata_entries)
+                if metadata_entries:
+                    # Pick the entry with the newest cached_at.
+                    metadata = max(
+                        metadata_entries,
+                        key=lambda entry: _as_datetime(entry.get("cached_at"))
+                        or datetime.min.replace(tzinfo=timezone.utc),
+                    )
+            else:
+                try:
+                    metadata = await self._pipeline.get_metadata(name)
+                except Exception:
+                    logger.exception(
+                        "fabric.health.metadata_lookup_failed",
+                        extra={"product": name},
+                    )
+                    metadata = None
 
             if metadata is None:
-                product_health[name] = {
+                cold_entry: Dict[str, Any] = {
                     "freshness": "cold",
                     "age_seconds": None,
                     "cached_at": None,
                 }
+                if is_parameterized:
+                    cold_entry["param_combinations_cached"] = (
+                        param_combinations_cached or 0
+                    )
+                product_health[name] = cold_entry
                 continue
 
             cached_at_value = metadata.get("cached_at")
@@ -136,7 +201,7 @@ class FabricHealthManager:
                 except (ValueError, TypeError):
                     cached_at_iso = cached_at_value
 
-            product_health[name] = {
+            entry: Dict[str, Any] = {
                 "freshness": (
                     "fresh"
                     if age <= product.staleness.max_age.total_seconds()
@@ -146,6 +211,9 @@ class FabricHealthManager:
                 "cached_at": cached_at_iso,
                 "pipeline_ms": metadata.get("pipeline_ms", 0),
             }
+            if is_parameterized:
+                entry["param_combinations_cached"] = param_combinations_cached or 0
+            product_health[name] = entry
 
         # Pipeline stats
         pipeline_stats = {}
@@ -239,7 +307,7 @@ class FabricHealthManager:
     def get_health_handler(self) -> Dict[str, Any]:
         """Route definition for GET /fabric/_health."""
 
-        async def handler(**kwargs: Any) -> Dict[str, Any]:
+        async def handler(**_kwargs: Any) -> Dict[str, Any]:
             return {
                 "_status": 200,
                 "data": await self.get_health(),
@@ -256,7 +324,7 @@ class FabricHealthManager:
     def get_trace_handler(self) -> Dict[str, Any]:
         """Route definition for GET /fabric/_trace/{product}."""
 
-        async def handler(product: str = "", **kwargs: Any) -> Dict[str, Any]:
+        async def handler(product: str = "", **_kwargs: Any) -> Dict[str, Any]:
             if not product:
                 return {"_status": 400, "error": "product parameter required"}
             return {

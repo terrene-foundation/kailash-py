@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Mapping, Optional
 
 from dataflow.adapters.source_adapter import BaseSourceAdapter
 
@@ -200,12 +200,12 @@ class FabricContext:
     def __init__(
         self,
         express: Any,
-        sources: Dict[str, BaseSourceAdapter],
+        sources: Mapping[str, BaseSourceAdapter],
         products_cache: Dict[str, Any],
         tenant_id: Optional[str] = None,
     ) -> None:
         self._express = express
-        self._sources = sources
+        self._sources: Mapping[str, BaseSourceAdapter] = sources
         self._products_cache = products_cache
         self._tenant_id = tenant_id
 
@@ -475,7 +475,7 @@ class PipelineContext(FabricContext):
     def __init__(
         self,
         express: Any,
-        sources: Dict[str, BaseSourceAdapter],
+        sources: Mapping[str, BaseSourceAdapter],
         products_cache: Dict[str, Any],
         tenant_id: Optional[str] = None,
     ) -> None:
