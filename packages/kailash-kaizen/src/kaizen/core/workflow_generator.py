@@ -362,6 +362,12 @@ class WorkflowGenerator:
                     # Add to node config
                     node_config["tools"] = provider_tools
 
+                    # When tools are present on Gemini, structured output via
+                    # response_mime_type is incompatible — drop response_format
+                    # so the prompt-based JSON suffix is used instead (gh#357)
+                    if effective_provider in ("google", "gemini"):
+                        node_config.pop("response_format", None)
+
                     logger.info(
                         f"Added {len(provider_tools)} MCP tools to LLMAgentNode config"
                     )
