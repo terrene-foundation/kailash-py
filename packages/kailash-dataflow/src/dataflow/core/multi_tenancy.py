@@ -13,8 +13,17 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-from dataflow.adapters.base import _safe_identifier
+from dataflow.adapters.dialect import DialectManager
 from dataflow.adapters.exceptions import InvalidIdentifierError
+
+# Multi-tenancy uses PostgreSQL dialect for schema-level isolation
+_pg_dialect = DialectManager.get_dialect("postgresql")
+
+
+def _safe_identifier(name: str) -> str:
+    """Validate and quote a SQL identifier (PostgreSQL double-quote style)."""
+    return _pg_dialect.quote_identifier(name)
+
 
 logger = logging.getLogger(__name__)
 

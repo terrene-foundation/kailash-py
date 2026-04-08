@@ -5193,11 +5193,18 @@ class DataFlow(DataFlowEventMixin):
             try:
                 # Check if table already exists by trying to create it
                 # The migration system will handle the actual table creation
+                # Auto-migrate requires explicit opt-in via DATAFLOW_AUTO_MIGRATE env var
+                import os
+
+                auto_migrate_enabled = os.environ.get(
+                    "DATAFLOW_AUTO_MIGRATE", "false"
+                ).lower() in ("true", "1", "yes")
+
                 success, migrations = await self._migration_system.auto_migrate(
                     target_schema=target_schema,
-                    dry_run=False,
-                    interactive=False,  # Non-interactive for SQLite
-                    auto_confirm=True,  # Auto-confirm for SQLite simplicity
+                    dry_run=not auto_migrate_enabled,
+                    interactive=False,
+                    auto_confirm=auto_migrate_enabled,
                 )
 
                 if success:
@@ -5212,9 +5219,15 @@ class DataFlow(DataFlowEventMixin):
                 return success, migrations
 
             except Exception as e:
-                logger.error(f"SQLite migration error for model '{model_name}': {e}")
-                # Don't fail model registration - table will be created on-demand
-                return False, []
+                logger.error(
+                    "migration.error",
+                    extra={"model": model_name, "error": str(e)},
+                )
+                raise RuntimeError(
+                    f"Auto-migration failed for model '{model_name}': {e}. "
+                    f"Set DATAFLOW_AUTO_MIGRATE=true to enable DDL execution, "
+                    f"or fix the migration error."
+                ) from e
 
         # Run migration with async-safe execution (works in sync and async contexts)
         # Phase 6: Replaced manual thread pool handling with async_safe_run

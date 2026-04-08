@@ -10,8 +10,17 @@ import traceback
 import warnings
 from typing import Any, Dict, List, Tuple
 
-from .base import DatabaseAdapter, _safe_identifier
+from .base import DatabaseAdapter
+from .dialect import DialectManager
 from .exceptions import AdapterError, ConnectionError, QueryError, TransactionError
+
+_pg_dialect = DialectManager.get_dialect("postgresql")
+
+
+def _safe_identifier(name: str) -> str:
+    """Validate and quote a SQL identifier (PostgreSQL double-quote style)."""
+    return _pg_dialect.quote_identifier(name)
+
 
 logger = logging.getLogger(__name__)
 

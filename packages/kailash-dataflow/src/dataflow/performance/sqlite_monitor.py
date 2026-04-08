@@ -19,9 +19,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..adapters.sqlite_enterprise import (
+from ..adapters.sqlite import (
+    SQLiteAdapter,
     SQLiteConnectionPoolStats,
-    SQLiteEnterpriseAdapter,
     SQLiteIndexInfo,
     SQLitePerformanceMetrics,
 )
@@ -107,7 +107,7 @@ class SQLitePerformanceMonitor:
 
     def __init__(
         self,
-        adapter: SQLiteEnterpriseAdapter,
+        adapter: SQLiteAdapter,
         migration_tracker: Optional[MigrationPerformanceTracker] = None,
         monitoring_interval: int = 60,  # seconds
         max_query_history: int = 1000,
@@ -654,7 +654,9 @@ class SQLitePerformanceMonitor:
             # Update recommendations list (keep only recent ones)
             self.optimization_recommendations = (
                 recommendations + self.optimization_recommendations
-            )[:50]  # Keep last 50 recommendations
+            )[
+                :50
+            ]  # Keep last 50 recommendations
 
         except Exception as e:
             logger.warning(f"Failed to generate optimization recommendations: {e}")

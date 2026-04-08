@@ -344,6 +344,14 @@ class AsyncRedisCacheAdapter:
         """
         Invalidate all cache entries for a model (async).
 
+        The key generator produces two key formats:
+
+        - Express keys: ``dataflow:v1:{model}:{op}:...``
+        - SQL query keys: ``dataflow:{model}:v1:...``
+
+        Both patterns are scanned so that all entries for the model are
+        removed regardless of which code path created them.
+
         Args:
             model_name: Name of the model
 
@@ -353,8 +361,14 @@ class AsyncRedisCacheAdapter:
         Example:
             >>> deleted = await adapter.invalidate_model("User")
         """
-        pattern = f"dataflow:{model_name}:*"
-        return await self.clear_pattern(pattern)
+        # Express keys: dataflow:v1:{model}:*
+        express_pattern = f"dataflow:v1:{model_name}:*"
+        # SQL query keys: dataflow:{model}:v1:*
+        query_pattern = f"dataflow:{model_name}:v1:*"
+
+        express_count = await self.clear_pattern(express_pattern)
+        query_count = await self.clear_pattern(query_pattern)
+        return express_count + query_count
 
     def __del__(self):
         """Cleanup executor on deletion."""

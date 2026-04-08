@@ -8,8 +8,16 @@ Extends PostgreSQLAdapter with vector operations for RAG and semantic search.
 import logging
 from typing import Any, Dict, List, Optional
 
-from .base import _safe_identifier
+from .dialect import DialectManager
 from .postgresql import PostgreSQLAdapter
+
+_pg_dialect = DialectManager.get_dialect("postgresql")
+
+
+def _safe_identifier(name: str) -> str:
+    """Validate and quote a SQL identifier (PostgreSQL double-quote style)."""
+    return _pg_dialect.quote_identifier(name)
+
 
 logger = logging.getLogger(__name__)
 

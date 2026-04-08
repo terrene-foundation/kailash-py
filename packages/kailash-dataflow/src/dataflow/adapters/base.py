@@ -6,36 +6,11 @@ Inherits from BaseAdapter to provide SQL-specific functionality.
 """
 
 import logging
-import re
 from abc import abstractmethod
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .base_adapter import BaseAdapter
 from .connection_parser import ConnectionParser
-from .exceptions import InvalidIdentifierError
-
-_SAFE_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
-
-
-def _safe_identifier(name: str) -> str:
-    """Validate and quote a SQL identifier to prevent injection.
-
-    Args:
-        name: The identifier to validate (table name, column name, etc.)
-
-    Returns:
-        Double-quoted identifier string safe for use in SQL.
-
-    Raises:
-        InvalidIdentifierError: If the identifier contains unsafe characters.
-    """
-    if not name or not _SAFE_IDENTIFIER_RE.match(name):
-        raise InvalidIdentifierError(
-            f"Invalid SQL identifier: {name!r}. "
-            f"Identifiers must match {_SAFE_IDENTIFIER_RE.pattern}"
-        )
-    return f'"{name}"'
-
 
 logger = logging.getLogger(__name__)
 

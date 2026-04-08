@@ -181,6 +181,16 @@ class InMemoryCache:
         """
         Invalidate all entries for a model.
 
+        Uses exact-delimited prefix matching so that invalidating ``"User"``
+        does NOT affect entries for ``"UserAudit"`` or ``"UserSession"``.
+        The key generator produces two formats:
+
+        - Express keys: ``dataflow:v1:{model}:{op}:...``
+        - SQL query keys: ``dataflow:{model}:v1:...``
+
+        Both are matched by looking for the model name bounded by ``:``
+        delimiters (i.e. ``:{model_name}:``).
+
         Args:
             model_name: Name of the model
 
@@ -188,9 +198,11 @@ class InMemoryCache:
             Number of keys invalidated
         """
         async with self.lock:
-            # Find all keys for this model
-            pattern = f"dataflow:{model_name}:"
-            keys_to_remove = [k for k in self.cache.keys() if pattern in k]
+            # Match keys containing :{model_name}: as an exact segment.
+            # This prevents "User" from matching "UserAudit" because the
+            # latter would appear as ":UserAudit:" which != ":User:".
+            segment = f":{model_name}:"
+            keys_to_remove = [k for k in self.cache.keys() if segment in k]
 
             # Remove them
             for key in keys_to_remove:
@@ -198,7 +210,9 @@ class InMemoryCache:
 
             self._invalidations += len(keys_to_remove)
             logger.info(
-                f"Invalidated {len(keys_to_remove)} cache entries for model {model_name}"
+                "Invalidated %d cache entries for model %s",
+                len(keys_to_remove),
+                model_name,
             )
             return len(keys_to_remove)
 

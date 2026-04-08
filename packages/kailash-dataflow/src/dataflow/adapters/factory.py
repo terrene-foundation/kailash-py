@@ -14,7 +14,6 @@ from .mongodb import MongoDBAdapter
 from .mysql import MySQLAdapter
 from .postgresql import PostgreSQLAdapter
 from .sqlite import SQLiteAdapter
-from .sqlite_enterprise import SQLiteEnterpriseAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +33,7 @@ class AdapterFactory:
             "postgresql": PostgreSQLAdapter,
             "postgres": PostgreSQLAdapter,  # Alternative scheme
             "mysql": MySQLAdapter,
-            "sqlite": SQLiteEnterpriseAdapter,  # Use enterprise SQLite by default
-            "sqlite_basic": SQLiteAdapter,  # Keep basic version available
+            "sqlite": SQLiteAdapter,  # Consolidated SQLite adapter (v2.0)
             "mongodb": MongoDBAdapter,  # MongoDB document database (v0.6.0+)
         }
 

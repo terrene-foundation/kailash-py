@@ -1,9 +1,17 @@
-"""Tests for _safe_identifier SQL injection prevention."""
+"""Tests for quote_identifier / _safe_identifier SQL injection prevention."""
 
 import pytest
 
-from dataflow.adapters.base import _safe_identifier
+from dataflow.adapters.dialect import PostgreSQLDialect
 from dataflow.adapters.exceptions import InvalidIdentifierError
+
+# Use the PostgreSQL dialect's quote_identifier as the canonical test target
+_dialect = PostgreSQLDialect()
+
+
+def _safe_identifier(name: str) -> str:
+    """Wrapper for backward compatibility in tests."""
+    return _dialect.quote_identifier(name)
 
 
 class TestSafeIdentifierValid:

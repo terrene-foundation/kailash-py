@@ -10,8 +10,17 @@ import traceback
 import warnings
 from typing import Any, Dict, List, Tuple
 
-from .base import DatabaseAdapter, _safe_identifier
+from .base import DatabaseAdapter
+from .dialect import DialectManager
 from .exceptions import AdapterError, ConnectionError, QueryError, TransactionError
+
+_mysql_dialect = DialectManager.get_dialect("mysql")
+
+
+def _safe_identifier(name: str) -> str:
+    """Validate and quote a SQL identifier (MySQL backtick style)."""
+    return _mysql_dialect.quote_identifier(name)
+
 
 logger = logging.getLogger(__name__)
 

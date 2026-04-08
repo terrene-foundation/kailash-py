@@ -19,8 +19,17 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import aiosqlite
 
-from .base import DatabaseAdapter, _safe_identifier
+from .base import DatabaseAdapter
+from .dialect import DialectManager
 from .exceptions import ConnectionError, QueryError, TransactionError
+
+_sqlite_dialect = DialectManager.get_dialect("sqlite")
+
+
+def _safe_identifier(name: str) -> str:
+    """Validate and quote a SQL identifier (SQLite double-quote style)."""
+    return _sqlite_dialect.quote_identifier(name)
+
 
 try:
     from kailash.core.pool.sqlite_pool import AsyncSQLitePool, SQLitePoolConfig
@@ -912,8 +921,22 @@ class SQLiteAdapter(DatabaseAdapter):
                 cache_size_pages = abs(cache_size_result[0]) if cache_size_result else 0
                 await cursor.close()
 
-                # Calculate cache hit ratio (simplified)
-                cache_hit_ratio = 0.95 if self._query_count > 10 else 0.0
+                # Cache hit ratio: SQLite does not expose cache_hit/miss
+                # counters via PRAGMA.  We derive a proxy from freelist
+                # fragmentation — a low freelist relative to total pages
+                # suggests data stays cached; a high freelist means more
+                # disk I/O.  0.0 when we have no data to estimate from.
+                if total_pages > 0 and self._query_count > 0:
+                    cache_hit_ratio = max(
+                        0.0,
+                        min(1.0, 1.0 - (free_pages / max(1, total_pages))),
+                    )
+                else:
+                    cache_hit_ratio = 0.0
+
+                # Checkpoint frequency: unavailable without WAL log
+                # analysis; report 0.0 to signal "not measured".
+                checkpoint_frequency = 0.0
 
                 return SQLitePerformanceMetrics(
                     db_size_mb=db_size_mb,
@@ -924,7 +947,7 @@ class SQLiteAdapter(DatabaseAdapter):
                     free_pages=free_pages,
                     query_plans_analyzed=self._query_count,
                     vacuum_needed=free_pages > (total_pages * 0.25),
-                    checkpoint_frequency=1.0,
+                    checkpoint_frequency=checkpoint_frequency,
                 )
 
         except Exception as e:

@@ -1,36 +1,42 @@
 """
 DataFlow Connection Management
 
-Database connection pooling and management utilities.
+Real database connection pooling and health checking.
+Delegates to the adapter layer for actual connections.
 """
 
-import os
+import logging
+import time
 from typing import Any, Dict, Optional
 
 from ..adapters.connection_parser import ConnectionParser
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
     """Database connection management for DataFlow.
 
+    Provides real connection health checking, pool initialization,
+    and connection statistics by delegating to the adapter layer.
+
     Args:
         dataflow_instance: The owning DataFlow instance.
-        url_override: When provided, overrides the DataFlow's database URL.
-            Used by TSG-105 to create a separate read-replica connection pool.
-        pool_size_override: When provided, overrides the configured pool size.
-            Used by TSG-105 for independent read-pool sizing.
+        url_override: Override the DataFlow's database URL (for read replicas).
+        pool_size_override: Override the configured pool size.
     """
 
     def __init__(
         self,
-        dataflow_instance,
+        dataflow_instance: Any,
         url_override: Optional[str] = None,
         pool_size_override: Optional[int] = None,
     ):
         self.dataflow = dataflow_instance
         self._url_override = url_override
         self._pool_size_override = pool_size_override
-        self._connection_pool = None
+        self._adapter: Optional[Any] = None
+        self._initialized = False
 
         effective_pool_size = (
             pool_size_override
@@ -39,101 +45,167 @@ class ConnectionManager:
                 dataflow_instance.config.environment
             )
         )
-        self._connection_stats = {
-            "active_connections": 0,
-            "total_connections": 0,
-            "pool_size": effective_pool_size,
-        }
+        self._pool_size = effective_pool_size
 
-    def initialize_pool(self) -> Dict[str, Any]:
-        """Initialize the connection pool."""
-        config = self.dataflow.config
-
-        # TSG-105: Use url_override when provided (read replica)
+    def _get_db_url(self) -> str:
+        """Resolve the effective database URL."""
         if self._url_override:
-            db_url = self._url_override
-        else:
-            db_url = config.database.get_connection_url(config.environment)
+            return self._url_override
+        config = self.dataflow.config
+        url = config.database.get_connection_url(config.environment)
+        if not isinstance(url, str):
+            raise ValueError(f"Expected database URL string, got {type(url).__name__}")
+        return url
 
-        if not isinstance(db_url, str):
-            raise ValueError(
-                f"Expected database URL to be a string, got {type(db_url).__name__}: {db_url}"
-            )
-        parsed_components = ConnectionParser.parse_connection_string(db_url)
+    async def initialize_pool(self) -> Dict[str, Any]:
+        """Initialize the connection pool via the adapter.
 
-        effective_pool_size = (
-            self._pool_size_override
-            if self._pool_size_override is not None
-            else config.database.get_pool_size(config.environment)
+        Creates the appropriate adapter for the database type and
+        establishes the connection pool. Runs a SELECT 1 health check
+        per rules/dataflow-pool.md Rule 2.
+
+        Returns:
+            Dict with pool_initialized, pool_size, database_type, success.
+
+        Raises:
+            ConnectionError: If the database is unreachable.
+        """
+        from ..adapters.factory import AdapterFactory
+
+        db_url = self._get_db_url()
+        db_type = ConnectionParser.detect_database_type(db_url)
+
+        adapter_class = AdapterFactory.get_adapter(db_type)
+        self._adapter = adapter_class(
+            db_url,
+            pool_size=self._pool_size,
+            max_overflow=max(2, self._pool_size // 2),
         )
-        pool_config = {
-            "database_url": db_url,
-            "pool_size": effective_pool_size,
-            "max_overflow": max(2, effective_pool_size // 2),
-            "pool_recycle": config.database.pool_recycle or 3600,
-            "echo": config.database.echo or False,
-        }
 
-        # In real implementation, would create SQLAlchemy engine and pool
-        self._connection_pool = pool_config
+        await self._adapter.connect()
+        self._initialized = True
+
+        logger.info(
+            "connection.pool.initialized",
+            extra={
+                "database_type": db_type,
+                "pool_size": self._pool_size,
+            },
+        )
 
         return {
             "pool_initialized": True,
-            "config": pool_config,
+            "pool_size": self._pool_size,
+            "database_type": db_type,
             "success": True,
         }
 
-    def get_connection_stats(self) -> Dict[str, Any]:
-        """Get connection pool statistics."""
-        return self._connection_stats.copy()
+    async def health_check(self) -> Dict[str, Any]:
+        """Check database connection health with a real SELECT 1.
 
-    def health_check(self) -> Dict[str, Any]:
-        """Check database connection health."""
-        try:
-            # In real implementation, would test actual database connection
-            return {
-                "database_reachable": True,
-                "connection_pool_healthy": True,
-                "active_connections": self._connection_stats["active_connections"],
-                "pool_size": self._connection_stats["pool_size"],
-                "success": True,
-            }
-        except Exception as e:
+        Returns:
+            Dict with database_reachable, latency_ms, success.
+        """
+        if not self._initialized or self._adapter is None:
             return {
                 "database_reachable": False,
-                "error": str(e),
+                "error": "Connection pool not initialized",
                 "success": False,
             }
 
+        t0 = time.monotonic()
+        try:
+            result = await self._adapter.execute_query("SELECT 1 AS health")
+            latency_ms = (time.monotonic() - t0) * 1000
+
+            logger.debug(
+                "connection.health_check.ok",
+                extra={"latency_ms": round(latency_ms, 2)},
+            )
+
+            return {
+                "database_reachable": True,
+                "latency_ms": round(latency_ms, 2),
+                "pool_size": self._pool_size,
+                "success": True,
+            }
+        except Exception as e:
+            latency_ms = (time.monotonic() - t0) * 1000
+            logger.error(
+                "connection.health_check.failed",
+                extra={"error": str(e), "latency_ms": round(latency_ms, 2)},
+            )
+            return {
+                "database_reachable": False,
+                "error": str(e),
+                "latency_ms": round(latency_ms, 2),
+                "success": False,
+            }
+
+    def get_connection_stats(self) -> Dict[str, Any]:
+        """Get connection pool statistics from the adapter."""
+        if self._adapter is None or self._adapter.connection_pool is None:
+            return {
+                "active_connections": 0,
+                "total_connections": 0,
+                "pool_size": self._pool_size,
+                "initialized": False,
+            }
+
+        pool = self._adapter.connection_pool
+        stats: Dict[str, Any] = {
+            "pool_size": self._pool_size,
+            "initialized": True,
+        }
+
+        # asyncpg pool stats
+        if hasattr(pool, "get_size"):
+            stats["current_size"] = pool.get_size()
+            stats["free_size"] = pool.get_idle_size()
+            stats["used_size"] = pool.get_size() - pool.get_idle_size()
+        # aiomysql pool stats
+        elif hasattr(pool, "size"):
+            stats["current_size"] = pool.size
+            stats["free_size"] = pool.freesize
+            stats["used_size"] = pool.size - pool.freesize
+
+        return stats
+
     def parse_database_url(self, url: Optional[str] = None) -> Dict[str, Any]:
-        """Parse database URL into components using safe parser."""
-        target_url = url or self.dataflow.config.database.get_connection_url(
-            self.dataflow.config.environment
-        )
+        """Parse database URL into components (no credentials in output)."""
+        target_url = url or self._get_db_url()
         components = ConnectionParser.parse_connection_string(target_url)
 
         return {
             "scheme": components.get("scheme"),
-            "hostname": components.get(
-                "host"
-            ),  # Note: ConnectionParser uses 'host', not 'hostname'
+            "hostname": components.get("host"),
             "port": components.get("port"),
             "database": components.get("database"),
             "username": components.get("username"),
             "has_password": bool(components.get("password")),
         }
 
-    def test_connection(self, url: Optional[str] = None) -> Dict[str, Any]:
-        """Test database connection."""
-        target_url = url or self.dataflow.config.database_url
+    async def test_connection(self, url: Optional[str] = None) -> Dict[str, Any]:
+        """Test database connection with a real query.
 
+        Creates a temporary adapter, connects, runs SELECT 1, disconnects.
+        Does NOT modify the main connection pool.
+        """
+        from ..adapters.factory import AdapterFactory
+
+        target_url = url or self._get_db_url()
+        db_type = ConnectionParser.detect_database_type(target_url)
+        adapter_class = AdapterFactory.get_adapter(db_type)
+
+        test_adapter = adapter_class(target_url, pool_size=1, max_overflow=0)
         try:
-            # In real implementation, would test actual connection
+            await test_adapter.connect()
+            await test_adapter.execute_query("SELECT 1 AS test")
             parsed = self.parse_database_url(target_url)
 
             return {
                 "connection_successful": True,
-                "database_type": parsed["scheme"],
+                "database_type": db_type,
                 "host": parsed["hostname"],
                 "port": parsed["port"],
                 "success": True,
@@ -142,17 +214,23 @@ class ConnectionManager:
             return {
                 "connection_successful": False,
                 "error": str(e),
+                "database_type": db_type,
                 "success": False,
             }
+        finally:
+            await test_adapter.disconnect()
 
-    def close_all_connections(self) -> Dict[str, Any]:
+    async def close_all_connections(self) -> Dict[str, Any]:
         """Close all connections in the pool."""
-        active_connections = self._connection_stats["active_connections"]
+        if self._adapter is not None:
+            try:
+                await self._adapter.disconnect()
+                logger.info("connection.pool.closed")
+            except Exception as e:
+                logger.warning(
+                    "connection.pool.close_error",
+                    extra={"error": str(e)},
+                )
 
-        # Reset stats
-        self._connection_stats["active_connections"] = 0
-
-        return {
-            "closed_connections": active_connections,
-            "success": True,
-        }
+        self._initialized = False
+        return {"success": True}

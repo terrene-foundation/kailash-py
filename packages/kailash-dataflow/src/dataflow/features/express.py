@@ -989,11 +989,15 @@ class DataFlowExpress:
         await self._cache_manager.set(cache_key, value, ttl=effective_ttl)
 
     async def _invalidate_model_cache(self, model: str) -> None:
-        """Clear all cache entries scoped to *model*."""
+        """Clear all cache entries scoped to *model*.
+
+        Delegates to the cache backend's ``invalidate_model`` method so
+        that key-format matching logic lives in exactly one place per
+        backend (InMemoryCache or AsyncRedisCacheAdapter).
+        """
         if not self._cache_enabled or not self._cache_manager:
             return
-        pattern = f"{self._key_gen.prefix}:{self._key_gen.version}:{model}:*"
-        await self._cache_manager.clear_pattern(pattern)
+        await self._cache_manager.invalidate_model(model)
 
     # ========================================================================
     # Cache Management
