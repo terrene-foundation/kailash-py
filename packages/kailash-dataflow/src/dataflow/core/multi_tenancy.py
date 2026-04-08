@@ -274,7 +274,9 @@ class TenantRegistry:
         """Deactivate a tenant."""
         if tenant_id in self._tenants:
             self._tenants[tenant_id].active = False
-            logger.info(f"Deactivated tenant: {tenant_id}")
+            logger.info(
+                "multi_tenancy.deactivated_tenant", extra={"tenant_id": tenant_id}
+            )
 
     def remove_tenant(self, tenant_id: str):
         """Remove a tenant from the registry."""
@@ -282,7 +284,7 @@ class TenantRegistry:
             del self._tenants[tenant_id]
             self._tenant_schemas.pop(tenant_id, None)
             self._tenant_databases.pop(tenant_id, None)
-            logger.info(f"Removed tenant: {tenant_id}")
+            logger.info("multi_tenancy.removed_tenant", extra={"tenant_id": tenant_id})
 
     def get_tenant_schema(self, tenant_id: str) -> Optional[str]:
         """Get schema name for a tenant."""
@@ -330,7 +332,9 @@ class TenantRegistry:
         elif config.isolation_strategy == IsolationStrategy.DATABASE.value:
             self._tenant_databases[config.tenant_id] = f"tenant_{config.tenant_id}_db"
 
-        logger.info(f"Updated tenant: {config.tenant_id}")
+        logger.info(
+            "multi_tenancy.updated_tenant", extra={"tenant_id": config.tenant_id}
+        )
 
 
 class TenantIsolationStrategy(ABC):
@@ -373,7 +377,7 @@ class SchemaIsolationStrategy(TenantIsolationStrategy):
         schema_name = f"tenant_{tenant_config.tenant_id}"
 
         # In a real implementation, this would execute CREATE SCHEMA
-        logger.info(f"Creating schema: {schema_name}")
+        logger.info("multi_tenancy.creating_schema", extra={"schema_name": schema_name})
         return True
 
     def cleanup_tenant_resources(self, tenant_config: TenantConfig) -> bool:
@@ -381,7 +385,7 @@ class SchemaIsolationStrategy(TenantIsolationStrategy):
         schema_name = f"tenant_{tenant_config.tenant_id}"
 
         # In a real implementation, this would execute DROP SCHEMA
-        logger.info(f"Dropping schema: {schema_name}")
+        logger.info("multi_tenancy.dropping_schema", extra={"schema_name": schema_name})
         return True
 
     def get_tenant_schema(self, tenant_id: str) -> str:
@@ -396,7 +400,7 @@ class SchemaIsolationStrategy(TenantIsolationStrategy):
         schema_name = _safe_identifier(tenant_id)
         sql = f"CREATE SCHEMA IF NOT EXISTS {schema_name}"
         self._execute_sql(db, sql)
-        logger.info(f"Created schema: {tenant_id}")
+        logger.info("multi_tenancy.created_schema", extra={"tenant_id": tenant_id})
 
     def modify_query_for_tenant(self, query: str, tenant_id: str) -> str:
         """Modify query to use tenant schema."""
@@ -431,7 +435,10 @@ class SchemaIsolationStrategy(TenantIsolationStrategy):
 
         sql = f"CREATE TABLE {safe_schema}.{safe_table} ({', '.join(column_defs)})"
         self._execute_sql(db, sql)
-        logger.info(f"Created table: {tenant_id}.{table_name}")
+        logger.info(
+            "multi_tenancy.created_table",
+            extra={"tenant_id": tenant_id, "table_name": table_name},
+        )
 
     def cleanup_tenant_schema(self, db, tenant_id: str):
         """Drop tenant schema."""
@@ -439,7 +446,7 @@ class SchemaIsolationStrategy(TenantIsolationStrategy):
         safe_schema = _safe_identifier(tenant_id)
         sql = f"DROP SCHEMA IF EXISTS {safe_schema} CASCADE"
         self._execute_sql(db, sql)
-        logger.info(f"Dropped schema: {tenant_id}")
+        logger.info("multi_tenancy.dropped_schema", extra={"tenant_id": tenant_id})
 
     def prepare_query_execution(self, db, tenant_id: str):
         """Prepare query execution for schema isolation."""
@@ -450,7 +457,7 @@ class SchemaIsolationStrategy(TenantIsolationStrategy):
         """Execute SQL statement."""
         from sqlalchemy import text
 
-        logger.debug(f"Executing SQL: {sql}")
+        logger.debug("multi_tenancy.executing_sql", extra={"sql": sql})
 
         # Check if db is a SQLAlchemy engine or connection
         if hasattr(db, "execute"):
@@ -464,7 +471,10 @@ class SchemaIsolationStrategy(TenantIsolationStrategy):
                 conn.execute(text(sql))
                 conn.commit()
         else:
-            logger.warning(f"Cannot execute SQL - unknown db type: {type(db)}")
+            logger.warning(
+                "multi_tenancy.cannot_execute_sql_unknown_db_type",
+                extra={"type": type(db)},
+            )
 
 
 class RowLevelSecurityStrategy(TenantIsolationStrategy):
@@ -506,7 +516,10 @@ class RowLevelSecurityStrategy(TenantIsolationStrategy):
         tenant_id = tenant_config.tenant_id
 
         # In a real implementation, this would create RLS policies
-        logger.info(f"Creating RLS policies for tenant: {tenant_id}")
+        logger.info(
+            "multi_tenancy.creating_rls_policies_for_tenant",
+            extra={"tenant_id": tenant_id},
+        )
         return True
 
     def cleanup_tenant_resources(self, tenant_config: TenantConfig) -> bool:
@@ -514,7 +527,10 @@ class RowLevelSecurityStrategy(TenantIsolationStrategy):
         tenant_id = tenant_config.tenant_id
 
         # In a real implementation, this would drop RLS policies
-        logger.info(f"Dropping RLS policies for tenant: {tenant_id}")
+        logger.info(
+            "multi_tenancy.dropping_rls_policies_for_tenant",
+            extra={"tenant_id": tenant_id},
+        )
         return True
 
     def create_tenant_policy(self, db, tenant_id: str, table_name: str = "users"):
@@ -539,7 +555,10 @@ class RowLevelSecurityStrategy(TenantIsolationStrategy):
         )
         self._execute_sql(db, modify_policy)
 
-        logger.info(f"Created RLS policies for tenant: {tenant_id}")
+        logger.info(
+            "multi_tenancy.created_rls_policies_for_tenant",
+            extra={"tenant_id": tenant_id},
+        )
 
     def modify_query_for_tenant(self, query: str, tenant_id: str) -> str:
         """Modify query for RLS (no modification needed, context is set)."""
@@ -574,7 +593,7 @@ class RowLevelSecurityStrategy(TenantIsolationStrategy):
             sql = text("SET row_security.user_id = :uid")
             self._execute_sql_with_params(db, sql, {"uid": user_id})
 
-        logger.debug(f"Set tenant context: {tenant_id}")
+        logger.debug("multi_tenancy.set_tenant_context", extra={"tenant_id": tenant_id})
 
     def cleanup_tenant_policy(self, db, tenant_id: str, table_name: str = "users"):
         """Clean up RLS policies for tenant."""
@@ -591,13 +610,16 @@ class RowLevelSecurityStrategy(TenantIsolationStrategy):
         drop_modify = f"DROP POLICY IF EXISTS {safe_modify_policy} ON {safe_table}"
         self._execute_sql(db, drop_modify)
 
-        logger.info(f"Cleaned up RLS policies for tenant: {tenant_id}")
+        logger.info(
+            "multi_tenancy.cleaned_up_rls_policies_for_tenant",
+            extra={"tenant_id": tenant_id},
+        )
 
     def _execute_sql(self, db, sql):
         """Execute SQL statement (accepts str or sqlalchemy text())."""
         from sqlalchemy import text
 
-        logger.debug(f"Executing SQL: {sql}")
+        logger.debug("multi_tenancy.executing_sql", extra={"sql": sql})
 
         # Wrap plain strings in text(); text() objects pass through
         if isinstance(sql, str):
@@ -615,13 +637,16 @@ class RowLevelSecurityStrategy(TenantIsolationStrategy):
                 conn.execute(sql)
                 conn.commit()
         else:
-            logger.warning(f"Cannot execute SQL - unknown db type: {type(db)}")
+            logger.warning(
+                "multi_tenancy.cannot_execute_sql_unknown_db_type",
+                extra={"type": type(db)},
+            )
 
     def _execute_sql_with_params(self, db, sql, params: dict):
         """Execute parameterized SQL statement."""
         from sqlalchemy import text
 
-        logger.debug(f"Executing parameterized SQL: {sql}")
+        logger.debug("multi_tenancy.executing_parameterized_sql", extra={"sql": sql})
 
         # Ensure sql is a text() object
         if isinstance(sql, str):
@@ -636,7 +661,10 @@ class RowLevelSecurityStrategy(TenantIsolationStrategy):
                 conn.execute(sql, params)
                 conn.commit()
         else:
-            logger.warning(f"Cannot execute SQL - unknown db type: {type(db)}")
+            logger.warning(
+                "multi_tenancy.cannot_execute_sql_unknown_db_type",
+                extra={"type": type(db)},
+            )
 
 
 class HybridTenancyStrategy(TenantIsolationStrategy):
@@ -754,12 +782,18 @@ class TenantManager:
             if success:
                 # Register tenant
                 self.registry.register_tenant(tenant_config)
-                logger.info(f"Created tenant: {tenant_config.tenant_id}")
+                logger.info(
+                    "multi_tenancy.created_tenant",
+                    extra={"tenant_id": tenant_config.tenant_id},
+                )
                 return True
 
             return False
         except Exception as e:
-            logger.error(f"Failed to create tenant {tenant_config.tenant_id}: {e}")
+            logger.error(
+                "multi_tenancy.failed_to_create_tenant",
+                extra={"tenant_id": tenant_config.tenant_id, "error": str(e)},
+            )
             return False
 
     def remove_tenant(self, tenant_id: str) -> bool:
@@ -767,7 +801,9 @@ class TenantManager:
         try:
             tenant_config = self.registry.get_tenant(tenant_id)
             if not tenant_config:
-                logger.warning(f"Tenant not found: {tenant_id}")
+                logger.warning(
+                    "multi_tenancy.tenant_not_found", extra={"tenant_id": tenant_id}
+                )
                 return False
 
             # Get isolation strategy
@@ -782,12 +818,17 @@ class TenantManager:
             if strategy.cleanup_tenant_resources(tenant_config):
                 # Remove from registry
                 self.registry.remove_tenant(tenant_id)
-                logger.info(f"Removed tenant: {tenant_id}")
+                logger.info(
+                    "multi_tenancy.removed_tenant", extra={"tenant_id": tenant_id}
+                )
                 return True
 
             return False
         except Exception as e:
-            logger.error(f"Failed to remove tenant {tenant_id}: {e}")
+            logger.error(
+                "multi_tenancy.failed_to_remove_tenant",
+                extra={"tenant_id": tenant_id, "error": str(e)},
+            )
             return False
 
     def delete_tenant(self, db, tenant_id: str) -> bool:
@@ -820,7 +861,10 @@ class TenantManager:
             modified_query = query
 
         # In real implementation, execute the query
-        logger.info(f"Executing tenant query: {modified_query}")
+        logger.info(
+            "multi_tenancy.executing_tenant_query",
+            extra={"modified_query": modified_query},
+        )
         return {"query": modified_query, "tenant_id": tenant_id}
 
     def _get_strategy_for_type(self, strategy_type: str):
@@ -836,11 +880,15 @@ class TenantManager:
         """Set the current tenant context."""
         tenant_config = self.registry.get_tenant(tenant_id)
         if not tenant_config:
-            logger.warning(f"Tenant not found: {tenant_id}")
+            logger.warning(
+                "multi_tenancy.tenant_not_found", extra={"tenant_id": tenant_id}
+            )
             return None
 
         if not tenant_config.active:
-            logger.warning(f"Tenant is inactive: {tenant_id}")
+            logger.warning(
+                "multi_tenancy.tenant_is_inactive", extra={"tenant_id": tenant_id}
+            )
             return None
 
         context = TenantContext(
@@ -852,7 +900,7 @@ class TenantManager:
 
         # Set context variable
         current_tenant.set(context)
-        logger.debug(f"Set tenant context: {tenant_id}")
+        logger.debug("multi_tenancy.set_tenant_context", extra={"tenant_id": tenant_id})
         return context
 
     def get_current_tenant_context(self) -> Optional[TenantContext]:
@@ -944,10 +992,15 @@ class TenantMigrationManager:
             # Load data to target
             self._load_tenant_data(db, tenant_id, target_strategy, data)
 
-            logger.info(f"Migrated data for tenant: {tenant_id}")
+            logger.info(
+                "multi_tenancy.migrated_data_for_tenant", extra={"tenant_id": tenant_id}
+            )
             return True
         except Exception as e:
-            logger.error(f"Failed to migrate tenant data {tenant_id}: {e}")
+            logger.error(
+                "multi_tenancy.failed_to_migrate_tenant_data",
+                extra={"tenant_id": tenant_id, "error": str(e)},
+            )
             return False
 
     def rollback_migration(self, db, tenant_id: str, migration_id: str = None) -> bool:
@@ -960,10 +1013,16 @@ class TenantMigrationManager:
                 db = None
 
             self._restore_from_backup(db, tenant_id, migration_id)
-            logger.info(f"Rolled back migration for tenant: {tenant_id}")
+            logger.info(
+                "multi_tenancy.rolled_back_migration_for_tenant",
+                extra={"tenant_id": tenant_id},
+            )
             return True
         except Exception as e:
-            logger.error(f"Failed to rollback migration {tenant_id}: {e}")
+            logger.error(
+                "multi_tenancy.failed_to_rollback_migration",
+                extra={"tenant_id": tenant_id, "error": str(e)},
+            )
             return False
 
     def _extract_tenant_data(self, db, tenant_id: str, strategy: str) -> Dict[str, Any]:
@@ -992,13 +1051,21 @@ class TenantMigrationManager:
 
             # Execute migration steps
             for step in migration_plan.get("migration_steps", []):
-                logger.info(f"Executing migration step: {step}")
+                logger.info(
+                    "multi_tenancy.executing_migration_step", extra={"step": step}
+                )
                 # In real implementation, execute SQL or other migration steps
 
-            logger.info(f"Migration completed for tenant: {tenant_id}")
+            logger.info(
+                "multi_tenancy.migration_completed_for_tenant",
+                extra={"tenant_id": tenant_id},
+            )
             return True
         except Exception as e:
-            logger.error(f"Migration failed for tenant {tenant_id}: {e}")
+            logger.error(
+                "multi_tenancy.migration_failed_for_tenant",
+                extra={"tenant_id": tenant_id, "error": str(e)},
+            )
             return False
 
     def rollback_migration_with_plan(
@@ -1012,13 +1079,21 @@ class TenantMigrationManager:
 
             # Execute rollback steps
             for step in migration_plan.get("rollback_steps", []):
-                logger.info(f"Executing rollback step: {step}")
+                logger.info(
+                    "multi_tenancy.executing_rollback_step", extra={"step": step}
+                )
                 # In real implementation, execute rollback SQL or other steps
 
-            logger.info(f"Migration rollback completed for tenant: {tenant_id}")
+            logger.info(
+                "multi_tenancy.migration_rollback_completed_for_tenant",
+                extra={"tenant_id": tenant_id},
+            )
             return True
         except Exception as e:
-            logger.error(f"Migration rollback failed for tenant {tenant_id}: {e}")
+            logger.error(
+                "multi_tenancy.migration_rollback_failed_for_tenant",
+                extra={"tenant_id": tenant_id, "error": str(e)},
+            )
             return False
 
 
@@ -1171,7 +1246,10 @@ class TenantMiddleware:
             )
 
             # In real implementation, execute the query
-            logger.info(f"Executing tenant query: {isolated_query}")
+            logger.info(
+                "multi_tenancy.executing_tenant_query",
+                extra={"isolated_query": isolated_query},
+            )
             result = {"query": isolated_query, "tenant_id": tenant_id}
 
             return result

@@ -280,7 +280,10 @@ class ProgressiveConfiguration:
                     try:
                         enabled.add(FeatureFlag(feature))
                     except ValueError:
-                        logger.warning(f"Unknown feature flag: {feature}")
+                        logger.warning(
+                            "progressive_disclosure.unknown_feature_flag",
+                            extra={"feature": feature},
+                        )
                 else:
                     enabled.add(feature)
 
@@ -462,12 +465,17 @@ class ProgressiveConfiguration:
             try:
                 feature = FeatureFlag(feature)
             except ValueError:
-                logger.warning(f"Unknown feature flag: {feature}")
+                logger.warning(
+                    "progressive_disclosure.unknown_feature_flag",
+                    extra={"feature": feature},
+                )
                 return
 
         self.enabled_features.add(feature)
         self._apply_feature_flags()
-        logger.info(f"Enabled feature: {feature.value}")
+        logger.info(
+            "progressive_disclosure.enabled_feature", extra={"value": feature.value}
+        )
 
     def disable_feature(self, feature: Union[FeatureFlag, str]):
         """Disable a specific feature."""
@@ -478,7 +486,9 @@ class ProgressiveConfiguration:
                 return
 
         self.enabled_features.discard(feature)
-        logger.info(f"Disabled feature: {feature.value}")
+        logger.info(
+            "progressive_disclosure.disabled_feature", extra={"value": feature.value}
+        )
 
     def upgrade_level(self, new_level: Union[ConfigurationLevel, str]):
         """Upgrade to a higher configuration level."""

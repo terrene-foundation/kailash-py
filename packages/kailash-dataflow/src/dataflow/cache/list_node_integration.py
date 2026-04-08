@@ -88,13 +88,18 @@ class ListNodeCacheIntegration:
         cached_result = await self.cache_manager.get(cache_key)
         if cached_result is not None:
             # Cache hit - return cached result with metadata
-            logger.debug(f"Cache hit for key: {cache_key}")
+            logger.debug(
+                "list_node_integration.cache_hit_for_key",
+                extra={"cache_key": cache_key},
+            )
             return self._add_cache_metadata(
                 cached_result, cache_key, hit=True, source="cache"
             )
 
         # Cache miss - execute query
-        logger.debug(f"Cache miss for key: {cache_key}")
+        logger.debug(
+            "list_node_integration.cache_miss_for_key", extra={"cache_key": cache_key}
+        )
         import asyncio
 
         if asyncio.iscoroutinefunction(executor_func):
@@ -107,9 +112,15 @@ class ListNodeCacheIntegration:
         if result is not None:
             cache_success = await self.cache_manager.set(cache_key, result, cache_ttl)
             if cache_success:
-                logger.debug(f"Cached result for key: {cache_key}")
+                logger.debug(
+                    "list_node_integration.cached_result_for_key",
+                    extra={"cache_key": cache_key},
+                )
             else:
-                logger.warning(f"Failed to cache result for key: {cache_key}")
+                logger.warning(
+                    "list_node_integration.failed_to_cache_result_for_key",
+                    extra={"cache_key": cache_key},
+                )
 
         return self._add_cache_metadata(result, cache_key, hit=False, source="database")
 

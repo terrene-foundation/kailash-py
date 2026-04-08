@@ -207,7 +207,10 @@ class ModelRegistry:
     def _transaction_context(self, operation_name: str):
         """Context manager for transaction-safe operations with logging."""
         with self._registry_lock:
-            logger.debug(f"Starting registry operation: {operation_name}")
+            logger.debug(
+                "model_registry.starting_registry_operation",
+                extra={"operation_name": operation_name},
+            )
 
             if self._transaction_manager:
                 # Use existing transaction manager
@@ -220,7 +223,10 @@ class ModelRegistry:
                             f"Registry operation {operation_name} completed successfully"
                         )
                     except Exception as e:
-                        logger.error(f"Registry operation {operation_name} failed: {e}")
+                        logger.error(
+                            "model_registry.registry_operation_failed",
+                            extra={"operation_name": operation_name, "error": str(e)},
+                        )
                         raise
             else:
                 # No transaction support, just use lock
@@ -230,7 +236,10 @@ class ModelRegistry:
                         f"Registry operation {operation_name} completed (non-transactional)"
                     )
                 except Exception as e:
-                    logger.error(f"Registry operation {operation_name} failed: {e}")
+                    logger.error(
+                        "model_registry.registry_operation_failed",
+                        extra={"operation_name": operation_name, "error": str(e)},
+                    )
                     raise
 
     def initialize(self) -> bool:
@@ -252,7 +261,10 @@ class ModelRegistry:
             return success
 
         except Exception as e:
-            logger.error(f"Error initializing model registry: {e}")
+            logger.error(
+                "model_registry.error_initializing_model_registry",
+                extra={"error": str(e)},
+            )
             return False
 
     def _finalize_initialization(self) -> None:
@@ -287,7 +299,10 @@ class ModelRegistry:
                     )
                     if success:
                         registered_count += 1
-                        logger.debug(f"Registered pending model: {model_name}")
+                        logger.debug(
+                            "model_registry.registered_pending_model",
+                            extra={"model_name": model_name},
+                        )
                     else:
                         failed_count += 1
                         logger.warning(
@@ -295,7 +310,10 @@ class ModelRegistry:
                         )
                 except Exception as e:
                     failed_count += 1
-                    logger.error(f"Error registering pending model {model_name}: {e}")
+                    logger.error(
+                        "model_registry.error_registering_pending_model",
+                        extra={"model_name": model_name, "error": str(e)},
+                    )
 
             # Clear the pending queue
             self._pending_models.clear()
@@ -839,7 +857,10 @@ class ModelRegistry:
             return True
 
         except Exception as e:
-            logger.error(f"Error registering model {model_name}: {e}")
+            logger.error(
+                "model_registry.error_registering_model",
+                extra={"model_name": model_name, "error": str(e)},
+            )
             return False
 
     def discover_models(self) -> Dict[str, Dict[str, Any]]:
@@ -951,7 +972,10 @@ class ModelRegistry:
                     else:
                         added += 1
 
-        logger.info(f"Model sync complete: {added} added, {updated} updated")
+        logger.info(
+            "model_registry.model_sync_complete_added_updated",
+            extra={"added": added, "updated": updated},
+        )
         return added, updated
 
     def get_model_version(self, model_name: str) -> int:

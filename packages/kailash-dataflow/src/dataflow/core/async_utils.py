@@ -242,7 +242,9 @@ def _run_in_thread_pool(
                 try:
                     _cancel_all_tasks(new_loop)
                 except Exception as e:
-                    logger.warning(f"Error cancelling tasks: {e}")
+                    logger.warning(
+                        "async_utils.error_cancelling_tasks", extra={"error": str(e)}
+                    )
                 new_loop.close()
         except Exception as e:
             result_container["exception"] = e

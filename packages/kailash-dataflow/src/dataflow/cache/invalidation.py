@@ -221,7 +221,7 @@ class CacheInvalidator:
             try:
                 hook(model, operation, data)
             except Exception as e:
-                logger.error(f"Pre-hook error: {e}")
+                logger.error("invalidation.pre_hook_error", extra={"error": str(e)})
 
         # Collect keys to invalidate
         keys_to_invalidate = set()
@@ -277,7 +277,9 @@ class CacheInvalidator:
                 try:
                     hook(model, operation, data, cleared_count)
                 except Exception as e:
-                    logger.error(f"Post-hook error: {e}")
+                    logger.error(
+                        "invalidation.post_hook_error", extra={"error": str(e)}
+                    )
 
         # Clear current model
         self._current_model = None
@@ -334,7 +336,10 @@ class CacheInvalidator:
             result = self.cache_manager.delete(key)
             return result > 0
         except Exception as e:
-            logger.error(f"Failed to invalidate key {key}: {e}")
+            logger.error(
+                "invalidation.failed_to_invalidate_key",
+                extra={"key": key, "error": str(e)},
+            )
             return False
 
     def invalidate_keys(self, keys: List[str]) -> int:
@@ -350,7 +355,10 @@ class CacheInvalidator:
         try:
             return self.cache_manager.delete_many(keys)
         except Exception as e:
-            logger.error(f"Failed to invalidate keys {keys}: {e}")
+            logger.error(
+                "invalidation.failed_to_invalidate_keys",
+                extra={"keys": keys, "error": str(e)},
+            )
             return 0
 
     def key_exists(self, key: str) -> bool:
@@ -366,7 +374,10 @@ class CacheInvalidator:
         try:
             return self.cache_manager.exists(key)
         except Exception as e:
-            logger.error(f"Failed to check key existence {key}: {e}")
+            logger.error(
+                "invalidation.failed_to_check_key_existence",
+                extra={"key": key, "error": str(e)},
+            )
             return False
 
     def _find_matching_patterns(
@@ -454,7 +465,10 @@ class CacheInvalidator:
                         continue
                     cleared += result if isinstance(result, int) else 1
                 except Exception as e:
-                    logger.error(f"Failed to delete key {key}: {e}")
+                    logger.error(
+                        "invalidation.failed_to_delete_key",
+                        extra={"key": key, "error": str(e)},
+                    )
 
         # Clear patterns (sync path)
         for pattern in patterns:
@@ -469,9 +483,12 @@ class CacheInvalidator:
                     continue
                 cleared += result if isinstance(result, int) else 1
             except Exception as e:
-                logger.error(f"Failed to clear pattern {pattern}: {e}")
+                logger.error(
+                    "invalidation.failed_to_clear_pattern",
+                    extra={"pattern": pattern, "error": str(e)},
+                )
 
-        logger.info(f"Invalidated {cleared} cache keys")
+        logger.info("invalidation.invalidated_cache_keys", extra={"cleared": cleared})
         return cleared
 
     def _perform_invalidation_async_safe(
@@ -498,7 +515,10 @@ class CacheInvalidator:
             return async_safe_run(self._perform_invalidation_async(keys, patterns))
         except Exception as e:
             # Log warning but don't fail the operation
-            logger.warning(f"Cache invalidation failed: {e}. Operation will continue.")
+            logger.warning(
+                "invalidation.cache_invalidation_failed_operation_will_continue",
+                extra={"error": str(e)},
+            )
             return 0
 
     async def _perform_invalidation_async(
@@ -528,7 +548,10 @@ class CacheInvalidator:
                         result = await result
                     cleared += result if isinstance(result, int) else 1
                 except Exception as e:
-                    logger.error(f"Failed to delete key {key}: {e}")
+                    logger.error(
+                        "invalidation.failed_to_delete_key",
+                        extra={"key": key, "error": str(e)},
+                    )
 
         # Clear patterns
         for pattern in patterns:
@@ -538,9 +561,14 @@ class CacheInvalidator:
                     result = await result
                 cleared += result if isinstance(result, int) else 1
             except Exception as e:
-                logger.error(f"Failed to clear pattern {pattern}: {e}")
+                logger.error(
+                    "invalidation.failed_to_clear_pattern",
+                    extra={"pattern": pattern, "error": str(e)},
+                )
 
-        logger.info(f"Async invalidated {cleared} cache keys")
+        logger.info(
+            "invalidation.async_invalidated_cache_keys", extra={"cleared": cleared}
+        )
         return cleared
 
     def _update_metrics(self, model: str, operation: str, cleared_count: int):

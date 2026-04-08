@@ -85,7 +85,9 @@ def test_redis_connection(redis_url: Optional[str] = None, timeout: int = 2) -> 
         client.close()
         return True
     except Exception as e:
-        logger.debug(f"Redis connection test failed: {e}")
+        logger.debug(
+            "auto_detection.redis_connection_test_failed", extra={"error": str(e)}
+        )
         return False
 
 
