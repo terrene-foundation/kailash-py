@@ -1,15 +1,28 @@
 #!/usr/bin/env python3
 """
-Integration tests for Impact Assessment Reporting System - TODO-137 Phase 3
+Unit tests for Impact Assessment Reporting System - TODO-137 Phase 3 (Tier 1).
 
-Tests integration between ImpactReporter and existing Phase 1 (DependencyAnalyzer)
-and Phase 2 (ColumnRemovalManager) components in realistic scenarios.
+Tests report-generation logic in ``ImpactReporter``, ``DependencyAnalyzer``
+and ``ColumnRemovalManager`` in isolation. The underlying database layer is
+simulated with ``unittest.mock.AsyncMock`` side-effect queues because the
+report generators pivot on the exact row shapes returned from asyncpg —
+seeding equivalent data into real PostgreSQL would duplicate the Tier 2
+integration suite without additional coverage.
+
+Tier 1 (unit) semantics apply per ``tests/unit/CLAUDE.md``: mocks are
+allowed here because this suite validates pure Python report-building
+behaviour, and the database-touching ``ColumnRemovalManager`` /
+``DependencyAnalyzer`` integration paths are exercised end-to-end in
+``tests/integration/migration/test_column_removal_integration.py`` and
+``test_fk_safe_migration_integration.py``.
 """
 
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+pytestmark = [pytest.mark.unit]
 from dataflow.migrations.column_removal_manager import (
     BackupStrategy,
     ColumnRemovalManager,

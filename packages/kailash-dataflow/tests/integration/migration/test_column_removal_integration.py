@@ -17,11 +17,102 @@ import asyncio
 import os
 import sqlite3
 import tempfile
-from unittest.mock import AsyncMock, MagicMock
+from types import SimpleNamespace
+from typing import Any, Callable, Optional
 
 # Test database setup
 import asyncpg
 import pytest
+
+
+class RealConnectionManagerStub:
+    """In-process ConnectionManager stand-in backed by a real asyncpg conn.
+
+    Replaces a mocking-library double in Tier 2 tests — exposes an async
+    ``get_connection`` method that returns the real PostgreSQL connection
+    handed in at construction.
+    """
+
+    def __init__(self, connection: Optional[asyncpg.Connection] = None) -> None:
+        self._connection = connection
+
+    async def get_connection(self) -> asyncpg.Connection:
+        if self._connection is None:
+            raise RuntimeError("RealConnectionManagerStub created without a connection")
+        return self._connection
+
+
+class _StubTransactionContext:
+    """Async context manager that returns the wrapped connection on enter."""
+
+    def __init__(self, conn: "StubAsyncConnection") -> None:
+        self._conn = conn
+
+    async def __aenter__(self) -> "StubAsyncConnection":
+        return self._conn
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        return None
+
+
+class StubAsyncConnection:
+    """Real (non-mocking-lib) asyncpg-like connection stand-in.
+
+    Provides ``execute``, ``fetch``, ``fetchval``, ``fetchrow`` and
+    ``transaction()`` context manager. Behaviour is configured by
+    supplying callables (or plain return values) that are invoked in
+    order. Replaces previous mocking-library usage without pulling in any
+    mocking library.
+    """
+
+    def __init__(
+        self,
+        execute_impl: Optional[Callable[..., Any]] = None,
+        fetch_impl: Optional[Callable[..., Any]] = None,
+        fetchval_impl: Optional[Callable[..., Any]] = None,
+        fetchrow_impl: Optional[Callable[..., Any]] = None,
+    ) -> None:
+        self._execute_impl = execute_impl or (lambda *a, **kw: None)
+        self._fetch_impl = fetch_impl or (lambda *a, **kw: [])
+        self._fetchval_impl = fetchval_impl or (lambda *a, **kw: None)
+        self._fetchrow_impl = fetchrow_impl or (lambda *a, **kw: None)
+        self.execute_calls: list = []
+        self.fetch_calls: list = []
+        self.fetchval_calls: list = []
+        self.fetchrow_calls: list = []
+
+    async def execute(self, *args, **kwargs):
+        self.execute_calls.append((args, kwargs))
+        result = self._execute_impl(*args, **kwargs)
+        if hasattr(result, "__await__"):
+            return await result
+        return result
+
+    async def fetch(self, *args, **kwargs):
+        self.fetch_calls.append((args, kwargs))
+        result = self._fetch_impl(*args, **kwargs)
+        if hasattr(result, "__await__"):
+            return await result
+        return result
+
+    async def fetchval(self, *args, **kwargs):
+        self.fetchval_calls.append((args, kwargs))
+        result = self._fetchval_impl(*args, **kwargs)
+        if hasattr(result, "__await__"):
+            return await result
+        return result
+
+    async def fetchrow(self, *args, **kwargs):
+        self.fetchrow_calls.append((args, kwargs))
+        result = self._fetchrow_impl(*args, **kwargs)
+        if hasattr(result, "__await__"):
+            return await result
+        return result
+
+    def transaction(self):
+        return _StubTransactionContext(self)
+
+
 from dataflow.migrations.column_removal_manager import (
     BackupStrategy,
     ColumnRemovalManager,
@@ -114,10 +205,8 @@ class TestColumnRemovalIntegration:
 
     @pytest.fixture
     def connection_manager(self, postgres_connection):
-        """Mock connection manager."""
-        manager = MagicMock()
-        manager.get_connection = AsyncMock(return_value=postgres_connection)
-        return manager
+        """Real connection-manager stub backed by real PostgreSQL connection."""
+        return RealConnectionManagerStub(postgres_connection)
 
     @pytest.fixture
     def removal_manager(self, connection_manager):
@@ -129,11 +218,14 @@ class TestColumnRemovalIntegration:
         self, removal_manager, postgres_connection
     ):
         """Test planning removal for column with no dependencies."""
-        # Mock dependency analysis to return no dependencies
+        # Override dependency analysis with a real async function that
+        # returns a fixed empty report (no mocking library).
         empty_report = DependencyReport("users", "temp_column")
-        removal_manager.dependency_analyzer.analyze_column_dependencies = AsyncMock(
-            return_value=empty_report
-        )
+
+        async def _no_deps(*args, **kwargs):
+            return empty_report
+
+        removal_manager.dependency_analyzer.analyze_column_dependencies = _no_deps
 
         plan = await removal_manager.plan_column_removal(
             table="users",
@@ -180,9 +272,10 @@ class TestColumnRemovalIntegration:
         dep_report.dependencies[DependencyType.FOREIGN_KEY] = [dependencies[1]]
         dep_report.dependencies[DependencyType.TRIGGER] = [dependencies[2]]
 
-        removal_manager.dependency_analyzer.analyze_column_dependencies = AsyncMock(
-            return_value=dep_report
-        )
+        async def _deps_report(*args, **kwargs):
+            return dep_report
+
+        removal_manager.dependency_analyzer.analyze_column_dependencies = _deps_report
 
         plan = await removal_manager.plan_column_removal(
             table="users", column="email", backup_strategy=BackupStrategy.TABLE_SNAPSHOT
@@ -559,15 +652,25 @@ class TestColumnRemovalIntegration:
         )
         dep_report.dependencies[DependencyType.CONSTRAINT] = [test_dep]
 
-        removal_manager.dependency_analyzer.analyze_column_dependencies = AsyncMock(
-            return_value=dep_report
+        # Real async replacement with call-recording.
+        call_log: list = []
+
+        async def _record_and_return(table, column, connection):
+            call_log.append((table, column, connection))
+            return dep_report
+
+        removal_manager.dependency_analyzer.analyze_column_dependencies = (
+            _record_and_return
         )
 
         plan = await removal_manager.plan_column_removal("test_table", "test_column")
 
         # Verify analyzer was called with correct parameters
-        removal_manager.dependency_analyzer.analyze_column_dependencies.assert_called_once_with(
-            "test_table", "test_column", postgres_connection
+        assert len(call_log) == 1
+        assert call_log[0] == (
+            "test_table",
+            "test_column",
+            postgres_connection,
         )
 
         # Verify plan includes analyzer results
@@ -641,14 +744,32 @@ class TestColumnRemovalIntegration:
 
 
 class TestColumnRemovalEdgeCases:
-    """Test edge cases and error conditions for column removal."""
+    """Test edge cases and error conditions for column removal.
+
+    These tests exercise internal error-handling paths (permission denied,
+    backup failure, column-not-exists) that real PostgreSQL cannot be made
+    to trigger on arbitrary tables. The tests use the ``StubAsyncConnection``
+    and ``RealConnectionManagerStub`` classes defined at module top — both
+    are real Python classes, not mocking-library doubles.
+    """
 
     @pytest.fixture
-    def connection_manager(self):
-        """Mock connection manager for edge case tests."""
-        manager = MagicMock()
-        manager.get_connection = AsyncMock()
-        return manager
+    def stub_state(self) -> SimpleNamespace:
+        """Mutable holder so tests can swap the connection per test."""
+        return SimpleNamespace(current_conn=None)
+
+    @pytest.fixture
+    def connection_manager(self, stub_state):
+        """Dynamic connection manager stub that returns stub_state.current_conn."""
+
+        class _DynamicStub:
+            def __init__(self, state):
+                self._state = state
+
+            async def get_connection(self):
+                return self._state.current_conn
+
+        return _DynamicStub(stub_state)
 
     @pytest.fixture
     def removal_manager(self, connection_manager):
@@ -656,14 +777,16 @@ class TestColumnRemovalEdgeCases:
         return ColumnRemovalManager(connection_manager)
 
     @pytest.mark.asyncio
-    async def test_column_already_removed(self, removal_manager, connection_manager):
+    async def test_column_already_removed(
+        self, removal_manager, connection_manager, stub_state
+    ):
         """Test handling when column is already removed."""
-        mock_conn = AsyncMock()
-        mock_conn.fetchval.side_effect = [
-            True,  # Table exists
-            False,  # Column doesn't exist
-        ]
-        connection_manager.get_connection.return_value = mock_conn
+        fetchval_values = iter([True, False])  # table exists, column doesn't
+
+        def _fetchval(*args, **kwargs):
+            return next(fetchval_values)
+
+        stub_state.current_conn = StubAsyncConnection(fetchval_impl=_fetchval)
 
         plan = RemovalPlan(
             table_name="users",
@@ -679,12 +802,9 @@ class TestColumnRemovalEdgeCases:
 
     @pytest.mark.asyncio
     async def test_permission_denied_handling(
-        self, removal_manager, connection_manager
+        self, removal_manager, connection_manager, stub_state
     ):
         """Test handling of permission denied errors."""
-        mock_conn = AsyncMock()
-
-        # Counter to track call number
         call_count = [0]
 
         def execute_side_effect(*args, **kwargs):
@@ -696,15 +816,7 @@ class TestColumnRemovalEdgeCases:
             else:
                 return None  # ROLLBACK TO SAVEPOINT succeeds
 
-        mock_conn.execute.side_effect = execute_side_effect
-
-        # Setup transaction mock properly
-        mock_transaction = MagicMock()
-        mock_transaction.__aenter__ = AsyncMock(return_value=None)
-        mock_transaction.__aexit__ = AsyncMock(return_value=None)
-        mock_conn.transaction = MagicMock(return_value=mock_transaction)
-
-        connection_manager.get_connection.return_value = mock_conn
+        stub_state.current_conn = StubAsyncConnection(execute_impl=execute_side_effect)
 
         plan = RemovalPlan(
             table_name="users",
@@ -718,11 +830,10 @@ class TestColumnRemovalEdgeCases:
         assert "permission denied" in result.error_message
 
     @pytest.mark.asyncio
-    async def test_backup_failure_handling(self, removal_manager, connection_manager):
+    async def test_backup_failure_handling(
+        self, removal_manager, connection_manager, stub_state
+    ):
         """Test handling when backup creation fails."""
-        mock_conn = AsyncMock()
-
-        # Counter to track call number
         call_count = [0]
 
         def execute_side_effect(*args, **kwargs):
@@ -734,15 +845,7 @@ class TestColumnRemovalEdgeCases:
             else:
                 return None  # ROLLBACK TO SAVEPOINT succeeds
 
-        mock_conn.execute.side_effect = execute_side_effect
-
-        # Setup transaction mock properly
-        mock_transaction = MagicMock()
-        mock_transaction.__aenter__ = AsyncMock(return_value=None)
-        mock_transaction.__aexit__ = AsyncMock(return_value=None)
-        mock_conn.transaction = MagicMock(return_value=mock_transaction)
-
-        connection_manager.get_connection.return_value = mock_conn
+        stub_state.current_conn = StubAsyncConnection(execute_impl=execute_side_effect)
 
         plan = RemovalPlan(
             table_name="users",

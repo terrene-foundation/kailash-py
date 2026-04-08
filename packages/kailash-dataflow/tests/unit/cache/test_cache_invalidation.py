@@ -1,8 +1,15 @@
 """
-Integration tests for cache invalidation strategies.
+Unit tests for cache invalidation strategies (Tier 1).
 
 Tests table-based invalidation, pattern-based rules, manual invalidation,
-cascade invalidation, and bulk operations using real infrastructure.
+cascade invalidation, and bulk operations. These tests exercise the pure
+in-process logic of ``CacheInvalidator`` and use an in-memory test double
+for the cache manager interface — no Redis connection is required.
+
+Tier 1 (unit) semantics apply per ``tests/unit/CLAUDE.md``: mocks are
+allowed here because the ``CacheInvalidator`` contract with its backend
+is purely behavioural and the backend implementation is covered by the
+Tier 2 Redis tests in ``tests/integration/cache``.
 """
 
 import os
@@ -15,8 +22,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from kailash.runtime.local import LocalRuntime
-from tests.infrastructure.test_harness import IntegrationTestSuite
+pytestmark = [pytest.mark.unit]
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../src"))
 from dataflow.cache.invalidation import CacheInvalidator, InvalidationPattern

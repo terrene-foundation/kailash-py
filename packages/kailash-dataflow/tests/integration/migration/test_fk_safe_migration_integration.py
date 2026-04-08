@@ -21,12 +21,34 @@ SAFETY VALIDATION:
 import asyncio
 import os
 from datetime import datetime
-from typing import Dict, List
-from unittest.mock import AsyncMock, Mock
+from types import SimpleNamespace
+from typing import Any, Dict, List
 
 import asyncpg
 import asyncpg.exceptions
 import pytest
+
+
+class RealConnectionManagerStub:
+    """In-process ConnectionManager stand-in backed by a real asyncpg connection.
+
+    Replaces a mocking-library double in Tier 2 tests — exposes
+    an async ``get_connection()`` method that returns the real PostgreSQL
+    connection handed in at construction time. No mocking library is used.
+    """
+
+    def __init__(self, connection: asyncpg.Connection) -> None:
+        self._connection = connection
+
+    async def get_connection(self) -> asyncpg.Connection:
+        return self._connection
+
+
+def _make_operation(**fields: Any) -> SimpleNamespace:
+    """Build a lightweight operation-like object without any mocking lib."""
+    return SimpleNamespace(**fields)
+
+
 from dataflow.migrations.dependency_analyzer import (
     DependencyAnalyzer,
     ForeignKeyDependency,
@@ -193,10 +215,12 @@ class TestFKSafeMigrationExecutor:
 
     @pytest.fixture
     def connection_manager(self, postgres_connection):
-        """Mock connection manager that returns real PostgreSQL connection."""
-        manager = Mock()
-        manager.get_connection = AsyncMock(return_value=postgres_connection)
-        return manager
+        """Real connection-manager stub backed by an asyncpg connection.
+
+        Replaces the former mocking-library double combo
+        with a real ``RealConnectionManagerStub`` — no mocking library.
+        """
+        return RealConnectionManagerStub(postgres_connection)
 
     @pytest.fixture
     def foreign_key_analyzer(self, connection_manager):
@@ -348,11 +372,12 @@ class TestFKSafeMigrationExecutor:
         self, fk_executor, postgres_connection
     ):
         """Test that referential integrity is preserved during migrations."""
-        # Create a mock operation that would affect FK relationships
-        operation = Mock()
-        operation.table = "customers"
-        operation.column = "customer_id"
-        operation.operation_type = "modify_column_type"
+        # Build an in-process operation object (SimpleNamespace, not Mock).
+        operation = _make_operation(
+            table="customers",
+            column="customer_id",
+            operation_type="modify_column_type",
+        )
 
         # Test integrity preservation check
         result = await fk_executor.ensure_referential_integrity_preservation(
@@ -489,10 +514,12 @@ class TestFKMigrationOperations:
 
     @pytest.fixture
     def connection_manager(self, postgres_connection):
-        """Mock connection manager that returns real PostgreSQL connection."""
-        manager = Mock()
-        manager.get_connection = AsyncMock(return_value=postgres_connection)
-        return manager
+        """Real connection-manager stub backed by an asyncpg connection.
+
+        Replaces the former mocking-library double combo
+        with a real ``RealConnectionManagerStub`` — no mocking library.
+        """
+        return RealConnectionManagerStub(postgres_connection)
 
     @pytest.fixture
     def fk_operations(self, connection_manager):
