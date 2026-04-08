@@ -20,7 +20,7 @@ description: "Load phase 03 (implement) for the current workspace. Repeat until 
 
 ## Execution Model
 
-This phase executes under the **autonomous execution model** (see `rules/autonomous-execution.md`). Implementation is fully autonomous — agents execute in parallel, self-validate through TDD, and converge through quality gates. The human observes outcomes but does not sit in the execution loop. Pre-existing failures are fixed, not reported (zero-tolerance). Agent-to-agent delegation (intermediate-reviewer, security-reviewer) is autonomous, not human-gated.
+This phase executes under the **autonomous execution model** (see `rules/autonomous-execution.md`). Implementation is fully autonomous — agents execute in parallel, self-validate through TDD, and converge through quality gates. The human observes outcomes but does not sit in the execution loop. Pre-existing failures are fixed, not reported (zero-tolerance). Agent-to-agent delegation (reviewer, security-reviewer) is autonomous, not human-gated.
 
 ## Workflow
 
@@ -90,6 +90,19 @@ Before moving ANY todo from `active/` to `completed/`, MUST:
 
 A todo is complete when the plan says X and the code does X. Not when the code does something and happens to compile.
 
+### 8. Integration hygiene checklist (end of each cycle)
+
+Before reporting the cycle complete, print this 4-line check and tick each box:
+
+```
+[ ] Every new endpoint has entry + exit + error logs (observability.md § Mandatory Log Points)
+[ ] Every integration point (DB, HTTP, MQ) logged with correlation ID
+[ ] Zero raw SQL / direct HTTP / mock data introduced (framework-first.md § Work-Domain Binding)
+[ ] Log triage clean or each WARN explicitly acknowledged (observability.md MUST Rule 5)
+```
+
+If any box cannot be ticked, fix before closing the cycle. The `integration-hygiene.js` PostToolUse hook catches most violations as they land; this checklist is the final pass.
+
 At the end of each implementation cycle, update documentation at the **project root** (not workspace):
 
 - `docs/` — complete codebase docs; `docs/00-authority/` — authoritative `README.md` + `CLAUDE.md`
@@ -103,7 +116,7 @@ Deploy these agents as a team for each implementation cycle:
 
 - **tdd-implementer** — Test-first development, red-green-refactor
 - **testing-specialist** — 3-tier test strategy, Real infrastructure recommended in Tier 2-3
-- **intermediate-reviewer** — Code review after every file change (MANDATORY)
+- **reviewer** — Code review after every file change (MANDATORY)
 - **todo-manager** — Track progress, update todo status, verify completion with evidence
 
 **Specialist (invoke ONE matching the current todo):**
@@ -118,8 +131,8 @@ Deploy these agents as a team for each implementation cycle:
 
 - **uiux-designer** — Design system, visual hierarchy, responsive layouts
 - **react-specialist** or **flutter-specialist** — Framework-specific implementation
-- **ai-ux-designer** — AI interaction patterns (if AI-facing UI)
-- **frontend-developer** — Responsive UI components
+- **uiux-designer** — AI interaction patterns (if AI-facing UI)
+- **react-specialist** — Responsive UI components
 
 **Recovery (invoke when builds break):**
 
@@ -130,12 +143,12 @@ Deploy these agents as a team for each implementation cycle:
 - **value-auditor** — Evaluate from user/buyer perspective, not just technical assertions
 - **security-reviewer** — Security audit before any commit (MANDATORY)
 
-### Journal
+### Journal (MUST — phase-complete gate)
 
-After completing each task, create journal entries for insights produced:
+Before reporting each cycle complete, create journal entries for journal-worthy findings produced this cycle:
 
-- **DECISION** entries for implementation choices (architecture, library selection, design patterns)
-- **DISCOVERY** entries for technical findings during development
-- **RISK** entries for potential issues discovered during implementation
+- **DECISION** — implementation choices made (architecture, library selection, design patterns)
+- **DISCOVERY** — technical findings that surprised you or contradict prior assumptions
+- **RISK** — potential issues discovered but not yet resolved
 
-Use sequential naming: check the highest existing `NNNN-` prefix and increment.
+Use `/journal new <TYPE> <slug>` (or write directly to `workspaces/<project>/journal/NNNN-TYPE-slug.md`). Skip only when the cycle genuinely produced nothing journal-worthy — use judgment, not formulas. Do not batch: create each entry as you recognize it.

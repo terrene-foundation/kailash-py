@@ -1,125 +1,88 @@
 ---
 name: wrapup
-description: "Write session notes before ending. Captures context for next session."
+description: "Write .session-notes so the next session resumes without re-discovering context."
 ---
 
-Write session notes to preserve context for the next session. The next session starts from zero — these notes are its only link to your work.
+The only deliverable is a `.session-notes` file that lets a fresh session start producing work within 2–3 minutes of reading it, without having to re-explore the codebase.
 
-## Workspace Resolution
+**Before running:** if significant decisions, discoveries, or risks from this session are not yet in `journal/`, run `/journal new DECISION|DISCOVERY|RISK <topic>` first. `.session-notes` is not a decision log.
 
-1. If `$ARGUMENTS` specifies a project name, use `workspaces/$ARGUMENTS/`
-2. Otherwise, use the most recently modified directory under `workspaces/` (excluding `instructions/`)
-3. If no workspace exists, write `.session-notes` at the repo root
+## What the next session already has for free
 
-## Journal Check
+Do NOT duplicate these — the next session reads them directly:
 
-Before writing session notes, review this session's work and create journal entries for anything un-journaled:
+- **Commits & diffs** — `git log`, `git status`, `git diff`
+- **Outstanding work** — `workspaces/<project>/todos/active/`
+- **Decisions & discoveries** — `workspaces/<project>/journal/`
+- **Phase outputs** — `01-analysis/`, `02-plans/`, `03-user-flows/`, `04-validate/`
+- **Project context** — `CLAUDE.md`
 
-- Significant decisions without DECISION entries?
-- Technical findings without DISCOVERY entries?
-- Risks identified without RISK entries?
+## What ONLY wrapup can provide
 
-Create entries for anything missing, then proceed.
+Three things nothing else captures:
 
-## Write `.session-notes`
+1. **Priority ordering** — out of everything in the repo, which files should the next session read first, and in what order
+2. **In-flight state** — what's true RIGHT NOW that isn't yet committed, journaled, or filed as a todo
+3. **Traps** — specific pitfalls the next session will walk into without warning
 
-The file MUST contain these sections. The next session agent reads this to get full context — be specific, not vague.
+If content doesn't fit one of those three, it belongs somewhere else. Put it there before running `/wrapup`.
 
-### Section 1: Context Files (CRITICAL)
+## Where to write
 
-List the exact files the next session MUST read to understand the current state. Order matters — list foundation files first, then specifics.
+1. If `$ARGUMENTS` names a workspace, write `workspaces/$ARGUMENTS/.session-notes`
+2. Else use the most recently modified directory under `workspaces/` (excluding `instructions/`)
+3. Else write `.session-notes` at the repo root
 
-```markdown
-### Read These Files First (in order)
+## Format
 
-1. `path/to/file` — what it is and why to read it
-2. `path/to/file` — what it is and why to read it
-```
-
-**Why:** CO Principle 2 (Brilliant New Hire) — every session starts from zero. Without this list, the next session wastes time discovering what you already know. Be explicit about file paths. "Read the docs" is useless; "`docs/00-authority/CLAUDE.md` — preloaded architecture context" is useful.
-
-### Section 2: Accomplished
-
-What was completed. Focus on outcomes, not activity.
-
-### Section 3: Outstanding
-
-What remains to be done. Be specific — include file paths, line numbers, exact issues. This is NOT a wish list; it's the next session's work queue.
+Hard cap: **50 lines**. Overflow means the content belongs in `todos/active/` or `journal/`, not here. Omit any section that would be empty.
 
 ```markdown
-### Outstanding
+# Session Notes — <YYYY-MM-DD>
 
-- [ ] `rules/testing.md` missing from USE template — coc-sync Gate 2 should create softened version
-- [ ] BUILD-internal path refs in USE template agents — check for stale agent/skill references
+## Where we are
+
+One short paragraph (≤4 lines). Current work, current phase, last concrete
+change. Just enough for the next session to orient — not a history.
+
+## Read first
+
+1. `path/to/file` — why it matters (one line)
+2. `path/to/file` — why it matters
+   (3–6 files, priority-ordered)
+
+## In-flight state
+
+- Uncommitted decisions, half-done refactors, mid-migration state.
+- Facts that are true NOW but aren't in git/todos/journal yet.
+  (omit if none)
+
+## Traps
+
+- Concrete pitfalls the next session will hit.
+- One line each. Link to the fix location if you know it.
+  (omit if none)
+
+## Open questions for the human
+
+(omit if none)
 ```
 
-### Section 4: Oversight Checklist
+## Hard rules
 
-Verification steps the next session should perform BEFORE and AFTER its main work. This prevents regressions and ensures quality.
+- **Write, not verify.** Do NOT run grep, git log, git show, git diff, gh, pytest, ls, find, or file reads during wrapup. The only permitted tool calls are: workspace resolution (one `ls workspaces/` if needed) and the final `Write .session-notes`. **Tool call cap: 2.**
+- **Memory only.** Produce the notes from conversation memory. If you're unsure whether a claim is still true, omit it — the next session can discover it from git.
+- **No accomplishments list.** The next session reads `git log`. Do not describe what happened this session.
+- **No outstanding-todo list.** The next session reads `todos/active/`. Do not itemize remaining work.
+- **No decision log.** Journal decisions with `/journal` before running `/wrapup`, not in session notes.
+- **No quantitative claims.** Do not write "N tests passing", "3 files changed", or "27 todos remaining". Numbers must be verified; verification is forbidden here. Point at the source of truth instead.
+- **No oversight checklist.** Verification commands belong in the next session's task list, not session notes.
+- **50-line output cap.** Overflow belongs in `todos/` or `journal/`.
+- **Overwrite** existing `.session-notes`. Only the latest matters.
+- **The "Read first" list is the one section that MUST be present.** Without it, the next session has no entry point. If you can't produce a useful list, point at `CLAUDE.md` as the sole entry and say why.
 
-```markdown
-### Oversight — Verify Before Starting
+## Why this is lean
 
-- [ ] Check: `file` still has expected content (hasn't been reverted)
-- [ ] Confirm: feature X is still working (run command Y)
+Previous versions forced a tool-call cascade ("the tool call is the verification, not your memory") that consumed 200K+ tokens per run on large workspaces. The cascade existed to catch stale claims. The lean fix is to **not make claims that could go stale**: instead of "27 todos remaining" (must be verified), write "see `todos/active/`" (always current by definition).
 
-### Oversight — Verify After Completing
-
-- [ ] Zero contamination: `grep -rl "pattern" path/` returns empty
-- [ ] All tests pass: `pytest tests/ -x`
-- [ ] Sync marker updated: `.coc-sync-marker` has current timestamp
-```
-
-**Why:** Without an oversight layer, the next session trusts the current state blindly. Verification catches regressions from hooks, other sessions, or manual edits between sessions.
-
-### Section 5: Blockers (if any)
-
-Decisions needed from the human, external dependencies, or unresolved questions.
-
-## Red Team Verification (MANDATORY)
-
-After drafting the `.session-notes`, BEFORE writing the final version, run a self-audit. This prevents the next session from inheriting stale assumptions.
-
-### Verify Outstanding Items
-
-For EVERY item in the Outstanding section (if >10 items, verify top 5 individually + one bulk grep for the rest):
-
-1. **Run a concrete check** (grep, file read, `gh issue view`, count) — the tool call is the verification, not your memory
-2. **Include the evidence inline**: e.g., `(verified: grep -rl "pattern" path/ returned 3 files)` or `(verified: ls todos/active/ | wc -l returned 27)`
-3. If the item references a GitHub issue, check its current state (`gh issue view`). If network fails, note `(skipped: network error)`
-4. If the item claims "N todos remaining", count the actual active todos and state the count
-5. **Remove or correct** any item that is already resolved — do NOT carry forward stale items
-
-For artifact-only sessions (no code changes), verification means reading the files you claim are incomplete/missing and confirming their actual state.
-
-**Why:** Without tool-call evidence, an agent can write "verified" from memory — the same memory that produced stale claims in the first place. Requiring inline evidence makes the verification auditable by the next session.
-
-### Verify Accomplished Claims
-
-For the top 3 most significant accomplishments:
-
-1. **Spot-check** that the claimed change actually exists (read the file, check git log)
-2. If a commit was claimed, verify it exists (`git log --oneline -5`)
-3. If a PR was merged, verify (`gh pr view N --json state`)
-
-### Verify Oversight Commands
-
-For every command in the Oversight Checklist:
-
-1. **Run it now** and record the actual output
-2. If the output doesn't match expectations, investigate before writing the notes
-3. Include the actual values in the notes (e.g., "FastAPI grep: 0 matches" not just "should be 0")
-
-### Final Coherence Check
-
-- If any Outstanding item was corrected or removed, re-read the full notes for coherence
-- The final `.session-notes` MUST reflect verified reality, not session memory
-
-## Rules
-
-- **Overwrite** existing `.session-notes` — only the latest matters
-- **Be specific** — file paths, line numbers, exact commands. Vague notes are useless to a blank-slate session.
-- **Context files section is mandatory** — this is the single most important part. Without it, the next session has no starting point.
-- **Oversight checklist is mandatory** — verification prevents blind trust in stale state.
-- **Red team verification is mandatory** — claims MUST be checked against codebase reality before writing.
-- Keep under 100 lines. If you need more, the outstanding items should be in the todo system instead.
+`.session-notes` is a pointer file, not a report. Its job is to save the next session's discovery time. That's all.

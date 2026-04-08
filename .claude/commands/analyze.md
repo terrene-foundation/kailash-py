@@ -80,11 +80,10 @@ Work with red team agents to scrutinize analysis, plans and user flows.
 
 Deploy these agents as a team for analysis:
 
-- **deep-analyst** — Failure analysis, complexity assessment, identify risks
-- **requirements-analyst** — Break down requirements, create ADRs, define scope
-- **coc-expert** — Ground analysis in COC methodology; identify institutional knowledge gaps and guard against the three fault lines (amnesia, convention drift, security blindness)
-- **framework-advisor** — Choose implementation approach (if applicable)
-- **sdk-navigator** — Find existing patterns and documentation before designing from scratch (if applicable)
+- **analyst** — Failure analysis, complexity assessment, identify risks
+- **analyst** — Break down requirements, create ADRs, define scope
+- `co-reference` skill — Ground analysis in COC methodology; identify institutional knowledge gaps and guard against the three fault lines (amnesia, convention drift, security blindness)
+- **`decide-framework` skill** — Choose implementation approach (if applicable)
 
 For product/market analysis, additionally deploy:
 
@@ -93,15 +92,16 @@ For product/market analysis, additionally deploy:
 For frontend projects, additionally deploy:
 
 - **uiux-designer** — Information architecture, visual hierarchy, design system planning
-- **ai-ux-designer** — AI interaction patterns (if the project involves AI interfaces)
+- **uiux-designer** — AI interaction patterns (if the project involves AI interfaces)
 
 Red team the analysis with agents until they confirm no gaps remain in research, plans, and user flows.
 
-### Journal
+### Journal (MUST — phase-complete gate)
 
-Create journal entries in the workspace's `journal/` directory for insights produced during analysis:
-- **DISCOVERY** entries for key findings, patterns, or domain knowledge uncovered
-- **GAP** entries for missing information, unvalidated assumptions, or areas needing research
-- **CONNECTION** entries for relationships between components, requirements, or findings
+Before reporting `/analyze` complete, create journal entries for journal-worthy findings produced this phase:
 
-Use sequential naming: check the highest existing `NNNN-` prefix and increment.
+- **DISCOVERY** — key findings, patterns, or domain knowledge uncovered during research
+- **GAP** — missing information, unvalidated assumptions, or areas needing follow-up research
+- **CONNECTION** — non-obvious relationships between requirements, components, or findings
+
+Use `/journal new <TYPE> <slug>` (or write directly to `workspaces/<project>/journal/NNNN-TYPE-slug.md`). Skip only when the phase genuinely produced nothing journal-worthy — use judgment, not formulas. Do not batch: create each entry as you recognize it, not at the end.

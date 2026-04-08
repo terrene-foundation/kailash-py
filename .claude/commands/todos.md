@@ -72,10 +72,10 @@ Review with red team agents continuously until they are satisfied there are no g
 Deploy these agents as a team for todo creation:
 
 - **todo-manager** — Create and organize the detailed todos, ensure completeness
-- **requirements-analyst** — Break down requirements, identify missing tasks
-- **deep-analyst** — Identify failure points, dependencies, and gaps
-- **coc-expert** — Ensure todos include context/guardrails/learning work, not just features (COC five-layer completeness)
-- **framework-advisor** — Ensure todos cover the right framework choices (if applicable)
+- **analyst** — Break down requirements, identify missing tasks
+- **analyst** — Identify failure points, dependencies, and gaps
+- `co-reference` skill — Ensure todos include context/guardrails/learning work, not just features (COC five-layer completeness)
+- **`decide-framework` skill** — Ensure todos cover the right framework choices (if applicable)
 
 For frontend projects, additionally deploy:
 
@@ -84,12 +84,12 @@ For frontend projects, additionally deploy:
 
 Red team the todo list with agents until they confirm no gaps remain.
 
-### Journal
+### Journal (MUST — phase-complete gate)
 
-Create journal entries for decisions made during planning:
+Before reporting `/todos` complete, create journal entries for journal-worthy decisions made during planning:
 
-- **DECISION** entries for scope choices, prioritization rationale, and architectural direction
-- **TRADE-OFF** entries for competing approaches evaluated
-- **RISK** entries for risks identified during planning
+- **DECISION** — scope choices, prioritization rationale, architectural direction
+- **TRADE-OFF** — competing approaches evaluated and why one was chosen
+- **RISK** — risks identified during planning (scope, dependency, schedule, technical)
 
-Use sequential naming: check the highest existing `NNNN-` prefix and increment.
+Use `/journal new <TYPE> <slug>` (or write directly to `workspaces/<project>/journal/NNNN-TYPE-slug.md`). Skip only when the phase genuinely produced nothing journal-worthy — use judgment, not formulas. Do not batch: create each entry as you recognize it, not at the end.

@@ -218,6 +218,12 @@ function buildWorkspaceSummary(cwd) {
     parts.push(`Todos: ${todos.active} active / ${todos.completed} done`);
   }
 
+  // Surface journal candidates waiting for review (written by SessionEnd hook)
+  const pending = countFiles(path.join(ws.path, "journal", ".pending"));
+  if (pending > 0) {
+    parts.push(`Journal candidates pending: ${pending}`);
+  }
+
   return parts.join(" | ");
 }
 
