@@ -6,13 +6,44 @@ and hybrid tenancy strategies for secure data separation.
 """
 
 import logging
+import re
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
+from dataflow.adapters.base import _safe_identifier
+from dataflow.adapters.exceptions import InvalidIdentifierError
+
 logger = logging.getLogger(__name__)
+
+_TENANT_ID_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
+
+
+class InvalidTenantIdError(Exception):
+    """Raised when a tenant_id fails safety validation."""
+
+    pass
+
+
+def _validate_tenant_id(tenant_id: str) -> str:
+    """Validate a tenant_id for safe use in SQL identifiers.
+
+    Args:
+        tenant_id: The tenant ID to validate.
+
+    Returns:
+        The validated tenant_id (unchanged).
+
+    Raises:
+        InvalidTenantIdError: If the tenant_id contains unsafe characters.
+    """
+    if not tenant_id or not _TENANT_ID_RE.match(tenant_id):
+        raise InvalidTenantIdError(
+            f"Invalid tenant_id: {tenant_id!r}. " f"Must match {_TENANT_ID_RE.pattern}"
+        )
+    return tenant_id
 
 
 class IsolationStrategy(Enum):
@@ -45,9 +76,8 @@ class TenantConfig:
         if self.isolation_strategy not in [s.value for s in IsolationStrategy]:
             raise ValueError(f"Invalid isolation strategy: {self.isolation_strategy}")
 
-        # Validate tenant ID format
-        if " " in self.tenant_id:
-            raise ValueError("Invalid tenant ID")
+        # Validate tenant ID format (strict: prevents SQL injection in DDL)
+        _validate_tenant_id(self.tenant_id)
 
     def is_valid(self) -> bool:
         """Check if configuration is valid."""
@@ -295,7 +325,8 @@ class SchemaIsolationStrategy(TenantIsolationStrategy):
 
     def apply_isolation(self, query: str, tenant_context: TenantContext) -> str:
         """Apply schema isolation to a query."""
-        schema_name = tenant_context.get_schema_name()
+        _validate_tenant_id(tenant_context.tenant_id)
+        schema_name = _safe_identifier(tenant_context.get_schema_name())
 
         # Replace table references with schema-qualified names
         # This is a simplified implementation
@@ -322,28 +353,28 @@ class SchemaIsolationStrategy(TenantIsolationStrategy):
         return True
 
     def get_tenant_schema(self, tenant_id: str) -> str:
-        """Get tenant schema name with sanitization."""
-        # Sanitize tenant ID for schema name
-        sanitized_id = tenant_id.replace("-", "_").replace(" ", "_")
-        return sanitized_id
+        """Get tenant schema name with validation."""
+        _validate_tenant_id(tenant_id)
+        # Replace hyphens with underscores for SQL identifier compatibility
+        return tenant_id.replace("-", "_")
 
     def create_tenant_schema(self, db, tenant_id: str):
         """Create schema for tenant."""
-        # For tests, use plain tenant_id without prefix
-        schema_name = tenant_id
+        _validate_tenant_id(tenant_id)
+        schema_name = _safe_identifier(tenant_id)
         sql = f"CREATE SCHEMA IF NOT EXISTS {schema_name}"
         self._execute_sql(db, sql)
-        logger.info(f"Created schema: {schema_name}")
+        logger.info(f"Created schema: {tenant_id}")
 
     def modify_query_for_tenant(self, query: str, tenant_id: str) -> str:
         """Modify query to use tenant schema."""
-        # For tests, use plain tenant_id without prefix
-        schema_name = tenant_id
+        _validate_tenant_id(tenant_id)
+        safe_schema = _safe_identifier(tenant_id)
 
         # Replace table references with schema-qualified names
         if "FROM " in query.upper():
             # Add schema prefix to table names
-            query = query.replace("FROM ", f"FROM {schema_name}.")
+            query = query.replace("FROM ", f"FROM {safe_schema}.")
 
         return query
 
@@ -351,30 +382,32 @@ class SchemaIsolationStrategy(TenantIsolationStrategy):
         self, db, tenant_id: str, table_name: str, columns: List[Dict]
     ):
         """Create table in tenant schema."""
-        # For tests, use plain tenant_id without prefix
-        schema_name = tenant_id
+        _validate_tenant_id(tenant_id)
+        safe_schema = _safe_identifier(tenant_id)
+        safe_table = _safe_identifier(table_name)
 
         # Build CREATE TABLE statement
         column_defs = []
         for col in columns:
-            col_def = f"{col['name']} {col['type']}"
+            safe_col_name = _safe_identifier(col["name"])
+            col_def = f"{safe_col_name} {col['type']}"
             if col.get("length"):
-                col_def = f"{col['name']} {col['type']}({col['length']})"
+                col_def = f"{safe_col_name} {col['type']}({col['length']})"
             if col.get("primary_key"):
                 col_def += " PRIMARY KEY"
             column_defs.append(col_def)
 
-        sql = f"CREATE TABLE {schema_name}.{table_name} ({', '.join(column_defs)})"
+        sql = f"CREATE TABLE {safe_schema}.{safe_table} ({', '.join(column_defs)})"
         self._execute_sql(db, sql)
-        logger.info(f"Created table: {schema_name}.{table_name}")
+        logger.info(f"Created table: {tenant_id}.{table_name}")
 
     def cleanup_tenant_schema(self, db, tenant_id: str):
         """Drop tenant schema."""
-        # For tests, use plain tenant_id without prefix
-        schema_name = tenant_id
-        sql = f"DROP SCHEMA IF EXISTS {schema_name} CASCADE"
+        _validate_tenant_id(tenant_id)
+        safe_schema = _safe_identifier(tenant_id)
+        sql = f"DROP SCHEMA IF EXISTS {safe_schema} CASCADE"
         self._execute_sql(db, sql)
-        logger.info(f"Dropped schema: {schema_name}")
+        logger.info(f"Dropped schema: {tenant_id}")
 
     def prepare_query_execution(self, db, tenant_id: str):
         """Prepare query execution for schema isolation."""
@@ -406,10 +439,16 @@ class RowLevelSecurityStrategy(TenantIsolationStrategy):
     """Row-level security based tenant isolation strategy."""
 
     def apply_isolation(self, query: str, tenant_context: TenantContext) -> str:
-        """Apply row-level security to a query."""
-        tenant_id = tenant_context.tenant_id
+        """Apply row-level security to a query.
+
+        The tenant_id is validated to contain only safe characters before
+        being interpolated into the query string. This prevents SQL injection
+        while maintaining the query-rewriting architecture.
+        """
+        tenant_id = _validate_tenant_id(tenant_context.tenant_id)
 
         # Add WHERE clause for tenant filtering
+        # tenant_id is validated to match ^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$
         if "WHERE " in query.upper():
             # Insert tenant filter into existing WHERE clause
             query = query.replace("WHERE ", f"WHERE tenant_id = '{tenant_id}' AND ")
@@ -448,12 +487,24 @@ class RowLevelSecurityStrategy(TenantIsolationStrategy):
 
     def create_tenant_policy(self, db, tenant_id: str, table_name: str = "users"):
         """Create RLS policies for tenant."""
+        _validate_tenant_id(tenant_id)
+        safe_table = _safe_identifier(table_name)
+        # Policy names are DDL identifiers -- validate tenant_id component
+        safe_select_policy = _safe_identifier(f"tenant_{tenant_id}_select")
+        safe_modify_policy = _safe_identifier(f"tenant_{tenant_id}_modify")
+
         # Create SELECT policy
-        select_policy = f"CREATE POLICY tenant_{tenant_id}_select ON {table_name} FOR SELECT USING (tenant_id = current_setting('row_security.tenant_id'))"
+        select_policy = (
+            f"CREATE POLICY {safe_select_policy} ON {safe_table} "
+            f"FOR SELECT USING (tenant_id = current_setting('row_security.tenant_id'))"
+        )
         self._execute_sql(db, select_policy)
 
         # Create modification policy
-        modify_policy = f"CREATE POLICY tenant_{tenant_id}_modify ON {table_name} FOR ALL USING (tenant_id = current_setting('row_security.tenant_id'))"
+        modify_policy = (
+            f"CREATE POLICY {safe_modify_policy} ON {safe_table} "
+            f"FOR ALL USING (tenant_id = current_setting('row_security.tenant_id'))"
+        )
         self._execute_sql(db, modify_policy)
 
         logger.info(f"Created RLS policies for tenant: {tenant_id}")
@@ -472,46 +523,85 @@ class RowLevelSecurityStrategy(TenantIsolationStrategy):
         self.set_tenant_context(db, tenant_id)
 
     def set_tenant_context(self, db, tenant_id: str, user_id: str = None):
-        """Set tenant context for RLS."""
-        # Always set tenant_id
-        sql = f"SET row_security.tenant_id = '{tenant_id}'"
-        self._execute_sql(db, sql)
+        """Set tenant context for RLS.
+
+        Uses parameterized SET via sqlalchemy text() with bound parameters
+        to prevent SQL injection in tenant_id and user_id values.
+        """
+        _validate_tenant_id(tenant_id)
+
+        from sqlalchemy import text
+
+        # Use parameterized query for SET values
+        sql = text("SET row_security.tenant_id = :tid")
+        self._execute_sql_with_params(db, sql, {"tid": tenant_id})
 
         # Only set user_id if provided
         if user_id:
-            sql = f"SET row_security.user_id = '{user_id}'"
-            self._execute_sql(db, sql)
+            _validate_tenant_id(user_id)  # user_id follows same safety rules
+            sql = text("SET row_security.user_id = :uid")
+            self._execute_sql_with_params(db, sql, {"uid": user_id})
 
         logger.debug(f"Set tenant context: {tenant_id}")
 
     def cleanup_tenant_policy(self, db, tenant_id: str, table_name: str = "users"):
         """Clean up RLS policies for tenant."""
+        _validate_tenant_id(tenant_id)
+        safe_table = _safe_identifier(table_name)
+        safe_select_policy = _safe_identifier(f"tenant_{tenant_id}_select")
+        safe_modify_policy = _safe_identifier(f"tenant_{tenant_id}_modify")
+
         # Drop SELECT policy
-        drop_select = f"DROP POLICY IF EXISTS tenant_{tenant_id}_select ON {table_name}"
+        drop_select = f"DROP POLICY IF EXISTS {safe_select_policy} ON {safe_table}"
         self._execute_sql(db, drop_select)
 
         # Drop modification policy
-        drop_modify = f"DROP POLICY IF EXISTS tenant_{tenant_id}_modify ON {table_name}"
+        drop_modify = f"DROP POLICY IF EXISTS {safe_modify_policy} ON {safe_table}"
         self._execute_sql(db, drop_modify)
 
         logger.info(f"Cleaned up RLS policies for tenant: {tenant_id}")
 
-    def _execute_sql(self, db, sql: str):
-        """Execute SQL statement."""
+    def _execute_sql(self, db, sql):
+        """Execute SQL statement (accepts str or sqlalchemy text())."""
         from sqlalchemy import text
 
         logger.debug(f"Executing SQL: {sql}")
 
+        # Wrap plain strings in text(); text() objects pass through
+        if isinstance(sql, str):
+            sql = text(sql)
+
         # Check if db is a SQLAlchemy engine or connection
         if hasattr(db, "execute"):
             # It's a connection
-            db.execute(text(sql))
+            db.execute(sql)
             if hasattr(db, "commit"):
                 db.commit()
         elif hasattr(db, "connect"):
             # It's an engine
             with db.connect() as conn:
-                conn.execute(text(sql))
+                conn.execute(sql)
+                conn.commit()
+        else:
+            logger.warning(f"Cannot execute SQL - unknown db type: {type(db)}")
+
+    def _execute_sql_with_params(self, db, sql, params: dict):
+        """Execute parameterized SQL statement."""
+        from sqlalchemy import text
+
+        logger.debug(f"Executing parameterized SQL: {sql}")
+
+        # Ensure sql is a text() object
+        if isinstance(sql, str):
+            sql = text(sql)
+
+        if hasattr(db, "execute"):
+            db.execute(sql, params)
+            if hasattr(db, "commit"):
+                db.commit()
+        elif hasattr(db, "connect"):
+            with db.connect() as conn:
+                conn.execute(sql, params)
                 conn.commit()
         else:
             logger.warning(f"Cannot execute SQL - unknown db type: {type(db)}")
@@ -923,20 +1013,25 @@ class TenantSecurityManager:
         return tenant_context.has_permission(action)
 
     def encrypt_tenant_data(self, tenant_id: str, data: str) -> str:
-        """Encrypt data for a specific tenant."""
-        # For tests, we don't require tenant to exist in registry
-        try:
-            tenant_config = self.tenant_registry.get_tenant(tenant_id)
-        except:
-            # Mock tenant for tests
-            pass
+        """Encrypt data for a specific tenant using Fernet symmetric encryption.
 
-        # Mock encryption key retrieval
-        encryption_key = self._get_tenant_encryption_key(tenant_id)
-        encrypted_data = f"encrypted_{encryption_key}_{data}"
+        Args:
+            tenant_id: The tenant whose key should be used for encryption.
+            data: The plaintext string to encrypt.
 
-        logger.debug(f"Encrypted data for tenant: {tenant_id}")
-        return encrypted_data
+        Returns:
+            Base64-encoded Fernet ciphertext (URL-safe).
+
+        Raises:
+            ConfigError: If no encryption key is configured for the tenant.
+        """
+        from cryptography.fernet import Fernet
+
+        key = self._get_tenant_encryption_key(tenant_id)
+        fernet = Fernet(key)
+        encrypted = fernet.encrypt(data.encode("utf-8"))
+        logger.debug("tenant.data.encrypted", extra={"tenant_id": tenant_id})
+        return encrypted.decode("utf-8")
 
     def audit_tenant_operation(
         self, tenant_id: str, operation: str, user_id: str, details: Dict[str, Any]
@@ -944,22 +1039,52 @@ class TenantSecurityManager:
         """Audit an operation performed in a tenant."""
         self._log_audit_event(tenant_id, operation, user_id, details)
 
-    def _get_tenant_encryption_key(self, tenant_id: str) -> str:
-        """Get encryption key for tenant."""
-        return "tenant_specific_key"
+    def _get_tenant_encryption_key(self, tenant_id: str) -> bytes:
+        """Get Fernet encryption key for tenant from environment.
+
+        The key MUST be a valid Fernet key (32 url-safe base64-encoded bytes).
+        Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+        Looks up DATAFLOW_TENANT_KEY_{TENANT_ID} first, then falls back to
+        DATAFLOW_TENANT_ENCRYPTION_KEY as a shared key.
+
+        Raises:
+            ConfigError: If no encryption key is configured.
+        """
+        import os
+
+        # Per-tenant key takes priority
+        per_tenant_key = os.environ.get(f"DATAFLOW_TENANT_KEY_{tenant_id.upper()}")
+        if per_tenant_key:
+            return per_tenant_key.encode("utf-8")
+
+        # Shared key fallback
+        shared_key = os.environ.get("DATAFLOW_TENANT_ENCRYPTION_KEY")
+        if shared_key:
+            return shared_key.encode("utf-8")
+
+        raise RuntimeError(
+            f"No encryption key configured for tenant {tenant_id!r}. "
+            f"Set DATAFLOW_TENANT_KEY_{tenant_id.upper()} or "
+            f"DATAFLOW_TENANT_ENCRYPTION_KEY in your environment."
+        )
 
     def _log_audit_event(
         self, tenant_id: str, operation: str, user_id: str, details: Dict[str, Any]
     ):
-        """Log audit event."""
-        audit_entry = {
-            "tenant_id": tenant_id,
-            "operation": operation,
-            "user_id": user_id,
-            "details": details,
-            "timestamp": "2025-01-15T12:00:00Z",
-        }
-        logger.info(f"Audit log: {audit_entry}")
+        """Log audit event with structured fields."""
+        from datetime import datetime, timezone
+
+        logger.info(
+            "tenant.audit",
+            extra={
+                "tenant_id": tenant_id,
+                "operation": operation,
+                "user_id": user_id,
+                "details": details,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
 
 class TenantMiddleware:

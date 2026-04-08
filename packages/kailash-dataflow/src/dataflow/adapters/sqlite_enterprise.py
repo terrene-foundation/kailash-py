@@ -31,7 +31,7 @@ from typing import Any, AsyncContextManager, Dict, List, Optional, Tuple
 
 import aiosqlite
 
-from .base import DatabaseAdapter
+from .base import DatabaseAdapter, _safe_identifier
 from .exceptions import AdapterError, ConnectionError, QueryError, TransactionError
 
 logger = logging.getLogger(__name__)
@@ -861,7 +861,8 @@ class SQLiteEnterpriseAdapter(DatabaseAdapter):
         try:
             async with self._get_connection() as db:
                 # Get table info using PRAGMA table_info
-                cursor = await db.execute(f"PRAGMA table_info({table_name})")
+                safe_table = _safe_identifier(table_name)
+                cursor = await db.execute(f"PRAGMA table_info({safe_table})")
                 columns = await cursor.fetchall()
 
                 if not columns:
@@ -890,7 +891,7 @@ class SQLiteEnterpriseAdapter(DatabaseAdapter):
                         schema["_indexes"] = indexes
 
                 # Include foreign key information
-                fk_cursor = await db.execute(f"PRAGMA foreign_key_list({table_name})")
+                fk_cursor = await db.execute(f"PRAGMA foreign_key_list({safe_table})")
                 foreign_keys = await fk_cursor.fetchall()
                 if foreign_keys:
                     schema["_foreign_keys"] = [
@@ -970,7 +971,7 @@ class SQLiteEnterpriseAdapter(DatabaseAdapter):
 
             # Combine all constraints
             all_definitions = column_definitions + foreign_key_constraints
-            create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(all_definitions)})"
+            create_sql = f"CREATE TABLE IF NOT EXISTS {_safe_identifier(table_name)} ({', '.join(all_definitions)})"
 
             async with self._get_connection() as db:
                 # Create table
@@ -996,11 +997,12 @@ class SQLiteEnterpriseAdapter(DatabaseAdapter):
             raise ConnectionError("Not connected to database")
 
         try:
+            safe_table = _safe_identifier(table_name)
             async with self._get_connection() as db:
                 # Drop associated indexes first if cascade is requested
                 if cascade:
                     # Get list of indexes for this table
-                    cursor = await db.execute(f"PRAGMA index_list({table_name})")
+                    cursor = await db.execute(f"PRAGMA index_list({safe_table})")
                     indexes = await cursor.fetchall()
 
                     for idx in indexes:
@@ -1010,7 +1012,9 @@ class SQLiteEnterpriseAdapter(DatabaseAdapter):
                             "sqlite_autoindex_"
                         ):  # Skip auto-indexes
                             try:
-                                await db.execute(f"DROP INDEX IF EXISTS {index_name}")
+                                await db.execute(
+                                    f"DROP INDEX IF EXISTS {_safe_identifier(index_name)}"
+                                )
                                 # Remove from tracking
                                 self._tracked_indexes.pop(index_name, None)
                                 logger.debug(f"Dropped index: {index_name}")
@@ -1020,7 +1024,7 @@ class SQLiteEnterpriseAdapter(DatabaseAdapter):
                                 )
 
                 # Drop the table
-                await db.execute(f"DROP TABLE IF EXISTS {table_name}")
+                await db.execute(f"DROP TABLE IF EXISTS {safe_table}")
                 await db.commit()
 
             logger.info(f"Dropped table: {table_name}")
@@ -1071,12 +1075,12 @@ class SQLiteEnterpriseAdapter(DatabaseAdapter):
 
     def get_columns_query(self, table_name: str) -> str:
         """Get query to list table columns."""
-        return f"PRAGMA table_info({table_name})"
+        return f"PRAGMA table_info({_safe_identifier(table_name)})"
 
     def get_indexes_query(self, table_name: Optional[str] = None) -> str:
         """Get query to list indexes."""
         if table_name:
-            return f"PRAGMA index_list({table_name})"
+            return f"PRAGMA index_list({_safe_identifier(table_name)})"
         else:
             return """
             SELECT name, tbl_name as table_name
@@ -1099,13 +1103,16 @@ class SQLiteEnterpriseAdapter(DatabaseAdapter):
     ) -> bool:
         """Create an index on specified columns."""
         try:
+            safe_table = _safe_identifier(table_name)
             if not index_name:
                 index_name = f"idx_{table_name}_{'_'.join(columns)}"
 
+            safe_index = _safe_identifier(index_name)
             create_sql = f"CREATE {'UNIQUE ' if unique else ''}INDEX "
             if if_not_exists:
                 create_sql += "IF NOT EXISTS "
-            create_sql += f"{index_name} ON {table_name} ({', '.join(columns)})"
+            safe_columns = ", ".join(_safe_identifier(c) for c in columns)
+            create_sql += f"{safe_index} ON {safe_table} ({safe_columns})"
 
             if partial_condition:
                 create_sql += f" WHERE {partial_condition}"
@@ -1136,7 +1143,8 @@ class SQLiteEnterpriseAdapter(DatabaseAdapter):
         """Get index information for a table."""
         try:
             # Get list of indexes
-            cursor = await db.execute(f"PRAGMA index_list({table_name})")
+            safe_table = _safe_identifier(table_name)
+            cursor = await db.execute(f"PRAGMA index_list({safe_table})")
             index_list = await cursor.fetchall()
 
             indexes = []
@@ -1145,7 +1153,9 @@ class SQLiteEnterpriseAdapter(DatabaseAdapter):
                 index_name = idx_dict["name"]
 
                 # Get index columns
-                col_cursor = await db.execute(f"PRAGMA index_info({index_name})")
+                col_cursor = await db.execute(
+                    f"PRAGMA index_info({_safe_identifier(index_name)})"
+                )
                 columns = await col_cursor.fetchall()
 
                 index_info = {
@@ -1192,10 +1202,13 @@ class SQLiteEnterpriseAdapter(DatabaseAdapter):
             partial_condition = index_def.get("where")
 
             # Build CREATE INDEX statement
+            safe_index = _safe_identifier(index_name)
+            safe_table = _safe_identifier(table_name)
+            safe_columns = ", ".join(_safe_identifier(c) for c in columns)
             create_index_sql = (
-                f"CREATE {'UNIQUE ' if unique else ''}INDEX IF NOT EXISTS {index_name} "
+                f"CREATE {'UNIQUE ' if unique else ''}INDEX IF NOT EXISTS {safe_index} "
             )
-            create_index_sql += f"ON {table_name} ({', '.join(columns)})"
+            create_index_sql += f"ON {safe_table} ({safe_columns})"
 
             if partial_condition:
                 create_index_sql += f" WHERE {partial_condition}"

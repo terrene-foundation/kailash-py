@@ -271,29 +271,14 @@ class ChangeDetector:
                 )
             return
 
-        # Fallback: push to the pipeline executor queue if it has one.
-        queue = getattr(self._pipeline_executor, "_queue", None)
-        if queue is not None:
-            msg = {
-                "product_name": product_name,
-                "triggered_by": triggered_by,
-                "detected_at": datetime.now(timezone.utc).isoformat(),
-            }
-            try:
-                queue.put_nowait(msg)
-            except asyncio.QueueFull:
-                logger.warning(
-                    "ChangeDetector: pipeline queue full — dropping change event "
-                    "for product '%s' (triggered by '%s')",
-                    product_name,
-                    triggered_by,
-                )
-        else:
-            logger.warning(
-                "ChangeDetector: no dispatch target for product '%s' "
-                "(no on_change callback and no pipeline queue)",
-                product_name,
-            )
+        # No dispatch target. on_change should always be set via
+        # FabricRuntime.start() -> set_on_change().
+        logger.warning(
+            "ChangeDetector: no on_change callback for product '%s' "
+            "(triggered by '%s'). Call set_on_change() during startup.",
+            product_name,
+            triggered_by,
+        )
 
     # ------------------------------------------------------------------
     # Helpers

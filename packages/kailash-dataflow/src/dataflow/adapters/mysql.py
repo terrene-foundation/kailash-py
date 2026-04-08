@@ -10,7 +10,7 @@ import traceback
 import warnings
 from typing import Any, Dict, List, Tuple
 
-from .base import DatabaseAdapter
+from .base import DatabaseAdapter, _safe_identifier
 from .exceptions import AdapterError, ConnectionError, QueryError, TransactionError
 
 logger = logging.getLogger(__name__)
@@ -279,6 +279,7 @@ class MySQLAdapter(DatabaseAdapter):
             if primary_keys:
                 columns.append(f"PRIMARY KEY ({', '.join(primary_keys)})")
 
+            _safe_identifier(table_name)  # validate (MySQL uses backtick quoting)
             query = f"CREATE TABLE `{table_name}` ({', '.join(columns)})"
             query += f" ENGINE=InnoDB DEFAULT CHARSET={self.charset} COLLATE={self.collation}"
 
@@ -295,6 +296,7 @@ class MySQLAdapter(DatabaseAdapter):
             raise ConnectionError("Not connected to database")
 
         try:
+            _safe_identifier(table_name)  # validate (MySQL uses backtick quoting)
             query = f"DROP TABLE IF EXISTS `{table_name}`"
             await self.execute_query(query)
             logger.info(f"Dropped table: {table_name}")
@@ -374,7 +376,11 @@ class MySQLAdapter(DatabaseAdapter):
         return params
 
     def get_tables_query(self) -> str:
-        """Get query to list all tables."""
+        """Get query to list all tables.
+
+        Note: self.database is validated via _safe_identifier to prevent injection.
+        """
+        _safe_identifier(self.database)  # validate
         return f"""
         SELECT TABLE_NAME
         FROM INFORMATION_SCHEMA.TABLES
@@ -384,7 +390,13 @@ class MySQLAdapter(DatabaseAdapter):
         """
 
     def get_columns_query(self, table_name: str) -> str:
-        """Get query to list table columns."""
+        """Get query to list table columns.
+
+        Note: self.database and table_name are validated via _safe_identifier
+        to prevent injection.
+        """
+        _safe_identifier(self.database)  # validate
+        _safe_identifier(table_name)  # validate
         return f"""
         SELECT
             COLUMN_NAME,

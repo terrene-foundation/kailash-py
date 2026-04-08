@@ -9,9 +9,12 @@ Transforms cryptic errors into rich, contextual messages that:
 - Offer auto-fix capabilities
 """
 
+import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class ErrorCode(str, Enum):
@@ -291,7 +294,9 @@ class ErrorEnhancer:
             catalog_path = Path(__file__).parent / "error_catalog.yaml"
 
             if not catalog_path.exists():
-                print(f"Warning: Error catalog not found at {catalog_path}")
+                logger.warning(
+                    "error_catalog.not_found", extra={"path": str(catalog_path)}
+                )
                 cls._error_catalog = {}
                 cls._catalog_loaded = True
                 return {}
@@ -306,7 +311,7 @@ class ErrorEnhancer:
             return cls._error_catalog
 
         except Exception as e:
-            print(f"Warning: Failed to load error catalog: {e}")
+            logger.warning("error_catalog.load_failed", extra={"error": str(e)})
             cls._error_catalog = {}
             cls._catalog_loaded = True
             return {}

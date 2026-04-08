@@ -9,10 +9,13 @@ Provides 1-minute setup for common use cases with:
 - Best practice configuration
 """
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Type
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from dataflow import DataFlow
@@ -293,9 +296,11 @@ class DataFlowStudio:
         if auto_validate:
             report = studio.validate()
             if not report.is_valid:
-                print(report.show())
+                logger.warning(
+                    "studio.validation_failed", extra={"report": report.show()}
+                )
                 if any(error.auto_fixable for error in report.errors):
-                    print("\n🛠️  Attempting auto-fix...")
+                    logger.info("studio.attempting_auto_fix")
                     report.auto_fix()
 
         # Auto-migrate

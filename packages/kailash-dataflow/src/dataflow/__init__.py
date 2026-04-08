@@ -23,6 +23,17 @@ This maintains 100% functional compatibility while providing:
 - Progressive complexity (zero-config to enterprise)
 """
 
+# Data classification (issue #83)
+from .classification import (
+    ClassificationPolicy,
+    DataClassification,
+    FieldClassification,
+    MaskingStrategy,
+    RetentionPolicy,
+    classify,
+    get_field_classification,
+)
+
 # Progressive Configuration System
 from .configuration import (
     ConfigurationLevel,
@@ -35,23 +46,30 @@ from .configuration import (
 )
 from .core.config import DataFlowConfig, LoggingConfig, mask_sensitive
 from .core.engine import DataFlow
-from .core.provenance import Provenance, ProvenanceMetadata, SourceType
-from .features.express import SyncExpress
-from .engine import (
-    DataFlowEngine,
-    HealthStatus,
-    QueryEngine,
-    ValidationLayer,
-    DataClassificationPolicy,
-)
 from .core.logging_config import DEFAULT_SENSITIVE_PATTERNS
 from .core.logging_config import LoggingConfig as AdvancedLoggingConfig
 from .core.logging_config import SensitiveMaskingFilter, mask_sensitive_values
 from .core.model_registry import ModelRegistry
 from .core.models import DataFlowModel
+from .core.provenance import Provenance, ProvenanceMetadata, SourceType
 from .core.tenant_context import TenantContextSwitch, TenantInfo, get_current_tenant_id
 from .core.type_processor import TypeAwareFieldProcessor
 from .core.workflow_binding import DataFlowWorkflowBinder
+from .engine import (
+    DataClassificationPolicy,
+    DataFlowEngine,
+    HealthStatus,
+    QueryEngine,
+    ValidationLayer,
+)
+from .features.express import SyncExpress
+from .utils.suppress_warnings import (
+    configure_dataflow_logging,
+    dataflow_logging_context,
+    get_dataflow_logger,
+    is_logging_configured,
+    restore_dataflow_logging,
+)
 
 # Field-level validation (issue #82)
 from .validation import (
@@ -68,31 +86,8 @@ from .validation import (
     validate_model,
 )
 
-# Data classification (issue #83)
-from .classification import (
-    ClassificationPolicy,
-    DataClassification,
-    FieldClassification,
-    MaskingStrategy,
-    RetentionPolicy,
-    classify,
-    get_field_classification,
-)
-
-from .utils.suppress_warnings import (
-    configure_dataflow_logging,
-    dataflow_logging_context,
-    get_dataflow_logger,
-    is_logging_configured,
-    restore_dataflow_logging,
-    suppress_core_sdk_warnings,
-)
-
-# Suppress verbose Core SDK warnings on import
-suppress_core_sdk_warnings()
-
 # Legacy compatibility - maintain the original imports
-__version__ = "1.7.1"
+__version__ = "2.0.0.dev1"
 
 __all__ = [
     "DataFlow",

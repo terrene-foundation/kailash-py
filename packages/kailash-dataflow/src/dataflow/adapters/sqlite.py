@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import aiosqlite
 
-from .base import DatabaseAdapter
+from .base import DatabaseAdapter, _safe_identifier
 from .exceptions import ConnectionError, QueryError, TransactionError
 
 try:
@@ -469,7 +469,9 @@ class SQLiteAdapter(DatabaseAdapter):
             # Use connection from pool
             async with self._get_connection() as db:
                 # Get table info using PRAGMA table_info
-                cursor = await db.execute(f"PRAGMA table_info({table_name})")
+                cursor = await db.execute(
+                    f"PRAGMA table_info({_safe_identifier(table_name)})"
+                )
                 columns = await cursor.fetchall()
                 await cursor.close()
 
@@ -516,7 +518,7 @@ class SQLiteAdapter(DatabaseAdapter):
 
                 column_definitions.append(col_def)
 
-            create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(column_definitions)})"
+            create_sql = f"CREATE TABLE IF NOT EXISTS {_safe_identifier(table_name)} ({', '.join(column_definitions)})"
 
             # Use connection from pool
             async with self._get_connection() as db:
@@ -536,7 +538,7 @@ class SQLiteAdapter(DatabaseAdapter):
         try:
             # Use connection from pool
             async with self._get_connection() as db:
-                await db.execute(f"DROP TABLE IF EXISTS {table_name}")
+                await db.execute(f"DROP TABLE IF EXISTS {_safe_identifier(table_name)}")
                 await db.commit()
 
             logger.info(f"Dropped table: {table_name}")
@@ -670,7 +672,7 @@ class SQLiteAdapter(DatabaseAdapter):
 
     def get_columns_query(self, table_name: str) -> str:
         """Get query to list table columns."""
-        return f"PRAGMA table_info({table_name})"
+        return f"PRAGMA table_info({_safe_identifier(table_name)})"
 
     async def get_server_version(self) -> str:
         """Get SQLite version."""

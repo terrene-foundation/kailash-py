@@ -481,6 +481,11 @@ class DataFlow(DataFlowEventMixin):
             redis_url=_express_redis_url,
         )
 
+        # Store redis_url for fabric runtime (fixes #354 deepest wiring bug).
+        # Previously this was never assigned, making the hasattr check at
+        # DataFlow.start() line ~2018 always False.
+        self._redis_url = _express_redis_url
+
         # TSG-103: Validation on write flag
         self._validate_on_write = validate_on_write
 

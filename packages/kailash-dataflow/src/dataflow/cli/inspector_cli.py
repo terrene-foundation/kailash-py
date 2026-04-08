@@ -23,11 +23,20 @@ Examples:
 
 import argparse
 import json
+import logging
 import sys
 from typing import Any, Optional
 
 from dataflow import DataFlow
 from dataflow.platform.inspector import Inspector
+
+logger = logging.getLogger(__name__)
+
+
+def _cli_output(message: str, file=None) -> None:
+    """Write CLI output to stdout or specified file handle."""
+    target = file or sys.stdout
+    target.write(message + "\n")
 
 
 def load_workflow(workflow_path: str) -> Any:
@@ -39,10 +48,12 @@ def load_workflow(workflow_path: str) -> Any:
         # For now, this is a placeholder
         return workflow_data
     except FileNotFoundError:
-        print(f"Error: Workflow file '{workflow_path}' not found", file=sys.stderr)
+        logger.error("inspector.workflow_file_not_found", extra={"path": workflow_path})
         sys.exit(1)
     except json.JSONDecodeError as e:
-        print(f"Error: Invalid JSON in workflow file: {e}", file=sys.stderr)
+        logger.error(
+            "inspector.invalid_json", extra={"path": workflow_path, "error": str(e)}
+        )
         sys.exit(1)
 
 
@@ -50,39 +61,39 @@ def cmd_model(inspector: Inspector, args: argparse.Namespace) -> None:
     """Inspect a model."""
     try:
         model_info = inspector.model(args.model_name)
-        print(model_info.show(color=args.color))
+        _cli_output(model_info.show(color=args.color))
     except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        logger.error("inspector.model_error", extra={"error": str(e)})
         sys.exit(1)
 
 
 def cmd_node(inspector: Inspector, args: argparse.Namespace) -> None:
     """Inspect a node."""
     node_info = inspector.node(args.node_id)
-    print(node_info.show(color=args.color))
+    _cli_output(node_info.show(color=args.color))
 
 
 def cmd_instance(inspector: Inspector, args: argparse.Namespace) -> None:
     """Get DataFlow instance information."""
     instance_info = inspector.instance()
-    print(instance_info.show(color=args.color))
+    _cli_output(instance_info.show(color=args.color))
 
 
 def cmd_workflow(inspector: Inspector, args: argparse.Namespace) -> None:
     """Get workflow information."""
     if not args.workflow_file:
-        print("Error: --workflow-file is required", file=sys.stderr)
+        logger.error("inspector.workflow_file_required")
         sys.exit(1)
 
     workflow = load_workflow(args.workflow_file)
     workflow_info = inspector.workflow(workflow)
-    print(workflow_info.show(color=args.color))
+    _cli_output(workflow_info.show(color=args.color))
 
 
 def cmd_connections(inspector: Inspector, args: argparse.Namespace) -> None:
     """List workflow connections."""
     if not args.workflow_file:
-        print("Error: --workflow-file is required", file=sys.stderr)
+        logger.error("inspector.workflow_file_required")
         sys.exit(1)
 
     workflow = load_workflow(args.workflow_file)
@@ -90,23 +101,30 @@ def cmd_connections(inspector: Inspector, args: argparse.Namespace) -> None:
 
     connections = inspector.connections(args.node_id)
     if not connections:
-        print("No connections found.")
+        _cli_output("No connections found.")
         return
 
-    print(f"Found {len(connections)} connection(s):")
+    _cli_output("Found %d connection(s):" % len(connections))
     for conn in connections:
-        status = "✓" if conn.is_valid else "✗"
-        print(
-            f"  {status} {conn.source_node}.{conn.source_parameter} → {conn.target_node}.{conn.target_parameter}"
+        status = "+" if conn.is_valid else "x"
+        _cli_output(
+            "  %s %s.%s -> %s.%s"
+            % (
+                status,
+                conn.source_node,
+                conn.source_parameter,
+                conn.target_node,
+                conn.target_parameter,
+            )
         )
         if conn.validation_message:
-            print(f"      Issue: {conn.validation_message}")
+            _cli_output("      Issue: %s" % conn.validation_message)
 
 
 def cmd_connection_chain(inspector: Inspector, args: argparse.Namespace) -> None:
     """Show connection chain between two nodes."""
     if not args.workflow_file:
-        print("Error: --workflow-file is required", file=sys.stderr)
+        logger.error("inspector.workflow_file_required")
         sys.exit(1)
 
     workflow = load_workflow(args.workflow_file)
@@ -114,20 +132,30 @@ def cmd_connection_chain(inspector: Inspector, args: argparse.Namespace) -> None
 
     chain = inspector.connection_chain(args.from_node, args.to_node)
     if not chain:
-        print(f"No connection path found from '{args.from_node}' to '{args.to_node}'")
+        _cli_output(
+            "No connection path found from '%s' to '%s'"
+            % (args.from_node, args.to_node)
+        )
         return
 
-    print(f"Connection chain ({len(chain)} steps):")
+    _cli_output("Connection chain (%d steps):" % len(chain))
     for i, conn in enumerate(chain, 1):
-        print(
-            f"  {i}. {conn.source_node}.{conn.source_parameter} → {conn.target_node}.{conn.target_parameter}"
+        _cli_output(
+            "  %d. %s.%s -> %s.%s"
+            % (
+                i,
+                conn.source_node,
+                conn.source_parameter,
+                conn.target_node,
+                conn.target_parameter,
+            )
         )
 
 
 def cmd_connection_graph(inspector: Inspector, args: argparse.Namespace) -> None:
     """Show workflow connection graph."""
     if not args.workflow_file:
-        print("Error: --workflow-file is required", file=sys.stderr)
+        logger.error("inspector.workflow_file_required")
         sys.exit(1)
 
     workflow = load_workflow(args.workflow_file)
@@ -135,21 +163,21 @@ def cmd_connection_graph(inspector: Inspector, args: argparse.Namespace) -> None
 
     graph = inspector.connection_graph()
     if not graph:
-        print("No connections found.")
+        _cli_output("No connections found.")
         return
 
-    print("Connection Graph:")
+    _cli_output("Connection Graph:")
     for node, targets in sorted(graph.items()):
         if targets:
-            print(f"  {node} → {', '.join(targets)}")
+            _cli_output("  %s -> %s" % (node, ", ".join(targets)))
         else:
-            print(f"  {node} (no outgoing connections)")
+            _cli_output("  %s (no outgoing connections)" % node)
 
 
 def cmd_validate_connections(inspector: Inspector, args: argparse.Namespace) -> None:
     """Validate all workflow connections."""
     if not args.workflow_file:
-        print("Error: --workflow-file is required", file=sys.stderr)
+        logger.error("inspector.workflow_file_required")
         sys.exit(1)
 
     workflow = load_workflow(args.workflow_file)
@@ -157,18 +185,18 @@ def cmd_validate_connections(inspector: Inspector, args: argparse.Namespace) -> 
 
     is_valid, issues = inspector.validate_connections()
     if is_valid:
-        print("✓ All connections are valid.")
+        _cli_output("All connections are valid.")
     else:
-        print(f"✗ Found {len(issues)} validation issue(s):")
+        _cli_output("Found %d validation issue(s):" % len(issues))
         for issue in issues:
-            print(f"  - {issue}")
+            _cli_output("  - %s" % issue)
         sys.exit(1)
 
 
 def cmd_trace_parameter(inspector: Inspector, args: argparse.Namespace) -> None:
     """Trace parameter back to source."""
     if not args.workflow_file:
-        print("Error: --workflow-file is required", file=sys.stderr)
+        logger.error("inspector.workflow_file_required")
         sys.exit(1)
 
     workflow = load_workflow(args.workflow_file)
@@ -176,24 +204,29 @@ def cmd_trace_parameter(inspector: Inspector, args: argparse.Namespace) -> None:
 
     try:
         trace = inspector.trace_parameter(args.node_id, args.parameter)
-        print(f"Parameter Trace for '{args.parameter}' in '{args.node_id}':")
-        print(f"  Source: {trace.source_node}.{trace.source_parameter}")
-        print(f"  Destination: {trace.destination_node}.{trace.destination_param}")
+        _cli_output(
+            "Parameter Trace for '%s' in '%s':" % (args.parameter, args.node_id)
+        )
+        _cli_output("  Source: %s.%s" % (trace.source_node, trace.source_parameter))
+        _cli_output(
+            "  Destination: %s.%s" % (trace.destination_node, trace.destination_param)
+        )
         if trace.transformations:
-            print(f"  Transformations ({len(trace.transformations)}):")
+            _cli_output("  Transformations (%d):" % len(trace.transformations))
             for i, transform in enumerate(trace.transformations, 1):
-                print(
-                    f"    {i}. {transform['node']}: {transform.get('transformation', 'unknown')}"
+                _cli_output(
+                    "    %d. %s: %s"
+                    % (i, transform["node"], transform.get("transformation", "unknown"))
                 )
     except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        logger.error("inspector.trace_parameter_error", extra={"error": str(e)})
         sys.exit(1)
 
 
 def cmd_parameter_flow(inspector: Inspector, args: argparse.Namespace) -> None:
     """Show how parameter flows through workflow."""
     if not args.workflow_file:
-        print("Error: --workflow-file is required", file=sys.stderr)
+        logger.error("inspector.workflow_file_required")
         sys.exit(1)
 
     workflow = load_workflow(args.workflow_file)
@@ -201,20 +234,30 @@ def cmd_parameter_flow(inspector: Inspector, args: argparse.Namespace) -> None:
 
     flows = inspector.parameter_flow(args.node_id, args.parameter)
     if not flows:
-        print(f"No flows found for parameter '{args.parameter}' from '{args.node_id}'")
+        _cli_output(
+            "No flows found for parameter '%s' from '%s'"
+            % (args.parameter, args.node_id)
+        )
         return
 
-    print(f"Parameter Flow ({len(flows)} path(s)):")
+    _cli_output("Parameter Flow (%d path(s)):" % len(flows))
     for i, flow in enumerate(flows, 1):
-        print(
-            f"  {i}. {flow.source_node}.{flow.source_parameter} → {flow.destination_node}.{flow.destination_param}"
+        _cli_output(
+            "  %d. %s.%s -> %s.%s"
+            % (
+                i,
+                flow.source_node,
+                flow.source_parameter,
+                flow.destination_node,
+                flow.destination_param,
+            )
         )
 
 
 def cmd_parameter_dependencies(inspector: Inspector, args: argparse.Namespace) -> None:
     """List parameter dependencies for a node."""
     if not args.workflow_file:
-        print("Error: --workflow-file is required", file=sys.stderr)
+        logger.error("inspector.workflow_file_required")
         sys.exit(1)
 
     workflow = load_workflow(args.workflow_file)
@@ -222,18 +265,18 @@ def cmd_parameter_dependencies(inspector: Inspector, args: argparse.Namespace) -
 
     deps = inspector.parameter_dependencies(args.node_id)
     if not deps:
-        print(f"Node '{args.node_id}' has no parameter dependencies.")
+        _cli_output("Node '%s' has no parameter dependencies." % args.node_id)
         return
 
-    print(f"Parameter Dependencies for '{args.node_id}':")
+    _cli_output("Parameter Dependencies for '%s':" % args.node_id)
     for param, source in deps.items():
-        print(f"  {param} ← {source}")
+        _cli_output("  %s <- %s" % (param, source))
 
 
 def cmd_node_dependencies(inspector: Inspector, args: argparse.Namespace) -> None:
     """List node dependencies (upstream)."""
     if not args.workflow_file:
-        print("Error: --workflow-file is required", file=sys.stderr)
+        logger.error("inspector.workflow_file_required")
         sys.exit(1)
 
     workflow = load_workflow(args.workflow_file)
@@ -241,18 +284,18 @@ def cmd_node_dependencies(inspector: Inspector, args: argparse.Namespace) -> Non
 
     deps = inspector.node_dependencies(args.node_id)
     if not deps:
-        print(f"Node '{args.node_id}' has no dependencies.")
+        _cli_output("Node '%s' has no dependencies." % args.node_id)
         return
 
-    print(f"Node Dependencies (upstream) for '{args.node_id}':")
+    _cli_output("Node Dependencies (upstream) for '%s':" % args.node_id)
     for dep in deps:
-        print(f"  ← {dep}")
+        _cli_output("  <- %s" % dep)
 
 
 def cmd_node_dependents(inspector: Inspector, args: argparse.Namespace) -> None:
     """List node dependents (downstream)."""
     if not args.workflow_file:
-        print("Error: --workflow-file is required", file=sys.stderr)
+        logger.error("inspector.workflow_file_required")
         sys.exit(1)
 
     workflow = load_workflow(args.workflow_file)
@@ -260,94 +303,96 @@ def cmd_node_dependents(inspector: Inspector, args: argparse.Namespace) -> None:
 
     dependents = inspector.node_dependents(args.node_id)
     if not dependents:
-        print(f"Node '{args.node_id}' has no dependents.")
+        _cli_output("Node '%s' has no dependents." % args.node_id)
         return
 
-    print(f"Node Dependents (downstream) for '{args.node_id}':")
+    _cli_output("Node Dependents (downstream) for '%s':" % args.node_id)
     for dependent in dependents:
-        print(f"  → {dependent}")
+        _cli_output("  -> %s" % dependent)
 
 
 def cmd_execution_order(inspector: Inspector, args: argparse.Namespace) -> None:
     """Show workflow execution order."""
     if not args.workflow_file:
-        print("Error: --workflow-file is required", file=sys.stderr)
+        logger.error("inspector.workflow_file_required")
         sys.exit(1)
 
     workflow = load_workflow(args.workflow_file)
     inspector.workflow_obj = workflow
 
     order = inspector.execution_order()
-    print(f"Execution Order ({len(order)} nodes):")
+    _cli_output("Execution Order (%d nodes):" % len(order))
     for i, node in enumerate(order, 1):
-        print(f"  {i}. {node}")
+        _cli_output("  %d. %s" % (i, node))
 
 
 def cmd_workflow_summary(inspector: Inspector, args: argparse.Namespace) -> None:
     """Show workflow summary."""
     if not args.workflow_file:
-        print("Error: --workflow-file is required", file=sys.stderr)
+        logger.error("inspector.workflow_file_required")
         sys.exit(1)
 
     workflow = load_workflow(args.workflow_file)
     inspector.workflow_obj = workflow
 
     summary = inspector.workflow_summary()
-    print("Workflow Summary:")
-    print(f"  Nodes: {summary['node_count']}")
-    print(f"  Connections: {summary['connection_count']}")
-    print(
-        f"  Entry Points: {', '.join(summary['entry_points']) if summary['entry_points'] else 'None'}"
+    _cli_output("Workflow Summary:")
+    _cli_output("  Nodes: %s" % summary["node_count"])
+    _cli_output("  Connections: %s" % summary["connection_count"])
+    _cli_output(
+        "  Entry Points: %s"
+        % (", ".join(summary["entry_points"]) if summary["entry_points"] else "None")
     )
-    print(
-        f"  Exit Points: {', '.join(summary['exit_points']) if summary['exit_points'] else 'None'}"
+    _cli_output(
+        "  Exit Points: %s"
+        % (", ".join(summary["exit_points"]) if summary["exit_points"] else "None")
     )
 
 
 def cmd_workflow_metrics(inspector: Inspector, args: argparse.Namespace) -> None:
     """Show workflow metrics."""
     if not args.workflow_file:
-        print("Error: --workflow-file is required", file=sys.stderr)
+        logger.error("inspector.workflow_file_required")
         sys.exit(1)
 
     workflow = load_workflow(args.workflow_file)
     inspector.workflow_obj = workflow
 
     metrics = inspector.workflow_metrics()
-    print("Workflow Metrics:")
-    print(f"  Nodes: {metrics['node_count']}")
-    print(f"  Connections: {metrics['connection_count']}")
-    print(f"  Depth: {metrics['depth']}")
-    print(f"  Complexity: {metrics['complexity']}")
+    _cli_output("Workflow Metrics:")
+    _cli_output("  Nodes: %s" % metrics["node_count"])
+    _cli_output("  Connections: %s" % metrics["connection_count"])
+    _cli_output("  Depth: %s" % metrics["depth"])
+    _cli_output("  Complexity: %s" % metrics["complexity"])
 
 
 def cmd_workflow_validation(inspector: Inspector, args: argparse.Namespace) -> None:
     """Comprehensive workflow validation."""
     if not args.workflow_file:
-        print("Error: --workflow-file is required", file=sys.stderr)
+        logger.error("inspector.workflow_file_required")
         sys.exit(1)
 
     workflow = load_workflow(args.workflow_file)
     inspector.workflow_obj = workflow
 
     report = inspector.workflow_validation_report()
-    print("Workflow Validation Report:")
-    print(f"  Valid: {'Yes' if report['is_valid'] else 'No'}")
+    _cli_output("Workflow Validation Report:")
+    _cli_output("  Valid: %s" % ("Yes" if report["is_valid"] else "No"))
 
     if report["errors"]:
-        print(f"\nErrors ({len(report['errors'])}):")
+        _cli_output("\nErrors (%d):" % len(report["errors"]))
         for error in report["errors"]:
-            print(f"  ✗ {error}")
+            _cli_output("  x %s" % error)
 
     if report["warnings"]:
-        print(f"\nWarnings ({len(report['warnings'])}):")
+        _cli_output("\nWarnings (%d):" % len(report["warnings"]))
         for warning in report["warnings"]:
-            print(f"  ! {warning}")
+            _cli_output("  ! %s" % warning)
 
     if report["suggestions"]:
-        print(f"\nSuggestions ({len(report['suggestions'])}):")
+        _cli_output("\nSuggestions (%d):" % len(report["suggestions"]))
         for suggestion in report["suggestions"]:
-            print(f"  💡 {suggestion}")
+            _cli_output("  * %s" % suggestion)
 
     if not report["is_valid"]:
         sys.exit(1)
@@ -485,7 +530,7 @@ def main():
         db = DataFlow(args.database_url)
         inspector = Inspector(db)
     except Exception as e:
-        print(f"Error: Failed to initialize DataFlow: {e}", file=sys.stderr)
+        logger.error("inspector.init_failed", extra={"error": str(e)})
         sys.exit(1)
 
     # Dispatch to command handler
@@ -514,7 +559,7 @@ def main():
     if handler:
         handler(inspector, args)
     else:
-        print(f"Error: Unknown command '{args.command}'", file=sys.stderr)
+        logger.error("inspector.unknown_command", extra={"command": args.command})
         sys.exit(1)
 
 

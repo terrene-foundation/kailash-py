@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-dataflow"
-version = "1.8.0"
+version = "2.0.0.dev1"
 description = "Workflow-native database framework for Kailash SDK"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -85,8 +85,8 @@ dev = [
     "mypy>=1.0.0",
 ]
 
-[project.scripts]
-dataflow = "dataflow.cli:main"
+# CLI entry point removed — all commands were stubs printing "coming soon".
+# Reinstated when real CLI functionality is implemented.
 
 [project.urls]
 Homepage = "https://github.com/terrene-foundation/kailash-py"

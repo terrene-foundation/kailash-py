@@ -169,9 +169,6 @@ class PipelineExecutor:
             pool_size,
         )
 
-        # Pipeline coalescing queue
-        self._queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue(maxsize=100)
-
         # In-memory cache (used when dev_mode or no redis_url)
         # Bounded to prevent OOM from high-cardinality parameterized products
         self._cache_data: collections.OrderedDict[str, bytes] = (

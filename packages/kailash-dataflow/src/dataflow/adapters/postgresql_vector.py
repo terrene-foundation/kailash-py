@@ -8,6 +8,7 @@ Extends PostgreSQLAdapter with vector operations for RAG and semantic search.
 import logging
 from typing import Any, Dict, List, Optional
 
+from .base import _safe_identifier
 from .postgresql import PostgreSQLAdapter
 
 logger = logging.getLogger(__name__)
@@ -126,9 +127,12 @@ class PostgreSQLVectorAdapter(PostgreSQLAdapter):
         if self._pgvector_installed is None:
             await self.ensure_pgvector_extension()
 
+        safe_table = _safe_identifier(table_name)
+        safe_column = _safe_identifier(column_name)
+
         query = f"""
-        ALTER TABLE {table_name}
-        ADD COLUMN IF NOT EXISTS {column_name} vector({dims})
+        ALTER TABLE {safe_table}
+        ADD COLUMN IF NOT EXISTS {safe_column} vector({int(dims)})
         """
 
         await self.execute_query(query)
@@ -185,25 +189,28 @@ class PostgreSQLVectorAdapter(PostgreSQLAdapter):
             )
 
         ops = distance_ops[distance]
+        safe_table = _safe_identifier(table_name)
+        safe_column = _safe_identifier(column_name)
         index_name = f"{table_name}_{column_name}_{index_type}_idx"
+        safe_index = _safe_identifier(index_name)
 
         if index_type == "ivfflat":
             query = f"""
-            CREATE INDEX IF NOT EXISTS {index_name}
-            ON {table_name} USING ivfflat ({column_name} {ops})
-            WITH (lists = {lists})
+            CREATE INDEX IF NOT EXISTS {safe_index}
+            ON {safe_table} USING ivfflat ({safe_column} {ops})
+            WITH (lists = {int(lists)})
             """
 
         elif index_type == "hnsw":
             # HNSW requires pgvector 0.5.0+
-            m = index_params.get("m", 16)  # Max connections per layer
-            ef_construction = index_params.get(
-                "ef_construction", 64
+            m = int(index_params.get("m", 16))  # Max connections per layer
+            ef_construction = int(
+                index_params.get("ef_construction", 64)
             )  # Build time accuracy
 
             query = f"""
-            CREATE INDEX IF NOT EXISTS {index_name}
-            ON {table_name} USING hnsw ({column_name} {ops})
+            CREATE INDEX IF NOT EXISTS {safe_index}
+            ON {safe_table} USING hnsw ({safe_column} {ops})
             WITH (m = {m}, ef_construction = {ef_construction})
             """
 
@@ -260,13 +267,15 @@ class PostgreSQLVectorAdapter(PostgreSQLAdapter):
             )
 
         op = distance_ops[distance]
+        safe_table = _safe_identifier(table_name)
+        safe_column = _safe_identifier(column_name)
 
         # Convert Python list to PostgreSQL array format
         vector_str = f"'[{','.join(map(str, query_vector))}]'"
 
         # Build query
         distance_select = (
-            f", {column_name} {op} {vector_str}::vector AS distance"
+            f", {safe_column} {op} {vector_str}::vector AS distance"
             if return_distance
             else ""
         )
@@ -274,10 +283,10 @@ class PostgreSQLVectorAdapter(PostgreSQLAdapter):
 
         query = f"""
         SELECT *{distance_select}
-        FROM {table_name}
+        FROM {safe_table}
         {where_clause}
-        ORDER BY {column_name} {op} {vector_str}::vector
-        LIMIT {k}
+        ORDER BY {safe_column} {op} {vector_str}::vector
+        LIMIT {int(k)}
         """
 
         results = await self.execute_query(query)
@@ -339,17 +348,21 @@ class PostgreSQLVectorAdapter(PostgreSQLAdapter):
             return vector_results[:k]
 
         # Full-text search results
+        safe_table = _safe_identifier(table_name)
+        safe_text_col = _safe_identifier(text_column)
+
+        # Use parameterized query for text_query to prevent SQL injection
         text_query_sql = f"""
-        SELECT *, ts_rank(to_tsvector('english', {text_column}),
-                         to_tsquery('english', '{text_query}')) AS text_score
-        FROM {table_name}
-        WHERE to_tsvector('english', {text_column}) @@ to_tsquery('english', '{text_query}')
+        SELECT *, ts_rank(to_tsvector('english', {safe_text_col}),
+                         to_tsquery('english', $1)) AS text_score
+        FROM {safe_table}
+        WHERE to_tsvector('english', {safe_text_col}) @@ to_tsquery('english', $1)
         ORDER BY text_score DESC
-        LIMIT {k * 2}
+        LIMIT {int(k * 2)}
         """
 
         try:
-            text_results = await self.execute_query(text_query_sql)
+            text_results = await self.execute_query(text_query_sql, [text_query])
         except Exception as e:
             logger.warning(f"Text search failed, falling back to vector search: {e}")
             return vector_results[:k]
@@ -378,11 +391,12 @@ class PostgreSQLVectorAdapter(PostgreSQLAdapter):
         if not top_ids:
             return []
 
-        # Fetch full records for top results
-        id_list = ",".join([f"'{id_val}'" for id_val, _ in top_ids])
-        final_query = f"SELECT * FROM {table_name} WHERE id IN ({id_list})"
+        # Fetch full records for top results using parameterized query
+        placeholders = ", ".join(f"${i}" for i in range(1, len(top_ids) + 1))
+        id_values = [id_val for id_val, _ in top_ids]
+        final_query = f"SELECT * FROM {safe_table} WHERE id IN ({placeholders})"
 
-        final_results = await self.execute_query(final_query)
+        final_results = await self.execute_query(final_query, id_values)
 
         logger.info(
             f"Hybrid search on '{table_name}' returned {len(final_results)} results"
@@ -403,12 +417,15 @@ class PostgreSQLVectorAdapter(PostgreSQLAdapter):
         Returns:
             Dict with vector column statistics
         """
+        safe_table = _safe_identifier(table_name)
+        safe_column = _safe_identifier(column_name)
+
         query = f"""
         SELECT
             COUNT(*) as total_vectors,
-            COUNT({column_name}) as non_null_vectors,
-            (SELECT array_length({column_name}, 1) FROM {table_name} WHERE {column_name} IS NOT NULL LIMIT 1) as dimensions
-        FROM {table_name}
+            COUNT({safe_column}) as non_null_vectors,
+            (SELECT array_length({safe_column}, 1) FROM {safe_table} WHERE {safe_column} IS NOT NULL LIMIT 1) as dimensions
+        FROM {safe_table}
         """
 
         results = await self.execute_query(query)

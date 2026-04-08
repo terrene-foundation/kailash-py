@@ -1322,8 +1322,8 @@ class ProductionDeploymentTester:
         with open(report_file, "w") as f:
             f.write(report)
 
-        logger.info(f"📄 Production testing report saved to: {report_file}")
-        print(f"\n{report}")
+        logger.info("production_test.report_saved", extra={"report_file": report_file})
+        logger.info("production_test.report_output", extra={"report": report})
 
 
 async def main():
@@ -1347,23 +1347,20 @@ async def main():
         passed = sum(1 for r in results if r.success)
         total = len(results)
 
-        print("\n🎯 Production Testing Complete!")
-        print(f"Results: {passed}/{total} tests passed ({(passed / total * 100):.1f}%)")
+        logger.info(
+            "production_test.complete",
+            extra={"passed": passed, "total": total, "pass_rate": passed / total * 100},
+        )
 
         if passed / total >= 0.8:
-            print(
-                "✅ PRODUCTION READY: DataFlow optimizations validated for production deployment"
-            )
+            logger.info("production_test.production_ready")
             return 0
         else:
-            print("⚠️ NEEDS IMPROVEMENT: Some production tests failed")
+            logger.warning("production_test.needs_improvement")
             return 1
 
     except Exception as e:
-        print(f"❌ Production testing failed: {e}")
-        import traceback
-
-        traceback.print_exc()
+        logger.exception("production_test.failed", extra={"error": str(e)})
         return 1
 
 

@@ -2269,8 +2269,8 @@ class AutoMigrationSystem:
             # Record failed migration
             try:
                 await self._record_migration(migration)
-            except:
-                pass  # Don't fail if we can't record the failure
+            except Exception:
+                logger.warning("Failed to record migration failure")
 
             return False
 
@@ -2408,35 +2408,40 @@ class AutoMigrationSystem:
         self, migration: Migration, diff: SchemaDiff
     ) -> bool:
         """Show visual confirmation of migration changes."""
-        print("\n" + "=" * 60)
-        print("🔄 DataFlow Auto-Migration Preview")
-        print("=" * 60)
+        import sys
 
-        print("\n📊 Migration Summary:")
-        print(f"  Version: {migration.version}")
-        print(f"  Name: {migration.name}")
-        print(f"  Operations: {len(migration.operations)}")
-        print(f"  Total changes: {diff.change_count()}")
+        def _out(msg: str) -> None:
+            sys.stdout.write(msg + "\n")
+
+        _out("\n" + "=" * 60)
+        _out("DataFlow Auto-Migration Preview")
+        _out("=" * 60)
+
+        _out("\nMigration Summary:")
+        _out("  Version: %s" % migration.version)
+        _out("  Name: %s" % migration.name)
+        _out("  Operations: %d" % len(migration.operations))
+        _out("  Total changes: %d" % diff.change_count())
 
         # Show detailed changes
         if diff.tables_to_create:
-            print(f"\n✅ Tables to CREATE ({len(diff.tables_to_create)}):")
+            _out("\nTables to CREATE (%d):" % len(diff.tables_to_create))
             for table in diff.tables_to_create:
-                print(f"  📋 {table.name} ({len(table.columns)} columns)")
+                _out("  %s (%d columns)" % (table.name, len(table.columns)))
                 for col in table.columns[:3]:  # Show first 3 columns
-                    print(f"    - {col.name}: {col.type}")
+                    _out("    - %s: %s" % (col.name, col.type))
                 if len(table.columns) > 3:
-                    print(f"    ... and {len(table.columns) - 3} more columns")
+                    _out("    ... and %d more columns" % (len(table.columns) - 3))
 
         if diff.tables_to_drop:
-            print(f"\n❌ Tables to DROP ({len(diff.tables_to_drop)}):")
+            _out("\nTables to DROP (%d):" % len(diff.tables_to_drop))
             for table_name in diff.tables_to_drop:
-                print(f"  🗑️ {table_name} (⚠️ Data will be lost!)")
+                _out("  %s (Data will be lost!)" % table_name)
 
         if diff.tables_to_modify:
-            print(f"\n🔄 Tables to MODIFY ({len(diff.tables_to_modify)}):")
+            _out("\nTables to MODIFY (%d):" % len(diff.tables_to_modify))
             for table_name, current, target in diff.tables_to_modify:
-                print(f"  📝 {table_name}")
+                _out("  %s" % table_name)
                 # Show specific changes
                 current_cols = {col.name: col for col in current.columns}
                 target_cols = {col.name: col for col in target.columns}
@@ -2445,22 +2450,26 @@ class AutoMigrationSystem:
                 dropped_cols = set(current_cols.keys()) - set(target_cols.keys())
 
                 if new_cols:
-                    print(f"    ➕ Adding columns: {', '.join(new_cols)}")
+                    _out("    Adding columns: %s" % ", ".join(new_cols))
                 if dropped_cols:
-                    print(
-                        f"    ➖ Dropping columns: {', '.join(dropped_cols)} (⚠️ Data will be lost!)"
+                    _out(
+                        "    Dropping columns: %s (Data will be lost!)"
+                        % ", ".join(dropped_cols)
                     )
 
         # Show SQL preview
-        print("\n📜 SQL Operations Preview:")
+        _out("\nSQL Operations Preview:")
         for i, operation in enumerate(migration.operations[:5], 1):
-            print(f"  {i}. {operation.description}")
+            _out("  %d. %s" % (i, operation.description))
             # Show first line of SQL
             first_line = operation.sql_up.split("\n")[0]
-            print(f"     SQL: {first_line[:60]}{'...' if len(first_line) > 60 else ''}")
+            _out(
+                "     SQL: %s%s"
+                % (first_line[:60], "..." if len(first_line) > 60 else "")
+            )
 
         if len(migration.operations) > 5:
-            print(f"     ... and {len(migration.operations) - 5} more operations")
+            _out("     ... and %d more operations" % (len(migration.operations) - 5))
 
         # Warnings
         has_data_loss = any(
@@ -2469,15 +2478,20 @@ class AutoMigrationSystem:
         )
 
         if has_data_loss:
-            print("\n⚠️ WARNING: This migration will result in DATA LOSS!")
-            print("   Please ensure you have backups before proceeding.")
+            logger.warning(
+                "migration.data_loss_warning",
+                extra={
+                    "version": migration.version,
+                    "operations": len(migration.operations),
+                },
+            )
+            _out("\nWARNING: This migration will result in DATA LOSS!")
+            _out("   Please ensure you have backups before proceeding.")
 
-        print(
-            f"\n🔄 This migration can be rolled back: {self._can_rollback(migration)}"
-        )
+        _out("\nThis migration can be rolled back: %s" % self._can_rollback(migration))
 
         # Confirmation prompt
-        print("\n" + "-" * 60)
+        _out("\n" + "-" * 60)
         while True:
             response = (
                 input("Do you want to apply this migration? [y/N/details]: ")
@@ -2492,7 +2506,7 @@ class AutoMigrationSystem:
             elif response in ["d", "details"]:
                 self._print_migration_details(migration)
             else:
-                print(
+                _out(
                     "Please enter 'y' for yes, 'n' for no, or 'details' for more information."
                 )
 
@@ -2505,37 +2519,48 @@ class AutoMigrationSystem:
 
     def _print_migration_preview(self, migration: Migration):
         """Print migration preview for dry run."""
-        print("\n📋 Migration Preview (Dry Run)")
-        print(f"Version: {migration.version}")
-        print(f"Operations: {len(migration.operations)}")
+        import sys
+
+        def _out(msg: str) -> None:
+            sys.stdout.write(msg + "\n")
+
+        _out("\nMigration Preview (Dry Run)")
+        _out("Version: %s" % migration.version)
+        _out("Operations: %d" % len(migration.operations))
 
         for operation in migration.operations:
-            print(
-                f"\n{operation.operation_type.value.upper()}: {operation.description}"
+            _out(
+                "\n%s: %s"
+                % (operation.operation_type.value.upper(), operation.description)
             )
-            print(f"SQL: {operation.sql_up}")
+            _out("SQL: %s" % operation.sql_up)
 
     def _print_migration_details(self, migration: Migration):
         """Print detailed migration information."""
-        print("\n" + "=" * 60)
-        print("📋 Detailed Migration Information")
-        print("=" * 60)
+        import sys
+
+        def _out(msg: str) -> None:
+            sys.stdout.write(msg + "\n")
+
+        _out("\n" + "=" * 60)
+        _out("Detailed Migration Information")
+        _out("=" * 60)
 
         for i, operation in enumerate(migration.operations, 1):
-            print(f"\n{i}. {operation.operation_type.value.upper()}")
-            print(f"   Table: {operation.table_name}")
-            print(f"   Description: {operation.description}")
-            print("   Forward SQL:")
+            _out("\n%d. %s" % (i, operation.operation_type.value.upper()))
+            _out("   Table: %s" % operation.table_name)
+            _out("   Description: %s" % operation.description)
+            _out("   Forward SQL:")
             for line in operation.sql_up.split("\n"):
-                print(f"     {line}")
-            print("   Rollback SQL:")
+                _out("     %s" % line)
+            _out("   Rollback SQL:")
             for line in operation.sql_down.split("\n"):
-                print(f"     {line}")
+                _out("     %s" % line)
 
             if operation.metadata:
-                print(f"   Metadata: {operation.metadata}")
+                _out("   Metadata: %s" % operation.metadata)
 
-        print("\n" + "=" * 60)
+        _out("\n" + "=" * 60)
 
     async def _acquire_migration_lock(self) -> bool:
         """Acquire migration lock using MigrationLockManager or fallback to advisory locks."""
