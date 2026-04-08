@@ -14,7 +14,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, AsyncGenerator
+import uuid
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from kaizen_agents.delegate.adapters.protocol import StreamEvent
 
@@ -47,12 +49,10 @@ class OllamaStreamAdapter:
         base_url: str | None = None,
         default_model: str = "",
         default_temperature: float = 0.4,
-        default_max_tokens: int = 16384,
+        default_max_tokens: int = 4096,
     ) -> None:
         self._base_url = (
-            base_url
-            or os.environ.get("OLLAMA_BASE_URL")
-            or _DEFAULT_OLLAMA_BASE_URL
+            base_url or os.environ.get("OLLAMA_BASE_URL") or _DEFAULT_OLLAMA_BASE_URL
         ).rstrip("/")
         self._default_model = default_model
         self._default_temperature = default_temperature
@@ -75,18 +75,26 @@ class OllamaStreamAdapter:
         import httpx
 
         resolved_model = model or self._default_model
-        resolved_temp = temperature if temperature is not None else self._default_temperature
-        resolved_max = max_tokens if max_tokens is not None else self._default_max_tokens
+        resolved_temp = (
+            temperature if temperature is not None else self._default_temperature
+        )
+        resolved_max = (
+            max_tokens if max_tokens is not None else self._default_max_tokens
+        )
 
         # Convert messages: Ollama supports a subset of OpenAI format
         # (role/content pairs).  System, user, assistant are supported natively.
         # Tool results become assistant messages with tool content.
         ollama_messages = _convert_messages_for_ollama(messages)
 
+        # Ollama does not support streaming when tools are provided;
+        # disable stream to get a single JSON response with tool_calls.
+        use_stream = not bool(tools)
+
         request_body: dict[str, Any] = {
             "model": resolved_model,
             "messages": ollama_messages,
-            "stream": True,
+            "stream": use_stream,
             "options": {
                 "temperature": resolved_temp,
                 "num_predict": resolved_max,
@@ -96,7 +104,17 @@ class OllamaStreamAdapter:
         if tools:
             request_body["tools"] = tools
 
-        request_body.update(kwargs)
+        # Merge permitted kwargs into request body. Only known Ollama API
+        # keys are allowed to prevent callers from overwriting model/messages/
+        # stream/tools (request smuggling, gh#367b security hardening).
+        _ALLOWED_KWARGS = {"options", "format", "keep_alive", "template"}
+        for k, v in kwargs.items():
+            if k not in _ALLOWED_KWARGS:
+                continue
+            if k == "options" and isinstance(v, dict):
+                request_body.setdefault("options", {}).update(v)
+            else:
+                request_body[k] = v
 
         url = f"{self._base_url}/api/chat"
 
@@ -107,80 +125,147 @@ class OllamaStreamAdapter:
         usage: dict[str, int] = {}
         finish_reason: str | None = None
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10, read=120, write=30, pool=10)) as client:
-            async with client.stream("POST", url, json=request_body) as response:
-                if response.status_code != 200:
-                    body = await response.aread()
-                    raise ConnectionError(
-                        f"Ollama returned status {response.status_code}: "
-                        f"{body.decode('utf-8', errors='replace')[:500]}"
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=10, read=120, write=30, pool=10)
+        ) as client:
+            if not use_stream:
+                # Non-streaming path: tools are present, Ollama returns a
+                # single JSON object instead of newline-delimited chunks.
+                resp = await client.post(url, json=request_body)
+                if resp.status_code != 200:
+                    logger.warning(
+                        "ollama.non_streaming_error",
+                        extra={"status": resp.status_code, "body": resp.text[:500]},
+                    )
+                    raise ConnectionError(f"Ollama returned status {resp.status_code}")
+                data = resp.json()
+
+                if "model" in data:
+                    resp_model = data["model"]
+
+                msg = data.get("message", {})
+                text = msg.get("content", "")
+                if text:
+                    content = text
+                    yield StreamEvent(
+                        event_type="text_delta",
+                        content=content,
+                        delta_text=text,
+                        model=resp_model,
                     )
 
-                async for line in response.aiter_lines():
-                    if not line.strip():
-                        continue
+                raw_tool_calls = msg.get("tool_calls", [])
+                for tc in raw_tool_calls:
+                    func = tc.get("function", {})
+                    tc_dict = {
+                        "id": f"call_ollama_{uuid.uuid4().hex[:12]}",
+                        "type": "function",
+                        "function": {
+                            "name": func.get("name", ""),
+                            "arguments": json.dumps(func.get("arguments", {})),
+                        },
+                    }
+                    tool_calls.append(tc_dict)
+                    yield StreamEvent(
+                        event_type="tool_call_start",
+                        content=content,
+                        model=resp_model,
+                    )
+                    yield StreamEvent(
+                        event_type="tool_call_end",
+                        content=content,
+                        model=resp_model,
+                    )
 
-                    try:
-                        data = json.loads(line)
-                    except json.JSONDecodeError:
-                        logger.warning("Failed to parse Ollama stream line: %s", line[:200])
-                        continue
-
-                    # Model name
-                    if "model" in data:
-                        resp_model = data["model"]
-
-                    # Text delta from message.content
-                    msg = data.get("message", {})
-                    delta_text = msg.get("content", "")
-                    if delta_text:
-                        content += delta_text
-                        yield StreamEvent(
-                            event_type="text_delta",
-                            content=content,
-                            delta_text=delta_text,
-                            model=resp_model,
-                        )
-
-                    # Tool calls (Ollama returns them in message.tool_calls)
-                    raw_tool_calls = msg.get("tool_calls", [])
-                    for tc in raw_tool_calls:
-                        func = tc.get("function", {})
-                        tc_dict = {
-                            "id": f"call_ollama_{len(tool_calls)}",
-                            "type": "function",
-                            "function": {
-                                "name": func.get("name", ""),
-                                "arguments": json.dumps(func.get("arguments", {})),
+                usage = {
+                    "prompt_tokens": data.get("prompt_eval_count", 0) or 0,
+                    "completion_tokens": data.get("eval_count", 0) or 0,
+                    "total_tokens": (
+                        (data.get("prompt_eval_count", 0) or 0)
+                        + (data.get("eval_count", 0) or 0)
+                    ),
+                }
+                finish_reason = "tool_calls" if tool_calls else "stop"
+            else:
+                # Streaming path: read newline-delimited JSON chunks.
+                async with client.stream("POST", url, json=request_body) as response:
+                    if response.status_code != 200:
+                        body = await response.aread()
+                        logger.warning(
+                            "ollama.streaming_error",
+                            extra={
+                                "status": response.status_code,
+                                "body": body.decode("utf-8", errors="replace")[:500],
                             },
-                        }
-                        tool_calls.append(tc_dict)
-                        yield StreamEvent(
-                            event_type="tool_call_start",
-                            content=content,
-                            model=resp_model,
                         )
-                        yield StreamEvent(
-                            event_type="tool_call_end",
-                            content=content,
-                            model=resp_model,
+                        raise ConnectionError(
+                            f"Ollama returned status {response.status_code}"
                         )
 
-                    # Done indicator
-                    if data.get("done", False):
-                        # Extract usage from the final message
-                        usage = {
-                            "prompt_tokens": data.get("prompt_eval_count", 0) or 0,
-                            "completion_tokens": data.get("eval_count", 0) or 0,
-                            "total_tokens": (
-                                (data.get("prompt_eval_count", 0) or 0)
-                                + (data.get("eval_count", 0) or 0)
-                            ),
-                        }
-                        if tool_calls:
-                            finish_reason = "tool_calls"
-                        else:
-                            finish_reason = "stop"
+                    async for line in response.aiter_lines():
+                        if not line.strip():
+                            continue
+
+                        try:
+                            data = json.loads(line)
+                        except json.JSONDecodeError:
+                            logger.warning(
+                                "Failed to parse Ollama stream line: %r", line[:200]
+                            )
+                            continue
+
+                        # Model name
+                        if "model" in data:
+                            resp_model = data["model"]
+
+                        # Text delta from message.content
+                        msg = data.get("message", {})
+                        delta_text = msg.get("content", "")
+                        if delta_text:
+                            content += delta_text
+                            yield StreamEvent(
+                                event_type="text_delta",
+                                content=content,
+                                delta_text=delta_text,
+                                model=resp_model,
+                            )
+
+                        # Tool calls (Ollama returns them in message.tool_calls)
+                        raw_tool_calls = msg.get("tool_calls", [])
+                        for tc in raw_tool_calls:
+                            func = tc.get("function", {})
+                            tc_dict = {
+                                "id": f"call_ollama_{uuid.uuid4().hex[:12]}",
+                                "type": "function",
+                                "function": {
+                                    "name": func.get("name", ""),
+                                    "arguments": json.dumps(func.get("arguments", {})),
+                                },
+                            }
+                            tool_calls.append(tc_dict)
+                            yield StreamEvent(
+                                event_type="tool_call_start",
+                                content=content,
+                                model=resp_model,
+                            )
+                            yield StreamEvent(
+                                event_type="tool_call_end",
+                                content=content,
+                                model=resp_model,
+                            )
+
+                        # Done indicator
+                        if data.get("done", False):
+                            # Extract usage from the final message
+                            usage = {
+                                "prompt_tokens": data.get("prompt_eval_count", 0) or 0,
+                                "completion_tokens": data.get("eval_count", 0) or 0,
+                                "total_tokens": (
+                                    (data.get("prompt_eval_count", 0) or 0)
+                                    + (data.get("eval_count", 0) or 0)
+                                ),
+                            }
+                            finish_reason = "tool_calls" if tool_calls else "stop"
 
         yield StreamEvent(
             event_type="done",
@@ -205,9 +290,38 @@ def _convert_messages_for_ollama(
     for msg in messages:
         role = msg.get("role", "")
         if role in ("system", "user", "assistant", "tool"):
-            converted: dict[str, Any] = {"role": role, "content": msg.get("content", "")}
-            # Pass through tool_calls for assistant messages
+            converted: dict[str, Any] = {
+                "role": role,
+                "content": msg.get("content", ""),
+            }
+            # Pass through tool_calls for assistant messages, deserialising
+            # arguments from JSON strings back to dicts (Ollama expects dicts).
             if role == "assistant" and "tool_calls" in msg:
-                converted["tool_calls"] = msg["tool_calls"]
+                converted_tcs = []
+                for tc in msg["tool_calls"]:
+                    func = tc.get("function", {})
+                    args = func.get("arguments", {})
+                    if isinstance(args, str):
+                        try:
+                            args = json.loads(args)
+                        except json.JSONDecodeError:
+                            args = {}
+                    converted_tcs.append(
+                        {
+                            "type": tc.get("type", "function"),
+                            "function": {
+                                "name": func.get("name", ""),
+                                "arguments": args,
+                            },
+                        }
+                    )
+                converted["tool_calls"] = converted_tcs
+            # Preserve tool_call_id and name for tool-role messages so
+            # Ollama can correlate tool results with the originating call.
+            if role == "tool":
+                if "tool_call_id" in msg:
+                    converted["tool_call_id"] = msg["tool_call_id"]
+                if "name" in msg:
+                    converted["name"] = msg["name"]
             result.append(converted)
     return result
