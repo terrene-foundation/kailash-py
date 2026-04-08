@@ -3,7 +3,7 @@ Integration tests for DataFlow Circuit Breaker System
 
 Tests circuit breaker integration with real components and workflows. Uses a
 real in-process performance monitor stand-in (``RecordingPerformanceMonitor``)
-rather than ``unittest.mock.MagicMock`` to honour the Tier 2 NO MOCKING rule
+rather than a mocking-library double, to honour the Tier 2 NO MOCKING rule
 from ``rules/testing.md``.
 """
 
@@ -17,7 +17,7 @@ import pytest
 class RecordingPerformanceMonitor:
     """In-process performance monitor that records metric calls for assertions.
 
-    A real replacement for ``unittest.mock.MagicMock`` in Tier 2/3 — provides
+    A real replacement for a mocking-library double in Tier 2/3 — provides
     the ``record_metric`` surface the ``CircuitBreakerManager`` expects and
     stores every call so the test can verify observability contracts without
     any mocking library.
