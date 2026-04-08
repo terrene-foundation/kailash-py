@@ -7,20 +7,46 @@ Test QueryBuilder and QueryCache integration with DataFlow.
 
 import sys
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
+
+
+class InMemoryQueryCache:
+    """In-process QueryCache stand-in using a real dict backing store.
+
+    Replaces ``unittest.mock.Mock`` in Tier 2 tests that exercise DataFlow's
+    ``execute_cached_query`` path. Implements the minimum QueryCache surface
+    (``get`` / ``set``) with real state so read-back verification works
+    against a genuine cache rather than mock return values.
+    """
+
+    def __init__(self) -> None:
+        self._store: dict = {}
+
+    def get(self, key):
+        return self._store.get(key)
+
+    def set(self, key, value, ttl=None):
+        self._store[key] = value
+        return True
+
+    def invalidate(self, key):
+        self._store.pop(key, None)
+
+    def clear(self):
+        self._store.clear()
+
 
 from tests.infrastructure.test_harness import IntegrationTestSuite
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 
-from dataflow import DataFlow
-from dataflow.core import DataFlowConfig, Environment
-
 from kailash.nodes.data.query_builder import create_query_builder
 from kailash.nodes.data.query_cache import CacheInvalidationStrategy, QueryCache
+
+from dataflow import DataFlow
+from dataflow.core import DataFlowConfig, Environment
 
 
 @pytest.fixture
@@ -165,28 +191,41 @@ class TestDataFlowQueryIntegration:
         result = db.execute_cached_query("SELECT * FROM users", [])
         assert result is None
 
-    @patch("dataflow.core.engine.QueryCache")
-    def test_execute_cached_query_with_cache(self, mock_cache_class):
-        """Test execute_cached_query with cache enabled"""
-        # Mock cache instance
-        mock_cache = Mock()
-        mock_cache.get.return_value = {"result": [{"id": 1, "name": "John"}]}
-        mock_cache_class.return_value = mock_cache
+    def test_execute_cached_query_with_cache(self):
+        """Test execute_cached_query with a real in-memory cache.
 
+        Replaces the original ``@patch`` on ``dataflow.core.engine.QueryCache``
+        with a real ``InMemoryQueryCache`` injected into the DataFlow
+        instance. Verifies the cache hit/miss behaviour against actual state
+        (state-persistence verification per ``rules/testing.md``).
+        """
         config = DataFlowConfig()
         config.environment = Environment.DEVELOPMENT
         config.enable_query_cache = True
 
         db = DataFlow(config)
 
-        # Should return cached result
-        result = db.execute_cached_query("SELECT * FROM users", [])
+        # Inject a real in-memory cache in place of any auto-created Redis one
+        real_cache = InMemoryQueryCache()
+        db._query_cache = real_cache
+
+        query = "SELECT * FROM users"
+        params: list = []
+
+        # Cache miss returns None
+        assert db.execute_cached_query(query, params) is None
+
+        # Populate the cache through the real object, then verify the
+        # DataFlow pathway reads it back.
+        cache_key = db._build_query_cache_key(query, params)
+        real_cache.set(cache_key, {"result": [{"id": 1, "name": "John"}]})
+
+        result = db.execute_cached_query(query, params)
         assert result == [{"id": 1, "name": "John"}]
 
-        # Test cache miss
-        mock_cache.get.return_value = None
-        result = db.execute_cached_query("SELECT * FROM users", [])
-        assert result is None
+        # Invalidate and confirm the follow-up read returns None
+        real_cache.invalidate(cache_key)
+        assert db.execute_cached_query(query, params) is None
 
     def test_model_enhancement_with_query_features(self):
         """Test that models are enhanced with query builder and cache methods"""

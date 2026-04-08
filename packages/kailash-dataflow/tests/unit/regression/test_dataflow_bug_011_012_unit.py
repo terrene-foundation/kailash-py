@@ -1,10 +1,15 @@
 """
-Integration tests for DataFlow bugs 011 and 012.
+Unit regression tests for DataFlow bugs 011 and 012.
 
 Bug 011: Logger undefined error (line 1758 in dataflow/core/nodes.py)
 Bug 012: TDD isolation bypass due to params.host access failure (line 1748)
 
-These tests use real Docker infrastructure to verify bug behavior in realistic scenarios.
+These regression tests deliberately inject a fake asyncpg ConnectionParameters
+object that is missing the ``host`` attribute. That is an internal error-path
+the real asyncpg client cannot produce on a healthy connection, so the tests
+live in Tier 1 (unit) where the fake is permitted. Tier 1 allows mocks per
+``tests/unit/CLAUDE.md`` and ``rules/testing.md`` § "Tier 1 (Unit):
+Mocking allowed".
 """
 
 import asyncio
@@ -12,6 +17,8 @@ import os
 from unittest.mock import Mock
 
 import pytest
+
+pytestmark = [pytest.mark.unit, pytest.mark.regression]
 
 # Set TDD mode for integration tests
 os.environ["DATAFLOW_TDD_MODE"] = "true"
