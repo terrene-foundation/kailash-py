@@ -128,6 +128,8 @@ class FabricRuntime:
         self._started = False
         self._started_at: Optional[datetime] = None
         self._health_manager: Optional[Any] = None
+        # Phase 5.8: track registered Nexus routes for graceful shutdown.
+        self._registered_nexus_routes: List[Dict[str, Any]] = []
 
     def _validate_params(self) -> None:
         """Validate parameter combinations at startup (TODO-38)."""
@@ -278,6 +280,13 @@ class FabricRuntime:
         # 9. Subscribe to DataFlow event bus for model writes (TODO-18)
         self._subscribe_to_events()
 
+        # 10. Phase 5.8: Register fabric endpoints with Nexus when one was
+        # supplied via ``db.start(nexus=...)``. When no Nexus is bound, the
+        # fabric runtime is "background only" — handlers exist on the
+        # subsystems but are not exposed over HTTP, and a loud warning is
+        # logged so operators are not surprised by 404s.
+        self._register_with_nexus()
+
         self._started = True
         logger.info(
             "fabric.runtime.started",
@@ -288,8 +297,134 @@ class FabricRuntime:
                 "dev_mode": self._dev_mode,
                 "instance_name": self._instance_name,
                 "redis_url_masked": _mask_url(self._redis_url),
+                "nexus_routes": len(self._registered_nexus_routes),
             },
         )
+
+    # ------------------------------------------------------------------
+    # Nexus registration (Phase 5.8)
+    # ------------------------------------------------------------------
+
+    def _register_with_nexus(self) -> None:
+        """Wire the fabric subsystem handlers into the bound Nexus.
+
+        Called from :meth:`start` after every subsystem has been
+        initialised. When no ``nexus`` was supplied to ``__init__``,
+        the runtime stays in "background only" mode and a warning is
+        logged.
+
+        The wiring covers, in order:
+
+        * **Serving routes** — every dict returned by
+          :meth:`FabricServingLayer.get_routes` (one per product, plus
+          ``/fabric/_batch`` and any write endpoints when
+          ``enable_writes=True``).
+        * **Health endpoint** — ``GET /fabric/_health`` from a
+          :class:`FabricHealthManager` instance, instantiated here if
+          one wasn't already created lazily by :meth:`last_trace`.
+        * **Trace endpoint** — ``GET /fabric/_trace/{product}`` from
+          the same health manager.
+        * **Webhook endpoint** — ``POST /fabric/webhook/{source_name}``
+          wrapping :meth:`WebhookReceiver.handle_webhook` so each
+          webhook source has a single canonical URL.
+        """
+        if self._nexus is None:
+            logger.warning(
+                "fabric.nexus.absent: FabricRuntime started without a Nexus "
+                "instance — fabric endpoints are NOT exposed over HTTP. Pass "
+                "nexus=Nexus(...) to db.start() to enable.",
+                extra={"products": len(self._products)},
+            )
+            return
+
+        from dataflow.fabric.nexus_adapter import (
+            fabric_handler_to_fastapi,
+            register_route_dicts,
+        )
+
+        registered: List[Dict[str, Any]] = []
+
+        # Serving — products + batch + (optional) writes.
+        if self._serving is not None:
+            try:
+                registered.extend(
+                    register_route_dicts(self._nexus, self._serving.get_routes())
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.exception(
+                    "fabric.nexus.serving.failed", extra={"error": str(exc)}
+                )
+
+        # Health + trace — instantiate the manager if it wasn't lazy
+        # built by ``last_trace`` already.
+        try:
+            from dataflow.fabric.health import FabricHealthManager
+
+            if self._health_manager is None:
+                self._health_manager = FabricHealthManager(
+                    self._sources,
+                    self._products,
+                    self._pipeline,
+                    self._started_at,
+                )
+            health_route = self._health_manager.get_health_handler()
+            trace_route = self._health_manager.get_trace_handler()
+            registered.extend(
+                register_route_dicts(self._nexus, [health_route, trace_route])
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception("fabric.nexus.health.failed", extra={"error": str(exc)})
+
+        # Webhook — wrap handle_webhook so each source maps to a path.
+        if self._webhook_receiver is not None:
+            try:
+                webhook_route = self._make_webhook_route()
+                registered.append(register_route_dicts(self._nexus, [webhook_route])[0])
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.exception(
+                    "fabric.nexus.webhook.failed", extra={"error": str(exc)}
+                )
+
+        self._registered_nexus_routes = registered
+        logger.info(
+            "fabric.nexus.registered",
+            extra={"count": len(registered)},
+        )
+
+    def _make_webhook_route(self) -> Dict[str, Any]:
+        """Build a fabric-style route dict that exposes the webhook
+        receiver as ``POST /fabric/webhook/{source_name}``.
+
+        The handler reads the raw request body, copies request headers
+        into a plain dict, and delegates to
+        :meth:`WebhookReceiver.handle_webhook`. The receiver returns a
+        plain dict (``{"accepted": bool, "reason": str}``) which the
+        adapter wraps in a JSONResponse via the ``_status`` convention.
+        """
+        receiver = self._webhook_receiver
+
+        async def handler(source_name: str = "", request: Any = None) -> Dict[str, Any]:
+            if not source_name:
+                return {"_status": 400, "error": "source_name path parameter required"}
+            if request is None:
+                return {"_status": 500, "error": "request object required"}
+            body = await request.body()
+            headers = {k.lower(): v for k, v in request.headers.items()}
+            result = await receiver.handle_webhook(
+                source_name=source_name,
+                headers=headers,
+                body=body,
+            )
+            status = 200 if result.get("accepted") else 400
+            return {"_status": status, **result}
+
+        handler.__name__ = "fabric_webhook"
+        return {
+            "method": "POST",
+            "path": "/fabric/webhook/{source_name}",
+            "handler": handler,
+            "metadata": {"type": "webhook"},
+        }
 
     # ------------------------------------------------------------------
     # Shared Redis client + cache backend builders
