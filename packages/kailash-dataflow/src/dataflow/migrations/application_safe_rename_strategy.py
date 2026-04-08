@@ -296,7 +296,10 @@ class ViewAliasingManager:
             return alias_view_name
 
         except Exception as e:
-            self.logger.error(f"Failed to create alias view: {e}")
+            self.logger.error(
+                "application_safe_rename_strategy.failed_to_create_alias_view",
+                extra={"error": str(e)},
+            )
             raise ApplicationSafeRenameError(f"Alias view creation failed: {str(e)}")
 
     async def cleanup_alias_views(
@@ -320,10 +323,16 @@ class ViewAliasingManager:
             try:
                 await connection.execute(f"DROP VIEW IF EXISTS {alias_view}")
                 cleaned_views.append(alias_view)
-                self.logger.info(f"Cleaned up alias view: {alias_view}")
+                self.logger.info(
+                    "application_safe_rename_strategy.cleaned_up_alias_view",
+                    extra={"alias_view": alias_view},
+                )
 
             except Exception as e:
-                self.logger.error(f"Failed to cleanup alias view {alias_view}: {e}")
+                self.logger.error(
+                    "application_safe_rename_strategy.failed_to_cleanup_alias_view",
+                    extra={"alias_view": alias_view, "error": str(e)},
+                )
 
         self.created_aliases = []
         return cleaned_views
@@ -390,7 +399,10 @@ class BlueGreenRenameManager:
             )
 
         except Exception as e:
-            self.logger.error(f"Blue-green rename failed: {e}")
+            self.logger.error(
+                "application_safe_rename_strategy.blue_green_rename_failed",
+                extra={"error": str(e)},
+            )
             # Cleanup temp objects on failure
             await self._cleanup_temp_objects(connection)
 
@@ -408,7 +420,10 @@ class BlueGreenRenameManager:
         create_sql = f"CREATE TABLE {temp_table} (LIKE {source_table} INCLUDING ALL)"
         await connection.execute(create_sql)
         self.temp_objects.append(temp_table)
-        self.logger.info(f"Created temp table: {temp_table}")
+        self.logger.info(
+            "application_safe_rename_strategy.created_temp_table",
+            extra={"temp_table": temp_table},
+        )
 
     async def _sync_data(
         self, source_table: str, temp_table: str, connection: asyncpg.Connection
@@ -416,7 +431,10 @@ class BlueGreenRenameManager:
         """Sync data from source to temp table."""
         sync_sql = f"INSERT INTO {temp_table} SELECT * FROM {source_table}"
         await connection.execute(sync_sql)
-        self.logger.info(f"Synced data from {source_table} to {temp_table}")
+        self.logger.info(
+            "application_safe_rename_strategy.synced_data_from_to",
+            extra={"source_table": source_table, "temp_table": temp_table},
+        )
 
     async def _execute_atomic_cutover(
         self,
@@ -453,16 +471,25 @@ class BlueGreenRenameManager:
             else:
                 raise
 
-        self.logger.info(f"Atomic cutover completed: {old_table} -> {new_table}")
+        self.logger.info(
+            "application_safe_rename_strategy.atomic_cutover_completed",
+            extra={"old_table": old_table, "new_table": new_table},
+        )
 
     async def _cleanup_temp_objects(self, connection: asyncpg.Connection):
         """Clean up temporary objects created during blue-green deployment."""
         for temp_obj in self.temp_objects:
             try:
                 await connection.execute(f"DROP TABLE IF EXISTS {temp_obj}")
-                self.logger.info(f"Cleaned up temp object: {temp_obj}")
+                self.logger.info(
+                    "application_safe_rename_strategy.cleaned_up_temp_object",
+                    extra={"temp_obj": temp_obj},
+                )
             except Exception as e:
-                self.logger.error(f"Failed to cleanup {temp_obj}: {e}")
+                self.logger.error(
+                    "application_safe_rename_strategy.failed_to_cleanup",
+                    extra={"temp_obj": temp_obj, "error": str(e)},
+                )
 
         self.temp_objects = []
 
@@ -521,7 +548,10 @@ class RollbackManager:
             )
 
         except Exception as e:
-            self.logger.error(f"Rollback failed: {e}")
+            self.logger.error(
+                "application_safe_rename_strategy.rollback_failed",
+                extra={"error": str(e)},
+            )
             return RollbackExecutionResult(
                 rollback_successful=False,
                 rollback_time=time.time() - start_time,
@@ -537,7 +567,10 @@ class RollbackManager:
             if obj.startswith("alias_view") or obj.startswith("migration_alias"):
                 await connection.execute(f"DROP VIEW IF EXISTS {obj}")
                 cleaned.append(obj)
-                self.logger.info(f"Rolled back alias view: {obj}")
+                self.logger.info(
+                    "application_safe_rename_strategy.rolled_back_alias_view",
+                    extra={"obj": obj},
+                )
         return cleaned
 
     async def _rollback_blue_green(
@@ -549,7 +582,10 @@ class RollbackManager:
             if "_migration_temp" in obj or "temp_" in obj:
                 await connection.execute(f"DROP TABLE IF EXISTS {obj}")
                 cleaned.append(obj)
-                self.logger.info(f"Rolled back temp table: {obj}")
+                self.logger.info(
+                    "application_safe_rename_strategy.rolled_back_temp_table",
+                    extra={"obj": obj},
+                )
         return cleaned
 
 
@@ -692,7 +728,10 @@ class ApplicationSafeRenameStrategy:
             return result
 
         except Exception as e:
-            self.logger.error(f"Zero-downtime rename failed: {e}")
+            self.logger.error(
+                "application_safe_rename_strategy.zero_downtime_rename_failed",
+                extra={"error": str(e)},
+            )
             raise ApplicationSafeRenameError(f"Strategy execution failed: {str(e)}")
 
     async def execute_view_aliasing_strategy(
@@ -748,7 +787,10 @@ class ApplicationSafeRenameStrategy:
             )
 
         except Exception as e:
-            self.logger.error(f"View aliasing strategy failed: {e}")
+            self.logger.error(
+                "application_safe_rename_strategy.view_aliasing_strategy_failed",
+                extra={"error": str(e)},
+            )
             return StrategyExecutionResult(
                 success=False,
                 strategy_used=ZeroDowntimeStrategy.VIEW_ALIASING,
@@ -805,7 +847,10 @@ class ApplicationSafeRenameStrategy:
 
         try:
             for phase in migration_phases:
-                self.logger.info(f"Executing migration phase: {phase.value}")
+                self.logger.info(
+                    "application_safe_rename_strategy.executing_migration_phase",
+                    extra={"value": phase.value},
+                )
 
                 if phase == DeploymentPhase.PRE_RENAME_VALIDATION:
                     # Validate rename feasibility
@@ -844,7 +889,10 @@ class ApplicationSafeRenameStrategy:
             return result
 
         except Exception as e:
-            self.logger.error(f"Gradual migration failed: {e}")
+            self.logger.error(
+                "application_safe_rename_strategy.gradual_migration_failed",
+                extra={"error": str(e)},
+            )
             return StrategyExecutionResult(
                 success=False,
                 strategy_used=ZeroDowntimeStrategy.GRADUAL_MIGRATION,
@@ -902,12 +950,18 @@ class ApplicationSafeRenameStrategy:
     async def _validate_pre_rename_conditions(self, old_table: str, new_table: str):
         """Validate conditions before rename execution."""
         # Mock validation for testing
-        self.logger.info(f"Pre-rename validation passed for {old_table} -> {new_table}")
+        self.logger.info(
+            "application_safe_rename_strategy.pre_rename_validation_passed_for",
+            extra={"old_table": old_table, "new_table": new_table},
+        )
 
     async def _validate_post_rename_conditions(self, new_table: str):
         """Validate conditions after rename execution."""
         # Mock validation for testing
-        self.logger.info(f"Post-rename validation passed for {new_table}")
+        self.logger.info(
+            "application_safe_rename_strategy.post_rename_validation_passed_for",
+            extra={"new_table": new_table},
+        )
 
     async def _get_connection(self) -> asyncpg.Connection:
         """Get database connection from connection manager."""

@@ -181,11 +181,16 @@ class DirectDeploymentStrategy(AbstractDeploymentStrategy):
             deployment_id=deployment_id, strategy_name=self.name, phases=phases
         )
 
-        self.logger.info(f"Starting direct deployment: {deployment_id}")
+        self.logger.info(
+            "deployment_strategies.starting_direct_deployment",
+            extra={"deployment_id": deployment_id},
+        )
 
         try:
             for phase in phases:
-                self.logger.info(f"Executing phase: {phase.name}")
+                self.logger.info(
+                    "deployment_strategies.executing_phase", extra={"name": phase.name}
+                )
                 execution_context.current_phase = phase.name
 
                 # Execute phase
@@ -221,7 +226,10 @@ class DirectDeploymentStrategy(AbstractDeploymentStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Direct deployment failed: {e}")
+            self.logger.error(
+                "deployment_strategies.direct_deployment_failed",
+                extra={"error": str(e)},
+            )
 
             return {
                 "success": False,
@@ -314,7 +322,10 @@ class StagedDeploymentStrategy(AbstractDeploymentStrategy):
             deployment_id=deployment_id, strategy_name=self.name, phases=phases
         )
 
-        self.logger.info(f"Starting staged deployment: {deployment_id}")
+        self.logger.info(
+            "deployment_strategies.starting_staged_deployment",
+            extra={"deployment_id": deployment_id},
+        )
 
         try:
             for i, phase in enumerate(phases):
@@ -365,7 +376,10 @@ class StagedDeploymentStrategy(AbstractDeploymentStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Staged deployment failed: {e}")
+            self.logger.error(
+                "deployment_strategies.staged_deployment_failed",
+                extra={"error": str(e)},
+            )
 
             return {
                 "success": False,
@@ -385,7 +399,10 @@ class StagedDeploymentStrategy(AbstractDeploymentStrategy):
             return
 
         last_checkpoint = context.rollback_points[-1]
-        self.logger.info(f"Rolling back to checkpoint: {last_checkpoint}")
+        self.logger.info(
+            "deployment_strategies.rolling_back_to_checkpoint",
+            extra={"last_checkpoint": last_checkpoint},
+        )
 
         # Find the phase to rollback to
         for phase in context.phases:
@@ -501,7 +518,10 @@ class ZeroDowntimeDeploymentStrategy(AbstractDeploymentStrategy):
             connection_pools=connection_pools,
         )
 
-        self.logger.info(f"Starting zero-downtime deployment: {deployment_id}")
+        self.logger.info(
+            "deployment_strategies.starting_zero_downtime_deployment",
+            extra={"deployment_id": deployment_id},
+        )
 
         try:
             for i, phase in enumerate(phases):
@@ -553,7 +573,10 @@ class ZeroDowntimeDeploymentStrategy(AbstractDeploymentStrategy):
             }
 
         except Exception as e:
-            self.logger.error(f"Zero-downtime deployment failed: {e}")
+            self.logger.error(
+                "deployment_strategies.zero_downtime_deployment_failed",
+                extra={"error": str(e)},
+            )
 
             return {
                 "success": False,
@@ -673,7 +696,10 @@ class BlockedDeploymentStrategy(AbstractDeploymentStrategy):
         """Blocked deployment cannot be executed."""
         deployment_id = migration_info.get("deployment_id", "blocked_deploy_001")
 
-        self.logger.warning(f"Deployment blocked due to critical risk: {deployment_id}")
+        self.logger.warning(
+            "deployment_strategies.deployment_blocked_due_to_critical_risk",
+            extra={"deployment_id": deployment_id},
+        )
 
         blocking_reasons = [
             "Critical risk level detected",

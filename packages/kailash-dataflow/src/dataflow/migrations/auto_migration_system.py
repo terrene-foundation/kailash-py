@@ -78,7 +78,10 @@ def _execute_workflow_safe(workflow: WorkflowBuilder) -> Tuple[Dict[str, Any], s
         query = params.get("query", "")
 
         if not connection_string or not query:
-            logger.debug(f"Node {node_id} missing connection_string or query, skipping")
+            logger.debug(
+                "auto_migration_system.node_missing_connection_string_or_query_skipping",
+                extra={"node_id": node_id},
+            )
             results[node_id] = {"result": [], "error": "Missing parameters"}
             continue
 
@@ -339,7 +342,10 @@ class PostgreSQLSchemaInspector:
             # Check if result is a dict and contains error
             if isinstance(schema_result, dict) and schema_result.get("error"):
                 error_msg = schema_result.get("error", "Unknown error")
-                logger.error(f"Failed to get PostgreSQL schema: {error_msg}")
+                logger.error(
+                    "auto_migration_system.failed_to_get_postgresql_schema",
+                    extra={"error_msg": error_msg},
+                )
                 return {}
 
             rows = results["get_schema"].get("result", [])
@@ -377,7 +383,10 @@ class PostgreSQLSchemaInspector:
             return tables
 
         except Exception as e:
-            logger.error(f"Failed to get PostgreSQL schema: {e}")
+            logger.error(
+                "auto_migration_system.failed_to_get_postgresql_schema",
+                extra={"error": str(e)},
+            )
             return {}
 
     async def _get_postgresql_indexes(
@@ -428,7 +437,10 @@ class PostgreSQLSchemaInspector:
                     index_info = {"name": row[0], "columns": row[1], "unique": row[2]}
                     table_def.indexes.append(index_info)
         except Exception as e:
-            logger.debug(f"Failed to get indexes for table {table_name}: {e}")
+            logger.debug(
+                "auto_migration_system.failed_to_get_indexes_for_table",
+                extra={"table_name": table_name, "error": str(e)},
+            )
             # Don't fail the whole schema discovery for index issues
 
     # PostgreSQL-optimized implementation
@@ -879,7 +891,10 @@ class PostgreSQLMigrationGenerator:
 
             # Check if column exists in database
             if col_name not in db_columns:
-                logger.debug(f"Column '{col_name}' not found in database")
+                logger.debug(
+                    "auto_migration_system.column_not_found_in_database",
+                    extra={"col_name": col_name},
+                )
                 return False
 
             db_col = db_columns[col_name]
@@ -895,7 +910,10 @@ class PostgreSQLMigrationGenerator:
             # Check nullable compatibility
             # Model requires NOT NULL but DB allows NULL = incompatible
             if not model_col.nullable and db_col.nullable:
-                logger.debug(f"Column '{col_name}' nullable mismatch")
+                logger.debug(
+                    "auto_migration_system.column_nullable_mismatch",
+                    extra={"col_name": col_name},
+                )
                 return False
 
         # All model columns are satisfied by database
@@ -1056,7 +1074,10 @@ class SQLiteSchemaInspector:
             # Check if result is a dict and contains error
             if isinstance(schema_result, dict) and schema_result.get("error"):
                 error_msg = schema_result.get("error", "Unknown error")
-                logger.error(f"Failed to get SQLite schema: {error_msg}")
+                logger.error(
+                    "auto_migration_system.failed_to_get_sqlite_schema",
+                    extra={"error_msg": error_msg},
+                )
                 return {}
 
             # Handle different result formats from AsyncSQLDatabaseNode
@@ -1087,7 +1108,10 @@ class SQLiteSchemaInspector:
                 else:
                     # List/tuple format
                     if not isinstance(row, (list, tuple)) or len(row) < 7:
-                        logger.debug(f"Skipping invalid row: {row}")
+                        logger.debug(
+                            "auto_migration_system.skipping_invalid_row",
+                            extra={"row": row},
+                        )
                         continue
                     table_name = row[0]
                     column_name = row[2]
@@ -1117,7 +1141,10 @@ class SQLiteSchemaInspector:
             return tables
 
         except Exception as e:
-            logger.error(f"Failed to get SQLite schema: {e}")
+            logger.error(
+                "auto_migration_system.failed_to_get_sqlite_schema",
+                extra={"error": str(e)},
+            )
             return {}
 
     def _normalize_sqlite_type(self, sqlite_type: str) -> str:
@@ -1198,7 +1225,10 @@ class SQLiteSchemaInspector:
                     table_def.indexes.append(index_info)
 
         except Exception as e:
-            logger.debug(f"Failed to get indexes for table {table_name}: {e}")
+            logger.debug(
+                "auto_migration_system.failed_to_get_indexes_for_table",
+                extra={"table_name": table_name, "error": str(e)},
+            )
 
     def compare_schemas(
         self,
@@ -1582,7 +1612,10 @@ class AutoMigrationSystem:
             logger.info(
                 "AutoMigrationSystem initialized with MigrationLockManager for concurrent safety"
             )
-            logger.info(f"Proceeding with detected database type: {self.dialect}")
+            logger.info(
+                "auto_migration_system.proceeding_with_detected_database_type",
+                extra={"dialect": self.dialect},
+            )
 
         self.migrations_dir = Path(migrations_dir)
         self.migrations_dir.mkdir(exist_ok=True)
@@ -1663,7 +1696,10 @@ class AutoMigrationSystem:
                     "Cannot proceed without migration lock: Lock acquisition failed"
                 )
         except Exception as e:
-            logger.error(f"Failed to acquire migration lock: {e}")
+            logger.error(
+                "auto_migration_system.failed_to_acquire_migration_lock",
+                extra={"error": str(e)},
+            )
             raise RuntimeError(f"Cannot proceed without migration lock: {e}")
 
         # CRITICAL FIX: All migration logic must happen while lock is held
@@ -1676,11 +1712,20 @@ class AutoMigrationSystem:
 
             # Get current schema
             current_schema = await self.inspector.get_current_schema()
-            logger.info(f"Current schema has {len(current_schema)} tables")
+            logger.info(
+                "auto_migration_system.current_schema_has_tables",
+                extra={"count": len(current_schema)},
+            )
 
             # Compare schemas with existing_schema_mode support
-            logger.info(f"Current schema type: {type(current_schema)}")
-            logger.info(f"Target schema type: {type(target_schema)}")
+            logger.info(
+                "auto_migration_system.current_schema_type",
+                extra={"type": type(current_schema)},
+            )
+            logger.info(
+                "auto_migration_system.target_schema_type",
+                extra={"type": type(target_schema)},
+            )
             logger.info(
                 f"Current schema keys: {list(current_schema.keys()) if isinstance(current_schema, dict) else 'N/A'}"
             )
@@ -1695,12 +1740,24 @@ class AutoMigrationSystem:
                     existing_schema_mode=self._existing_schema_mode,
                 )
             except Exception as e:
-                logger.error(f"Schema comparison failed: {e}")
-                logger.error(f"Current schema sample: {str(current_schema)[:200]}...")
-                logger.error(f"Target schema sample: {str(target_schema)[:200]}...")
+                logger.error(
+                    "auto_migration_system.schema_comparison_failed",
+                    extra={"error": str(e)},
+                )
+                logger.error(
+                    "auto_migration_system.current_schema_sample",
+                    extra={"str": str(current_schema)[:200]},
+                )
+                logger.error(
+                    "auto_migration_system.target_schema_sample",
+                    extra={"str": str(target_schema)[:200]},
+                )
                 import traceback
 
-                logger.error(f"Full traceback: {traceback.format_exc()}")
+                logger.error(
+                    "auto_migration_system.full_traceback",
+                    extra={"format_exc": traceback.format_exc()},
+                )
                 raise
 
             # Handle case where schema comparison fails
@@ -1742,14 +1799,22 @@ class AutoMigrationSystem:
             success = await self._apply_migration(migration)
 
             if success:
-                logger.info(f"Migration {migration.version} applied successfully")
+                logger.info(
+                    "auto_migration_system.migration_applied_successfully",
+                    extra={"version": migration.version},
+                )
                 return True, [migration]
             else:
-                logger.error(f"Migration {migration.version} failed")
+                logger.error(
+                    "auto_migration_system.migration_failed",
+                    extra={"version": migration.version},
+                )
                 return False, []
 
         except Exception as e:
-            logger.error(f"Auto-migration failed: {e}")
+            logger.error(
+                "auto_migration_system.auto_migration_failed", extra={"error": str(e)}
+            )
             return False, []
 
         finally:
@@ -1757,7 +1822,10 @@ class AutoMigrationSystem:
             try:
                 await self._release_migration_lock()
             except Exception as e:
-                logger.error(f"Failed to release migration lock: {e}")
+                logger.error(
+                    "auto_migration_system.failed_to_release_migration_lock",
+                    extra={"error": str(e)},
+                )
 
     async def rollback_migration(self, migration_version: str = None) -> bool:
         """
@@ -1769,7 +1837,10 @@ class AutoMigrationSystem:
         Returns:
             True if rollback successful
         """
-        logger.info(f"Starting rollback process for version: {migration_version}")
+        logger.info(
+            "auto_migration_system.starting_rollback_process_for_version",
+            extra={"migration_version": migration_version},
+        )
 
         try:
             await self._load_migration_history()
@@ -1797,11 +1868,17 @@ class AutoMigrationSystem:
                         break
 
                 if not migration_to_rollback:
-                    logger.error(f"Migration {migration_version} not found")
+                    logger.error(
+                        "auto_migration_system.migration_not_found",
+                        extra={"migration_version": migration_version},
+                    )
                     return False
 
             # Execute rollback operations in reverse order
-            logger.info(f"Rolling back migration {migration_to_rollback.version}")
+            logger.info(
+                "auto_migration_system.rolling_back_migration",
+                extra={"version": migration_to_rollback.version},
+            )
 
             # Execute rollback operations using WorkflowBuilder pattern
             for operation in reversed(migration_to_rollback.operations):
@@ -1843,7 +1920,10 @@ class AutoMigrationSystem:
                         )
                         raise RuntimeError(f"Rollback failed: {error_msg}")
 
-                    logger.info(f"Rolled back: {operation.description}")
+                    logger.info(
+                        "auto_migration_system.rolled_back",
+                        extra={"description": operation.description},
+                    )
                 except Exception as e:
                     logger.error(
                         f"Failed to rollback operation {operation.description}: {e}"
@@ -1861,7 +1941,9 @@ class AutoMigrationSystem:
             return True
 
         except Exception as e:
-            logger.error(f"Rollback failed: {e}")
+            logger.error(
+                "auto_migration_system.rollback_failed", extra={"error": str(e)}
+            )
             return False
 
     async def get_migration_status(self) -> Dict[str, Any]:
@@ -1940,7 +2022,10 @@ class AutoMigrationSystem:
                     raise RuntimeError(f"Migration table creation failed: {error_msg}")
 
         except Exception as e:
-            logger.error(f"Failed to create {self.dialect} migration table: {e}")
+            logger.error(
+                "auto_migration_system.failed_to_create_migration_table",
+                extra={"dialect": self.dialect, "error": str(e)},
+            )
             raise
 
     def _get_postgresql_migration_table_statements(self) -> List[str]:
@@ -2034,7 +2119,10 @@ class AutoMigrationSystem:
                 columns = {}
             elif isinstance(validate_result, dict) and validate_result.get("error"):
                 error_msg = validate_result.get("error", "Unknown error")
-                logger.debug(f"Failed to validate migration table: {error_msg}")
+                logger.debug(
+                    "auto_migration_system.failed_to_validate_migration_table",
+                    extra={"error_msg": error_msg},
+                )
                 columns = {}
             else:
                 rows = results["validate_table"].get("result", [])
@@ -2112,7 +2200,10 @@ class AutoMigrationSystem:
                 rows = []
             elif isinstance(history_result, dict) and history_result.get("error"):
                 error_msg = history_result.get("error", "Unknown error")
-                logger.debug(f"Failed to load migration history: {error_msg}")
+                logger.debug(
+                    "auto_migration_system.failed_to_load_migration_history",
+                    extra={"error_msg": error_msg},
+                )
                 rows = []
             else:
                 rows = results["load_history"].get("result", [])
@@ -2175,7 +2266,10 @@ class AutoMigrationSystem:
                     continue
 
         except Exception as e:
-            logger.error(f"Failed to load migration history: {e}")
+            logger.error(
+                "auto_migration_system.failed_to_load_migration_history",
+                extra={"error": str(e)},
+            )
             # For safety, treat missing/corrupted history as empty
             # This prevents accidental re-application but logs the issue
             self.applied_migrations = []
@@ -2253,7 +2347,10 @@ class AutoMigrationSystem:
                     )
                     raise RuntimeError(f"Migration operation failed: {error_msg}")
 
-                logger.info(f"Applied: {operation.description}")
+                logger.info(
+                    "auto_migration_system.applied",
+                    extra={"description": operation.description},
+                )
 
             # Record migration in history
             await self._record_migration(migration)
@@ -2263,7 +2360,10 @@ class AutoMigrationSystem:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to apply migration: {e}")
+            logger.error(
+                "auto_migration_system.failed_to_apply_migration",
+                extra={"error": str(e)},
+            )
             migration.status = MigrationStatus.FAILED
 
             # Record failed migration
@@ -2345,11 +2445,17 @@ class AutoMigrationSystem:
             # Check if result is a dict and contains error
             if isinstance(record_result, dict) and record_result.get("error"):
                 error_msg = record_result.get("error", "Unknown error")
-                logger.error(f"Failed to record {self.dialect} migration: {error_msg}")
+                logger.error(
+                    "auto_migration_system.failed_to_record_migration",
+                    extra={"dialect": self.dialect, "error_msg": error_msg},
+                )
                 raise RuntimeError(f"Migration recording failed: {error_msg}")
 
         except Exception as e:
-            logger.error(f"Failed to record {self.dialect} migration: {e}")
+            logger.error(
+                "auto_migration_system.failed_to_record_migration",
+                extra={"dialect": self.dialect, "error": str(e)},
+            )
             raise
 
     async def _update_migration_status(self, version: str, status: MigrationStatus):
@@ -2401,7 +2507,10 @@ class AutoMigrationSystem:
                 raise RuntimeError(f"Status update failed: {error_msg}")
 
         except Exception as e:
-            logger.error(f"Failed to update {self.dialect} migration status: {e}")
+            logger.error(
+                "auto_migration_system.failed_to_update_migration_status",
+                extra={"dialect": self.dialect, "error": str(e)},
+            )
             raise
 
     async def _show_visual_confirmation(
@@ -2639,7 +2748,10 @@ class AutoMigrationSystem:
         # Check if result is a dict and contains error
         if isinstance(lock_result, dict) and lock_result.get("error"):
             error_msg = lock_result.get("error", "Unknown error")
-            logger.error(f"Failed to try advisory lock: {error_msg}")
+            logger.error(
+                "auto_migration_system.failed_to_try_advisory_lock",
+                extra={"error_msg": error_msg},
+            )
             raise RuntimeError("Cannot proceed without migration lock")
 
         # PostgreSQL pg_try_advisory_lock returns true if lock acquired, false if already held
@@ -2683,7 +2795,10 @@ class AutoMigrationSystem:
             # Check if result is a dict and contains error
             if isinstance(wait_result, dict) and wait_result.get("error"):
                 error_msg = wait_result.get("error", "Unknown error")
-                logger.error(f"Failed to acquire advisory lock: {error_msg}")
+                logger.error(
+                    "auto_migration_system.failed_to_acquire_advisory_lock",
+                    extra={"error_msg": error_msg},
+                )
                 raise RuntimeError("Cannot proceed without migration lock")
 
             logger.info("Migration lock acquired")
@@ -2828,7 +2943,10 @@ class AutoMigrationSystem:
                 logger.debug("SQLite migration lock released")
 
         except Exception as e:
-            logger.error(f"Failed to release SQLite migration lock: {e}")
+            logger.error(
+                "auto_migration_system.failed_to_release_sqlite_migration_lock",
+                extra={"error": str(e)},
+            )
 
     async def _ensure_sqlite_lock_table(self) -> None:
         """Ensure SQLite lock table exists."""
@@ -2862,7 +2980,10 @@ class AutoMigrationSystem:
         # Check if result is a dict and contains error
         if isinstance(create_result, dict) and create_result.get("error"):
             error_msg = create_result.get("error", "Unknown error")
-            logger.error(f"Failed to create SQLite lock table: {error_msg}")
+            logger.error(
+                "auto_migration_system.failed_to_create_sqlite_lock_table",
+                extra={"error_msg": error_msg},
+            )
             raise RuntimeError(f"Lock table creation failed: {error_msg}")
 
     def close(self):

@@ -142,7 +142,10 @@ class DependencyReportAdapter:
                 )
             )
 
-        logger.info(f"Converted dependency report: {len(dependencies)} dependencies")
+        logger.info(
+            "column_removal_integration.converted_dependency_report_dependencies",
+            extra={"count": len(dependencies)},
+        )
         return dependencies
 
     @staticmethod

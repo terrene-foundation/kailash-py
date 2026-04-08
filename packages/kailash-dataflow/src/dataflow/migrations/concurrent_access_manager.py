@@ -204,7 +204,10 @@ class MigrationLockManager:
         try:
             await self.connection_manager.execute_query(create_table_sql)
         except Exception as e:
-            logger.warning(f"Failed to create lock table: {e}")
+            logger.warning(
+                "concurrent_access_manager.failed_to_create_lock_table",
+                extra={"error": str(e)},
+            )
 
     async def acquire_migration_lock(
         self, schema_name: str, timeout: int = None
@@ -296,17 +299,29 @@ class MigrationLockManager:
                 )
 
                 if check_result:
-                    logger.info(f"Acquired migration lock for schema: {schema_name}")
+                    logger.info(
+                        "concurrent_access_manager.acquired_migration_lock_for_schema",
+                        extra={"schema_name": schema_name},
+                    )
                     return True
 
-            logger.warning(f"Failed to acquire lock for schema: {schema_name}")
+            logger.warning(
+                "concurrent_access_manager.failed_to_acquire_lock_for_schema",
+                extra={"schema_name": schema_name},
+            )
             return False
 
         except asyncio.TimeoutError:
-            logger.warning(f"Lock acquisition timeout for schema: {schema_name}")
+            logger.warning(
+                "concurrent_access_manager.lock_acquisition_timeout_for_schema",
+                extra={"schema_name": schema_name},
+            )
             return False
         except Exception as e:
-            logger.error(f"Error acquiring lock for schema {schema_name}: {e}")
+            logger.error(
+                "concurrent_access_manager.error_acquiring_lock_for_schema",
+                extra={"schema_name": schema_name, "error": str(e)},
+            )
             return False
 
     async def release_migration_lock(self, schema_name: str) -> None:
@@ -337,10 +352,16 @@ class MigrationLockManager:
             await self.connection_manager.execute_query(
                 delete_lock_sql, (schema_name, self.process_id)
             )
-            logger.info(f"Released migration lock for schema: {schema_name}")
+            logger.info(
+                "concurrent_access_manager.released_migration_lock_for_schema",
+                extra={"schema_name": schema_name},
+            )
 
         except Exception as e:
-            logger.error(f"Error releasing lock for schema {schema_name}: {e}")
+            logger.error(
+                "concurrent_access_manager.error_releasing_lock_for_schema",
+                extra={"schema_name": schema_name, "error": str(e)},
+            )
             # Still attempt cleanup of expired locks
             try:
                 await self._cleanup_expired_locks()
@@ -388,9 +409,17 @@ class MigrationLockManager:
             )
 
             if result:
-                logger.debug(f"Lock status result: {result}")
-                logger.debug(f"First item: {result[0]}")
-                logger.debug(f"Type of first item: {type(result[0])}")
+                logger.debug(
+                    "concurrent_access_manager.lock_status_result",
+                    extra={"result": result},
+                )
+                logger.debug(
+                    "concurrent_access_manager.first_item", extra={"result": result[0]}
+                )
+                logger.debug(
+                    "concurrent_access_manager.type_of_first_item",
+                    extra={"type": type(result[0])},
+                )
                 holder_process_id, acquired_at = result[0]
                 return LockStatus(
                     schema_name=schema_name,
@@ -402,7 +431,10 @@ class MigrationLockManager:
                 return LockStatus(schema_name=schema_name, is_locked=False)
 
         except Exception as e:
-            logger.error(f"Error checking lock status for schema {schema_name}: {e}")
+            logger.error(
+                "concurrent_access_manager.error_checking_lock_status_for_schema",
+                extra={"schema_name": schema_name, "error": str(e)},
+            )
             return LockStatus(schema_name=schema_name, is_locked=False)
 
     @asynccontextmanager
@@ -451,7 +483,10 @@ class MigrationLockManager:
         try:
             await self.connection_manager.execute_query(cleanup_sql, (datetime.now(),))
         except Exception as e:
-            logger.warning(f"Failed to cleanup expired locks: {e}")
+            logger.warning(
+                "concurrent_access_manager.failed_to_cleanup_expired_locks",
+                extra={"error": str(e)},
+            )
 
 
 class ConcurrentMigrationQueue:
@@ -514,7 +549,10 @@ class ConcurrentMigrationQueue:
         try:
             await self.connection_manager.execute_query(create_table_sql)
         except Exception as e:
-            logger.warning(f"Failed to create queue table: {e}")
+            logger.warning(
+                "concurrent_access_manager.failed_to_create_queue_table",
+                extra={"error": str(e)},
+            )
 
     def enqueue_migration(self, request: MigrationRequest) -> str:
         """
@@ -622,7 +660,10 @@ class ConcurrentMigrationQueue:
             self._queue = new_queue
             heapq.heapify(self._queue)
 
-            logger.info(f"Cancelled migration {queue_id}")
+            logger.info(
+                "concurrent_access_manager.cancelled_migration",
+                extra={"queue_id": queue_id},
+            )
             return True
 
     def _dequeue_next_migration(self) -> Optional[MigrationRequest]:
@@ -668,7 +709,10 @@ class ConcurrentMigrationQueue:
             end_time = time.perf_counter()
             execution_time_ms = int((end_time - start_time) * 1000)
 
-            logger.error(f"Migration execution failed for {request.request_id}: {e}")
+            logger.error(
+                "concurrent_access_manager.migration_execution_failed_for",
+                extra={"request_id": request.request_id, "error": str(e)},
+            )
             return MigrationResult(
                 success=False,
                 queue_id=request.request_id,
@@ -863,7 +907,10 @@ class AtomicMigrationExecutor:
                     )
 
                 except Exception as op_error:
-                    logger.error(f"Operation {i + 1} failed: {op_error}")
+                    logger.error(
+                        "concurrent_access_manager.operation_failed",
+                        extra={"i_1": i + 1, "op_error": op_error},
+                    )
                     # Rollback transaction
                     await self.connection_manager.rollback_transaction()
                     rollback_executed = True
@@ -900,7 +947,10 @@ class AtomicMigrationExecutor:
                 await self.connection_manager.rollback_transaction()
                 rollback_executed = True
             except Exception as rollback_error:
-                logger.error(f"Rollback failed: {rollback_error}")
+                logger.error(
+                    "concurrent_access_manager.rollback_failed",
+                    extra={"rollback_error": rollback_error},
+                )
 
             end_time = time.perf_counter()
             execution_time_ms = int((end_time - start_time) * 1000)
@@ -1046,14 +1096,20 @@ class AtomicMigrationExecutor:
 
             for step in rollback_plan.steps:
                 await self.connection_manager.execute_query(step.sql)
-                logger.debug(f"Executed rollback step: {step.operation_type}")
+                logger.debug(
+                    "concurrent_access_manager.executed_rollback_step",
+                    extra={"operation_type": step.operation_type},
+                )
 
             await self.connection_manager.commit_transaction()
             logger.info("Rollback plan executed successfully")
             return True
 
         except Exception as e:
-            logger.error(f"Rollback plan execution failed: {e}")
+            logger.error(
+                "concurrent_access_manager.rollback_plan_execution_failed",
+                extra={"error": str(e)},
+            )
             try:
                 await self.connection_manager.rollback_transaction()
             except Exception as rollback_error:

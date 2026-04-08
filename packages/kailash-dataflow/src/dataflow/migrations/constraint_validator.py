@@ -128,7 +128,10 @@ class ConstraintValidator:
         Returns:
             ValidationResult with comprehensive constraint analysis
         """
-        self.logger.info(f"Validating all constraints for {table_name}.{column.name}")
+        self.logger.info(
+            "constraint_validator.validating_all_constraints_for",
+            extra={"table_name": table_name, "name": column.name},
+        )
 
         if connection is None:
             connection = await self._get_connection()
@@ -204,7 +207,10 @@ class ConstraintValidator:
             )
 
         except Exception as e:
-            self.logger.error(f"Constraint validation failed: {e}")
+            self.logger.error(
+                "constraint_validator.constraint_validation_failed",
+                extra={"error": str(e)},
+            )
             return ValidationResult(
                 is_safe=False,
                 issues=[f"Constraint validation error: {str(e)}"],
@@ -250,7 +256,10 @@ class ConstraintValidator:
             return bool(exists)
 
         except Exception as e:
-            self.logger.error(f"Foreign key validation failed: {e}")
+            self.logger.error(
+                "constraint_validator.foreign_key_validation_failed",
+                extra={"error": str(e)},
+            )
             return False
 
     async def validate_check_constraints(
@@ -292,7 +301,10 @@ class ConstraintValidator:
             return True
 
         except Exception as e:
-            self.logger.error(f"Check constraint validation failed: {e}")
+            self.logger.error(
+                "constraint_validator.check_constraint_validation_failed",
+                extra={"error": str(e)},
+            )
             return False
 
     async def validate_unique_constraints(
@@ -339,7 +351,10 @@ class ConstraintValidator:
             return True
 
         except Exception as e:
-            self.logger.error(f"Unique constraint validation failed: {e}")
+            self.logger.error(
+                "constraint_validator.unique_constraint_validation_failed",
+                extra={"error": str(e)},
+            )
             return False
 
     async def validate_trigger_compatibility(
@@ -380,7 +395,10 @@ class ConstraintValidator:
             return True
 
         except Exception as e:
-            self.logger.error(f"Trigger compatibility validation failed: {e}")
+            self.logger.error(
+                "constraint_validator.trigger_compatibility_validation_failed",
+                extra={"error": str(e)},
+            )
             return False
 
     # Private helper methods

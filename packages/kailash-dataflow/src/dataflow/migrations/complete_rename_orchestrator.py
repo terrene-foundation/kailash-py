@@ -276,7 +276,10 @@ class CompleteRenameOrchestrator:
             return result
 
         except Exception as e:
-            self.logger.error(f"Complete rename orchestration failed: {e}")
+            self.logger.error(
+                "complete_rename_orchestrator.complete_rename_orchestration_failed",
+                extra={"error": str(e)},
+            )
 
             # Create failure result
             return OrchestratorResult(
@@ -340,7 +343,10 @@ class CompleteRenameOrchestrator:
             return result
 
         except Exception as e:
-            self.logger.error(f"Staging-validated rename failed: {e}")
+            self.logger.error(
+                "complete_rename_orchestrator.staging_validated_rename_failed",
+                extra={"error": str(e)},
+            )
             return OrchestratorResult(
                 success=False,
                 orchestration_id=orchestration_id,
@@ -417,7 +423,10 @@ class CompleteRenameOrchestrator:
             return result
 
         except Exception as e:
-            self.logger.error(f"Orchestration workflow failed: {e}")
+            self.logger.error(
+                "complete_rename_orchestrator.orchestration_workflow_failed",
+                extra={"error": str(e)},
+            )
             result.success = False
             result.error_message = str(e)
             return result
@@ -549,7 +558,10 @@ class CompleteRenameOrchestrator:
         self, old_table: str, new_table: str, staging_config: Dict[str, Any]
     ) -> bool:
         """Validate rename operation in staging environment."""
-        self.logger.info(f"Validating rename in staging: {old_table} -> {new_table}")
+        self.logger.info(
+            "complete_rename_orchestrator.validating_rename_in_staging",
+            extra={"old_table": old_table, "new_table": new_table},
+        )
 
         try:
             # Mock staging validation - in real implementation this would:
@@ -565,7 +577,10 @@ class CompleteRenameOrchestrator:
             return True
 
         except Exception as e:
-            self.logger.error(f"Staging validation failed: {e}")
+            self.logger.error(
+                "complete_rename_orchestrator.staging_validation_failed",
+                extra={"error": str(e)},
+            )
             return False
 
     def _calculate_total_downtime(self, phase3_result: PhaseExecutionResult) -> float:
