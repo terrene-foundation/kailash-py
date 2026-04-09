@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "name": "request_with_params_list",
+  "input": {
+    "jsonrpc": "2.0",
+    "method": "subtract",
+    "params": [42, 23],
+    "id": 99
+  },
+  "expected_canonical_json": "{\"id\":99,\"jsonrpc\":\"2.0\",\"method\":\"subtract\",\"params\":[42,23]}",
+  "metadata": {
+    "description": "JSON-RPC 2.0 request with positional (list) params per §4.2",
+    "spec_reference": "SPEC-01 §7.5"
+  }
+}

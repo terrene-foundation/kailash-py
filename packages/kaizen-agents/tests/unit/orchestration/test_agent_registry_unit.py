@@ -13,12 +13,12 @@ Strategy: Fast execution (<5s), mocked infrastructure
 """
 
 import asyncio
-from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from kaizen.core.base_agent import BaseAgent
+from kaizen.signatures import InputField, OutputField, Signature
 from kaizen_agents.patterns.registry import (
     AgentRegistry,
     AgentRegistryConfig,
@@ -26,11 +26,10 @@ from kaizen_agents.patterns.registry import (
     RegistryEventType,
 )
 from kaizen_agents.patterns.runtime import AgentStatus
-from kaizen.signatures import InputField, OutputField, Signature
 
 # Check A2A availability for capability indexing tests
 try:
-    from kaizen.nodes.ai.a2a import A2AAgentCard
+    from kaizen.nodes.ai.a2a import A2AAgentCard  # noqa: F401
 
     A2A_AVAILABLE = True
 except ImportError:
@@ -243,13 +242,29 @@ async def test_list_agents_by_runtime(registry, mock_agent, mock_agent_2):
     not A2A_AVAILABLE, reason="A2A module required for capability indexing"
 )
 async def test_find_agents_by_capability(registry, mock_agent, mock_agent_2):
-    """Test finding agents by capability."""
+    """Test finding agents by capability.
+
+    Capability lookup now delegates similarity scoring to the LLM via
+    `kaizen.llm.reasoning.llm_text_similarity` (see
+    `rules/agent-reasoning.md` MUST Rule 1). Unit tests stub the LLM helper
+    so the routing decision is deterministic without real LLM calls.
+    """
+
     # Register agents
     await registry.register_agent(mock_agent, runtime_id="runtime_1")
     await registry.register_agent(mock_agent_2, runtime_id="runtime_2")
 
-    # Find agents with "code" capability
-    agents = await registry.find_agents_by_capability("code")
+    def fake_similarity(text_a, text_b, *, config=None, correlation_id=None):
+        # text_a is the query ("code"); text_b is the capability string.
+        if text_a.lower() in str(text_b).lower():
+            return 0.9
+        return 0.0
+
+    with patch(
+        "kaizen_agents.patterns.registry.llm_text_similarity",
+        side_effect=fake_similarity,
+    ):
+        agents = await registry.find_agents_by_capability("code")
 
     # Verify correct agent found
     assert len(agents) >= 1
@@ -566,7 +581,7 @@ async def test_capability_indexing(registry, mock_agent):
     assert len(registry.capability_index) > 0
     # Check if capability was indexed
     found = False
-    for cap, agent_ids in registry.capability_index.items():
+    for _cap, agent_ids in registry.capability_index.items():
         if mock_agent.agent_id in agent_ids:
             found = True
             break
@@ -590,5 +605,5 @@ async def test_capability_deindexing(registry, mock_agent):
     await registry.deregister_agent(agent_id, "runtime_1")
 
     # Verify agent removed from capability index
-    for cap, agent_ids in registry.capability_index.items():
+    for _cap, agent_ids in registry.capability_index.items():
         assert agent_id not in agent_ids

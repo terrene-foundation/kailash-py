@@ -12,12 +12,16 @@ Human defines the operating envelope. AI executes within it. Human-on-the-Loop, 
 - Assume sequential execution where parallel autonomous execution is possible
 - Frame trade-offs in terms of "developer experience" or "cognitive load on the team"
 
+**Why:** Human-team framing causes the agent to recommend suboptimal approaches (phasing, sequencing, simplifying) that waste autonomous execution capacity.
+
 ## MUST (Deliberation)
 
 - Estimate effort in **autonomous execution cycles** (sessions, not days)
 - Recommend the **technically optimal approach** unconstrained by human resource limits
 - Default to **maximum parallelization** across agent specializations
 - Frame trade-offs in terms of **system complexity**, **validation rigor**, and **institutional knowledge capture**
+
+**Why:** Without autonomous framing, effort estimates inflate 10x and plans are artificially sequenced to fit human-team constraints that don't exist.
 
 ## 10x Throughput Multiplier
 

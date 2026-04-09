@@ -42,9 +42,13 @@ Created: 2025-10-27 (Phase 3, Day 2, TODO-174)
 Reference: ADR-018, docs/testing/pipeline-edge-case-test-matrix.md
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
+from kaizen_agents.patterns._reasoning_bridge import (
+    rank_agents_by_capability_sync,
+    resolve_reasoning_config,
+)
 from kaizen_agents.patterns.pipeline import Pipeline
 
 # A2A imports for capability-based specialist selection
@@ -90,7 +94,7 @@ class BlackboardPipeline(Pipeline):
 
     def __init__(
         self,
-        specialists: List[BaseAgent],
+        specialists: list[BaseAgent],
         controller: BaseAgent,
         selection_mode: str = "semantic",
         max_iterations: int = 5,
@@ -122,8 +126,8 @@ class BlackboardPipeline(Pipeline):
         self._current_specialist_index = 0
 
     def _select_specialist_via_a2a(
-        self, needed_capability: Optional[str]
-    ) -> Optional[BaseAgent]:
+        self, needed_capability: str | None
+    ) -> BaseAgent | None:
         """
         Select best specialist using A2A capability matching.
 
@@ -151,28 +155,17 @@ class BlackboardPipeline(Pipeline):
                     # Skip specialists that can't generate A2A cards
                     continue
 
-            # Find best match using A2A semantic matching
+            # LLM-first ranking (no keyword / substring scoring)
             if specialist_cards:
-                best_specialist = None
-                best_score = 0.0
-
-                for specialist, card in specialist_cards:
-                    # Calculate capability match score
-                    score = 0.0
-                    for capability in card.primary_capabilities:
-                        capability_score = capability.matches_requirement(
-                            needed_capability
-                        )
-                        if capability_score > score:
-                            score = capability_score
-
-                    # Track best match
-                    if score > best_score:
-                        best_score = score
-                        best_specialist = specialist
-
-                # Return best match if score above threshold
-                if best_specialist and best_score > 0:
+                reasoning_config = resolve_reasoning_config(self.specialists)
+                scored = rank_agents_by_capability_sync(
+                    specialist_cards,
+                    needed_capability,
+                    reasoning_config=reasoning_config,
+                )
+                scored.sort(key=lambda item: item[1], reverse=True)
+                best_specialist, best_score = scored[0]
+                if best_specialist is not None and best_score > 0:
                     return best_specialist
 
         except Exception:
@@ -195,7 +188,7 @@ class BlackboardPipeline(Pipeline):
         )
         return specialist
 
-    def _select_specialist(self, needed_capability: Optional[str] = None) -> BaseAgent:
+    def _select_specialist(self, needed_capability: str | None = None) -> BaseAgent:
         """
         Select specialist based on selection mode.
 
@@ -223,8 +216,8 @@ class BlackboardPipeline(Pipeline):
             return self._select_specialist_sequential()
 
     def _execute_specialist(
-        self, specialist: BaseAgent, blackboard: Dict[str, Any], **inputs
-    ) -> Dict[str, Any]:
+        self, specialist: BaseAgent, blackboard: dict[str, Any], **inputs
+    ) -> dict[str, Any]:
         """
         Execute specialist and return insight.
 
@@ -268,8 +261,8 @@ class BlackboardPipeline(Pipeline):
                 }
 
     def _execute_controller(
-        self, blackboard: Dict[str, Any], **inputs
-    ) -> Dict[str, Any]:
+        self, blackboard: dict[str, Any], **inputs
+    ) -> dict[str, Any]:
         """
         Execute controller to determine completion and next needed capability.
 
@@ -310,7 +303,7 @@ class BlackboardPipeline(Pipeline):
                     "next_needed_capability": None,
                 }
 
-    def run(self, **inputs) -> Dict[str, Any]:
+    def run(self, **inputs) -> dict[str, Any]:
         """
         Execute blackboard pipeline: iterative specialist selection and convergence.
 

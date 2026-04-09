@@ -1,12 +1,75 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.3",
   "type": "coc-build",
   "variant": "py",
-  "updated": "2026-03-30",
+  "updated": "2026-04-09",
   "description": "Kailash Python SDK BUILD repo",
   "upstream": {
-    "source": "kailash",
+    "source": "loom",
+    "version": "2.8.0",
     "build_version": "2.8.0",
-    "synced_at": "2026-04-09T02:00:00+08:00"
-  }
+    "synced_at": "2026-04-09T00:00:00Z"
+  },
+  "changelog": [
+    {
+      "version": "1.0.3",
+      "date": "2026-04-09",
+      "summary": "Sync loom 2.8.0 — deterministic quality guide + rule-authoring meta-rule + Phase 9.4 rule extensions. Institutionalizes 0052-DISCOVERY session productivity patterns. Gate reviews upgraded from RECOMMENDED to MUST at /implement and /release with background agent pattern.",
+      "changes": [
+        "NEW GUIDE: guides/deterministic-quality/ — 9 files. Part I (CO insights): rule-authoring principles, session architecture, enforcement ladder. Part II (code primitives): type system enforcement, runtime safety defaults, observability primitives, destructive operation gates, cross-SDK parity.",
+        "NEW RULE: rules/rule-authoring.md — meta-rule for authoring COC rules. 6 MUST clauses + Loud/Linguistic/Layered test. Subprocess-tested: rule quality 2/6 → 6/6.",
+        "NEW RULES (Phase 9.4 DataFlow audit): dataflow-identifier-safety.md, facade-manager-detection.md, orphan-detection.md, tenant-isolation.md.",
+        "UPDATE: rules/agents.md — gate reviews at /implement and /release upgraded from RECOMMENDED to MUST with background agent pattern + BLOCKED phrases for skip rationalizations.",
+        "UPDATE: rules/git.md — commit bodies MUST answer 'why' not 'what', with DO/DON'T example.",
+        "UPDATE: rules/observability.md — bulk ops MUST log at WARN on partial failure.",
+        "UPDATE: rules/zero-tolerance.md — extended examples from Phase 5 audit (fake encryption, fake transaction, fake health, fake classification, fake tenant isolation, fake metrics).",
+        "UPDATE: rules/cc-artifacts.md — Clause #10 requires new rules to follow rule-authoring.md meta-rule.",
+        "UPDATE: rules/dataflow-pool.md — Phase 9.4 extensions.",
+        "UPDATE: commands/analyze, codify, implement, redteam, todos, wrapup — phase-gate journal automation + lean wrapup.",
+        "UPDATE: scripts/hooks/ — session-end.js, log-triage-gate.js, lib/workspace-utils.js."
+      ]
+    },
+    {
+      "version": "1.0.2",
+      "date": "2026-04-08",
+      "summary": "Sync loom 2.7.0 — framework mandate enforcement wave. Observability + schema-migration rules, integration-hygiene + log-triage-gate hooks, 16-agent description updates, work-domain binding in framework-first.md, warnings-as-errors in zero-tolerance.md.",
+      "changes": [
+        "NEW: rules/observability.md (mandatory log points, correlation IDs, log triage gate)",
+        "NEW: rules/schema-migration.md (numbered migrations, reversibility, data fixes)",
+        "NEW: agents/frameworks/mcp-platform-specialist.md",
+        "NEW: scripts/hooks/integration-hygiene.js (PostToolUse Edit|Write)",
+        "NEW: scripts/hooks/log-triage-gate.js (Stop)",
+        "UPDATE: rules/zero-tolerance.md Rule 1 now covers warnings+notices alongside failures",
+        "UPDATE: rules/framework-first.md adds Work-Domain Binding table + specialist consultation gate",
+        "UPDATE: rules/dependencies.md adds Declared = Imported manifest enforcement",
+        "UPDATE: rules/{dataflow-pool,connection-pool,infrastructure-sql}.md scoping + fail-fast startup",
+        "UPDATE: 16 framework agent descriptions (proactive framing, explicit BLOCKED patterns)",
+        "UPDATE: agents/quality/reviewer.md adds Integration Hygiene checklist",
+        "UPDATE: agents/testing/testing-specialist.md adds Log Assertion Requirement for Tiers 2-3",
+        "UPDATE: commands/{implement,redteam}.md tighten framework enforcement phrasing",
+        "UPDATE: commands/analyze, todos, validate, design, i-audit, i-polish, i-harden",
+        "UPDATE: variant-py commands {sync,cc-audit,sdk,db,ai,api,test,release}",
+        "UPDATE: variant-py framework agents {dataflow,nexus,kaizen,pact,ml}-specialist (description tighten + Docker/async)",
+        "UPDATE: global mcp-specialist.md",
+        "UPDATE: scripts/hooks/validate-prod-deploy.js (execFileSync hardening over execSync)",
+        "UPDATE: .claude/settings.json registers integration-hygiene + log-triage-gate hooks",
+        "UPDATE: Why: rationale added to ~15 additional rules per cc-artifacts Rule 4",
+        "ABSENT (build_exclude): commands/deploy.md, rules/deploy-hygiene.md, skills/10-deployment-git/application-deployment.md — BUILD repo uses /release for SDK publishing",
+        "PRESERVED: agents/frameworks/infrastructure-specialist.md (BUILD-local adaptations with src/kailash/db/ paths)"
+      ]
+    },
+    {
+      "version": "1.0.1",
+      "date": "2026-04-08",
+      "summary": "Sync loom 2.6.2 — spec-compliance skill + deploy hygiene refusals + Rust leak removal. BUILD-py is Python; deploy artifacts intentionally absent (BUILD repos use /release).",
+      "changes": [
+        "NEW: skills/spec-compliance/SKILL.md (Python-only)",
+        "REWRITE: commands/redteam.md (semantic verification, language-agnostic phrasing)",
+        "UPDATE: rules/testing.md (Audit Mode Rules — pytest --collect-only, no cargo)",
+        "UPDATE: agents/analysis/analyst.md, agents/testing/testing-specialist.md (/redteam ownership)",
+        "UPDATE: commands/wrapup.md (4-state deploy classification — Python BUILD falls under State C/D as expected)",
+        "ABSENT: commands/deploy.md, rules/deploy-hygiene.md, skills/10-deployment-git/application-deployment.md (build_exclude — BUILD repos use /release for SDK publishing, not /deploy for application shipping)"
+      ]
+    }
+  ]
 }

@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "name": "request_notification",
+  "input": {
+    "jsonrpc": "2.0",
+    "method": "notifications/progress",
+    "params": {
+      "progressToken": "tok1",
+      "progress": 0.5
+    }
+  },
+  "expected_canonical_json": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/progress\",\"params\":{\"progress\":0.5,\"progressToken\":\"tok1\"}}",
+  "metadata": {
+    "description": "JSON-RPC 2.0 notification (no id field) per §4.1",
+    "spec_reference": "SPEC-01 §7.6"
+  }
+}

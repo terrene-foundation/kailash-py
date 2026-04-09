@@ -55,7 +55,6 @@ results, run_id = runtime.execute(workflow.build())
 When working with Core SDK, deploy:
 
 - **pattern-expert** — Workflow patterns, node configuration, cyclic patterns
-- **sdk-navigator** — Find existing patterns and documentation
 
 ## Related Commands
 

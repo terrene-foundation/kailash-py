@@ -140,48 +140,6 @@ for live workflow updates.
        "my_listener", handle_events
    )
 
-AI Chat Middleware
-------------------
-
-.. autoclass:: kailash.middleware.AIChatMiddleware
-   :members:
-   :undoc-members:
-   :show-inheritance:
-   :special-members: __init__
-
-AI-powered conversation management with natural language workflow generation capabilities.
-
-**Key Features:**
-
-- Natural language to workflow conversion
-- Context-aware conversation management
-- Vector search integration for semantic similarity
-- Intent recognition and response generation
-- Chat history persistence
-
-**Usage Example:**
-
-.. code-block:: python
-
-   from kailash.middleware import AIChatMiddleware
-
-   ai_chat = AIChatMiddleware(
-       agent_ui,
-       enable_vector_search=True,
-       vector_database_url="postgresql://...",
-       llm_provider="ollama"
-   )
-
-   # Start chat session
-   chat_session_id = await ai_chat.start_chat_session("user123")
-
-   # Send message
-   response = await ai_chat.send_message(
-       chat_session_id,
-       "Create a workflow to process CSV data",
-       context={"data_source": "customers.csv"}
-   )
-
 Event System
 ============
 

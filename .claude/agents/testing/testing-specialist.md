@@ -11,6 +11,18 @@ Testing strategy, architecture, and E2E generation for the Kailash SDK's 3-tier 
 
 **CRITICAL**: Never change tests to fit the code. Respect original design. TDD principles always apply.
 
+## /redteam Step 4 Ownership — Audit Mode
+
+When deployed by `/redteam` for test verification, MUST follow `rules/testing.md` § Audit Mode Rules:
+
+1. **Do NOT read `.test-results`** to verify counts. The file is written by `/implement` and may report old-code coverage while new spec modules have zero tests.
+2. **Re-derive coverage** with `pytest --collect-only -q` (Python) or `cargo test --list` (Rust).
+3. **For every new module** the spec created, grep `tests/` for an import of that module. Zero importing tests = HIGH finding regardless of suite-level "tests pass".
+4. **For every § Security Threats** subsection in any spec, grep for a corresponding `test_<threat>` function. Missing = HIGH.
+5. Run only NEW tests written by red team (E2E, regression for findings). If a test is suspected wrong, re-run THAT test specifically.
+
+See also: `skills/spec-compliance/SKILL.md` for the full audit protocol.
+
 ## 3-Tier Strategy
 
 | Tier               | Speed | Mocking       | Location             | Focus                   |
@@ -23,7 +35,7 @@ Testing strategy, architecture, and E2E generation for the Kailash SDK's 3-tier 
 
 **Forbidden**: Mock objects, stubbed responses, fake implementations, bypassed service calls.
 
-**Why**: Mocks hide integration failures. Real tests = real confidence.
+**Why:** Mocks hide integration failures. Real tests = real confidence.
 
 **Allowed in all tiers**: `freeze_time()`, `random.seed()`, `patch.dict(os.environ)`.
 
@@ -133,6 +145,27 @@ pytest --cov=src/kailash --cov-report=term-missing
 | Flaky test             | Check race conditions, add proper waits |
 | Mock in Tier 2-3       | Remove mock, use real Docker service    |
 | Database state leakage | Add cleanup fixture                     |
+
+## Log Assertion Requirement (Tiers 2-3)
+
+Every integration and E2E test for an operation that has `observability.md`-mandated log points MUST assert on the log output. Missing log assertions block sign-off.
+
+```python
+# DO — capture and assert on structured log output
+def test_create_user_ok(caplog):
+    with caplog.at_level("INFO"):
+        user = api.create_user(name="Alice")
+    assert user.id
+    assert any("create_user.start" in r.message for r in caplog.records)
+    assert any("create_user.ok"    in r.message for r in caplog.records)
+
+# DO NOT — test the effect without testing the log contract
+def test_create_user_ok():
+    user = api.create_user(name="Alice")
+    assert user.id  # log contract silently broken; ops gets no signal
+```
+
+**Why:** Logs are part of the operation's observable contract. A test that checks the return value but not the log line lets the observability contract silently break — the operation still "works", but production loses its debugging surface. This is especially critical at integration boundaries per `observability.md` § Mandatory Log Points.
 
 ## Process
 

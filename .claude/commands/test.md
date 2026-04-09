@@ -91,11 +91,11 @@ When writing tests, deploy these agents as a team:
 
 - **testing-specialist** — 3-tier strategy, test architecture, coverage requirements
 - **tdd-implementer** — Test-first methodology, red-green-refactor cycle
-- **intermediate-reviewer** — Review test quality after writing
+- **reviewer** — Review test quality after writing
 
 For E2E tests, additionally deploy:
 
-- **e2e-runner** — Playwright/Marionette test generation
+- **testing-specialist** — Playwright/Marionette test generation
 - **value-auditor** — Validate from user/buyer perspective, not just technical assertions
 
 ## Related Commands

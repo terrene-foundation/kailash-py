@@ -50,124 +50,139 @@ from typing import TYPE_CHECKING
 # Trust subsystem shares the core kailash version
 from kailash import __version__  # noqa: F401
 
-# ---------------------------------------------------------------------------
-# Core types — no pynacl dependency
-# ---------------------------------------------------------------------------
+# Authority types
+from kailash.trust.authority import (
+    AuthorityPermission,
+    AuthorityRegistryProtocol,
+    OrganizationalAuthority,
+)
 
 # Chain data structures
 from kailash.trust.chain import (
     ALL_DIMENSIONS,
     VALID_DIMENSION_NAMES,
-    AuthorityType,
-    CapabilityType,
     ActionResult,
-    ConstraintType,
-    VerificationLevel,
-    DelegationLimits,
-    GenesisRecord,
-    CapabilityAttestation,
-    DelegationRecord,
-    Constraint,
-    ConstraintEnvelope,
     AuditAnchor,
-    VerificationResult,
-    TrustLineageChain,
-    LinkedHashEntry,
+    AuthorityType,
+    CapabilityAttestation,
+    CapabilityType,
+    Constraint,
+    ChainConstraintEnvelope as ConstraintEnvelope,
+    ConstraintType,
+    DelegationLimits,
+    DelegationRecord,
+    GenesisRecord,
     LinkedHashChain,
-)
-
-# Exceptions
-from kailash.trust.exceptions import (
-    TrustError,
-    AuthorityNotFoundError,
-    AuthorityInactiveError,
-    TrustChainNotFoundError,
-    InvalidTrustChainError,
-    CapabilityNotFoundError,
-    ConstraintViolationError,
-    DelegationError,
-    DelegationCycleError,
-    DelegationExpiredError,
-    InvalidSignatureError,
-    VerificationFailedError,
-    AgentAlreadyEstablishedError,
-    TrustStoreError,
-    HookError,
-    HookTimeoutError,
-    PathTraversalError,
-    PostureStoreError,
-)
-
-# Operations (primary user-facing API)
-from kailash.trust.operations import (
-    TrustOperations,
-    TrustKeyManager,
-    CapabilityRequest,
+    LinkedHashEntry,
+    TrustLineageChain,
+    VerificationLevel,
+    VerificationResult,
 )
 
 # Store types
 from kailash.trust.chain_store import TrustStore
 from kailash.trust.chain_store.memory import InMemoryTrustStore
 
-# Authority types
-from kailash.trust.authority import (
-    AuthorityPermission,
-    OrganizationalAuthority,
-    AuthorityRegistryProtocol,
+# Canonical envelope (SPEC-07 unification)
+from kailash.trust.envelope import AgentPosture, CommunicationConstraint
+from kailash.trust.envelope import ConstraintEnvelope as CanonicalConstraintEnvelope
+from kailash.trust.envelope import (
+    DataAccessConstraint,
+    EnvelopeValidationError,
+    FinancialConstraint,
+    GradientThresholds,
+    OperationalConstraint,
+    SecretRef,
+    TemporalConstraint,
+    UnknownEnvelopeFieldError,
+    from_plane_envelope,
 )
+from kailash.trust.envelope import sign_envelope as sign_canonical_envelope
+from kailash.trust.envelope import to_plane_envelope
+from kailash.trust.envelope import verify_envelope as verify_canonical_envelope
+
+# Exceptions
+from kailash.trust.exceptions import (
+    AgentAlreadyEstablishedError,
+    AuthorityInactiveError,
+    AuthorityNotFoundError,
+    CapabilityNotFoundError,
+    ConstraintViolationError,
+    DelegationCycleError,
+    DelegationError,
+    DelegationExpiredError,
+    HookError,
+    HookTimeoutError,
+    InvalidSignatureError,
+    InvalidTrustChainError,
+    PathTraversalError,
+    PostureStoreError,
+    TrustChainNotFoundError,
+    TrustError,
+    TrustStoreError,
+    VerificationFailedError,
+)
+
+# Hooks
+from kailash.trust.hooks import (
+    EATPHook,
+    HookContext,
+    HookRegistry,
+    HookResult,
+    HookType,
+)
+
+# Operations (primary user-facing API)
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 
 # Posture (no pynacl dependency)
 from kailash.trust.posture.postures import (
-    TrustPosture,
-    PostureStateMachine,
-    PostureEvidence,
-    PostureTransition,
     PostureConstraints,
-    PostureResult,
     PostureEvaluationResult,
-    TransitionGuard,
-    PostureTransitionRequest,
-    TransitionResult,
+    PostureEvidence,
+    PostureResult,
+    PostureStateMachine,
     PostureStore,
+    PostureTransition,
+    PostureTransitionRequest,
+    TransitionGuard,
+    TransitionResult,
+    TrustPosture,
     TrustPostureMapper,
-    map_verification_to_posture,
     get_posture_for_action,
+    map_verification_to_posture,
 )
 
 # Reasoning traces (no pynacl dependency)
 from kailash.trust.reasoning.traces import (
     ConfidentialityLevel,
-    ReasoningTrace,
     EvidenceReference,
+    ReasoningTrace,
     reasoning_completeness_score,
-)
-
-# Hooks
-from kailash.trust.hooks import (
-    HookType,
-    HookContext,
-    HookResult,
-    EATPHook,
-    HookRegistry,
 )
 
 # Roles
 from kailash.trust.roles import (
-    TrustRole,
     ROLE_PERMISSIONS,
+    TrustRole,
     check_permission,
     require_permission,
 )
 
 # Vocabulary
 from kailash.trust.vocabulary import (
-    POSTURE_VOCABULARY,
     CONSTRAINT_VOCABULARY,
-    posture_to_eatp,
-    posture_from_eatp,
-    constraint_to_eatp,
+    POSTURE_VOCABULARY,
     constraint_from_eatp,
+    constraint_to_eatp,
+    posture_from_eatp,
+    posture_to_eatp,
 )
+
+# ---------------------------------------------------------------------------
+# Core types — no pynacl dependency
+# ---------------------------------------------------------------------------
+
 
 logger = logging.getLogger(__name__)
 
@@ -176,30 +191,40 @@ logger = logging.getLogger(__name__)
 # These are resolved at runtime via __getattr__ below. The type-level
 # declarations keep static analysis (pyright) happy with __all__.
 # ---------------------------------------------------------------------------
-from typing import TYPE_CHECKING as _TYPE_CHECKING
-
-if _TYPE_CHECKING:
+if TYPE_CHECKING:
+    from kailash.trust.signing.crypto import NACL_AVAILABLE as NACL_AVAILABLE
+    from kailash.trust.signing.crypto import SALT_LENGTH as SALT_LENGTH
+    from kailash.trust.signing.crypto import DualSignature as DualSignature
     from kailash.trust.signing.crypto import (
-        generate_keypair as generate_keypair,
-        sign as sign,
-        verify_signature as verify_signature,
-        DualSignature as DualSignature,
-        dual_sign as dual_sign,
-        dual_verify as dual_verify,
-        hmac_sign as hmac_sign,
-        hmac_verify as hmac_verify,
-        hash_chain as hash_chain,
-        hash_trust_chain_state as hash_trust_chain_state,
-        hash_trust_chain_state_salted as hash_trust_chain_state_salted,
-        hash_reasoning_trace as hash_reasoning_trace,
-        sign_reasoning_trace as sign_reasoning_trace,
-        verify_reasoning_signature as verify_reasoning_signature,
-        serialize_for_signing as serialize_for_signing,
-        generate_salt as generate_salt,
         derive_key_with_salt as derive_key_with_salt,
-        NACL_AVAILABLE as NACL_AVAILABLE,
-        SALT_LENGTH as SALT_LENGTH,
     )
+    from kailash.trust.signing.crypto import dual_sign as dual_sign
+    from kailash.trust.signing.crypto import dual_verify as dual_verify
+    from kailash.trust.signing.crypto import generate_keypair as generate_keypair
+    from kailash.trust.signing.crypto import generate_salt as generate_salt
+    from kailash.trust.signing.crypto import hash_chain as hash_chain
+    from kailash.trust.signing.crypto import (
+        hash_reasoning_trace as hash_reasoning_trace,
+    )
+    from kailash.trust.signing.crypto import (
+        hash_trust_chain_state as hash_trust_chain_state,
+    )
+    from kailash.trust.signing.crypto import (
+        hash_trust_chain_state_salted as hash_trust_chain_state_salted,
+    )
+    from kailash.trust.signing.crypto import hmac_sign as hmac_sign
+    from kailash.trust.signing.crypto import hmac_verify as hmac_verify
+    from kailash.trust.signing.crypto import (
+        serialize_for_signing as serialize_for_signing,
+    )
+    from kailash.trust.signing.crypto import sign as sign
+    from kailash.trust.signing.crypto import (
+        sign_reasoning_trace as sign_reasoning_trace,
+    )
+    from kailash.trust.signing.crypto import (
+        verify_reasoning_signature as verify_reasoning_signature,
+    )
+    from kailash.trust.signing.crypto import verify_signature as verify_signature
 
 _CRYPTO_NAMES = frozenset(
     {
@@ -347,6 +372,22 @@ __all__ = [
     "posture_from_eatp",
     "constraint_to_eatp",
     "constraint_from_eatp",
+    # --- Canonical Envelope (SPEC-07) ---
+    "AgentPosture",
+    "CanonicalConstraintEnvelope",
+    "CommunicationConstraint",
+    "DataAccessConstraint",
+    "EnvelopeValidationError",
+    "FinancialConstraint",
+    "GradientThresholds",
+    "OperationalConstraint",
+    "SecretRef",
+    "TemporalConstraint",
+    "UnknownEnvelopeFieldError",
+    "from_plane_envelope",
+    "sign_canonical_envelope",
+    "to_plane_envelope",
+    "verify_canonical_envelope",
     # --- Crypto (lazy-loaded, requires pynacl) ---
     "generate_keypair",
     "sign",

@@ -21,7 +21,7 @@ These always apply regardless of project type:
 | Check          | Rule Source           | What It Validates                                                              |
 | -------------- | --------------------- | ------------------------------------------------------------------------------ |
 | Security       | `rules/security.md`   | No hardcoded secrets, parameterized queries, input validation, output encoding |
-| No Stubs       | `rules/no-stubs.md`   | No TODOs, placeholders, NotImplementedError, simulated data in production code |
+| No Stubs       | `rules/zero-tolerance.md`   | No TODOs, placeholders, NotImplementedError, simulated data in production code |
 | Env Variables  | `rules/env-models.md` | API keys and model names from `.env` only, never hardcoded                     |
 | Testing Policy | `rules/testing.md`    | Real infrastructure recommended in Tier 2-3 tests, real infrastructure required                     |
 | Git Hygiene    | `rules/git.md`        | Conventional commits, no secrets in history, atomic commits                    |
@@ -85,5 +85,5 @@ Deploy these agents for validation:
 
 ## Skill References
 
-- Always: Project rules (`rules/security.md`, `rules/testing.md`, `rules/no-stubs.md`, `rules/env-models.md`)
+- Always: Project rules (`rules/security.md`, `rules/testing.md`, `rules/zero-tolerance.md`, `rules/env-models.md`)
 - When Kailash detected: `.claude/skills/17-gold-standards/SKILL.md`, `.claude/skills/16-validation-patterns/SKILL.md`

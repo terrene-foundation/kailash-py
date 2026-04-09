@@ -16,6 +16,8 @@ These rules apply to ALL bug fixes, feature implementations, and issue resolutio
 
 When an issue is found or fixed in ONE BUILD repo, you MUST inspect the OTHER BUILD repo for the same or equivalent issue.
 
+**Why:** Bugs in shared architecture (trust plane, DataFlow, Nexus) almost always exist in both SDKs — fixing only one leaves users of the other SDK hitting the same issue.
+
 **kailash-rs issue found → inspect kailash-py**:
 
 - Does the Python SDK have the same bug?
@@ -36,6 +38,8 @@ When filing a cross-SDK issue, MUST include:
 - Tag: `cross-sdk` label
 - Note: "Cross-SDK alignment: this is the [Rust/Python] equivalent of [link]"
 
+**Why:** Without cross-references, the same bug gets fixed independently with different approaches, causing semantic divergence between SDKs that violates EATP D6.
+
 ### 3. EATP D6 Compliance
 
 Per EATP SDK conventions (D6: independent implementation, matching semantics):
@@ -43,6 +47,8 @@ Per EATP SDK conventions (D6: independent implementation, matching semantics):
 - Both SDKs implement features independently
 - Semantics MUST match (same API shape, same behavior)
 - Implementation details may differ (Rust idioms vs Python idioms)
+
+**Why:** Semantic divergence between SDKs means code ported from Python to Rust (or vice versa) silently changes behavior, breaking user trust in the platform's cross-language promise.
 
 ### 4. Inspection Checklist
 
@@ -52,6 +58,8 @@ When closing any issue, verify:
 - [ ] If feature: is it in the other SDK's roadmap?
 - [ ] If bug: could the same bug exist in the other SDK?
 - [ ] Cross-reference added to both issues if applicable
+
+**Why:** Closing without cross-SDK verification is the primary cause of feature drift — the checklist is the last gate before an issue is forgotten.
 
 ## Examples
 

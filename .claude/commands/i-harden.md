@@ -82,7 +82,7 @@ After presenting the report, implement critical and important fixes. Delegate to
 ## Agent Teams
 
 - **uiux-designer** -- Design-level edge case decisions
-- **frontend-developer** -- React implementation of hardening
+- **react-specialist** -- React implementation of hardening
 - **flutter-specialist** -- Flutter implementation of hardening
 - **testing-specialist** -- Creating hardening test suites
 

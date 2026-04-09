@@ -24,8 +24,7 @@ middleware/
 │   ├── __init__.py
 │   ├── events.py           # EventStream and event types
 │   ├── realtime.py         # RealtimeMiddleware (WebSocket, SSE)
-│   ├── api_gateway.py      # APIGateway for REST APIs
-│   └── ai_chat.py          # AIChatMiddleware
+│   └── api_gateway.py      # APIGateway for REST APIs
 │
 ├── database/               # Database persistence layer
 │   ├── __init__.py
@@ -93,6 +92,7 @@ from ...nodes.enterprise import BatchProcessorNode
 ```
 
 This structure provides:
+
 - Clear organization
 - No naming conflicts
 - Easy navigation

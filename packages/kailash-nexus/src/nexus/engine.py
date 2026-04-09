@@ -104,6 +104,8 @@ class NexusEngineBuilder:
         self._enterprise_config: Optional[EnterpriseMiddlewareConfig] = None
         self._bind_addr: str = "0.0.0.0:3000"
         self._nexus_kwargs: Dict[str, Any] = {}
+        self._governance_engine: Optional[Any] = None
+        self._governance_kwargs: Dict[str, Any] = {}
 
     def preset(self, preset: Preset) -> NexusEngineBuilder:
         """Set a middleware preset (NONE, SAAS, ENTERPRISE)."""
@@ -123,6 +125,32 @@ class NexusEngineBuilder:
     def config(self, **kwargs: Any) -> NexusEngineBuilder:
         """Pass additional configuration to the underlying Nexus instance."""
         self._nexus_kwargs.update(kwargs)
+        return self
+
+    def governance(
+        self,
+        engine: Any,
+        **pact_middleware_kwargs: Any,
+    ) -> NexusEngineBuilder:
+        """Enable PACT governance enforcement on this NexusEngine.
+
+        Registers ``PACTMiddleware`` in the Nexus middleware stack so that
+        every non-exempt HTTP request is routed through
+        ``GovernanceEngine.verify_action()``. The middleware sits AFTER
+        authentication (Nexus owns authN) and BEFORE business handlers
+        (PACT owns authZ) per the framework-first specialist split.
+
+        Args:
+            engine: A ``kailash.trust.pact.GovernanceEngine`` instance.
+            **pact_middleware_kwargs: Extra kwargs forwarded to
+                ``PACTMiddleware.__init__`` (e.g. ``exempt_paths``,
+                ``role_address_state_key``, ``require_role_address``).
+
+        Returns:
+            self (for chaining).
+        """
+        self._governance_engine = engine
+        self._governance_kwargs = dict(pact_middleware_kwargs)
         return self
 
     def build(self) -> NexusEngine:
@@ -154,10 +182,36 @@ class NexusEngineBuilder:
 
         nexus = Nexus(**nexus_kwargs)
 
+        # Register PACTMiddleware LAST so it runs FIRST on requests
+        # (Nexus applies middleware in LIFO add order — last added is the
+        # outermost wrapper and runs first on the way in). But we want
+        # authN to run BEFORE authZ, so the auth middleware (added by the
+        # Nexus preset during Nexus() construction) wraps PACTMiddleware
+        # from the outside. Registering PACTMiddleware here — AFTER the
+        # Nexus() constructor has already queued the preset's auth stack —
+        # places PACT authZ INSIDE the auth authN wrapper, which is the
+        # correct ordering: authN → authZ → handler.
+        if self._governance_engine is not None:
+            from nexus.middleware.governance import PACTMiddleware
+
+            nexus.add_middleware(
+                PACTMiddleware,
+                governance_engine=self._governance_engine,
+                **self._governance_kwargs,
+            )
+            logger.info(
+                "nexus_engine.governance.registered",
+                extra={
+                    "component": "nexus.engine",
+                    "middleware": "PACTMiddleware",
+                },
+            )
+
         return NexusEngine(
             nexus=nexus,
             enterprise_config=enterprise_config,
             bind_addr=self._bind_addr,
+            governance_engine=self._governance_engine,
         )
 
 
@@ -176,10 +230,12 @@ class NexusEngine:
         nexus: Nexus,
         enterprise_config: Optional[EnterpriseMiddlewareConfig] = None,
         bind_addr: str = "0.0.0.0:3000",
+        governance_engine: Optional[Any] = None,
     ) -> None:
         self._nexus = nexus
         self._enterprise_config = enterprise_config
         self._bind_addr = bind_addr
+        self._governance_engine = governance_engine
 
     @staticmethod
     def builder() -> NexusEngineBuilder:
@@ -200,6 +256,15 @@ class NexusEngine:
     def enterprise_config(self) -> Optional[EnterpriseMiddlewareConfig]:
         """Get enterprise middleware config, if set."""
         return self._enterprise_config
+
+    @property
+    def governance_engine(self) -> Optional[Any]:
+        """Get the registered PACT GovernanceEngine, if any.
+
+        Returns None if no governance engine was registered via
+        ``.governance()`` on the builder.
+        """
+        return self._governance_engine
 
     def register(self, name: str, workflow: Any, **kwargs: Any) -> None:
         """Register a workflow with the underlying Nexus instance."""

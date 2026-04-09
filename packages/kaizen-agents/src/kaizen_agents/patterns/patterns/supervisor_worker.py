@@ -42,12 +42,16 @@ import json
 import os
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.memory.shared_memory import SharedMemoryPool
-from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns._reasoning_bridge import (
+    rank_agents_by_capability_sync,
+    resolve_reasoning_config,
+)
+from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
 
 # A2A imports for capability-based agent selection
 try:
@@ -151,7 +155,7 @@ class SupervisorAgent(BaseAgent):
         self.a2a_coordinator = "capability_matching" if A2A_AVAILABLE else None
 
     def select_worker_for_task(
-        self, task: str, available_workers: List[BaseAgent], return_score: bool = False
+        self, task: str, available_workers: list[BaseAgent], return_score: bool = False
     ) -> Any:
         """
         Select best worker for task using A2A capability matching.
@@ -170,7 +174,7 @@ class SupervisorAgent(BaseAgent):
         if not available_workers:
             return None if not return_score else {"worker": None, "score": 0.0}
 
-        # Try A2A capability matching first
+        # Try A2A capability matching first (LLM-first, no keyword overlap)
         if self.a2a_coordinator and A2A_AVAILABLE:
             try:
                 # Generate A2A cards for all workers
@@ -184,25 +188,20 @@ class SupervisorAgent(BaseAgent):
                         # Skip workers that can't generate A2A cards
                         continue
 
-                # Find best match using A2A semantic matching
                 if worker_cards:
-                    best_worker = None
-                    best_score = 0.0
-
-                    for worker, card in worker_cards:
-                        # Calculate capability match score
-                        score = 0.0
-                        for capability in card.primary_capabilities:
-                            capability_score = capability.matches_requirement(task)
-                            if capability_score > score:
-                                score = capability_score
-
-                        # Track best match
-                        if score > best_score:
-                            best_score = score
-                            best_worker = worker
-
-                    if best_worker:
+                    # Reasoning config: prefer supervisor's own config so the
+                    # LLM judge matches the supervisor's model selection.
+                    reasoning_config = (
+                        self.config
+                        if isinstance(self.config, BaseAgentConfig)
+                        else resolve_reasoning_config(available_workers)
+                    )
+                    scored = rank_agents_by_capability_sync(
+                        worker_cards, task, reasoning_config=reasoning_config
+                    )
+                    scored.sort(key=lambda item: item[1], reverse=True)
+                    best_worker, best_score = scored[0]
+                    if best_worker is not None:
                         if return_score:
                             return {"worker": best_worker, "score": best_score}
                         return best_worker
@@ -221,9 +220,9 @@ class SupervisorAgent(BaseAgent):
     def delegate(
         self,
         request: str,
-        available_workers: Optional[List[str]] = None,
+        available_workers: list[str] | None = None,
         num_tasks: int = 3,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Delegate request to workers by breaking into tasks.
 
@@ -322,7 +321,7 @@ class SupervisorAgent(BaseAgent):
 
         return tasks
 
-    def aggregate_results(self, request_id: str) -> Dict[str, Any]:
+    def aggregate_results(self, request_id: str) -> dict[str, Any]:
         """
         Aggregate results from workers for a request.
 
@@ -403,7 +402,7 @@ class SupervisorAgent(BaseAgent):
         # All complete if no pending tasks and we have results
         return len(pending) > 0 and len(completed) >= len(pending)
 
-    def check_failures(self, request_id: str) -> List[Dict[str, Any]]:
+    def check_failures(self, request_id: str) -> list[dict[str, Any]]:
         """
         Check for failed tasks.
 
@@ -425,7 +424,7 @@ class SupervisorAgent(BaseAgent):
 
         return failures
 
-    def reassign_task(self, task: Dict[str, Any], new_worker: str) -> Dict[str, Any]:
+    def reassign_task(self, task: dict[str, Any], new_worker: str) -> dict[str, Any]:
         """
         Reassign a task to a different worker.
 
@@ -495,7 +494,7 @@ class WorkerAgent(BaseAgent):
             agent_id=agent_id,
         )
 
-    def get_assigned_tasks(self) -> List[Dict[str, Any]]:
+    def get_assigned_tasks(self) -> list[dict[str, Any]]:
         """
         Get tasks assigned to this worker.
 
@@ -528,7 +527,7 @@ class WorkerAgent(BaseAgent):
 
         return tasks
 
-    def execute_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
+    def execute_task(self, task: dict[str, Any]) -> dict[str, Any]:
         """
         Execute a task and write result to shared memory.
 
@@ -606,7 +605,7 @@ class CoordinatorAgent(BaseAgent):
             agent_id=agent_id,
         )
 
-    def monitor_progress(self) -> Dict[str, Any]:
+    def monitor_progress(self) -> dict[str, Any]:
         """
         Monitor progress of all workers.
 
@@ -683,7 +682,7 @@ class SupervisorWorkerPattern(BaseMultiAgentPattern):
     """
 
     supervisor: SupervisorAgent
-    workers: List[WorkerAgent]
+    workers: list[WorkerAgent]
     coordinator: CoordinatorAgent
 
     def __post_init__(self):
@@ -694,8 +693,8 @@ class SupervisorWorkerPattern(BaseMultiAgentPattern):
         )
 
     def delegate(
-        self, request: str, num_tasks: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
+        self, request: str, num_tasks: int | None = None
+    ) -> list[dict[str, Any]]:
         """
         Convenience method: Delegate request to workers.
 
@@ -714,7 +713,7 @@ class SupervisorWorkerPattern(BaseMultiAgentPattern):
             request, available_workers=worker_ids, num_tasks=num_tasks
         )
 
-    def aggregate_results(self, request_id: str) -> Dict[str, Any]:
+    def aggregate_results(self, request_id: str) -> dict[str, Any]:
         """
         Convenience method: Aggregate results from workers.
 
@@ -726,7 +725,7 @@ class SupervisorWorkerPattern(BaseMultiAgentPattern):
         """
         return self.supervisor.aggregate_results(request_id)
 
-    def monitor_progress(self) -> Dict[str, Any]:
+    def monitor_progress(self) -> dict[str, Any]:
         """
         Convenience method: Monitor execution progress.
 
@@ -735,7 +734,7 @@ class SupervisorWorkerPattern(BaseMultiAgentPattern):
         """
         return self.coordinator.monitor_progress()
 
-    def get_agents(self) -> List[BaseAgent]:
+    def get_agents(self) -> list[BaseAgent]:
         """
         Get all agents in this pattern.
 
@@ -750,7 +749,7 @@ class SupervisorWorkerPattern(BaseMultiAgentPattern):
             agents.append(self.coordinator)
         return agents
 
-    def get_agent_ids(self) -> List[str]:
+    def get_agent_ids(self) -> list[str]:
         """
         Get all agent IDs in this pattern.
 
@@ -760,8 +759,8 @@ class SupervisorWorkerPattern(BaseMultiAgentPattern):
         return [agent.agent_id for agent in self.get_agents() if agent is not None]
 
     async def execute_async(
-        self, request: str, num_tasks: Optional[int] = None
-    ) -> Dict[str, Any]:
+        self, request: str, num_tasks: int | None = None
+    ) -> dict[str, Any]:
         """
         Execute supervisor-worker pattern asynchronously using AsyncLocalRuntime.
 
@@ -815,14 +814,14 @@ class SupervisorWorkerPattern(BaseMultiAgentPattern):
 
 def create_supervisor_worker_pattern(
     num_workers: int = 3,
-    llm_provider: Optional[str] = None,
-    model: Optional[str] = None,
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-    shared_memory: Optional[SharedMemoryPool] = None,
-    supervisor_config: Optional[Dict[str, Any]] = None,
-    worker_config: Optional[Dict[str, Any]] = None,
-    coordinator_config: Optional[Dict[str, Any]] = None,
+    llm_provider: str | None = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    shared_memory: SharedMemoryPool | None = None,
+    supervisor_config: dict[str, Any] | None = None,
+    worker_config: dict[str, Any] | None = None,
+    coordinator_config: dict[str, Any] | None = None,
 ) -> SupervisorWorkerPattern:
     """
     Create supervisor-worker pattern with zero-config defaults.

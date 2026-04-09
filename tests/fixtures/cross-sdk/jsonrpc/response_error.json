@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "name": "response_error",
+  "input": {
+    "jsonrpc": "2.0",
+    "error": {
+      "code": -32601,
+      "message": "Method not found: unknown_method"
+    },
+    "id": 1
+  },
+  "expected_canonical_json": "{\"error\":{\"code\":-32601,\"message\":\"Method not found: unknown_method\"},\"id\":1,\"jsonrpc\":\"2.0\"}",
+  "metadata": {
+    "description": "JSON-RPC 2.0 error response (method not found)",
+    "spec_reference": "SPEC-01 §7.4"
+  }
+}

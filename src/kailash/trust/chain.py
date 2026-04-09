@@ -7,7 +7,7 @@ EATP Trust Lineage Chain Data Structures.
 Defines the core data structures for the Enterprise Agent Trust Protocol:
 - GenesisRecord: Who authorized this agent to exist?
 - DelegationRecord: Who delegated work to this agent?
-- ConstraintEnvelope: What limits apply?
+- ChainConstraintEnvelope: What limits apply?
 - CapabilityAttestation: What can this agent do?
 - AuditAnchor: What has this agent done?
 - TrustLineageChain: Complete trust chain for an agent
@@ -440,7 +440,7 @@ class Constraint:
 
 
 @dataclass
-class ConstraintEnvelope:
+class ChainConstraintEnvelope:
     """
     Aggregated constraints governing agent behavior.
 
@@ -497,6 +497,13 @@ class ConstraintEnvelope:
         if self.valid_until is None:
             return True
         return datetime.now(timezone.utc) <= self.valid_until
+
+
+# Backward-compatible alias — the canonical SPEC-07 ConstraintEnvelope lives
+# in kailash.trust.envelope. This chain-specific class was renamed to
+# ChainConstraintEnvelope to avoid name collision. The old name is kept
+# for backward compatibility with existing imports.
+ConstraintEnvelope = ChainConstraintEnvelope
 
 
 @dataclass
@@ -681,13 +688,13 @@ class TrustLineageChain:
     genesis: GenesisRecord
     capabilities: List[CapabilityAttestation] = field(default_factory=list)
     delegations: List[DelegationRecord] = field(default_factory=list)
-    constraint_envelope: Optional[ConstraintEnvelope] = None
+    constraint_envelope: Optional[ChainConstraintEnvelope] = None
     audit_anchors: List[AuditAnchor] = field(default_factory=list)
 
     def __post_init__(self):
         """Initialize constraint envelope if not provided."""
         if self.constraint_envelope is None:
-            self.constraint_envelope = ConstraintEnvelope(
+            self.constraint_envelope = ChainConstraintEnvelope(
                 id=f"env-{self.genesis.agent_id}", agent_id=self.genesis.agent_id
             )
 
@@ -1088,7 +1095,7 @@ class TrustLineageChain:
         constraint_envelope = None
         if data.get("constraint_envelope"):
             env_data = data["constraint_envelope"]
-            constraint_envelope = ConstraintEnvelope(
+            constraint_envelope = ChainConstraintEnvelope(
                 id=env_data["id"],
                 agent_id=env_data["agent_id"],
                 constraint_hash=env_data.get("constraint_hash", ""),
@@ -1425,7 +1432,8 @@ __all__ = [
     "CapabilityAttestation",
     "DelegationRecord",
     "Constraint",
-    "ConstraintEnvelope",
+    "ChainConstraintEnvelope",
+    "ConstraintEnvelope",  # backward-compat alias
     "AuditAnchor",
     "VerificationResult",
     "TrustLineageChain",

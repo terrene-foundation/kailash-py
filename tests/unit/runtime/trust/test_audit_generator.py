@@ -126,9 +126,9 @@ class TestWorkflowStartedEvent:
         assert event.trace_id == "wf-fields-trace"
         assert event.workflow_id == "run-123"
         assert event.action == "workflow_started"
-        assert event.result == "success"
-        assert "workflow_name" in event.context
-        assert event.context["workflow_name"] == "test-workflow"
+        assert event.outcome == "success"
+        assert "workflow_name" in event.metadata
+        assert event.metadata["workflow_name"] == "test-workflow"
 
 
 class TestWorkflowCompletedEvent:
@@ -164,7 +164,7 @@ class TestWorkflowCompletedEvent:
             trust_context=trust_ctx,
         )
 
-        assert event.result == "success"
+        assert event.outcome == "success"
 
     @pytest.mark.asyncio
     async def test_workflow_completed_duration_in_context(self):
@@ -180,8 +180,8 @@ class TestWorkflowCompletedEvent:
             trust_context=trust_ctx,
         )
 
-        assert "duration_ms" in event.context
-        assert event.context["duration_ms"] == 2500
+        assert "duration_ms" in event.metadata
+        assert event.metadata["duration_ms"] == 2500
 
 
 class TestWorkflowFailedEvent:
@@ -219,7 +219,7 @@ class TestWorkflowFailedEvent:
             trust_context=trust_ctx,
         )
 
-        assert event.result == "failure"
+        assert event.outcome == "failure"
 
     @pytest.mark.asyncio
     async def test_workflow_failed_error_in_context(self):
@@ -236,10 +236,10 @@ class TestWorkflowFailedEvent:
             trust_context=trust_ctx,
         )
 
-        assert "error" in event.context
-        assert event.context["error"] == "Database connection failed"
-        assert "duration_ms" in event.context
-        assert event.context["duration_ms"] == 200
+        assert "error" in event.metadata
+        assert event.metadata["error"] == "Database connection failed"
+        assert "duration_ms" in event.metadata
+        assert event.metadata["duration_ms"] == 200
 
 
 class TestNodeExecutedEvent:
@@ -280,11 +280,11 @@ class TestNodeExecutedEvent:
         )
 
         assert event.node_id == "my-node"
-        assert event.result == "success"
-        assert "node_type" in event.context
-        assert event.context["node_type"] == "BashCommand"
-        assert "duration_ms" in event.context
-        assert event.context["duration_ms"] == 300
+        assert event.outcome == "success"
+        assert "node_type" in event.metadata
+        assert event.metadata["node_type"] == "BashCommand"
+        assert "duration_ms" in event.metadata
+        assert event.metadata["duration_ms"] == 300
 
 
 class TestNodeFailedEvent:
@@ -327,11 +327,11 @@ class TestNodeFailedEvent:
         )
 
         assert event.node_id == "error-node"
-        assert event.result == "failure"
-        assert "error" in event.context
-        assert event.context["error"] == "Query failed"
-        assert "node_type" in event.context
-        assert event.context["node_type"] == "DatabaseQuery"
+        assert event.outcome == "failure"
+        assert "error" in event.metadata
+        assert event.metadata["error"] == "Query failed"
+        assert "node_type" in event.metadata
+        assert event.metadata["node_type"] == "DatabaseQuery"
 
 
 class TestTrustVerificationEvent:
@@ -354,7 +354,7 @@ class TestTrustVerificationEvent:
         )
 
         assert event.event_type == AuditEventType.TRUST_VERIFICATION
-        assert event.result == "success"
+        assert event.outcome == "success"
 
     @pytest.mark.asyncio
     async def test_trust_denied_event(self):
@@ -373,9 +373,9 @@ class TestTrustVerificationEvent:
         )
 
         assert event.event_type == AuditEventType.TRUST_DENIED
-        assert event.result == "denied"
-        assert "reason" in event.context
-        assert event.context["reason"] == "Insufficient permissions"
+        assert event.outcome == "denied"
+        assert "reason" in event.metadata
+        assert event.metadata["reason"] == "Insufficient permissions"
 
 
 class TestResourceAccessedEvent:
@@ -400,7 +400,7 @@ class TestResourceAccessedEvent:
         assert event.event_type == AuditEventType.RESOURCE_ACCESS
         assert event.resource == "/data/sensitive-file.txt"
         assert event.action == "read"
-        assert event.result == "success"
+        assert event.outcome == "success"
 
 
 class TestGetEvents:

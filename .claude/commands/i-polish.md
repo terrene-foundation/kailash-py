@@ -120,7 +120,7 @@ Run `/i-harden` for production resilience, or `/i-audit` to verify improvements.
 Deploy these agents for visual refinement:
 
 - **uiux-designer** — Design analysis, typography systems, color theory, spacing optimization
-- **frontend-developer** — React implementation of refinements
+- **react-specialist** — React implementation of refinements
 - **flutter-specialist** — Flutter implementation of refinements (if applicable)
 
 ## Related Commands

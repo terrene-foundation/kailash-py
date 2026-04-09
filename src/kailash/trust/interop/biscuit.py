@@ -4,7 +4,7 @@
 """
 EATP Biscuit Interop -- Biscuit-inspired token format for EATP constraints.
 
-Provides functions to serialize EATP ConstraintEnvelopes into a compact binary
+Provides functions to serialize EATP ChainConstraintEnvelopes into a compact binary
 token format inspired by the Biscuit authorization token specification.  Tokens
 use Ed25519 signatures (via ``eatp.crypto``) and support delegation-style
 *attenuation*: anyone holding a token can add restrictions without needing the
@@ -56,7 +56,7 @@ import logging
 import struct
 from typing import Any, Dict, List, Tuple
 
-from kailash.trust.chain import Constraint, ConstraintEnvelope, ConstraintType
+from kailash.trust.chain import ChainConstraintEnvelope, Constraint, ConstraintType
 from kailash.trust.exceptions import InvalidSignatureError
 
 logger = logging.getLogger(__name__)
@@ -138,8 +138,8 @@ def _validate_attenuator_key(attenuator_key: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _serialize_authority_block(envelope: ConstraintEnvelope) -> bytes:
-    """Build the JSON authority block from a ConstraintEnvelope.
+def _serialize_authority_block(envelope: ChainConstraintEnvelope) -> bytes:
+    """Build the JSON authority block from a ChainConstraintEnvelope.
 
     Returns:
         UTF-8 encoded JSON bytes.
@@ -169,8 +169,8 @@ def _serialize_authority_block(envelope: ConstraintEnvelope) -> bytes:
     return json.dumps(block, separators=(",", ":"), sort_keys=True).encode("utf-8")
 
 
-def _deserialize_authority_block(data: bytes) -> ConstraintEnvelope:
-    """Reconstruct a ConstraintEnvelope from authority block JSON bytes."""
+def _deserialize_authority_block(data: bytes) -> ChainConstraintEnvelope:
+    """Reconstruct a ChainConstraintEnvelope from authority block JSON bytes."""
     block = json.loads(data.decode("utf-8"))
 
     facts = block["facts"]
@@ -186,7 +186,7 @@ def _deserialize_authority_block(data: bytes) -> ConstraintEnvelope:
             )
         )
 
-    return ConstraintEnvelope(
+    return ChainConstraintEnvelope(
         id=facts["envelope_id"],
         agent_id=facts["agent_id"],
         active_constraints=constraint_list,
@@ -340,8 +340,8 @@ def _build_authority_payload(version_byte: int, authority_block: bytes) -> bytes
 # ===================================================================
 
 
-def to_biscuit(envelope: ConstraintEnvelope, signing_key: str) -> bytes:
-    """Export a ConstraintEnvelope as a Biscuit-inspired binary token.
+def to_biscuit(envelope: ChainConstraintEnvelope, signing_key: str) -> bytes:
+    """Export a ChainConstraintEnvelope as a Biscuit-inspired binary token.
 
     The token contains:
     - An authority block encoding the envelope's constraint facts.
@@ -349,7 +349,7 @@ def to_biscuit(envelope: ConstraintEnvelope, signing_key: str) -> bytes:
     - A single Ed25519 signature over the authority block.
 
     Args:
-        envelope: The ConstraintEnvelope to serialize.
+        envelope: The ChainConstraintEnvelope to serialize.
         signing_key: Base64-encoded Ed25519 private key.
 
     Returns:
@@ -398,8 +398,8 @@ def to_biscuit(envelope: ConstraintEnvelope, signing_key: str) -> bytes:
     return token
 
 
-def from_biscuit(token: bytes, public_key: str) -> ConstraintEnvelope:
-    """Import a Biscuit-inspired token and return the ConstraintEnvelope.
+def from_biscuit(token: bytes, public_key: str) -> ChainConstraintEnvelope:
+    """Import a Biscuit-inspired token and return the ChainConstraintEnvelope.
 
     Verifies the full signature chain before deserializing.  If verification
     fails, raises an error rather than returning potentially tampered data.
@@ -409,7 +409,7 @@ def from_biscuit(token: bytes, public_key: str) -> ConstraintEnvelope:
         public_key: Base64-encoded Ed25519 public key of the original authority.
 
     Returns:
-        The deserialized ConstraintEnvelope from the authority block.
+        The deserialized ChainConstraintEnvelope from the authority block.
 
     Raises:
         ValueError: If public_key is empty, token is malformed, or version is wrong.

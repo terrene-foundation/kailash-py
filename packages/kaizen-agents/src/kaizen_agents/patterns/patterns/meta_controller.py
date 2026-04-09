@@ -29,9 +29,13 @@ Created: 2025-10-27 (Phase 3, TODO-174)
 Reference: ADR-018, docs/testing/pipeline-edge-case-test-matrix.md
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
+from kaizen_agents.patterns._reasoning_bridge import (
+    rank_agents_by_capability_sync,
+    resolve_reasoning_config,
+)
 from kaizen_agents.patterns.pipeline import Pipeline
 
 # A2A imports for capability-based agent selection
@@ -73,7 +77,7 @@ class MetaControllerPipeline(Pipeline):
 
     def __init__(
         self,
-        agents: List[BaseAgent],
+        agents: list[BaseAgent],
         routing_strategy: str = "semantic",
         error_handling: str = "graceful",
     ):
@@ -126,26 +130,15 @@ class MetaControllerPipeline(Pipeline):
                     # Skip agents that can't generate A2A cards
                     continue
 
-            # Find best match using A2A semantic matching
+            # LLM-first capability matching (no keyword / substring scoring)
             if agent_cards:
-                best_agent = None
-                best_score = 0.0
-
-                for agent, card in agent_cards:
-                    # Calculate capability match score
-                    score = 0.0
-                    for capability in card.primary_capabilities:
-                        capability_score = capability.matches_requirement(task)
-                        if capability_score > score:
-                            score = capability_score
-
-                    # Track best match
-                    if score > best_score:
-                        best_score = score
-                        best_agent = agent
-
-                # Return best match or fallback
-                if best_agent and best_score > 0:
+                reasoning_config = resolve_reasoning_config(self.agents)
+                scored = rank_agents_by_capability_sync(
+                    agent_cards, task, reasoning_config=reasoning_config
+                )
+                scored.sort(key=lambda item: item[1], reverse=True)
+                best_agent, best_score = scored[0]
+                if best_agent is not None and best_score > 0:
                     return best_agent
 
         except Exception:
@@ -177,7 +170,7 @@ class MetaControllerPipeline(Pipeline):
 
         return random.choice(self.agents)
 
-    def _select_agent(self, task: Optional[str] = None) -> BaseAgent:
+    def _select_agent(self, task: str | None = None) -> BaseAgent:
         """
         Select best agent based on routing strategy.
 
@@ -207,7 +200,7 @@ class MetaControllerPipeline(Pipeline):
             # Unknown strategy, default to first agent
             return self.agents[0]
 
-    def _handle_agent_error(self, agent: BaseAgent, error: Exception) -> Dict[str, Any]:
+    def _handle_agent_error(self, agent: BaseAgent, error: Exception) -> dict[str, Any]:
         """
         Handle agent execution error based on configured mode.
 
@@ -234,7 +227,7 @@ class MetaControllerPipeline(Pipeline):
                 "traceback": traceback.format_exc(),
             }
 
-    def run(self, **inputs) -> Dict[str, Any]:
+    def run(self, **inputs) -> dict[str, Any]:
         """
         Execute router pipeline: select and execute best agent.
 
@@ -251,7 +244,7 @@ class MetaControllerPipeline(Pipeline):
             - fail-fast: Raises exception on first error
         """
         # Extract task for routing (if provided)
-        task = inputs.get("task", None)
+        task = inputs.get("task")
 
         # Select best agent
         selected_agent = self._select_agent(task=task)

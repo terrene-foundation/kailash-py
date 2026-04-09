@@ -72,7 +72,7 @@ Rate each dimension 1-5 (1=critical issues, 5=excellent):
 ## Priority Issues (3-5, ordered by impact)
 For each:
 - **What**: The specific problem
-- **Why**: Impact on user experience
+- **Why:** Impact on user experience
 - **Fix**: Concrete fix with code direction
 - **Command**: Which command addresses this (e.g., `/i-harden`, `/design`)
 
@@ -114,7 +114,7 @@ When auditing AI-facing interfaces, also evaluate:
 Deploy these agents for design audits:
 
 - **uiux-designer** — Deep design analysis and recommendations
-- **ai-ux-designer** — AI-specific interaction pattern evaluation
+- **uiux-designer** — AI-specific interaction pattern evaluation
 - **value-auditor** — Enterprise demo value assessment (via Playwright)
 
 ## Skill References

@@ -65,6 +65,13 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["E501"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["kaizen", "kaizen_agents", "kailash"]
+
+[tool.isort]
+profile = "black"
+known_first_party = ["kaizen", "kaizen_agents", "kailash"]
+
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true

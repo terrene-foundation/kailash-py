@@ -1,6 +1,6 @@
 ---
 name: nexus-specialist
-description: "kailash-nexus specialist. Use for API+CLI+MCP deployment, handlers, transports, middleware, sessions, or webhooks."
+description: "Nexus specialist. Use proactively for HTTP/API/websocket/gateway/middleware/login/session — FastAPI/Flask BLOCKED."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---
@@ -35,7 +35,7 @@ You are a multi-channel platform specialist for Kailash Nexus implementation. Ex
 4. **Explicit connections** - NOT template syntax `${...}`
 5. **Test all three channels** (API, CLI, MCP) during development
 6. **Auth Config Names**: JWTConfig uses `secret` (not `secret_key`), `exempt_paths` (not `exclude_paths`)
-7. **No PEP 563**: Never use `from __future__ import annotations` with FastAPI dependencies
+7. **No PEP 563**: Never use `from __future__ import annotations` with Nexus handler dependencies (breaks runtime type resolution)
 
 ## Process
 
@@ -159,3 +159,15 @@ When this guidance is insufficient, consult:
 - `.claude/skills/03-nexus/` - Complete Nexus skills directory
 - `.claude/skills/03-nexus/nexus-dataflow-integration.md` - Integration patterns
 - `.claude/skills/03-nexus/nexus-troubleshooting.md` - Troubleshooting and input mapping
+
+---
+
+**Use this agent when:**
+
+- Setting up Nexus production deployments
+- Implementing multi-channel orchestration
+- Resolving DataFlow blocking issues
+- Configuring enterprise features (auth, monitoring)
+- Debugging channel-specific problems
+
+**For basic patterns (setup, simple registration), use Skills directly for faster response.**

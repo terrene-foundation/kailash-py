@@ -9,7 +9,7 @@ Modules:
 - bash: Bash command execution tool
 - web: Web scraping tools (fetch URL, extract links)
 
-All tools use the @tool decorator from kailash.mcp_server for MCP compliance.
+All tools use the @tool decorator from kailash_mcp for MCP compliance.
 All tools preserve security validations from original custom implementations.
 """
 

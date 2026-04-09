@@ -173,6 +173,13 @@ target-version = "py311"
 select = ["E", "F"]
 ignore = ["E203", "E501", "F401", "F841"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact"]
+
+[tool.isort]
+profile = "black"
+known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", "pact"]
+
 [tool.ruff.lint.per-file-ignores]
 # Ignore import ordering and undefined names in packages directory (separate packages)
 "packages/**/*.py" = ["E402", "F821", "F811", "E721"]

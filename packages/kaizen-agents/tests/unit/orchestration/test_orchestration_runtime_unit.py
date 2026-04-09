@@ -13,12 +13,13 @@ Strategy: Fast execution (<5s), mocked infrastructure
 """
 
 import asyncio
-from datetime import datetime
+import contextlib
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from kaizen.core.base_agent import BaseAgent
+from kaizen.signatures import InputField, OutputField, Signature
 from kaizen_agents.patterns.runtime import (
     AgentStatus,
     ErrorHandlingMode,
@@ -27,11 +28,9 @@ from kaizen_agents.patterns.runtime import (
     RetryPolicy,
     RoutingStrategy,
 )
-from kaizen.signatures import InputField, OutputField, Signature
 
 # Check A2A availability
 try:
-    from kaizen.nodes.ai.a2a import A2AAgentCard
 
     A2A_AVAILABLE = True
 except ImportError:
@@ -102,7 +101,9 @@ def runtime(runtime_config):
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(not A2A_AVAILABLE, reason="A2A module required for capability registration")
+@pytest.mark.skipif(
+    not A2A_AVAILABLE, reason="A2A module required for capability registration"
+)
 async def test_agent_registration_basic(runtime, mock_agent):
     """Test basic agent registration."""
     # Register agent
@@ -172,9 +173,17 @@ async def test_agent_health_check_failure(runtime, mock_agent):
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(not A2A_AVAILABLE, reason="A2A module required for semantic routing")
+@pytest.mark.skipif(
+    not A2A_AVAILABLE, reason="A2A module required for semantic routing"
+)
 async def test_semantic_routing_capability_match(runtime):
-    """Test semantic routing selects agent with matching capability."""
+    """Test semantic routing selects agent with matching capability.
+
+    Semantic routing now delegates similarity scoring to the LLM via
+    `kaizen.llm.reasoning.llm_text_similarity` (see
+    `rules/agent-reasoning.md` MUST Rule 1). Unit tests stub the LLM helper
+    so the routing decision is deterministic without real LLM calls.
+    """
     # Create agents with different capabilities
     agent1 = Mock(spec=BaseAgent)
     agent1.agent_id = "agent_1"
@@ -197,14 +206,25 @@ async def test_semantic_routing_capability_match(runtime):
     await runtime.register_agent(agent1)
     await runtime.register_agent(agent2)
 
-    # Route task requiring data analysis
-    # Semantic similarity uses instance method _simple_text_similarity
-    result = await runtime.route_task(
-        "Analyze sales data and create charts", strategy=RoutingStrategy.SEMANTIC
-    )
+    # Stub the LLM similarity helper so the test is deterministic.
+    # Data analysis task should beat code generation for agent2.
+    def fake_similarity(text_a, text_b, *, config=None, correlation_id=None):
+        if "Data analysis" in text_b or "Visualization" in text_b:
+            return 0.9
+        if "Code generation" in text_b:
+            return 0.1
+        return 0.0
+
+    with patch(
+        "kaizen_agents.patterns.runtime.llm_text_similarity",
+        side_effect=fake_similarity,
+    ):
+        result = await runtime.route_task(
+            "Analyze sales data and create charts",
+            strategy=RoutingStrategy.SEMANTIC,
+        )
 
     # Should select agent2 (data analysis capability)
-    # Note: result is the agent itself, not agent_id
     assert result is not None
     assert result.agent_id == agent2.agent_id
 
@@ -323,7 +343,9 @@ async def test_concurrent_agent_limit_enforcement(runtime):
 
     with patch.object(runtime, "_execute_agent_task", side_effect=slow_task):
         # Submit 3 tasks (more than max_concurrent_agents)
-        tasks = [runtime.execute_task(f"agent_{i}", {"task": f"task_{i}"}) for i in range(3)]
+        tasks = [
+            runtime.execute_task(f"agent_{i}", {"task": f"task_{i}"}) for i in range(3)
+        ]
 
         # Wait for all to complete
         results = await asyncio.gather(*tasks)
@@ -345,10 +367,11 @@ async def test_budget_enforcement_stops_execution(runtime):
     await runtime.register_agent(mock_agent)
 
     # Mock cost calculation to return $0.10
-    with patch.object(runtime, "_calculate_task_cost", return_value=0.10):
-        # Execute task - should raise budget exceeded error
-        with pytest.raises(RuntimeError, match="Global budget exceeded"):
-            await runtime.execute_task("expensive_agent", {"task": "expensive"})
+    with (
+        patch.object(runtime, "_calculate_task_cost", return_value=0.10),
+        pytest.raises(RuntimeError, match="Global budget exceeded"),
+    ):
+        await runtime.execute_task("expensive_agent", {"task": "expensive"})
 
 
 @pytest.mark.asyncio
@@ -514,10 +537,8 @@ async def test_circuit_breaker_opens_after_threshold(runtime, mock_agent):
 
     # Fail 3 times to trip circuit breaker
     for _ in range(3):
-        try:
+        with contextlib.suppress(Exception):
             await runtime.execute_task(mock_agent.agent_id, {"task": "test"})
-        except Exception:
-            pass
 
     # Circuit breaker should be open
     assert runtime._circuit_breaker_state[mock_agent.agent_id] == "open"
@@ -541,10 +562,8 @@ async def test_circuit_breaker_recovery(runtime, mock_agent):
     # Trip circuit breaker
     mock_agent.run = AsyncMock(side_effect=Exception("Error"))
     for _ in range(2):
-        try:
+        with contextlib.suppress(Exception):
             await runtime.execute_task(mock_agent.agent_id, {"task": "test"})
-        except Exception:
-            pass
 
     assert runtime._circuit_breaker_state[mock_agent.agent_id] == "open"
 
@@ -590,7 +609,9 @@ async def test_workflow_tracking_records_execution(runtime, mock_agent):
     await runtime.register_agent(mock_agent)
 
     # Execute task
-    result = await runtime.execute_task(mock_agent.agent_id, {"task": "test workflow tracking"})
+    _result = await runtime.execute_task(
+        mock_agent.agent_id, {"task": "test workflow tracking"}
+    )
 
     # Verify execution tracked
     assert len(runtime._execution_history) > 0
@@ -625,7 +646,7 @@ async def test_workflow_history_provides_task_details(runtime, mock_agent):
 
     # Execute task
     task_inputs = {"task": "test history", "params": {"value": 42}}
-    result = await runtime.execute_task(mock_agent.agent_id, task_inputs)
+    _result = await runtime.execute_task(mock_agent.agent_id, task_inputs)
 
     # Get history
     history = runtime.get_execution_history()
@@ -679,7 +700,9 @@ async def test_graceful_shutdown_waits_for_tasks(runtime, mock_agent):
     mock_agent.run = AsyncMock(side_effect=long_task)
 
     # Start task
-    task = asyncio.create_task(runtime.execute_task(mock_agent.agent_id, {"task": "long"}))
+    task = asyncio.create_task(
+        runtime.execute_task(mock_agent.agent_id, {"task": "long"})
+    )
     runtime._active_tasks["long_task"] = task
 
     # Initiate graceful shutdown
@@ -712,7 +735,9 @@ async def test_immediate_shutdown_cancels_tasks(runtime, mock_agent):
     mock_agent.run = AsyncMock(side_effect=long_task)
 
     # Start task
-    task = asyncio.create_task(runtime.execute_task(mock_agent.agent_id, {"task": "long"}))
+    task = asyncio.create_task(
+        runtime.execute_task(mock_agent.agent_id, {"task": "long"})
+    )
     runtime._active_tasks["long_task"] = task
 
     # Wait a bit to ensure task is running

@@ -68,21 +68,26 @@ Reference: Based on kaizen-specialist analysis and existing coordination pattern
 """
 
 import asyncio
+import contextlib
+import inspect
+import logging
 import time
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from enum import StrEnum
+from typing import Any
 
 # Kailash SDK imports for workflow execution
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
 from kaizen.core.autonomy.hooks import HookManager
-from kaizen.core.base_agent import BaseAgent
+from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
+from kaizen.llm.reasoning import llm_text_similarity
 from kaizen.memory.shared_memory import SharedMemoryPool
+
+logger = logging.getLogger(__name__)
 
 # Set availability flag for AsyncLocalRuntime
 ASYNC_RUNTIME_AVAILABLE = True
@@ -113,7 +118,7 @@ except ImportError:
 # ============================================================================
 
 
-class AgentStatus(str, Enum):
+class AgentStatus(StrEnum):
     """Agent health status."""
 
     ACTIVE = "active"  # Healthy and available
@@ -122,7 +127,7 @@ class AgentStatus(str, Enum):
     OFFLINE = "offline"  # Manually deregistered
 
 
-class RoutingStrategy(str, Enum):
+class RoutingStrategy(StrEnum):
     """Task routing strategy."""
 
     SEMANTIC = "semantic"  # A2A capability-based routing (recommended)
@@ -131,7 +136,7 @@ class RoutingStrategy(str, Enum):
     LEAST_LOADED = "least-loaded"  # Select agent with fewest active tasks
 
 
-class ErrorHandlingMode(str, Enum):
+class ErrorHandlingMode(StrEnum):
     """Error handling mode."""
 
     GRACEFUL = "graceful"  # Continue on errors, return partial results
@@ -168,9 +173,13 @@ class OrchestrationRuntimeConfig:
     heartbeat_timeout: float = 30.0  # Heartbeat staleness threshold
 
     # Error handling and retry
-    default_retry_policy: Optional[RetryPolicy] = None  # Default retry policy
-    retry_policy: Optional[RetryPolicy] = None  # Alias for default_retry_policy (test compat)
-    error_handling: ErrorHandlingMode = ErrorHandlingMode.GRACEFUL  # Error handling mode
+    default_retry_policy: RetryPolicy | None = None  # Default retry policy
+    retry_policy: RetryPolicy | None = (
+        None  # Alias for default_retry_policy (test compat)
+    )
+    error_handling: ErrorHandlingMode = (
+        ErrorHandlingMode.GRACEFUL
+    )  # Error handling mode
     enable_circuit_breaker: bool = True  # Enable circuit breaker pattern
     circuit_breaker_threshold: float = 0.5  # Error rate threshold (0.0-1.0)
     circuit_breaker_failure_threshold: int = 5  # Number of failures to trip breaker
@@ -179,13 +188,13 @@ class OrchestrationRuntimeConfig:
 
     # Resource management
     enable_budget_enforcement: bool = True  # Enforce agent budget limits
-    max_budget_usd: Optional[float] = None  # Global budget limit (None = no limit)
+    max_budget_usd: float | None = None  # Global budget limit (None = no limit)
     enable_rate_limiting: bool = True  # Enable rate limiting
 
     # Monitoring and observability
     enable_progress_tracking: bool = True  # Enable real-time progress tracking
     enable_metrics: bool = True  # Enable performance metrics
-    hook_manager: Optional[HookManager] = None  # Hook manager for observability
+    hook_manager: HookManager | None = None  # Hook manager for observability
 
     # Graceful shutdown
     graceful_shutdown_timeout: float = 30.0  # Max time for graceful shutdown
@@ -202,7 +211,7 @@ class AgentMetadata:
 
     agent_id: str  # Unique agent identifier
     agent: BaseAgent  # Agent instance
-    a2a_card: Optional[A2AAgentCard] = None  # A2A capability card
+    a2a_card: A2AAgentCard | None = None  # A2A capability card
 
     # Resource constraints
     max_concurrency: int = 10  # Max concurrent tasks for this agent
@@ -211,7 +220,9 @@ class AgentMetadata:
 
     # Status and tracking
     status: AgentStatus = AgentStatus.ACTIVE  # Current health status
-    last_heartbeat: datetime = field(default_factory=datetime.now)  # Last heartbeat timestamp
+    last_heartbeat: datetime = field(
+        default_factory=datetime.now
+    )  # Last heartbeat timestamp
     active_tasks: int = 0  # Current active task count
     completed_tasks: int = 0  # Total completed tasks
     failed_tasks: int = 0  # Total failed tasks
@@ -233,8 +244,8 @@ class WorkflowStatus:
     completed_tasks: int = 0  # Completed task count
     failed_tasks: int = 0  # Failed task count
     start_time: datetime = field(default_factory=datetime.now)  # Workflow start time
-    estimated_completion: Optional[datetime] = None  # Estimated completion time
-    results: List[Dict[str, Any]] = field(default_factory=list)  # Task results
+    estimated_completion: datetime | None = None  # Estimated completion time
+    results: list[dict[str, Any]] = field(default_factory=list)  # Task results
 
 
 # ============================================================================
@@ -255,7 +266,7 @@ class OrchestrationRuntime:
         results = await runtime.execute_multi_agent_workflow(tasks, routing_strategy="semantic")
     """
 
-    def __init__(self, config: Optional[OrchestrationRuntimeConfig] = None):
+    def __init__(self, config: OrchestrationRuntimeConfig | None = None):
         """
         Initialize OrchestrationRuntime.
 
@@ -285,7 +296,7 @@ class OrchestrationRuntime:
             self.async_runtime = None  # Fallback to manual execution if unavailable
 
         # Agent registry
-        self.agents: Dict[str, AgentMetadata] = {}
+        self.agents: dict[str, AgentMetadata] = {}
 
         # Task queue with priority support and concurrency control
         # PriorityQueue orders by (priority, item) - lower priority value = higher priority
@@ -296,7 +307,7 @@ class OrchestrationRuntime:
         self.semaphore = asyncio.Semaphore(self.config.max_concurrent_agents)
 
         # Workflow tracking
-        self.workflows: Dict[str, WorkflowStatus] = {}
+        self.workflows: dict[str, WorkflowStatus] = {}
 
         # Shared memory pool for agent coordination
         self.shared_memory = SharedMemoryPool()
@@ -306,19 +317,19 @@ class OrchestrationRuntime:
 
         # Runtime state
         self._running = False
-        self._health_monitor_task: Optional[asyncio.Task] = None
+        self._health_monitor_task: asyncio.Task | None = None
         self._round_robin_index = 0  # For round-robin routing
         self._is_shutting_down = False  # Shutdown flag
 
         # Circuit breaker state per agent (closed, open, half-open)
-        self._circuit_breaker_state: Dict[str, str] = {}
+        self._circuit_breaker_state: dict[str, str] = {}
         # Circuit breaker failure counts per agent
-        self._circuit_breaker_failures: Dict[str, int] = {}
+        self._circuit_breaker_failures: dict[str, int] = {}
         # Circuit breaker open timestamps for recovery timeout
-        self._circuit_breaker_open_time: Dict[str, datetime] = {}
+        self._circuit_breaker_open_time: dict[str, datetime] = {}
 
         # Active task tracking for execution monitoring
-        self._active_tasks: Dict[str, asyncio.Task] = {}
+        self._active_tasks: dict[str, asyncio.Task] = {}
 
         # Budget tracking for cost enforcement
         self._total_budget_spent: float = 0.0
@@ -330,12 +341,18 @@ class OrchestrationRuntime:
         self._total_tasks_executed: int = 0
 
         # AsyncLocalRuntime for level-based parallelism (Task 1: TODO-178)
-        self._async_runtime: Optional[AsyncLocalRuntime] = None
+        self._async_runtime: AsyncLocalRuntime | None = None
 
         # Retry policy - use retry_policy if set, otherwise default_retry_policy
-        if self.config.retry_policy is None and self.config.default_retry_policy is None:
+        if (
+            self.config.retry_policy is None
+            and self.config.default_retry_policy is None
+        ):
             self.config.default_retry_policy = RetryPolicy()
-        elif self.config.retry_policy is not None and self.config.default_retry_policy is None:
+        elif (
+            self.config.retry_policy is not None
+            and self.config.default_retry_policy is None
+        ):
             self.config.default_retry_policy = self.config.retry_policy
 
     # ========================================================================
@@ -345,7 +362,7 @@ class OrchestrationRuntime:
     async def register_agent(
         self,
         agent: BaseAgent,
-        agent_id: Optional[str] = None,
+        agent_id: str | None = None,
         max_concurrency: int = 10,
         memory_limit_mb: int = 512,
         budget_limit_usd: float = 1.0,
@@ -381,10 +398,8 @@ class OrchestrationRuntime:
         # Get A2A capability card if available
         a2a_card = None
         if A2A_AVAILABLE and hasattr(agent, "to_a2a_card"):
-            try:
+            with contextlib.suppress(Exception):
                 a2a_card = agent.to_a2a_card()
-            except Exception:
-                pass  # A2A card generation failed, will use fallback routing
 
         # Create agent metadata
         metadata = AgentMetadata(
@@ -407,7 +422,9 @@ class OrchestrationRuntime:
 
         # Start health monitoring if not already running
         if self.config.enable_health_monitoring and not self._health_monitor_task:
-            self._health_monitor_task = asyncio.create_task(self._monitor_agent_health())
+            self._health_monitor_task = asyncio.create_task(
+                self._monitor_agent_health()
+            )
 
         return agent_id
 
@@ -428,7 +445,7 @@ class OrchestrationRuntime:
             return True
         return False
 
-    async def get_agent_status(self, agent_id: str) -> Optional[Dict[str, Any]]:
+    async def get_agent_status(self, agent_id: str) -> dict[str, Any] | None:
         """
         Get agent status and metrics.
 
@@ -455,8 +472,8 @@ class OrchestrationRuntime:
         }
 
     async def list_agents(
-        self, status_filter: Optional[AgentStatus] = None
-    ) -> List[Dict[str, Any]]:
+        self, status_filter: AgentStatus | None = None
+    ) -> list[dict[str, Any]]:
         """
         List all registered agents with optional status filter.
 
@@ -479,16 +496,20 @@ class OrchestrationRuntime:
         while self._running or self.agents:
             await asyncio.sleep(self.config.health_check_interval)
 
-            for agent_id, metadata in list(self.agents.items()):
+            for _agent_id, metadata in list(self.agents.items()):
                 # Check heartbeat staleness
-                time_since_heartbeat = (datetime.now() - metadata.last_heartbeat).total_seconds()
+                time_since_heartbeat = (
+                    datetime.now() - metadata.last_heartbeat
+                ).total_seconds()
                 if time_since_heartbeat > self.config.heartbeat_timeout:
                     metadata.status = AgentStatus.UNHEALTHY
 
                 # Check budget limit
-                if self.config.enable_budget_enforcement:
-                    if metadata.budget_spent_usd >= metadata.budget_limit_usd:
-                        metadata.status = AgentStatus.DEGRADED
+                if (
+                    self.config.enable_budget_enforcement
+                    and metadata.budget_spent_usd >= metadata.budget_limit_usd
+                ):
+                    metadata.status = AgentStatus.DEGRADED
 
                 # Check circuit breaker
                 if self.config.enable_circuit_breaker and metadata.request_count > 0:
@@ -501,8 +522,8 @@ class OrchestrationRuntime:
     # ========================================================================
 
     async def route_task(
-        self, task: str, strategy: Optional[RoutingStrategy] = None
-    ) -> Optional[BaseAgent]:
+        self, task: str, strategy: RoutingStrategy | None = None
+    ) -> BaseAgent | None:
         """
         Route task to best agent using specified strategy.
 
@@ -551,10 +572,19 @@ class OrchestrationRuntime:
         else:  # ROUND_ROBIN
             return await self._route_round_robin(healthy_agents)
 
-    async def _route_semantic(self, task: str, agents: List[tuple]) -> Optional[BaseAgent]:
-        """Route using A2A capability matching (best-fit selection)."""
+    async def _route_semantic(self, task: str, agents: list[tuple]) -> BaseAgent | None:
+        """Route using A2A capability matching (best-fit selection).
+
+        Capability scoring is delegated to the LLM via
+        `kaizen.llm.reasoning.llm_capability_match` (for Capability objects)
+        and `kaizen.llm.reasoning.llm_text_similarity` (for plain-string
+        capability names). Deterministic word-overlap scoring was removed to
+        comply with `rules/agent-reasoning.md` MUST Rule 1.
+        """
         best_agent = None
         best_score = 0.0
+
+        reasoning_config = self._resolve_reasoning_config(agents)
 
         for agent_id, metadata in agents:
             if metadata.a2a_card is None:
@@ -578,19 +608,14 @@ class OrchestrationRuntime:
             if not capabilities:
                 continue
 
-            # Calculate capability match score
+            # Calculate capability match score via LLM (not keyword overlap)
             for cap in capabilities:
-                if hasattr(cap, "matches_requirement"):
-                    score = cap.matches_requirement(task)
-                    if score > best_score:
-                        best_agent = metadata.agent
-                        best_score = score
-                elif isinstance(cap, str):
-                    # Simple string matching as fallback
-                    score = self._simple_text_similarity(task.lower(), cap.lower())
-                    if score > best_score:
-                        best_agent = metadata.agent
-                        best_score = score
+                score = await self._score_capability(
+                    cap, task, reasoning_config, agent_id=agent_id
+                )
+                if score > best_score:
+                    best_agent = metadata.agent
+                    best_score = score
 
         # Fallback to round-robin if no match found
         if best_agent is None:
@@ -598,50 +623,119 @@ class OrchestrationRuntime:
 
         return best_agent
 
-    async def _route_least_loaded(self, agents: List[tuple]) -> BaseAgent:
+    def _resolve_reasoning_config(self, agents: list[tuple]) -> BaseAgentConfig | None:
+        """Return a BaseAgentConfig to use for LLM-based routing decisions.
+
+        Picks the first registered agent's config so the routing judge shares
+        the host agent's model selection. Returns None when no agent has a
+        usable config, in which case the reasoning helpers fall back to
+        `.env`-defined defaults.
+        """
+        for _agent_id, metadata in agents:
+            agent = getattr(metadata, "agent", None)
+            if agent is None:
+                continue
+            candidate = getattr(agent, "config", None)
+            if isinstance(candidate, BaseAgentConfig):
+                return candidate
+        return None
+
+    async def _score_capability(
+        self,
+        cap: Any,
+        task: str,
+        reasoning_config: BaseAgentConfig | None,
+        *,
+        agent_id: str | None = None,
+    ) -> float:
+        """Score a capability against a task using LLM reasoning.
+
+        Accepts:
+            - Capability dataclass instances (exposes async `matches_requirement`)
+            - Legacy test mocks that expose a sync `matches_requirement`
+            - Plain strings (capability name only) — scored via LLM similarity
+
+        Returns 0.0 on any exception so a single LLM failure cannot sink the
+        entire routing decision; a WARN log captures the failure so
+        `rules/observability.md` MUST Rule 5 still triages it.
+        """
+        correlation_id = f"route_{agent_id or 'unknown'}"
+
+        if isinstance(cap, str):
+            try:
+                return llm_text_similarity(
+                    text_a=task,
+                    text_b=cap,
+                    config=reasoning_config,
+                    correlation_id=correlation_id,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "route_semantic.similarity_failed",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "agent_id": agent_id,
+                        "error": str(exc),
+                    },
+                )
+                return 0.0
+
+        matcher = getattr(cap, "matches_requirement", None)
+        if matcher is None:
+            return 0.0
+
+        try:
+            if inspect.iscoroutinefunction(matcher):
+                return await matcher(
+                    task, config=reasoning_config, correlation_id=correlation_id
+                )
+            result = matcher(task)
+            if inspect.iscoroutine(result):
+                return await result
+            return float(result)
+        except TypeError:
+            # Legacy sync mock with single-arg signature
+            try:
+                result = matcher(task)
+                return float(result)
+            except Exception as exc:
+                logger.warning(
+                    "route_semantic.capability_match_failed",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "agent_id": agent_id,
+                        "error": str(exc),
+                    },
+                )
+                return 0.0
+        except Exception as exc:
+            logger.warning(
+                "route_semantic.capability_match_failed",
+                extra={
+                    "correlation_id": correlation_id,
+                    "agent_id": agent_id,
+                    "error": str(exc),
+                },
+            )
+            return 0.0
+
+    async def _route_least_loaded(self, agents: list[tuple]) -> BaseAgent:
         """Route to agent with fewest active tasks."""
         agent_id, metadata = min(agents, key=lambda x: x[1].active_tasks)
         return metadata.agent
 
-    async def _route_random(self, agents: List[tuple]) -> BaseAgent:
+    async def _route_random(self, agents: list[tuple]) -> BaseAgent:
         """Route to random agent."""
         import random
 
         agent_id, metadata = random.choice(agents)
         return metadata.agent
 
-    async def _route_round_robin(self, agents: List[tuple]) -> BaseAgent:
+    async def _route_round_robin(self, agents: list[tuple]) -> BaseAgent:
         """Route using round-robin distribution."""
         agent_id, metadata = agents[self._round_robin_index]
         self._round_robin_index = (self._round_robin_index + 1) % len(agents)
         return metadata.agent
-
-    def _simple_text_similarity(self, text1: str, text2: str) -> float:
-        """
-        Calculate simple text similarity between two strings.
-
-        Uses word overlap as a basic similarity metric (Jaccard similarity).
-        This is a fallback when advanced A2A matching is not available.
-
-        Args:
-            text1: First text string
-            text2: Second text string
-
-        Returns:
-            Similarity score between 0.0 and 1.0
-        """
-        # Split into words and create sets
-        words1 = set(text1.lower().split())
-        words2 = set(text2.lower().split())
-
-        # Calculate Jaccard similarity (intersection / union)
-        if not words1 or not words2:
-            return 0.0
-
-        intersection = len(words1 & words2)
-        union = len(words1 | words2)
-
-        return intersection / union if union > 0 else 0.0
 
     # ========================================================================
     # Workflow Execution (AsyncLocalRuntime Integration)
@@ -650,9 +744,9 @@ class OrchestrationRuntime:
     async def execute_workflow(
         self,
         workflow: "Workflow",
-        inputs: Optional[Dict[str, Any]] = None,
-        workflow_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        inputs: dict[str, Any] | None = None,
+        workflow_id: str | None = None,
+    ) -> dict[str, Any]:
         """
         Execute a Core SDK Workflow using AsyncLocalRuntime's level-based parallelism.
 
@@ -742,11 +836,11 @@ class OrchestrationRuntime:
 
     async def execute_multi_agent_workflow(
         self,
-        tasks: List[str],
-        routing_strategy: Optional[str] = None,
+        tasks: list[str],
+        routing_strategy: str | None = None,
         error_handling: str = "graceful",
-        max_concurrent: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        max_concurrent: int | None = None,
+    ) -> dict[str, Any]:
         """
         Execute multiple tasks across agents with level-based parallelism via AsyncLocalRuntime.
 
@@ -776,7 +870,9 @@ class OrchestrationRuntime:
         workflow_id = f"workflow_{uuid.uuid4().hex[:8]}"
 
         # Create workflow status
-        workflow_status = WorkflowStatus(workflow_id=workflow_id, total_tasks=len(tasks))
+        workflow_status = WorkflowStatus(
+            workflow_id=workflow_id, total_tasks=len(tasks)
+        )
         self.workflows[workflow_id] = workflow_status
 
         # Route tasks to agents
@@ -784,7 +880,9 @@ class OrchestrationRuntime:
         for task in tasks:
             agent = await self.route_task(
                 task,
-                strategy=(RoutingStrategy(routing_strategy) if routing_strategy else None),
+                strategy=(
+                    RoutingStrategy(routing_strategy) if routing_strategy else None
+                ),
             )
 
             if agent is None:
@@ -799,7 +897,9 @@ class OrchestrationRuntime:
         # Build workflow from agents (enables level-based parallelism)
         if selected_agents:
             # Filter tasks to only those with assigned agents
-            assigned_tasks = [task for i, task in enumerate(tasks) if i < len(selected_agents)]
+            assigned_tasks = [
+                task for i, task in enumerate(tasks) if i < len(selected_agents)
+            ]
 
             workflow = self._build_workflow_from_agents(
                 selected_agents,
@@ -814,7 +914,9 @@ class OrchestrationRuntime:
                 )
 
                 # Extract results from workflow execution
-                for i, (agent, task) in enumerate(zip(selected_agents, assigned_tasks)):
+                for i, (agent, task) in enumerate(
+                    zip(selected_agents, assigned_tasks, strict=False)
+                ):
                     node_id = f"agent_{i}_{agent.agent_id}"
 
                     if node_id in results:
@@ -848,7 +950,7 @@ class OrchestrationRuntime:
                     raise
 
                 # Graceful error handling: mark all tasks as failed
-                for agent, task in zip(selected_agents, assigned_tasks):
+                for agent, task in zip(selected_agents, assigned_tasks, strict=False):
                     workflow_status.failed_tasks += 1
                     workflow_status.results.append(
                         {
@@ -874,8 +976,8 @@ class OrchestrationRuntime:
         }
 
     async def _execute_with_retry(
-        self, agent: BaseAgent, task: str, retry_policy: Optional[RetryPolicy] = None
-    ) -> Dict[str, Any]:
+        self, agent: BaseAgent, task: str, retry_policy: RetryPolicy | None = None
+    ) -> dict[str, Any]:
         """
         Execute agent with retry logic and exponential backoff.
 
@@ -908,14 +1010,16 @@ class OrchestrationRuntime:
                         await asyncio.sleep(0.1)
 
                     # Check budget
-                    if self.config.enable_budget_enforcement:
-                        if agent_metadata.budget_spent_usd >= agent_metadata.budget_limit_usd:
-                            return {
-                                "task": task,
-                                "status": "failed",
-                                "error": "Budget limit exceeded",
-                                "agent_id": agent_metadata.agent_id,
-                            }
+                    if self.config.enable_budget_enforcement and (
+                        agent_metadata.budget_spent_usd
+                        >= agent_metadata.budget_limit_usd
+                    ):
+                        return {
+                            "task": task,
+                            "status": "failed",
+                            "error": "Budget limit exceeded",
+                            "agent_id": agent_metadata.agent_id,
+                        }
 
                     # Increment active task counter
                     agent_metadata.active_tasks += 1
@@ -939,7 +1043,8 @@ class OrchestrationRuntime:
                     agent_metadata.last_heartbeat = datetime.now()
                     agent_metadata.total_execution_time += execution_time
                     agent_metadata.avg_execution_time = (
-                        agent_metadata.total_execution_time / agent_metadata.completed_tasks
+                        agent_metadata.total_execution_time
+                        / agent_metadata.completed_tasks
                     )
 
                     # Track budget if available
@@ -951,7 +1056,9 @@ class OrchestrationRuntime:
                     "status": "completed",
                     "result": result,
                     "execution_time": execution_time,
-                    "agent_id": (agent_metadata.agent_id if agent_metadata else "unknown"),
+                    "agent_id": (
+                        agent_metadata.agent_id if agent_metadata else "unknown"
+                    ),
                     "attempts": attempt + 1,
                 }
 
@@ -964,7 +1071,8 @@ class OrchestrationRuntime:
                 if attempt < retry_policy.max_retries - 1:
                     # Calculate backoff delay using backoff_factor (exponential backoff)
                     delay = min(
-                        retry_policy.initial_delay * (retry_policy.backoff_factor**attempt),
+                        retry_policy.initial_delay
+                        * (retry_policy.backoff_factor**attempt),
                         retry_policy.max_delay,
                     )
 
@@ -978,7 +1086,9 @@ class OrchestrationRuntime:
                         "task": task,
                         "status": "failed",
                         "error": str(e),
-                        "agent_id": (agent_metadata.agent_id if agent_metadata else "unknown"),
+                        "agent_id": (
+                            agent_metadata.agent_id if agent_metadata else "unknown"
+                        ),
                         "attempts": retry_policy.max_retries,
                     }
 
@@ -994,7 +1104,7 @@ class OrchestrationRuntime:
     # Monitoring and Observability
     # ========================================================================
 
-    async def get_workflow_status(self, workflow_id: str) -> Optional[Dict[str, Any]]:
+    async def get_workflow_status(self, workflow_id: str) -> dict[str, Any] | None:
         """
         Get workflow execution status and progress.
 
@@ -1020,7 +1130,9 @@ class OrchestrationRuntime:
         if status.completed_tasks > 0:
             elapsed = (datetime.now() - status.start_time).total_seconds()
             avg_time_per_task = elapsed / status.completed_tasks
-            remaining_tasks = status.total_tasks - status.completed_tasks - status.failed_tasks
+            remaining_tasks = (
+                status.total_tasks - status.completed_tasks - status.failed_tasks
+            )
             eta_seconds = avg_time_per_task * remaining_tasks
             estimated_completion = datetime.now() + timedelta(seconds=eta_seconds)
         else:
@@ -1038,7 +1150,7 @@ class OrchestrationRuntime:
             ),
         }
 
-    async def get_metrics(self) -> Dict[str, Any]:
+    async def get_metrics(self) -> dict[str, Any]:
         """
         Get runtime performance metrics.
 
@@ -1046,9 +1158,15 @@ class OrchestrationRuntime:
             Metrics dictionary with runtime statistics
         """
         total_agents = len(self.agents)
-        active_agents = sum(1 for m in self.agents.values() if m.status == AgentStatus.ACTIVE)
-        degraded_agents = sum(1 for m in self.agents.values() if m.status == AgentStatus.DEGRADED)
-        unhealthy_agents = sum(1 for m in self.agents.values() if m.status == AgentStatus.UNHEALTHY)
+        active_agents = sum(
+            1 for m in self.agents.values() if m.status == AgentStatus.ACTIVE
+        )
+        degraded_agents = sum(
+            1 for m in self.agents.values() if m.status == AgentStatus.DEGRADED
+        )
+        unhealthy_agents = sum(
+            1 for m in self.agents.values() if m.status == AgentStatus.UNHEALTHY
+        )
 
         total_completed = sum(m.completed_tasks for m in self.agents.values())
         total_failed = sum(m.failed_tasks for m in self.agents.values())
@@ -1056,7 +1174,9 @@ class OrchestrationRuntime:
 
         # Calculate average execution time
         total_execution_time = sum(m.total_execution_time for m in self.agents.values())
-        avg_execution_time = total_execution_time / total_completed if total_completed > 0 else 0.0
+        avg_execution_time = (
+            total_execution_time / total_completed if total_completed > 0 else 0.0
+        )
 
         return {
             "total_agents": total_agents,
@@ -1092,7 +1212,9 @@ class OrchestrationRuntime:
 
         # Start health monitoring
         if self.config.enable_health_monitoring:
-            self._health_monitor_task = asyncio.create_task(self._monitor_agent_health())
+            self._health_monitor_task = asyncio.create_task(
+                self._monitor_agent_health()
+            )
 
     async def shutdown(self, graceful: bool = True, timeout: float = 30.0):
         """
@@ -1116,13 +1238,11 @@ class OrchestrationRuntime:
                 await asyncio.sleep(0.1)
         else:
             # Immediate shutdown - cancel all active tasks
-            for task_id, task in list(self._active_tasks.items()):
+            for _task_id, task in list(self._active_tasks.items()):
                 if not task.done():
                     task.cancel()
-                    try:
+                    with contextlib.suppress(TimeoutError, asyncio.CancelledError):
                         await asyncio.wait_for(asyncio.shield(task), timeout=0.1)
-                    except (asyncio.CancelledError, asyncio.TimeoutError):
-                        pass
 
         # Clear active tasks
         self._active_tasks.clear()
@@ -1130,10 +1250,8 @@ class OrchestrationRuntime:
         # Cancel health monitoring
         if self._health_monitor_task:
             self._health_monitor_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._health_monitor_task
-            except asyncio.CancelledError:
-                pass
 
         # Clear agents
         self.agents.clear()
@@ -1143,7 +1261,9 @@ class OrchestrationRuntime:
     # Additional Helper Methods (for testing compatibility)
     # ========================================================================
 
-    async def execute_task(self, agent_id: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute_task(
+        self, agent_id: str, inputs: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Execute a single task on a specific agent.
 
@@ -1279,7 +1399,8 @@ class OrchestrationRuntime:
 
                     # Calculate backoff delay for retry
                     delay = min(
-                        retry_policy.initial_delay * (retry_policy.backoff_factor**attempt),
+                        retry_policy.initial_delay
+                        * (retry_policy.backoff_factor**attempt),
                         retry_policy.max_delay,
                     )
                     await asyncio.sleep(delay)
@@ -1307,19 +1428,19 @@ class OrchestrationRuntime:
 
         try:
             # Simple health check - try to run with minimal input
-            result = await asyncio.wait_for(agent.run(task="health_check"), timeout=5.0)
+            await asyncio.wait_for(agent.run(task="health_check"), timeout=5.0)
 
             # Update status to idle if successful
             agent_metadata.status = AgentStatus.ACTIVE
             return True
 
-        except Exception as e:
+        except Exception:
             # Mark as failed
             agent_metadata.status = AgentStatus.UNHEALTHY
             agent_metadata.error_count += 1  # Use error_count consistently
             return False
 
-    async def _route_task(self, task: str, available_agents: List[str]) -> Optional[str]:
+    async def _route_task(self, task: str, available_agents: list[str]) -> str | None:
         """
         Internal routing helper for tests.
 
@@ -1337,7 +1458,8 @@ class OrchestrationRuntime:
         active_agents = [
             agent_id
             for agent_id in available_agents
-            if agent_id in self.agents and self.agents[agent_id].status == AgentStatus.ACTIVE
+            if agent_id in self.agents
+            and self.agents[agent_id].status == AgentStatus.ACTIVE
         ]
 
         if not active_agents:
@@ -1362,22 +1484,27 @@ class OrchestrationRuntime:
             # Least loaded: pick agent with fewest active tasks
             return min(active_agents, key=lambda aid: self.agents[aid].active_tasks)
         elif strategy == RoutingStrategy.SEMANTIC:
-            # Semantic routing: use text similarity
+            # Semantic routing: LLM-first scoring (no keyword overlap)
             best_score = -1.0
             best_agent = active_agents[0]  # fallback
+            reasoning_tuples = [(aid, self.agents[aid]) for aid in active_agents]
+            reasoning_config = self._resolve_reasoning_config(reasoning_tuples)
             for agent_id in active_agents:
                 metadata = self.agents[agent_id]
-                if metadata.a2a_card:
-                    # Check capabilities
-                    capabilities = getattr(metadata.a2a_card, "capabilities", [])
-                    if isinstance(capabilities, dict):
-                        capabilities = capabilities.get("capabilities", [])
-                    for cap in capabilities:
-                        if isinstance(cap, str):
-                            score = self._simple_text_similarity(task.lower(), cap.lower())
-                            if score > best_score:
-                                best_score = score
-                                best_agent = agent_id
+                if not metadata.a2a_card:
+                    continue
+
+                # Check capabilities
+                capabilities = getattr(metadata.a2a_card, "capabilities", [])
+                if isinstance(capabilities, dict):
+                    capabilities = capabilities.get("capabilities", [])
+                for cap in capabilities:
+                    score = await self._score_capability(
+                        cap, task, reasoning_config, agent_id=agent_id
+                    )
+                    if score > best_score:
+                        best_score = score
+                        best_agent = agent_id
             return best_agent
         else:
             # Default: round-robin
@@ -1385,7 +1512,9 @@ class OrchestrationRuntime:
             self._round_robin_index = (self._round_robin_index + 1) % len(active_agents)
             return selected
 
-    async def _execute_agent_task(self, agent, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_agent_task(
+        self, agent, inputs: dict[str, Any]
+    ) -> dict[str, Any]:
         """
         Internal execution helper for tests.
 
@@ -1398,7 +1527,7 @@ class OrchestrationRuntime:
         """
         return await agent.run(**inputs)
 
-    def _calculate_task_cost(self, agent_id: str, inputs: Dict[str, Any]) -> float:
+    def _calculate_task_cost(self, agent_id: str, inputs: dict[str, Any]) -> float:
         """
         Calculate estimated cost for a task.
 
@@ -1421,7 +1550,7 @@ class OrchestrationRuntime:
 
         return base_cost + size_cost
 
-    def get_execution_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_execution_history(self, limit: int | None = None) -> list[dict[str, Any]]:
         """
         Get execution history.
 
@@ -1437,7 +1566,7 @@ class OrchestrationRuntime:
         return history
 
     def _build_workflow_from_agents(
-        self, agents: List[BaseAgent], tasks: List[str], mode: str = "parallel"
+        self, agents: list[BaseAgent], tasks: list[str], mode: str = "parallel"
     ) -> WorkflowBuilder:
         """
         Build Kailash workflow from list of agents for level-based parallelism.
@@ -1469,7 +1598,7 @@ class OrchestrationRuntime:
         workflow = WorkflowBuilder()
 
         # Create LLMAgentNode for each agent
-        for i, (agent, task) in enumerate(zip(agents, tasks)):
+        for i, (agent, task) in enumerate(zip(agents, tasks, strict=False)):
             node_id = f"agent_{i}_{agent.agent_id}"
 
             # Configure node with agent and task
@@ -1480,10 +1609,14 @@ class OrchestrationRuntime:
                     "agent": agent,
                     "task": task,
                     "provider": (
-                        agent.config.provider if hasattr(agent.config, "provider") else "openai"
+                        agent.config.provider
+                        if hasattr(agent.config, "provider")
+                        else "openai"
                     ),
                     "model": (
-                        agent.config.model if hasattr(agent.config, "model") else "gpt-4o-mini"
+                        agent.config.model
+                        if hasattr(agent.config, "model")
+                        else "gpt-4o-mini"
                     ),
                 },
             )

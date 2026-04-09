@@ -26,7 +26,7 @@ import inspect
 import logging
 from typing import Any, List
 
-from kailash.mcp_server import MCPServer
+from kailash_mcp import MCPServer
 
 logger = logging.getLogger(__name__)
 

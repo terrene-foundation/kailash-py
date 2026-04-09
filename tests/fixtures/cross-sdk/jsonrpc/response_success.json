@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "name": "response_success",
+  "input": {
+    "jsonrpc": "2.0",
+    "result": {
+      "tools": [{ "name": "read_file", "description": "Read a file" }]
+    },
+    "id": 1
+  },
+  "expected_canonical_json": "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":{\"tools\":[{\"description\":\"Read a file\",\"name\":\"read_file\"}]}}",
+  "metadata": {
+    "description": "JSON-RPC 2.0 success response",
+    "spec_reference": "SPEC-01 §7.3"
+  }
+}

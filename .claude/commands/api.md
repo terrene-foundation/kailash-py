@@ -58,7 +58,7 @@ app.start()  # API on :8000, CLI ready, MCP server running
 When working with Nexus, deploy:
 
 - **nexus-specialist** — Multi-channel deployment, unified sessions, workflow registration
-- **deployment-specialist** — Docker/Kubernetes production deployment
+- **release-specialist** — Docker/Kubernetes production deployment
 
 ## Related Commands
 

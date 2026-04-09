@@ -6,6 +6,8 @@ ALL code changes in the repository.
 
 All sensitive data MUST use environment variables.
 
+**Why:** Hardcoded secrets end up in git history, CI logs, and error traces, making them permanently extractable even after deletion.
+
 ```
 ❌ api_key = "sk-..."
 ❌ password = "admin123"
@@ -20,6 +22,8 @@ All sensitive data MUST use environment variables.
 
 All database queries MUST use parameterized queries or ORM.
 
+**Why:** Without parameterized queries, user input becomes executable SQL, enabling data theft, deletion, or privilege escalation.
+
 ```
 ❌ f"SELECT * FROM users WHERE id = {user_id}"
 ❌ "DELETE FROM users WHERE name = '" + name + "'"
@@ -33,9 +37,13 @@ All database queries MUST use parameterized queries or ORM.
 
 All user input MUST be validated before use: type checking, length limits, format validation, whitelist when possible. Applies to API endpoints, CLI inputs, file uploads, form submissions.
 
+**Why:** Unvalidated input is the entry point for injection attacks, buffer overflows, and type confusion across every attack surface.
+
 ## Output Encoding
 
 All user-generated content MUST be encoded before display in HTML templates, JSON responses, and log output.
+
+**Why:** Unencoded user content enables cross-site scripting (XSS), allowing attackers to execute arbitrary JavaScript in other users' browsers.
 
 ```
 ❌ element.innerHTML = userContent
@@ -48,8 +56,16 @@ All user-generated content MUST be encoded before display in HTML templates, JSO
 ## MUST NOT
 
 - **No eval() on user input**: `eval()`, `exec()`, `subprocess.call(cmd, shell=True)` — BLOCKED
+
+**Why:** `eval()` on user input is arbitrary code execution — the attacker runs whatever they want on the server.
+
 - **No secrets in logs**: MUST NOT log passwords, tokens, or PII
+
+**Why:** Log files are widely accessible (CI, monitoring, support staff) and rarely encrypted, turning every logged secret into a breach.
+
 - **No .env in Git**: .env in .gitignore, use .env.example for templates
+
+**Why:** Once committed, secrets persist in git history even after removal, and are exposed to anyone with repo access.
 
 ## Kailash-Specific Security
 

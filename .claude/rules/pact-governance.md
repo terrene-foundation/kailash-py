@@ -19,7 +19,7 @@ agent.set_governance(ctx)
 agent.set_governance(engine)  # Exposes mutable engine — self-modification attack vector
 ```
 
-**Why**: If an agent receives the engine directly, it can modify its own governance constraints at runtime.
+**Why:** If an agent receives the engine directly, it can modify its own governance constraints at runtime.
 
 ### 2. Monotonic Tightening
 
@@ -34,7 +34,7 @@ child_envelope = requested_envelope  # Bypasses parent constraints
 child_envelope.max_cost = parent_envelope.max_cost + 100  # Widening forbidden
 ```
 
-**Why**: Governance flows downward. A child can never have more permissions than its parent — violating this allows privilege escalation.
+**Why:** Governance flows downward. A child can never have more permissions than its parent — violating this allows privilege escalation.
 
 ### 3. D/T/R Grammar
 
@@ -48,7 +48,7 @@ address = Address(org="acme", dept="engineering", role="developer")
 address = Address(org="acme", dept="engineering")  # Missing Role
 ```
 
-**Why**: An address without a terminal Role is ambiguous — could match multiple envelopes with different constraints.
+**Why:** An address without a terminal Role is ambiguous — could match multiple envelopes with different constraints.
 
 ### 4. Fail-Closed Decisions
 
@@ -64,11 +64,13 @@ except EnvelopeNotFoundError:
     return Decision.ALLOWED  # Fail-open — missing envelope permits everything!
 ```
 
-**Why**: An error in constraint resolution MUST NOT result in permissive access.
+**Why:** An error in constraint resolution MUST NOT result in permissive access.
 
 ### 5. Default-Deny Tool Registration
 
 Tools MUST be explicitly registered via `register_tool()`. Unregistered tools are BLOCKED.
+
+**Why:** Default-allow means every newly added tool is immediately accessible to all agents with no governance review — one unregistered tool can bypass the entire PACT envelope.
 
 ```python
 # DO:
@@ -93,11 +95,13 @@ if self.max_cost is not None and self.max_cost < 0:
     raise ValueError("negative")  # NaN < 0 is False — NaN passes silently
 ```
 
-**Why**: `NaN` poisons all comparisons (`NaN < X` is always `False`). If NaN enters a financial field, all budget checks pass silently.
+**Why:** `NaN` poisons all comparisons (`NaN < X` is always `False`). If NaN enters a financial field, all budget checks pass silently.
 
 ### 7. Compilation Limits
 
 Org compilation MUST enforce: `MAX_COMPILATION_DEPTH` (50), `MAX_CHILDREN_PER_NODE` (500), `MAX_TOTAL_NODES` (100,000).
+
+**Why:** Without compilation limits, a malformed or adversarial org tree causes exponential traversal, hanging the governance engine and blocking all agent authorization.
 
 ### 8. Thread Safety
 
@@ -110,8 +114,13 @@ def resolve_envelope(self, address: Address) -> GovernanceEnvelope:
         return self._envelopes[address.key]
 ```
 
+**Why:** Concurrent envelope resolution without locking causes torn reads — an agent can see a partially-updated envelope with inconsistent constraints.
+
 ## MUST NOT
 
 - Expose `GovernanceEngine` to agent code — agents receive `GovernanceContext` only
+  **Why:** Direct engine access lets an agent modify its own governance constraints, bypassing the entire PACT trust model.
 - Bypass monotonic tightening — no code path may widen a child envelope beyond parent
+  **Why:** Widening a child envelope beyond its parent is a privilege escalation — the child gains permissions the parent was never granted.
 - Use bare exceptions for governance errors — all MUST inherit `PactError` with structured `.details`
+  **Why:** Bare exceptions lose the structured error context (address, envelope, constraint) needed to diagnose governance failures in production.

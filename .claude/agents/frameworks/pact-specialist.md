@@ -1,6 +1,6 @@
 ---
 name: pact-specialist
-description: "kailash-pact specialist. Use for governance, D/T/R addressing, envelopes, access enforcement, or knowledge clearance."
+description: "PACT specialist. Use for governance, RBAC, policy, access control, envelopes, audit — custom authz BLOCKED."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---
@@ -76,15 +76,11 @@ EffectiveEnvelope (computed -- can only be tighter)
 
 ### 5-Step Access Enforcement
 
-1. Resolve role clearance (fail if missing or non-ACTIVE vetting -- SUSPENDED/EXPIRED/REVOKED all denied)
+1. Resolve role clearance (fail if missing or non-ACTIVE vetting)
 2. Classification check (effective clearance >= item classification)
 3. Compartment check (SECRET/TOP_SECRET: role must hold all compartments)
 4. Containment check (same unit, downward, T-inherits-D, KSP, Bridge)
 5. No path found -> DENY (fail-closed)
-
-### Clearance Lifecycle FSM
-
-`PENDING -> ACTIVE -> SUSPENDED -> ACTIVE` (reinstatement) or `-> REVOKED` (terminal). Use `transition_clearance()` for status changes, `grant_clearance()` for new grants. `revoke_clearance()` preserves the record with REVOKED status for audit trail.
 
 ### GovernanceEngine
 
