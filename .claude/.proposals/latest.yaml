@@ -1,39 +1,163 @@
 source_repo: kailash-py
-codify_date: "2026-04-08"
-codify_session: "refactor(dataflow)!: DataFlow 2.0 Phases 0-9 perfection sprint"
+codify_date: "2026-04-09"
+codify_session: "feat: platform architecture convergence — 10 SPECs, 221 files, 176 new tests"
 sdk_version: "2.6.0"
-coc_version: "1.0.2"
+coc_version: "1.0.3"
 
 changes:
-  - file: agents/frameworks/dataflow-specialist.md
+  # --- Skills ---
+
+  - file: skills/04-kaizen/SKILL.md
     action: modified
     suggested_tier: coc-py
-    reason: "Added DataFlow 2.0 patterns: pluggable fabric cache, tenant isolation, FabricMetrics singleton, webhook providers, trust executor wiring, correlation ID, ResourceWarning"
-    diff_lines: "+30 -1"
+    reason: "Updated description triggers with Delegate system, wrapper composition, provider protocols, LLM routing, GovernedSupervisor, typed events, progressive disclosure API, tool hydration, multi-provider adapters, and kaizen-agents governance layer"
+    diff_lines: "+80 -10"
 
-  - file: rules/orphan-detection.md
+  - file: skills/04-kaizen/kaizen-delegate.md
+    action: created
+    suggested_tier: coc-py
+    reason: "New skill documenting Delegate as unified autonomous core — progressive disclosure API (Layer 1/2/3), typed event system (TextDelta, ToolCallStart, DelegateEvent), budget tracking, run_sync convenience"
+    diff_lines: "+120"
+
+  - file: skills/04-kaizen/kaizen-delegate-vs-baseagent.md
+    action: created
+    suggested_tier: coc-py
+    reason: "New skill clarifying Delegate (engine, autonomous TAOD loop) vs BaseAgent (primitive, custom extension). Decision matrix for when to use each"
+    diff_lines: "+80"
+
+  - file: skills/04-kaizen/kaizen-multi-provider.md
+    action: created
+    suggested_tier: coc-py
+    reason: "New skill for multi-provider LLM adapter system — StreamingChatAdapter protocol, auto-detect from model prefix, explicit provider selection, adapter registry (OpenAI/Anthropic/Google/Ollama)"
+    diff_lines: "+100"
+
+  - file: skills/04-kaizen/kaizen-config-patterns.md
+    action: created
+    suggested_tier: coc-py
+    reason: "New skill for domain config auto-extraction patterns — BaseAgentConfig auto-conversion, type-safe configuration, provider_config separation"
+    diff_lines: "+90"
+
+  - file: skills/04-kaizen/kaizen-structured-outputs.md
+    action: created
+    suggested_tier: coc-py
+    reason: "New skill for multi-provider structured outputs — json_schema, json_object, 10 Python typing patterns, auto-translation per provider, strict mode validation"
+    diff_lines: "+110"
+
+  - file: skills/04-kaizen/kaizen-tool-hydration.md
+    action: created
+    suggested_tier: coc-py
+    reason: "New skill for ToolHydrator, search_tools, BM25 search — tool discovery and hydration patterns for Delegate"
+    diff_lines: "+70"
+
+  - file: skills/04-kaizen/kaizen-agents-governance.md
+    action: created
+    suggested_tier: coc-py
+    reason: "New skill for GovernedSupervisor, progressive disclosure layers, 7 governance modules (AccountabilityTracker, CascadeManager, ClearanceEnforcer, DerelictionDetector, BypassManager, VacancyManager, anti-self-modification)"
+    diff_lines: "+150"
+
+  - file: skills/04-kaizen/kaizen-agents-security.md
+    action: created
+    suggested_tier: coc-py
+    reason: "New skill for governance security patterns — NaN defense, bounded collections, ReadOnlyView, BashTool gate, ExecPolicy, session sanitization"
+    diff_lines: "+90"
+
+  - file: skills/04-kaizen/UNIFIED_AGENT_EXECUTIVE_SUMMARY.md
+    action: created
+    suggested_tier: coc-py
+    reason: "One-page executive summary of Unified Agent API design — problem statement (16 agent classes decision paralysis), solution (single Agent class with composition wrappers)"
+    diff_lines: "+60"
+
+  - file: skills/04-kaizen/UNIFIED_AGENT_API_DESIGN.md
+    action: created
+    suggested_tier: coc-py
+    reason: "Detailed API design for Unified Agent — wrapper composition system, streaming/monitoring/governance as composable layers, migration path from specialized classes"
+    diff_lines: "+200"
+
+  - file: skills/04-kaizen/UNIFIED_AGENT_IMPLEMENTATION_BLUEPRINT.md
+    action: created
+    suggested_tier: coc-py
+    reason: "Implementation blueprint for Unified Agent — file structure, Agent class, presets, thin wrappers, test plan, migration guide"
+    diff_lines: "+180"
+
+  - file: skills/spec-compliance/SKILL.md
     action: created
     suggested_tier: coc
-    reason: "New rule from Phase 5.11 orphan discovery — every db.* facade MUST have production call site + Tier 2 test"
+    reason: "New spec compliance verification protocol — AST/grep-based verification replacing file-existence checking, 9-check protocol, acceptance assertion tables. Prevents convergence-verify.py self-report trust failures"
+    diff_lines: "+200"
+
+  - file: skills/05-kailash-mcp/SKILL.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Updated with kailash-mcp package extraction context (SPEC-01), platform_map() aggregation, FastMCP integration patterns"
+    diff_lines: "+30 -5"
+
+  - file: skills/05-kailash-mcp/mcp-platform-server.md
+    action: created
+    suggested_tier: coc-py
+    reason: "New skill for MCP platform server — platform_map() tool aggregation, contributor plugin architecture, security tier enforcement"
+    diff_lines: "+120"
+
+  # --- Rules ---
+
+  - file: rules/dataflow-identifier-safety.md
+    action: created
+    suggested_tier: coc
+    reason: "DDL identifier quoting mandate — dialect.quote_identifier() on every dynamic DDL path, reject-not-escape, regression test requirement, DROP confirmation gate. From Phase 0-2 security audit (45 SQL injection sites)"
     diff_lines: "+120"
 
   - file: rules/facade-manager-detection.md
     action: created
     suggested_tier: coc
-    reason: "Specific shape rule for *Manager/*Executor/*Store classes — Tier 2 wiring test naming convention"
+    reason: "Manager-shape orphan detection — Tier 2 wiring test requirement for *Manager/*Executor/*Store/*Registry/*Engine/*Service, naming convention, explicit framework dependency injection. From Phase 5.11 discovery"
     diff_lines: "+95"
+
+  - file: rules/orphan-detection.md
+    action: created
+    suggested_tier: coc
+    reason: "Facade orphan detection protocol — every db.*/app.* facade MUST have production call site + Tier 2 integration test. 4-step detection protocol. From Phase 5.11 (2,407 LOC trust integration was dead code)"
+    diff_lines: "+120"
 
   - file: rules/tenant-isolation.md
     action: created
     suggested_tier: coc
-    reason: "Cache key + metric label + audit row tenant dimension mandate from Phase 5.3/5.7 work"
+    reason: "Cache key + metric label + audit row tenant dimension mandate — TenantRequiredError on missing tenant_id, bounded Prometheus label cardinality, tenant-scoped invalidation. From Phase 5.3/5.7"
     diff_lines: "+130"
 
-  - file: rules/dataflow-identifier-safety.md
+  - file: rules/schema-migration.md
     action: created
     suggested_tier: coc
-    reason: "DDL identifier quoting mandate from Phase 0-2 security audit (45 SQL injection sites)"
-    diff_lines: "+120"
+    reason: "Numbered migration mandate — append-only files, reversible paths, data fixes as migrations, production schema sync as deploy gate. Prevents DDL drift"
+    diff_lines: "+140"
+
+  - file: rules/dependencies.md
+    action: modified
+    suggested_tier: coc
+    reason: "Added Declared=Imported enforcement — every import MUST resolve to manifest entry, BLOCKED anti-patterns (try/except ImportError without extras), verification step before /redteam and /deploy"
+    diff_lines: "+80 -0"
+
+  - file: rules/zero-tolerance.md
+    action: modified
+    suggested_tier: coc
+    reason: "Extended Rule 2 with 6 fake-safety examples from Phase 5 audit: fake encryption, fake transaction, fake health, fake classification, fake tenant isolation, fake metrics"
+    diff_lines: "+65 -0"
+
+  - file: rules/observability.md
+    action: modified
+    suggested_tier: coc
+    reason: "Added Rule 6: bulk operations MUST log partial failures at WARN. BLOCKED responses for skip rationalizations. From 0052-DISCOVERY"
+    diff_lines: "+35 -0"
+
+  - file: rules/agents.md
+    action: modified
+    suggested_tier: coc
+    reason: "Gate reviews at /implement and /release upgraded from RECOMMENDED to MUST with background agent pattern. BLOCKED phrases for skip rationalizations. From 0052-DISCOVERY"
+    diff_lines: "+25 -5"
+
+  - file: rules/git.md
+    action: modified
+    suggested_tier: coc
+    reason: "Commit bodies MUST answer 'why' not 'what', with DO/DON'T example. From 0052-DISCOVERY"
+    diff_lines: "+20 -0"
 
   - file: rules/dataflow-pool.md
     action: modified
@@ -41,10 +165,53 @@ changes:
     reason: "Extended Rule 3 with *_url/*_backend/*_client consumer-check enforcement from Phase 5.2 PipelineExecutor._redis_url orphan"
     diff_lines: "+35 -0"
 
-  - file: rules/zero-tolerance.md
-    action: modified
+  # --- Agents ---
+
+  - file: agents/frameworks/mcp-platform-specialist.md
+    action: created
     suggested_tier: coc
-    reason: "Extended Rule 2 with 6 explicit fake-safety examples from Phase 5 audit: fake encryption, fake transaction, fake health, fake classification, fake tenant isolation, fake metrics"
-    diff_lines: "+65 -0"
+    reason: "New MCP platform server specialist — FastMCP tool registration, contributor plugin integration, security tier enforcement, transport configuration, platform_map() debugging"
+    diff_lines: "+100"
+
+  - file: agents/frameworks/kaizen-specialist.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Updated layer preference table with Delegate as engine default, explicit-over-implicit provider config rules, Azure env var canonicalization, deprecation shim guidance"
+    diff_lines: "+30 -10"
+
+  - file: agents/frameworks/infrastructure-specialist.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Added v1.0.0 convergence status line — all CRITICAL and HIGH red team findings resolved, 212 unit tests pass, transaction support and SQL identifier validation production-ready"
+    diff_lines: "+5 -2"
+
+  # --- Project Skills (BUILD-local, not for upstream) ---
+  # NOTE: skills/project/ files are BUILD-repo-local and excluded from upstream sync.
+  # Listed here for completeness but suggested_tier is "skip".
+
+  - file: skills/project/pool-safety.md
+    action: existing
+    suggested_tier: skip
+    reason: "BUILD-local project skill — pool safety patterns specific to kailash-py internals"
+
+  - file: skills/project/pact-enforcement-modes.md
+    action: existing
+    suggested_tier: skip
+    reason: "BUILD-local project skill — PACT enforcement mode reference"
+
+  - file: skills/project/fabric-cache-consumers.md
+    action: existing
+    suggested_tier: skip
+    reason: "BUILD-local project skill — fabric cache consumer map"
+
+  - file: skills/project/dataflow-provenance-audit.md
+    action: existing
+    suggested_tier: skip
+    reason: "BUILD-local project skill — DataFlow provenance audit trail"
+
+  - file: skills/project/ml-quick-reference.md
+    action: existing
+    suggested_tier: skip
+    reason: "BUILD-local project skill — ML engine quick reference"
 
 status: pending_review

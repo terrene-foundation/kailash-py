@@ -1,6 +1,6 @@
 ---
 name: kaizen
-description: "Kailash Kaizen - production-ready AI agent framework with signature-based programming, multi-agent coordination, and enterprise features. Use when asking about 'AI agents', 'agent framework', 'BaseAgent', 'multi-agent systems', 'agent coordination', 'signatures', 'agent signatures', 'RAG agents', 'vision agents', 'audio agents', 'multimodal agents', 'agent prompts', 'prompt optimization', 'chain of thought', 'ReAct pattern', 'Planning agent', 'PEV agent', 'Tree-of-Thoughts', 'pipeline patterns', 'supervisor-worker', 'router pattern', 'ensemble pattern', 'blackboard pattern', 'parallel execution', 'agent-to-agent communication', 'A2A protocol', 'streaming agents', 'agent testing', 'agent memory', 'agentic workflows', 'AgentRegistry', 'OrchestrationRuntime', 'distributed agents', 'agent registry', '100+ agents', 'capability discovery', 'fault tolerance', 'health monitoring', 'trust protocol', 'EATP', 'TrustedAgent', 'trust chains', 'secure messaging', 'enterprise trust', 'credential rotation', 'trust verification', 'cross-organization agents', 'agent manifest', 'TOML manifest', 'GovernanceManifest', 'deploy agent', 'FileRegistry', 'introspect agent', 'DAG validation', 'validate_dag', 'schema compatibility', 'cost estimation', 'composition validation', 'catalog server', 'CatalogMCPServer', 'MCP catalog', 'budget tracking', 'BudgetTracker', 'PostureBudgetIntegration', 'posture budget', 'budget threshold', 'L3 autonomy', 'L3 primitives', 'EnvelopeTracker', 'EnvelopeSplitter', 'EnvelopeEnforcer', 'ScopedContext', 'ContextScope', 'ScopeProjection', 'DataClassification', 'MessageRouter', 'MessageChannel', 'DeadLetterStore', 'AgentFactory', 'AgentInstance', 'AgentInstanceRegistry', 'AgentSpec', 'PlanExecutor', 'PlanValidator', 'PlanModification', 'Plan DAG', 'gradient zone', 'agent spawning', 'cascade termination', 'scoped context', 'envelope enforcement', 'plan execution', or 'agent lifecycle'. Also covers L3 integration: 'L3Runtime', 'L3EventBus', 'L3EventType', 'EatpTranslator', 'L3 event system', 'EATP audit events', or 'governance events'. Also covers kaizen-agents governance layer: 'GovernedSupervisor', 'governed agent', 'progressive disclosure', 'governance modules', 'AccountabilityTracker', 'CascadeManager', 'ClearanceEnforcer', 'DerelictionDetector', 'BypassManager', 'VacancyManager', 'kaizen-agents', 'governed multi-agent', 'PACT governance', 'anti-self-modification', 'ReadOnlyView', 'governance security', 'NaN defense', or 'bounded collections'. Also covers kaizen-agents Delegate system: 'Delegate', 'delegate facade', 'typed events', 'TextDelta', 'ToolCallStart', 'DelegateEvent', 'progressive disclosure API', 'run_sync', 'budget tracking', 'multi-provider', 'StreamingChatAdapter', 'adapter registry', 'OpenAI adapter', 'Anthropic adapter', 'Google adapter', 'Ollama adapter', 'tool hydration', 'ToolHydrator', 'search_tools', 'BM25 search', 'incremental streaming', or 'token streaming'."
+description: "Kailash Kaizen - production-ready AI agent framework with signature-based programming, multi-agent coordination, and enterprise features. Use when asking about 'AI agents', 'agent framework', 'BaseAgent', 'multi-agent systems', 'agent coordination', 'signatures', 'agent signatures', 'RAG agents', 'vision agents', 'audio agents', 'multimodal agents', 'agent prompts', 'prompt optimization', 'chain of thought', 'ReAct pattern', 'Planning agent', 'PEV agent', 'Tree-of-Thoughts', 'pipeline patterns', 'supervisor-worker', 'router pattern', 'ensemble pattern', 'blackboard pattern', 'parallel execution', 'agent-to-agent communication', 'A2A protocol', 'streaming agents', 'agent testing', 'agent memory', 'agentic workflows', 'AgentRegistry', 'OrchestrationRuntime', 'distributed agents', 'agent registry', '100+ agents', 'capability discovery', 'fault tolerance', 'health monitoring', 'trust protocol', 'EATP', 'TrustedAgent', 'trust chains', 'secure messaging', 'enterprise trust', 'credential rotation', 'trust verification', 'cross-organization agents', 'agent manifest', 'TOML manifest', 'GovernanceManifest', 'deploy agent', 'FileRegistry', 'introspect agent', 'DAG validation', 'validate_dag', 'schema compatibility', 'cost estimation', 'composition validation', 'catalog server', 'CatalogMCPServer', 'MCP catalog', 'budget tracking', 'BudgetTracker', 'PostureBudgetIntegration', 'posture budget', 'budget threshold', 'L3 autonomy', 'L3 primitives', 'EnvelopeTracker', 'EnvelopeSplitter', 'EnvelopeEnforcer', 'ScopedContext', 'ContextScope', 'ScopeProjection', 'DataClassification', 'MessageRouter', 'MessageChannel', 'DeadLetterStore', 'AgentFactory', 'AgentInstance', 'AgentInstanceRegistry', 'AgentSpec', 'PlanExecutor', 'PlanValidator', 'PlanModification', 'Plan DAG', 'gradient zone', 'agent spawning', 'cascade termination', 'scoped context', 'envelope enforcement', 'plan execution', or 'agent lifecycle'. Also covers L3 integration: 'L3Runtime', 'L3EventBus', 'L3EventType', 'EatpTranslator', 'L3 event system', 'EATP audit events', or 'governance events'. Also covers kaizen-agents governance layer: 'GovernedSupervisor', 'governed agent', 'progressive disclosure', 'governance modules', 'AccountabilityTracker', 'CascadeManager', 'ClearanceEnforcer', 'DerelictionDetector', 'BypassManager', 'VacancyManager', 'kaizen-agents', 'governed multi-agent', 'PACT governance', 'anti-self-modification', 'ReadOnlyView', 'governance security', 'NaN defense', or 'bounded collections'. Also covers kaizen-agents Delegate system: 'Delegate', 'delegate facade', 'typed events', 'TextDelta', 'ToolCallStart', 'DelegateEvent', 'progressive disclosure API', 'run_sync', 'budget tracking', 'multi-provider', 'StreamingChatAdapter', 'adapter registry', 'OpenAI adapter', 'Anthropic adapter', 'Google adapter', 'Ollama adapter', 'tool hydration', 'ToolHydrator', 'search_tools', 'BM25 search', 'incremental streaming', or 'token streaming'. Also covers wrapper composition: 'WrapperBase', 'wrapper stack', 'L3GovernedAgent', 'MonitoredAgent', 'StreamingAgent', 'SupervisorWrapper', 'wrapper composition', 'DuplicateWrapperError', 'WrapperOrderError', 'canonical stacking order', 'GovernanceRejectedError', 'BudgetExhaustedError', 'StreamEvent', 'run_stream', 'StreamingProvider', 'ToolCallingProvider', 'StructuredOutputProvider', 'ProviderCapability', 'get_provider_for_model', 'LLMBased routing', or 'provider protocols'."
 ---
 
 # Kailash Kaizen - AI Agent Framework
@@ -25,6 +25,7 @@ Kaizen enables building sophisticated AI agents with:
 - **Performance Optimization (v1.0)**: 7 caches with 10-100x speedup (SchemaCache, EmbeddingCache, PromptCache, etc.)
 - **Specialist System (v1.0)**: Claude Code-style specialists and skills with `.kaizen/` directory
 - **GPT-5 Support (v1.0)**: Automatic temperature=1.0 enforcement, 8000 max_tokens for reasoning
+- **Wrapper Composition System**: Stackable cross-cutting wrappers (governance, monitoring, streaming) with enforced ordering
 
 ## Quick Start
 
@@ -434,7 +435,7 @@ workflow.add_node("KaizenAgent", "agent1", {
 })
 ```
 
-## Provider Configuration (v2.5.0 — Explicit over Implicit)
+## Provider Configuration (v2.5.0 -- Explicit over Implicit)
 
 As of v2.5.0, provider configuration follows an **explicit over implicit** model. Structured output config is separated from provider-specific settings.
 
@@ -482,52 +483,52 @@ Legacy vars emit `DeprecationWarning`. Use `resolve_azure_env()` from `kaizen.no
 
 ### Anti-Patterns
 
-- **Never** put structured output config in `provider_config` — use `response_format`
-- **Never** rely on auto-generated structured output without understanding it — set `structured_output_mode="explicit"`
+- **Never** put structured output config in `provider_config` -- use `response_format`
+- **Never** rely on auto-generated structured output without understanding it -- set `structured_output_mode="explicit"`
 - **Never** use multiple env var names for the same Azure setting without deprecation
-- **Never** use error-based backend switching — detect the backend upfront or set `AZURE_BACKEND` explicitly
+- **Never** use error-based backend switching -- detect the backend upfront or set `AZURE_BACKEND` explicitly
 
 ### Prompt Utilities
 
 `kaizen.core.prompt_utils` is the single source of truth for signature-based prompt generation:
 
-- `generate_prompt_from_signature(signature)` — builds system prompt from signature fields
-- `json_prompt_suffix(output_fields)` — returns JSON format instructions for Azure `json_object` compatibility
+- `generate_prompt_from_signature(signature)` -- builds system prompt from signature fields
+- `json_prompt_suffix(output_fields)` -- returns JSON format instructions for Azure `json_object` compatibility
 
 For detailed configuration patterns, see:
 
-- **[kaizen-config-patterns](kaizen-config-patterns.md)** — Domain configs, auto-extraction, provider-specific patterns
-- **[kaizen-structured-outputs](kaizen-structured-outputs.md)** — Full structured output guide with migration examples
+- **[kaizen-config-patterns](kaizen-config-patterns.md)** -- Domain configs, auto-extraction, provider-specific patterns
+- **[kaizen-structured-outputs](kaizen-structured-outputs.md)** -- Full structured output guide with migration examples
 
 ## Critical Rules
 
-- ✅ Define signatures before implementing agents
-- ✅ Extend BaseAgent for production agents
-- ✅ Use type hints in signatures for validation
-- ✅ Track costs in production environments
-- ✅ Test agents with real infrastructure (real infrastructure recommended)
-- ✅ Enable hooks for observability
-- ✅ Use AgentRegistry for distributed coordination
-- ✅ Use `response_format` for structured output (not `provider_config`)
-- ✅ Set `structured_output_mode="explicit"` for new agents
-- ❌ NEVER skip signature definitions
-- ❌ NEVER ignore cost tracking in production
-- ❌ NEVER put structured output keys in `provider_config`
-- ❌ Avoid mocking LLM calls in integration tests (real infrastructure recommended)
+- Define signatures before implementing agents
+- Extend BaseAgent for production agents
+- Use type hints in signatures for validation
+- Track costs in production environments
+- Test agents with real infrastructure (real infrastructure recommended)
+- Enable hooks for observability
+- Use AgentRegistry for distributed coordination
+- Use `response_format` for structured output (not `provider_config`)
+- Set `structured_output_mode="explicit"` for new agents
+- NEVER skip signature definitions
+- NEVER ignore cost tracking in production
+- NEVER put structured output keys in `provider_config`
+- Avoid mocking LLM calls in integration tests (real infrastructure recommended)
 
 ### Kaizen-Agents Governance (v0.1.0)
 
-- **[kaizen-agents-governance](kaizen-agents-governance.md)** — GovernedSupervisor, progressive disclosure (Layer 1/2/3), 7 governance modules
-  - `GovernedSupervisor` with 3-layer progressive API (2-param simple → 8-param configured → 9 governance subsystems)
-  - `AccountabilityTracker` — D/T/R addressing, policy source chain
-  - `BudgetTracker` — reclamation, predictive warnings, reallocation
-  - `CascadeManager` — monotonic envelope tightening, BFS termination
-  - `ClearanceEnforcer` + `ClassificationAssigner` — data classification (C0-C4), regex pre-filter
-  - `DerelictionDetector` — insufficient tightening detection
-  - `BypassManager` — time-limited emergency overrides with anti-stacking
-  - `VacancyManager` — orphan detection, grandparent auto-designation
-  - `AuditTrail` — EATP hash chain with `hmac.compare_digest()`
-  - SDK integration: `EnvelopeAllocator` → `EnvelopeSplitter`, `ScopeBridge` → `ScopedContext`
+- **[kaizen-agents-governance](kaizen-agents-governance.md)** -- GovernedSupervisor, progressive disclosure (Layer 1/2/3), 7 governance modules
+  - `GovernedSupervisor` with 3-layer progressive API (2-param simple -> 8-param configured -> 9 governance subsystems)
+  - `AccountabilityTracker` -- D/T/R addressing, policy source chain
+  - `BudgetTracker` -- reclamation, predictive warnings, reallocation
+  - `CascadeManager` -- monotonic envelope tightening, BFS termination
+  - `ClearanceEnforcer` + `ClassificationAssigner` -- data classification (C0-C4), regex pre-filter
+  - `DerelictionDetector` -- insufficient tightening detection
+  - `BypassManager` -- time-limited emergency overrides with anti-stacking
+  - `VacancyManager` -- orphan detection, grandparent auto-designation
+  - `AuditTrail` -- EATP hash chain with `hmac.compare_digest()`
+  - SDK integration: `EnvelopeAllocator` -> `EnvelopeSplitter`, `ScopeBridge` -> `ScopedContext`
 
 ### L3 Integration & Event System
 
@@ -536,11 +537,96 @@ For detailed configuration patterns, see:
   - `L3EventBus` pub/sub for 15 governance event types across all primitives
   - `EatpTranslator` converts L3 events into EATP audit records with severity classification
 
-- **[kaizen-agents-security](kaizen-agents-security.md)** — Security patterns for governance
+- **[kaizen-agents-security](kaizen-agents-security.md)** -- Security patterns for governance
   - Anti-self-modification via `_ReadOnlyView` proxies
   - Pervasive NaN/Inf defense (`math.isfinite()` on all numeric paths)
   - Bounded collections, monotonic invariants, thread safety
   - Delegate tool security (mandatory BashTool gate, ExecPolicy, session sanitization)
+
+### Wrapper Composition System
+
+Composition wrappers add cross-cutting concerns (governance, monitoring, streaming) around a `BaseAgent` without modifying it. `WrapperBase` enforces a canonical stacking order and duplicate detection.
+
+**Canonical stacking order** (innermost to outermost):
+
+```
+BaseAgent -> L3GovernedAgent -> MonitoredAgent -> StreamingAgent
+```
+
+`WrapperBase` rejects duplicate wrappers (`DuplicateWrapperError`) and out-of-order stacking (`WrapperOrderError`). Every wrapper proxies `get_parameters()` and `to_workflow()` to the inner agent. The `innermost` property walks the full stack to the non-wrapper agent.
+
+**Key files:**
+
+- `packages/kaizen-agents/src/kaizen_agents/wrapper_base.py` -- `WrapperBase` with stack ordering + duplicate detection
+- `packages/kaizen-agents/src/kaizen_agents/governed_agent.py` -- `L3GovernedAgent` with `ConstraintEnvelope` enforcement (Financial, Operational, Temporal, Data Access, Communication, Posture ceiling). Rejects BEFORE LLM cost is incurred. Uses `_ProtectedInnerProxy` to block governance bypass via `.inner._inner`.
+- `packages/kaizen-agents/src/kaizen_agents/monitored_agent.py` -- `MonitoredAgent` with `CostTracker`, budget enforcement via `BudgetExhaustedError`, NaN/Inf defense on budget values
+- `packages/kaizen-agents/src/kaizen_agents/streaming_agent.py` -- `StreamingAgent` with `run_stream()` async iterator, typed `StreamEvent` events, buffer overflow protection, timeout enforcement. Falls back to batch when provider lacks `StreamingProvider`.
+- `packages/kaizen-agents/src/kaizen_agents/events.py` -- Frozen dataclass events: `TextDelta`, `ToolCallStart`, `ToolCallEnd`, `TurnComplete`, `BudgetExhausted`, `ErrorEvent`, `StreamBufferOverflow`
+- `packages/kaizen-agents/src/kaizen_agents/supervisor_wrapper.py` -- `SupervisorWrapper` for task delegation to worker pool via `LLMBased` routing
+
+**Building a wrapper stack:**
+
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen_agents.governed_agent import L3GovernedAgent
+from kaizen_agents.monitored_agent import MonitoredAgent
+from kaizen_agents.streaming_agent import StreamingAgent
+from kaizen_agents.events import TextDelta, TurnComplete
+from kailash.trust.envelope import ConstraintEnvelope, FinancialConstraint
+
+# Stack innermost to outermost
+agent = MyAgent(config=config)
+governed = L3GovernedAgent(agent, envelope=ConstraintEnvelope(
+    financial=FinancialConstraint(budget_limit=10.0)
+))
+monitored = MonitoredAgent(governed, budget_usd=5.0)
+streaming = StreamingAgent(monitored)
+
+# Stream typed events
+async for event in streaming.run_stream(prompt="analyze this"):
+    match event:
+        case TextDelta(text=t): print(t, end="")
+        case TurnComplete(text=t): print(f"\n[Done: {t[:50]}]")
+```
+
+**SupervisorWrapper** -- delegates tasks to a worker pool using LLM-based routing:
+
+```python
+from kaizen_agents.supervisor_wrapper import SupervisorWrapper
+from kaizen_agents.patterns.llm_routing import LLMBased
+
+supervisor = SupervisorWrapper(inner_agent, workers=[w1, w2], routing=LLMBased())
+result = await supervisor.run_async(task="complex task")
+```
+
+### Provider Capability Protocols
+
+SPEC-02 defines `runtime_checkable` protocols in `kaizen.providers.base` for structural capability discovery. Providers satisfy protocols structurally -- no explicit inheritance needed.
+
+| Protocol                   | Key Method                          | Purpose                        |
+| -------------------------- | ----------------------------------- | ------------------------------ |
+| `StreamingProvider`        | `stream_chat()` -> `StreamEvent`    | Token-by-token streaming       |
+| `ToolCallingProvider`      | `chat_with_tools(messages, tools)`  | Native function calling        |
+| `StructuredOutputProvider` | `chat_structured(messages, schema)` | JSON schema structured outputs |
+| `AsyncLLMProvider`         | `chat_async(messages)`              | Async chat completions         |
+
+`ProviderCapability` enum: `CHAT_SYNC`, `CHAT_ASYNC`, `CHAT_STREAM`, `TOOLS`, `STRUCTURED_OUTPUT`, `EMBEDDINGS`, `VISION`, `AUDIO`, `REASONING_MODELS`, `BYOK`.
+
+Use `get_provider_for_model(model)` from `kaizen.providers.registry` to resolve a model string to a provider instance. Use `isinstance(provider, StreamingProvider)` for capability checks.
+
+### LLM-Based Routing
+
+`LLMBased` from `kaizen_agents.patterns.llm_routing` scores agent capabilities against task requirements using Kaizen signatures (not keyword matching or dispatch tables).
+
+```python
+from kaizen_agents.patterns.llm_routing import LLMBased
+
+routing = LLMBased(config=config)  # config optional; falls back to .env defaults
+score = await routing.score("analyze revenue data", agent_capability)
+best = await routing.select_best("analyze revenue data", [agent1, agent2, agent3])
+```
+
+`score()` returns `[0.0, 1.0]`. Accepts `Capability` dataclasses (`.name` + `.description`) or plain strings. `select_best()` returns the highest-scoring candidate or `None` when empty.
 
 ## Related Skills
 

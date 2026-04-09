@@ -157,6 +157,62 @@ Use this skill when:
 - Conducting security reviews
 - Preparing for deployment
 
+## Trust-Plane Security Patterns (from convergence audit)
+
+### Closure Capture in Loop-Registered Callbacks
+
+```python
+# ❌ WRONG — all wrappers invoke the LAST method
+for tool_name in tools:
+    method = getattr(self, tool_name)
+    async def wrapper(**kwargs):
+        return method(**kwargs)  # captures loop var by reference
+
+# ✅ CORRECT — default argument captures value
+for tool_name in tools:
+    method = getattr(self, tool_name)
+    async def wrapper(_bound=method, **kwargs):
+        return _bound(**kwargs)  # captures at definition time
+```
+
+### Trust File I/O — No Bare `open()`
+
+```python
+# ❌ WRONG — follows symlinks (TOCTOU attack)
+with open(trust_file) as f:
+    data = yaml.safe_load(f)
+
+# ✅ CORRECT — O_NOFOLLOW prevents symlink redirect
+from kailash.trust._locking import safe_read_text
+text = safe_read_text(Path(trust_file))
+data = yaml.safe_load(text)
+```
+
+### Bounded Collections in Long-Running Agents
+
+```python
+# ❌ WRONG — unbounded list grows to OOM
+self._records: list[dict] = []
+
+# ✅ CORRECT — bounded deque per trust-plane-security rule P6
+from collections import deque
+self._records: deque[dict] = deque(maxlen=10000)
+```
+
+### NaN/Inf Budget Bypass Prevention
+
+```python
+# ❌ WRONG — NaN passes all comparisons
+if cost > budget_limit:  # NaN > anything is always False
+    reject()
+
+# ✅ CORRECT — validate finiteness first
+if not math.isfinite(cost):
+    raise GovernanceRejectedError("non-finite cost value")
+if cost > budget_limit:
+    reject()
+```
+
 ## Related Skills
 
 - **[17-gold-standards](../17-gold-standards/SKILL.md)** - Mandatory best practices
