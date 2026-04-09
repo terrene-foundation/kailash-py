@@ -97,6 +97,12 @@ class BaseAgentConfig:
         None  # Directory for filesystem hooks (.kaizen/hooks/)
     )
 
+    # Trust / Posture Configuration (SPEC-04)
+    # Trust posture ceiling applied to this agent. None means no ceiling.
+    # Use values from kailash.trust.envelope.AgentPosture
+    # (e.g., "PUBLIC", "INTERNAL", "RESTRICTED", "CONFIDENTIAL").
+    posture: Optional[str] = None
+
     def __post_init__(self):
         """Validate configuration after initialization."""
         # Set default permission_mode if not specified

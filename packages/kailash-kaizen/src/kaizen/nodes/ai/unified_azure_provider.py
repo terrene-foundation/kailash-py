@@ -16,8 +16,9 @@ operations in Kaizen, providing:
 import logging
 from typing import Any, Dict, List, Optional
 
-# Import base class from ai_providers
-from .ai_providers import UnifiedAIProvider
+# Import base class from the new providers package (SPEC-02)
+from kaizen.providers.base import UnifiedAIProvider
+
 from .azure_backends import AzureAIFoundryBackend, AzureOpenAIBackend
 from .azure_capabilities import AzureCapabilityRegistry, FeatureNotSupportedError
 from .azure_detection import AzureBackendDetector
