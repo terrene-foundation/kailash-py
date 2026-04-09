@@ -1,10 +1,12 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
 
-"""Provider registry — resolve a provider name to a concrete instance.
+"""Provider registry — resolve a provider name or model name to a concrete instance.
 
 This is infrastructure configuration branching (permitted by agent-reasoning
-rules), NOT agent decision-making.
+rules), NOT agent decision-making. The model-prefix dispatch in
+:func:`get_provider_for_model` is structural string-prefix matching over a
+declared provider registry — not semantic classification of user intent.
 """
 
 from __future__ import annotations
@@ -13,10 +15,16 @@ import logging
 from typing import Any
 
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
-from kaizen.providers.base import BaseAIProvider, EmbeddingProvider, LLMProvider
+from kaizen.providers.base import (
+    BaseAIProvider,
+    BaseProvider,
+    EmbeddingProvider,
+    LLMProvider,
+    StreamingProvider,
+)
 from kaizen.providers.embedding.cohere import CohereProvider
 from kaizen.providers.embedding.huggingface import HuggingFaceProvider
-from kaizen.providers.errors import UnknownProviderError
+from kaizen.providers.errors import CapabilityNotSupportedError, UnknownProviderError
 from kaizen.providers.llm.anthropic import AnthropicProvider
 from kaizen.providers.llm.azure import AzureAIFoundryProvider
 from kaizen.providers.llm.docker import DockerModelRunnerProvider
@@ -59,6 +67,42 @@ PROVIDERS: dict[str, type | str] = {
     "perplexity": PerplexityProvider,
     "pplx": PerplexityProvider,
 }
+
+
+# SPEC-02 §3.1 — model-name prefix dispatch.
+#
+# This is a declared structural mapping, NOT a classification of user intent.
+# Every tuple on the left is a set of model-id prefixes owned by the provider
+# on the right. New providers extend this table; the function below is a
+# pure prefix scan with no keyword reasoning.
+_MODEL_PREFIX_MAP: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("gpt-", "o1-", "o3-", "o4-", "o1", "o3", "o4-mini", "ft:gpt"), "openai"),
+    (("claude-",), "anthropic"),
+    (("gemini-",), "google"),
+    (
+        (
+            "llama",
+            "mistral",
+            "mixtral",
+            "qwen",
+            "phi-",
+            "phi3",
+            "phi4",
+            "codellama",
+            "deepseek",
+        ),
+        "ollama",
+    ),
+    (("ai/",), "docker"),
+    (
+        (
+            "sonar",
+            "sonar-",
+        ),
+        "perplexity",
+    ),
+    (("mock-", "mock"), "mock"),
+)
 
 
 def _resolve_provider_class(name: str) -> type:
@@ -115,6 +159,69 @@ def get_provider(
                 f"Invalid provider_type: {provider_type}. Must be 'chat', 'embeddings', or None"
             )
 
+    return provider
+
+
+def get_provider_for_model(model: str) -> BaseProvider:
+    """Resolve a model id to its owning provider via structural prefix match.
+
+    SPEC-02 §3.1. This is NOT semantic classification — it is a pure string-
+    prefix scan over a declared table. Adding a new provider means extending
+    ``_MODEL_PREFIX_MAP``, not teaching an LLM to recognise new prefixes.
+
+    Args:
+        model: Model identifier (e.g. ``"gpt-4o"``, ``"claude-3-opus-20240229"``,
+            ``"gemini-2.5-flash"``).
+
+    Returns:
+        A provider instance whose declared prefixes match *model*.
+
+    Raises:
+        UnknownProviderError: When no declared prefix matches *model*.
+    """
+    if not model or not isinstance(model, str):
+        raise UnknownProviderError(
+            f"Cannot detect provider for model: {model!r}", provider_name=str(model)
+        )
+
+    model_lower = model.lower()
+    for prefixes, provider_name in _MODEL_PREFIX_MAP:
+        for prefix in prefixes:
+            if model_lower.startswith(prefix.lower()):
+                logger.debug(
+                    "provider.resolve model=%s prefix=%s provider=%s",
+                    model,
+                    prefix,
+                    provider_name,
+                )
+                return get_provider(provider_name)
+
+    raise UnknownProviderError(
+        f"Cannot detect provider for model: {model}. "
+        f"Add a prefix mapping to kaizen.providers.registry._MODEL_PREFIX_MAP.",
+        provider_name=model,
+    )
+
+
+def get_streaming_provider(name_or_model: str) -> StreamingProvider:
+    """Resolve a name or model id to a provider that implements StreamingProvider.
+
+    Tries the provider registry first; falls back to model-prefix dispatch.
+    Raises :class:`CapabilityNotSupportedError` if the resolved provider does
+    not satisfy the :class:`StreamingProvider` protocol (i.e. has no real
+    ``stream_chat`` method).
+    """
+    if name_or_model.lower() in PROVIDERS:
+        provider = get_provider(name_or_model)
+    else:
+        provider = get_provider_for_model(name_or_model)
+
+    if not isinstance(provider, StreamingProvider):
+        raise CapabilityNotSupportedError(
+            f"Provider '{provider.name}' does not support streaming. "
+            f"Capabilities: {provider.capabilities}",
+            provider_name=getattr(provider, "name", ""),
+        )
     return provider
 
 

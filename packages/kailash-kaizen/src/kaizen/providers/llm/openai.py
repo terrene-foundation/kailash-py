@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, List
+from typing import Any, AsyncGenerator, List
 
 from kaizen.nodes.ai.client_cache import BYOKClientCache
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
-from kaizen.providers.base import UnifiedAIProvider
-from kaizen.providers.types import Message
+from kaizen.providers.base import ProviderCapability, UnifiedAIProvider
+from kaizen.providers.types import Message, StreamEvent, TokenUsage
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +80,29 @@ class OpenAIProvider(UnifiedAIProvider):
 
         self._available = bool(os.getenv("OPENAI_API_KEY"))
         return self._available
+
+    # ------------------------------------------------------------------
+    # SPEC-02 capability declaration
+    # ------------------------------------------------------------------
+
+    @property
+    def name(self) -> str:
+        return "openai"
+
+    @property
+    def capabilities(self) -> set[ProviderCapability]:
+        return {
+            ProviderCapability.CHAT_SYNC,
+            ProviderCapability.CHAT_ASYNC,
+            ProviderCapability.CHAT_STREAM,
+            ProviderCapability.TOOLS,
+            ProviderCapability.STRUCTURED_OUTPUT,
+            ProviderCapability.EMBEDDINGS,
+            ProviderCapability.VISION,
+            ProviderCapability.AUDIO,
+            ProviderCapability.REASONING_MODELS,
+            ProviderCapability.BYOK,
+        }
 
     # ------------------------------------------------------------------
     # Reasoning model helpers
@@ -418,6 +441,172 @@ class OpenAIProvider(UnifiedAIProvider):
         except Exception as e:
             logger.error("OpenAI error: %s", e, exc_info=True)
             raise RuntimeError(sanitize_provider_error(e, "OpenAI"))
+
+    # ------------------------------------------------------------------
+    # Chat (streaming) — SPEC-02 StreamingProvider protocol
+    # ------------------------------------------------------------------
+
+    async def stream_chat(
+        self, messages: List[Message], **kwargs: Any
+    ) -> AsyncGenerator[StreamEvent, None]:
+        """Stream tokens from OpenAI chat.completions.create(stream=True).
+
+        Genuinely iterates the AsyncOpenAI streaming response — one
+        :class:`StreamEvent` per incoming delta chunk, followed by a final
+        ``"done"`` event carrying the accumulated text, finish reason, and
+        usage (when ``stream_options={"include_usage": True}`` is supported).
+        """
+        # Import is unconditional — ModuleNotFoundError propagates as a
+        # clear error. Wrapping in try/except here confuses static analysers
+        # about whether ``openai`` is bound in the rest of the method.
+        import openai
+
+        model = kwargs.get("model", "o4-mini")
+        generation_config = dict(kwargs.get("generation_config", {}) or {})
+        tools = kwargs.get("tools", [])
+
+        per_request_api_key = kwargs.get("api_key")
+        per_request_base_url = kwargs.get("base_url")
+
+        if per_request_api_key or per_request_base_url:
+            client_kwargs: dict[str, Any] = {}
+            if per_request_api_key:
+                client_kwargs["api_key"] = per_request_api_key
+            if per_request_base_url:
+                client_kwargs["base_url"] = per_request_base_url
+            async_client = openai.AsyncOpenAI(**client_kwargs)
+        else:
+            if self._async_client is None:
+                self._async_client = openai.AsyncOpenAI()
+            async_client = self._async_client
+
+        processed_messages = self._process_messages(messages)
+
+        max_completion = generation_config.get(
+            "max_completion_tokens"
+        ) or generation_config.get("max_tokens")
+
+        filtered_config = self._filter_reasoning_model_params(model, generation_config)
+
+        request_params: dict[str, Any] = {
+            "model": model,
+            "messages": processed_messages,
+            "max_completion_tokens": max_completion,
+            "stop": filtered_config.get("stop"),
+            "n": filtered_config.get("n", 1),
+            "stream": True,
+            "stream_options": {"include_usage": True},
+            "logit_bias": filtered_config.get("logit_bias"),
+            "user": filtered_config.get("user"),
+            "seed": filtered_config.get("seed"),
+        }
+
+        if not self._is_reasoning_model(model):
+            request_params["temperature"] = filtered_config.get("temperature", 1.0)
+            request_params["top_p"] = filtered_config.get("top_p", 1.0)
+            request_params["frequency_penalty"] = filtered_config.get(
+                "frequency_penalty"
+            )
+            request_params["presence_penalty"] = filtered_config.get("presence_penalty")
+
+        response_format = filtered_config.get("response_format")
+        if response_format and isinstance(response_format, dict):
+            if "type" in response_format:
+                request_params["response_format"] = response_format
+
+        request_params = {k: v for k, v in request_params.items() if v is not None}
+
+        if tools:
+            request_params["tools"] = tools
+            request_params["tool_choice"] = generation_config.get("tool_choice", "auto")
+
+        logger.debug(
+            "openai.stream_chat.start model=%s tools=%d",
+            model,
+            len(tools) if tools else 0,
+        )
+
+        try:
+            stream = await async_client.chat.completions.create(**request_params)
+
+            accumulated_text = ""
+            # Accumulate tool calls across chunks (OpenAI streams tool calls
+            # in partial deltas keyed by index).
+            tool_call_acc: dict[int, dict[str, Any]] = {}
+            last_finish_reason: str | None = None
+            last_usage: dict[str, int] = {}
+
+            async for chunk in stream:
+                if not chunk.choices:
+                    # Final usage-only chunk (stream_options.include_usage).
+                    if getattr(chunk, "usage", None) is not None:
+                        last_usage = {
+                            "prompt_tokens": chunk.usage.prompt_tokens,
+                            "completion_tokens": chunk.usage.completion_tokens,
+                            "total_tokens": chunk.usage.total_tokens,
+                        }
+                    continue
+
+                choice = chunk.choices[0]
+                delta = choice.delta
+
+                if delta is None:
+                    continue
+
+                text_piece = getattr(delta, "content", None)
+                if text_piece:
+                    accumulated_text += text_piece
+                    yield StreamEvent(
+                        event_type="text_delta",
+                        delta_text=text_piece,
+                        content=accumulated_text,
+                        model=model,
+                    )
+
+                delta_tool_calls = getattr(delta, "tool_calls", None) or []
+                for tc_delta in delta_tool_calls:
+                    idx = getattr(tc_delta, "index", 0) or 0
+                    acc = tool_call_acc.setdefault(
+                        idx,
+                        {
+                            "id": "",
+                            "type": "function",
+                            "function": {"name": "", "arguments": ""},
+                        },
+                    )
+                    if getattr(tc_delta, "id", None):
+                        acc["id"] = tc_delta.id
+                    fn_delta = getattr(tc_delta, "function", None)
+                    if fn_delta is not None:
+                        name_piece = getattr(fn_delta, "name", None)
+                        args_piece = getattr(fn_delta, "arguments", None)
+                        if name_piece:
+                            acc["function"]["name"] += name_piece
+                        if args_piece:
+                            acc["function"]["arguments"] += args_piece
+
+                if choice.finish_reason:
+                    last_finish_reason = choice.finish_reason
+
+            logger.debug(
+                "openai.stream_chat.done model=%s chars=%d finish=%s",
+                model,
+                len(accumulated_text),
+                last_finish_reason,
+            )
+
+            final_tool_calls = [tool_call_acc[k] for k in sorted(tool_call_acc)]
+            yield StreamEvent(
+                event_type="done",
+                content=accumulated_text,
+                tool_calls=final_tool_calls,
+                finish_reason=last_finish_reason or "stop",
+                model=model,
+                usage=last_usage,
+            )
+        except Exception as exc:  # pragma: no cover - re-raise sanitised
+            logger.error("openai.stream_chat.error error=%s", exc, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(exc, "OpenAI"))
 
     # ------------------------------------------------------------------
     # Embeddings

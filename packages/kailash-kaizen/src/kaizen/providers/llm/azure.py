@@ -11,11 +11,11 @@ and both sync/async operation.
 from __future__ import annotations
 
 import logging
-from typing import Any, List
+from typing import Any, AsyncGenerator, List
 
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
-from kaizen.providers.base import UnifiedAIProvider
-from kaizen.providers.types import Message
+from kaizen.providers.base import ProviderCapability, UnifiedAIProvider
+from kaizen.providers.types import Message, StreamEvent
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +50,27 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
         api_key = os.getenv("AZURE_AI_INFERENCE_API_KEY")
         self._available = bool(endpoint and api_key)
         return self._available
+
+    # ------------------------------------------------------------------
+    # SPEC-02 capability declaration
+    # ------------------------------------------------------------------
+
+    @property
+    def name(self) -> str:
+        return "azure"
+
+    @property
+    def capabilities(self) -> set[ProviderCapability]:
+        return {
+            ProviderCapability.CHAT_SYNC,
+            ProviderCapability.CHAT_ASYNC,
+            ProviderCapability.CHAT_STREAM,
+            ProviderCapability.TOOLS,
+            ProviderCapability.STRUCTURED_OUTPUT,
+            ProviderCapability.EMBEDDINGS,
+            ProviderCapability.VISION,
+            ProviderCapability.BYOK,
+        }
 
     def _get_credential(self) -> Any:
         import os
@@ -383,6 +404,103 @@ class AzureAIFoundryProvider(UnifiedAIProvider):
         except Exception as e:
             logger.error("Azure AI Foundry async error: %s", e, exc_info=True)
             raise RuntimeError(sanitize_provider_error(e, "Azure AI Foundry"))
+
+    # ------------------------------------------------------------------
+    # Chat (streaming) — SPEC-02 StreamingProvider protocol
+    # ------------------------------------------------------------------
+
+    async def stream_chat(
+        self, messages: List[Message], **kwargs: Any
+    ) -> AsyncGenerator[StreamEvent, None]:
+        """Stream tokens from Azure AI Inference ChatCompletionsClient.
+
+        Iterates the real per-chunk ``StreamingChatCompletionsUpdate`` events
+        via ``ChatCompletionsClient.complete(stream=True)``.
+        """
+        from azure.ai.inference.aio import ChatCompletionsClient
+
+        model = kwargs.get("model")
+        generation_config = dict(kwargs.get("generation_config", {}) or {})
+
+        endpoint = self._get_endpoint()
+        credential = self._get_credential()
+
+        async_chat_client = ChatCompletionsClient(
+            endpoint=endpoint, credential=credential
+        )
+
+        processed_messages = self._process_messages(messages)
+
+        complete_kwargs: dict[str, Any] = {
+            "messages": processed_messages,
+            "model": model,
+            "stream": True,
+        }
+        if generation_config.get("temperature") is not None:
+            complete_kwargs["temperature"] = generation_config["temperature"]
+        if generation_config.get("max_tokens") is not None:
+            complete_kwargs["max_tokens"] = generation_config["max_tokens"]
+        if generation_config.get("top_p") is not None:
+            complete_kwargs["top_p"] = generation_config["top_p"]
+
+        logger.debug("azure.stream_chat.start model=%s", model)
+
+        accumulated_text = ""
+        last_finish_reason: str | None = None
+        last_usage: dict[str, int] = {}
+
+        try:
+            stream = await async_chat_client.complete(**complete_kwargs)
+            async for update in stream:
+                choices = getattr(update, "choices", None) or []
+                if not choices:
+                    usage_obj = getattr(update, "usage", None)
+                    if usage_obj is not None:
+                        last_usage = {
+                            "prompt_tokens": getattr(usage_obj, "prompt_tokens", 0),
+                            "completion_tokens": getattr(
+                                usage_obj, "completion_tokens", 0
+                            ),
+                            "total_tokens": getattr(usage_obj, "total_tokens", 0),
+                        }
+                    continue
+                choice = choices[0]
+                delta = getattr(choice, "delta", None)
+                text_piece = getattr(delta, "content", None) if delta else None
+                if text_piece:
+                    accumulated_text += text_piece
+                    yield StreamEvent(
+                        event_type="text_delta",
+                        delta_text=text_piece,
+                        content=accumulated_text,
+                        model=model or "",
+                    )
+                fr = getattr(choice, "finish_reason", None)
+                if fr:
+                    last_finish_reason = str(fr)
+
+            logger.debug(
+                "azure.stream_chat.done model=%s chars=%d finish=%s",
+                model,
+                len(accumulated_text),
+                last_finish_reason,
+            )
+
+            yield StreamEvent(
+                event_type="done",
+                content=accumulated_text,
+                finish_reason=last_finish_reason or "stop",
+                model=model or "",
+                usage=last_usage,
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.error("azure.stream_chat.error error=%s", exc, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(exc, "Azure AI Foundry"))
+        finally:
+            try:
+                await async_chat_client.close()
+            except Exception:
+                pass  # cleanup path — carve-out per zero-tolerance.md Rule 3
 
     def embed(self, texts: list[str], **kwargs: Any) -> list[list[float]]:
         try:

@@ -13,10 +13,10 @@ import hashlib
 import json
 import logging
 import random
-from typing import Any, List
+from typing import Any, AsyncGenerator, List
 
-from kaizen.providers.base import UnifiedAIProvider
-from kaizen.providers.types import Message
+from kaizen.providers.base import ProviderCapability, UnifiedAIProvider
+from kaizen.providers.types import Message, StreamEvent
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,79 @@ class MockProvider(UnifiedAIProvider):
 
     def is_available(self) -> bool:
         return True
+
+    # ------------------------------------------------------------------
+    # SPEC-02 capability declaration
+    # ------------------------------------------------------------------
+
+    @property
+    def name(self) -> str:
+        return "mock"
+
+    @property
+    def capabilities(self) -> set[ProviderCapability]:
+        return {
+            ProviderCapability.CHAT_SYNC,
+            ProviderCapability.CHAT_ASYNC,
+            ProviderCapability.CHAT_STREAM,
+            ProviderCapability.EMBEDDINGS,
+            ProviderCapability.TOOLS,
+            ProviderCapability.STRUCTURED_OUTPUT,
+        }
+
+    # ------------------------------------------------------------------
+    # Chat (streaming) — deterministic test-only implementation.
+    #
+    # This is the ONE legitimate synthetic stream in the codebase: it
+    # exists so unit tests for the StreamingProvider protocol have a
+    # deterministic adapter that yields multiple distinct chunks without
+    # requiring a real provider. Every other provider iterates the actual
+    # SDK streaming response.
+    # ------------------------------------------------------------------
+
+    async def stream_chat(
+        self, messages: List[Message], **kwargs: Any
+    ) -> AsyncGenerator[StreamEvent, None]:
+        """Yield a deterministic, word-by-word synthetic stream for tests."""
+        response = self.chat(messages, **kwargs)
+        content = response.get("content") or ""
+        model = response.get("model") or kwargs.get("model") or "mock-model"
+        usage = response.get("usage") or {}
+
+        logger.debug("mock.stream_chat.start chars=%d model=%s", len(content), model)
+
+        accumulated_text = ""
+        # Split on whitespace, preserving the separator so the concatenation
+        # of all deltas reconstructs the original string byte-for-byte.
+        pieces: list[str] = []
+        current = ""
+        for ch in content:
+            if ch.isspace() and current:
+                pieces.append(current)
+                current = ch
+            else:
+                current += ch
+        if current:
+            pieces.append(current)
+        if not pieces:
+            pieces = [content or ""]
+
+        for piece in pieces:
+            accumulated_text += piece
+            yield StreamEvent(
+                event_type="text_delta",
+                delta_text=piece,
+                content=accumulated_text,
+                model=model,
+            )
+
+        yield StreamEvent(
+            event_type="done",
+            content=accumulated_text,
+            finish_reason="stop",
+            model=model,
+            usage=usage if isinstance(usage, dict) else {},
+        )
 
     def chat(self, messages: List[Message], **kwargs: Any) -> dict[str, Any]:
         last_user_message = ""
