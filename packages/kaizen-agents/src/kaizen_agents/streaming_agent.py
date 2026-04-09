@@ -73,9 +73,11 @@ def _resolve_streaming_provider(agent: BaseAgent) -> Any | None:
         provider = get_provider_for_model(model)
         if isinstance(provider, StreamingProvider):
             return provider
-    except Exception:
-        # Provider resolution failure — fall back to batch mode
-        pass
+    except Exception as exc:
+        logger.warning(
+            "streaming_agent.provider_resolution_failed",
+            extra={"model": model, "error": str(exc)},
+        )
 
     return None
 

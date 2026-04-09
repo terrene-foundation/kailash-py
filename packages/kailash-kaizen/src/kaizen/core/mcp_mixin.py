@@ -267,26 +267,9 @@ class MCPMixin:
         if data is not None:
             result_dict["data"] = data
 
-        import sys
-
-        sys.stderr.write("\n[DEBUG] _convert_mcp_result_to_dict - Before flattening:\n")
-        sys.stderr.write(f"  structured_content: {structured_content}\n")
-        sys.stderr.write(f"  result_dict keys before: {list(result_dict.keys())}\n")
-        sys.stderr.flush()
-
         for key, value in structured_content.items():
-            sys.stderr.write(f"  [FLATTEN] Processing key={key}, value={value}\n")
-            sys.stderr.flush()
             if key not in result_dict:
                 result_dict[key] = value
-                sys.stderr.write(f"    Added {key}={value} to result_dict\n")
-            else:
-                sys.stderr.write(f"    Skipped {key} (already in result_dict)\n")
-            sys.stderr.flush()
-
-        sys.stderr.write(f"  result_dict keys after: {list(result_dict.keys())}\n")
-        sys.stderr.write(f"  Final result_dict: {result_dict}\n")
-        sys.stderr.flush()
 
         return result_dict
 
@@ -768,9 +751,9 @@ class MCPMixin:
 
             method = getattr(self, tool_name)
 
-            async def tool_wrapper(**kwargs):
+            async def tool_wrapper(_bound_method=method, **kwargs):
                 """Auto-generated MCP tool from agent method."""
-                result = method(**kwargs)
+                result = _bound_method(**kwargs)
                 if hasattr(result, "__await__"):
                     result = await result
                 return result

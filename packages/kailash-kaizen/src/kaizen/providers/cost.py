@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -59,7 +60,7 @@ class CostTracker:
         self._total_prompt_tokens = 0
         self._total_completion_tokens = 0
         self._total_cost_usd = 0.0
-        self._records: list[dict[str, Any]] = []
+        self._records: deque[dict[str, Any]] = deque(maxlen=10000)
 
     def record(
         self,

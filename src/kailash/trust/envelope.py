@@ -1070,10 +1070,18 @@ class ConstraintEnvelope:
         )
         if is_file:
             try:
-                with open(path_or_str) as f:
-                    data = yaml.safe_load(f)
+                from pathlib import Path
+
+                from kailash.trust._locking import safe_read_text
+
+                text = safe_read_text(Path(path_or_str))
+                data = yaml.safe_load(text)
             except FileNotFoundError:
                 raise EnvelopeValidationError(f"YAML file not found: {path_or_str}")
+            except OSError as exc:
+                raise EnvelopeValidationError(
+                    f"Cannot read YAML file {path_or_str}: {exc}"
+                )
             except yaml.YAMLError as exc:
                 raise EnvelopeValidationError(
                     f"Invalid YAML in file {path_or_str}: {exc}"
