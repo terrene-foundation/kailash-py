@@ -13,19 +13,10 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
-from urllib.parse import parse_qs
 
-from fastapi import (
-    Depends,
-    FastAPI,
-    HTTPException,
-    Request,
-    WebSocket,
-    WebSocketDisconnect,
-)
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from ...nodes.base import NodeRegistry
@@ -276,7 +267,6 @@ class APIGateway:
                     "sessions": True,
                     "real_time": True,
                     "dynamic_workflows": True,
-                    "ai_chat": True,
                     "webhooks": True,
                 },
                 "endpoints": {

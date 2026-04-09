@@ -194,9 +194,6 @@ from .auth.auth_manager import AuthLevel, MiddlewareAuthManager
 from .auth.jwt_auth import JWTAuthManager
 
 # Communication Layer
-# Note: AI chat functionality has been moved to the Kaizen framework.
-# For AI-powered chat interfaces with semantic search and workflow generation, use:
-#     from kaizen.middleware.communication import AIChatMiddleware, ChatMessage, WorkflowGenerator
 from .communication.api_gateway import APIGateway, create_gateway
 
 # Communication Layer

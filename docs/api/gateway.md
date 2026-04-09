@@ -39,20 +39,18 @@ gateway.run(port=8000)
 ```python
 from kailash.middleware import (
     AgentUIMiddleware, RealtimeMiddleware, APIGateway,
-    AIChatMiddleware, KailashJWTAuthManager
+    KailashJWTAuthManager
 )
 
 # Create components
 auth_manager = KailashJWTAuthManager()
 agent_ui = AgentUIMiddleware(auth_manager=auth_manager)
 realtime = RealtimeMiddleware(agent_ui)
-ai_chat = AIChatMiddleware(agent_ui)
 
 # Create gateway with components
 gateway = APIGateway(
     agent_ui=agent_ui,
     realtime=realtime,
-    ai_chat=ai_chat,
     auth_manager=auth_manager,
     title="Custom Platform"
 )
@@ -159,29 +157,31 @@ GET /api/executions/{execution_id}
 
 ```javascript
 // WebSocket connection
-const ws = new WebSocket('ws://localhost:8000/ws?session_id=session-uuid');
+const ws = new WebSocket("ws://localhost:8000/ws?session_id=session-uuid");
 
 ws.onmessage = (event) => {
-    const update = JSON.parse(event.data);
+  const update = JSON.parse(event.data);
 
-    switch(update.type) {
-        case 'workflow.started':
-            console.log('Workflow started:', update.workflow_id);
-            break;
-        case 'workflow.progress':
-            console.log('Progress:', update.progress + '%');
-            break;
-        case 'workflow.completed':
-            console.log('Completed:', update.outputs);
-            break;
-    }
+  switch (update.type) {
+    case "workflow.started":
+      console.log("Workflow started:", update.workflow_id);
+      break;
+    case "workflow.progress":
+      console.log("Progress:", update.progress + "%");
+      break;
+    case "workflow.completed":
+      console.log("Completed:", update.outputs);
+      break;
+  }
 };
 
 // Server-Sent Events
-const eventSource = new EventSource('http://localhost:8000/events?session_id=session-uuid');
+const eventSource = new EventSource(
+  "http://localhost:8000/events?session_id=session-uuid",
+);
 eventSource.onmessage = (event) => {
-    const update = JSON.parse(event.data);
-    console.log('SSE Update:', update);
+  const update = JSON.parse(event.data);
+  console.log("SSE Update:", update);
 };
 ```
 
@@ -220,31 +220,37 @@ POST /api/chat/message
 ## API Endpoints
 
 ### Session Management
+
 - `POST /api/sessions` - Create new session
 - `GET /api/sessions/{session_id}` - Get session info
 - `DELETE /api/sessions/{session_id}` - Close session
 
 ### Workflow Management
+
 - `POST /api/workflows` - Create dynamic workflow
 - `GET /api/workflows/{workflow_id}` - Get workflow info
 - `POST /api/workflows/{workflow_id}/execute` - Execute workflow
 
 ### Execution Management
+
 - `POST /api/executions` - Start workflow execution
 - `GET /api/executions/{execution_id}` - Get execution status
 - `DELETE /api/executions/{execution_id}` - Cancel execution
 
 ### Real-Time Communication
+
 - `GET /ws` - WebSocket connection for real-time updates
 - `GET /events` - Server-Sent Events stream
 - `POST /api/webhooks` - Register webhook endpoints
 
 ### AI Chat
+
 - `POST /api/chat/sessions` - Start AI chat session
 - `POST /api/chat/message` - Send message to AI
 - `GET /api/chat/history/{session_id}` - Get chat history
 
 ### Schema and Discovery
+
 - `GET /api/nodes` - Get available node types with schemas
 - `GET /api/nodes/{node_type}/schema` - Get specific node schema
 - `GET /health` - Health check endpoint
@@ -377,22 +383,22 @@ spec:
         app: kailash-middleware
     spec:
       containers:
-      - name: middleware
-        image: kailash-middleware:latest
-        ports:
-        - containerPort: 8000
-        env:
-        - name: KAILASH_JWT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: kailash-secrets
-              key: jwt-secret
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 30
-          periodSeconds: 10
+        - name: middleware
+          image: kailash-middleware:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: KAILASH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kailash-secrets
+                  key: jwt-secret
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
 ```
 
 ### Load Balancing

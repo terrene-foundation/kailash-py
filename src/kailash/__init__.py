@@ -1,7 +1,12 @@
+# pyright: reportUnsupportedDunderAll=false
 """Kailash Python SDK - A framework for building workflow-based applications.
 
 The Kailash SDK provides a comprehensive framework for creating nodes and workflows
 that align with container-node architecture while allowing rapid prototyping.
+
+Note: ``__all__`` lists names resolved via ``__getattr__`` (lazy imports for
+optional server extras). Pyright's ``reportUnsupportedDunderAll`` check is
+disabled because it does not follow ``__getattr__`` fallbacks.
 """
 
 import warnings
@@ -30,7 +35,6 @@ def __getattr__(name):
         return Workflow
     if name in (
         "AgentUIMiddleware",
-        "AIChatMiddleware",
         "APIGateway",
         "RealtimeMiddleware",
     ):

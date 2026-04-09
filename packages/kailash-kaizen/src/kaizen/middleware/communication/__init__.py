@@ -1,11 +1,16 @@
 """
-AI-Powered Communication Middleware
+AI-Powered Communication Middleware (placeholder)
 
-This module contains AI-powered communication components that have been migrated
-from Core SDK to Kaizen framework.
+This package was provisioned for AI-powered communication components to be
+migrated from Core SDK to Kaizen. No modules currently live here — the
+previous ``ai_chat`` module was removed as dead code because it depended on
+Core SDK middleware internals (``AgentUIMiddleware``, ``DynamicSchemaRegistry``)
+that were never re-exported, and its intent-classification path used
+code-side keyword matching in violation of Kaizen's LLM-first rule.
 
-NOTE: Some components may have dependencies on Core SDK middleware components
-(AgentUIMiddleware, DynamicSchemaRegistry) that haven't been fully migrated yet.
+When AI chat functionality is re-introduced, it MUST use Kaizen signatures
+for routing, classification, and extraction — not deterministic keyword
+matching.
 """
 
-__all__ = ["ai_chat"]
+__all__: list[str] = []
