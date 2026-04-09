@@ -33,6 +33,11 @@
           },
           {
             "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/integration-hygiene.js\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/auto-format.js\"",
             "timeout": 30
           }
@@ -87,6 +92,11 @@
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/stop.js\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/log-triage-gate.js\"",
+            "timeout": 7
           }
         ]
       }

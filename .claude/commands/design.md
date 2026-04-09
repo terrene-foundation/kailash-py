@@ -97,7 +97,7 @@ LEVEL 4: VISUAL DETAILS (Lowest Priority)
 Deploy these agents when doing design work:
 
 - **uiux-designer** — Design analysis, layout critique, visual hierarchy recommendations
-- **frontend-developer** — React implementation of design patterns
+- **react-specialist** — React implementation of design patterns
 - **flutter-specialist** — Flutter/Material implementation
 - **react-specialist** — React 19 / Next.js patterns
 

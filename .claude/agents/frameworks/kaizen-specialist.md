@@ -1,6 +1,6 @@
 ---
 name: kaizen-specialist
-description: "kailash-kaizen specialist. Use for AI agents, signatures, Delegate, multi-agent orchestration, A2A, or planning."
+description: "Kaizen specialist. Use proactively for LLM/prompt/agent/RAG/provider-abstraction work — custom LLM services BLOCKED."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---
@@ -70,9 +70,9 @@ Use `self.run()` with a rich Signature. Permitted: input validation, error handl
 
 Provider config follows an explicit model. Three fields, three purposes:
 
-- `response_format` — Structured output config (`{"type": "json_schema", ...}` or `{"type": "json_object"}`)
-- `provider_config` — Provider-specific operational settings only (`{"api_version": "...", "deployment": "..."}`)
-- `structured_output_mode` — `"explicit"` (recommended), `"auto"` (deprecated), `"off"`
+- `response_format` -- Structured output config (`{"type": "json_schema", ...}` or `{"type": "json_object"}`)
+- `provider_config` -- Provider-specific operational settings only (`{"api_version": "...", "deployment": "..."}`)
+- `structured_output_mode` -- `"explicit"` (recommended), `"auto"` (deprecated), `"off"`
 
 Deprecation shim auto-migrates `provider_config` with `"type"` key to `response_format`. New code MUST use `response_format` directly.
 
@@ -147,16 +147,39 @@ result = agent.process("input")
 
 **Interactive (21)**: All others -- AsyncSingleShotStrategy, tool calling optional
 
+### Multi-Agent Patterns (Top-Level Exports)
+
+All pattern classes are importable directly from `kaizen_agents`:
+
+```python
+from kaizen_agents import (
+    SupervisorWorkerPattern,
+    ConsensusPattern,
+    DebatePattern,
+    HandoffPattern,
+    SequentialPipelinePattern,
+    BaseMultiAgentPattern,
+    create_supervisor_worker_pattern,  # factory functions
+    create_consensus_pattern,
+    create_debate_pattern,
+    create_handoff_pattern,
+    create_sequential_pipeline,
+)
+```
+
+Also available via `kaizen_agents.patterns`. The deprecated `kaizen_agents.agents.coordination` module was removed in v0.6.0 -- all imports must use the paths above.
+
 ### Deprecation Notes
 
-| Feature                                   | Status      | Migration                                                  |
-| ----------------------------------------- | ----------- | ---------------------------------------------------------- |
-| `ToolRegistry`, `ToolExecutor`            | **REMOVED** | Use MCP or `KaizenToolRegistry`                            |
-| `AgentTeam`                               | Deprecated  | Use `OrchestrationRuntime`                                 |
-| `max_tokens` (OpenAI)                     | Deprecated  | Use `max_completion_tokens`                                |
-| `provider_config` for structured output   | Deprecated  | Use `response_format` field                                |
-| `structured_output_mode="auto"`           | Deprecated  | Use `"explicit"` (default changes in v2.6.0)               |
-| `AZURE_OPENAI_*` / `AZURE_AI_INFERENCE_*` | Deprecated  | Use `AZURE_ENDPOINT`, `AZURE_API_KEY`, `AZURE_API_VERSION` |
+| Feature                                   | Status      | Migration                                                   |
+| ----------------------------------------- | ----------- | ----------------------------------------------------------- |
+| `ToolRegistry`, `ToolExecutor`            | **REMOVED** | Use MCP or `KaizenToolRegistry`                             |
+| `AgentTeam`                               | Deprecated  | Use `OrchestrationRuntime`                                  |
+| `max_tokens` (OpenAI)                     | Deprecated  | Use `max_completion_tokens`                                 |
+| `provider_config` for structured output   | Deprecated  | Use `response_format` field                                 |
+| `structured_output_mode="auto"`           | Deprecated  | Use `"explicit"` (default changes in v2.6.0)                |
+| `AZURE_OPENAI_*` / `AZURE_AI_INFERENCE_*` | Deprecated  | Use `AZURE_ENDPOINT`, `AZURE_API_KEY`, `AZURE_API_VERSION`  |
+| `kaizen_agents.agents.coordination`       | **REMOVED** | Use `from kaizen_agents import SupervisorWorkerPattern` etc |
 
 ## Related Agents
 

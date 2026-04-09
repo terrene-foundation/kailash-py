@@ -1,22 +1,50 @@
 source_repo: kailash-py
-codify_date: "2026-04-07"
-codify_session: "feat(ml): PyCaret/MLflow parity — 11 features, ModelExplainer engine"
-sdk_version: "0.7.0"
-coc_version: "1.0.0"
+codify_date: "2026-04-08"
+codify_session: "refactor(dataflow)!: DataFlow 2.0 Phases 0-9 perfection sprint"
+sdk_version: "2.6.0"
+coc_version: "1.0.2"
 
 changes:
-  - file: skills/34-kailash-ml/SKILL.md
+  - file: agents/frameworks/dataflow-specialist.md
     action: modified
     suggested_tier: coc-py
-    reason: "Add ModelExplainer engine, preprocessing enhancements (normalization methods, KNN/iterative imputation, multicollinearity removal, SMOTE), nested runs, auto-logging, model calibration, inference validation to ml skill reference"
-    diff_lines: "+80 -0"
+    reason: "Added DataFlow 2.0 patterns: pluggable fabric cache, tenant isolation, FabricMetrics singleton, webhook providers, trust executor wiring, correlation ID, ResourceWarning"
+    diff_lines: "+30 -1"
 
-  - file: agents/frameworks/ml-specialist.md
+  - file: rules/orphan-detection.md
+    action: created
+    suggested_tier: coc
+    reason: "New rule from Phase 5.11 orphan discovery — every db.* facade MUST have production call site + Tier 2 test"
+    diff_lines: "+120"
+
+  - file: rules/facade-manager-detection.md
+    action: created
+    suggested_tier: coc
+    reason: "Specific shape rule for *Manager/*Executor/*Store classes — Tier 2 wiring test naming convention"
+    diff_lines: "+95"
+
+  - file: rules/tenant-isolation.md
+    action: created
+    suggested_tier: coc
+    reason: "Cache key + metric label + audit row tenant dimension mandate from Phase 5.3/5.7 work"
+    diff_lines: "+130"
+
+  - file: rules/dataflow-identifier-safety.md
+    action: created
+    suggested_tier: coc
+    reason: "DDL identifier quoting mandate from Phase 0-2 security audit (45 SQL injection sites)"
+    diff_lines: "+120"
+
+  - file: rules/dataflow-pool.md
     action: modified
-    suggested_tier: coc-py
-    reason: "Update ml-specialist with knowledge of new engines (ModelExplainer), preprocessing parity features, auto-logging integration pattern, nested runs, and inference validation"
-    diff_lines: "+20 -0"
+    suggested_tier: coc
+    reason: "Extended Rule 3 with *_url/*_backend/*_client consumer-check enforcement from Phase 5.2 PipelineExecutor._redis_url orphan"
+    diff_lines: "+35 -0"
 
-status: reviewed
-review_date: "2026-04-07"
-review_notes: "SKILL.md → global (rs has variant_only). ml-specialist.md → variant-py. Content authored from source (model_explainer.py, preprocessing.py, training_pipeline.py, experiment_tracker.py)."
+  - file: rules/zero-tolerance.md
+    action: modified
+    suggested_tier: coc
+    reason: "Extended Rule 2 with 6 explicit fake-safety examples from Phase 5 audit: fake encryption, fake transaction, fake health, fake classification, fake tenant isolation, fake metrics"
+    diff_lines: "+65 -0"
+
+status: pending_review

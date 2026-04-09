@@ -18,7 +18,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { execFileSync } = require("child_process");
 
 const TIMEOUT_MS = 5000;
 const timeout = setTimeout(() => {
@@ -111,7 +111,7 @@ async function main() {
     // Locate repo root by walking up from cwd or script location
     let repoRoot;
     try {
-      repoRoot = execSync("git rev-parse --show-toplevel", {
+      repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
         encoding: "utf8",
         timeout: 3000,
       }).trim();
@@ -151,7 +151,7 @@ async function main() {
     const marker = fs.readFileSync(markerPath, "utf8").trim();
     let currentCommit;
     try {
-      currentCommit = execSync("git rev-parse HEAD", {
+      currentCommit = execFileSync("git", ["rev-parse", "HEAD"], {
         cwd: repoRoot,
         encoding: "utf8",
         timeout: 3000,

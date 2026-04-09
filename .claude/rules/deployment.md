@@ -16,6 +16,8 @@ paths:
 4. Version bumped consistently across all packages (`pyproject.toml` + `__init__.py`)
 5. No uncommitted changes
 
+**Why:** Skipping any pre-release step risks publishing a broken, insecure, or version-mismatched package to PyPI where it becomes immediately available to every downstream user.
+
 ## TestPyPI Validation
 
 Major/minor releases MUST validate on TestPyPI before production PyPI:
@@ -27,6 +29,8 @@ python -m venv /tmp/verify --clear
 /tmp/verify/bin/python -c "import kailash; print(kailash.__version__)"
 ```
 
+**Why:** PyPI uploads are immutable -- a broken release cannot be overwritten, only yanked, leaving a permanent gap in the version sequence.
+
 **Exception**: Patch releases may skip TestPyPI with explicit human approval.
 
 ## Publishing Rules
@@ -36,6 +40,10 @@ python -m venv /tmp/verify --clear
 - No PyPI tokens in source — use `~/.pypirc`, CI secrets, or trusted publisher (OIDC)
 - Research current syntax (`--help` or web search) before running release commands
 
+**Why:** Publishing sdist for proprietary packages exposes source code, publishing on failing CI ships known-broken artifacts, and committed tokens grant anyone with repo access full PyPI publishing rights.
+
 ## Release Config
 
 Every SDK MUST have `deploy/deployment-config.md`. Run `/deploy` to create it.
+
+**Why:** Without a deployment config, release agents guess at package names, registries, and credentials, leading to failed or misdirected publishes.

@@ -45,6 +45,16 @@ Reviews documents and code for quality, consistency, cross-reference accuracy, a
 - [ ] No personal information without authorization
 - [ ] No hardcoded credentials
 
+### Integration Hygiene
+
+- [ ] Framework specialist consulted before dropping below Engine layer (`framework-first.md` § Work-Domain Binding)
+- [ ] Every new endpoint has entry + exit + error logs (`observability.md` § Mandatory Log Points)
+- [ ] Every integration point logs intent + result with correlation ID
+- [ ] Zero raw SQL / raw HTTP client / mock-data constants introduced in non-migration, non-test code
+- [ ] Every `import`/`use`/`require` resolves to a manifest entry (`dependencies.md` § Declared = Imported)
+- [ ] Schema changes go through numbered migrations (`schema-migration.md`)
+- [ ] No silent exception swallows (`zero-tolerance.md` Rule 3)
+
 ## Code Example Validation Process
 
 1. **Extract** all code blocks from documentation

@@ -1,6 +1,6 @@
 ---
 name: ml-specialist
-description: "kailash-ml specialist. Use for training, inference, drift, AutoML, experiments, ensembles, features, or ML examples."
+description: "ML specialist. Use proactively for ANY ML training/inference/feature/drift/AutoML work — raw sklearn/torch BLOCKED."
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---
@@ -28,7 +28,8 @@ kailash-ml
     hyperparameter_search.py <- [P1] grid/random/bayesian/successive_halving
     automl_engine.py    <- [P1] agent-infused, LLM guardrails, cost tracking
     ensemble.py         <- [P1] blend/stack/bag/boost
-    preprocessing.py    <- [P1] auto-setup from FeatureSchema
+    preprocessing.py    <- [P1] auto-setup, normalize, impute, SMOTE, multicollinearity
+    model_explainer.py  <- [P1] SHAP global/local/dependence, plotly (requires [explain])
     data_explorer.py    <- [P1] async profiling, alerts, HTML reports, ydata-profiling parity
     _data_explorer_report.py <- HTML report generator (self-contained, XSS-safe)
     feature_engineer.py <- [P2] auto-generation, selection, ranking
@@ -126,13 +127,13 @@ result = pipeline.setup(
     data=df,
     target="target",
     categorical_encoding="onehot",
-    max_cardinality=50,          # columns above threshold → ordinal (default 50)
+    max_cardinality=50,          # columns above threshold -> ordinal (default 50)
     exclude_columns=["trip_id"], # skip encoding for specific columns
 )
 # Warning: "Column 'zone' has 263 unique values (> max_cardinality=50), using ordinal encoding"
 ```
 
-**Mixed encoding**: When some columns are one-hot and others overflow to ordinal, `_transformers` stores both `onehot_mappings` AND `ordinal_overflow_mappings`. `_apply_fitted_encoding()` uses separate `if` blocks (not `elif`) so both can coexist. The cardinality guard only applies to `"onehot"` encoding — `"target"` and `"ordinal"` are inherently cardinality-safe.
+**Mixed encoding**: When some columns are one-hot and others overflow to ordinal, `_transformers` stores both `onehot_mappings` AND `ordinal_overflow_mappings`. `_apply_fitted_encoding()` uses separate `if` blocks (not `elif`) so both can coexist. The cardinality guard only applies to `"onehot"` encoding -- `"target"` and `"ordinal"` are inherently cardinality-safe.
 
 ### ModelVisualizer EDA Methods
 
@@ -160,12 +161,12 @@ async with await ExperimentTracker.create("sqlite:///ml.db") as tracker:
     async with tracker.run(exp_name, run_name="baseline") as run:
         await run.log_metric("accuracy", 0.95)
 
-# ExperimentTracker auto-initializes — no initialize() call needed.
+# ExperimentTracker auto-initializes -- no initialize() call needed.
 # Factory-created trackers own their connection; close() releases it.
 # External ConnectionManager trackers leave connection lifecycle to caller.
 ```
 
-### DataExplorer (P1 — Async, ydata-profiling Parity)
+### DataExplorer (P1 -- Async, ydata-profiling Parity)
 
 All methods are **async**. 5 matrix computations run in parallel via `asyncio.gather()`.
 
@@ -175,7 +176,7 @@ from kailash_ml import DataExplorer, AlertConfig
 explorer = DataExplorer(alert_config=AlertConfig(high_correlation_threshold=0.9))
 profile = await explorer.profile(df)
 # profile.skewness, .kurtosis, .iqr, .outlier_count, .zero_count
-# profile.spearman_matrix, .categorical_associations (Cramér's V)
+# profile.spearman_matrix, .categorical_associations (Cramer's V)
 # profile.duplicate_count, .memory_bytes, .sample_head, .sample_tail
 # profile.alerts (8 types: high_nulls, constant, high_skewness, high_zeros,
 #                  high_cardinality, high_correlation, duplicates, imbalanced)
@@ -185,9 +186,63 @@ html_report = await explorer.to_html(df, title="My Report")  # Self-contained HT
 comparison = await explorer.compare(train_df, prod_df)  # Parallel profiling
 ```
 
-**Correlation robustness**: Pairwise-complete observation (not `fill_null(0.0)`) for Pearson and Spearman. Centralized `_sanitize_float()` guards ALL numeric outputs — returns `None` for non-finite values. Correlation `None` = "undefined" (constant column), distinct from `0.0` = "no correlation". HTML report renders "N/A" with tooltip. Alert threshold check guards against `None`.
+**Correlation robustness**: Pairwise-complete observation (not `fill_null(0.0)`) for Pearson and Spearman. Centralized `_sanitize_float()` guards ALL numeric outputs -- returns `None` for non-finite values. Correlation `None` = "undefined" (constant column), distinct from `0.0` = "no correlation". HTML report renders "N/A" with tooltip. Alert threshold check guards against `None`.
 
 **Security**: XSS-safe HTML via `html.escape()` + `_safe_uid()` for plotly div IDs. No scipy dependency.
+
+### ModelExplainer (SHAP, requires `[explain]`)
+
+```python
+from kailash_ml import ModelExplainer
+
+explainer = ModelExplainer(model=fitted_model, X=train_df, feature_names=schema.feature_names)
+global_report = explainer.explain_global(max_display=10)
+# global_report["feature_importance"]: sorted feature → mean |SHAP|
+local_report = explainer.explain_local(X=test_df, index=0)
+# local_report["feature_contributions"]: per-feature SHAP for one prediction
+dep = explainer.explain_dependence(feature="tenure_months", interaction_feature="age")
+fig = explainer.to_plotly("summary")  # Also: "beeswarm", "dependence"
+```
+
+Polars-native: accepts `pl.DataFrame`, converts to numpy internally via `_polars_to_numpy()`. Boolean→Int8, Categorical→physical, Utf8 raises.
+
+### Preprocessing Enhancements
+
+```python
+result = pipeline.setup(
+    data=df, target="churned",
+    normalize=True, normalize_method="robust",   # zscore, minmax, robust, maxabs
+    imputation="knn", impute_n_neighbors=5,       # knn, iterative, or default
+    remove_multicollinearity=True, multicollinearity_threshold=0.9,
+    fix_imbalance=True, imbalance_method="smote", # smote, adasyn (requires [imbalance])
+)
+```
+
+### Model Calibration
+
+```python
+result = await pipeline.calibrate(model_name="churn_v1", method="isotonic", cv=5)
+# method: "platt" (sigmoid) or "isotonic"
+# Returns calibrated model via CalibratedClassifierCV
+```
+
+### Nested Runs & Auto-Logging
+
+```python
+# Nested runs — group trials under a parent
+async with tracker.run("hyperopt-sweep") as parent:
+    for params in param_grid:
+        async with tracker.run("trial", parent_run_id=parent.run_id) as child:
+            await child.log_params(params)
+
+# Auto-logging — TrainingPipeline logs to ExperimentTracker automatically
+pipeline = TrainingPipeline(feature_store=fs, model_registry=registry, experiment_tracker=tracker)
+# train() auto-logs metrics, params, artifacts
+```
+
+### Inference Validation
+
+InferenceServer validates input DataFrames against model feature signatures. Missing features raise `ValueError` with the specific missing column names.
 
 ### Agent-Infused AutoML (Double Opt-In)
 
@@ -293,6 +348,8 @@ pip install kailash-ml[rl]        # + Stable-Baselines3, Gymnasium
 pip install kailash-ml[agents]    # + kailash-kaizen (agent integration)
 pip install kailash-ml[xgb]       # + XGBoost
 pip install kailash-ml[catboost]  # + CatBoost
+pip install kailash-ml[explain]   # + SHAP (model explainability)
+pip install kailash-ml[imbalance] # + imbalanced-learn (SMOTE, ADASYN)
 pip install kailash-ml[stats]     # + statsmodels
 pip install kailash-ml[all]       # Everything
 ```
