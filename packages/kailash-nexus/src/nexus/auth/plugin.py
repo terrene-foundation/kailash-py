@@ -1,7 +1,7 @@
 """NexusAuthPlugin - Unified auth plugin for Nexus (TODO-310G).
 
-Combines JWT, RBAC, rate limiting, tenant isolation, and audit logging
-into a single plugin following the NexusPlugin protocol.
+SPEC-06 Migration: Core configs imported from kailash.trust.auth and
+kailash.trust.rate_limit. Plugin orchestration remains Nexus-specific.
 
 Note: Do NOT use ``from __future__ import annotations`` in this module.
 FastAPI inspects parameter annotations at runtime to recognize special types.
@@ -11,10 +11,11 @@ import logging
 from typing import Any, Dict, List, Optional, Union
 
 from nexus.auth.audit.config import AuditConfig
-from nexus.auth.jwt import JWTConfig
-from nexus.auth.rate_limit.config import RateLimitConfig
-from nexus.auth.tenant.config import TenantConfig
 from nexus.plugins import NexusPlugin
+
+from kailash.trust.auth.context import TenantConfig
+from kailash.trust.auth.jwt import JWTConfig
+from kailash.trust.rate_limit.config import RateLimitConfig
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +32,12 @@ class NexusAuthPlugin(NexusPlugin):
         2. RateLimit (before auth, prevent abuse)
         3. JWT (core authentication)
         4. Tenant (needs JWT user for tenant claim resolution)
-        5. RBAC (needs JWT user for role→permission resolution)
+        5. RBAC (needs JWT user for role->permission resolution)
 
     Example:
         >>> from nexus.auth.plugin import NexusAuthPlugin
-        >>> from nexus.auth import JWTConfig, AuditConfig
+        >>> from kailash.trust.auth import JWTConfig
+        >>> from nexus.auth import AuditConfig
         >>>
         >>> auth = NexusAuthPlugin(
         ...     jwt=JWTConfig(secret="my-secret-at-least-32-chars-long!"),
@@ -126,7 +128,7 @@ class NexusAuthPlugin(NexusPlugin):
             2. RateLimit (before auth, prevent abuse)
             3. JWT (core authentication - must run before RBAC/Tenant)
             4. Tenant (needs JWT user for tenant resolution from claims)
-            5. RBAC (needs JWT user for role→permission resolution)
+            5. RBAC (needs JWT user for role->permission resolution)
 
         Note: In Starlette, middleware added later wraps middleware added
         earlier. So we add in reverse order: innermost first (RBAC),

@@ -1,6 +1,6 @@
 """FastAPI dependencies for authentication.
 
-Provides dependency functions for endpoint-level authentication checks.
+SPEC-06 Migration: AuthenticatedUser imported from kailash.trust.auth.models.
 
 Note: Do NOT use `from __future__ import annotations` in this module.
 FastAPI inspects parameter annotations at runtime to recognize special types
@@ -11,7 +11,8 @@ prevents FastAPI from injecting the Request object into callable dependencies.
 from typing import Optional
 
 from fastapi import HTTPException, Request
-from nexus.auth.models import AuthenticatedUser
+
+from kailash.trust.auth.models import AuthenticatedUser
 
 
 def get_current_user(request: Request) -> AuthenticatedUser:
@@ -105,7 +106,7 @@ class RequirePermission:
         # Check RBAC-resolved permissions (from RBACMiddleware)
         rbac_permissions = getattr(request.state, "user_permissions", None)
         if rbac_permissions:
-            from nexus.auth.rbac import matches_permission_set
+            from kailash.trust.auth.rbac import matches_permission_set
 
             for perm in self.permissions:
                 if matches_permission_set(rbac_permissions, perm):

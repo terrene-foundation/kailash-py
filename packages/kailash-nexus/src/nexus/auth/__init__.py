@@ -1,5 +1,10 @@
 """Nexus Auth Package - Authentication and authorization for Nexus.
 
+.. deprecated::
+    Auth middleware is migrating to ``kailash.trust.auth`` as the canonical
+    location (SPEC-06). This package continues to work but new code should
+    import from ``kailash.trust.auth`` instead.
+
 Provides JWT middleware, RBAC, SSO, rate limiting, tenant isolation,
 and audit logging as a unified NexusAuthPlugin.
 
@@ -8,6 +13,15 @@ Usage:
     from nexus.auth.models import AuthenticatedUser
     from nexus.auth.exceptions import InvalidTokenError, ExpiredTokenError
 """
+
+import warnings
+
+warnings.warn(
+    "nexus.auth is deprecated; import from kailash.trust.auth instead. "
+    "See SPEC-06 auth consolidation.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from nexus.auth.audit import AuditConfig, AuditMiddleware
 from nexus.auth.exceptions import (

@@ -10,9 +10,13 @@ import logging
 from typing import Any, Optional
 
 from fastapi import Request
-from nexus.auth.tenant.config import TenantConfig
-from nexus.auth.tenant.context import TenantInfo
-from nexus.auth.tenant.exceptions import TenantAccessDeniedError, TenantNotFoundError
+
+from kailash.trust.auth.context import (
+    TenantAccessDeniedError,
+    TenantConfig,
+    TenantInfo,
+    TenantNotFoundError,
+)
 
 logger = logging.getLogger(__name__)
 

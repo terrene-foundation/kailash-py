@@ -9,7 +9,8 @@ from functools import wraps
 from typing import Callable, Optional
 
 from fastapi import HTTPException, Request
-from nexus.auth.rate_limit.backends.memory import InMemoryBackend
+
+from kailash.trust.rate_limit.backends.memory import InMemoryBackend
 
 
 def rate_limit(
