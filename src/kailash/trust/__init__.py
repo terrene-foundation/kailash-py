@@ -67,7 +67,7 @@ from kailash.trust.chain import (
     CapabilityAttestation,
     CapabilityType,
     Constraint,
-    ConstraintEnvelope,
+    ChainConstraintEnvelope as ConstraintEnvelope,
     ConstraintType,
     DelegationLimits,
     DelegationRecord,
