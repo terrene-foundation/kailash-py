@@ -44,6 +44,7 @@ from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
 from kailash.trust.chain import ActionResult, AuditAnchor
@@ -131,6 +132,56 @@ class AuditStoreImmutabilityError(AuditStoreError):
 # ---------------------------------------------------------------------------
 
 
+class AuditEventType(str, Enum):
+    """Well-known audit event types (cross-domain union).
+
+    String-backed enum whose ``.value`` is used to populate the canonical
+    ``AuditEvent.event_type`` field. This enum provides a shared vocabulary
+    for high-level trust-plane events; domain-specific modules MAY define
+    their own enums as long as the string values are preserved in
+    ``AuditEvent.event_type``.
+    """
+
+    # Generic trust events (from immutable_audit_log)
+    ACTION_EXECUTED = "action_executed"
+    ACTION_DENIED = "action_denied"
+    DELEGATION_CREATED = "delegation_created"
+    DELEGATION_REVOKED = "delegation_revoked"
+    TRUST_ESTABLISHED = "trust_established"
+    TRUST_REVOKED = "trust_revoked"
+    POLICY_CHANGED = "policy_changed"
+    ACCESS_GRANTED = "access_granted"
+    ACCESS_DENIED = "access_denied"
+    CONSTRAINT_VIOLATED = "constraint_violated"
+    SYSTEM_EVENT = "system_event"
+    CUSTOM = "custom"
+
+    # Workflow lifecycle events (from runtime.trust.audit)
+    WORKFLOW_START = "workflow_start"
+    WORKFLOW_END = "workflow_end"
+    WORKFLOW_ERROR = "workflow_error"
+    NODE_START = "node_start"
+    NODE_END = "node_end"
+    NODE_ERROR = "node_error"
+    TRUST_VERIFICATION = "trust_verification"
+    TRUST_DENIED = "trust_denied"
+    RESOURCE_ACCESS = "resource_access"
+    DELEGATION_USED = "delegation_used"
+
+
+class AuditOutcome(str, Enum):
+    """Outcome of an audited action.
+
+    String-backed enum whose ``.value`` populates the canonical
+    ``AuditEvent.outcome`` field.
+    """
+
+    SUCCESS = "success"
+    FAILURE = "failure"
+    DENIED = "denied"
+    ERROR = "error"
+
+
 def _compute_event_hash(
     event_id: str,
     timestamp: str,
@@ -147,6 +198,12 @@ def _compute_event_hash(
 
     The canonical form is JSON with sorted keys and minimal separators for
     deterministic hashing across platforms.
+
+    NOTE: Only the hash-anchoring fields are included in the digest.  The
+    extended domain fields (``event_type``, ``severity``, etc.) are stored
+    in ``metadata`` or as optional attributes and do NOT participate in the
+    Merkle chain, preserving backward compatibility for pre-SPEC-08 chains
+    while still letting consumers migrate to the canonical type.
     """
     payload = {
         "event_id": event_id,
@@ -166,13 +223,20 @@ def _compute_event_hash(
 
 @dataclass(frozen=True)
 class AuditEvent:
-    """Canonical audit event -- superset of all existing audit record types.
+    """Canonical audit event -- SPEC-08 single source of truth.
 
-    Every field from immutable_audit_log.AuditEntry, chain.AuditAnchor,
-    runtime.trust.audit.AuditEvent, and pact.audit.AuditAnchor is represented.
+    Consolidates every audit record type that previously existed in scattered
+    modules (``nodes/admin/audit_log.AuditEvent``,
+    ``runtime/trust/audit.AuditEvent``, ``trust/immutable_audit_log.AuditEntry``,
+    ``pact.audit.AuditAnchor``).  All of those are now either migrated to
+    import from here or are deprecated-and-scheduled-for-deletion.
 
-    The ``hash`` and ``prev_hash`` fields form a Merkle chain: each event
-    includes the hash of the previous event, enabling tamper detection.
+    The core fields (``event_id``, ``timestamp``, ``actor``, ``action``,
+    ``resource``, ``outcome``, ``prev_hash``, ``hash``, ``parent_anchor_id``,
+    ``duration_ms``, ``metadata``) form the Merkle-chained audit trail.
+    The extended fields are optional attributes for domain-specific
+    consumers (workflow runtime, enterprise admin logging) and do not
+    participate in the hash chain.
 
     Attributes:
         event_id: Unique identifier for this event.
@@ -180,12 +244,27 @@ class AuditEvent:
         actor: Identifier of the entity that performed the action.
         action: Short description of what was done.
         resource: Identifier of the resource acted upon.
-        outcome: Result of the action (``success``, ``failure``, ``denied``).
+        outcome: Result of the action (``success``, ``failure``, ``denied``, ``error``).
         prev_hash: SHA-256 hex digest of the previous event (or genesis sentinel).
-        hash: SHA-256 hex digest covering all fields above.
+        hash: SHA-256 hex digest covering all core fields above.
         parent_anchor_id: Link to triggering action for causal chains.
         duration_ms: Execution duration in milliseconds.
         metadata: Arbitrary additional context.
+        event_type: High-level event category (see ``AuditEventType``).
+        severity: Severity level string (e.g. ``"low"``, ``"high"``, ``"critical"``).
+        description: Human-readable event description.
+        user_id: Authenticated user identifier (enterprise audit).
+        tenant_id: Multi-tenant isolation key.
+        resource_id: Structured resource identifier (distinct from ``resource``).
+        ip_address: Source IP address of the actor.
+        user_agent: User-Agent string of the actor.
+        session_id: Session correlation ID.
+        correlation_id: Request/trace correlation ID.
+        trace_id: Distributed trace ID for correlation across services.
+        workflow_id: Workflow run identifier (runtime audit).
+        node_id: Node instance identifier (runtime audit).
+        agent_id: Agent identifier from delegation chain.
+        human_origin_id: Identifier of the human at the root of the delegation chain.
     """
 
     event_id: str
@@ -193,15 +272,39 @@ class AuditEvent:
     actor: str
     action: str
     resource: str
-    outcome: str  # "success", "failure", "denied"
+    outcome: str  # "success", "failure", "denied", "error"
     prev_hash: str
     hash: str
     parent_anchor_id: Optional[str] = None
     duration_ms: Optional[float] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    # --- Extended domain fields (do NOT participate in the Merkle hash) ----
+    # These were previously scattered across 4 separate ``AuditEvent``
+    # dataclasses (siem, nodes/admin, runtime/trust, immutable_audit_log).
+    # SPEC-08 folds them into the canonical type as optional attributes.
+    event_type: Optional[str] = None
+    severity: Optional[str] = None
+    description: Optional[str] = None
+    user_id: Optional[str] = None
+    tenant_id: Optional[str] = None
+    resource_id: Optional[str] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    session_id: Optional[str] = None
+    correlation_id: Optional[str] = None
+    trace_id: Optional[str] = None
+    workflow_id: Optional[str] = None
+    node_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    human_origin_id: Optional[str] = None
+
     def to_dict(self) -> Dict[str, Any]:
-        """Serialize to a plain dictionary."""
+        """Serialize to a plain dictionary.
+
+        All extended fields are included; ``None`` values are preserved so
+        round-trips are lossless.
+        """
         return {
             "event_id": self.event_id,
             "timestamp": self.timestamp,
@@ -214,11 +317,30 @@ class AuditEvent:
             "parent_anchor_id": self.parent_anchor_id,
             "duration_ms": self.duration_ms,
             "metadata": dict(self.metadata),
+            "event_type": self.event_type,
+            "severity": self.severity,
+            "description": self.description,
+            "user_id": self.user_id,
+            "tenant_id": self.tenant_id,
+            "resource_id": self.resource_id,
+            "ip_address": self.ip_address,
+            "user_agent": self.user_agent,
+            "session_id": self.session_id,
+            "correlation_id": self.correlation_id,
+            "trace_id": self.trace_id,
+            "workflow_id": self.workflow_id,
+            "node_id": self.node_id,
+            "agent_id": self.agent_id,
+            "human_origin_id": self.human_origin_id,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> AuditEvent:
-        """Deserialize from a plain dictionary."""
+        """Deserialize from a plain dictionary.
+
+        Unknown extra keys are ignored.  Missing optional keys default to
+        ``None`` or the field default.
+        """
         return cls(
             event_id=str(data["event_id"]),
             timestamp=str(data["timestamp"]),
@@ -231,12 +353,30 @@ class AuditEvent:
             parent_anchor_id=data.get("parent_anchor_id"),
             duration_ms=data.get("duration_ms"),
             metadata=dict(data.get("metadata") or {}),
+            event_type=data.get("event_type"),
+            severity=data.get("severity"),
+            description=data.get("description"),
+            user_id=data.get("user_id"),
+            tenant_id=data.get("tenant_id"),
+            resource_id=data.get("resource_id"),
+            ip_address=data.get("ip_address"),
+            user_agent=data.get("user_agent"),
+            session_id=data.get("session_id"),
+            correlation_id=data.get("correlation_id"),
+            trace_id=data.get("trace_id"),
+            workflow_id=data.get("workflow_id"),
+            node_id=data.get("node_id"),
+            agent_id=data.get("agent_id"),
+            human_origin_id=data.get("human_origin_id"),
         )
 
     def verify_integrity(self) -> bool:
         """Verify this event's hash matches its content.
 
         Uses ``hmac.compare_digest`` to prevent timing side-channels.
+        Only the core Merkle-chained fields participate in the hash;
+        extended domain fields are excluded so pre-SPEC-08 chains remain
+        verifiable after migration.
 
         Returns:
             True if the hash is valid.
@@ -1147,6 +1287,8 @@ class AuditStore(ABC):
 __all__ = [
     # SPEC-08 canonical types
     "AuditEvent",
+    "AuditEventType",
+    "AuditOutcome",
     "AuditFilter",
     "AuditStoreProtocol",
     "InMemoryAuditStore",

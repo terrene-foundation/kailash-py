@@ -149,7 +149,7 @@ class TestResultMapping:
         )
 
         # Result should be "success"
-        assert event.result == "success"
+        assert event.outcome == "success"
 
     @pytest.mark.asyncio
     async def test_failure_result_mapping(self):
@@ -167,7 +167,7 @@ class TestResultMapping:
         )
 
         # Result should be "failure"
-        assert event.result == "failure"
+        assert event.outcome == "failure"
 
     @pytest.mark.asyncio
     async def test_denied_result_mapping(self):
@@ -186,7 +186,7 @@ class TestResultMapping:
         )
 
         # Result should be "denied"
-        assert event.result == "denied"
+        assert event.outcome == "denied"
 
 
 class TestAnchorDictFormat:

@@ -18,7 +18,7 @@ from kailash.trust.export.compliance import (
     generate_soc2_evidence,
 )
 from kailash.trust.export.siem import (
-    AuditEvent,
+    AuditOperationEvent,
     DelegateEvent,
     EstablishEvent,
     SIEMEvent,
@@ -34,7 +34,7 @@ __all__ = [
     "EstablishEvent",
     "DelegateEvent",
     "VerifyEvent",
-    "AuditEvent",
+    "AuditOperationEvent",
     "serialize_cef",
     "serialize_ocsf",
     "from_audit_anchor",

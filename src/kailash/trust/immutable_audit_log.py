@@ -15,6 +15,13 @@ Key design principles:
 - THREAD-SAFE: All mutations are protected by a threading.Lock.
 - CONSTANT-TIME COMPARISON: Hash comparisons use ``hmac.compare_digest``.
 
+SPEC-08 consolidation (2026-04): ``AuditEventType`` and ``AuditOutcome`` are
+re-exported from the canonical ``kailash.trust.audit_store`` module.  The
+``AuditEntry`` dataclass remains local -- it is a pre-SPEC-08 internal type
+specific to the ``ImmutableAuditLog`` deque, with a sequence-number-based
+structure distinct from the canonical ``AuditEvent`` (which uses
+parent-anchor-id based causal chains).
+
 Cross-SDK alignment: esperie-enterprise/kailash-rs#83
 """
 
@@ -28,8 +35,10 @@ import threading
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Any, Deque, Dict, List, Optional
+
+# SPEC-08: AuditEventType and AuditOutcome live in the canonical audit store.
+from kailash.trust.audit_store import AuditEventType, AuditOutcome
 
 logger = logging.getLogger(__name__)
 
@@ -47,32 +56,6 @@ _GENESIS_HASH = "0" * 64
 # ---------------------------------------------------------------------------
 # Data types
 # ---------------------------------------------------------------------------
-
-
-class AuditEventType(str, Enum):
-    """Well-known audit event types."""
-
-    ACTION_EXECUTED = "action_executed"
-    ACTION_DENIED = "action_denied"
-    DELEGATION_CREATED = "delegation_created"
-    DELEGATION_REVOKED = "delegation_revoked"
-    TRUST_ESTABLISHED = "trust_established"
-    TRUST_REVOKED = "trust_revoked"
-    POLICY_CHANGED = "policy_changed"
-    ACCESS_GRANTED = "access_granted"
-    ACCESS_DENIED = "access_denied"
-    CONSTRAINT_VIOLATED = "constraint_violated"
-    SYSTEM_EVENT = "system_event"
-    CUSTOM = "custom"
-
-
-class AuditOutcome(str, Enum):
-    """Outcome of an audited action."""
-
-    SUCCESS = "success"
-    FAILURE = "failure"
-    DENIED = "denied"
-    ERROR = "error"
 
 
 @dataclass(frozen=True)

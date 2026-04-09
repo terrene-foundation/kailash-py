@@ -11,6 +11,11 @@ Design Principles:
     - All methods async for consistency with trust verification flow
     - Events stored in-memory with optional persistence to Kaizen AuditStore
 
+SPEC-08 consolidation (2026-04): ``AuditEvent`` and ``AuditEventType`` are
+re-exported from the canonical single source of truth at
+``kailash.trust.audit_store``.  This module owns only the workflow-lifecycle
+audit GENERATOR; the event types themselves live in the trust plane.
+
 Usage:
     from kailash.runtime.trust.audit import (
         AuditEventType,
@@ -42,46 +47,26 @@ Version:
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import threading
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from uuid import uuid4
+
+# SPEC-08: canonical AuditEvent lives in kailash.trust.audit_store.
+# We re-export AuditEvent and AuditEventType here for backward compatibility
+# with existing imports from ``kailash.runtime.trust.audit``.
+from kailash.trust.audit_store import AuditEvent, AuditEventType
 
 if TYPE_CHECKING:
     from kailash.runtime.trust.context import RuntimeTrustContext
 
 logger = logging.getLogger(__name__)
 
-
-class AuditEventType(Enum):
-    """Audit event types for workflow execution tracking.
-
-    Types:
-        WORKFLOW_START: Workflow execution has begun
-        WORKFLOW_END: Workflow execution completed successfully
-        WORKFLOW_ERROR: Workflow execution failed with error
-        NODE_START: Node execution has begun
-        NODE_END: Node execution completed successfully
-        NODE_ERROR: Node execution failed with error
-        TRUST_VERIFICATION: Trust verification was performed (and passed)
-        TRUST_DENIED: Trust verification denied the operation
-        RESOURCE_ACCESS: Resource access was performed
-        DELEGATION_USED: Delegation chain was extended/used
-    """
-
-    WORKFLOW_START = "workflow_start"
-    WORKFLOW_END = "workflow_end"
-    WORKFLOW_ERROR = "workflow_error"
-    NODE_START = "node_start"
-    NODE_END = "node_end"
-    NODE_ERROR = "node_error"
-    TRUST_VERIFICATION = "trust_verification"
-    TRUST_DENIED = "trust_denied"
-    RESOURCE_ACCESS = "resource_access"
-    DELEGATION_USED = "delegation_used"
+_GENESIS_HASH = "0" * 64
+"""Sentinel previous-hash for generator-built events that are not part of a chain."""
 
 
 def _generate_event_id() -> str:
@@ -95,81 +80,78 @@ def _generate_event_id() -> str:
     return f"evt-{uuid4().hex[:12]}"
 
 
-def _get_utc_now() -> datetime:
-    """Get current UTC datetime.
+def _get_utc_now_iso() -> str:
+    """Get current UTC datetime as ISO-8601 string.
 
-    Returns:
-        Current datetime with UTC timezone
+    The canonical ``AuditEvent.timestamp`` is a string for deterministic
+    hashing across platforms.
     """
-    return datetime.now(UTC)
+    return datetime.now(UTC).isoformat()
 
 
-@dataclass
-class AuditEvent:
-    """Audit event for workflow execution tracking.
+def _build_runtime_event(
+    *,
+    event_id: str,
+    event_type: AuditEventType,
+    timestamp: str,
+    trace_id: str,
+    result: str,
+    workflow_id: Optional[str] = None,
+    node_id: Optional[str] = None,
+    agent_id: Optional[str] = None,
+    human_origin_id: Optional[str] = None,
+    action: Optional[str] = None,
+    resource: Optional[str] = None,
+    context: Optional[Dict[str, Any]] = None,
+) -> AuditEvent:
+    """Build a canonical ``AuditEvent`` for runtime workflow audit.
 
-    Represents a single audit event in the execution trail, capturing
-    information about workflow, node, or trust operations.
-
-    Attributes:
-        event_id: Unique event identifier (format: evt-{12 hex chars})
-        event_type: Type of audit event
-        timestamp: When the event occurred (UTC)
-        trace_id: Trace ID from RuntimeTrustContext for correlation
-        workflow_id: ID of the workflow (optional)
-        node_id: ID of the node (optional)
-        agent_id: ID of the agent from delegation chain (optional)
-        human_origin_id: ID of the human origin (optional)
-        action: Description of the action performed (optional)
-        resource: Resource being accessed (optional)
-        result: Result of the operation ("success", "failure", "denied")
-        context: Additional context data
-
-    Example:
-        >>> event = AuditEvent(
-        ...     event_id="evt-abc123def456",
-        ...     event_type=AuditEventType.WORKFLOW_START,
-        ...     timestamp=datetime.now(UTC),
-        ...     trace_id="trace-123",
-        ...     result="success",
-        ... )
+    Generator-built events are standalone observation records, NOT part
+    of a Merkle chain — ``prev_hash`` is the genesis sentinel and ``hash``
+    is a deterministic digest of the non-chain fields.  The trust-plane
+    ``InMemoryAuditStore`` / ``SqliteAuditStore`` maintain the real chain
+    when these events are persisted.
     """
+    meta = dict(context) if context else {}
+    # The canonical AuditEvent expects ``actor`` and ``action`` as strings
+    # and ``outcome`` to distinguish success/failure/denied.  We map
+    # workflow-runtime semantics onto those fields.
+    actor = agent_id or human_origin_id or "runtime"
+    action_str = action or event_type.value
+    resource_str = resource or ""
 
-    event_id: str
-    event_type: AuditEventType
-    timestamp: datetime
-    trace_id: str
-    result: str
-    workflow_id: Optional[str] = None
-    node_id: Optional[str] = None
-    agent_id: Optional[str] = None
-    human_origin_id: Optional[str] = None
-    action: Optional[str] = None
-    resource: Optional[str] = None
-    context: Dict[str, Any] = field(default_factory=dict)
+    payload = {
+        "event_id": event_id,
+        "timestamp": timestamp,
+        "actor": actor,
+        "action": action_str,
+        "resource": resource_str,
+        "outcome": result,
+        "prev_hash": _GENESIS_HASH,
+        "parent_anchor_id": None,
+        "duration_ms": None,
+        "metadata": meta,
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    event_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Serialize event to dictionary.
-
-        Handles datetime conversion to ISO format string.
-
-        Returns:
-            Dictionary representation of the event
-        """
-        return {
-            "event_id": self.event_id,
-            "event_type": self.event_type.value,
-            "timestamp": self.timestamp.isoformat(),
-            "trace_id": self.trace_id,
-            "workflow_id": self.workflow_id,
-            "node_id": self.node_id,
-            "agent_id": self.agent_id,
-            "human_origin_id": self.human_origin_id,
-            "action": self.action,
-            "resource": self.resource,
-            "result": self.result,
-            "context": self.context,
-        }
+    return AuditEvent(
+        event_id=event_id,
+        timestamp=timestamp,
+        actor=actor,
+        action=action_str,
+        resource=resource_str,
+        outcome=result,
+        prev_hash=_GENESIS_HASH,
+        hash=event_hash,
+        metadata=meta,
+        event_type=event_type.value,
+        trace_id=trace_id,
+        workflow_id=workflow_id,
+        node_id=node_id,
+        agent_id=agent_id,
+        human_origin_id=human_origin_id,
+    )
 
 
 class RuntimeAuditGenerator:
@@ -271,9 +253,9 @@ class RuntimeAuditGenerator:
             if self._log_to_stdout:
                 logger.info(
                     "AUDIT: %s trace=%s result=%s",
-                    event.event_type.value,
+                    event.event_type or "unknown",
                     event.trace_id,
-                    event.result,
+                    event.outcome,
                 )
 
             # Persist to Kaizen store if available
@@ -305,11 +287,11 @@ class RuntimeAuditGenerator:
             anchor_dict = {
                 "id": event.event_id,
                 "agent_id": event.agent_id or "unknown",
-                "action": event.action or event.event_type.value,
-                "timestamp": event.timestamp.isoformat(),
-                "result": event.result,
+                "action": event.action or event.event_type or "unknown",
+                "timestamp": event.timestamp,
+                "result": event.outcome,
                 "resource": event.resource,
-                "context": event.context,
+                "context": dict(event.metadata),
                 "trace_id": event.trace_id,
                 "human_origin_id": event.human_origin_id,
             }
@@ -336,10 +318,10 @@ class RuntimeAuditGenerator:
         Returns:
             The created AuditEvent
         """
-        event = AuditEvent(
+        event = _build_runtime_event(
             event_id=_generate_event_id(),
             event_type=AuditEventType.WORKFLOW_START,
-            timestamp=_get_utc_now(),
+            timestamp=_get_utc_now_iso(),
             trace_id=trust_context.trace_id if trust_context else run_id,
             workflow_id=run_id,
             agent_id=self._extract_agent_id(trust_context),
@@ -370,10 +352,10 @@ class RuntimeAuditGenerator:
         Returns:
             The created AuditEvent
         """
-        event = AuditEvent(
+        event = _build_runtime_event(
             event_id=_generate_event_id(),
             event_type=AuditEventType.WORKFLOW_END,
-            timestamp=_get_utc_now(),
+            timestamp=_get_utc_now_iso(),
             trace_id=trust_context.trace_id if trust_context else run_id,
             workflow_id=run_id,
             agent_id=self._extract_agent_id(trust_context),
@@ -406,10 +388,10 @@ class RuntimeAuditGenerator:
         Returns:
             The created AuditEvent
         """
-        event = AuditEvent(
+        event = _build_runtime_event(
             event_id=_generate_event_id(),
             event_type=AuditEventType.WORKFLOW_ERROR,
-            timestamp=_get_utc_now(),
+            timestamp=_get_utc_now_iso(),
             trace_id=trust_context.trace_id if trust_context else run_id,
             workflow_id=run_id,
             agent_id=self._extract_agent_id(trust_context),
@@ -444,10 +426,10 @@ class RuntimeAuditGenerator:
         Returns:
             The created AuditEvent
         """
-        event = AuditEvent(
+        event = _build_runtime_event(
             event_id=_generate_event_id(),
             event_type=AuditEventType.NODE_END,
-            timestamp=_get_utc_now(),
+            timestamp=_get_utc_now_iso(),
             trace_id=trust_context.trace_id if trust_context else run_id,
             workflow_id=run_id,
             node_id=node_id,
@@ -485,10 +467,10 @@ class RuntimeAuditGenerator:
         Returns:
             The created AuditEvent
         """
-        event = AuditEvent(
+        event = _build_runtime_event(
             event_id=_generate_event_id(),
             event_type=AuditEventType.NODE_ERROR,
-            timestamp=_get_utc_now(),
+            timestamp=_get_utc_now_iso(),
             trace_id=trust_context.trace_id if trust_context else run_id,
             workflow_id=run_id,
             node_id=node_id,
@@ -535,10 +517,10 @@ class RuntimeAuditGenerator:
         )
         result = "success" if allowed else "denied"
 
-        event = AuditEvent(
+        event = _build_runtime_event(
             event_id=_generate_event_id(),
             event_type=event_type,
-            timestamp=_get_utc_now(),
+            timestamp=_get_utc_now_iso(),
             trace_id=trust_context.trace_id if trust_context else run_id,
             workflow_id=run_id,
             agent_id=self._extract_agent_id(trust_context),
@@ -573,10 +555,10 @@ class RuntimeAuditGenerator:
         Returns:
             The created AuditEvent
         """
-        event = AuditEvent(
+        event = _build_runtime_event(
             event_id=_generate_event_id(),
             event_type=AuditEventType.RESOURCE_ACCESS,
-            timestamp=_get_utc_now(),
+            timestamp=_get_utc_now_iso(),
             trace_id=trust_context.trace_id if trust_context else run_id,
             workflow_id=run_id,
             agent_id=self._extract_agent_id(trust_context),
@@ -612,8 +594,11 @@ class RuntimeAuditGenerator:
             List of matching AuditEvents
         """
         # ROUND7-002: Thread-safe event access
+        # Canonical AuditEvent stores event_type as a string (.value),
+        # so compare against the enum's string value.
+        type_value = event_type.value
         with self._lock:
-            return [e for e in self._events if e.event_type == event_type]
+            return [e for e in self._events if e.event_type == type_value]
 
     def get_events_by_trace(self, trace_id: str) -> List[AuditEvent]:
         """Get events filtered by trace ID.

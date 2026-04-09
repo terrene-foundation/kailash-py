@@ -13,10 +13,6 @@ Tests for the optimized SQLiteStorage implementation with:
 import json
 import os
 import sqlite3
-
-import pytest
-
-
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -265,24 +261,35 @@ class TestAuditEvents:
     """Test audit event persistence."""
 
     def test_sqlite_storage_audit_events(self, sqlite_storage):
-        """Persist and query AuditEvent."""
+        """Persist and query AuditEvent (SPEC-08 canonical shape)."""
+        now_iso = datetime.now(UTC).isoformat()
         events = [
             AuditEvent(
                 event_id="evt-1",
-                event_type=AuditEventType.WORKFLOW_START,
-                timestamp=datetime.now(UTC),
+                timestamp=now_iso,
+                actor="agent-1",
+                action="workflow_started",
+                resource="",
+                outcome="success",
+                prev_hash="0" * 64,
+                hash="a" * 64,
+                event_type=AuditEventType.WORKFLOW_START.value,
                 trace_id="trace-1",
                 workflow_id="run-1",
-                result="success",
             ),
             AuditEvent(
                 event_id="evt-2",
-                event_type=AuditEventType.NODE_END,
-                timestamp=datetime.now(UTC),
+                timestamp=now_iso,
+                actor="agent-1",
+                action="node_executed",
+                resource="",
+                outcome="success",
+                prev_hash="0" * 64,
+                hash="b" * 64,
+                event_type=AuditEventType.NODE_END.value,
                 trace_id="trace-1",
                 workflow_id="run-1",
                 node_id="node-1",
-                result="success",
             ),
         ]
 
@@ -299,8 +306,8 @@ class TestAuditEvents:
         assert len(found) == 1
         assert found[0]["event_id"] == "evt-1"
 
-        # Query by result
-        found = sqlite_storage.query_audit_events(result="success")
+        # Query by canonical outcome (legacy "result" kwarg still works)
+        found = sqlite_storage.query_audit_events(outcome="success")
         assert len(found) == 2
 
     def test_sqlite_storage_audit_events_dict_format(self, sqlite_storage):

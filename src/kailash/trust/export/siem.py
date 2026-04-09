@@ -12,10 +12,18 @@ Sentinel, QRadar, and CrowdStrike Falcon.
 Event hierarchy::
 
     SIEMEvent           -- base event for all EATP operations
-      +-- EstablishEvent  -- ESTABLISH operation (genesis, key binding)
-      +-- DelegateEvent   -- DELEGATE operation (trust transfer)
-      +-- VerifyEvent     -- VERIFY operation (chain validation)
-      +-- AuditEvent      -- AUDIT operation (action recording)
+      +-- EstablishEvent       -- ESTABLISH operation (genesis, key binding)
+      +-- DelegateEvent        -- DELEGATE operation (trust transfer)
+      +-- VerifyEvent          -- VERIFY operation (chain validation)
+      +-- AuditOperationEvent  -- AUDIT operation (action recording)
+
+SPEC-08 (2026-04): the subclass representing the AUDIT SIEM operation was
+previously named ``AuditEvent``, which collided with the canonical
+``kailash.trust.audit_store.AuditEvent`` single-source-of-truth type.  It
+is now ``AuditOperationEvent`` -- a SIEM-specific DTO used only for CEF/OCSF
+serialization of EATP AUDIT operations.  Consumers wanting the generic
+audit record type should import ``AuditEvent`` from
+``kailash.trust.audit_store``.
 
 Serializers:
 
@@ -24,7 +32,7 @@ Serializers:
 
 Factory:
 
-    from_audit_anchor(anchor, authority_id) -> AuditEvent
+    from_audit_anchor(anchor, authority_id) -> AuditOperationEvent
 """
 
 from __future__ import annotations
@@ -176,8 +184,12 @@ class VerifyEvent(SIEMEvent):
 
 
 @dataclass
-class AuditEvent(SIEMEvent):
+class AuditOperationEvent(SIEMEvent):
     """SIEM event for AUDIT operations.
+
+    Represents an EATP AUDIT operation for SIEM export -- NOT a
+    general-purpose audit record.  For that, import ``AuditEvent`` from
+    ``kailash.trust.audit_store`` (SPEC-08 canonical single source of truth).
 
     Attributes:
         action: The action that was audited.
@@ -290,7 +302,7 @@ def _build_cef_extensions(event: SIEMEvent) -> str:
             _add("cs2", event.action_verified)
             _add("cs2Label", "actionVerified")
 
-    elif isinstance(event, AuditEvent):
+    elif isinstance(event, AuditOperationEvent):
         if event.action is not None:
             _add("act", event.action)
         if event.resource is not None:
@@ -336,7 +348,9 @@ def serialize_cef(event: SIEMEvent) -> str:
         raise ValueError("Cannot serialize None event to CEF")
 
     sig_id = _escape_cef_header_value(event.operation)
-    name = _escape_cef_header_value(_CEF_EVENT_NAMES.get(event.operation, f"EATP {event.operation}"))
+    name = _escape_cef_header_value(
+        _CEF_EVENT_NAMES.get(event.operation, f"EATP {event.operation}")
+    )
     severity = str(event.severity)
     extensions = _build_cef_extensions(event)
 
@@ -390,7 +404,7 @@ def _build_ocsf_unmapped(event: SIEMEvent) -> Dict[str, Any]:
         if event.action_verified is not None:
             unmapped["action_verified"] = event.action_verified
 
-    elif isinstance(event, AuditEvent):
+    elif isinstance(event, AuditOperationEvent):
         if event.action is not None:
             unmapped["action"] = event.action
         if event.resource is not None:
@@ -488,10 +502,12 @@ def serialize_ocsf(event: SIEMEvent) -> Dict[str, Any]:
 # ============================================================================
 
 
-def from_audit_anchor(anchor: AuditAnchor, authority_id: Optional[str] = None) -> AuditEvent:
-    """Create an AuditEvent from an existing AuditAnchor.
+def from_audit_anchor(
+    anchor: AuditAnchor, authority_id: Optional[str] = None
+) -> AuditOperationEvent:
+    """Create an AuditOperationEvent from an existing AuditAnchor.
 
-    Maps AuditAnchor fields to AuditEvent fields, translating
+    Maps AuditAnchor fields to AuditOperationEvent fields, translating
     ActionResult enum values to SIEM-friendly strings and assigning
     severity based on the action result.
 
@@ -506,18 +522,20 @@ def from_audit_anchor(anchor: AuditAnchor, authority_id: Optional[str] = None) -
         authority_id: Optional authority ID to attach to the event.
 
     Returns:
-        An AuditEvent populated from the anchor's fields.
+        An AuditOperationEvent populated from the anchor's fields.
 
     Raises:
         ValueError: If anchor is None.
     """
     if anchor is None:
-        raise ValueError("Cannot create AuditEvent from None anchor. Provide a valid AuditAnchor instance.")
+        raise ValueError(
+            "Cannot create AuditOperationEvent from None anchor. Provide a valid AuditAnchor instance."
+        )
 
     result_str = anchor.result.value.upper()
     severity = _RESULT_SEVERITY.get(anchor.result.value, 3)
 
-    return AuditEvent(
+    return AuditOperationEvent(
         timestamp=anchor.timestamp,
         agent_id=anchor.agent_id,
         operation="AUDIT",
@@ -536,7 +554,7 @@ __all__ = [
     "EstablishEvent",
     "DelegateEvent",
     "VerifyEvent",
-    "AuditEvent",
+    "AuditOperationEvent",
     "serialize_cef",
     "serialize_ocsf",
     "from_audit_anchor",

@@ -1,20 +1,28 @@
-"""Unit tests for AuditEvent and AuditEventType (CARE-018).
+"""Unit tests for runtime.trust.audit AuditEvent integration (CARE-018, SPEC-08).
 
-Tests for AuditEventType enum and AuditEvent dataclass.
+Tests that the re-exported AuditEvent and AuditEventType from
+kailash.runtime.trust.audit point to the canonical types in
+kailash.trust.audit_store, and that the runtime audit generator
+produces correctly-shaped canonical AuditEvent instances.
+
 These are Tier 1 unit tests - fast, isolated, no external dependencies.
 """
 
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime
 
 import pytest
 
 
 class TestAuditEventTypeEnum:
-    """Test AuditEventType enum values."""
+    """Test AuditEventType enum values (canonical + runtime).
+
+    The canonical enum in kailash.trust.audit_store unions all domain
+    values.  The workflow-lifecycle subset originating in runtime.trust.audit
+    is still accessible via the same enum.
+    """
 
     def test_workflow_start_event_type(self):
         """Test WORKFLOW_START type has correct string value."""
@@ -76,12 +84,9 @@ class TestAuditEventTypeEnum:
 
         assert AuditEventType.DELEGATION_USED.value == "delegation_used"
 
-    def test_all_ten_event_types_defined(self):
-        """Test all 10 event types are defined."""
+    def test_workflow_lifecycle_event_types_present(self):
+        """Test all 10 workflow-lifecycle event types are accessible."""
         from kailash.runtime.trust.audit import AuditEventType
-
-        types = list(AuditEventType)
-        assert len(types) == 10
 
         expected = [
             "WORKFLOW_START",
@@ -95,147 +100,141 @@ class TestAuditEventTypeEnum:
             "RESOURCE_ACCESS",
             "DELEGATION_USED",
         ]
-        actual_names = [t.name for t in types]
+        actual_names = [t.name for t in AuditEventType]
         for expected_name in expected:
             assert expected_name in actual_names, f"Missing event type: {expected_name}"
 
+    def test_audit_event_type_is_canonical(self):
+        """SPEC-08: runtime.trust.audit re-exports the canonical enum."""
+        from kailash.runtime.trust.audit import AuditEventType as RuntimeAET
+        from kailash.trust.audit_store import AuditEventType as CanonicalAET
 
-class TestAuditEventCreation:
-    """Test AuditEvent dataclass creation and fields."""
+        assert RuntimeAET is CanonicalAET
 
-    def test_audit_event_creation_all_fields(self):
-        """Test all fields set correctly on creation."""
-        from kailash.runtime.trust.audit import AuditEvent, AuditEventType
 
-        timestamp = datetime.now(UTC)
+class TestAuditEventCanonicalShape:
+    """Test AuditEvent dataclass has the canonical SPEC-08 shape."""
+
+    def test_audit_event_is_canonical(self):
+        """SPEC-08: runtime.trust.audit re-exports the canonical dataclass."""
+        from kailash.runtime.trust.audit import AuditEvent as RuntimeAE
+        from kailash.trust.audit_store import AuditEvent as CanonicalAE
+
+        assert RuntimeAE is CanonicalAE
+
+    def test_audit_event_creation_core_fields(self):
+        """Test core hash-chained fields are required."""
+        from kailash.runtime.trust.audit import AuditEvent
+
         event = AuditEvent(
             event_id="evt-abc123def456",
-            event_type=AuditEventType.WORKFLOW_START,
-            timestamp=timestamp,
-            trace_id="trace-123",
-            workflow_id="wf-456",
-            node_id="node-1",
-            agent_id="agent-789",
-            human_origin_id="human-001",
+            timestamp="2026-04-09T12:00:00+00:00",
+            actor="agent-789",
             action="execute_workflow",
             resource="/data/file.txt",
-            result="success",
-            context={"key": "value"},
+            outcome="success",
+            prev_hash="0" * 64,
+            hash="deadbeef" * 8,
         )
 
         assert event.event_id == "evt-abc123def456"
-        assert event.event_type == AuditEventType.WORKFLOW_START
-        assert event.timestamp == timestamp
-        assert event.trace_id == "trace-123"
-        assert event.workflow_id == "wf-456"
-        assert event.node_id == "node-1"
-        assert event.agent_id == "agent-789"
-        assert event.human_origin_id == "human-001"
+        assert event.timestamp == "2026-04-09T12:00:00+00:00"
+        assert event.actor == "agent-789"
         assert event.action == "execute_workflow"
         assert event.resource == "/data/file.txt"
-        assert event.result == "success"
-        assert event.context == {"key": "value"}
+        assert event.outcome == "success"
+        assert event.prev_hash == "0" * 64
+        assert event.hash == "deadbeef" * 8
 
-    def test_audit_event_defaults(self):
-        """Test default values for optional fields."""
-        from kailash.runtime.trust.audit import AuditEvent, AuditEventType
+    def test_audit_event_extended_fields_optional(self):
+        """Test extended domain fields default to None."""
+        from kailash.runtime.trust.audit import AuditEvent
 
-        timestamp = datetime.now(UTC)
         event = AuditEvent(
             event_id="evt-test123456",
-            event_type=AuditEventType.NODE_END,
-            timestamp=timestamp,
-            trace_id="trace-default",
-            result="success",
+            timestamp="2026-04-09T12:00:00+00:00",
+            actor="runtime",
+            action="node_end",
+            resource="",
+            outcome="success",
+            prev_hash="0" * 64,
+            hash="abc",
         )
 
-        assert event.event_id == "evt-test123456"
-        assert event.event_type == AuditEventType.NODE_END
-        assert event.timestamp == timestamp
-        assert event.trace_id == "trace-default"
-        assert event.result == "success"
-
-        # Optional fields should have None or empty defaults
+        # Extended fields default to None / empty
+        assert event.event_type is None
+        assert event.trace_id is None
         assert event.workflow_id is None
         assert event.node_id is None
         assert event.agent_id is None
         assert event.human_origin_id is None
-        assert event.action is None
-        assert event.resource is None
-        assert event.context == {}
+        assert event.severity is None
+        assert event.metadata == {}
 
 
-class TestAuditEventIdFormat:
-    """Test AuditEvent ID format requirements."""
+class TestRuntimeEventBuilder:
+    """Test the runtime _build_runtime_event helper produces canonical events."""
 
-    def test_audit_event_id_format_starts_with_evt(self):
-        """Test event ID starts with 'evt-'."""
-        from kailash.runtime.trust.audit import AuditEvent, AuditEventType
-
-        event = AuditEvent(
-            event_id="evt-abc123def456",
-            event_type=AuditEventType.WORKFLOW_START,
-            timestamp=datetime.now(UTC),
-            trace_id="trace-1",
-            result="success",
+    def test_build_runtime_event_sets_event_type_string(self):
+        """Runtime builder stores event_type as enum .value string."""
+        from kailash.runtime.trust.audit import (
+            AuditEventType,
+            _build_runtime_event,
+            _generate_event_id,
+            _get_utc_now_iso,
         )
 
-        assert event.event_id.startswith("evt-")
-
-    def test_audit_event_id_format_has_12_hex_chars(self):
-        """Test event ID has 12 hex characters after 'evt-'."""
-        from kailash.runtime.trust.audit import AuditEvent, AuditEventType
-
-        # Valid format: evt-{12 hex chars}
-        event = AuditEvent(
-            event_id="evt-a1b2c3d4e5f6",
+        event = _build_runtime_event(
+            event_id=_generate_event_id(),
             event_type=AuditEventType.WORKFLOW_START,
-            timestamp=datetime.now(UTC),
-            trace_id="trace-1",
+            timestamp=_get_utc_now_iso(),
+            trace_id="trace-123",
+            workflow_id="wf-1",
+            agent_id="agent-1",
+            action="workflow_started",
             result="success",
+            context={"workflow_name": "test"},
         )
 
-        # Extract the hex portion
-        hex_portion = event.event_id[4:]  # After "evt-"
+        # event_type is a string on the canonical AuditEvent
+        assert event.event_type == "workflow_start"
+        # outcome is the canonical name (maps from runtime "result")
+        assert event.outcome == "success"
+        # workflow-runtime fields flow through
+        assert event.trace_id == "trace-123"
+        assert event.workflow_id == "wf-1"
+        assert event.agent_id == "agent-1"
+        # metadata carries the runtime "context" dict
+        assert event.metadata == {"workflow_name": "test"}
+
+    def test_build_runtime_event_id_format(self):
+        """Event ID format: evt-{12 hex chars}."""
+        from kailash.runtime.trust.audit import _generate_event_id
+
+        event_id = _generate_event_id()
+        assert event_id.startswith("evt-")
+        hex_portion = event_id[4:]
         assert len(hex_portion) == 12
+        assert re.match(r"^[0-9a-f]{12}$", hex_portion)
 
-        # Verify it's valid hex
-        pattern = re.compile(r"^[0-9a-f]{12}$")
-        assert pattern.match(hex_portion), f"Expected 12 hex chars, got: {hex_portion}"
+    def test_build_runtime_event_timestamp_is_iso_string(self):
+        """Canonical timestamp is an ISO-8601 string, not datetime."""
+        from kailash.runtime.trust.audit import _get_utc_now_iso
 
+        ts = _get_utc_now_iso()
+        assert isinstance(ts, str)
+        # Must be parseable back to a UTC datetime
+        parsed = datetime.fromisoformat(ts)
+        assert parsed.tzinfo is not None
 
-class TestAuditEventTimestamp:
-    """Test AuditEvent timestamp requirements."""
+    def test_build_runtime_event_to_dict_includes_extended_fields(self):
+        """Canonical to_dict includes the runtime extended fields."""
+        from kailash.runtime.trust.audit import AuditEventType, _build_runtime_event
 
-    def test_audit_event_timestamp_utc(self):
-        """Test timestamp is UTC."""
-        from kailash.runtime.trust.audit import AuditEvent, AuditEventType
-
-        utc_timestamp = datetime.now(UTC)
-        event = AuditEvent(
-            event_id="evt-123456789abc",
-            event_type=AuditEventType.WORKFLOW_START,
-            timestamp=utc_timestamp,
-            trace_id="trace-1",
-            result="success",
-        )
-
-        assert event.timestamp.tzinfo is not None
-        assert event.timestamp.tzinfo == UTC
-
-
-class TestAuditEventSerialization:
-    """Test AuditEvent to_dict serialization."""
-
-    def test_audit_event_to_dict(self):
-        """Test serialization works including datetime iso."""
-        from kailash.runtime.trust.audit import AuditEvent, AuditEventType
-
-        timestamp = datetime(2024, 1, 15, 12, 30, 45, tzinfo=UTC)
-        event = AuditEvent(
+        event = _build_runtime_event(
             event_id="evt-abc123def456",
             event_type=AuditEventType.WORKFLOW_END,
-            timestamp=timestamp,
+            timestamp="2024-01-15T12:30:45+00:00",
             trace_id="trace-serialize",
             workflow_id="wf-1",
             node_id="node-1",
@@ -259,70 +258,24 @@ class TestAuditEventSerialization:
         assert data["human_origin_id"] == "human-1"
         assert data["action"] == "execute"
         assert data["resource"] == "/path/resource"
-        assert data["result"] == "success"
-        assert data["context"] == {"duration_ms": 1500}
+        assert data["outcome"] == "success"
+        assert data["metadata"] == {"duration_ms": 1500}
 
-    def test_audit_event_to_dict_with_none_values(self):
-        """Test serialization handles None values correctly."""
-        from kailash.runtime.trust.audit import AuditEvent, AuditEventType
+    def test_build_runtime_event_outcomes(self):
+        """Test different outcome values propagate correctly."""
+        from kailash.runtime.trust.audit import AuditEventType, _build_runtime_event
 
-        timestamp = datetime.now(UTC)
-        event = AuditEvent(
-            event_id="evt-minimal12345",
-            event_type=AuditEventType.NODE_START,
-            timestamp=timestamp,
-            trace_id="trace-minimal",
-            result="success",
-        )
-
-        data = event.to_dict()
-
-        assert data["event_id"] == "evt-minimal12345"
-        assert data["event_type"] == "node_start"
-        assert data["trace_id"] == "trace-minimal"
-        assert data["result"] == "success"
-
-        # Optional fields should be None
-        assert data["workflow_id"] is None
-        assert data["node_id"] is None
-        assert data["agent_id"] is None
-        assert data["human_origin_id"] is None
-        assert data["action"] is None
-        assert data["resource"] is None
-        assert data["context"] == {}
-
-    def test_audit_event_to_dict_result_values(self):
-        """Test serialization with different result values."""
-        from kailash.runtime.trust.audit import AuditEvent, AuditEventType
-
-        timestamp = datetime.now(UTC)
-
-        # Test success result
-        success_event = AuditEvent(
-            event_id="evt-success12345",
-            event_type=AuditEventType.NODE_END,
-            timestamp=timestamp,
-            trace_id="trace-1",
-            result="success",
-        )
-        assert success_event.to_dict()["result"] == "success"
-
-        # Test failure result
-        failure_event = AuditEvent(
-            event_id="evt-failure12345",
-            event_type=AuditEventType.NODE_ERROR,
-            timestamp=timestamp,
-            trace_id="trace-1",
-            result="failure",
-        )
-        assert failure_event.to_dict()["result"] == "failure"
-
-        # Test denied result
-        denied_event = AuditEvent(
-            event_id="evt-denied123456",
-            event_type=AuditEventType.TRUST_DENIED,
-            timestamp=timestamp,
-            trace_id="trace-1",
-            result="denied",
-        )
-        assert denied_event.to_dict()["result"] == "denied"
+        for outcome_str, event_type in [
+            ("success", AuditEventType.NODE_END),
+            ("failure", AuditEventType.NODE_ERROR),
+            ("denied", AuditEventType.TRUST_DENIED),
+        ]:
+            event = _build_runtime_event(
+                event_id=f"evt-{outcome_str:12}"[:16],
+                event_type=event_type,
+                timestamp="2026-04-09T12:00:00+00:00",
+                trace_id="trace-1",
+                result=outcome_str,
+            )
+            assert event.outcome == outcome_str
+            assert event.to_dict()["outcome"] == outcome_str
