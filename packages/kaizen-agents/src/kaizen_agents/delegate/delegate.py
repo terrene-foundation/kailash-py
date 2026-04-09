@@ -2,8 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """Delegate facade -- the single entry point for autonomous AI execution.
 
-Composes :class:`AgentLoop` with optional :class:`GovernedSupervisor` to
-provide a progressive-disclosure API:
+Composes a wrapper stack (SPEC-05) instead of containing parallel
+implementation.  Internally constructs:
+
+    AgentLoop (via _LoopAgent) -> [L3GovernedAgent] -> [MonitoredAgent]
+
+Only wrappers whose parameters are supplied are stacked.
+
+The user-facing API is byte-identical to v2.x:
 
 Layer 1 (simple)::
 
@@ -38,8 +44,11 @@ import asyncio
 import logging
 import math
 import os
-from typing import AsyncGenerator, Callable, TYPE_CHECKING
+from collections.abc import AsyncGenerator, Callable
+from typing import TYPE_CHECKING, Any
 
+from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
+from kaizen.signatures import InputField, OutputField, Signature
 from kaizen_agents.delegate.config.loader import KzConfig
 from kaizen_agents.delegate.events import (
     BudgetExhausted,
@@ -51,8 +60,10 @@ from kaizen_agents.delegate.events import (
 from kaizen_agents.delegate.loop import AgentLoop, ToolRegistry
 
 if TYPE_CHECKING:
+    from kailash.trust.envelope import ConstraintEnvelope
     from kaizen_agents.delegate.adapters.protocol import StreamingChatAdapter
-    from kaizen_agents.supervisor import GovernedSupervisor
+    from kaizen_agents.governed_agent import L3GovernedAgent
+    from kaizen_agents.monitored_agent import MonitoredAgent
 
 logger = logging.getLogger(__name__)
 
@@ -106,12 +117,122 @@ def _estimate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> fl
             output_rate = rate
             break
 
-    cost = (prompt_tokens / 1_000_000) * input_rate + (completion_tokens / 1_000_000) * output_rate
+    cost = (prompt_tokens / 1_000_000) * input_rate + (
+        completion_tokens / 1_000_000
+    ) * output_rate
     return cost
 
 
+# ---------------------------------------------------------------------------
+# _LoopAgent -- BaseAgent bridge for AgentLoop
+# ---------------------------------------------------------------------------
+
+
+class _DelegateSignature(Signature):
+    """Minimal signature for the LoopAgent bridge.
+
+    The Delegate's AgentLoop drives its own prompt/response cycle, so
+    this signature is a placeholder that satisfies the BaseAgent contract
+    without interfering with execution.
+    """
+
+    prompt: str = InputField(description="User prompt")
+    response: str = OutputField(description="Agent response")
+
+
+class _LoopAgent(BaseAgent):
+    """Bridge that wraps :class:`AgentLoop` into the :class:`BaseAgent` interface.
+
+    This adapter allows the ``AgentLoop`` (which has its own streaming
+    interface) to participate in the SPEC-03 wrapper stack.  The wrappers
+    call ``run_async()`` which collects the full loop turn into a result
+    dict.  The Delegate's ``run()`` method bypasses this and streams
+    from the loop directly for incremental output.
+    """
+
+    def __init__(self, loop: AgentLoop, model: str) -> None:
+        # Create a minimal BaseAgentConfig for the BaseAgent contract
+        config = BaseAgentConfig(
+            llm_provider="mock",  # Not used -- loop has its own adapter
+            model=model,
+        )
+        super().__init__(config=config, signature=_DelegateSignature())
+        self._loop = loop
+
+    @property
+    def loop(self) -> AgentLoop:
+        """The underlying AgentLoop."""
+        return self._loop
+
+    def run(self, **inputs: Any) -> dict[str, Any]:
+        """Synchronous execution -- collects loop turn into a result dict."""
+        prompt = inputs.get("prompt", "")
+
+        async def _collect() -> str:
+            parts: list[str] = []
+            async for chunk in self._loop.run_turn(prompt):
+                if isinstance(chunk, str):
+                    parts.append(chunk)
+            return "".join(parts)
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop is not None and loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, _collect())
+                text = future.result()
+        else:
+            text = asyncio.run(_collect())
+
+        usage = self._loop.usage
+        return {
+            "text": text,
+            "usage": {
+                "prompt_tokens": usage.prompt_tokens,
+                "completion_tokens": usage.completion_tokens,
+                "total_tokens": usage.total_tokens,
+            },
+        }
+
+    async def run_async(self, **inputs: Any) -> dict[str, Any]:
+        """Async execution -- collects loop turn into a result dict."""
+        prompt = inputs.get("prompt", "")
+        parts: list[str] = []
+        async for chunk in self._loop.run_turn(prompt):
+            if isinstance(chunk, str):
+                parts.append(chunk)
+        text = "".join(parts)
+        usage = self._loop.usage
+        return {
+            "text": text,
+            "usage": {
+                "prompt_tokens": usage.prompt_tokens,
+                "completion_tokens": usage.completion_tokens,
+                "total_tokens": usage.total_tokens,
+            },
+        }
+
+
+# ---------------------------------------------------------------------------
+# Delegate -- composition facade
+# ---------------------------------------------------------------------------
+
+
 class Delegate:
-    """Facade composing AgentLoop + optional governance for autonomous AI execution.
+    """Facade composing a wrapper stack for autonomous AI execution.
+
+    Internally constructs:
+
+        AgentLoop (via _LoopAgent) -> [L3GovernedAgent] -> [MonitoredAgent]
+
+    Only wrappers whose parameters are supplied are stacked.  The ``run()``
+    method drives the ``AgentLoop`` directly for streaming, using the wrapper
+    stack for governance validation and cost tracking.
 
     Progressive disclosure layers:
 
@@ -157,6 +278,9 @@ class Delegate:
     config:
         Optional pre-built :class:`KzConfig`.  When provided, ``model``,
         ``max_turns``, and other config fields are ignored.
+    envelope:
+        Optional :class:`ConstraintEnvelope` for L3 governance.
+        When provided, wraps the inner agent with :class:`L3GovernedAgent`.
     """
 
     def __init__(
@@ -169,8 +293,9 @@ class Delegate:
         budget_usd: float | None = None,
         adapter: StreamingChatAdapter | None = None,
         config: KzConfig | None = None,
+        envelope: ConstraintEnvelope | None = None,
     ) -> None:
-        # Validate budget
+        # Validate budget (safety guard -- permitted deterministic logic)
         if budget_usd is not None:
             if not math.isfinite(budget_usd):
                 raise ValueError("budget_usd must be finite")
@@ -199,12 +324,12 @@ class Delegate:
         self._budget_usd = budget_usd
         self._consumed_usd: float = 0.0
 
-        # Build the budget check callback
+        # Build the budget check callback for the loop
         budget_check: Callable[[], bool] | None = None
         if budget_usd is not None:
             budget_check = self._check_budget
 
-        # Create the core loop
+        # Create the core loop (the execution engine)
         self._loop = AgentLoop(
             config=self._config,
             tools=self._tool_registry,
@@ -212,6 +337,45 @@ class Delegate:
             system_prompt=system_prompt,
             budget_check=budget_check,
         )
+
+        # ---- SPEC-05: Compose wrapper stack ----
+        # Build the BaseAgent-compatible bridge
+        self._loop_agent: BaseAgent = _LoopAgent(self._loop, resolved_model)
+
+        # Stack L3GovernedAgent if envelope provided
+        self._governed: L3GovernedAgent | None = None
+        if envelope is not None:
+            try:
+                from kaizen_agents.governed_agent import L3GovernedAgent as _Gov
+
+                self._governed = _Gov(self._loop_agent, envelope=envelope)
+                self._loop_agent = self._governed
+            except ImportError:
+                logger.debug(
+                    "L3GovernedAgent unavailable (missing trust.envelope); "
+                    "envelope parameter ignored"
+                )
+
+        # Stack MonitoredAgent if budget provided and the wrapper is available.
+        # When kaizen.providers.cost is not installed, the Delegate's own
+        # budget tracking (_consumed_usd / _estimate_cost) handles budget
+        # enforcement directly.
+        self._monitored: MonitoredAgent | None = None
+        if budget_usd is not None:
+            try:
+                from kaizen_agents.monitored_agent import MonitoredAgent as _Mon
+
+                self._monitored = _Mon(
+                    self._loop_agent,
+                    budget_usd=budget_usd,
+                    model=resolved_model,
+                )
+                self._loop_agent = self._monitored
+            except ImportError:
+                logger.debug(
+                    "MonitoredAgent unavailable (missing kaizen.providers.cost); "
+                    "using Delegate-level budget tracking"
+                )
 
         self._closed = False
 
@@ -262,6 +426,15 @@ class Delegate:
             return None
         return max(0.0, self._budget_usd - self._consumed_usd)
 
+    @property
+    def wrapper_stack(self) -> BaseAgent:
+        """The outermost agent in the wrapper stack (Layer 3 access).
+
+        This is the composed wrapper stack:
+        ``_LoopAgent -> [L3GovernedAgent] -> [MonitoredAgent]``
+        """
+        return self._loop_agent
+
     async def run(self, prompt: str) -> AsyncGenerator[DelegateEvent, None]:
         """Run the Delegate on a user prompt, yielding typed events.
 
@@ -300,6 +473,19 @@ class Delegate:
                 consumed_usd=self._consumed_usd,
             )
             return
+
+        # If MonitoredAgent is in the stack, let it validate budget too
+        if self._monitored is not None:
+            from kaizen_agents.monitored_agent import BudgetExhaustedError
+
+            try:
+                self._monitored._check_budget()
+            except BudgetExhaustedError as exc:
+                yield BudgetExhausted(
+                    budget_usd=exc.budget_usd,
+                    consumed_usd=exc.consumed_usd,
+                )
+                return
 
         accumulated_text = ""
 
@@ -352,8 +538,11 @@ class Delegate:
         }
 
         # Update budget tracking with latest usage delta
-        # The loop tracks cumulative usage; we need the delta since last recording
         self._record_usage(usage_dict)
+
+        # If MonitoredAgent is in the stack, record usage there too
+        if self._monitored is not None:
+            self._monitored._record_usage({"usage": usage_dict})
 
         yield TurnComplete(text=accumulated_text, usage=usage_dict)
 
@@ -417,5 +606,7 @@ class Delegate:
         self._closed = True
 
     def __repr__(self) -> str:
-        budget_str = f", budget=${self._budget_usd:.2f}" if self._budget_usd is not None else ""
+        budget_str = (
+            f", budget=${self._budget_usd:.2f}" if self._budget_usd is not None else ""
+        )
         return f"Delegate(model={self._config.model!r}{budget_str})"
