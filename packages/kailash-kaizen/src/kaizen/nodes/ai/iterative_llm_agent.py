@@ -6,9 +6,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from kaizen.nodes.ai.llm_agent import LLMAgentNode
-
 from kailash.nodes.base import NodeParameter, register_node
+
+from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 
 class ConvergenceMode(Enum):
@@ -533,7 +533,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
         try:
             # Ensure MCP client is initialized
             if not hasattr(self, "_mcp_client"):
-                from kailash.mcp_server import MCPClient
+                from kailash_mcp import MCPClient
 
                 self._mcp_client = MCPClient()
 
@@ -862,9 +862,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                                 "tool_outputs", {}
                             ).get(tool, step_result["output"])
                         else:
-                            execution_results["tool_outputs"][tool] = (
-                                f"Error executing {tool}: {step_result.get('error', 'Unknown error')}"
-                            )
+                            execution_results["tool_outputs"][
+                                tool
+                            ] = f"Error executing {tool}: {step_result.get('error', 'Unknown error')}"
                 else:
                     # Store LLM response output
                     execution_results["tool_outputs"][f"step_{step_num}_llm"] = (
@@ -909,7 +909,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
 
         # Initialize MCP client if not already done
         if not hasattr(self, "_mcp_client"):
-            from kailash.mcp_server import MCPClient
+            from kailash_mcp import MCPClient
 
             self._mcp_client = MCPClient()
 
@@ -1469,9 +1469,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 improvement = current_score - previous_score
 
                 diminishing_returns = improvement < min_improvement
-                convergence_result["criteria_met"]["diminishing_returns"] = (
-                    diminishing_returns
-                )
+                convergence_result["criteria_met"][
+                    "diminishing_returns"
+                ] = diminishing_returns
 
                 # Only stop for diminishing returns if we already have decent confidence
                 if (
@@ -1586,7 +1586,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
                         total_custom_weight += criterion_weight
                         convergence_result["criteria_met"][
                             f"custom_{criterion_name}"
-                        ] = criterion_score > 0.5
+                        ] = (criterion_score > 0.5)
 
                     except Exception as e:
                         self.logger.warning(

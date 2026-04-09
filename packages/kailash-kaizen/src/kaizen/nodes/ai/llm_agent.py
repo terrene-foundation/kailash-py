@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal
 
 from kailash.nodes.base import Node, NodeParameter, register_node
+
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
 
 
@@ -1305,7 +1306,7 @@ class LLMAgentNode(Node):
                 import asyncio
                 from datetime import datetime
 
-                from kailash.mcp_server import MCPClient
+                from kailash_mcp import MCPClient
 
                 # Initialize MCP client if not already done
                 if not hasattr(self, "_mcp_client"):
@@ -1517,7 +1518,7 @@ class LLMAgentNode(Node):
 
         if use_real_mcp:
             try:
-                from kailash.mcp_server import MCPClient
+                from kailash_mcp import MCPClient
 
                 # Initialize MCP client if not already done
                 if not hasattr(self, "_mcp_client"):
@@ -2444,7 +2445,7 @@ Final Answer: 6 hours"""
         server_config = mcp_tool.get("function", {}).get("mcp_server_config", {})
 
         try:
-            from kailash.mcp_server import MCPClient
+            from kailash_mcp import MCPClient
 
             # Initialize MCP client if not already done
             if not hasattr(self, "_mcp_client"):
