@@ -739,11 +739,11 @@ class MCPMixin:
             MCPServer: Configured server (call .run() to start).
         """
         try:
-            from kailash.mcp_server import MCPServer
-            from kailash.mcp_server import enable_auto_discovery as enable_discovery
+            from kailash_mcp.server import MCPServer
+            from kailash_mcp.discovery import enable_auto_discovery as enable_discovery
         except ImportError:
             raise ImportError(
-                "kailash.mcp_server not available. Install with: pip install kailash"
+                "kailash_mcp not available. Install with: pip install kailash-mcp"
             )
 
         server = MCPServer(
