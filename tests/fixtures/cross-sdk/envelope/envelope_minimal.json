@@ -4,9 +4,9 @@
   "input": {
     "metadata": {}
   },
-  "expected_canonical_json": "{\"metadata\":{}}",
+  "expected_canonical_json": "{\"envelope_hash\":\"44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a\"}",
   "metadata": {
-    "description": "Minimal empty ConstraintEnvelope",
+    "description": "Minimal empty ConstraintEnvelope. Empty metadata is dropped by to_dict per SPEC-07 §5.1; the envelope_hash is SHA-256 of the empty constraint dict ({}), which is the canonical 'no constraints' fingerprint.",
     "spec_reference": "SPEC-07 §5.1"
   }
 }
