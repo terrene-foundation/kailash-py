@@ -18,10 +18,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from kaizen.nodes.ai.llm_agent import LLMAgentNode
-
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.base_cycle_aware import CycleAwareNode
+
+from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 # ============================================================================
 # ENHANCED A2A COMPONENTS: Agent Cards and Task Management
@@ -92,33 +92,64 @@ class Capability:
     examples: List[str] = field(default_factory=list)
     constraints: List[str] = field(default_factory=list)
 
-    def matches_requirement(self, requirement: str) -> float:
-        """Calculate match score for a requirement (0.0-1.0)."""
-        requirement_lower = requirement.lower()
+    async def matches_requirement(
+        self,
+        requirement: str,
+        *,
+        config: Optional[Any] = None,
+        correlation_id: Optional[str] = None,
+    ) -> float:
+        """Score how well this capability fulfils a requirement via the LLM.
 
-        # Direct name match
-        if self.name.lower() in requirement_lower:
-            return 0.9
+        This method delegates to `kaizen.llm.reasoning.llm_capability_match`,
+        which invokes a Kaizen Signature-backed `CapabilityMatchAgent`. The
+        LLM receives the capability card (name + description + domain +
+        keywords) and the requirement, then returns a 0.0-1.0 confidence
+        score.
 
-        # Domain match
-        if self.domain.lower() in requirement_lower:
-            return 0.7
+        Why this is the LLM's job:
+            `rules/agent-reasoning.md` MUST Rule 1 forbids deterministic
+            logic in agent decision paths. Previous versions of this method
+            used substring containment + keyword overlap scoring, which
+            failed on synonyms, paraphrases, and any requirement not
+            literally mentioning the capability name. The LLM generalises.
 
-        # Keyword matches
-        keyword_matches = sum(
-            1 for keyword in self.keywords if keyword.lower() in requirement_lower
+        Args:
+            requirement: Task requirement to score this capability against.
+            config: Optional BaseAgentConfig for the LLM judge. When None,
+                the helper falls back to `.env`-defined model selection.
+                Callers MUST pass their own config whenever possible so the
+                judge model matches the host agent's model.
+            correlation_id: Optional correlation ID propagated to structured
+                log lines so multi-capability loops can be traced end-to-end.
+
+        Returns:
+            float: Match confidence in [0.0, 1.0].
+        """
+        # Local import keeps `kaizen.nodes.ai.a2a` importable even when the
+        # llm.reasoning module has not been exercised yet, and avoids a hard
+        # import cycle between core.base_agent and this module.
+        from kaizen.llm.reasoning import llm_capability_match
+
+        description_parts = [self.description or ""]
+        if self.domain:
+            description_parts.append(f"Domain: {self.domain}")
+        if self.level is not None:
+            level_value = (
+                self.level.value if hasattr(self.level, "value") else str(self.level)
+            )
+            description_parts.append(f"Level: {level_value}")
+        if self.keywords:
+            description_parts.append("Related terms: " + ", ".join(self.keywords))
+        description = ". ".join(part for part in description_parts if part)
+
+        return llm_capability_match(
+            capability_name=self.name,
+            capability_description=description,
+            requirement=requirement,
+            config=config,
+            correlation_id=correlation_id,
         )
-        if keyword_matches > 0:
-            return min(0.6 + (keyword_matches * 0.1), 0.8)
-
-        # Description similarity
-        desc_words = set(self.description.lower().split())
-        req_words = set(requirement_lower.split())
-        overlap = len(desc_words & req_words)
-        if overlap > 0:
-            return min(0.3 + (overlap * 0.05), 0.5)
-
-        return 0.0
 
 
 @dataclass

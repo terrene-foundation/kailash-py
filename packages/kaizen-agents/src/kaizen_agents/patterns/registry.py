@@ -45,16 +45,21 @@ Reference: Based on OrchestrationRuntime and AgentPoolManagerNode patterns
 """
 
 import asyncio
-import time
+import contextlib
+import logging
 import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set
+from datetime import datetime
+from enum import StrEnum
+from typing import Any
 
-from kaizen.core.base_agent import BaseAgent
+from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
+from kaizen.llm.reasoning import llm_text_similarity
 from kaizen_agents.patterns.runtime import AgentMetadata, AgentStatus
+
+logger = logging.getLogger(__name__)
 
 # Try to import A2A for capability-based routing
 try:
@@ -71,7 +76,7 @@ except ImportError:
 # ============================================================================
 
 
-class RegistryEventType(str, Enum):
+class RegistryEventType(StrEnum):
     """Registry event types for cross-runtime coordination."""
 
     AGENT_REGISTERED = "agent_registered"
@@ -87,10 +92,10 @@ class RegistryEvent:
     """Event for cross-runtime coordination."""
 
     event_type: RegistryEventType
-    agent_id: Optional[str] = None
-    runtime_id: Optional[str] = None
+    agent_id: str | None = None
+    runtime_id: str | None = None
     timestamp: datetime = field(default_factory=datetime.now)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -133,7 +138,7 @@ class AgentRegistry:
         agents = await registry.find_agents_by_capability("code_generation")
     """
 
-    def __init__(self, config: Optional[AgentRegistryConfig] = None):
+    def __init__(self, config: AgentRegistryConfig | None = None):
         """
         Initialize AgentRegistry.
 
@@ -143,19 +148,19 @@ class AgentRegistry:
         self.config = config or AgentRegistryConfig()
 
         # Agent registry: {agent_id: AgentMetadata}
-        self.agents: Dict[str, AgentMetadata] = {}
+        self.agents: dict[str, AgentMetadata] = {}
 
         # Runtime tracking: {runtime_id: Set[agent_id]}
-        self.runtime_agents: Dict[str, Set[str]] = defaultdict(set)
+        self.runtime_agents: dict[str, set[str]] = defaultdict(set)
 
         # Capability index: {capability: Set[agent_id]}
-        self.capability_index: Dict[str, Set[str]] = defaultdict(set)
+        self.capability_index: dict[str, set[str]] = defaultdict(set)
 
         # Status index: {status: Set[agent_id]}
-        self.status_index: Dict[AgentStatus, Set[str]] = defaultdict(set)
+        self.status_index: dict[AgentStatus, set[str]] = defaultdict(set)
 
         # Event listeners: {event_type: List[callback]}
-        self.event_listeners: Dict[RegistryEventType, List[Callable]] = defaultdict(
+        self.event_listeners: dict[RegistryEventType, list[Callable]] = defaultdict(
             list
         )
 
@@ -166,9 +171,9 @@ class AgentRegistry:
 
         # Background tasks
         self._running = False
-        self._heartbeat_monitor_task: Optional[asyncio.Task] = None
-        self._event_broadcaster_task: Optional[asyncio.Task] = None
-        self._index_rebuilder_task: Optional[asyncio.Task] = None
+        self._heartbeat_monitor_task: asyncio.Task | None = None
+        self._event_broadcaster_task: asyncio.Task | None = None
+        self._index_rebuilder_task: asyncio.Task | None = None
 
         # Performance metrics
         self._total_queries = 0
@@ -215,10 +220,8 @@ class AgentRegistry:
         for task in tasks:
             if task:
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
 
         # Clear all data
         self.agents.clear()
@@ -234,7 +237,7 @@ class AgentRegistry:
         self,
         agent: BaseAgent,
         runtime_id: str,
-        agent_id: Optional[str] = None,
+        agent_id: str | None = None,
         max_concurrency: int = 10,
         memory_limit_mb: int = 512,
         budget_limit_usd: float = 1.0,
@@ -375,7 +378,7 @@ class AgentRegistry:
     # Agent Discovery and Search
     # ========================================================================
 
-    async def get_agent(self, agent_id: str) -> Optional[AgentMetadata]:
+    async def get_agent(self, agent_id: str) -> AgentMetadata | None:
         """
         Get agent metadata by ID.
 
@@ -389,9 +392,9 @@ class AgentRegistry:
 
     async def list_agents(
         self,
-        runtime_id: Optional[str] = None,
-        status_filter: Optional[AgentStatus] = None,
-    ) -> List[AgentMetadata]:
+        runtime_id: str | None = None,
+        status_filter: AgentStatus | None = None,
+    ) -> list[AgentMetadata]:
         """
         List agents with optional filters.
 
@@ -418,22 +421,37 @@ class AgentRegistry:
         return agents
 
     async def find_agents_by_capability(
-        self, capability: str, status_filter: Optional[AgentStatus] = AgentStatus.ACTIVE
-    ) -> List[AgentMetadata]:
+        self, capability: str, status_filter: AgentStatus | None = AgentStatus.ACTIVE
+    ) -> list[AgentMetadata]:
         """
-        Find agents by capability using semantic matching.
+        Find agents by capability using LLM-first semantic matching.
+
+        Capability scoring is delegated to
+        `kaizen.llm.reasoning.llm_text_similarity`, which invokes a
+        Signature-backed `TextSimilarityAgent`. This replaces the previous
+        Jaccard word-overlap implementation (see
+        `rules/agent-reasoning.md` MUST Rule 1).
 
         Args:
             capability: Capability to search for
             status_filter: Optional status filter (default: ACTIVE)
 
         Returns:
-            List of matching agent metadata sorted by relevance
+            List of matching agent metadata sorted by semantic relevance
         """
         async with self._query_semaphore:
             self._total_queries += 1
 
-            matching_agents = []
+            matching_agents: list[tuple] = []
+
+            # Resolve a reasoning config from any registered agent so the
+            # LLM judge inherits the host model selection.
+            reasoning_config: BaseAgentConfig | None = None
+            for metadata in self.agents.values():
+                candidate = getattr(metadata.agent, "config", None)
+                if isinstance(candidate, BaseAgentConfig):
+                    reasoning_config = candidate
+                    break
 
             # Search through all agents
             for agent_id, metadata in self.agents.items():
@@ -441,25 +459,44 @@ class AgentRegistry:
                 if status_filter and metadata.status != status_filter:
                     continue
 
-                # Check A2A card
-                if metadata.a2a_card:
-                    # Extract capabilities
-                    capabilities = self._extract_capabilities(metadata.a2a_card)
+                if metadata.a2a_card is None:
+                    continue
 
-                    # Simple text matching (can be enhanced with semantic similarity)
-                    for cap in capabilities:
-                        if self._capability_matches(capability, cap):
-                            matching_agents.append(
-                                (metadata, self._calculate_match_score(capability, cap))
-                            )
-                            break
+                capabilities = self._extract_capabilities(metadata.a2a_card)
+                if not capabilities:
+                    continue
+
+                best_score = 0.0
+                for cap in capabilities:
+                    try:
+                        score = llm_text_similarity(
+                            text_a=capability,
+                            text_b=str(cap),
+                            config=reasoning_config,
+                            correlation_id=f"registry_{agent_id}",
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "registry.capability_similarity_failed",
+                            extra={
+                                "agent_id": agent_id,
+                                "capability": capability,
+                                "error": str(exc),
+                            },
+                        )
+                        score = 0.0
+                    if score > best_score:
+                        best_score = score
+
+                if best_score > 0:
+                    matching_agents.append((metadata, best_score))
 
             # Sort by match score (highest first)
             matching_agents.sort(key=lambda x: x[1], reverse=True)
 
-            return [agent for agent, score in matching_agents]
+            return [agent for agent, _score in matching_agents]
 
-    async def find_agents_by_runtime(self, runtime_id: str) -> List[AgentMetadata]:
+    async def find_agents_by_runtime(self, runtime_id: str) -> list[AgentMetadata]:
         """
         Find all agents registered to a specific runtime.
 
@@ -472,7 +509,7 @@ class AgentRegistry:
         agent_ids = self.runtime_agents.get(runtime_id, set())
         return [self.agents[aid] for aid in agent_ids if aid in self.agents]
 
-    async def find_agents_by_status(self, status: AgentStatus) -> List[AgentMetadata]:
+    async def find_agents_by_status(self, status: AgentStatus) -> list[AgentMetadata]:
         """
         Find all agents with a specific status.
 
@@ -490,7 +527,7 @@ class AgentRegistry:
     # ========================================================================
 
     async def update_agent_status(
-        self, agent_id: str, status: AgentStatus, runtime_id: Optional[str] = None
+        self, agent_id: str, status: AgentStatus, runtime_id: str | None = None
     ) -> bool:
         """
         Update agent status.
@@ -576,11 +613,8 @@ class AgentRegistry:
     async def _emit_event(self, event: RegistryEvent):
         """Emit event to queue for broadcasting."""
         if self.config.enable_event_broadcasting:
-            try:
+            with contextlib.suppress(asyncio.QueueFull):
                 await self.event_queue.put(event)
-            except asyncio.QueueFull:
-                # Drop event if queue is full
-                pass
 
     async def _broadcast_events(self):
         """Background task: Broadcast events to listeners."""
@@ -599,7 +633,7 @@ class AgentRegistry:
                     except Exception:
                         pass  # Ignore listener errors
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     # ========================================================================
@@ -670,7 +704,7 @@ class AgentRegistry:
             for cap in capabilities:
                 self.capability_index[cap.lower()].discard(agent_id)
 
-    def _extract_capabilities(self, a2a_card: Optional[Dict]) -> List[str]:
+    def _extract_capabilities(self, a2a_card: dict | None) -> list[str]:
         """Extract capabilities from A2A card."""
         if not a2a_card:
             return []
@@ -693,39 +727,11 @@ class AgentRegistry:
 
         return capabilities
 
-    def _capability_matches(self, query: str, capability: str) -> bool:
-        """Check if capability matches query (case-insensitive substring match)."""
-        return query.lower() in capability.lower()
-
-    def _calculate_match_score(self, query: str, capability: str) -> float:
-        """
-        Calculate match score between query and capability.
-
-        Uses simple word overlap as similarity metric (Jaccard similarity).
-
-        Args:
-            query: Query string
-            capability: Capability string
-
-        Returns:
-            Match score between 0.0 and 1.0
-        """
-        query_words = set(query.lower().split())
-        cap_words = set(capability.lower().split())
-
-        if not query_words or not cap_words:
-            return 0.0
-
-        intersection = len(query_words & cap_words)
-        union = len(query_words | cap_words)
-
-        return intersection / union if union > 0 else 0.0
-
     # ========================================================================
     # Metrics and Observability
     # ========================================================================
 
-    async def get_metrics(self) -> Dict[str, Any]:
+    async def get_metrics(self) -> dict[str, Any]:
         """
         Get registry performance metrics.
 

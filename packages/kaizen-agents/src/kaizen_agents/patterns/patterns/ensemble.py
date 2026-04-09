@@ -40,9 +40,13 @@ Created: 2025-10-27 (Phase 3, Day 2, TODO-174)
 Reference: ADR-018, docs/testing/pipeline-edge-case-test-matrix.md
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kaizen.core.base_agent import BaseAgent
+from kaizen_agents.patterns._reasoning_bridge import (
+    rank_agents_by_capability_sync,
+    resolve_reasoning_config,
+)
 from kaizen_agents.patterns.pipeline import Pipeline
 
 # A2A imports for capability-based agent discovery
@@ -88,7 +92,7 @@ class EnsemblePipeline(Pipeline):
 
     def __init__(
         self,
-        agents: List[BaseAgent],
+        agents: list[BaseAgent],
         synthesizer: BaseAgent,
         discovery_mode: str = "a2a",
         top_k: int = 3,
@@ -116,7 +120,7 @@ class EnsemblePipeline(Pipeline):
         self.top_k = top_k
         self.error_handling = error_handling
 
-    def _discover_agents_via_a2a(self, task: str) -> List[BaseAgent]:
+    def _discover_agents_via_a2a(self, task: str) -> list[BaseAgent]:
         """
         Discover top-k agents using A2A capability matching.
 
@@ -145,24 +149,14 @@ class EnsemblePipeline(Pipeline):
                     # Skip agents that can't generate A2A cards
                     continue
 
-            # Score all agents
+            # LLM-first ranking (no keyword / substring scoring)
             if agent_cards:
-                scored_agents = []
-
-                for agent, card in agent_cards:
-                    # Calculate capability match score
-                    score = 0.0
-                    for capability in card.primary_capabilities:
-                        capability_score = capability.matches_requirement(task)
-                        if capability_score > score:
-                            score = capability_score
-
-                    scored_agents.append((agent, score))
-
-                # Sort by score (descending) and select top-k
+                reasoning_config = resolve_reasoning_config(self.agents)
+                scored_agents = rank_agents_by_capability_sync(
+                    agent_cards, task, reasoning_config=reasoning_config
+                )
                 scored_agents.sort(key=lambda x: x[1], reverse=True)
-                top_agents = [agent for agent, score in scored_agents[: self.top_k]]
-
+                top_agents = [agent for agent, _score in scored_agents[: self.top_k]]
                 if top_agents:
                     return top_agents
 
@@ -173,7 +167,7 @@ class EnsemblePipeline(Pipeline):
         # Fallback: return first top_k agents
         return self.agents[: self.top_k]
 
-    def _select_agents(self, task: Optional[str] = None) -> List[BaseAgent]:
+    def _select_agents(self, task: str | None = None) -> list[BaseAgent]:
         """
         Select agents based on discovery mode.
 
@@ -202,8 +196,8 @@ class EnsemblePipeline(Pipeline):
             return self.agents
 
     def _execute_agents(
-        self, agents: List[BaseAgent], **inputs
-    ) -> List[Dict[str, Any]]:
+        self, agents: list[BaseAgent], **inputs
+    ) -> list[dict[str, Any]]:
         """
         Execute all selected agents and collect perspectives.
 
@@ -253,8 +247,8 @@ class EnsemblePipeline(Pipeline):
         return perspectives
 
     def _synthesize_perspectives(
-        self, perspectives: List[Dict[str, Any]], task: Optional[str] = None, **inputs
-    ) -> Dict[str, Any]:
+        self, perspectives: list[dict[str, Any]], task: str | None = None, **inputs
+    ) -> dict[str, Any]:
         """
         Synthesize all perspectives into unified result.
 
@@ -301,7 +295,7 @@ class EnsemblePipeline(Pipeline):
                     "perspectives": perspectives,  # Include original perspectives
                 }
 
-    def run(self, **inputs) -> Dict[str, Any]:
+    def run(self, **inputs) -> dict[str, Any]:
         """
         Execute ensemble pipeline: discover, execute, synthesize.
 
@@ -324,7 +318,7 @@ class EnsemblePipeline(Pipeline):
             - fail-fast: Raise exception on first error
         """
         # Extract task for discovery (if provided)
-        task = inputs.get("task", None)
+        task = inputs.get("task")
 
         # Filter task from inputs to avoid duplicate parameter passing
         # (Core SDK v0.10.0+ enforces stricter parameter scoping)
