@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "name": "request_simple",
+  "input": {
+    "jsonrpc": "2.0",
+    "method": "tools/list",
+    "id": 1
+  },
+  "expected_canonical_json": "{\"id\":1,\"jsonrpc\":\"2.0\",\"method\":\"tools/list\"}",
+  "metadata": {
+    "description": "Minimal JSON-RPC 2.0 request without params",
+    "spec_reference": "SPEC-01 §7.1"
+  }
+}
