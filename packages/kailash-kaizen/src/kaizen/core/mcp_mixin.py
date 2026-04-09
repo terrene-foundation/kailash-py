@@ -626,10 +626,10 @@ class MCPMixin:
             MCPClient: Configured MCPClient instance.
         """
         try:
-            from kailash.mcp_server import MCPClient
+            from kailash_mcp.client import MCPClient
         except ImportError:
             raise ImportError(
-                "kailash.mcp_server not available. Install with: pip install kailash"
+                "kailash_mcp not available. Install with: pip install kailash-mcp"
             )
 
         self._mcp_client = MCPClient(
