@@ -10,11 +10,11 @@ language model, returning responses with citations and sources.
 from __future__ import annotations
 
 import logging
-from typing import Any, List
+from typing import Any, AsyncGenerator, List
 
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
-from kaizen.providers.base import LLMProvider
-from kaizen.providers.types import Message
+from kaizen.providers.base import LLMProvider, ProviderCapability
+from kaizen.providers.types import Message, StreamEvent
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +86,23 @@ class PerplexityProvider(LLMProvider):
 
         self._available = bool(os.getenv("PERPLEXITY_API_KEY"))
         return self._available
+
+    # ------------------------------------------------------------------
+    # SPEC-02 capability declaration
+    # ------------------------------------------------------------------
+
+    @property
+    def name(self) -> str:
+        return "perplexity"
+
+    @property
+    def capabilities(self) -> set[ProviderCapability]:
+        return {
+            ProviderCapability.CHAT_SYNC,
+            ProviderCapability.CHAT_ASYNC,
+            ProviderCapability.CHAT_STREAM,
+            ProviderCapability.BYOK,
+        }
 
     def _get_api_key(self) -> str:
         import os
@@ -371,6 +388,82 @@ class PerplexityProvider(LLMProvider):
                     "Set PERPLEXITY_API_KEY environment variable."
                 )
             raise RuntimeError(sanitize_provider_error(e, "Perplexity"))
+
+    # ------------------------------------------------------------------
+    # Chat (streaming) — SPEC-02 StreamingProvider protocol
+    # ------------------------------------------------------------------
+
+    async def stream_chat(
+        self, messages: List[Message], **kwargs: Any
+    ) -> AsyncGenerator[StreamEvent, None]:
+        """Stream tokens from the Perplexity OpenAI-compatible API."""
+        from openai import AsyncOpenAI
+
+        model = kwargs.pop("model", self.DEFAULT_MODEL)
+        generation_config = dict(kwargs.pop("generation_config", {}) or {})
+
+        per_request_api_key = kwargs.pop("api_key", None)
+        per_request_base_url = kwargs.pop("base_url", None)
+
+        client = AsyncOpenAI(
+            api_key=per_request_api_key or self._get_api_key(),
+            base_url=per_request_base_url or self.BASE_URL,
+        )
+
+        processed_messages = self._process_messages(messages)
+        request_params = self._build_request_params(
+            processed_messages, model, generation_config, **kwargs
+        )
+        request_params["stream"] = True
+
+        logger.debug("perplexity.stream_chat.start model=%s", model)
+
+        accumulated_text = ""
+        last_finish_reason: str | None = None
+        last_usage: dict[str, int] = {}
+
+        try:
+            stream = await client.chat.completions.create(**request_params)
+            async for chunk in stream:
+                if not chunk.choices:
+                    if getattr(chunk, "usage", None) is not None:
+                        last_usage = {
+                            "prompt_tokens": chunk.usage.prompt_tokens,
+                            "completion_tokens": chunk.usage.completion_tokens,
+                            "total_tokens": chunk.usage.total_tokens,
+                        }
+                    continue
+                choice = chunk.choices[0]
+                delta = choice.delta
+                text_piece = getattr(delta, "content", None) if delta else None
+                if text_piece:
+                    accumulated_text += text_piece
+                    yield StreamEvent(
+                        event_type="text_delta",
+                        delta_text=text_piece,
+                        content=accumulated_text,
+                        model=model,
+                    )
+                if choice.finish_reason:
+                    last_finish_reason = choice.finish_reason
+
+            logger.debug(
+                "perplexity.stream_chat.done model=%s chars=%d finish=%s",
+                model,
+                len(accumulated_text),
+                last_finish_reason,
+            )
+
+            yield StreamEvent(
+                event_type="done",
+                content=accumulated_text,
+                finish_reason=last_finish_reason or "stop",
+                model=model,
+                usage=last_usage,
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.error("perplexity.stream_chat.error error=%s", exc, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(exc, "Perplexity"))
 
     def get_supported_models(self) -> dict:
         return self.SUPPORTED_MODELS.copy()

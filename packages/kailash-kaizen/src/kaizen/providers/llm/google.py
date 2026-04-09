@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from typing import Any, List
+from typing import Any, AsyncGenerator, List
 
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
-from kaizen.providers.base import UnifiedAIProvider
-from kaizen.providers.types import Message
+from kaizen.providers.base import ProviderCapability, UnifiedAIProvider
+from kaizen.providers.types import Message, StreamEvent
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,28 @@ class GoogleGeminiProvider(UnifiedAIProvider):
         project = os.getenv("GOOGLE_CLOUD_PROJECT")
         self._available = bool(api_key or project)
         return self._available
+
+    # ------------------------------------------------------------------
+    # SPEC-02 capability declaration
+    # ------------------------------------------------------------------
+
+    @property
+    def name(self) -> str:
+        return "google"
+
+    @property
+    def capabilities(self) -> set[ProviderCapability]:
+        return {
+            ProviderCapability.CHAT_SYNC,
+            ProviderCapability.CHAT_ASYNC,
+            ProviderCapability.CHAT_STREAM,
+            ProviderCapability.TOOLS,
+            ProviderCapability.STRUCTURED_OUTPUT,
+            ProviderCapability.EMBEDDINGS,
+            ProviderCapability.VISION,
+            ProviderCapability.AUDIO,
+            ProviderCapability.BYOK,
+        }
 
     def _get_client(self) -> Any:
         if self._sync_client is not None:
@@ -487,6 +509,152 @@ class GoogleGeminiProvider(UnifiedAIProvider):
         except Exception as e:
             logger.error("Google Gemini async error: %s", e, exc_info=True)
             raise RuntimeError(sanitize_provider_error(e, "Google Gemini"))
+
+    # ------------------------------------------------------------------
+    # Chat (streaming) — SPEC-02 StreamingProvider protocol
+    # ------------------------------------------------------------------
+
+    async def stream_chat(
+        self, messages: List[Message], **kwargs: Any
+    ) -> AsyncGenerator[StreamEvent, None]:
+        """Stream tokens from the Google GenAI async streaming endpoint.
+
+        Iterates the real ``client.aio.models.generate_content_stream``
+        response chunks, yielding a :class:`StreamEvent` for every incoming
+        text delta and a final ``done`` event with accumulated text and
+        usage metadata.
+        """
+        # Unconditional import — ModuleNotFoundError propagates as a clear
+        # error instead of leaving ``types`` possibly unbound for Pyright.
+        from google.genai import types
+
+        model = kwargs.get("model", "gemini-2.0-flash")
+        generation_config = dict(kwargs.get("generation_config", {}) or {})
+        tools = kwargs.get("tools", [])
+
+        per_request_api_key = kwargs.get("api_key")
+        if per_request_api_key:
+            from google import genai
+
+            client = genai.Client(api_key=per_request_api_key)
+        else:
+            client = self._get_client()
+
+        contents, system_instruction = self._convert_messages_to_contents(messages)
+        config_params = self._build_config_params(generation_config)
+
+        # #340 mutual exclusion — tools and response_json_schema are incompatible.
+        if tools and (
+            "response_mime_type" in config_params
+            or "response_json_schema" in config_params
+        ):
+            stripped = [
+                k
+                for k in ("response_mime_type", "response_json_schema")
+                if k in config_params
+            ]
+            logger.warning(
+                "gemini.response_format_stripped stripped=%s reason=mutually_exclusive_with_tools",
+                stripped,
+                extra={
+                    "event": "gemini.response_format_stripped",
+                    "reason": "mutually_exclusive_with_tools",
+                    "stripped": stripped,
+                },
+            )
+            config_params.pop("response_mime_type", None)
+            config_params.pop("response_json_schema", None)
+
+        request_config = types.GenerateContentConfig(**config_params)
+        if system_instruction:
+            request_config.system_instruction = system_instruction
+        if tools:
+            request_config.tools = self._convert_tools(tools)
+
+        logger.debug("google.stream_chat.start model=%s", model)
+
+        accumulated_text = ""
+        last_usage: dict[str, int] = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        }
+        finish_reason = "stop"
+
+        try:
+            stream = await client.aio.models.generate_content_stream(
+                model=model,
+                contents=contents,
+                config=request_config,
+            )
+
+            async for chunk in stream:
+                # Gemini chunks expose a ``text`` attribute summarising the
+                # new delta. Fall back to candidate.parts for safety.
+                text_piece = getattr(chunk, "text", None)
+                if not text_piece:
+                    candidates = getattr(chunk, "candidates", None) or []
+                    if candidates and getattr(candidates[0], "content", None):
+                        parts = candidates[0].content.parts or []
+                        text_piece = "".join(
+                            getattr(p, "text", "") or "" for p in parts
+                        )
+
+                if text_piece:
+                    accumulated_text += text_piece
+                    yield StreamEvent(
+                        event_type="text_delta",
+                        delta_text=text_piece,
+                        content=accumulated_text,
+                        model=model,
+                    )
+
+                usage_metadata = getattr(chunk, "usage_metadata", None)
+                if usage_metadata is not None:
+                    last_usage = {
+                        "prompt_tokens": getattr(
+                            usage_metadata, "prompt_token_count", 0
+                        )
+                        or 0,
+                        "completion_tokens": getattr(
+                            usage_metadata, "candidates_token_count", 0
+                        )
+                        or 0,
+                        "total_tokens": getattr(usage_metadata, "total_token_count", 0)
+                        or 0,
+                    }
+
+                candidates = getattr(chunk, "candidates", None) or []
+                if candidates:
+                    fr = getattr(candidates[0], "finish_reason", None)
+                    if fr is not None:
+                        fr_str = str(fr).lower()
+                        if "tool" in fr_str or "function" in fr_str:
+                            finish_reason = "tool_calls"
+                        elif "max" in fr_str or "length" in fr_str:
+                            finish_reason = "length"
+                        elif "safety" in fr_str:
+                            finish_reason = "content_filter"
+                        else:
+                            finish_reason = "stop"
+
+            logger.debug(
+                "google.stream_chat.done model=%s chars=%d finish=%s",
+                model,
+                len(accumulated_text),
+                finish_reason,
+            )
+
+            yield StreamEvent(
+                event_type="done",
+                content=accumulated_text,
+                finish_reason=finish_reason,
+                model=model,
+                usage=last_usage,
+            )
+        except Exception as exc:  # pragma: no cover - re-raise sanitised
+            logger.error("google.stream_chat.error error=%s", exc, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(exc, "Google Gemini"))
 
     def embed(self, texts: list[str], **kwargs: Any) -> list[list[float]]:
         try:

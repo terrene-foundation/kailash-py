@@ -10,11 +10,11 @@ OpenAI-compatible API running locally with no API keys required.
 from __future__ import annotations
 
 import logging
-from typing import Any, List
+from typing import Any, AsyncGenerator, List
 
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
-from kaizen.providers.base import UnifiedAIProvider
-from kaizen.providers.types import Message
+from kaizen.providers.base import ProviderCapability, UnifiedAIProvider
+from kaizen.providers.types import Message, StreamEvent
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +73,24 @@ class DockerModelRunnerProvider(UnifiedAIProvider):
         except Exception:
             self._available = False
         return self._available
+
+    # ------------------------------------------------------------------
+    # SPEC-02 capability declaration
+    # ------------------------------------------------------------------
+
+    @property
+    def name(self) -> str:
+        return "docker"
+
+    @property
+    def capabilities(self) -> set[ProviderCapability]:
+        return {
+            ProviderCapability.CHAT_SYNC,
+            ProviderCapability.CHAT_ASYNC,
+            ProviderCapability.CHAT_STREAM,
+            ProviderCapability.EMBEDDINGS,
+            ProviderCapability.TOOLS,
+        }
 
     def supports_tools(self, model: str) -> bool:
         return any(model.startswith(prefix) for prefix in self.TOOL_CAPABLE_MODELS)
@@ -268,6 +286,102 @@ class DockerModelRunnerProvider(UnifiedAIProvider):
         except Exception as e:
             logger.error("Docker Model Runner async error: %s", e, exc_info=True)
             raise RuntimeError(sanitize_provider_error(e, "Docker Model Runner"))
+
+    # ------------------------------------------------------------------
+    # Chat (streaming) — SPEC-02 StreamingProvider protocol
+    # ------------------------------------------------------------------
+
+    async def stream_chat(
+        self, messages: List[Message], **kwargs: Any
+    ) -> AsyncGenerator[StreamEvent, None]:
+        """Stream tokens from Docker Model Runner (OpenAI-compatible API).
+
+        Uses the AsyncOpenAI client pointed at the local Docker Model Runner
+        endpoint and iterates the real per-chunk deltas.
+        """
+        from openai import AsyncOpenAI
+
+        model = kwargs.get("model", "ai/llama3.2")
+        generation_config = dict(kwargs.get("generation_config", {}) or {})
+        tools = kwargs.get("tools") or []
+
+        per_request_base_url = kwargs.get("base_url") or self._get_base_url()
+        async_client = AsyncOpenAI(
+            api_key="docker-model-runner", base_url=per_request_base_url
+        )
+
+        request_params: dict[str, Any] = {
+            "model": model,
+            "messages": self._process_messages(messages),
+            "temperature": generation_config.get("temperature", 0.7),
+            "max_tokens": generation_config.get("max_tokens"),
+            "top_p": generation_config.get("top_p"),
+            "stop": generation_config.get("stop"),
+            "stream": True,
+        }
+
+        # Tools and streaming are mutually exclusive on Docker Model Runner;
+        # the non-streaming chat path already disables stream when tools
+        # are present. For stream_chat we simply drop tools rather than
+        # silently degrade to a non-streaming response.
+        if tools:
+            logger.warning(
+                "docker.stream_chat.tools_ignored model=%s reason=stream_tools_unsupported",
+                model,
+            )
+
+        request_params = {k: v for k, v in request_params.items() if v is not None}
+
+        logger.debug(
+            "docker.stream_chat.start model=%s base_url=%s", model, per_request_base_url
+        )
+
+        accumulated_text = ""
+        last_finish_reason: str | None = None
+        last_usage: dict[str, int] = {}
+
+        try:
+            stream = await async_client.chat.completions.create(**request_params)
+            async for chunk in stream:
+                if not chunk.choices:
+                    if getattr(chunk, "usage", None) is not None:
+                        last_usage = {
+                            "prompt_tokens": chunk.usage.prompt_tokens,
+                            "completion_tokens": chunk.usage.completion_tokens,
+                            "total_tokens": chunk.usage.total_tokens,
+                        }
+                    continue
+                choice = chunk.choices[0]
+                delta = choice.delta
+                text_piece = getattr(delta, "content", None) if delta else None
+                if text_piece:
+                    accumulated_text += text_piece
+                    yield StreamEvent(
+                        event_type="text_delta",
+                        delta_text=text_piece,
+                        content=accumulated_text,
+                        model=model,
+                    )
+                if choice.finish_reason:
+                    last_finish_reason = choice.finish_reason
+
+            logger.debug(
+                "docker.stream_chat.done model=%s chars=%d finish=%s",
+                model,
+                len(accumulated_text),
+                last_finish_reason,
+            )
+
+            yield StreamEvent(
+                event_type="done",
+                content=accumulated_text,
+                finish_reason=last_finish_reason or "stop",
+                model=model,
+                usage=last_usage,
+            )
+        except Exception as exc:  # pragma: no cover
+            logger.error("docker.stream_chat.error error=%s", exc, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(exc, "Docker Model Runner"))
 
     def embed(self, texts: list[str], **kwargs: Any) -> list[list[float]]:
         try:

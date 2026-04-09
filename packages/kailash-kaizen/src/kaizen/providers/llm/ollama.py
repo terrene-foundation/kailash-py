@@ -10,11 +10,11 @@ operations using various open-source models.
 from __future__ import annotations
 
 import logging
-from typing import Any, List
+from typing import Any, AsyncGenerator, List
 
 from kaizen.nodes.ai.error_sanitizer import sanitize_provider_error
-from kaizen.providers.base import UnifiedAIProvider
-from kaizen.providers.types import Message
+from kaizen.providers.base import ProviderCapability, UnifiedAIProvider
+from kaizen.providers.types import Message, StreamEvent
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,24 @@ class OllamaProvider(UnifiedAIProvider):
         except Exception:
             self._available = False
         return self._available
+
+    # ------------------------------------------------------------------
+    # SPEC-02 capability declaration
+    # ------------------------------------------------------------------
+
+    @property
+    def name(self) -> str:
+        return "ollama"
+
+    @property
+    def capabilities(self) -> set[ProviderCapability]:
+        return {
+            ProviderCapability.CHAT_SYNC,
+            ProviderCapability.CHAT_ASYNC,
+            ProviderCapability.CHAT_STREAM,
+            ProviderCapability.EMBEDDINGS,
+            ProviderCapability.VISION,
+        }
 
     def _get_client(self, backend_config: dict[str, Any] | None = None) -> Any:
         """Get or create an Ollama client."""
@@ -158,6 +176,110 @@ class OllamaProvider(UnifiedAIProvider):
         except Exception as e:
             logger.error("Ollama error: %s", e, exc_info=True)
             raise RuntimeError(sanitize_provider_error(e, "Ollama"))
+
+    # ------------------------------------------------------------------
+    # Chat (streaming) — SPEC-02 StreamingProvider protocol
+    # ------------------------------------------------------------------
+
+    async def stream_chat(
+        self, messages: List[Message], **kwargs: Any
+    ) -> AsyncGenerator[StreamEvent, None]:
+        """Stream tokens from the Ollama async chat endpoint.
+
+        Uses ``ollama.AsyncClient`` with ``stream=True`` to iterate the real
+        per-token deltas emitted by the local Ollama service.
+        """
+        import os
+
+        import ollama
+
+        model = kwargs.get("model", "llama3.1:8b-instruct-q8_0")
+        generation_config = dict(kwargs.get("generation_config", {}) or {})
+        backend_config = kwargs.get("backend_config") or {}
+
+        per_request_base_url = kwargs.get("base_url")
+        host: str | None = None
+        if per_request_base_url:
+            host = per_request_base_url
+        elif backend_config.get("base_url"):
+            host = backend_config["base_url"]
+        else:
+            host = os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST")
+
+        async_client = ollama.AsyncClient(host=host) if host else ollama.AsyncClient()
+
+        options = {
+            "temperature": generation_config.get("temperature"),
+            "top_p": generation_config.get("top_p"),
+            "top_k": generation_config.get("top_k"),
+            "repeat_penalty": generation_config.get("repeat_penalty"),
+            "seed": generation_config.get("seed"),
+            "stop": generation_config.get("stop"),
+            "num_predict": generation_config.get("max_tokens"),
+            "num_ctx": generation_config.get("num_ctx"),
+        }
+        options = {k: v for k, v in options.items() if v is not None}
+
+        processed_messages = self._process_messages(messages)
+
+        logger.debug(
+            "ollama.stream_chat.start model=%s host=%s", model, host or "default"
+        )
+
+        accumulated_text = ""
+        prompt_tokens = 0
+        completion_tokens = 0
+        finish_reason = "stop"
+
+        try:
+            stream = await async_client.chat(
+                model=model,
+                messages=processed_messages,
+                options=options,
+                stream=True,
+            )
+
+            async for chunk in stream:
+                msg = chunk.get("message") if isinstance(chunk, dict) else None
+                text_piece = msg.get("content") if msg else None
+                if text_piece:
+                    accumulated_text += text_piece
+                    yield StreamEvent(
+                        event_type="text_delta",
+                        delta_text=text_piece,
+                        content=accumulated_text,
+                        model=model,
+                    )
+                # Final chunk carries the done flag and counters.
+                if isinstance(chunk, dict) and chunk.get("done"):
+                    prompt_tokens = chunk.get("prompt_eval_count") or 0
+                    completion_tokens = chunk.get("eval_count") or 0
+                    done_reason = chunk.get("done_reason")
+                    if done_reason:
+                        finish_reason = str(done_reason)
+
+            logger.debug(
+                "ollama.stream_chat.done model=%s chars=%d prompt_tokens=%d completion_tokens=%d",
+                model,
+                len(accumulated_text),
+                prompt_tokens,
+                completion_tokens,
+            )
+
+            yield StreamEvent(
+                event_type="done",
+                content=accumulated_text,
+                finish_reason=finish_reason,
+                model=model,
+                usage={
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": prompt_tokens + completion_tokens,
+                },
+            )
+        except Exception as exc:  # pragma: no cover - re-raise sanitised
+            logger.error("ollama.stream_chat.error error=%s", exc, exc_info=True)
+            raise RuntimeError(sanitize_provider_error(exc, "Ollama"))
 
     def _process_messages(self, messages: List[Message]) -> list:
         """Process messages for vision content."""
