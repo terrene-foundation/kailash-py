@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "name": "envelope_with_intersection",
+  "left": {
+    "financial": {
+      "max_spend_usd": 100.0
+    },
+    "operational": {
+      "blocked_actions": ["delete"]
+    }
+  },
+  "right": {
+    "financial": {
+      "max_spend_usd": 50.0
+    },
+    "operational": {
+      "blocked_actions": ["shutdown"]
+    }
+  },
+  "expected_left_canonical_json": "{\"envelope_hash\":\"c78e41c9ab314a36233c03bb6bb3bff4ede3ee084e33e371e8d471d5430d14ac\",\"financial\":{\"api_cost_budget_usd\":null,\"budget_limit\":null,\"budget_tracking\":false,\"cost_per_call\":null,\"currency\":\"USD\",\"max_cost_per_action\":null,\"max_cost_per_session\":null,\"max_spend_usd\":100.0,\"reasoning_required\":false,\"requires_approval_above_usd\":null},\"operational\":{\"allowed_actions\":[],\"blocked_actions\":[\"delete\"],\"max_actions_per_day\":null,\"max_actions_per_hour\":null,\"max_concurrent\":null,\"max_retries\":null,\"rate_limit_window_type\":\"fixed\",\"reasoning_required\":false,\"timeout_seconds\":null}}",
+  "expected_right_canonical_json": "{\"envelope_hash\":\"daa0be102e019a06d3ac2c36f7ce30abb9e1d2c9c54c1972f8a2cad114c72ac2\",\"financial\":{\"api_cost_budget_usd\":null,\"budget_limit\":null,\"budget_tracking\":false,\"cost_per_call\":null,\"currency\":\"USD\",\"max_cost_per_action\":null,\"max_cost_per_session\":null,\"max_spend_usd\":50.0,\"reasoning_required\":false,\"requires_approval_above_usd\":null},\"operational\":{\"allowed_actions\":[],\"blocked_actions\":[\"shutdown\"],\"max_actions_per_day\":null,\"max_actions_per_hour\":null,\"max_concurrent\":null,\"max_retries\":null,\"rate_limit_window_type\":\"fixed\",\"reasoning_required\":false,\"timeout_seconds\":null}}",
+  "expected_intersection_canonical_json": "{\"envelope_hash\":\"4e3b9e9b247fd673c08857dac12573e1b931cf97c0aba804079b9db3f674dcc4\",\"financial\":{\"api_cost_budget_usd\":null,\"budget_limit\":null,\"budget_tracking\":false,\"cost_per_call\":null,\"currency\":\"USD\",\"max_cost_per_action\":null,\"max_cost_per_session\":null,\"max_spend_usd\":50.0,\"reasoning_required\":false,\"requires_approval_above_usd\":null},\"operational\":{\"allowed_actions\":[],\"blocked_actions\":[\"delete\",\"shutdown\"],\"max_actions_per_day\":null,\"max_actions_per_hour\":null,\"max_concurrent\":null,\"max_retries\":null,\"rate_limit_window_type\":\"fixed\",\"reasoning_required\":false,\"timeout_seconds\":null}}",
+  "metadata": {
+    "description": "Monotonic intersection of two envelopes per SPEC-07 §5.3. Financial: min(100, 50) = 50. Operational blocked_actions: union of ['delete'] and ['shutdown'] = ['delete', 'shutdown'] sorted.",
+    "spec_reference": "SPEC-07 §5.3"
+  }
+}

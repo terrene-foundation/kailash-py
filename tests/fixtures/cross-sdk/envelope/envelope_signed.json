@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "name": "envelope_signed",
+  "input": {
+    "financial": {
+      "max_spend_usd": 25.0
+    },
+    "posture_ceiling": "supervised",
+    "metadata": {
+      "agent_id": "test-agent-7"
+    }
+  },
+  "expected_canonical_json": "{\"envelope_hash\":\"a5c6a45a6a7146da8857fa66ac3e6f59e44edece680f983b789fd802cac57a9f\",\"financial\":{\"api_cost_budget_usd\":null,\"budget_limit\":null,\"budget_tracking\":false,\"cost_per_call\":null,\"currency\":\"USD\",\"max_cost_per_action\":null,\"max_cost_per_session\":null,\"max_spend_usd\":25.0,\"reasoning_required\":false,\"requires_approval_above_usd\":null},\"metadata\":{\"agent_id\":\"test-agent-7\"},\"posture_ceiling\":\"supervised\"}",
+  "hmac": {
+    "algorithm": "sha256",
+    "key_id": "FIXTURE_TEST_HMAC_KEY",
+    "key_value": "test-fixture-hmac-key-12345",
+    "expected_signature_hex": "6a3251c4a03b31f5fe1e7a7d57811664f64290a3f2cce4ed990da089228b9b30"
+  },
+  "metadata": {
+    "description": "HMAC-SHA256 signed envelope. The fixture key is test-only; production uses env/vault/kms providers. Both SDKs MUST compute the same HMAC digest over the canonical JSON payload per SPEC-07 §6.",
+    "spec_reference": "SPEC-07 §5.4, §6"
+  }
+}

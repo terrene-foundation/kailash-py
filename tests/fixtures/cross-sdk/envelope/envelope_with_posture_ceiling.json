@@ -8,7 +8,7 @@
       "env": "production"
     }
   },
-  "expected_canonical_json": "{\"metadata\":{\"env\":\"production\",\"tenant_id\":\"acme-corp\"},\"posture_ceiling\":\"supervised\"}",
+  "expected_canonical_json": "{\"envelope_hash\":\"67cfdaff4d0fb6239ac1b2b22f7692a64b91c05da8d3b1177552e22c8a9d9cf2\",\"metadata\":{\"env\":\"production\",\"tenant_id\":\"acme-corp\"},\"posture_ceiling\":\"supervised\"}",
   "metadata": {
     "description": "Envelope with posture_ceiling per ADR-010",
     "spec_reference": "SPEC-07 §5.2, ADR-010"
