@@ -552,6 +552,16 @@ class AgentPosture(str, Enum):
     Defines the maximum autonomy level an agent can operate at. The posture
     ceiling on a ``ConstraintEnvelope`` restricts the posture level regardless
     of what the trust posture system would otherwise allow.
+
+    The five postures are ordered by increasing autonomy:
+
+    ``PSEUDO_AGENT`` < ``SUPERVISED`` < ``SHARED_PLANNING`` <
+    ``CONTINUOUS_INSIGHT`` < ``DELEGATED``.
+
+    ``str``-backed so existing wire formats that serialize the posture as a
+    lowercase string (e.g. ``"supervised"``) round-trip unchanged. Equality
+    against string values is preserved: ``AgentPosture.SUPERVISED ==
+    "supervised"`` is ``True``.
     """
 
     PSEUDO_AGENT = "pseudo_agent"
@@ -582,6 +592,44 @@ class AgentPosture(str, Enum):
         if order[self] <= order[ceiling]:
             return self
         return ceiling
+
+    def intersect(self, other: AgentPosture | None) -> AgentPosture:
+        """Return the stricter (lower autonomy) of two postures.
+
+        Used by :meth:`ConstraintEnvelope.intersect` to combine posture
+        ceilings monotonically -- intersecting two envelopes never loosens
+        their posture ceiling. ``None`` on the other side is treated as
+        unbounded (this posture wins).
+        """
+        if other is None:
+            return self
+        order = AgentPosture.ordering()
+        return self if order[self] <= order[other] else other
+
+    @classmethod
+    def coerce(cls, value: AgentPosture | str | None) -> AgentPosture | None:
+        """Coerce a wire-format string to a canonical ``AgentPosture``.
+
+        Accepts an existing ``AgentPosture`` (returned unchanged), the
+        lowercase string value (``"supervised"``), or ``None``. Raises
+        :class:`EnvelopeValidationError` if the value does not match a
+        known posture.
+        """
+        if value is None:
+            return None
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, str):
+            try:
+                return cls(value)
+            except ValueError as exc:
+                valid = sorted(p.value for p in cls)
+                raise EnvelopeValidationError(
+                    f"posture must be one of {valid}, got {value!r}"
+                ) from exc
+        raise EnvelopeValidationError(
+            f"posture must be AgentPosture | str | None, got " f"{type(value).__name__}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -690,18 +738,24 @@ class ConstraintEnvelope:
     data_access: DataAccessConstraint | None = None
     communication: CommunicationConstraint | None = None
     gradient_thresholds: GradientThresholds | None = None
-    posture_ceiling: str | None = None
+    posture_ceiling: AgentPosture | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        # Validate posture ceiling is a recognized value if set
+        # Coerce posture_ceiling: accept an AgentPosture instance or its
+        # wire-format string value (e.g. "supervised"). Invalid values raise
+        # an EnvelopeValidationError that names the posture_ceiling field
+        # so callers can tell which input was rejected.
         if self.posture_ceiling is not None:
-            valid_postures = {p.value for p in AgentPosture}
-            if self.posture_ceiling not in valid_postures:
+            try:
+                coerced = AgentPosture.coerce(self.posture_ceiling)
+            except EnvelopeValidationError as exc:
+                valid = sorted(p.value for p in AgentPosture)
                 raise EnvelopeValidationError(
-                    f"posture_ceiling must be one of {sorted(valid_postures)}, "
+                    f"posture_ceiling must be one of {valid}, "
                     f"got {self.posture_ceiling!r}"
-                )
+                ) from exc
+            object.__setattr__(self, "posture_ceiling", coerced)
         # Freeze the metadata dict by making a copy
         if self.metadata is not None:
             object.__setattr__(self, "metadata", dict(self.metadata))
@@ -732,7 +786,10 @@ class ConstraintEnvelope:
         if self.gradient_thresholds is not None:
             result["gradient_thresholds"] = self.gradient_thresholds.to_dict()
         if self.posture_ceiling is not None:
-            result["posture_ceiling"] = self.posture_ceiling
+            # Serialize the enum as its lowercase string value so the
+            # canonical wire format (e.g. "supervised") matches the Rust
+            # SDK and existing cross-SDK fixtures.
+            result["posture_ceiling"] = self.posture_ceiling.value
         return result
 
     def intersect(self, other: ConstraintEnvelope) -> ConstraintEnvelope:
@@ -892,14 +949,12 @@ class ConstraintEnvelope:
                 ):
                     return False
 
-        # Posture ceiling: this must be equal or lower
+        # Posture ceiling: this must be equal or lower (stricter)
         if other.posture_ceiling is not None:
             if self.posture_ceiling is None:
                 return False
             order = AgentPosture.ordering()
-            self_order = order.get(AgentPosture(self.posture_ceiling), 999)
-            other_order = order.get(AgentPosture(other.posture_ceiling), 999)
-            if self_order > other_order:
+            if order[self.posture_ceiling] > order[other.posture_ceiling]:
                 return False
 
         return True
@@ -920,7 +975,9 @@ class ConstraintEnvelope:
         if self.gradient_thresholds is not None:
             result["gradient_thresholds"] = self.gradient_thresholds.to_dict()
         if self.posture_ceiling is not None:
-            result["posture_ceiling"] = self.posture_ceiling
+            # Serialize the enum as its lowercase string value to match the
+            # canonical wire format shared with the Rust SDK.
+            result["posture_ceiling"] = self.posture_ceiling.value
         if self.metadata:
             result["metadata"] = self.metadata
         result["envelope_hash"] = self.envelope_hash()
@@ -1246,20 +1303,22 @@ def _intersect_gradient(
     )
 
 
-def _intersect_posture_ceiling(a: str | None, b: str | None) -> str | None:
-    """Intersect posture ceilings: lower (more restrictive) wins."""
+def _intersect_posture_ceiling(
+    a: AgentPosture | None, b: AgentPosture | None
+) -> AgentPosture | None:
+    """Intersect posture ceilings: lower (more restrictive) wins.
+
+    Delegates to :meth:`AgentPosture.intersect` so the monotonic-tightening
+    arithmetic lives on the enum itself. ``None`` on either side is treated
+    as unbounded.
+    """
     if a is None and b is None:
         return None
     if a is None:
         return b
     if b is None:
         return a
-    order = AgentPosture.ordering()
-    a_order = order.get(AgentPosture(a), 999)
-    b_order = order.get(AgentPosture(b), 999)
-    if a_order <= b_order:
-        return a
-    return b
+    return a.intersect(b)
 
 
 # ---------------------------------------------------------------------------
