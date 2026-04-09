@@ -15,6 +15,88 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### Platform Architecture Convergence — 2026-04-09
+
+kailash 2.7.0 + kailash-kaizen 2.6.0 + kailash-nexus 2.0.0 + kaizen-agents 0.8.0 + kailash-mcp 0.2.0 + kailash-dataflow 2.0.1
+
+#### [kailash 2.7.0]
+
+##### Added
+
+- **ConstraintEnvelope** canonical implementation (SPEC-07) with financial, operational, temporal, data access, communication dimensions, posture ceiling, monotonic intersection, and NaN/Inf protection
+- **AgentPosture** enum (SPEC-04) with 5 posture levels, coercion from strings, and ceiling intersection arithmetic
+- **AuditEvent** consolidated to single canonical class with AuditEventType enum — 4 duplicate classes deleted
+- **Auth consolidation** (SPEC-06) — JWT validation, RBAC, SSO providers moved to `kailash.trust.auth`
+- Cross-SDK wire type fixtures for envelope and JSON-RPC round-trip testing
+
+##### Fixed
+
+- `from_yaml` symlink vulnerability — replaced bare `open()` with `safe_read_text()` (O_NOFOLLOW)
+- `ChainConstraintEnvelope` renamed from `ConstraintEnvelope` to avoid name collision with canonical SPEC-07 class
+
+#### [kailash-kaizen 2.6.0]
+
+##### Added
+
+- **Provider capability protocols** (SPEC-02): `StreamingProvider`, `ToolCallingProvider`, `StructuredOutputProvider`, `AsyncLLMProvider`, `BaseProvider` with `@runtime_checkable`
+- **`ProviderCapability`** enum and `get_provider_for_model()` registry function
+- **OpenAI `stream_chat()`** async generator for real token-by-token streaming
+- **`@deprecated`** decorator applied to 7 BaseAgent extension points (SPEC-04)
+- **`BaseAgentConfig.posture`** typed as `AgentPosture` enum (was `str`)
+- **LLM-first reasoning module** (`kaizen.llm.reasoning`) with `llm_text_similarity` and `llm_capability_match`
+
+##### Removed
+
+- Dead `ai_chat` middleware module (LLM-first rule violation)
+- `_simple_text_similarity` Jaccard/substring scoring (replaced by LLM reasoning)
+
+##### Fixed
+
+- Debug `sys.stderr.write` statements removed from `mcp_mixin.py` (information disclosure)
+- Closure-over-loop-variable bug in `expose_as_mcp_server` (all tools invoked last method)
+- All `kailash.mcp_server` imports migrated to `kailash_mcp`
+
+#### [kailash-nexus 2.0.0] — BREAKING
+
+##### Added
+
+- **PACTMiddleware** governance enforcement (SPEC-06) with envelope evaluation, rejection counting
+- SSO/JWT security tests (expired token, invalid signature, algorithm confusion, nonce replay)
+
+##### Changed
+
+- **BREAKING**: Auth middleware consolidated to `kailash.trust.auth`. Old `nexus.auth` path works via deprecation shim but will be removed in 3.0.0.
+
+#### [kaizen-agents 0.8.0]
+
+##### Added
+
+- **Wrapper composition system**: `WrapperBase` with canonical stack ordering (`BaseAgent → L3GovernedAgent → MonitoredAgent → StreamingAgent`), duplicate detection, and `WrapperOrderError`
+- **`StreamingAgent`** with real token streaming via `StreamingProvider.stream_chat()` and batch fallback
+- **`MonitoredAgent`** with cost tracking via `CostTracker` and budget enforcement (NaN/Inf protected)
+- **`L3GovernedAgent`** with `ConstraintEnvelope` enforcement (financial, operational, posture dimensions) and `_ProtectedInnerProxy`
+- **`LLMBased`** routing strategy wrapping `llm_capability_match` for agent selection
+- **`SupervisorWrapper(WrapperBase)`** delegating sub-tasks to worker pool via LLM routing
+- **Typed event system**: `TextDelta`, `ToolCallStart`, `ToolCallEnd`, `TurnComplete`, `BudgetExhausted`, `ErrorEvent`, `StreamBufferOverflow`
+- 176 new tests across 11 test files (wrapper, security, routing, protocol)
+
+##### Fixed
+
+- `CostTracker._records` bounded to `deque(maxlen=10000)` (memory exhaustion prevention)
+
+#### [kailash-mcp 0.2.0]
+
+##### Added
+
+- **Canonical wire types**: `JsonRpcRequest`, `JsonRpcResponse`, `JsonRpcError`, `McpToolInfo` with `to_dict()`/`from_dict()` round-trip
+- Protocol message validation and prompt injection security tests
+
+#### [kailash-dataflow 2.0.1]
+
+##### Fixed
+
+- Fabric sync products offloaded to thread + parameterized source-change fix
+
 ### kailash 2.6.0 + kailash-pact 0.8.0 + kailash-dataflow 1.8.0 + kailash-ml 0.5.0 + kailash-align 0.3.0 — 2026-04-06
 
 #### [kailash 2.6.0]
