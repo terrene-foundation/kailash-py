@@ -101,6 +101,24 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
                     stacklevel=2,
                 )
 
+    def _invoke_extension_point(self, name: str, *args: Any, **kwargs: Any) -> Any:
+        """Dispatch to a subclass override or the private ``_impl`` default.
+
+        SPEC-04 deprecates the seven extension points. Subclass overrides
+        run unchanged (they shadow the decorated wrapper). When no override
+        exists, the private ``_<name>_impl`` runs directly so vanilla
+        agents emit no deprecation warnings. ``__init_subclass__`` already
+        warned once at class-definition time for any override.
+        """
+        base_slot = getattr(BaseAgent, name, None)
+        actual_slot = getattr(type(self), name, None)
+        if actual_slot is not None and actual_slot is not base_slot:
+            return actual_slot(self, *args, **kwargs)
+        impl = getattr(self, f"{name}_impl", None)
+        if impl is None:
+            return getattr(self, name)(*args, **kwargs)
+        return impl(*args, **kwargs)
+
     def __init__(
         self,
         config: Any,
@@ -136,11 +154,22 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         self.config = config
         agent_config = config
 
-        # Signature and strategy (extension points)
+        # Signature and strategy (extension points).
+        # BaseAgent resolves defaults via ``_invoke_extension_point``: if the
+        # subclass overrides the slot, the override runs (no decorator
+        # warning because subclass methods are not decorated); otherwise the
+        # private ``_impl`` helper runs directly (no decorator warning on
+        # vanilla BaseAgent construction). See SPEC-04 § 1 item 5.
         self.signature = (
-            signature if signature is not None else self._default_signature()
+            signature
+            if signature is not None
+            else self._invoke_extension_point("_default_signature")
         )
-        self.strategy = strategy if strategy is not None else self._default_strategy()
+        self.strategy = (
+            strategy
+            if strategy is not None
+            else self._invoke_extension_point("_default_strategy")
+        )
 
         # Memory
         self.memory = memory
@@ -229,10 +258,15 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         # WorkflowGenerator
         from .workflow_generator import WorkflowGenerator
 
+        # Route prompt generation through _invoke_extension_point so
+        # subclass overrides still win while vanilla agents skip the
+        # deprecation warning path (SPEC-04 § 1 item 5).
         self.workflow_generator = WorkflowGenerator(
             config=self.config,
             signature=self.signature,
-            prompt_generator=self._generate_system_prompt,
+            prompt_generator=lambda: self._invoke_extension_point(
+                "_generate_system_prompt"
+            ),
             agent=self,
         )
 
@@ -373,7 +407,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         provider = OpenAIProvider(use_async=True)
 
         messages = []
-        system_prompt = self._generate_system_prompt()
+        system_prompt = self._invoke_extension_point("_generate_system_prompt")
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
 
@@ -518,7 +552,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         workflow = WorkflowBuilder()
 
         node_config = {
-            "system_prompt": self._generate_system_prompt(),
+            "system_prompt": self._invoke_extension_point("_generate_system_prompt"),
         }
 
         if self.config.model is not None:
@@ -544,13 +578,13 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         return self
 
     # =========================================================================
-    # Extension Points (7 total)
-    # Deprecated in v2.5.0 -- override still works but emits DeprecationWarning.
-    # Replacement: composition wrappers.
+    # Extension Points (SPEC-04 § 1 item 5 -- deprecated in v2.5.0)
+    # ``_*_impl`` are the private default implementations BaseAgent uses.
+    # The public slots below carry the deprecation wrapper for subclasses.
     # =========================================================================
 
-    def _default_signature(self) -> Signature:
-        """Provide default signature when none is specified."""
+    def _default_signature_impl(self) -> Signature:
+        """Default signature used by BaseAgent when no signature is provided."""
 
         class DefaultSignature(Signature):
             """Default signature with generic input/output."""
@@ -560,12 +594,8 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
 
         return DefaultSignature()
 
-    def _default_strategy(self) -> Any:
-        """Provide default execution strategy.
-
-        Returns AsyncSingleShotStrategy for strategy_type="single_shot",
-        MultiCycleStrategy for strategy_type="multi_cycle".
-        """
+    def _default_strategy_impl(self) -> Any:
+        """Default execution strategy resolved from config.strategy_type."""
         try:
             from kaizen.strategies.async_single_shot import AsyncSingleShotStrategy
             from kaizen.strategies.multi_cycle import MultiCycleStrategy
@@ -582,8 +612,8 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
 
             return SimpleStrategy()
 
-    def _generate_system_prompt(self) -> str:
-        """Generate system prompt from signature and tool registry."""
+    def _generate_system_prompt_impl(self) -> str:
+        """Generate the default system prompt from signature + discovered tools."""
         from kaizen.core.prompt_utils import generate_prompt_from_signature
 
         prompt_parts = [generate_prompt_from_signature(self.signature)]
@@ -593,54 +623,41 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
             all_tools.extend(server_tools)
 
         if all_tools:
-            prompt_parts.append("\n\n## Available Tools")
             prompt_parts.append(
-                "\nYou have access to the following tools to help complete tasks:"
+                "\n\n## Available Tools\n"
+                "\nYou have access to the following tools to help complete tasks:\n"
             )
-            prompt_parts.append("")
-
             for tool in all_tools:
-                tool_name = tool.get("name", "unknown")
-                display_name = tool_name.replace("mcp__kaizen_builtin__", "")
+                display_name = tool.get("name", "unknown").replace(
+                    "mcp__kaizen_builtin__", ""
+                )
                 description = tool.get("description", "No description available")
                 prompt_parts.append(f"- **{display_name}**: {description}")
-
-                input_schema = tool.get("inputSchema", {})
-                if input_schema and "properties" in input_schema:
-                    params = input_schema["properties"]
-                    if params:
-                        param_list = []
-                        for param_name, param_info in params.items():
-                            param_desc = param_info.get("description", "")
-                            param_list.append(f"{param_name} ({param_desc})")
-                        prompt_parts.append(f"  Parameters: {', '.join(param_list)}")
-
-            prompt_parts.append("\n\n## Tool Usage Instructions")
+                params = (tool.get("inputSchema") or {}).get("properties") or {}
+                if params:
+                    param_list = [
+                        f"{name} ({info.get('description', '')})"
+                        for name, info in params.items()
+                    ]
+                    prompt_parts.append(f"  Parameters: {', '.join(param_list)}")
             prompt_parts.append(
-                "\nTo use a tool, set the 'action' field to 'tool_use' and provide:"
-            )
-            prompt_parts.append(
-                "- action_input: A dict with 'tool_name' (without mcp__ prefix) and 'params' dict"
-            )
-            prompt_parts.append("")
-            prompt_parts.append("Example:")
-            prompt_parts.append('  action: "tool_use"')
-            prompt_parts.append("  action_input:")
-            prompt_parts.append('    tool_name: "read_file"')
-            prompt_parts.append("    params:")
-            prompt_parts.append('      path: "/path/to/file.txt"')
-            prompt_parts.append("")
-            prompt_parts.append(
-                "After using a tool, you will receive the result in the 'context' field."
-            )
-            prompt_parts.append(
+                "\n\n## Tool Usage Instructions\n"
+                "\nTo use a tool, set the 'action' field to 'tool_use' and provide:\n"
+                "- action_input: A dict with 'tool_name' (without mcp__ prefix) and 'params' dict\n"
+                "\nExample:\n"
+                '  action: "tool_use"\n'
+                "  action_input:\n"
+                '    tool_name: "read_file"\n'
+                "    params:\n"
+                '      path: "/path/to/file.txt"\n'
+                "\nAfter using a tool, you will receive the result in the 'context' field.\n"
                 'When the task is complete, set action to "finish" with your final response.'
             )
 
         return "\n".join(prompt_parts)
 
-    def _validate_signature_output(self, output: Dict[str, Any]) -> bool:
-        """Validate that output matches signature."""
+    def _validate_signature_output_impl(self, output: Dict[str, Any]) -> bool:
+        """Validate that output matches signature (default implementation)."""
         has_special_keys = any(
             key in output for key in ["_write_insight", "response", "result"]
         )
@@ -655,31 +672,83 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
                     raise ValueError(f"Missing required output field: {field_name}")
         return True
 
-    def _pre_execution_hook(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Hook called before execution."""
+    def _pre_execution_hook_impl(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Default pre-execution hook (logs execution start)."""
         logging_enabled = getattr(self.config, "logging_enabled", True)
         if logging_enabled:
             signature_name = getattr(self.signature, "name", "unknown")
             logger.info(f"Executing {signature_name} with inputs: {inputs}")
         return inputs
 
-    def _post_execution_hook(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Hook called after execution."""
+    def _post_execution_hook_impl(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Default post-execution hook (logs completion)."""
         logging_enabled = getattr(self.config, "logging_enabled", True)
         if logging_enabled:
             logger.info(f"Execution complete. Result: {result}")
         return result
 
-    def _handle_error(
+    def _handle_error_impl(
         self, error: Exception, context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Handle errors during execution."""
+        """Default error handler."""
         error_handling_enabled = getattr(self.config, "error_handling_enabled", True)
         if error_handling_enabled:
             logger.error(f"Error during execution: {error}", extra=context)
             return {"error": str(error), "type": type(error).__name__, "success": False}
         else:
             raise error
+
+    # -------------------------------------------------------------------------
+    # Deprecated extension-point slots (SPEC-04 § 1 item 5)
+    #
+    # Each slot delegates to its ``_impl`` sibling so existing overrides
+    # keep working. The deprecation wrapper fires only when the slot is
+    # invoked directly; BaseAgent and AgentLoop route around the slots via
+    # ``_invoke_extension_point`` so vanilla agents stay warning-free.
+    # -------------------------------------------------------------------------
+
+    _DEPRECATION_MSG = (
+        "BaseAgent extension points are deprecated. Use composition wrappers "
+        "(kaizen_agents.StreamingAgent, MonitoredAgent, GovernedAgent) or "
+        "BaseAgentConfig/signature parameters instead of subclassing."
+    )
+
+    @deprecated(_DEPRECATION_MSG, since="2.5.0")
+    def _default_signature(self) -> Signature:
+        """Deprecated extension point: return the default Signature."""
+        return self._default_signature_impl()
+
+    @deprecated(_DEPRECATION_MSG, since="2.5.0")
+    def _default_strategy(self) -> Any:
+        """Deprecated extension point: return the default strategy."""
+        return self._default_strategy_impl()
+
+    @deprecated(_DEPRECATION_MSG, since="2.5.0")
+    def _generate_system_prompt(self) -> str:
+        """Deprecated extension point: generate the system prompt."""
+        return self._generate_system_prompt_impl()
+
+    @deprecated(_DEPRECATION_MSG, since="2.5.0")
+    def _validate_signature_output(self, output: Dict[str, Any]) -> bool:
+        """Deprecated extension point: validate LLM output against signature."""
+        return self._validate_signature_output_impl(output)
+
+    @deprecated(_DEPRECATION_MSG, since="2.5.0")
+    def _pre_execution_hook(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Deprecated extension point: called before execution."""
+        return self._pre_execution_hook_impl(inputs)
+
+    @deprecated(_DEPRECATION_MSG, since="2.5.0")
+    def _post_execution_hook(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Deprecated extension point: called after execution."""
+        return self._post_execution_hook_impl(result)
+
+    @deprecated(_DEPRECATION_MSG, since="2.5.0")
+    def _handle_error(
+        self, error: Exception, context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Deprecated extension point: handle execution errors."""
+        return self._handle_error_impl(error, context)
 
     # =========================================================================
     # Control Protocol helpers

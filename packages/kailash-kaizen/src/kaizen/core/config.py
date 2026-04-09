@@ -23,6 +23,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from kailash.trust.posture import AgentPosture
+
 
 # PERFORMANCE OPTIMIZATION: Lazy import Pydantic to avoid 1.8s import delay
 def _lazy_import_pydantic():
@@ -98,10 +100,13 @@ class BaseAgentConfig:
     )
 
     # Trust / Posture Configuration (SPEC-04)
-    # Trust posture ceiling applied to this agent. None means no ceiling.
-    # Use values from kailash.trust.envelope.AgentPosture
-    # (e.g., "PUBLIC", "INTERNAL", "RESTRICTED", "CONFIDENTIAL").
-    posture: Optional[str] = None
+    # Trust posture applied to this agent. ``None`` means no posture is
+    # asserted (the envelope ceiling, if present, will still clamp any
+    # wrapper-supplied posture). Accepts an ``AgentPosture`` enum member or
+    # its lowercase wire-format string (e.g. ``"supervised"``) and coerces
+    # to the enum in ``__post_init__`` so existing string-based callers
+    # continue to work without churn.
+    posture: Optional[AgentPosture] = None
 
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -111,6 +116,25 @@ class BaseAgentConfig:
             from kaizen.core.autonomy.permissions.types import PermissionMode
 
             self.permission_mode = PermissionMode.DEFAULT
+
+        # Coerce posture: accept a string wire value for backward compat
+        # and convert to the canonical AgentPosture enum. Invalid values
+        # raise a clear error at construction time (SPEC-04 § 1 item 4).
+        if self.posture is not None and not isinstance(self.posture, AgentPosture):
+            if isinstance(self.posture, str):
+                try:
+                    self.posture = AgentPosture(self.posture)
+                except ValueError as exc:
+                    valid = sorted(p.value for p in AgentPosture)
+                    raise ValueError(
+                        f"posture must be an AgentPosture enum or one of "
+                        f"{valid}, got {self.posture!r}"
+                    ) from exc
+            else:
+                raise TypeError(
+                    f"posture must be AgentPosture | str | None, got "
+                    f"{type(self.posture).__name__}"
+                )
 
         # Deprecation shim: migrate provider_config with "type" key to response_format
         self._migrate_provider_config()
