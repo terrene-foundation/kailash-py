@@ -718,7 +718,14 @@ class SQLiteStorage(StorageBackend):
             return tasks
 
     def save_audit_events(self, events: list[Any]) -> None:
-        """Persist audit events from RuntimeAuditGenerator."""
+        """Persist audit events from RuntimeAuditGenerator.
+
+        SPEC-08 consolidation: canonical ``AuditEvent`` stores ``outcome``
+        (was ``result``) and ``metadata`` (was ``context``).  Dict inputs
+        accept either the canonical or legacy key names; the DB schema
+        retains ``result`` / ``context`` columns so existing queries keep
+        working.
+        """
         if not events:
             return
 
@@ -733,20 +740,27 @@ class SQLiteStorage(StorageBackend):
                 else:
                     event_dict = event
 
+                # Canonical uses "outcome" / "metadata"; legacy dicts
+                # may pass "result" / "context".  Accept both.
+                result_value = event_dict.get("outcome", event_dict.get("result"))
+                context_value = event_dict.get(
+                    "metadata", event_dict.get("context") or {}
+                )
+
                 batch_data.append(
                     (
                         event_dict.get("event_id"),
                         event_dict.get("event_type"),
                         event_dict.get("timestamp"),
                         event_dict.get("trace_id"),
-                        event_dict.get("result"),
+                        result_value,
                         event_dict.get("workflow_id"),
                         event_dict.get("node_id"),
                         event_dict.get("agent_id"),
                         event_dict.get("human_origin_id"),
                         event_dict.get("action"),
                         event_dict.get("resource"),
-                        json.dumps(event_dict.get("context", {})),
+                        json.dumps(context_value),
                     )
                 )
 
@@ -763,7 +777,12 @@ class SQLiteStorage(StorageBackend):
             self.conn.commit()
 
     def query_audit_events(self, **filters) -> list[dict]:
-        """Query audit events with filters."""
+        """Query audit events with filters.
+
+        SPEC-08: accepts either ``outcome=`` (canonical) or ``result=``
+        (legacy) filter keys.  Returns dicts with both keys populated so
+        old and new consumers both work.
+        """
         with self._lock:
             cursor = self.conn.cursor()
 
@@ -782,9 +801,11 @@ class SQLiteStorage(StorageBackend):
                 query += " AND workflow_id = ?"
                 params.append(filters["workflow_id"])
 
-            if "result" in filters:
+            # Accept canonical "outcome=" or legacy "result="
+            outcome_filter = filters.get("outcome", filters.get("result"))
+            if outcome_filter is not None:
                 query += " AND result = ?"
-                params.append(filters["result"])
+                params.append(outcome_filter)
 
             query += " ORDER BY timestamp DESC LIMIT ?"
             limit = min(filters.get("limit", 10000), 10000)
@@ -799,6 +820,11 @@ class SQLiteStorage(StorageBackend):
                 data = dict(zip(columns, row, strict=False))
                 if data.get("context"):
                     data["context"] = json.loads(data["context"])
+                # Populate both canonical and legacy keys for consumers
+                if "result" in data and "outcome" not in data:
+                    data["outcome"] = data["result"]
+                if "context" in data and "metadata" not in data:
+                    data["metadata"] = data["context"]
                 events.append(data)
 
             return events

@@ -14,6 +14,12 @@ Features:
 - Automated log archiving and cleanup
 - Integration with SIEM systems
 - Multi-tenant log isolation
+
+SPEC-08 consolidation (2026-04): the ``AuditEvent`` dataclass is re-exported
+from ``kailash.trust.audit_store``.  The enterprise-specific ``AuditEventType``
+and ``AuditSeverity`` enums remain in this module -- they are a domain
+vocabulary for user / role / compliance events, not a duplicate of the
+generic trust-plane ``AuditEventType``.
 """
 
 import hashlib
@@ -29,9 +35,18 @@ from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import AsyncSQLDatabaseNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
+# SPEC-08: canonical AuditEvent lives in kailash.trust.audit_store.
+from kailash.trust.audit_store import AuditEvent
+
 
 class AuditEventType(Enum):
-    """Types of audit events."""
+    """Types of enterprise audit events.
+
+    Domain-specific enum for user management, RBAC, and compliance events.
+    NOT a duplicate of ``kailash.trust.audit_store.AuditEventType`` -- the
+    trust-plane enum covers workflow lifecycle and generic trust events;
+    this enum covers enterprise user/admin semantics.
+    """
 
     USER_LOGIN = "user_login"
     USER_LOGOUT = "user_logout"
@@ -88,43 +103,77 @@ class AuditOperation(Enum):
     MONITOR_REALTIME = "monitor_realtime"
 
 
-@dataclass
-class AuditEvent:
-    """Audit event structure."""
+_GENESIS_HASH = "0" * 64
+"""Sentinel previous-hash for enterprise audit events that are not part of a chain."""
 
-    event_id: str
-    event_type: AuditEventType
-    severity: AuditSeverity
-    user_id: Optional[str]
-    tenant_id: str
-    resource_id: Optional[str]
-    action: str
-    description: str
-    metadata: Dict[str, Any]
-    timestamp: datetime
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
-    session_id: Optional[str] = None
-    correlation_id: Optional[str] = None
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        return {
-            "event_id": self.event_id,
-            "event_type": self.event_type.value,
-            "severity": self.severity.value,
-            "user_id": self.user_id,
-            "tenant_id": self.tenant_id,
-            "resource_id": self.resource_id,
-            "action": self.action,
-            "description": self.description,
-            "metadata": self.metadata,
-            "timestamp": self.timestamp.isoformat(),
-            "ip_address": self.ip_address,
-            "user_agent": self.user_agent,
-            "session_id": self.session_id,
-            "correlation_id": self.correlation_id,
-        }
+def _build_enterprise_event(
+    *,
+    event_id: str,
+    event_type: AuditEventType,
+    severity: AuditSeverity,
+    user_id: Optional[str],
+    tenant_id: str,
+    resource_id: Optional[str],
+    action: str,
+    description: str,
+    metadata: Dict[str, Any],
+    timestamp: datetime,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    session_id: Optional[str] = None,
+    correlation_id: Optional[str] = None,
+) -> AuditEvent:
+    """Build a canonical ``AuditEvent`` for enterprise audit logging.
+
+    Enterprise events carry the full set of multi-tenant, session, and
+    correlation fields on the canonical AuditEvent.  The event is a
+    standalone observation record (genesis ``prev_hash``); real chain
+    linkage is performed by the persistent store if applicable.
+    """
+    ts_str = timestamp.isoformat()
+    actor = user_id or "system"
+    resource_str = resource_id or ""
+    outcome = (
+        "success"  # Enterprise events default to success; failures are distinct types
+    )
+
+    payload = {
+        "event_id": event_id,
+        "timestamp": ts_str,
+        "actor": actor,
+        "action": action,
+        "resource": resource_str,
+        "outcome": outcome,
+        "prev_hash": _GENESIS_HASH,
+        "parent_anchor_id": None,
+        "duration_ms": None,
+        "metadata": dict(metadata),
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    event_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    return AuditEvent(
+        event_id=event_id,
+        timestamp=ts_str,
+        actor=actor,
+        action=action,
+        resource=resource_str,
+        outcome=outcome,
+        prev_hash=_GENESIS_HASH,
+        hash=event_hash,
+        metadata=dict(metadata),
+        event_type=event_type.value,
+        severity=severity.value,
+        description=description,
+        user_id=user_id,
+        tenant_id=tenant_id,
+        resource_id=resource_id,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        session_id=session_id,
+        correlation_id=correlation_id,
+    )
 
 
 @register_node()
@@ -387,11 +436,11 @@ class EnterpriseAuditLogNode(Node):
             if field not in event_data:
                 raise NodeValidationError(f"Missing required field: {field}")
 
-        # Create audit event
+        # Create audit event via canonical builder
         event_id = self._generate_event_id()
         now = datetime.now(UTC)
 
-        audit_event = AuditEvent(
+        audit_event = _build_enterprise_event(
             event_id=event_id,
             event_type=AuditEventType(event_data["event_type"]),
             severity=AuditSeverity(event_data.get("severity", "medium")),
@@ -408,7 +457,10 @@ class EnterpriseAuditLogNode(Node):
             correlation_id=event_data.get("correlation_id"),
         )
 
-        # Insert into database
+        # Insert into database.
+        # Canonical AuditEvent stores event_type and severity as strings and
+        # timestamp as an ISO-8601 string.  Convert timestamp back to a
+        # datetime for DB drivers that expect a native timestamp column.
         insert_query = """
         INSERT INTO audit_logs (
             event_id, event_type, severity, user_id, tenant_id, resource_id,
@@ -424,15 +476,15 @@ class EnterpriseAuditLogNode(Node):
                 "query": insert_query,
                 "params": [
                     audit_event.event_id,
-                    audit_event.event_type.value,
-                    audit_event.severity.value,
+                    audit_event.event_type,
+                    audit_event.severity,
                     audit_event.user_id,
                     audit_event.tenant_id,
                     audit_event.resource_id,
                     audit_event.action,
                     audit_event.description,
-                    audit_event.metadata,
-                    audit_event.timestamp,
+                    dict(audit_event.metadata),
+                    datetime.fromisoformat(audit_event.timestamp),
                     audit_event.ip_address,
                     audit_event.user_agent,
                     audit_event.session_id,

@@ -22,7 +22,7 @@ import pytest
 
 from kailash.trust.chain import ActionResult, AuditAnchor
 from kailash.trust.export.siem import (
-    AuditEvent,
+    AuditOperationEvent,
     DelegateEvent,
     EstablishEvent,
     SIEMEvent,
@@ -31,7 +31,6 @@ from kailash.trust.export.siem import (
     serialize_cef,
     serialize_ocsf,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -106,8 +105,8 @@ def verify_event(now):
 
 @pytest.fixture
 def audit_event(now):
-    """An AuditEvent with all fields populated."""
-    return AuditEvent(
+    """An AuditOperationEvent with all fields populated."""
+    return AuditOperationEvent(
         timestamp=now,
         agent_id="agent-001",
         operation="AUDIT",
@@ -303,24 +302,24 @@ class TestVerifyEvent:
         assert isinstance(verify_event, SIEMEvent)
 
 
-class TestAuditEvent:
-    """Tests for AuditEvent subclass."""
+class TestAuditOperationEvent:
+    """Tests for AuditOperationEvent subclass."""
 
     def test_audit_has_action(self, audit_event):
-        """AuditEvent should store action."""
+        """AuditOperationEvent should store action."""
         assert audit_event.action == "generate_report"
 
     def test_audit_has_resource(self, audit_event):
-        """AuditEvent should store resource."""
+        """AuditOperationEvent should store resource."""
         assert audit_event.resource == "financial_db"
 
     def test_audit_has_chain_hash(self, audit_event):
-        """AuditEvent should store chain_hash."""
+        """AuditOperationEvent should store chain_hash."""
         assert audit_event.chain_hash == "abc123def456"
 
     def test_audit_defaults(self, now):
-        """AuditEvent fields should have correct defaults."""
-        event = AuditEvent(
+        """AuditOperationEvent fields should have correct defaults."""
+        event = AuditOperationEvent(
             timestamp=now,
             agent_id="agent-001",
             operation="AUDIT",
@@ -332,7 +331,7 @@ class TestAuditEvent:
         assert event.chain_hash is None
 
     def test_audit_is_siem_event(self, audit_event):
-        """AuditEvent should be a SIEMEvent."""
+        """AuditOperationEvent should be a SIEMEvent."""
         assert isinstance(audit_event, SIEMEvent)
 
 
@@ -458,7 +457,7 @@ class TestSerializeCEF:
         assert "cn1=85" in cef  # trust_score
 
     def test_cef_audit_event_extensions(self, audit_event):
-        """AuditEvent should include action, resource, and chain_hash."""
+        """AuditOperationEvent should include action, resource, and chain_hash."""
         cef = serialize_cef(audit_event)
         assert "act=generate_report" in cef
         assert "cs1=financial_db" in cef  # resource
@@ -728,7 +727,7 @@ class TestSerializeOCSF:
         assert unmapped.get("action_verified") == "analyze_data"
 
     def test_ocsf_audit_event_unmapped_fields(self, audit_event):
-        """AuditEvent-specific fields should appear in OCSF unmapped dict."""
+        """AuditOperationEvent-specific fields should appear in OCSF unmapped dict."""
         result = serialize_ocsf(audit_event)
         assert "unmapped" in result
         unmapped = result["unmapped"]
@@ -767,9 +766,9 @@ class TestFromAuditAnchor:
     """Tests for the from_audit_anchor factory function."""
 
     def test_creates_audit_event(self, sample_audit_anchor):
-        """Should return an AuditEvent instance."""
+        """Should return an AuditOperationEvent instance."""
         event = from_audit_anchor(sample_audit_anchor)
-        assert isinstance(event, AuditEvent)
+        assert isinstance(event, AuditOperationEvent)
 
     def test_maps_agent_id(self, sample_audit_anchor):
         """Should copy agent_id from anchor."""
@@ -911,7 +910,9 @@ class TestFromAuditAnchor:
 class TestRoundTrip:
     """Tests ensuring CEF and OCSF serializers handle all event types."""
 
-    def test_cef_roundtrip_all_event_types(self, establish_event, delegate_event, verify_event, audit_event):
+    def test_cef_roundtrip_all_event_types(
+        self, establish_event, delegate_event, verify_event, audit_event
+    ):
         """All event types should serialize to valid CEF strings."""
         for event in [establish_event, delegate_event, verify_event, audit_event]:
             cef = serialize_cef(event)
@@ -921,7 +922,9 @@ class TestRoundTrip:
             parts = cef.split("|")
             assert len(parts) >= 7
 
-    def test_ocsf_roundtrip_all_event_types(self, establish_event, delegate_event, verify_event, audit_event):
+    def test_ocsf_roundtrip_all_event_types(
+        self, establish_event, delegate_event, verify_event, audit_event
+    ):
         """All event types should serialize to valid OCSF dicts."""
         for event in [establish_event, delegate_event, verify_event, audit_event]:
             ocsf = serialize_ocsf(event)
