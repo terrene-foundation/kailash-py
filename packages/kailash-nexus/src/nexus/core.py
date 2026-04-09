@@ -576,8 +576,8 @@ class Nexus:
         try:
             # Import Core SDK's comprehensive MCP implementation for HTTP+WebSocket mode
             from kailash.channels import ChannelConfig, ChannelType, MCPChannel
-            from kailash.mcp_server import MCPServer
-            from kailash.mcp_server.auth import APIKeyAuth
+            from kailash_mcp import MCPServer
+            from kailash_mcp.auth.providers import APIKeyAuth
 
             # Create production-ready MCP server using Core SDK
             self._mcp_server = self._create_sdk_mcp_server()
@@ -756,8 +756,8 @@ Check the documentation or explore available resources.
         implementation that includes authentication, caching, metrics, and
         full protocol support (tools, resources, prompts).
         """
-        from kailash.mcp_server import MCPServer
-        from kailash.mcp_server.auth import APIKeyAuth
+        from kailash_mcp import MCPServer
+        from kailash_mcp.auth.providers import APIKeyAuth
 
         # Configure authentication if enabled
         auth_provider = None

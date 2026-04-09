@@ -23,8 +23,8 @@ from kailash.workflow.builder import WorkflowBuilder
 
 # Import existing Kailash MCP components
 try:
-    from kailash.mcp_server import MCPServer
-    from kailash.mcp_server.utils import CacheManager, ConfigManager, MetricsCollector
+    from kailash_mcp import MCPServer
+    from kailash_mcp.utils import CacheManager, ConfigManager, MetricsCollector
 
     _KAILASH_MCP_AVAILABLE = True
 except ImportError:

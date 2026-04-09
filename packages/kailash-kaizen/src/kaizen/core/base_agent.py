@@ -36,12 +36,12 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-# MCP client import (for MCP integration)
-from kailash.mcp_server.client import MCPClient
-
 # Core SDK imports
 from kailash.nodes.base import Node, NodeParameter
 from kailash.workflow.builder import WorkflowBuilder
+
+# MCP client import (for MCP integration)
+from kailash_mcp.client import MCPClient
 
 # Type checking imports (not available at runtime in all environments)
 if TYPE_CHECKING:
@@ -3158,10 +3158,10 @@ class BaseAgent(Node):
             - 100% MCP spec compliant: tools, resources, prompts
         """
         try:
-            from kailash.mcp_server import MCPClient
+            from kailash_mcp import MCPClient
         except ImportError:
             raise ImportError(
-                "kailash.mcp_server not available. Install with: pip install kailash"
+                "kailash_mcp not available. Install with: pip install kailash"
             )
 
         # Create production MCP client
@@ -3305,10 +3305,10 @@ class BaseAgent(Node):
             MCPServer: Configured server (call .run() to start)
 
         Raises:
-            ImportError: If kailash.mcp_server not available
+            ImportError: If kailash_mcp not available
 
         Example:
-            >>> from kailash.mcp_server.auth import APIKeyAuth
+            >>> from kailash_mcp.auth.providers import APIKeyAuth
             >>>
             >>> # Create agent
             >>> agent = MyAgent(config=config, signature=signature)
@@ -3331,11 +3331,11 @@ class BaseAgent(Node):
             - Service discovery via registry + network
         """
         try:
-            from kailash.mcp_server import MCPServer
-            from kailash.mcp_server import enable_auto_discovery as enable_discovery
+            from kailash_mcp import MCPServer
+            from kailash_mcp import enable_auto_discovery as enable_discovery
         except ImportError:
             raise ImportError(
-                "kailash.mcp_server not available. Install with: pip install kailash"
+                "kailash_mcp not available. Install with: pip install kailash"
             )
 
         # Create production MCP server
