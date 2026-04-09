@@ -2654,26 +2654,9 @@ class BaseAgent(Node):
 
         # Flatten structured_content fields to top level for easy access
         # This allows tests to call result.get("exists") instead of result.get("structured_content").get("exists")
-        import sys
-
-        sys.stderr.write("\n[DEBUG] _convert_mcp_result_to_dict - Before flattening:\n")
-        sys.stderr.write(f"  structured_content: {structured_content}\n")
-        sys.stderr.write(f"  result_dict keys before: {list(result_dict.keys())}\n")
-        sys.stderr.flush()
-
         for key, value in structured_content.items():
-            sys.stderr.write(f"  [FLATTEN] Processing key={key}, value={value}\n")
-            sys.stderr.flush()
             if key not in result_dict:  # Don't overwrite existing keys
                 result_dict[key] = value
-                sys.stderr.write(f"    ✓ Added {key}={value} to result_dict\n")
-            else:
-                sys.stderr.write(f"    ✗ Skipped {key} (already in result_dict)\n")
-            sys.stderr.flush()
-
-        sys.stderr.write(f"  result_dict keys after: {list(result_dict.keys())}\n")
-        sys.stderr.write(f"  Final result_dict: {result_dict}\n")
-        sys.stderr.flush()
 
         return result_dict
 

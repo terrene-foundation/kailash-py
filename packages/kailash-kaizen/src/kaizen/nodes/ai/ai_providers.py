@@ -3943,6 +3943,11 @@ class GoogleGeminiProvider(UnifiedAIProvider):
                     # Format: {"type": "json_object"}
                     config_params["response_mime_type"] = "application/json"
 
+            # Gemini rejects response_mime_type combined with tools (gh#340)
+            if tools:
+                config_params.pop("response_mime_type", None)
+                config_params.pop("response_json_schema", None)
+
             # Build request config
             request_config = types.GenerateContentConfig(**config_params)
 
@@ -4085,6 +4090,11 @@ class GoogleGeminiProvider(UnifiedAIProvider):
                     # OpenAI legacy mode -> Google JSON mode (no schema)
                     # Format: {"type": "json_object"}
                     config_params["response_mime_type"] = "application/json"
+
+            # Gemini rejects response_mime_type combined with tools (gh#340)
+            if tools:
+                config_params.pop("response_mime_type", None)
+                config_params.pop("response_json_schema", None)
 
             request_config = types.GenerateContentConfig(**config_params)
 

@@ -152,6 +152,253 @@ class TestGoogleGeminiProvider:
         assert result == []
 
 
+class TestGoogleProviderToolsResponseFormatConflict:
+    """Regression tests for gh#340: Gemini rejects response_mime_type + tools together."""
+
+    def test_chat_strips_response_mime_type_when_tools_present(self, monkeypatch):
+        """When tools and response_format are both provided, response_mime_type
+        must NOT appear in the GenerateContentConfig passed to Gemini."""
+        import sys
+        from unittest.mock import MagicMock, patch
+
+        # Build a fake google.genai.types module with a spy on GenerateContentConfig
+        captured_config_kwargs = {}
+
+        class FakeGenerateContentConfig:
+            def __init__(self, **kwargs):
+                captured_config_kwargs.update(kwargs)
+                self.system_instruction = None
+                self.tools = None
+
+        class FakeFunctionDeclaration:
+            def __init__(self, **kwargs):
+                pass
+
+        class FakeTool:
+            def __init__(self, **kwargs):
+                pass
+
+        class FakePart:
+            @staticmethod
+            def from_text(text=""):
+                return MagicMock(text=text)
+
+        class FakeContent:
+            def __init__(self, role=None, parts=None):
+                self.role = role
+                self.parts = parts or []
+
+        fake_types = MagicMock()
+        fake_types.GenerateContentConfig = FakeGenerateContentConfig
+        fake_types.FunctionDeclaration = FakeFunctionDeclaration
+        fake_types.Tool = FakeTool
+        fake_types.Part = FakePart
+        fake_types.Content = FakeContent
+
+        # Build a fake genai client whose generate_content returns a valid response
+        fake_response = MagicMock()
+        fake_response.candidates = []
+        fake_response.usage_metadata = None
+
+        fake_client = MagicMock()
+        fake_client.models.generate_content.return_value = fake_response
+
+        monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+        provider = GoogleGeminiProvider()
+        provider._sync_client = fake_client
+
+        # Patch google.genai.types to use our spy
+        fake_genai = MagicMock()
+        fake_genai.types = fake_types
+
+        with patch.dict(
+            sys.modules,
+            {"google.genai": fake_genai, "google": MagicMock(genai=fake_genai)},
+        ):
+            # Call chat with BOTH response_format AND tools
+            provider.chat(
+                messages=[{"role": "user", "content": "hello"}],
+                model="gemini-2.0-flash",
+                generation_config={
+                    "temperature": 0.7,
+                    "response_format": {
+                        "type": "json_schema",
+                        "json_schema": {"name": "Test", "schema": {"type": "object"}},
+                    },
+                },
+                tools=[
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "my_tool",
+                            "description": "A tool",
+                            "parameters": {},
+                        },
+                    }
+                ],
+            )
+
+        # The key assertion: response_mime_type must NOT be in the config
+        assert (
+            "response_mime_type" not in captured_config_kwargs
+        ), "response_mime_type should be stripped when tools are present (gh#340)"
+        assert (
+            "response_json_schema" not in captured_config_kwargs
+        ), "response_json_schema should be stripped when tools are present (gh#340)"
+
+    def test_chat_keeps_response_mime_type_when_no_tools(self, monkeypatch):
+        """When NO tools are provided, response_mime_type should remain in config."""
+        import sys
+        from unittest.mock import MagicMock, patch
+
+        captured_config_kwargs = {}
+
+        class FakeGenerateContentConfig:
+            def __init__(self, **kwargs):
+                captured_config_kwargs.update(kwargs)
+                self.system_instruction = None
+                self.tools = None
+
+        class FakePart:
+            @staticmethod
+            def from_text(text=""):
+                return MagicMock(text=text)
+
+        class FakeContent:
+            def __init__(self, role=None, parts=None):
+                self.role = role
+                self.parts = parts or []
+
+        fake_types = MagicMock()
+        fake_types.GenerateContentConfig = FakeGenerateContentConfig
+        fake_types.Part = FakePart
+        fake_types.Content = FakeContent
+
+        fake_response = MagicMock()
+        fake_response.candidates = []
+        fake_response.usage_metadata = None
+
+        fake_client = MagicMock()
+        fake_client.models.generate_content.return_value = fake_response
+
+        monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+        provider = GoogleGeminiProvider()
+        provider._sync_client = fake_client
+
+        fake_genai = MagicMock()
+        fake_genai.types = fake_types
+
+        with patch.dict(
+            sys.modules,
+            {"google.genai": fake_genai, "google": MagicMock(genai=fake_genai)},
+        ):
+            provider.chat(
+                messages=[{"role": "user", "content": "hello"}],
+                model="gemini-2.0-flash",
+                generation_config={
+                    "temperature": 0.7,
+                    "response_format": {
+                        "type": "json_schema",
+                        "json_schema": {"name": "Test", "schema": {"type": "object"}},
+                    },
+                },
+                tools=[],  # empty tools list
+            )
+
+        # response_mime_type SHOULD be present when there are no tools
+        assert captured_config_kwargs.get("response_mime_type") == "application/json"
+
+    @pytest.mark.asyncio
+    async def test_chat_async_strips_response_mime_type_when_tools_present(
+        self, monkeypatch
+    ):
+        """Async variant: response_mime_type must be stripped when tools are present."""
+        import sys
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        captured_config_kwargs = {}
+
+        class FakeGenerateContentConfig:
+            def __init__(self, **kwargs):
+                captured_config_kwargs.update(kwargs)
+                self.system_instruction = None
+                self.tools = None
+
+        class FakeFunctionDeclaration:
+            def __init__(self, **kwargs):
+                pass
+
+        class FakeTool:
+            def __init__(self, **kwargs):
+                pass
+
+        class FakePart:
+            @staticmethod
+            def from_text(text=""):
+                return MagicMock(text=text)
+
+        class FakeContent:
+            def __init__(self, role=None, parts=None):
+                self.role = role
+                self.parts = parts or []
+
+        fake_types = MagicMock()
+        fake_types.GenerateContentConfig = FakeGenerateContentConfig
+        fake_types.FunctionDeclaration = FakeFunctionDeclaration
+        fake_types.Tool = FakeTool
+        fake_types.Part = FakePart
+        fake_types.Content = FakeContent
+
+        fake_response = MagicMock()
+        fake_response.candidates = []
+        fake_response.usage_metadata = None
+
+        fake_aio_models = AsyncMock()
+        fake_aio_models.generate_content.return_value = fake_response
+
+        fake_aio = MagicMock()
+        fake_aio.models = fake_aio_models
+
+        fake_client = MagicMock()
+        fake_client.aio = fake_aio
+
+        monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
+        provider = GoogleGeminiProvider()
+        provider._sync_client = fake_client
+
+        fake_genai = MagicMock()
+        fake_genai.types = fake_types
+
+        with patch.dict(
+            sys.modules,
+            {"google.genai": fake_genai, "google": MagicMock(genai=fake_genai)},
+        ):
+            await provider.chat_async(
+                messages=[{"role": "user", "content": "hello"}],
+                model="gemini-2.0-flash",
+                generation_config={
+                    "temperature": 0.7,
+                    "response_format": {
+                        "type": "json_object",
+                    },
+                },
+                tools=[
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "my_tool",
+                            "description": "A tool",
+                            "parameters": {},
+                        },
+                    }
+                ],
+            )
+
+        assert (
+            "response_mime_type" not in captured_config_kwargs
+        ), "response_mime_type should be stripped when tools are present in async path (gh#340)"
+
+
 class TestGoogleProviderConfig:
     """Tests for Google provider configuration functions."""
 

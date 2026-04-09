@@ -576,9 +576,9 @@ class PipelineExecutor:
                         raw_data = await product_fn(context)
                 else:
                     if params is not None:
-                        raw_data = product_fn(context, params)
+                        raw_data = await asyncio.to_thread(product_fn, context, params)
                     else:
-                        raw_data = product_fn(context)
+                        raw_data = await asyncio.to_thread(product_fn, context)
             except Exception:
                 duration_ms = (time.monotonic() - t0) * 1000
                 steps.append(
