@@ -14,10 +14,8 @@ from __future__ import annotations
 import re
 
 import pytest
-
 from kailash.trust.metrics import TrustMetricsCollector, export_prometheus
 from kailash.trust.posture.postures import TrustPosture
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -36,9 +34,9 @@ def populated_collector():
     c = TrustMetricsCollector()
 
     # Record postures for multiple agents
-    c.record_posture("agent-001", TrustPosture.DELEGATED)
-    c.record_posture("agent-002", TrustPosture.SUPERVISED)
-    c.record_posture("agent-003", TrustPosture.CONTINUOUS_INSIGHT)
+    c.record_posture("agent-001", TrustPosture.AUTONOMOUS)
+    c.record_posture("agent-002", TrustPosture.TOOL)
+    c.record_posture("agent-003", TrustPosture.DELEGATING)
 
     # Record transitions
     c.record_transition("upgrade")
@@ -92,68 +90,80 @@ class TestExportPrometheus:
         result = export_prometheus(populated_collector)
         # Match pattern like: eatp_trust_score{agent_id="agent-001"} 5
         pattern = re.compile(r'eatp_trust_score\{agent_id="[^"]+"\}\s+\d+')
-        assert pattern.search(result), f"eatp_trust_score must have agent_id label. Got:\n{result}"
+        assert pattern.search(
+            result
+        ), f"eatp_trust_score must have agent_id label. Got:\n{result}"
 
     def test_trust_score_values_match_posture_levels(self, populated_collector):
         """eatp_trust_score values must correspond to posture autonomy levels."""
         result = export_prometheus(populated_collector)
 
         # agent-001 is DELEGATED (level 5)
-        assert re.search(r'eatp_trust_score\{agent_id="agent-001"\}\s+5', result), (
-            "agent-001 (DELEGATED) must have trust score 5"
-        )
+        assert re.search(
+            r'eatp_trust_score\{agent_id="agent-001"\}\s+5', result
+        ), "agent-001 (DELEGATED) must have trust score 5"
 
         # agent-002 is SUPERVISED (level 2)
-        assert re.search(r'eatp_trust_score\{agent_id="agent-002"\}\s+2', result), (
-            "agent-002 (SUPERVISED) must have trust score 2"
-        )
+        assert re.search(
+            r'eatp_trust_score\{agent_id="agent-002"\}\s+2', result
+        ), "agent-002 (SUPERVISED) must have trust score 2"
 
         # agent-003 is CONTINUOUS_INSIGHT (level 4)
-        assert re.search(r'eatp_trust_score\{agent_id="agent-003"\}\s+4', result), (
-            "agent-003 (CONTINUOUS_INSIGHT) must have trust score 4"
-        )
+        assert re.search(
+            r'eatp_trust_score\{agent_id="agent-003"\}\s+4', result
+        ), "agent-003 (CONTINUOUS_INSIGHT) must have trust score 4"
 
     def test_contains_verification_total_metric(self, populated_collector):
         """Output must include eatp_verification_total counter."""
         result = export_prometheus(populated_collector)
-        assert "eatp_verification_total" in result, "Must include eatp_verification_total metric"
+        assert (
+            "eatp_verification_total" in result
+        ), "Must include eatp_verification_total metric"
 
     def test_verification_total_equals_evaluations(self, populated_collector):
         """eatp_verification_total must equal total constraint evaluations."""
         result = export_prometheus(populated_collector)
         # 3 evaluations were recorded
-        assert re.search(r"eatp_verification_total\s+3", result), "eatp_verification_total must be 3"
+        assert re.search(
+            r"eatp_verification_total\s+3", result
+        ), "eatp_verification_total must be 3"
 
     def test_contains_posture_distribution_metric(self, populated_collector):
         """Output must include eatp_posture_distribution gauge with posture labels."""
         result = export_prometheus(populated_collector)
-        assert "eatp_posture_distribution" in result, "Must include eatp_posture_distribution metric"
+        assert (
+            "eatp_posture_distribution" in result
+        ), "Must include eatp_posture_distribution metric"
 
     def test_posture_distribution_has_posture_label(self, populated_collector):
         """eatp_posture_distribution must include posture label."""
         result = export_prometheus(populated_collector)
         pattern = re.compile(r'eatp_posture_distribution\{posture="[^"]+"\}\s+\d+')
-        assert pattern.search(result), f"eatp_posture_distribution must have posture label. Got:\n{result}"
+        assert pattern.search(
+            result
+        ), f"eatp_posture_distribution must have posture label. Got:\n{result}"
 
     def test_posture_distribution_values_match_agent_counts(self, populated_collector):
         """eatp_posture_distribution values must count agents at each posture level."""
         result = export_prometheus(populated_collector)
 
-        # 1 agent at delegated, 1 at supervised, 1 at continuous_insight
-        assert re.search(r'eatp_posture_distribution\{posture="delegated"\}\s+1', result), (
-            "Should show 1 agent at delegated posture"
-        )
-        assert re.search(r'eatp_posture_distribution\{posture="supervised"\}\s+1', result), (
-            "Should show 1 agent at supervised posture"
-        )
-        assert re.search(r'eatp_posture_distribution\{posture="continuous_insight"\}\s+1', result), (
-            "Should show 1 agent at continuous_insight posture"
-        )
+        # 1 agent at autonomous, 1 at tool, 1 at delegating
+        assert re.search(
+            r'eatp_posture_distribution\{posture="autonomous"\}\s+1', result
+        ), "Should show 1 agent at autonomous posture"
+        assert re.search(
+            r'eatp_posture_distribution\{posture="tool"\}\s+1', result
+        ), "Should show 1 agent at tool posture"
+        assert re.search(
+            r'eatp_posture_distribution\{posture="delegating"\}\s+1', result
+        ), "Should show 1 agent at delegating posture"
 
     def test_contains_constraint_utilization_metric(self, populated_collector):
         """Output must include eatp_constraint_utilization gauge."""
         result = export_prometheus(populated_collector)
-        assert "eatp_constraint_utilization" in result, "Must include eatp_constraint_utilization metric"
+        assert (
+            "eatp_constraint_utilization" in result
+        ), "Must include eatp_constraint_utilization metric"
 
     def test_constraint_utilization_is_pass_rate(self, populated_collector):
         """eatp_constraint_utilization must represent the constraint pass rate (0.0-1.0)."""
@@ -162,18 +172,24 @@ class TestExportPrometheus:
         match = re.search(r"eatp_constraint_utilization\s+([\d.]+)", result)
         assert match, "Must have eatp_constraint_utilization value"
         value = float(match.group(1))
-        assert abs(value - 2.0 / 3.0) < 0.01, f"Utilization should be ~0.667, got {value}"
+        assert (
+            abs(value - 2.0 / 3.0) < 0.01
+        ), f"Utilization should be ~0.667, got {value}"
 
     def test_contains_circuit_breaker_opens_metric(self, populated_collector):
         """Output must include eatp_circuit_breaker_opens_total counter."""
         result = export_prometheus(populated_collector)
-        assert "eatp_circuit_breaker_opens_total" in result, "Must include eatp_circuit_breaker_opens_total metric"
+        assert (
+            "eatp_circuit_breaker_opens_total" in result
+        ), "Must include eatp_circuit_breaker_opens_total metric"
 
     def test_circuit_breaker_opens_count_matches(self, populated_collector):
         """eatp_circuit_breaker_opens_total must equal recorded circuit breaker events."""
         result = export_prometheus(populated_collector)
         # 2 circuit breaker opens were recorded
-        assert re.search(r"eatp_circuit_breaker_opens_total\s+2", result), "eatp_circuit_breaker_opens_total must be 2"
+        assert re.search(
+            r"eatp_circuit_breaker_opens_total\s+2", result
+        ), "eatp_circuit_breaker_opens_total must be 2"
 
     def test_all_metric_names_have_eatp_prefix(self, populated_collector):
         """Every metric line (non-comment, non-blank) must use the eatp_ prefix."""
@@ -182,7 +198,9 @@ class TestExportPrometheus:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            assert line.startswith("eatp_"), f"Metric line must start with 'eatp_' prefix: {line}"
+            assert line.startswith(
+                "eatp_"
+            ), f"Metric line must start with 'eatp_' prefix: {line}"
 
     def test_prometheus_format_has_help_comments(self, populated_collector):
         """Output should include # HELP and # TYPE comment lines per Prometheus convention."""
@@ -200,17 +218,21 @@ class TestExportPrometheus:
             parts = line.split()
             assert len(parts) >= 4, f"TYPE line malformed: {line}"
             metric_type = parts[3]
-            assert metric_type in valid_types, f"Invalid Prometheus type '{metric_type}' in: {line}"
+            assert (
+                metric_type in valid_types
+            ), f"Invalid Prometheus type '{metric_type}' in: {line}"
 
     def test_empty_collector_has_zero_values(self, collector):
         """An empty collector must produce metrics with zero/default values."""
         result = export_prometheus(collector)
         # Verification total should be 0
-        assert re.search(r"eatp_verification_total\s+0", result), "Empty collector must have 0 verification total"
+        assert re.search(
+            r"eatp_verification_total\s+0", result
+        ), "Empty collector must have 0 verification total"
         # Circuit breaker opens should be 0
-        assert re.search(r"eatp_circuit_breaker_opens_total\s+0", result), (
-            "Empty collector must have 0 circuit breaker opens"
-        )
+        assert re.search(
+            r"eatp_circuit_breaker_opens_total\s+0", result
+        ), "Empty collector must have 0 circuit breaker opens"
 
     def test_output_is_valid_prometheus_text_format(self, populated_collector):
         """Output must conform to Prometheus text exposition format.
@@ -230,7 +252,9 @@ class TestExportPrometheus:
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            assert metric_pattern.match(line), f"Line does not match Prometheus text format: '{line}'"
+            assert metric_pattern.match(
+                line
+            ), f"Line does not match Prometheus text format: '{line}'"
 
 
 # ---------------------------------------------------------------------------
@@ -252,7 +276,9 @@ class TestOTelMetricsAdapter:
             # If we get here, opentelemetry IS installed -- that's fine too
             assert adapter is not None
         except ImportError as e:
-            assert "opentelemetry" in str(e).lower(), f"ImportError must mention opentelemetry, got: {e}"
+            assert (
+                "opentelemetry" in str(e).lower()
+            ), f"ImportError must mention opentelemetry, got: {e}"
 
     def test_adapter_class_exists(self):
         """OTelMetricsAdapter class must be importable from kailash.trust.metrics."""
@@ -280,12 +306,14 @@ class TestOTelMetricsAdapter:
 
     def test_adapter_default_meter_name(self):
         """OTelMetricsAdapter must accept a meter_name parameter defaulting to 'eatp'."""
-        from kailash.trust.metrics import OTelMetricsAdapter
-
         # Check signature accepts meter_name
         import inspect
+
+        from kailash.trust.metrics import OTelMetricsAdapter
 
         sig = inspect.signature(OTelMetricsAdapter.__init__)
         params = sig.parameters
         assert "meter_name" in params, "Must accept meter_name parameter"
-        assert params["meter_name"].default == "eatp", "meter_name must default to 'eatp'"
+        assert (
+            params["meter_name"].default == "eatp"
+        ), "meter_name must default to 'eatp'"

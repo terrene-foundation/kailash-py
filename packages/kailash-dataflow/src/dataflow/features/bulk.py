@@ -417,7 +417,7 @@ class BulkOperations:
                 "batches": batches_processed,
                 "batch_size": batch_size,
             }
-            logger.warning(
+            logger.info(
                 "bulk.bulk_create_success", extra={"success_result": success_result}
             )
             return success_result

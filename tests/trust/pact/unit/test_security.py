@@ -15,7 +15,11 @@ import inspect
 import math
 
 import pytest
-
+from kailash.trust.pact import access as access_module
+from kailash.trust.pact.access import KnowledgeSharePolicy, can_access
+from kailash.trust.pact.addressing import Address, AddressError, AddressSegment
+from kailash.trust.pact.clearance import _CLEARANCE_ORDER, RoleClearance
+from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     DepartmentConfig,
@@ -23,19 +27,7 @@ from kailash.trust.pact.config import (
     TeamConfig,
     TrustPostureLevel,
 )
-from kailash.trust.pact import access as access_module
-from kailash.trust.pact.access import (
-    KnowledgeSharePolicy,
-    can_access,
-)
-from kailash.trust.pact.addressing import Address, AddressError, AddressSegment
-from kailash.trust.pact.clearance import (
-    RoleClearance,
-    _CLEARANCE_ORDER,
-)
-from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
 from kailash.trust.pact.knowledge import KnowledgeItem
-
 
 # ---------------------------------------------------------------------------
 # Shared fixture
@@ -172,7 +164,7 @@ class TestKSPAbsenceDefaultDeny:
         decision = can_access(
             role_address="D2-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=compiled,
             clearances=clearances,
             ksps=[],
@@ -225,7 +217,7 @@ class TestKSPAbsenceDefaultDeny:
         decision = can_access(
             role_address="D2-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=compiled,
             clearances=clearances,
             ksps=[ksp],
@@ -278,7 +270,7 @@ class TestKSPAbsenceDefaultDeny:
         decision = can_access(
             role_address="D2-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=compiled,
             clearances=clearances,
             ksps=[ksp],
@@ -320,7 +312,7 @@ class TestCompartmentEnforcement:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.CONTINUOUS_INSIGHT,
+            posture=TrustPostureLevel.DELEGATING,
             compiled_org=simple_org,
             clearances=clearances,
             ksps=[],
@@ -348,7 +340,7 @@ class TestCompartmentEnforcement:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.DELEGATED,
+            posture=TrustPostureLevel.AUTONOMOUS,
             compiled_org=simple_org,
             clearances=clearances,
             ksps=[],
@@ -384,7 +376,7 @@ class TestCompartmentEnforcement:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=simple_org,
             clearances=clearances,
             ksps=[],

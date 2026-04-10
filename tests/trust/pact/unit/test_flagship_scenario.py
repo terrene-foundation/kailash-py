@@ -34,7 +34,9 @@ correct allow/deny decisions for the flagship demo.
 from __future__ import annotations
 
 import pytest
-
+from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge, can_access
+from kailash.trust.pact.clearance import RoleClearance
+from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     DepartmentConfig,
@@ -42,15 +44,7 @@ from kailash.trust.pact.config import (
     TeamConfig,
     TrustPostureLevel,
 )
-from kailash.trust.pact.access import (
-    KnowledgeSharePolicy,
-    PactBridge,
-    can_access,
-)
-from kailash.trust.pact.clearance import RoleClearance
-from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
 from kailash.trust.pact.knowledge import KnowledgeItem
-
 
 # ---------------------------------------------------------------------------
 # Fixture: Full financial services org
@@ -285,7 +279,7 @@ class TestScenario1AdvisoryBlockedFromTrading:
         decision = can_access(
             role_address="D1-R1-D2-R1-T1-R1",  # Senior Advisor
             knowledge_item=trading_positions,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=finserv_org,
             clearances=clearances,
             ksps=[],  # NO KSP between Advisory and Trading
@@ -307,7 +301,7 @@ class TestScenario1AdvisoryBlockedFromTrading:
         decision = can_access(
             role_address="D1-R1-D2-R1",  # Head of Advisory
             knowledge_item=trading_positions,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=finserv_org,
             clearances=clearances,
             ksps=[],
@@ -334,7 +328,7 @@ class TestScenario2CCOReadsAdvisory:
         decision = can_access(
             role_address="D1-R1-D1-R1",  # CCO
             knowledge_item=advisory_data,
-            posture=TrustPostureLevel.CONTINUOUS_INSIGHT,
+            posture=TrustPostureLevel.DELEGATING,
             compiled_org=finserv_org,
             clearances=clearances,
             ksps=[],
@@ -364,7 +358,7 @@ class TestScenario3CCOReadsTrading:
         decision = can_access(
             role_address="D1-R1-D1-R1",  # CCO
             knowledge_item=trading_positions,
-            posture=TrustPostureLevel.CONTINUOUS_INSIGHT,
+            posture=TrustPostureLevel.DELEGATING,
             compiled_org=finserv_org,
             clearances=clearances,
             ksps=[],
@@ -394,7 +388,7 @@ class TestScenario4AMLOfficerReadsInvestigation:
         decision = can_access(
             role_address="D1-R1-D1-R1-T1-R1",  # AML Officer
             knowledge_item=aml_investigation,
-            posture=TrustPostureLevel.CONTINUOUS_INSIGHT,
+            posture=TrustPostureLevel.DELEGATING,
             compiled_org=finserv_org,
             clearances=clearances,
             ksps=[],
@@ -424,7 +418,7 @@ class TestScenario5TradingBlockedFromInvestigation:
         decision = can_access(
             role_address="D1-R1-D3-R1",  # Head of Trading
             knowledge_item=aml_investigation,
-            posture=TrustPostureLevel.CONTINUOUS_INSIGHT,
+            posture=TrustPostureLevel.DELEGATING,
             compiled_org=finserv_org,
             clearances=clearances,
             ksps=[],
@@ -454,7 +448,7 @@ class TestScenario6TraderReadsSameUnit:
         decision = can_access(
             role_address="D1-R1-D3-R1-T1-R1",  # Senior Trader
             knowledge_item=equities_data,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=finserv_org,
             clearances=clearances,
             ksps=[],
@@ -484,7 +478,7 @@ class TestScenario7AdvisorReadsSameUnit:
         decision = can_access(
             role_address="D1-R1-D2-R1-T1-R1",  # Senior Advisor
             knowledge_item=client_advisory_data,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=finserv_org,
             clearances=clearances,
             ksps=[],

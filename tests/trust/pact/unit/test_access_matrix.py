@@ -21,7 +21,9 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-
+from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge, can_access
+from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     DepartmentConfig,
@@ -29,15 +31,7 @@ from kailash.trust.pact.config import (
     TeamConfig,
     TrustPostureLevel,
 )
-from kailash.trust.pact.access import (
-    KnowledgeSharePolicy,
-    PactBridge,
-    can_access,
-)
-from kailash.trust.pact.clearance import RoleClearance, VettingStatus
-from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
 from kailash.trust.pact.knowledge import KnowledgeItem
-
 
 # ---------------------------------------------------------------------------
 # Shared fixture: Financial services org (same structure as flagship scenario)
@@ -317,7 +311,7 @@ def test_containment_x_mechanism(
     decision = can_access(
         role_address=role_addr,
         knowledge_item=item,
-        posture=TrustPostureLevel.SHARED_PLANNING,
+        posture=TrustPostureLevel.SUPERVISED,
         compiled_org=finserv_org,
         clearances=clearances,
         ksps=ksps,
@@ -366,7 +360,7 @@ def test_clearance_level_matrix(
 ) -> None:
     """25-case clearance matrix: role clearance vs item classification.
 
-    At DELEGATED posture (ceiling=TOP_SECRET), effective clearance = role clearance.
+    At AUTONOMOUS posture (ceiling=TOP_SECRET), effective clearance = role clearance.
     Access allowed iff effective_clearance >= item_classification.
     """
     role_addr = "D1-R1-D3-R1-T1-R1"  # Senior Trader
@@ -384,7 +378,7 @@ def test_clearance_level_matrix(
     decision = can_access(
         role_address=role_addr,
         knowledge_item=item,
-        posture=TrustPostureLevel.DELEGATED,  # Ceiling = TOP_SECRET
+        posture=TrustPostureLevel.AUTONOMOUS,  # Ceiling = TOP_SECRET
         compiled_org=finserv_org,
         clearances=clearances,
         ksps=[],
@@ -402,11 +396,11 @@ def test_clearance_level_matrix(
 # ===========================================================================
 
 _POSTURE_CEILING = {
-    TrustPostureLevel.PSEUDO_AGENT: ConfidentialityLevel.PUBLIC,
-    TrustPostureLevel.SUPERVISED: ConfidentialityLevel.RESTRICTED,
-    TrustPostureLevel.SHARED_PLANNING: ConfidentialityLevel.CONFIDENTIAL,
-    TrustPostureLevel.CONTINUOUS_INSIGHT: ConfidentialityLevel.SECRET,
-    TrustPostureLevel.DELEGATED: ConfidentialityLevel.TOP_SECRET,
+    TrustPostureLevel.PSEUDO: ConfidentialityLevel.PUBLIC,
+    TrustPostureLevel.TOOL: ConfidentialityLevel.RESTRICTED,
+    TrustPostureLevel.SUPERVISED: ConfidentialityLevel.CONFIDENTIAL,
+    TrustPostureLevel.DELEGATING: ConfidentialityLevel.SECRET,
+    TrustPostureLevel.AUTONOMOUS: ConfidentialityLevel.TOP_SECRET,
 }
 
 _POSTURE_CASES = [
@@ -529,7 +523,7 @@ def test_compartment_enforcement(
     decision = can_access(
         role_address=role_addr,
         knowledge_item=item,
-        posture=TrustPostureLevel.DELEGATED,
+        posture=TrustPostureLevel.AUTONOMOUS,
         compiled_org=finserv_org,
         clearances=clearances,
         ksps=[],
@@ -564,7 +558,7 @@ def test_expired_ksp_denied(finserv_org: CompiledOrg) -> None:
     decision = can_access(
         role_address="D1-R1-D2-R1-T1-R1",
         knowledge_item=item,
-        posture=TrustPostureLevel.SHARED_PLANNING,
+        posture=TrustPostureLevel.SUPERVISED,
         compiled_org=finserv_org,
         clearances=clearances,
         ksps=[expired_ksp],
@@ -594,7 +588,7 @@ def test_expired_bridge_denied(finserv_org: CompiledOrg) -> None:
     decision = can_access(
         role_address="D1-R1-D1-R1",
         knowledge_item=item,
-        posture=TrustPostureLevel.SHARED_PLANNING,
+        posture=TrustPostureLevel.SUPERVISED,
         compiled_org=finserv_org,
         clearances=clearances,
         ksps=[],
@@ -623,7 +617,7 @@ def test_inactive_ksp_denied(finserv_org: CompiledOrg) -> None:
     decision = can_access(
         role_address="D1-R1-D2-R1-T1-R1",
         knowledge_item=item,
-        posture=TrustPostureLevel.SHARED_PLANNING,
+        posture=TrustPostureLevel.SUPERVISED,
         compiled_org=finserv_org,
         clearances=clearances,
         ksps=[inactive_ksp],
@@ -651,7 +645,7 @@ def test_inactive_bridge_denied(finserv_org: CompiledOrg) -> None:
     decision = can_access(
         role_address="D1-R1-D1-R1",
         knowledge_item=item,
-        posture=TrustPostureLevel.SHARED_PLANNING,
+        posture=TrustPostureLevel.SUPERVISED,
         compiled_org=finserv_org,
         clearances=clearances,
         ksps=[],
@@ -684,7 +678,7 @@ def test_bilateral_bridge_a_to_b(finserv_org: CompiledOrg) -> None:
     decision = can_access(
         role_address="D1-R1-D1-R1",
         knowledge_item=item,
-        posture=TrustPostureLevel.SHARED_PLANNING,
+        posture=TrustPostureLevel.SUPERVISED,
         compiled_org=finserv_org,
         clearances=clearances,
         ksps=[],
@@ -712,7 +706,7 @@ def test_bilateral_bridge_b_to_a(finserv_org: CompiledOrg) -> None:
     decision = can_access(
         role_address="D1-R1-D3-R1",
         knowledge_item=item,
-        posture=TrustPostureLevel.SHARED_PLANNING,
+        posture=TrustPostureLevel.SUPERVISED,
         compiled_org=finserv_org,
         clearances=clearances,
         ksps=[],
@@ -741,7 +735,7 @@ def test_unilateral_bridge_blocks_reverse(finserv_org: CompiledOrg) -> None:
     decision = can_access(
         role_address="D1-R1-D3-R1",
         knowledge_item=item,
-        posture=TrustPostureLevel.SHARED_PLANNING,
+        posture=TrustPostureLevel.SUPERVISED,
         compiled_org=finserv_org,
         clearances=clearances,
         ksps=[],
@@ -790,7 +784,7 @@ def test_vetting_status(
     decision = can_access(
         role_address=role_addr,
         knowledge_item=item,
-        posture=TrustPostureLevel.SHARED_PLANNING,
+        posture=TrustPostureLevel.SUPERVISED,
         compiled_org=finserv_org,
         clearances=clearances,
         ksps=[],
@@ -817,7 +811,7 @@ def test_default_deny_no_clearance(finserv_org: CompiledOrg) -> None:
     decision = can_access(
         role_address="D1-R1-D3-R1-T1-R1",
         knowledge_item=item,
-        posture=TrustPostureLevel.DELEGATED,
+        posture=TrustPostureLevel.AUTONOMOUS,
         compiled_org=finserv_org,
         clearances={},
         ksps=[],
@@ -838,7 +832,7 @@ def test_default_deny_cross_division(finserv_org: CompiledOrg) -> None:
     decision = can_access(
         role_address="D1-R1-D2-R1-T1-R1",
         knowledge_item=item,
-        posture=TrustPostureLevel.SHARED_PLANNING,
+        posture=TrustPostureLevel.SUPERVISED,
         compiled_org=finserv_org,
         clearances=clearances,
         ksps=[],

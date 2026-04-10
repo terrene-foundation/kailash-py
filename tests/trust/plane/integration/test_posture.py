@@ -6,9 +6,8 @@
 import json
 
 import pytest
-
-from kailash.trust.posture.postures import TrustPosture
 from kailash.trust.plane.project import TrustProject
+from kailash.trust.posture.postures import TrustPosture
 
 
 @pytest.fixture
@@ -32,11 +31,11 @@ class TestPosture:
             author="Bob",
         )
         new = await project.transition_posture(
-            TrustPosture.SHARED_PLANNING,
+            TrustPosture.SUPERVISED,
             reason="Trust established through session work",
         )
-        assert new == TrustPosture.SHARED_PLANNING
-        assert project.posture == TrustPosture.SHARED_PLANNING
+        assert new == TrustPosture.SUPERVISED
+        assert project.posture == TrustPosture.SUPERVISED
 
     async def test_posture_transition_creates_anchor(self, trust_dir):
         project = await TrustProject.create(
@@ -45,7 +44,7 @@ class TestPosture:
             author="Carol",
         )
         await project.transition_posture(
-            TrustPosture.SHARED_PLANNING,
+            TrustPosture.SUPERVISED,
             reason="Testing audit trail",
         )
         anchor_files = sorted((trust_dir / "anchors").glob("*.json"))
@@ -55,7 +54,7 @@ class TestPosture:
             data = json.load(f)
         assert data["action"] == "posture_transition"
         assert data["context"]["previous_posture"] == "supervised"
-        assert data["context"]["new_posture"] == "shared_planning"
+        assert data["context"]["new_posture"] == "supervised"
         assert data["context"]["reason"] == "Testing audit trail"
 
     async def test_posture_persists_across_load(self, trust_dir):
@@ -65,11 +64,11 @@ class TestPosture:
             author="Dave",
         )
         await project.transition_posture(
-            TrustPosture.SHARED_PLANNING,
+            TrustPosture.SUPERVISED,
             reason="Persisting",
         )
         loaded = await TrustProject.load(trust_dir)
-        assert loaded.posture == TrustPosture.SHARED_PLANNING
+        assert loaded.posture == TrustPosture.SUPERVISED
 
     async def test_downgrade_posture(self, trust_dir):
         project = await TrustProject.create(
@@ -78,14 +77,14 @@ class TestPosture:
             author="Eve",
         )
         await project.transition_posture(
-            TrustPosture.SHARED_PLANNING,
+            TrustPosture.SUPERVISED,
             reason="Upgrading first",
         )
         await project.transition_posture(
-            TrustPosture.SUPERVISED,
+            TrustPosture.TOOL,
             reason="Downgrading back",
         )
-        assert project.posture == TrustPosture.SUPERVISED
+        assert project.posture == TrustPosture.TOOL
 
     async def test_emergency_reset_to_pseudo_agent(self, trust_dir):
         """Emergency reset drops posture to PSEUDO_AGENT regardless of current level."""
@@ -95,14 +94,14 @@ class TestPosture:
             author="Grace",
         )
         await project.transition_posture(
-            TrustPosture.SHARED_PLANNING,
+            TrustPosture.SUPERVISED,
             reason="Upgrading first",
         )
         await project.transition_posture(
-            TrustPosture.PSEUDO_AGENT,
+            TrustPosture.PSEUDO,
             reason="Emergency: trust violation detected",
         )
-        assert project.posture == TrustPosture.PSEUDO_AGENT
+        assert project.posture == TrustPosture.PSEUDO
 
         # Verify anchor trail records the emergency reset
         anchor_files = sorted((trust_dir / "anchors").glob("*.json"))
@@ -116,17 +115,17 @@ class TestPosture:
             author="Frank",
         )
         await project.transition_posture(
-            TrustPosture.SHARED_PLANNING,
+            TrustPosture.SUPERVISED,
             reason="Testing verify",
         )
         report = await project.verify()
         assert report["chain_valid"] is True
         assert report["integrity_issues"] == []
-        assert report["trust_posture"] == "shared_planning"
+        assert report["trust_posture"] == "supervised"
         assert report["verification_level"] == "STANDARD"
 
-    async def test_verify_reports_supervised_as_full(self, trust_dir):
-        """SUPERVISED posture maps to FULL verification level."""
+    async def test_verify_reports_supervised_as_standard(self, trust_dir):
+        """SUPERVISED posture (default) maps to STANDARD verification level."""
         project = await TrustProject.create(
             trust_dir=trust_dir,
             project_name="Level Test",
@@ -134,4 +133,4 @@ class TestPosture:
         )
         report = await project.verify()
         assert report["trust_posture"] == "supervised"
-        assert report["verification_level"] == "FULL"
+        assert report["verification_level"] == "STANDARD"

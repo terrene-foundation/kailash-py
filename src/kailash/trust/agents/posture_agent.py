@@ -98,18 +98,18 @@ class PostureAwareAgent:
     """Wrapper that adds posture-based behavior to any Kaizen agent.
 
     Enforces trust postures on agent execution:
-    - DELEGATED: Execute directly without restrictions
-    - CONTINUOUS_INSIGHT: Notify, wait for cancel window, then execute with audit
-    - SHARED_PLANNING: Execute with audit logging
-    - SUPERVISED: Require approval before execution
-    - PSEUDO_AGENT: Deny execution
+    - AUTONOMOUS: Execute directly without restrictions
+    - DELEGATING: Notify, wait for cancel window, then execute with audit
+    - SUPERVISED: Execute with audit logging
+    - TOOL: Require approval before execution
+    - PSEUDO: Deny execution
 
     Example:
         >>> from kailash.trust.posture.postures import PostureStateMachine, TrustPosture
         >>> # PostureAgent wraps any agent with trust posture management
         >>>
         >>> machine = PostureStateMachine()
-        >>> machine.set_posture("agent-001", TrustPosture.DELEGATED)
+        >>> machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
         >>>
         >>> base_agent = MyAgent(config)
         >>> agent = PostureAwareAgent(
@@ -189,20 +189,20 @@ class PostureAwareAgent:
         posture = self.posture
 
         # Execute based on posture
-        if posture == TrustPosture.PSEUDO_AGENT:
-            logger.warning(f"Agent {self._agent_id} is PSEUDO_AGENT, execution denied")
+        if posture == TrustPosture.PSEUDO:
+            logger.warning(f"Agent {self._agent_id} is PSEUDO, execution denied")
             raise PermissionError(f"Agent {self._agent_id} is blocked from execution")
 
-        if posture == TrustPosture.SUPERVISED:
+        if posture == TrustPosture.TOOL:
             return await self._execute_with_approval(kwargs)
 
-        if posture == TrustPosture.SHARED_PLANNING:
+        if posture == TrustPosture.SUPERVISED:
             return await self._execute_with_audit(kwargs)
 
-        if posture == TrustPosture.CONTINUOUS_INSIGHT:
+        if posture == TrustPosture.DELEGATING:
             return await self._execute_with_delay(kwargs)
 
-        # DELEGATED
+        # AUTONOMOUS
         return await self._execute_direct(kwargs)
 
     async def _execute_direct(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:

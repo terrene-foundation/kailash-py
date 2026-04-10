@@ -24,7 +24,6 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 import pytest
-
 from kailash.trust.circuit_breaker import (
     CircuitBreakerConfig,
     CircuitBreakerRegistry,
@@ -33,7 +32,6 @@ from kailash.trust.circuit_breaker import (
     PostureCircuitBreaker,
 )
 from kailash.trust.posture.postures import PostureStateMachine, TrustPosture
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -44,7 +42,7 @@ from kailash.trust.posture.postures import PostureStateMachine, TrustPosture
 def machine():
     """Create a PostureStateMachine with an agent at DELEGATED."""
     m = PostureStateMachine()
-    m.set_posture("agent-001", TrustPosture.DELEGATED)
+    m.set_posture("agent-001", TrustPosture.AUTONOMOUS)
     return m
 
 
@@ -135,7 +133,7 @@ class TestCircuitBreakerFailuresBounded:
     @pytest.mark.asyncio
     async def test_per_agent_isolation_of_bounds(self, machine):
         """Bounds apply per-agent, not globally."""
-        machine.set_posture("agent-002", TrustPosture.DELEGATED)
+        machine.set_posture("agent-002", TrustPosture.AUTONOMOUS)
         maxlen = 20
         breaker = PostureCircuitBreaker(
             posture_machine=machine,
@@ -187,7 +185,7 @@ class TestCircuitBreakerRegistryBounded:
 
         for i in range(maxlen + 5):
             agent_id = f"agent-{i:04d}"
-            machine.set_posture(agent_id, TrustPosture.DELEGATED)
+            machine.set_posture(agent_id, TrustPosture.AUTONOMOUS)
             registry.get_or_create(agent_id)
 
         assert len(registry._breakers) <= maxlen
@@ -229,7 +227,7 @@ class TestMonotonicEscalationOnRecovery:
         assert breaker.get_state("agent-001") == CircuitState.OPEN
 
         # Step 2: External authority further downgrades to PSEUDO_AGENT
-        machine.set_posture("agent-001", TrustPosture.PSEUDO_AGENT)
+        machine.set_posture("agent-001", TrustPosture.PSEUDO)
 
         # Step 3: Recovery -- circuit transitions to HALF_OPEN
         can = await breaker.can_proceed("agent-001")
@@ -245,7 +243,7 @@ class TestMonotonicEscalationOnRecovery:
 
         # CRITICAL: Posture must NOT have been upgraded. It should remain
         # at PSEUDO_AGENT (or below), never back to DELEGATED or SUPERVISED.
-        assert current_posture == TrustPosture.PSEUDO_AGENT, (
+        assert current_posture == TrustPosture.PSEUDO, (
             f"Monotonic escalation violated: posture was restored to "
             f"{current_posture.value} but should remain at pseudo_agent "
             f"or lower (never upgrade on circuit close)"
@@ -262,7 +260,7 @@ class TestMonotonicEscalationOnRecovery:
         )
         breaker = PostureCircuitBreaker(posture_machine=machine, config=config)
 
-        # Open the circuit (downgrades from DELEGATED to SUPERVISED)
+        # Open the circuit (downgrades from AUTONOMOUS to SUPERVISED)
         await breaker.record_failure(
             "agent-001", "Error", "fail1", "action", "critical"
         )
@@ -282,8 +280,8 @@ class TestMonotonicEscalationOnRecovery:
         # The circuit breaker must only log a suggestion, never auto-restore
         current_posture = machine.get_posture("agent-001")
         assert (
-            current_posture != TrustPosture.DELEGATED
-            or current_posture == TrustPosture.SUPERVISED
+            current_posture != TrustPosture.AUTONOMOUS
+            or current_posture == TrustPosture.TOOL
         ), (
             f"Circuit breaker should not auto-restore posture to original. "
             f"Got {current_posture.value}, expected supervised (downgraded level)"

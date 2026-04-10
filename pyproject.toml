@@ -192,5 +192,8 @@ known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", 
 # Specific test files with import order issues after skip markers
 "tests/integration/api/test_gateway.py" = ["E402"]
 "tests/integration/api/test_workflow_api.py" = ["E402"]
+# Trust plane files with intentional late imports (sys.path / skip markers)
+"src/kailash/trust/plane/project.py" = ["E402"]
+"tests/trust/plane/e2e/test_mcp_server.py" = ["E402"]
 # RAG nodes with embedded Python code strings
 "src/kailash/nodes/rag/privacy.py" = ["F821"]

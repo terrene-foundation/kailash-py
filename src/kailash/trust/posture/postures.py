@@ -19,31 +19,55 @@ logger = logging.getLogger(__name__)
 
 
 class TrustPosture(str, Enum):
-    """Trust posture levels matching EATP specification.
+    """Trust posture levels matching EATP specification (Decision 007).
 
-    Five graduated trust postures for agent autonomy:
-    - DELEGATED: Agent operates with full autonomy; remote monitoring (autonomy_level=5)
-    - CONTINUOUS_INSIGHT: Agent executes, human monitors in real-time (autonomy_level=4)
-    - SHARED_PLANNING: Human and agent co-plan; agent executes approved plans (autonomy_level=3)
-    - SUPERVISED: Agent proposes actions, human approves each one (autonomy_level=2)
-    - PSEUDO_AGENT: Agent is interface only; human performs all reasoning (autonomy_level=1)
+    Five graduated trust postures for agent autonomy using canonical EATP names:
+    - AUTONOMOUS: Agent operates with full autonomy; remote monitoring (autonomy_level=5)
+    - DELEGATING: Agent executes, human monitors in real-time (autonomy_level=4)
+    - SUPERVISED: Agent proposes actions, human approves each one (autonomy_level=3)
+    - TOOL: Human and agent co-plan; agent executes approved plans (autonomy_level=2)
+    - PSEUDO: Agent is interface only; human performs all reasoning (autonomy_level=1)
+
+    Old names (DELEGATED, CONTINUOUS_INSIGHT, SHARED_PLANNING, PSEUDO_AGENT) are
+    accepted via ``_missing_()`` for backward compatibility with serialized data.
     """
 
-    DELEGATED = "delegated"
-    CONTINUOUS_INSIGHT = "continuous_insight"
-    SHARED_PLANNING = "shared_planning"
+    AUTONOMOUS = "autonomous"
+    DELEGATING = "delegating"
     SUPERVISED = "supervised"
-    PSEUDO_AGENT = "pseudo_agent"
+    TOOL = "tool"
+    PSEUDO = "pseudo"
 
     @classmethod
     def _missing_(cls, value: object) -> TrustPosture | None:
-        """Accept 'pseudo' as alias for 'pseudo_agent' (CARE spec L1 name)."""
+        """Accept old enum names/values for backward compatibility.
+
+        Maps pre-Decision-007 names to their canonical equivalents so that
+        existing serialized postures deserialize without error.
+        """
         if isinstance(value, str):
             lowered = value.lower().strip()
-            if lowered in ("pseudo", "pseudoagent"):
-                return cls.PSEUDO_AGENT
-            # Try matching with underscores replaced
+            aliases: dict[str, TrustPosture] = {
+                # Old enum values (wire-format strings)
+                "delegated": cls.AUTONOMOUS,
+                "continuous_insight": cls.DELEGATING,
+                "shared_planning": cls.SUPERVISED,
+                "pseudo_agent": cls.PSEUDO,
+                # CARE spec L1 aliases
+                "pseudo": cls.PSEUDO,
+                "pseudoagent": cls.PSEUDO,
+            }
+            # Try exact match first
+            if value in aliases:
+                return aliases[value]
+            # Then lowered
+            if lowered in aliases:
+                return aliases[lowered]
+            # Normalize hyphens/spaces to underscores
             normalized = lowered.replace("-", "_").replace(" ", "_")
+            if normalized in aliases:
+                return aliases[normalized]
+            # Try matching canonical values
             for member in cls:
                 if member.value == normalized:
                     return member
@@ -53,11 +77,11 @@ class TrustPosture(str, Enum):
     def autonomy_level(self) -> int:
         """Return the autonomy level for this posture (5=highest, 1=lowest)."""
         levels = {
-            TrustPosture.DELEGATED: 5,
-            TrustPosture.CONTINUOUS_INSIGHT: 4,
-            TrustPosture.SHARED_PLANNING: 3,
-            TrustPosture.SUPERVISED: 2,
-            TrustPosture.PSEUDO_AGENT: 1,
+            TrustPosture.AUTONOMOUS: 5,
+            TrustPosture.DELEGATING: 4,
+            TrustPosture.SUPERVISED: 3,
+            TrustPosture.TOOL: 2,
+            TrustPosture.PSEUDO: 1,
         }
         return levels[self]
 
@@ -431,12 +455,12 @@ class PostureStateMachine:
 
     Example:
         >>> machine = PostureStateMachine()
-        >>> machine.set_posture("agent-001", TrustPosture.SHARED_PLANNING)
+        >>> machine.set_posture("agent-001", TrustPosture.TOOL)
         >>> result = machine.transition(
         ...     PostureTransitionRequest(
         ...         agent_id="agent-001",
-        ...         from_posture=TrustPosture.SHARED_PLANNING,
-        ...         to_posture=TrustPosture.DELEGATED,
+        ...         from_posture=TrustPosture.TOOL,
+        ...         to_posture=TrustPosture.AUTONOMOUS,
         ...         reason="Agent has proven reliable",
         ...         requester_id="admin-001"
         ...     )
@@ -448,7 +472,7 @@ class PostureStateMachine:
 
     def __init__(
         self,
-        default_posture: TrustPosture = TrustPosture.SUPERVISED,
+        default_posture: TrustPosture = TrustPosture.TOOL,
         require_upgrade_approval: bool = True,
         store: Optional[PostureStore] = None,
     ):
@@ -456,9 +480,9 @@ class PostureStateMachine:
 
         Args:
             default_posture: Default posture for new agents.  Defaults to
-                ``TrustPosture.SUPERVISED`` per CARE spec (RT-17): tool
-                agents start at the SUPERVISED posture (autonomy_level=2).
-                Callers may pass ``TrustPosture.SHARED_PLANNING`` or any
+                ``TrustPosture.TOOL`` per CARE spec (RT-17): tool
+                agents start at the TOOL posture (autonomy_level=2).
+                Callers may pass ``TrustPosture.SUPERVISED`` or any
                 other posture to override.
             require_upgrade_approval: Whether to require approval for upgrades
             store: Optional persistent store for posture state.  When
@@ -591,7 +615,7 @@ class PostureStateMachine:
         reason: str = "Emergency downgrade",
         requester_id: Optional[str] = None,
     ) -> TransitionResult:
-        """Emergency downgrade an agent to PSEUDO_AGENT.
+        """Emergency downgrade an agent to PSEUDO.
 
         Bypasses all guards for immediate security response.
 
@@ -604,7 +628,7 @@ class PostureStateMachine:
             TransitionResult
         """
         current = self.get_posture(agent_id)
-        self.set_posture(agent_id, TrustPosture.PSEUDO_AGENT)
+        self.set_posture(agent_id, TrustPosture.PSEUDO)
 
         emergency_metadata = {"agent_id": agent_id}
         if requester_id:
@@ -612,7 +636,7 @@ class PostureStateMachine:
         result = TransitionResult(
             success=True,
             from_posture=current,
-            to_posture=TrustPosture.PSEUDO_AGENT,
+            to_posture=TrustPosture.PSEUDO,
             transition_type=PostureTransition.EMERGENCY_DOWNGRADE,
             reason=reason,
             metadata=emergency_metadata,
@@ -724,12 +748,12 @@ class TrustPostureMapper:
     Example:
         >>> mapper = TrustPostureMapper()
         >>> posture_result = mapper.map_verification_result(verification)
-        >>> print(posture_result.posture)  # TrustPosture.DELEGATED
+        >>> print(posture_result.posture)  # TrustPosture.AUTONOMOUS
     """
 
     def __init__(
         self,
-        default_posture: TrustPosture = TrustPosture.SHARED_PLANNING,
+        default_posture: TrustPosture = TrustPosture.SUPERVISED,
         sensitive_capabilities: Optional[List[str]] = None,
         high_risk_tools: Optional[List[str]] = None,
     ):
@@ -778,7 +802,7 @@ class TrustPostureMapper:
         # Handle None or invalid result
         if verification_result is None:
             return PostureResult(
-                posture=TrustPosture.PSEUDO_AGENT,
+                posture=TrustPosture.PSEUDO,
                 reason="No verification result provided",
             )
 
@@ -786,7 +810,7 @@ class TrustPostureMapper:
         is_valid = getattr(verification_result, "valid", False)
         if not is_valid:
             return PostureResult(
-                posture=TrustPosture.PSEUDO_AGENT,
+                posture=TrustPosture.PSEUDO,
                 reason=getattr(verification_result, "reason", "Verification failed"),
                 verification_details=self._extract_details(verification_result),
             )
@@ -805,27 +829,27 @@ class TrustPostureMapper:
 
         # Determine posture
         if approval_required or human_in_loop:
-            posture = TrustPosture.SUPERVISED
+            posture = TrustPosture.TOOL
             reason = "Human approval required"
         elif is_sensitive or is_high_risk_tool:
-            posture = TrustPosture.SHARED_PLANNING
+            posture = TrustPosture.SUPERVISED
             reason = "Sensitive capability or high-risk tool"
             audit_required = True
         elif audit_required:
-            # Use CONTINUOUS_INSIGHT when audit is required but no approval needed
+            # Use DELEGATING when audit is required but no approval needed
             # and trust level is normal or higher
             trust_level = constraints_dict.get("trust_level", "normal")
             if trust_level in ("normal", "high", "full"):
-                posture = TrustPosture.CONTINUOUS_INSIGHT
-                reason = "Continuous insight mode with audit logging"
+                posture = TrustPosture.DELEGATING
+                reason = "Delegating mode with audit logging"
             else:
-                posture = TrustPosture.SHARED_PLANNING
+                posture = TrustPosture.SUPERVISED
                 reason = "Audit logging required"
         else:
             # Check trust level if available
             trust_level = constraints_dict.get("trust_level", "normal")
             if trust_level == "high" or trust_level == "full":
-                posture = TrustPosture.DELEGATED
+                posture = TrustPosture.AUTONOMOUS
                 reason = "High trust level"
             else:
                 posture = self._default_posture
@@ -872,13 +896,13 @@ class TrustPostureMapper:
         """
         if not is_valid:
             return PostureResult(
-                posture=TrustPosture.PSEUDO_AGENT,
+                posture=TrustPosture.PSEUDO,
                 reason=reason or "Access denied",
             )
 
         if approval_required:
             return PostureResult(
-                posture=TrustPosture.SUPERVISED,
+                posture=TrustPosture.TOOL,
                 constraints=PostureConstraints(
                     approval_required=True,
                     audit_required=True,
@@ -888,7 +912,7 @@ class TrustPostureMapper:
 
         if trust_level in ("none", "low"):
             return PostureResult(
-                posture=TrustPosture.SHARED_PLANNING,
+                posture=TrustPosture.SUPERVISED,
                 constraints=PostureConstraints(
                     audit_required=True,
                 ),
@@ -896,18 +920,18 @@ class TrustPostureMapper:
             )
 
         if audit_required:
-            # Use CONTINUOUS_INSIGHT when audit required but trust is normal or higher
+            # Use DELEGATING when audit required but trust is normal or higher
             if trust_level in ("normal", "high", "full"):
                 return PostureResult(
-                    posture=TrustPosture.CONTINUOUS_INSIGHT,
+                    posture=TrustPosture.DELEGATING,
                     constraints=PostureConstraints(
                         audit_required=True,
                     ),
-                    reason=reason or "Continuous insight mode with audit logging",
+                    reason=reason or "Delegating mode with audit logging",
                 )
             else:
                 return PostureResult(
-                    posture=TrustPosture.SHARED_PLANNING,
+                    posture=TrustPosture.SUPERVISED,
                     constraints=PostureConstraints(
                         audit_required=True,
                     ),
@@ -916,7 +940,7 @@ class TrustPostureMapper:
 
         if trust_level in ("high", "full"):
             return PostureResult(
-                posture=TrustPosture.DELEGATED,
+                posture=TrustPosture.AUTONOMOUS,
                 reason=reason or "High trust level",
             )
 
@@ -995,12 +1019,12 @@ def get_posture_for_action(
         TrustPosture enum value
     """
     if not is_allowed:
-        return TrustPosture.PSEUDO_AGENT
+        return TrustPosture.PSEUDO
     if requires_approval:
-        return TrustPosture.SUPERVISED
+        return TrustPosture.TOOL
     if requires_audit:
-        return TrustPosture.CONTINUOUS_INSIGHT
-    return TrustPosture.DELEGATED
+        return TrustPosture.DELEGATING
+    return TrustPosture.AUTONOMOUS
 
 
 __all__ = [

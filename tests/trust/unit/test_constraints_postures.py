@@ -18,7 +18,6 @@ from datetime import datetime, time, timedelta, timezone
 from typing import Any, Dict, List
 
 import pytest
-
 from kailash.trust.chain import VerificationLevel, VerificationResult
 from kailash.trust.constraints import (
     CommunicationDimension,
@@ -82,7 +81,6 @@ from kailash.trust.templates import (
     get_template_names,
     list_templates,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -202,45 +200,45 @@ class TestTrustPostureAutonomyLevels:
     """Trust posture autonomy level values."""
 
     def test_delegated_level_is_5(self):
-        assert TrustPosture.DELEGATED.autonomy_level == 5
+        assert TrustPosture.AUTONOMOUS.autonomy_level == 5
 
     def test_continuous_insight_level_is_4(self):
-        assert TrustPosture.CONTINUOUS_INSIGHT.autonomy_level == 4
+        assert TrustPosture.DELEGATING.autonomy_level == 4
 
     def test_shared_planning_level_is_3(self):
-        assert TrustPosture.SHARED_PLANNING.autonomy_level == 3
+        assert TrustPosture.SUPERVISED.autonomy_level == 3
 
     def test_supervised_level_is_2(self):
-        assert TrustPosture.SUPERVISED.autonomy_level == 2
+        assert TrustPosture.TOOL.autonomy_level == 2
 
     def test_pseudo_agent_level_is_1(self):
-        assert TrustPosture.PSEUDO_AGENT.autonomy_level == 1
+        assert TrustPosture.PSEUDO.autonomy_level == 1
 
 
 class TestTrustPostureComparisons:
     """Comparison operators on TrustPosture."""
 
     def test_pseudo_agent_less_than_delegated(self):
-        assert TrustPosture.PSEUDO_AGENT < TrustPosture.DELEGATED
+        assert TrustPosture.PSEUDO < TrustPosture.AUTONOMOUS
 
     def test_shared_planning_less_than_or_equal_to_continuous_insight(self):
-        assert TrustPosture.SHARED_PLANNING <= TrustPosture.CONTINUOUS_INSIGHT
+        assert TrustPosture.SUPERVISED <= TrustPosture.DELEGATING
 
     def test_delegated_greater_than_supervised(self):
-        assert TrustPosture.DELEGATED > TrustPosture.SUPERVISED
+        assert TrustPosture.AUTONOMOUS > TrustPosture.TOOL
 
     def test_continuous_insight_greater_than_or_equal_to_continuous_insight(self):
-        assert TrustPosture.CONTINUOUS_INSIGHT >= TrustPosture.CONTINUOUS_INSIGHT
+        assert TrustPosture.DELEGATING >= TrustPosture.DELEGATING
 
     def test_equal_postures_le_ge(self):
-        assert TrustPosture.SHARED_PLANNING <= TrustPosture.SHARED_PLANNING
-        assert TrustPosture.SHARED_PLANNING >= TrustPosture.SHARED_PLANNING
+        assert TrustPosture.SUPERVISED <= TrustPosture.SUPERVISED
+        assert TrustPosture.SUPERVISED >= TrustPosture.SUPERVISED
 
     def test_not_less_than_when_equal(self):
-        assert not (TrustPosture.SHARED_PLANNING < TrustPosture.SHARED_PLANNING)
+        assert not (TrustPosture.SUPERVISED < TrustPosture.SUPERVISED)
 
     def test_comparison_with_non_posture_returns_not_implemented(self):
-        result = TrustPosture.PSEUDO_AGENT.__lt__(42)
+        result = TrustPosture.PSEUDO.__lt__(42)
         assert result is NotImplemented
 
 
@@ -248,32 +246,24 @@ class TestTrustPostureUpgradeDowngrade:
     """can_upgrade_to and can_downgrade_to methods."""
 
     def test_can_upgrade_from_pseudo_agent_to_supervised(self):
-        assert TrustPosture.PSEUDO_AGENT.can_upgrade_to(TrustPosture.SUPERVISED) is True
+        assert TrustPosture.PSEUDO.can_upgrade_to(TrustPosture.TOOL) is True
 
     def test_cannot_upgrade_to_same_posture(self):
-        assert (
-            TrustPosture.SHARED_PLANNING.can_upgrade_to(TrustPosture.SHARED_PLANNING)
-            is False
-        )
+        assert TrustPosture.SUPERVISED.can_upgrade_to(TrustPosture.SUPERVISED) is False
 
     def test_cannot_upgrade_to_lower_posture(self):
-        assert TrustPosture.DELEGATED.can_upgrade_to(TrustPosture.PSEUDO_AGENT) is False
+        assert TrustPosture.AUTONOMOUS.can_upgrade_to(TrustPosture.PSEUDO) is False
 
     def test_can_downgrade_from_delegated_to_pseudo_agent(self):
-        assert (
-            TrustPosture.DELEGATED.can_downgrade_to(TrustPosture.PSEUDO_AGENT) is True
-        )
+        assert TrustPosture.AUTONOMOUS.can_downgrade_to(TrustPosture.PSEUDO) is True
 
     def test_cannot_downgrade_to_same_posture(self):
         assert (
-            TrustPosture.SHARED_PLANNING.can_downgrade_to(TrustPosture.SHARED_PLANNING)
-            is False
+            TrustPosture.SUPERVISED.can_downgrade_to(TrustPosture.SUPERVISED) is False
         )
 
     def test_cannot_downgrade_to_higher_posture(self):
-        assert (
-            TrustPosture.PSEUDO_AGENT.can_downgrade_to(TrustPosture.DELEGATED) is False
-        )
+        assert TrustPosture.PSEUDO.can_downgrade_to(TrustPosture.AUTONOMOUS) is False
 
 
 class TestPostureTransitionRequest:
@@ -282,8 +272,8 @@ class TestPostureTransitionRequest:
     def test_upgrade_transition_type(self):
         req = PostureTransitionRequest(
             agent_id="a1",
-            from_posture=TrustPosture.SHARED_PLANNING,
-            to_posture=TrustPosture.DELEGATED,
+            from_posture=TrustPosture.SUPERVISED,
+            to_posture=TrustPosture.AUTONOMOUS,
         )
         assert req.transition_type == PostureTransition.UPGRADE
         assert req.is_upgrade is True
@@ -292,8 +282,8 @@ class TestPostureTransitionRequest:
     def test_downgrade_transition_type(self):
         req = PostureTransitionRequest(
             agent_id="a1",
-            from_posture=TrustPosture.DELEGATED,
-            to_posture=TrustPosture.PSEUDO_AGENT,
+            from_posture=TrustPosture.AUTONOMOUS,
+            to_posture=TrustPosture.PSEUDO,
         )
         assert req.transition_type == PostureTransition.DOWNGRADE
         assert req.is_downgrade is True
@@ -302,8 +292,8 @@ class TestPostureTransitionRequest:
     def test_maintain_transition_type(self):
         req = PostureTransitionRequest(
             agent_id="a1",
-            from_posture=TrustPosture.SHARED_PLANNING,
-            to_posture=TrustPosture.SHARED_PLANNING,
+            from_posture=TrustPosture.SUPERVISED,
+            to_posture=TrustPosture.SUPERVISED,
         )
         assert req.transition_type == PostureTransition.MAINTAIN
         assert req.is_upgrade is False
@@ -315,19 +305,19 @@ class TestPostureStateMachine:
 
     def test_default_posture_is_supervised(self, posture_machine: PostureStateMachine):
         """RT-17: CARE spec requires SUPERVISED as the default posture."""
-        assert posture_machine.get_posture("unknown-agent") == TrustPosture.SUPERVISED
+        assert posture_machine.get_posture("unknown-agent") == TrustPosture.TOOL
 
     def test_set_and_get_posture(self, posture_machine: PostureStateMachine):
-        posture_machine.set_posture("agent-1", TrustPosture.DELEGATED)
-        assert posture_machine.get_posture("agent-1") == TrustPosture.DELEGATED
+        posture_machine.set_posture("agent-1", TrustPosture.AUTONOMOUS)
+        assert posture_machine.get_posture("agent-1") == TrustPosture.AUTONOMOUS
 
     def test_upgrade_requires_requester_id(self, posture_machine: PostureStateMachine):
-        posture_machine.set_posture("agent-1", TrustPosture.SHARED_PLANNING)
+        posture_machine.set_posture("agent-1", TrustPosture.SUPERVISED)
         result = posture_machine.transition(
             PostureTransitionRequest(
                 agent_id="agent-1",
-                from_posture=TrustPosture.SHARED_PLANNING,
-                to_posture=TrustPosture.DELEGATED,
+                from_posture=TrustPosture.SUPERVISED,
+                to_posture=TrustPosture.AUTONOMOUS,
                 requester_id=None,
             )
         )
@@ -337,40 +327,40 @@ class TestPostureStateMachine:
     def test_upgrade_succeeds_with_requester_id(
         self, posture_machine: PostureStateMachine
     ):
-        posture_machine.set_posture("agent-1", TrustPosture.SHARED_PLANNING)
+        posture_machine.set_posture("agent-1", TrustPosture.SUPERVISED)
         result = posture_machine.transition(
             PostureTransitionRequest(
                 agent_id="agent-1",
-                from_posture=TrustPosture.SHARED_PLANNING,
-                to_posture=TrustPosture.DELEGATED,
+                from_posture=TrustPosture.SUPERVISED,
+                to_posture=TrustPosture.AUTONOMOUS,
                 requester_id="admin-001",
                 reason="Agent has proven reliable",
             )
         )
         assert result.success is True
-        assert posture_machine.get_posture("agent-1") == TrustPosture.DELEGATED
+        assert posture_machine.get_posture("agent-1") == TrustPosture.AUTONOMOUS
 
     def test_downgrade_does_not_require_approval(
         self, posture_machine: PostureStateMachine
     ):
-        posture_machine.set_posture("agent-1", TrustPosture.DELEGATED)
+        posture_machine.set_posture("agent-1", TrustPosture.AUTONOMOUS)
         result = posture_machine.transition(
             PostureTransitionRequest(
                 agent_id="agent-1",
-                from_posture=TrustPosture.DELEGATED,
-                to_posture=TrustPosture.SHARED_PLANNING,
+                from_posture=TrustPosture.AUTONOMOUS,
+                to_posture=TrustPosture.SUPERVISED,
             )
         )
         assert result.success is True
-        assert posture_machine.get_posture("agent-1") == TrustPosture.SHARED_PLANNING
+        assert posture_machine.get_posture("agent-1") == TrustPosture.SUPERVISED
 
     def test_mismatched_from_posture_fails(self, posture_machine: PostureStateMachine):
-        posture_machine.set_posture("agent-1", TrustPosture.PSEUDO_AGENT)
+        posture_machine.set_posture("agent-1", TrustPosture.PSEUDO)
         result = posture_machine.transition(
             PostureTransitionRequest(
                 agent_id="agent-1",
-                from_posture=TrustPosture.SHARED_PLANNING,
-                to_posture=TrustPosture.DELEGATED,
+                from_posture=TrustPosture.SUPERVISED,
+                to_posture=TrustPosture.AUTONOMOUS,
             )
         )
         assert result.success is False
@@ -379,22 +369,22 @@ class TestPostureStateMachine:
     def test_emergency_downgrade_bypasses_guards(
         self, posture_machine: PostureStateMachine
     ):
-        posture_machine.set_posture("agent-1", TrustPosture.DELEGATED)
+        posture_machine.set_posture("agent-1", TrustPosture.AUTONOMOUS)
         result = posture_machine.emergency_downgrade(
             "agent-1", reason="Security incident"
         )
         assert result.success is True
-        assert result.to_posture == TrustPosture.PSEUDO_AGENT
+        assert result.to_posture == TrustPosture.PSEUDO
         assert result.transition_type == PostureTransition.EMERGENCY_DOWNGRADE
-        assert posture_machine.get_posture("agent-1") == TrustPosture.PSEUDO_AGENT
+        assert posture_machine.get_posture("agent-1") == TrustPosture.PSEUDO
 
     def test_transition_history_recorded(self, posture_machine: PostureStateMachine):
-        posture_machine.set_posture("agent-1", TrustPosture.DELEGATED)
+        posture_machine.set_posture("agent-1", TrustPosture.AUTONOMOUS)
         posture_machine.transition(
             PostureTransitionRequest(
                 agent_id="agent-1",
-                from_posture=TrustPosture.DELEGATED,
-                to_posture=TrustPosture.SHARED_PLANNING,
+                from_posture=TrustPosture.AUTONOMOUS,
+                to_posture=TrustPosture.SUPERVISED,
             )
         )
         history = posture_machine.get_transition_history(agent_id="agent-1")
@@ -422,12 +412,12 @@ class TestPostureStateMachine:
 
     def test_machine_without_upgrade_approval(self):
         machine = PostureStateMachine(require_upgrade_approval=False)
-        machine.set_posture("agent-1", TrustPosture.SHARED_PLANNING)
+        machine.set_posture("agent-1", TrustPosture.SUPERVISED)
         result = machine.transition(
             PostureTransitionRequest(
                 agent_id="agent-1",
-                from_posture=TrustPosture.SHARED_PLANNING,
-                to_posture=TrustPosture.DELEGATED,
+                from_posture=TrustPosture.SUPERVISED,
+                to_posture=TrustPosture.AUTONOMOUS,
             )
         )
         assert result.success is True
@@ -435,15 +425,15 @@ class TestPostureStateMachine:
     def test_transition_result_to_dict(self):
         result = TransitionResult(
             success=True,
-            from_posture=TrustPosture.SHARED_PLANNING,
-            to_posture=TrustPosture.DELEGATED,
+            from_posture=TrustPosture.SUPERVISED,
+            to_posture=TrustPosture.AUTONOMOUS,
             transition_type=PostureTransition.UPGRADE,
             reason="Promoted",
         )
         d = result.to_dict()
         assert d["success"] is True
-        assert d["from_posture"] == "shared_planning"
-        assert d["to_posture"] == "delegated"
+        assert d["from_posture"] == "supervised"
+        assert d["to_posture"] == "autonomous"
         assert d["transition_type"] == "upgrade"
 
 

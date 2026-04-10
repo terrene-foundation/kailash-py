@@ -16,7 +16,6 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
-
 from kailash.trust.pact.config import (
     CommunicationConstraintConfig,
     ConfidentialityLevel,
@@ -28,15 +27,14 @@ from kailash.trust.pact.config import (
     TrustPostureLevel,
 )
 from kailash.trust.pact.envelopes import (
+    MonotonicTighteningError,
     RoleEnvelope,
     TaskEnvelope,
     check_degenerate_envelope,
     compute_effective_envelope,
     default_envelope_for_posture,
     intersect_envelopes,
-    MonotonicTighteningError,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers -- build constraint configs for tests
@@ -714,62 +712,62 @@ class TestDefaultEnvelopeForPosture:
     """Conservative defaults calibrated to trust posture level."""
 
     def test_pseudo_agent_no_financial(self) -> None:
-        env = default_envelope_for_posture(TrustPostureLevel.PSEUDO_AGENT)
+        env = default_envelope_for_posture(TrustPostureLevel.PSEUDO)
         assert env.financial is not None
         assert env.financial.max_spend_usd == 0.0
 
     def test_pseudo_agent_public_only(self) -> None:
-        env = default_envelope_for_posture(TrustPostureLevel.PSEUDO_AGENT)
+        env = default_envelope_for_posture(TrustPostureLevel.PSEUDO)
         assert env.confidentiality_clearance == ConfidentialityLevel.PUBLIC
 
     def test_pseudo_agent_internal_only(self) -> None:
-        env = default_envelope_for_posture(TrustPostureLevel.PSEUDO_AGENT)
+        env = default_envelope_for_posture(TrustPostureLevel.PSEUDO)
         assert env.communication.internal_only is True
 
-    def test_supervised_low_financial(self) -> None:
-        env = default_envelope_for_posture(TrustPostureLevel.SUPERVISED)
+    def test_tool_low_financial(self) -> None:
+        env = default_envelope_for_posture(TrustPostureLevel.TOOL)
         assert env.financial is not None
         assert env.financial.max_spend_usd == 100.0
 
-    def test_supervised_restricted(self) -> None:
-        env = default_envelope_for_posture(TrustPostureLevel.SUPERVISED)
+    def test_tool_restricted(self) -> None:
+        env = default_envelope_for_posture(TrustPostureLevel.TOOL)
         assert env.confidentiality_clearance == ConfidentialityLevel.RESTRICTED
 
-    def test_shared_planning_moderate_financial(self) -> None:
-        env = default_envelope_for_posture(TrustPostureLevel.SHARED_PLANNING)
+    def test_supervised_moderate_financial(self) -> None:
+        env = default_envelope_for_posture(TrustPostureLevel.SUPERVISED)
         assert env.financial is not None
         assert env.financial.max_spend_usd == 1000.0
 
-    def test_shared_planning_confidential(self) -> None:
-        env = default_envelope_for_posture(TrustPostureLevel.SHARED_PLANNING)
+    def test_supervised_confidential(self) -> None:
+        env = default_envelope_for_posture(TrustPostureLevel.SUPERVISED)
         assert env.confidentiality_clearance == ConfidentialityLevel.CONFIDENTIAL
 
-    def test_continuous_insight_higher_financial(self) -> None:
-        env = default_envelope_for_posture(TrustPostureLevel.CONTINUOUS_INSIGHT)
+    def test_delegating_higher_financial(self) -> None:
+        env = default_envelope_for_posture(TrustPostureLevel.DELEGATING)
         assert env.financial is not None
         assert env.financial.max_spend_usd == 10000.0
 
-    def test_continuous_insight_secret(self) -> None:
-        env = default_envelope_for_posture(TrustPostureLevel.CONTINUOUS_INSIGHT)
+    def test_delegating_secret(self) -> None:
+        env = default_envelope_for_posture(TrustPostureLevel.DELEGATING)
         assert env.confidentiality_clearance == ConfidentialityLevel.SECRET
 
-    def test_delegated_highest_financial(self) -> None:
-        env = default_envelope_for_posture(TrustPostureLevel.DELEGATED)
+    def test_autonomous_highest_financial(self) -> None:
+        env = default_envelope_for_posture(TrustPostureLevel.AUTONOMOUS)
         assert env.financial is not None
         assert env.financial.max_spend_usd == 100000.0
 
-    def test_delegated_top_secret(self) -> None:
-        env = default_envelope_for_posture(TrustPostureLevel.DELEGATED)
+    def test_autonomous_top_secret(self) -> None:
+        env = default_envelope_for_posture(TrustPostureLevel.AUTONOMOUS)
         assert env.confidentiality_clearance == ConfidentialityLevel.TOP_SECRET
 
     def test_posture_ordering_tightens_monotonically(self) -> None:
         """Higher postures produce more permissive envelopes (higher spend)."""
         postures = [
-            TrustPostureLevel.PSEUDO_AGENT,
+            TrustPostureLevel.PSEUDO,
+            TrustPostureLevel.TOOL,
             TrustPostureLevel.SUPERVISED,
-            TrustPostureLevel.SHARED_PLANNING,
-            TrustPostureLevel.CONTINUOUS_INSIGHT,
-            TrustPostureLevel.DELEGATED,
+            TrustPostureLevel.DELEGATING,
+            TrustPostureLevel.AUTONOMOUS,
         ]
         spends = []
         for p in postures:

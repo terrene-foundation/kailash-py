@@ -13,7 +13,6 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
-
 from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
@@ -25,6 +24,7 @@ from kailash.trust.chain import (
     GenesisRecord,
     TrustLineageChain,
 )
+from kailash.trust.chain_store.memory import InMemoryTrustStore
 from kailash.trust.exceptions import TrustChainNotFoundError
 from kailash.trust.posture.postures import PostureStateMachine, TrustPosture
 from kailash.trust.scoring import (
@@ -37,8 +37,6 @@ from kailash.trust.scoring import (
     generate_trust_report,
     score_to_grade,
 )
-from kailash.trust.chain_store.memory import InMemoryTrustStore
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -338,14 +336,16 @@ class TestScoringConstants:
 
     def test_posture_score_map_values(self):
         """Posture score map must map postures to expected trust scores."""
-        assert POSTURE_SCORE_MAP[TrustPosture.DELEGATED] == 20
-        assert POSTURE_SCORE_MAP[TrustPosture.SHARED_PLANNING] == 80
-        assert POSTURE_SCORE_MAP[TrustPosture.SUPERVISED] == 100
+        assert POSTURE_SCORE_MAP[TrustPosture.AUTONOMOUS] == 20
+        assert POSTURE_SCORE_MAP[TrustPosture.SUPERVISED] == 80
+        assert POSTURE_SCORE_MAP[TrustPosture.TOOL] == 100
 
     def test_posture_score_map_completeness(self):
         """Posture score map must include all TrustPosture values."""
         for posture in TrustPosture:
-            assert posture in POSTURE_SCORE_MAP, f"Missing posture in score map: {posture}"
+            assert (
+                posture in POSTURE_SCORE_MAP
+            ), f"Missing posture in score map: {posture}"
 
     def test_grade_thresholds(self):
         """Grade thresholds must be defined correctly."""
@@ -456,25 +456,36 @@ class TestComputeTrustScore:
         await store.store_chain(full_chain)
 
         # Set posture to SHARED_PLANNING (high trust score for posture)
-        posture_machine.set_posture("agent-001", TrustPosture.SHARED_PLANNING)
+        posture_machine.set_posture("agent-001", TrustPosture.SUPERVISED)
 
-        score_with_posture = await compute_trust_score("agent-001", store, posture_machine=posture_machine)
+        score_with_posture = await compute_trust_score(
+            "agent-001", store, posture_machine=posture_machine
+        )
 
         assert isinstance(score_with_posture, TrustScore)
         assert score_with_posture.breakdown["posture_level"] > 0
 
     @pytest.mark.asyncio
-    async def test_posture_delegated_scores_low_on_posture_factor(self, store, full_chain, posture_machine):
+    async def test_posture_delegated_scores_low_on_posture_factor(
+        self, store, full_chain, posture_machine
+    ):
         """DELEGATED posture should give a low posture factor score (less oversight = less trust)."""
         await store.store_chain(full_chain)
 
-        posture_machine.set_posture("agent-001", TrustPosture.DELEGATED)
-        score_autonomy = await compute_trust_score("agent-001", store, posture_machine=posture_machine)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
+        score_autonomy = await compute_trust_score(
+            "agent-001", store, posture_machine=posture_machine
+        )
 
-        posture_machine.set_posture("agent-001", TrustPosture.SUPERVISED)
-        score_human = await compute_trust_score("agent-001", store, posture_machine=posture_machine)
+        posture_machine.set_posture("agent-001", TrustPosture.TOOL)
+        score_human = await compute_trust_score(
+            "agent-001", store, posture_machine=posture_machine
+        )
 
-        assert score_autonomy.breakdown["posture_level"] < score_human.breakdown["posture_level"]
+        assert (
+            score_autonomy.breakdown["posture_level"]
+            < score_human.breakdown["posture_level"]
+        )
 
     @pytest.mark.asyncio
     async def test_without_posture_machine_uses_default(self, store, full_chain):
@@ -487,7 +498,9 @@ class TestComputeTrustScore:
         assert "posture_level" in score.breakdown
 
     @pytest.mark.asyncio
-    async def test_deep_delegation_lowers_score(self, store, now, genesis_record, capability):
+    async def test_deep_delegation_lowers_score(
+        self, store, now, genesis_record, capability
+    ):
         """Deeper delegation chains should lower the delegation depth factor score."""
         # Chain with no delegations
         chain_no_del = TrustLineageChain(
@@ -523,10 +536,15 @@ class TestComputeTrustScore:
         score_deep = await compute_trust_score("agent-001", store)
 
         # More delegation depth should lower the delegation_depth factor
-        assert score_no_del.breakdown["delegation_depth"] > score_deep.breakdown["delegation_depth"]
+        assert (
+            score_no_del.breakdown["delegation_depth"]
+            > score_deep.breakdown["delegation_depth"]
+        )
 
     @pytest.mark.asyncio
-    async def test_more_constraints_higher_coverage(self, store, now, genesis_record, capability):
+    async def test_more_constraints_higher_coverage(
+        self, store, now, genesis_record, capability
+    ):
         """More constraints should yield a higher constraint_coverage factor."""
         # Chain with no constraints (just default empty envelope)
         chain_few = TrustLineageChain(
@@ -563,7 +581,10 @@ class TestComputeTrustScore:
         await store.update_chain("agent-001", chain_many)
         score_many = await compute_trust_score("agent-001", store)
 
-        assert score_many.breakdown["constraint_coverage"] > score_few.breakdown["constraint_coverage"]
+        assert (
+            score_many.breakdown["constraint_coverage"]
+            > score_few.breakdown["constraint_coverage"]
+        )
 
     @pytest.mark.asyncio
     async def test_recent_chain_scores_higher_recency(self, store, capability):
@@ -620,7 +641,10 @@ class TestComputeTrustScore:
         await store.store_chain(recent_chain)
         score_recent = await compute_trust_score("agent-recent", store)
 
-        assert score_recent.breakdown["chain_recency"] > score_old.breakdown["chain_recency"]
+        assert (
+            score_recent.breakdown["chain_recency"]
+            > score_old.breakdown["chain_recency"]
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -698,26 +722,36 @@ class TestGenerateTrustReport:
             await generate_trust_report("nonexistent-agent", store)
 
     @pytest.mark.asyncio
-    async def test_report_with_posture_machine(self, store, full_chain, posture_machine):
+    async def test_report_with_posture_machine(
+        self, store, full_chain, posture_machine
+    ):
         """Report should work with posture_machine parameter."""
         await store.store_chain(full_chain)
-        posture_machine.set_posture("agent-001", TrustPosture.SHARED_PLANNING)
+        posture_machine.set_posture("agent-001", TrustPosture.SUPERVISED)
 
-        report = await generate_trust_report("agent-001", store, posture_machine=posture_machine)
+        report = await generate_trust_report(
+            "agent-001", store, posture_machine=posture_machine
+        )
 
         assert isinstance(report, TrustReport)
         assert report.score.breakdown["posture_level"] > 0
 
     @pytest.mark.asyncio
-    async def test_delegated_generates_risk_indicator(self, store, full_chain, posture_machine):
+    async def test_delegated_generates_risk_indicator(
+        self, store, full_chain, posture_machine
+    ):
         """DELEGATED posture should generate a risk indicator."""
         await store.store_chain(full_chain)
-        posture_machine.set_posture("agent-001", TrustPosture.DELEGATED)
+        posture_machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
 
-        report = await generate_trust_report("agent-001", store, posture_machine=posture_machine)
+        report = await generate_trust_report(
+            "agent-001", store, posture_machine=posture_machine
+        )
 
         # There should be a risk indicator about full autonomy
-        autonomy_indicators = [ri for ri in report.risk_indicators if "autonomy" in ri.lower()]
+        autonomy_indicators = [
+            ri for ri in report.risk_indicators if "autonomy" in ri.lower()
+        ]
         assert len(autonomy_indicators) > 0
 
     @pytest.mark.asyncio

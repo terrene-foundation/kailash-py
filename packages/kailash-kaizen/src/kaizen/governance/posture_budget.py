@@ -11,8 +11,8 @@ When a BudgetTracker crosses configurable utilization thresholds, this
 integration translates them into posture actions:
 
 - **warning** (default 80%): Log a warning. No posture change.
-- **downgrade** (default 95%): Transition the agent to SUPERVISED.
-- **emergency** (default 100%): Emergency downgrade to PSEUDO_AGENT.
+- **downgrade** (default 95%): Transition the agent to TOOL.
+- **emergency** (default 100%): Emergency downgrade to PSEUDO.
 
 The integration hooks into the BudgetTracker via ``on_threshold()``
 for the fixed 80/95/100% events, and registers an ``on_record()``
@@ -41,8 +41,8 @@ __all__ = [
 # Default threshold mapping: fraction of budget consumed -> action
 _DEFAULT_THRESHOLDS: Dict[str, float] = {
     "warning": 0.80,  # Log warning only
-    "downgrade": 0.95,  # Downgrade to SUPERVISED
-    "emergency": 1.0,  # Emergency downgrade to PSEUDO_AGENT
+    "downgrade": 0.95,  # Downgrade to TOOL
+    "emergency": 1.0,  # Emergency downgrade to PSEUDO
 }
 
 # Valid threshold keys
@@ -65,8 +65,8 @@ class PostureBudgetIntegration:
     When utilization crosses configured thresholds:
 
     - **warning**: Log a warning, no posture change.
-    - **downgrade**: Transition agent to SUPERVISED via normal transition.
-    - **emergency**: Emergency downgrade agent to PSEUDO_AGENT (bypasses guards).
+    - **downgrade**: Transition agent to TOOL via normal transition.
+    - **emergency**: Emergency downgrade agent to PSEUDO (bypasses guards).
 
     Args:
         budget_tracker: The BudgetTracker to monitor.
@@ -244,7 +244,7 @@ class PostureBudgetIntegration:
     def _handle_downgrade(self, utilization: float) -> None:
         """Handle the downgrade threshold crossing.
 
-        Attempts to downgrade the agent to SUPERVISED.  If the agent is
+        Attempts to downgrade the agent to TOOL.  If the agent is
         already at SUPERVISED or lower, this is a no-op.
 
         Args:
@@ -255,7 +255,7 @@ class PostureBudgetIntegration:
         remaining = max(0, snap.allocated - snap.committed)
 
         # Only downgrade if current posture is above SUPERVISED
-        if current <= TrustPosture.SUPERVISED:
+        if current <= TrustPosture.TOOL:
             logger.info(
                 "Budget %.0f%% threshold for agent '%s': already at %s, "
                 "no further downgrade from this threshold",
@@ -268,7 +268,7 @@ class PostureBudgetIntegration:
         request = PostureTransitionRequest(
             agent_id=self._agent_id,
             from_posture=current,
-            to_posture=TrustPosture.SUPERVISED,
+            to_posture=TrustPosture.TOOL,
             reason=f"Budget threshold crossed: utilization="
             f"{utilization * 100:.1f}% "
             f"(remaining={remaining} microdollars)",
@@ -286,8 +286,7 @@ class PostureBudgetIntegration:
         result = self._state_machine.transition(request)
         if result.success:
             logger.warning(
-                "Budget %.0f%% threshold: agent '%s' downgraded "
-                "from %s to SUPERVISED",
+                "Budget %.0f%% threshold: agent '%s' downgraded " "from %s to TOOL",
                 self._thresholds["downgrade"] * 100,
                 self._agent_id,
                 current.value,
@@ -298,7 +297,7 @@ class PostureBudgetIntegration:
             # re-read the current posture and retry once.
             if "does not match" in (result.reason or ""):
                 refreshed = self._state_machine.get_posture(self._agent_id)
-                if refreshed <= TrustPosture.SUPERVISED:
+                if refreshed <= TrustPosture.TOOL:
                     logger.info(
                         "Budget %.0f%% threshold for agent '%s': posture "
                         "already at %s after refresh, no downgrade needed",
@@ -311,7 +310,7 @@ class PostureBudgetIntegration:
                 retry_request = PostureTransitionRequest(
                     agent_id=self._agent_id,
                     from_posture=refreshed,
-                    to_posture=TrustPosture.SUPERVISED,
+                    to_posture=TrustPosture.TOOL,
                     reason=request.reason,
                     requester_id="posture_budget_integration",
                     metadata=dict(request.metadata),
@@ -320,7 +319,7 @@ class PostureBudgetIntegration:
                 if retry_result.success:
                     logger.warning(
                         "Budget %.0f%% threshold: agent '%s' downgraded "
-                        "from %s to SUPERVISED (retry after stale posture)",
+                        "from %s to TOOL (retry after stale posture)",
                         self._thresholds["downgrade"] * 100,
                         self._agent_id,
                         refreshed.value,
@@ -338,7 +337,7 @@ class PostureBudgetIntegration:
 
             logger.error(
                 "Budget %.0f%% threshold: failed to downgrade agent '%s' "
-                "from %s to SUPERVISED: %s",
+                "from %s to TOOL: %s",
                 self._thresholds["downgrade"] * 100,
                 self._agent_id,
                 current.value,
@@ -348,7 +347,7 @@ class PostureBudgetIntegration:
     def _handle_emergency(self, utilization: float) -> None:
         """Handle the emergency/exhausted threshold crossing.
 
-        Triggers emergency_downgrade to PSEUDO_AGENT, bypassing all guards.
+        Triggers emergency_downgrade to PSEUDO, bypassing all guards.
 
         Args:
             utilization: Current budget utilization fraction.
@@ -366,7 +365,7 @@ class PostureBudgetIntegration:
 
         logger.critical(
             "Budget exhausted: agent '%s' emergency downgraded to "
-            "PSEUDO_AGENT (from %s). Utilization: %.1f%%, "
+            "PSEUDO (from %s). Utilization: %.1f%%, "
             "remaining: %d microdollars",
             self._agent_id,
             result.from_posture.value,

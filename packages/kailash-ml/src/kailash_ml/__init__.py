@@ -33,6 +33,9 @@ def __getattr__(name: str):  # noqa: N807
         "AlertConfig": "kailash_ml.engines.data_explorer",
         "FeatureEngineer": "kailash_ml.engines.feature_engineer",
         "EnsembleEngine": "kailash_ml.engines.ensemble",
+        "ClusteringEngine": "kailash_ml.engines.clustering",
+        "AnomalyDetectionEngine": "kailash_ml.engines.anomaly_detection",
+        "DimReductionEngine": "kailash_ml.engines.dim_reduction",
         "ExperimentTracker": "kailash_ml.engines.experiment_tracker",
         "PreprocessingPipeline": "kailash_ml.engines.preprocessing",
         "ModelVisualizer": "kailash_ml.engines.model_visualizer",
@@ -47,6 +50,11 @@ def __getattr__(name: str):  # noqa: N807
         # Decorators
         "ExperimentalWarning": "kailash_ml._decorators",
     }
+    # Metrics module -- lazy-load the subpackage itself
+    if name == "metrics":
+        import importlib
+
+        return importlib.import_module("kailash_ml.metrics")
     if name in _engine_map:
         import importlib
 
@@ -76,6 +84,9 @@ __all__ = [
     "AlertConfig",
     "FeatureEngineer",
     "EnsembleEngine",
+    "ClusteringEngine",
+    "AnomalyDetectionEngine",
+    "DimReductionEngine",
     "ExperimentTracker",
     "PreprocessingPipeline",
     "ModelVisualizer",
@@ -85,4 +96,6 @@ __all__ = [
     "MlflowFormatWriter",
     "MLDashboard",
     "ExperimentalWarning",
+    # Metrics module
+    "metrics",
 ]

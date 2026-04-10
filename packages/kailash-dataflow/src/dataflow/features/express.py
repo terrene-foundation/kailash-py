@@ -1099,6 +1099,21 @@ class DataFlowExpress:
             if hasattr(self._db, "_emit_write_event"):
                 self._db._emit_write_event(model, "bulk_create", record_id=None)
 
+            # Issue #373: WARN on partial failure (observability.md Rule 6)
+            if isinstance(result, dict):
+                failed = result.get("failed", 0) or result.get("failure_count", 0)
+                total = result.get("total", len(records))
+                if failed and failed > 0:
+                    logger.warning(
+                        "bulk_create.partial_failure",
+                        extra={
+                            "model": model,
+                            "total": total,
+                            "failed": failed,
+                            "succeeded": total - failed,
+                        },
+                    )
+
             # Handle different result formats
             if isinstance(result, list):
                 return result
@@ -1136,15 +1151,33 @@ class DataFlowExpress:
 
         async def _bulk_update():
             results = []
+            failed_count = 0
             for record in records:
                 record_id = record.get(key_field)
                 if record_id is None:
+                    failed_count += 1
                     continue
                 fields = {k: v for k, v in record.items() if k != key_field}
                 if not fields:
+                    failed_count += 1
                     continue
-                updated = await self.update(model, str(record_id), fields)
-                results.append(updated)
+                try:
+                    updated = await self.update(model, str(record_id), fields)
+                    results.append(updated)
+                except Exception:
+                    failed_count += 1
+
+            # Issue #373: WARN on partial failure (observability.md Rule 6)
+            if failed_count > 0:
+                logger.warning(
+                    "bulk_update.partial_failure",
+                    extra={
+                        "model": model,
+                        "total": len(records),
+                        "failed": failed_count,
+                        "succeeded": len(results),
+                    },
+                )
 
             # Model-scoped cache invalidation (TSG-104)
             await self._invalidate_model_cache(model)

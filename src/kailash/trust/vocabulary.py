@@ -25,11 +25,11 @@ Example::
     from kailash.trust.vocabulary import posture_to_eatp, posture_from_eatp
     from kailash.trust.posture.postures import TrustPosture
 
-    eatp_id = posture_to_eatp(TrustPosture.DELEGATED)
-    # => "eatp:posture:delegated"
+    eatp_id = posture_to_eatp(TrustPosture.AUTONOMOUS)
+    # => "eatp:posture:autonomous"
 
-    posture = posture_from_eatp("eatp:posture:delegated")
-    # => TrustPosture.DELEGATED
+    posture = posture_from_eatp("eatp:posture:autonomous")
+    # => TrustPosture.AUTONOMOUS
 """
 
 from __future__ import annotations
@@ -44,42 +44,44 @@ from kailash.trust.posture.postures import TrustPosture
 # ---------------------------------------------------------------------------
 
 POSTURE_VOCABULARY: Dict[str, Dict[str, Any]] = {
-    "delegated": {
-        "eatp_id": "eatp:posture:delegated",
+    "autonomous": {
+        "eatp_id": "eatp:posture:autonomous",
         "autonomy_level": 5,
         "description": (
             "Agent operates with full autonomy under remote monitoring. "
             "Human oversight is asynchronous and review-based."
         ),
     },
-    "continuous_insight": {
-        "eatp_id": "eatp:posture:continuous_insight",
+    "delegating": {
+        "eatp_id": "eatp:posture:delegating",
         "autonomy_level": 4,
         "description": (
             "Agent executes tasks autonomously while a human monitors in "
             "real-time. Intervention is possible but not required for each action."
         ),
     },
-    "shared_planning": {
-        "eatp_id": "eatp:posture:shared_planning",
+    "supervised": {
+        "eatp_id": "eatp:posture:supervised",
         "autonomy_level": 3,
         "description": (
             "Human and agent co-plan task execution. Agent executes only "
             "plans that have been approved by the human collaborator."
         ),
     },
-    "supervised": {
-        "eatp_id": "eatp:posture:supervised",
+    "tool": {
+        "eatp_id": "eatp:posture:tool",
         "autonomy_level": 2,
         "description": (
-            "Agent proposes actions for human review. Each action requires explicit human approval before execution."
+            "Agent proposes actions for human review. Each action requires "
+            "explicit human approval before execution."
         ),
     },
-    "pseudo_agent": {
-        "eatp_id": "eatp:posture:pseudo_agent",
+    "pseudo": {
+        "eatp_id": "eatp:posture:pseudo",
         "autonomy_level": 1,
         "description": (
-            "Agent serves as an interface only. All reasoning and decision-making is performed by a human operator."
+            "Agent serves as an interface only. All reasoning and "
+            "decision-making is performed by a human operator."
         ),
     },
 }
@@ -93,7 +95,8 @@ Each entry is keyed by the ``TrustPosture`` enum value and contains:
 
 # Build reverse lookup for posture_from_eatp
 _EATP_ID_TO_POSTURE: Dict[str, TrustPosture] = {
-    entry["eatp_id"]: TrustPosture(posture_value) for posture_value, entry in POSTURE_VOCABULARY.items()
+    entry["eatp_id"]: TrustPosture(posture_value)
+    for posture_value, entry in POSTURE_VOCABULARY.items()
 }
 
 
@@ -123,7 +126,9 @@ def posture_from_eatp(eatp_id: str) -> TrustPosture:
             or refers to an unknown posture.
     """
     if not eatp_id.startswith("eatp:posture:"):
-        raise ValueError(f"Invalid EATP posture identifier: '{eatp_id}'. Expected prefix 'eatp:posture:'.")
+        raise ValueError(
+            f"Invalid EATP posture identifier: '{eatp_id}'. Expected prefix 'eatp:posture:'."
+        )
     result = _EATP_ID_TO_POSTURE.get(eatp_id)
     if result is None:
         posture_name = eatp_id.removeprefix("eatp:posture:")
@@ -207,7 +212,8 @@ Each entry is keyed by the ``ConstraintType`` enum value and contains:
 
 # Build reverse lookup for constraint_from_eatp
 _EATP_ID_TO_CONSTRAINT: Dict[str, ConstraintType] = {
-    entry["eatp_id"]: ConstraintType(ct_value) for ct_value, entry in CONSTRAINT_VOCABULARY.items()
+    entry["eatp_id"]: ConstraintType(ct_value)
+    for ct_value, entry in CONSTRAINT_VOCABULARY.items()
 }
 
 
@@ -237,7 +243,9 @@ def constraint_from_eatp(eatp_id: str) -> ConstraintType:
             or refers to an unknown constraint type.
     """
     if not eatp_id.startswith("eatp:constraint:"):
-        raise ValueError(f"Invalid EATP constraint identifier: '{eatp_id}'. Expected prefix 'eatp:constraint:'.")
+        raise ValueError(
+            f"Invalid EATP constraint identifier: '{eatp_id}'. Expected prefix 'eatp:constraint:'."
+        )
     result = _EATP_ID_TO_CONSTRAINT.get(eatp_id)
     if result is None:
         ct_name = eatp_id.removeprefix("eatp:constraint:")

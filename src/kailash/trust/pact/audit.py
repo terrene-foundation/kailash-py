@@ -35,6 +35,7 @@ __all__ = [
     "create_pact_audit_details",
     "AuditAnchor",
     "AuditChain",
+    "TieredAuditDispatcher",
 ]
 
 
@@ -62,6 +63,9 @@ class PactAuditAction(str, Enum):
     BRIDGE_CONSENT = "bridge_consent"
     BRIDGE_REJECTED = "bridge_rejected"
     CLEARANCE_TRANSITIONED = "clearance_transitioned"
+    PLAN_SUSPENDED = "plan_suspended"
+    PLAN_RESUMED = "plan_resumed"
+    RESUME_CONDITION_UPDATED = "resume_condition_updated"
 
 
 def create_pact_audit_details(
@@ -387,3 +391,195 @@ class AuditChain:
                 )
 
         return chain
+
+
+# ---------------------------------------------------------------------------
+# TieredAuditDispatcher -- gradient-aligned persistence tiers (PACT-08)
+# ---------------------------------------------------------------------------
+
+# Tier buffer bound: maximum FLAGGED anchors buffered before forced flush.
+_MAX_SESSION_BUFFER = 10_000
+
+
+class TieredAuditDispatcher:
+    """Routes audit anchors to storage tiers based on verification level.
+
+    The three tiers align with the PACT verification gradient:
+
+    * **Tier 1 (ephemeral)** -- ``AUTO_APPROVED`` actions are written only to
+      the in-memory ``AuditChain``.  Cheap, fast, lost on process restart.
+    * **Tier 2 (session-buffered)** -- ``FLAGGED`` actions are buffered in
+      memory and flushed to the durable store at session end via
+      ``flush_session()``.  Balances cost with auditability.
+    * **Tier 3 (synchronous durable)** -- ``HELD`` and ``BLOCKED`` actions are
+      written synchronously to both the ephemeral chain AND the durable store.
+      These represent governance denials or holds that MUST survive restarts.
+
+    Thread safety: the dispatcher acquires ``_lock`` around the session buffer.
+    The ephemeral ``AuditChain`` and durable store each have their own locks.
+
+    Args:
+        ephemeral: The in-memory ``AuditChain`` for all tiers.
+        durable: An ``InMemoryAuditStore`` (or any store exposing
+            ``create_event`` / ``append``).  When ``None``, Tier 2 and 3
+            behave identically to Tier 1 (ephemeral-only).
+    """
+
+    def __init__(
+        self,
+        ephemeral: AuditChain,
+        durable: Any | None = None,
+    ) -> None:
+        self._ephemeral = ephemeral
+        self._durable = durable
+        self._session_buffer: list[AuditAnchor] = []
+        self._lock = threading.Lock()
+
+    @property
+    def ephemeral(self) -> AuditChain:
+        """The underlying ephemeral audit chain."""
+        return self._ephemeral
+
+    @property
+    def session_buffer_size(self) -> int:
+        """Number of FLAGGED anchors currently buffered."""
+        with self._lock:
+            return len(self._session_buffer)
+
+    def dispatch(
+        self,
+        anchor: AuditAnchor,
+        level: VerificationLevel,
+    ) -> None:
+        """Route an anchor to the appropriate persistence tier.
+
+        Args:
+            anchor: The sealed ``AuditAnchor`` to dispatch.
+            level: The ``VerificationLevel`` that determines the tier.
+        """
+        if level in (VerificationLevel.HELD, VerificationLevel.BLOCKED):
+            # Tier 3: synchronous durable write + ephemeral
+            if self._durable is not None:
+                event = self._anchor_to_event(anchor)
+                try:
+                    # InMemoryAuditStore.append is async, but for synchronous
+                    # governance paths we need a sync wrapper.  We use the
+                    # store's internal deque directly if available, otherwise
+                    # fall back to create+append via an event loop.
+                    import asyncio
+
+                    try:
+                        loop = asyncio.get_running_loop()
+                    except RuntimeError:
+                        loop = None
+
+                    if loop is not None and loop.is_running():
+                        # Already in an async context -- schedule as task
+                        loop.create_task(self._durable.append(event))
+                    else:
+                        asyncio.run(self._durable.append(event))
+                except Exception:
+                    logger.exception(
+                        "TieredAuditDispatcher: durable write failed for "
+                        "HELD/BLOCKED anchor %s -- ephemeral-only",
+                        anchor.anchor_id,
+                    )
+            self._ephemeral.append(
+                agent_id=anchor.agent_id,
+                action=anchor.action,
+                verification_level=level,
+                envelope_id=anchor.envelope_id,
+                result=anchor.result,
+                metadata=anchor.metadata,
+            )
+
+        elif level == VerificationLevel.FLAGGED:
+            # Tier 2: buffer for session-end persistence + ephemeral
+            with self._lock:
+                self._session_buffer.append(anchor)
+                # Bounded: evict oldest 10% at capacity
+                if len(self._session_buffer) > _MAX_SESSION_BUFFER:
+                    evict = max(1, _MAX_SESSION_BUFFER // 10)
+                    self._session_buffer = self._session_buffer[evict:]
+            self._ephemeral.append(
+                agent_id=anchor.agent_id,
+                action=anchor.action,
+                verification_level=level,
+                envelope_id=anchor.envelope_id,
+                result=anchor.result,
+                metadata=anchor.metadata,
+            )
+
+        else:
+            # Tier 1: ephemeral only (AUTO_APPROVED)
+            self._ephemeral.append(
+                agent_id=anchor.agent_id,
+                action=anchor.action,
+                verification_level=level,
+                envelope_id=anchor.envelope_id,
+                result=anchor.result,
+                metadata=anchor.metadata,
+            )
+
+    def flush_session(self) -> int:
+        """Persist Tier 2 (FLAGGED) anchors to the durable store.
+
+        Returns the number of anchors flushed.  Clears the session buffer
+        regardless of whether the durable store is configured (so the buffer
+        does not grow unbounded in ephemeral-only mode).
+
+        Returns:
+            Number of anchors flushed to durable storage.
+        """
+        with self._lock:
+            to_flush = list(self._session_buffer)
+            self._session_buffer.clear()
+
+        if not to_flush or self._durable is None:
+            return 0
+
+        flushed = 0
+        for anchor in to_flush:
+            event = self._anchor_to_event(anchor)
+            try:
+                import asyncio
+
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    loop = None
+
+                if loop is not None and loop.is_running():
+                    loop.create_task(self._durable.append(event))
+                else:
+                    asyncio.run(self._durable.append(event))
+                flushed += 1
+            except Exception:
+                logger.exception(
+                    "TieredAuditDispatcher: flush failed for anchor %s",
+                    anchor.anchor_id,
+                )
+        return flushed
+
+    def _anchor_to_event(self, anchor: AuditAnchor) -> Any:
+        """Convert a PACT AuditAnchor to a canonical AuditEvent.
+
+        Uses the durable store's ``create_event`` factory to build a
+        properly hash-chained event from the anchor's fields.
+
+        Returns:
+            An ``AuditEvent`` instance ready for ``store.append()``.
+        """
+        if self._durable is None:
+            raise RuntimeError("Cannot convert anchor to event without a durable store")
+        return self._durable.create_event(
+            actor=anchor.agent_id,
+            action=anchor.action,
+            resource=anchor.envelope_id or "",
+            outcome=anchor.result or "success",
+            metadata={
+                **anchor.metadata,
+                "verification_level": anchor.verification_level.value,
+                "pact_anchor_id": anchor.anchor_id,
+            },
+        )

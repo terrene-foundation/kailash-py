@@ -132,7 +132,7 @@ class TestTrustVerify:
         assert result["chain_valid"] is True
         assert result["integrity_issues"] == []
         assert result["trust_posture"] == "supervised"
-        assert result["verification_level"] == "FULL"
+        assert result["verification_level"] == "STANDARD"
 
 
 class TestGetProjectThreadSafety:

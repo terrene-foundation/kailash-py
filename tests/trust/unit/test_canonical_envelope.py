@@ -25,7 +25,6 @@ import math
 import os
 
 import pytest
-
 from kailash.trust.envelope import (
     AgentPosture,
     CommunicationConstraint,
@@ -218,28 +217,26 @@ class TestPostureCeiling:
             ConstraintEnvelope(posture_ceiling="nonexistent")
 
     def test_agent_posture_fits_ceiling(self) -> None:
-        assert AgentPosture.SUPERVISED.fits_ceiling(AgentPosture.DELEGATED)
+        assert AgentPosture.SUPERVISED.fits_ceiling(AgentPosture.AUTONOMOUS)
         assert AgentPosture.SUPERVISED.fits_ceiling(AgentPosture.SUPERVISED)
-        assert not AgentPosture.DELEGATED.fits_ceiling(AgentPosture.SUPERVISED)
+        assert not AgentPosture.AUTONOMOUS.fits_ceiling(AgentPosture.SUPERVISED)
 
     def test_agent_posture_clamp_to_ceiling(self) -> None:
         assert (
-            AgentPosture.DELEGATED.clamp_to_ceiling(AgentPosture.SUPERVISED)
+            AgentPosture.AUTONOMOUS.clamp_to_ceiling(AgentPosture.SUPERVISED)
             == AgentPosture.SUPERVISED
         )
         assert (
-            AgentPosture.SUPERVISED.clamp_to_ceiling(AgentPosture.DELEGATED)
+            AgentPosture.SUPERVISED.clamp_to_ceiling(AgentPosture.AUTONOMOUS)
             == AgentPosture.SUPERVISED
         )
 
     def test_agent_posture_ordering(self) -> None:
         order = AgentPosture.ordering()
-        assert order[AgentPosture.PSEUDO_AGENT] < order[AgentPosture.SUPERVISED]
-        assert order[AgentPosture.SUPERVISED] < order[AgentPosture.SHARED_PLANNING]
-        assert (
-            order[AgentPosture.SHARED_PLANNING] < order[AgentPosture.CONTINUOUS_INSIGHT]
-        )
-        assert order[AgentPosture.CONTINUOUS_INSIGHT] < order[AgentPosture.DELEGATED]
+        assert order[AgentPosture.PSEUDO] < order[AgentPosture.SUPERVISED]
+        assert order[AgentPosture.SUPERVISED] < order[AgentPosture.TOOL]
+        assert order[AgentPosture.TOOL] < order[AgentPosture.DELEGATING]
+        assert order[AgentPosture.DELEGATING] < order[AgentPosture.AUTONOMOUS]
 
 
 # ---------------------------------------------------------------------------

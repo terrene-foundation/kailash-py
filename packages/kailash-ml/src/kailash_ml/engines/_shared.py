@@ -9,7 +9,6 @@ Centralizes duplicated definitions to prevent drift:
 """
 from __future__ import annotations
 
-import importlib
 import logging
 from typing import Any
 
@@ -89,8 +88,12 @@ def compute_metrics_by_name(
     metric_names: list[str],
     model: Any = None,
     X_test: np.ndarray | None = None,
+    y_prob: np.ndarray | None = None,
 ) -> dict[str, float]:
     """Compute requested sklearn metrics by name.
+
+    Delegates to :func:`kailash_ml.metrics.compute_metrics` -- the metrics
+    registry is the single source of truth for all metric implementations.
 
     Parameters
     ----------
@@ -104,57 +107,21 @@ def compute_metrics_by_name(
         Fitted model (needed for ``auc`` with ``predict_proba``).
     X_test:
         Test features (needed for ``auc`` with ``predict_proba``).
+    y_prob:
+        Probability predictions (needed for ``log_loss``,
+        ``brier_score_loss``, ``average_precision``).
 
     Returns
     -------
     dict mapping metric name to float value.
     """
-    from sklearn import metrics as skmetrics
+    from kailash_ml.metrics._registry import compute_metrics
 
-    results: dict[str, float] = {}
-    for name in metric_names:
-        if name == "accuracy":
-            results[name] = float(skmetrics.accuracy_score(y_true, y_pred))
-        elif name == "f1":
-            results[name] = float(
-                skmetrics.f1_score(y_true, y_pred, average="weighted", zero_division=0)
-            )
-        elif name == "precision":
-            results[name] = float(
-                skmetrics.precision_score(
-                    y_true, y_pred, average="weighted", zero_division=0
-                )
-            )
-        elif name == "recall":
-            results[name] = float(
-                skmetrics.recall_score(
-                    y_true, y_pred, average="weighted", zero_division=0
-                )
-            )
-        elif name == "mse":
-            results[name] = float(skmetrics.mean_squared_error(y_true, y_pred))
-        elif name == "rmse":
-            results[name] = float(np.sqrt(skmetrics.mean_squared_error(y_true, y_pred)))
-        elif name == "mae":
-            results[name] = float(skmetrics.mean_absolute_error(y_true, y_pred))
-        elif name == "r2":
-            results[name] = float(skmetrics.r2_score(y_true, y_pred))
-        elif name == "auc" and model is not None and X_test is not None:
-            if hasattr(model, "predict_proba"):
-                try:
-                    y_prob = model.predict_proba(X_test)
-                    if y_prob.shape[1] == 2:
-                        results[name] = float(
-                            skmetrics.roc_auc_score(y_true, y_prob[:, 1])
-                        )
-                    else:
-                        results[name] = float(
-                            skmetrics.roc_auc_score(
-                                y_true, y_prob, multi_class="ovr", average="weighted"
-                            )
-                        )
-                except Exception:
-                    logger.debug("AUC computation failed, skipping.")
-        else:
-            logger.warning("Unknown or unsupported metric: %s", name)
-    return results
+    return compute_metrics(
+        y_true,
+        y_pred,
+        metric_names,
+        y_prob=y_prob,
+        model=model,
+        X_test=X_test,
+    )

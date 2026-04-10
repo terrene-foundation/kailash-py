@@ -11,7 +11,6 @@ default config propagation, and cleanup operations.
 from __future__ import annotations
 
 import pytest
-
 from kailash.trust.circuit_breaker import (
     CircuitBreakerConfig,
     CircuitBreakerRegistry,
@@ -25,8 +24,8 @@ from kailash.trust.posture.postures import PostureStateMachine, TrustPosture
 def machine():
     """Create a PostureStateMachine with two agents at DELEGATED."""
     m = PostureStateMachine()
-    m.set_posture("agent-001", TrustPosture.DELEGATED)
-    m.set_posture("agent-002", TrustPosture.DELEGATED)
+    m.set_posture("agent-001", TrustPosture.AUTONOMOUS)
+    m.set_posture("agent-002", TrustPosture.AUTONOMOUS)
     return m
 
 

@@ -14,10 +14,8 @@ Written BEFORE implementation (TDD). Tests define the contract.
 from __future__ import annotations
 
 import pytest
-
 from kailash.trust.metrics import TrustMetricsCollector
 from kailash.trust.posture.postures import TrustPosture
-
 
 # ---------------------------------------------------------------------------
 # G2: TrustMetricsCollector bounded collections
@@ -43,7 +41,7 @@ class TestMetricsCollectorAgentPosturesBounded:
         collector = TrustMetricsCollector(max_agents=maxlen)
 
         for i in range(maxlen + 5):
-            collector.record_posture(f"agent-{i:04d}", TrustPosture.DELEGATED)
+            collector.record_posture(f"agent-{i:04d}", TrustPosture.AUTONOMOUS)
 
         assert len(collector._agent_postures) <= maxlen
 
@@ -53,7 +51,7 @@ class TestMetricsCollectorAgentPosturesBounded:
         collector = TrustMetricsCollector(max_agents=maxlen)
 
         for i in range(maxlen + 5):
-            collector.record_posture(f"agent-{i:04d}", TrustPosture.DELEGATED)
+            collector.record_posture(f"agent-{i:04d}", TrustPosture.AUTONOMOUS)
 
         remaining = set(collector._agent_postures.keys())
         # Oldest agents should be gone
@@ -117,7 +115,7 @@ class TestMetricsCollectorBackwardCompat:
     def test_no_args_works(self):
         """TrustMetricsCollector() with no args still works."""
         collector = TrustMetricsCollector()
-        collector.record_posture("agent-001", TrustPosture.DELEGATED)
+        collector.record_posture("agent-001", TrustPosture.AUTONOMOUS)
         collector.record_transition("upgrade")
         collector.record_constraint_evaluation(
             passed=True,
@@ -147,9 +145,11 @@ class TestMetricsCollectorBackwardCompat:
     def test_reset_clears_all(self):
         """reset() should clear all bounded collections."""
         collector = TrustMetricsCollector(max_agents=100)
-        collector.record_posture("agent-001", TrustPosture.DELEGATED)
+        collector.record_posture("agent-001", TrustPosture.AUTONOMOUS)
         collector.record_transition("upgrade")
-        collector.record_constraint_evaluation(passed=False, failed_dimensions=["test"], gaming_flags=["flag"])
+        collector.record_constraint_evaluation(
+            passed=False, failed_dimensions=["test"], gaming_flags=["flag"]
+        )
 
         collector.reset()
 

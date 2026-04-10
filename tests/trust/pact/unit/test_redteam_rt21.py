@@ -20,16 +20,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-
-from kailash.trust.pact.config import (
-    ConfidentialityLevel,
-    ConstraintEnvelopeConfig,
-    DataAccessConstraintConfig,
-    FinancialConstraintConfig,
-    OperationalConstraintConfig,
-    TemporalConstraintConfig,
-    TrustPostureLevel,
-)
 from kailash.trust.pact.access import (
     AccessDecision,
     KnowledgeSharePolicy,
@@ -43,6 +33,15 @@ from kailash.trust.pact.agent import (
 )
 from kailash.trust.pact.clearance import RoleClearance, VettingStatus
 from kailash.trust.pact.compilation import CompiledOrg, OrgNode
+from kailash.trust.pact.config import (
+    ConfidentialityLevel,
+    ConstraintEnvelopeConfig,
+    DataAccessConstraintConfig,
+    FinancialConstraintConfig,
+    OperationalConstraintConfig,
+    TemporalConstraintConfig,
+    TrustPostureLevel,
+)
 from kailash.trust.pact.context import GovernanceContext
 from kailash.trust.pact.engine import GovernanceEngine
 from kailash.trust.pact.envelopes import (
@@ -58,7 +57,6 @@ from kailash.trust.pact.store import (
     MemoryEnvelopeStore,
 )
 from kailash.trust.pact.verdict import GovernanceVerdict
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -231,7 +229,7 @@ class TestAccessBypass:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.DELEGATED,  # Ceiling: TOP_SECRET
+            posture=TrustPostureLevel.AUTONOMOUS,  # Ceiling: TOP_SECRET
             compiled_org=org,
             clearances=clearances,
             ksps=[],
@@ -340,7 +338,7 @@ class TestAccessBypass:
         decision = can_access(
             role_address="D1-R1-T1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=org,
             clearances=clearances,
             ksps=[expired_ksp],
@@ -571,7 +569,7 @@ class TestAgentBypass:
         ctx = agent.context
 
         with pytest.raises(AttributeError):
-            ctx.posture = TrustPostureLevel.DELEGATED  # type: ignore[misc]
+            ctx.posture = TrustPostureLevel.AUTONOMOUS  # type: ignore[misc]
         with pytest.raises(AttributeError):
             ctx.role_address = "D99-R99"  # type: ignore[misc]
         with pytest.raises(AttributeError):
@@ -778,7 +776,7 @@ class TestTOCTOUDefense:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=org,
             clearances=clearances,
             ksps=[ksp],
@@ -816,7 +814,7 @@ class TestTOCTOUDefense:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=org,
             clearances=clearances,
             ksps=[],
@@ -845,7 +843,7 @@ class TestTOCTOUDefense:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=org,
             clearances=clearances,
             ksps=[],

@@ -14,7 +14,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
+from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
+from kailash.trust.pact.agent import PactGovernedAgent
+from kailash.trust.pact.clearance import RoleClearance
+from kailash.trust.pact.compilation import CompiledOrg
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
@@ -22,24 +25,16 @@ from kailash.trust.pact.config import (
     OperationalConstraintConfig,
     TrustPostureLevel,
 )
+from kailash.trust.pact.context import GovernanceContext
+from kailash.trust.pact.engine import GovernanceEngine
+from kailash.trust.pact.envelopes import RoleEnvelope
+from kailash.trust.pact.store import MemoryAccessPolicyStore, MemoryClearanceStore
 from pact.examples.university.barriers import (
     create_university_bridges,
     create_university_ksps,
 )
 from pact.examples.university.clearance import create_university_clearances
 from pact.examples.university.org import create_university_org
-from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
-from kailash.trust.pact.agent import PactGovernedAgent
-from kailash.trust.pact.clearance import RoleClearance
-from kailash.trust.pact.compilation import CompiledOrg
-from kailash.trust.pact.context import GovernanceContext
-from kailash.trust.pact.engine import GovernanceEngine
-from kailash.trust.pact.envelopes import RoleEnvelope
-from kailash.trust.pact.store import (
-    MemoryAccessPolicyStore,
-    MemoryClearanceStore,
-)
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -122,7 +117,7 @@ def agent_context(engine: GovernanceEngine) -> GovernanceContext:
     agent = PactGovernedAgent(
         engine=engine,
         role_address=CS_CHAIR_ADDR,
-        posture=TrustPostureLevel.SHARED_PLANNING,
+        posture=TrustPostureLevel.SUPERVISED,
     )
     return agent.context
 
@@ -141,7 +136,7 @@ class TestFrozenFieldMutations:
 
     def test_cannot_mutate_posture(self, agent_context: GovernanceContext) -> None:
         with pytest.raises(AttributeError):
-            agent_context.posture = TrustPostureLevel.DELEGATED  # type: ignore[misc]
+            agent_context.posture = TrustPostureLevel.AUTONOMOUS  # type: ignore[misc]
 
     def test_cannot_mutate_effective_envelope(
         self, agent_context: GovernanceContext
@@ -174,7 +169,7 @@ class TestFrozenFieldMutations:
             agent_context.org_id = "hacked-org"  # type: ignore[misc]
 
     def test_cannot_mutate_created_at(self, agent_context: GovernanceContext) -> None:
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
 
         with pytest.raises(AttributeError):
             agent_context.created_at = datetime.now(UTC)  # type: ignore[misc]
@@ -212,7 +207,7 @@ class TestContextFromEngine:
         ctx = engine.get_context(CS_CHAIR_ADDR)
         assert isinstance(ctx, GovernanceContext)
         with pytest.raises(AttributeError):
-            ctx.posture = TrustPostureLevel.DELEGATED  # type: ignore[misc]
+            ctx.posture = TrustPostureLevel.AUTONOMOUS  # type: ignore[misc]
 
     def test_engine_get_context_has_correct_role(
         self, engine: GovernanceEngine
@@ -253,5 +248,5 @@ class TestContextFromEngine:
 
     def test_engine_get_context_custom_posture(self, engine: GovernanceEngine) -> None:
         """get_context() with posture override uses the specified posture."""
-        ctx = engine.get_context(CS_CHAIR_ADDR, posture=TrustPostureLevel.DELEGATED)
-        assert ctx.posture == TrustPostureLevel.DELEGATED
+        ctx = engine.get_context(CS_CHAIR_ADDR, posture=TrustPostureLevel.AUTONOMOUS)
+        assert ctx.posture == TrustPostureLevel.AUTONOMOUS

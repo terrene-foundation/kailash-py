@@ -21,25 +21,24 @@ from __future__ import annotations
 import logging
 import math
 import threading
+import time
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
-from kailash.trust.pact.addressing import Address
-from kailash.trust.pact.config import (
-    ConfidentialityLevel,
-    ConstraintEnvelopeConfig,
-    TrustPostureLevel,
-    VerificationLevel,
-)
 from kailash.trust.pact.access import (
     AccessDecision,
     KnowledgeSharePolicy,
     PactBridge,
     can_access,
 )
-from kailash.trust.pact.audit import PactAuditAction, create_pact_audit_details
+from kailash.trust.pact.addressing import Address
+from kailash.trust.pact.audit import (
+    PactAuditAction,
+    TieredAuditDispatcher,
+    create_pact_audit_details,
+)
 from kailash.trust.pact.clearance import (
     RoleClearance,
     VettingStatus,
@@ -51,6 +50,12 @@ from kailash.trust.pact.compilation import (
     OrgNode,
     VacancyDesignation,
     compile_org,
+)
+from kailash.trust.pact.config import (
+    ConfidentialityLevel,
+    ConstraintEnvelopeConfig,
+    TrustPostureLevel,
+    VerificationLevel,
 )
 from kailash.trust.pact.context import GovernanceContext
 from kailash.trust.pact.envelopes import (
@@ -64,7 +69,13 @@ from kailash.trust.pact.envelopes import (
     intersect_envelopes,
 )
 from kailash.trust.pact.exceptions import PactError
-from kailash.trust.pact.knowledge import KnowledgeItem
+from kailash.trust.pact.knowledge import (
+    FilterDecision,
+    KnowledgeFilter,
+    KnowledgeItem,
+    KnowledgeQuery,
+)
+from kailash.trust.pact.observation import Observation, ObservationSink
 from kailash.trust.pact.store import (
     AccessPolicyStore,
     ClearanceStore,
@@ -74,6 +85,12 @@ from kailash.trust.pact.store import (
     MemoryEnvelopeStore,
     MemoryOrgStore,
     OrgStore,
+)
+from kailash.trust.pact.suspension import (
+    PlanSuspension,
+    ResumeCondition,
+    SuspensionTrigger,
+    resume_condition_for_trigger,
 )
 from kailash.trust.pact.verdict import GovernanceVerdict
 
@@ -90,6 +107,24 @@ _MAX_BRIDGE_APPROVALS: int = 10_000
 
 _BRIDGE_APPROVAL_TTL: timedelta = timedelta(hours=24)
 """Default time-to-live for bridge approvals."""
+
+_MAX_ENVELOPE_CACHE_ENTRIES: int = 10_000
+"""Maximum number of cached effective envelope entries (bounded collection)."""
+
+
+@dataclass
+class _CachedEnvelope:
+    """Internal cache entry for a computed effective envelope.
+
+    Stores the computed ConstraintEnvelopeConfig along with monotonic
+    creation time for optional TTL-based expiry.
+
+    Not exported -- internal implementation detail.
+    """
+
+    envelope: ConstraintEnvelopeConfig | None
+    created_at_mono: float  # time.monotonic() timestamp
+    task_id: str | None  # None for role-only, set for task-scoped
 
 
 @dataclass(frozen=True)
@@ -192,10 +227,22 @@ class GovernanceEngine:
         store_backend: str = "memory",  # "memory" or "sqlite"
         store_url: str | None = None,  # Path for sqlite backend
         eatp_emitter: Any | None = None,  # PactEatpEmitter (Section 5.7)
+        knowledge_filter: KnowledgeFilter | None = None,  # Pre-retrieval filter
+        envelope_cache_ttl_seconds: float | None = None,  # N2: optional TTL
+        audit_dispatcher: TieredAuditDispatcher | None = None,  # PACT-08 tiers
+        observation_sink: ObservationSink | None = None,  # N5 monitoring events
         vacancy_deadline_hours: int = 24,  # Section 5.5 configurable deadline
         require_bilateral_consent: bool = False,  # Section 4.4 bilateral consent
     ) -> None:
         self._lock = threading.Lock()
+
+        # N2 Effective Envelope Cache -- bounded dict keyed by
+        # (role_address, task_id) -> _CachedEnvelope.
+        # Invalidated via prefix-based cascade on mutations.
+        self._envelope_cache: OrderedDict[tuple[str, str | None], _CachedEnvelope] = (
+            OrderedDict()
+        )
+        self._envelope_cache_ttl: float | None = envelope_cache_ttl_seconds
 
         # Initialize stores -- use factory if store_backend specified,
         # otherwise use explicit stores or default to memory
@@ -255,8 +302,17 @@ class GovernanceEngine:
             self._org_store = org_store if org_store is not None else MemoryOrgStore()
         self._audit_chain = audit_chain
 
+        # Tiered audit dispatcher -- gradient-aligned persistence (PACT-08)
+        self._audit_dispatcher = audit_dispatcher
+
         # EATP record emitter -- optional synchronous emission (Section 5.7)
         self._eatp_emitter = eatp_emitter
+
+        # Pre-retrieval knowledge filter -- evaluated before 5-step access check
+        self._knowledge_filter: KnowledgeFilter | None = knowledge_filter
+
+        # Observation sink -- optional structured monitoring events (N5)
+        self._observation_sink = observation_sink
 
         # Vacancy deadline -- configurable (Section 5.5, default 24h)
         if vacancy_deadline_hours <= 0:
@@ -283,6 +339,11 @@ class GovernanceEngine:
 
         # Compliance role -- alternative bridge approver (Section 4.4)
         self._compliance_role: str | None = None
+
+        # Plan suspensions -- bounded in-memory store (N3 Plan Re-Entry)
+        # Key: plan_id -> PlanSuspension
+        self._suspensions: dict[str, PlanSuspension] = {}
+        self._max_suspensions: int = 10_000
 
         # Compile if OrgDefinition, or use directly if CompiledOrg
         if isinstance(org, CompiledOrg):
@@ -337,22 +398,84 @@ class GovernanceEngine:
         role_address: str,
         knowledge_item: KnowledgeItem,
         posture: TrustPostureLevel,
+        *,
+        query: KnowledgeQuery | None = None,
     ) -> AccessDecision:
         """Check if a role can access a knowledge item. Thread-safe, fail-closed.
 
-        Delegates to the 5-step access enforcement algorithm using current
-        clearances, KSPs, and bridges from the stores.
+        If a ``KnowledgeFilter`` is configured, it runs as a pre-step BEFORE
+        the 5-step access enforcement algorithm. The filter can deny the
+        request outright (skip data retrieval entirely) or narrow the query
+        scope. Filter errors are fail-closed to DENY.
 
         Args:
             role_address: The D/T/R address of the requesting role.
             knowledge_item: The knowledge item being accessed.
             posture: The current trust posture level of the role.
+            query: Optional pre-retrieval query descriptor. When a filter
+                is configured, this describes the scope of the data request.
+                If None and a filter is configured, a default query is built
+                from the knowledge_item.
 
         Returns:
             An AccessDecision indicating allow/deny with reason.
         """
         with self._lock:
             try:
+                # --- Pre-step: KnowledgeFilter (before 5-step algorithm) ---
+                if self._knowledge_filter is not None:
+                    filter_decision = self._run_knowledge_filter_locked(
+                        role_address, knowledge_item, query
+                    )
+                    if not filter_decision.allowed:
+                        logger.info(
+                            "Access denied (pre-filter): role_address=%s, "
+                            "item_id=%s, reason=%s",
+                            role_address,
+                            knowledge_item.item_id,
+                            filter_decision.reason,
+                        )
+                        self._emit_audit_unlocked(
+                            "knowledge_filter_denied",
+                            {
+                                "role_address": role_address,
+                                "item_id": knowledge_item.item_id,
+                                "reason": filter_decision.reason,
+                                "audit_anchor_id": filter_decision.audit_anchor_id,
+                                "barrier_enforced": True,
+                            },
+                        )
+                        return AccessDecision(
+                            allowed=False,
+                            reason=(
+                                f"Pre-retrieval filter denied: "
+                                f"{filter_decision.reason}"
+                            ),
+                            step_failed=0,
+                            audit_details={
+                                "role_address": role_address,
+                                "item_id": knowledge_item.item_id,
+                                "filter_decision": filter_decision.to_dict(),
+                                "step": "pre_filter",
+                            },
+                        )
+                    # Filter allowed (possibly with narrowed scope) -- log and proceed
+                    if filter_decision.filtered_scope is not None:
+                        logger.debug(
+                            "Knowledge filter narrowed scope for role_address=%s",
+                            role_address,
+                        )
+                    self._emit_audit_unlocked(
+                        "knowledge_filter_allowed",
+                        {
+                            "role_address": role_address,
+                            "item_id": knowledge_item.item_id,
+                            "audit_anchor_id": filter_decision.audit_anchor_id,
+                            "narrowed": filter_decision.filtered_scope is not None,
+                        },
+                    )
+
+                # --- 5-step access enforcement algorithm ---
                 # Gather current state from stores
                 clearances = self._gather_clearances()
                 ksps = self._access_policy_store.list_ksps()
@@ -399,6 +522,75 @@ class GovernanceEngine:
                     },
                 )
 
+    def _run_knowledge_filter_locked(
+        self,
+        role_address: str,
+        knowledge_item: KnowledgeItem,
+        query: KnowledgeQuery | None,
+    ) -> FilterDecision:
+        """Run the pre-retrieval knowledge filter. Caller must hold self._lock.
+
+        Fail-closed: if the filter raises an exception, returns a DENY decision.
+        This ensures a buggy filter implementation cannot accidentally grant access.
+
+        Args:
+            role_address: The D/T/R address of the requesting role.
+            knowledge_item: The knowledge item being accessed.
+            query: Optional query descriptor. If None, a default query is
+                built from the knowledge_item.
+
+        Returns:
+            A FilterDecision from the configured filter, or a DENY decision
+            if the filter raised an exception.
+        """
+        assert self._knowledge_filter is not None  # noqa: S101 -- caller must check
+
+        # Build a default query from the knowledge item if none was provided
+        if query is None:
+            query = KnowledgeQuery(
+                item_ids=frozenset({knowledge_item.item_id}),
+                classifications=frozenset({knowledge_item.classification.value}),
+                owning_units=frozenset({knowledge_item.owning_unit_address}),
+                description=f"Access check for item '{knowledge_item.item_id}'",
+            )
+
+        # Compute the effective envelope snapshot for the filter
+        snapshot = self._compute_envelope_with_version_locked(role_address)
+
+        try:
+            decision = self._knowledge_filter.filter_before_retrieval(
+                role_address, query, snapshot
+            )
+        except Exception:
+            logger.exception(
+                "KnowledgeFilter.filter_before_retrieval raised for "
+                "role_address=%s -- fail-closed to DENY",
+                role_address,
+            )
+            return FilterDecision(
+                allowed=False,
+                reason="Knowledge filter raised an exception -- fail-closed to DENY",
+            )
+
+        # Validate the decision type (defensive -- a bad implementation might
+        # return something other than FilterDecision)
+        if not isinstance(decision, FilterDecision):
+            logger.error(
+                "KnowledgeFilter returned non-FilterDecision type %s for "
+                "role_address=%s -- fail-closed to DENY",
+                type(decision).__name__,
+                role_address,
+            )
+            return FilterDecision(
+                allowed=False,
+                reason=(
+                    "Knowledge filter returned invalid type "
+                    f"'{type(decision).__name__}' -- fail-closed to DENY"
+                ),
+            )
+
+        return decision
+
     def verify_action(
         self,
         role_address: str,
@@ -444,7 +636,7 @@ class GovernanceEngine:
             )
             verdict = GovernanceVerdict(
                 level="blocked",
-                reason=f"Internal error during action verification -- fail-closed to BLOCKED",
+                reason="Internal error during action verification -- fail-closed to BLOCKED",
                 role_address=role_address,
                 action=action,
                 effective_envelope_snapshot=None,
@@ -513,6 +705,47 @@ class GovernanceEngine:
                 access_decision=None,
                 timestamp=now,
             )
+
+        # Step 0.5: Plan suspension check (N3 Plan Re-Entry Guarantee).
+        # If the context carries a plan_id and that plan is suspended,
+        # block the action with a reference to the suspension record.
+        plan_id = ctx.get("plan_id")
+        if plan_id and plan_id in self._suspensions:
+            suspension = self._suspensions[plan_id]
+            if not suspension.all_conditions_met():
+                self._emit_audit_unlocked(
+                    "plan_suspended",
+                    {
+                        "role_address": role_address,
+                        "action": action,
+                        "plan_id": plan_id,
+                        "suspension_id": suspension.suspension_id,
+                        "trigger": suspension.trigger.value,
+                        "level": "blocked",
+                    },
+                )
+                return GovernanceVerdict(
+                    level="blocked",
+                    reason=(
+                        f"Plan '{plan_id}' is suspended "
+                        f"(trigger: {suspension.trigger.value}). "
+                        f"Resume conditions not yet met."
+                    ),
+                    role_address=role_address,
+                    action=action,
+                    effective_envelope_snapshot=None,
+                    audit_details={
+                        "role_address": role_address,
+                        "action": action,
+                        "plan_id": plan_id,
+                        "suspension_id": suspension.suspension_id,
+                        "trigger": suspension.trigger.value,
+                        "level": "blocked",
+                        "plan_suspended": True,
+                    },
+                    access_decision=None,
+                    timestamp=now,
+                )
 
         # Step 1: Compute effective envelope with version hash (TOCTOU defense)
         task_id = ctx.get("task_id")
@@ -600,7 +833,11 @@ class GovernanceEngine:
                     effective.financial.max_spend_usd if effective.financial else None
                 ),
                 "confidentiality": effective.confidentiality_clearance.value,
-                "allowed_actions_count": len(effective.operational.allowed_actions),
+                "allowed_actions_count": (
+                    len(effective.operational.allowed_actions)
+                    if effective.operational is not None
+                    else None
+                ),
             }
 
         verdict = GovernanceVerdict(
@@ -629,6 +866,25 @@ class GovernanceEngine:
             },
         )
 
+        # Emit monitoring observation (N5 ObservationSink)
+        obs_level = "info"
+        if level in ("flagged", "held"):
+            obs_level = "warn"
+        elif level == "blocked":
+            obs_level = "critical"
+        self._emit_observation(
+            event_type="verdict",
+            role_address=role_address,
+            level=obs_level,
+            payload={
+                "action": action,
+                "verdict_level": level,
+                "reason": reason,
+                "has_envelope": effective is not None,
+                "envelope_version": envelope_version,
+            },
+        )
+
         return verdict
 
     def _evaluate_against_envelope(
@@ -643,53 +899,53 @@ class GovernanceEngine:
             A tuple of (level, reason).
         """
         # --- Operational: check allowed/blocked actions ---
-        blocked_actions = set(envelope.operational.blocked_actions)
-        allowed_actions = set(envelope.operational.allowed_actions)
+        # None means unconstrained (maximally permissive) -- skip entirely (GH #390).
+        if envelope.operational is not None:
+            blocked_actions = set(envelope.operational.blocked_actions)
+            allowed_actions = set(envelope.operational.allowed_actions)
 
-        if action in blocked_actions:
-            return (
-                "blocked",
-                f"Action '{action}' is explicitly blocked by operational constraints",
-            )
-
-        # If allowed_actions is explicitly defined (even if empty), the action
-        # must be in the list. Empty allowed_actions + envelope exists = nothing allowed.
-        # When no envelope exists, the caller gets None (maximally permissive)
-        # and _evaluate_against_envelope is never called.
-        # None dimensions (financial=None, temporal=None) are already handled:
-        # they skip evaluation entirely (GH #217 — confirmed by design).
-        if action not in allowed_actions:
-            return (
-                "blocked",
-                f"Action '{action}' is not in the allowed actions list: "
-                f"{sorted(allowed_actions)}",
-            )
-
-        # --- Operational: check rate limits (max_actions_per_day/hour) ---
-        daily_calls = ctx.get("daily_calls")
-        if (
-            daily_calls is not None
-            and envelope.operational.max_actions_per_day is not None
-        ):
-            daily_calls_int = int(daily_calls)
-            if daily_calls_int >= envelope.operational.max_actions_per_day:
+            if action in blocked_actions:
                 return (
                     "blocked",
-                    f"Daily rate limit exceeded: {daily_calls_int} actions "
-                    f"(limit: {envelope.operational.max_actions_per_day}/day)",
+                    f"Action '{action}' is explicitly blocked by operational constraints",
                 )
-        hourly_calls = ctx.get("hourly_calls")
-        if (
-            hourly_calls is not None
-            and envelope.operational.max_actions_per_hour is not None
-        ):
-            hourly_calls_int = int(hourly_calls)
-            if hourly_calls_int >= envelope.operational.max_actions_per_hour:
+
+            # If allowed_actions is explicitly defined (even if empty), the action
+            # must be in the list. Empty allowed_actions + envelope exists = nothing
+            # allowed. When no envelope exists, the caller gets None (maximally
+            # permissive) and _evaluate_against_envelope is never called.
+            if action not in allowed_actions:
                 return (
                     "blocked",
-                    f"Hourly rate limit exceeded: {hourly_calls_int} actions "
-                    f"(limit: {envelope.operational.max_actions_per_hour}/hour)",
+                    f"Action '{action}' is not in the allowed actions list: "
+                    f"{sorted(allowed_actions)}",
                 )
+
+            # --- Operational: check rate limits (max_actions_per_day/hour) ---
+            daily_calls = ctx.get("daily_calls")
+            if (
+                daily_calls is not None
+                and envelope.operational.max_actions_per_day is not None
+            ):
+                daily_calls_int = int(daily_calls)
+                if daily_calls_int >= envelope.operational.max_actions_per_day:
+                    return (
+                        "blocked",
+                        f"Daily rate limit exceeded: {daily_calls_int} actions "
+                        f"(limit: {envelope.operational.max_actions_per_day}/day)",
+                    )
+            hourly_calls = ctx.get("hourly_calls")
+            if (
+                hourly_calls is not None
+                and envelope.operational.max_actions_per_hour is not None
+            ):
+                hourly_calls_int = int(hourly_calls)
+                if hourly_calls_int >= envelope.operational.max_actions_per_hour:
+                    return (
+                        "blocked",
+                        f"Hourly rate limit exceeded: {hourly_calls_int} actions "
+                        f"(limit: {envelope.operational.max_actions_per_hour}/hour)",
+                    )
 
         # --- Financial: check cost against max_spend_usd ---
         cost = ctx.get("cost")
@@ -734,7 +990,8 @@ class GovernanceEngine:
 
         # --- Temporal: check active hours and blackout periods ---
         if envelope.temporal is not None:
-            from datetime import datetime as _dt, timezone as _tz
+            from datetime import datetime as _dt
+            from datetime import timezone as _tz
 
             _tz_name = envelope.temporal.timezone or "UTC"
             try:
@@ -894,22 +1151,54 @@ class GovernanceEngine:
         role_address: str,
         task_id: str | None = None,
     ) -> ConstraintEnvelopeConfig | None:
-        """Internal envelope computation. Caller must hold self._lock."""
-        # Get all ancestor envelopes for the role
+        """Internal envelope computation with caching. Caller must hold self._lock.
+
+        N2 cache: checks the envelope cache first. On miss, computes from
+        stores and caches the result. TTL-based expiry is checked on read
+        when envelope_cache_ttl_seconds is configured.
+        """
+        cache_key = (role_address, task_id)
+
+        # Check cache
+        cached = self._envelope_cache.get(cache_key)
+        if cached is not None:
+            # TTL check if configured
+            if self._envelope_cache_ttl is not None:
+                age = time.monotonic() - cached.created_at_mono
+                if age > self._envelope_cache_ttl:
+                    # Expired -- evict and recompute
+                    del self._envelope_cache[cache_key]
+                else:
+                    return cached.envelope
+            else:
+                return cached.envelope
+
+        # Cache miss -- compute from stores
         ancestor_envelopes = self._envelope_store.get_ancestor_envelopes(role_address)
 
-        # Get task envelope if task_id is provided
         task_envelope: TaskEnvelope | None = None
         if task_id is not None:
             task_envelope = self._envelope_store.get_active_task_envelope(
                 role_address, task_id
             )
 
-        return compute_effective_envelope(
+        result = compute_effective_envelope(
             role_address=role_address,
             role_envelopes=ancestor_envelopes,
             task_envelope=task_envelope,
         )
+
+        # Store in cache (bounded)
+        self._envelope_cache[cache_key] = _CachedEnvelope(
+            envelope=result,
+            created_at_mono=time.monotonic(),
+            task_id=task_id,
+        )
+        # Evict oldest entries when at capacity
+        while len(self._envelope_cache) > _MAX_ENVELOPE_CACHE_ENTRIES:
+            self._envelope_cache.popitem(last=False)
+
+        return result
 
     def _compute_envelope_with_version_locked(
         self,
@@ -935,6 +1224,323 @@ class GovernanceEngine:
         )
 
     # -------------------------------------------------------------------
+    # N2 Envelope Cache Invalidation
+    # -------------------------------------------------------------------
+
+    def _cascade_invalidate(self, address: str) -> int:
+        """Evict cached envelopes for address and all descendant addresses.
+
+        Prefix-based eviction: when address X changes, every cache entry
+        whose role_address == X or starts with X followed by '-' is evicted.
+        This ensures that parent envelope mutations propagate to all
+        descendants that inherit from the parent.
+
+        Caller must hold self._lock.
+
+        Args:
+            address: The D/T/R address whose envelope (and descendants') should
+                be evicted.
+
+        Returns:
+            The number of cache entries evicted.
+        """
+        if not self._envelope_cache:
+            return 0
+
+        keys_to_evict: list[tuple[str, str | None]] = []
+        prefix = address + "-"
+        for cache_key in self._envelope_cache:
+            role_addr = cache_key[0]
+            if role_addr == address or role_addr.startswith(prefix):
+                keys_to_evict.append(cache_key)
+
+        for key in keys_to_evict:
+            del self._envelope_cache[key]
+
+        if keys_to_evict:
+            logger.debug(
+                "envelope_cache.cascade_invalidate: evicted %d entries for address '%s'",
+                len(keys_to_evict),
+                address,
+            )
+
+        return len(keys_to_evict)
+
+    def _invalidate_bridge_endpoints(
+        self, source_address: str, target_address: str
+    ) -> int:
+        """Evict cached envelopes for both bridge endpoints and their descendants.
+
+        Bridge approval or revocation can affect access decisions that depend
+        on envelope context, so both endpoints must be invalidated.
+
+        Caller must hold self._lock.
+
+        Args:
+            source_address: D/T/R address of one side of the bridge.
+            target_address: D/T/R address of the other side of the bridge.
+
+        Returns:
+            Total number of cache entries evicted.
+        """
+        count = self._cascade_invalidate(source_address)
+        count += self._cascade_invalidate(target_address)
+        return count
+
+    @property
+    def _envelope_cache_size(self) -> int:
+        """Current number of entries in the envelope cache. Thread-safe."""
+        with self._lock:
+            return len(self._envelope_cache)
+
+    # -------------------------------------------------------------------
+    # Plan Suspension / Resumption (N3 Plan Re-Entry Guarantee)
+    # -------------------------------------------------------------------
+
+    def suspend_plan(
+        self,
+        role_address: str,
+        plan_id: str,
+        trigger: SuspensionTrigger,
+        snapshot: dict[str, Any] | None = None,
+    ) -> PlanSuspension:
+        """Suspend a plan with explicit resume conditions.
+
+        Creates a PlanSuspension record that blocks all ``verify_action()``
+        calls carrying this plan_id until the resume conditions are met
+        and ``resume_plan()`` is called.
+
+        Thread-safe, fail-closed. Bounded to ``_max_suspensions`` entries.
+
+        Args:
+            role_address: The D/T/R address of the role whose plan is suspended.
+            plan_id: Unique identifier for the plan being suspended.
+            trigger: Why the plan is being suspended.
+            snapshot: Optional frozen state at suspension time.
+
+        Returns:
+            The created PlanSuspension record.
+
+        Raises:
+            PactError: If the suspension store is full.
+        """
+        with self._lock:
+            if len(self._suspensions) >= self._max_suspensions:
+                # Evict oldest to stay within bounds
+                oldest_key = next(iter(self._suspensions))
+                del self._suspensions[oldest_key]
+                logger.warning(
+                    "Plan suspension store at capacity (%d), evicted oldest: %s",
+                    self._max_suspensions,
+                    oldest_key,
+                )
+
+            condition = resume_condition_for_trigger(trigger)
+            now = datetime.now(UTC)
+            suspension = PlanSuspension(
+                plan_id=plan_id,
+                trigger=trigger,
+                suspended_at=now.isoformat(),
+                resume_conditions=(condition,),
+                snapshot=snapshot or {},
+                role_address=role_address,
+            )
+            self._suspensions[plan_id] = suspension
+
+            self._emit_audit_unlocked(
+                "plan_suspended",
+                {
+                    "role_address": role_address,
+                    "plan_id": plan_id,
+                    "trigger": trigger.value,
+                    "suspension_id": suspension.suspension_id,
+                    "suspended_at": suspension.suspended_at,
+                },
+            )
+
+            logger.info(
+                "Plan '%s' suspended for role '%s' (trigger: %s)",
+                plan_id,
+                role_address,
+                trigger.value,
+            )
+
+            return suspension
+
+    def resume_plan(self, plan_id: str) -> GovernanceVerdict:
+        """Attempt to resume a suspended plan.
+
+        Checks all resume conditions. If ALL are satisfied, removes the
+        suspension and returns an auto_approved verdict. Otherwise returns
+        a blocked verdict listing which conditions are still unmet.
+
+        Thread-safe, fail-closed.
+
+        Args:
+            plan_id: The plan to resume.
+
+        Returns:
+            GovernanceVerdict indicating whether resume succeeded.
+        """
+        now = datetime.now(UTC)
+        try:
+            with self._lock:
+                suspension = self._suspensions.get(plan_id)
+                if suspension is None:
+                    return GovernanceVerdict(
+                        level="blocked",
+                        reason=f"No active suspension found for plan '{plan_id}'",
+                        role_address="",
+                        action="resume_plan",
+                        timestamp=now,
+                    )
+
+                if not suspension.all_conditions_met():
+                    unmet = [
+                        c.condition_type
+                        for c in suspension.resume_conditions
+                        if not c.satisfied
+                    ]
+                    return GovernanceVerdict(
+                        level="blocked",
+                        reason=(
+                            f"Cannot resume plan '{plan_id}': "
+                            f"unmet conditions: {unmet}"
+                        ),
+                        role_address=suspension.role_address,
+                        action="resume_plan",
+                        audit_details={
+                            "plan_id": plan_id,
+                            "unmet_conditions": unmet,
+                            "trigger": suspension.trigger.value,
+                        },
+                        timestamp=now,
+                    )
+
+                # All conditions met -- remove suspension
+                del self._suspensions[plan_id]
+
+                self._emit_audit_unlocked(
+                    "plan_resumed",
+                    {
+                        "role_address": suspension.role_address,
+                        "plan_id": plan_id,
+                        "trigger": suspension.trigger.value,
+                        "suspension_id": suspension.suspension_id,
+                    },
+                )
+
+                logger.info(
+                    "Plan '%s' resumed for role '%s'",
+                    plan_id,
+                    suspension.role_address,
+                )
+
+                return GovernanceVerdict(
+                    level="auto_approved",
+                    reason=f"Plan '{plan_id}' resumed -- all conditions met",
+                    role_address=suspension.role_address,
+                    action="resume_plan",
+                    audit_details={
+                        "plan_id": plan_id,
+                        "trigger": suspension.trigger.value,
+                    },
+                    timestamp=now,
+                )
+        except Exception:
+            logger.exception(
+                "resume_plan failed for plan_id=%s -- fail-closed to BLOCKED",
+                plan_id,
+            )
+            return GovernanceVerdict(
+                level="blocked",
+                reason="Internal error during plan resume -- fail-closed to BLOCKED",
+                role_address="",
+                action="resume_plan",
+                timestamp=now,
+            )
+
+    def update_resume_condition(
+        self,
+        plan_id: str,
+        condition_type: str,
+        satisfied: bool,
+        details: str = "",
+    ) -> PlanSuspension | None:
+        """Update the satisfaction status of a resume condition.
+
+        Since PlanSuspension and ResumeCondition are frozen, this creates
+        a new PlanSuspension with updated conditions and replaces the old one.
+
+        Thread-safe.
+
+        Args:
+            plan_id: The suspended plan to update.
+            condition_type: Which condition to update (e.g., "budget_replenished").
+            satisfied: Whether the condition is now met.
+            details: Optional updated details string.
+
+        Returns:
+            The updated PlanSuspension, or None if the plan_id is not found.
+        """
+        with self._lock:
+            suspension = self._suspensions.get(plan_id)
+            if suspension is None:
+                return None
+
+            # Build new conditions tuple with the updated entry
+            new_conditions: list[ResumeCondition] = []
+            for cond in suspension.resume_conditions:
+                if cond.condition_type == condition_type:
+                    new_conditions.append(
+                        ResumeCondition(
+                            condition_type=cond.condition_type,
+                            satisfied=satisfied,
+                            details=details or cond.details,
+                        )
+                    )
+                else:
+                    new_conditions.append(cond)
+
+            # Create a new frozen suspension with updated conditions
+            updated = PlanSuspension(
+                plan_id=suspension.plan_id,
+                trigger=suspension.trigger,
+                suspended_at=suspension.suspended_at,
+                resume_conditions=tuple(new_conditions),
+                snapshot=suspension.snapshot,
+                role_address=suspension.role_address,
+                suspension_id=suspension.suspension_id,
+            )
+            self._suspensions[plan_id] = updated
+
+            self._emit_audit_unlocked(
+                "resume_condition_updated",
+                {
+                    "plan_id": plan_id,
+                    "condition_type": condition_type,
+                    "satisfied": satisfied,
+                    "role_address": suspension.role_address,
+                },
+            )
+
+            return updated
+
+    def get_suspension(self, plan_id: str) -> PlanSuspension | None:
+        """Retrieve the current suspension record for a plan.
+
+        Thread-safe.
+
+        Args:
+            plan_id: The plan to look up.
+
+        Returns:
+            The PlanSuspension if the plan is suspended, None otherwise.
+        """
+        with self._lock:
+            return self._suspensions.get(plan_id)
+
+    # -------------------------------------------------------------------
     # Query API
     # -------------------------------------------------------------------
 
@@ -957,16 +1563,26 @@ class GovernanceEngine:
             return self._compiled_org
 
     def get_node(self, address: str) -> OrgNode | None:
-        """Look up a node by its positional address. Thread-safe.
+        """Look up a node by its positional address or config role ID. Thread-safe.
+
+        First attempts an exact address lookup in compiled_org.nodes. If that
+        fails, falls back to searching by role_id via get_node_by_role_id().
+        This ensures non-head roles (analysts, members) that are not in the
+        primary nodes dict by their config ID can still be found.
 
         Args:
-            address: A D/T/R positional address string.
+            address: A D/T/R positional address string or a config role ID.
 
         Returns:
             The OrgNode at that address, or None if not found.
         """
         with self._lock:
-            return self._compiled_org.nodes.get(address)
+            # Exact address lookup first (O(1))
+            node = self._compiled_org.nodes.get(address)
+            if node is not None:
+                return node
+            # Fallback: search by config role_id (O(n) over nodes)
+            return self._compiled_org.get_node_by_role_id(address)
 
     def list_roles(self, prefix: str | None = None) -> list[OrgNode]:
         """List all Role nodes in the compiled org. Thread-safe.
@@ -1055,23 +1671,68 @@ class GovernanceEngine:
             )
 
     # -------------------------------------------------------------------
+    # Address Resolution
+    # -------------------------------------------------------------------
+
+    def _resolve_role_address(self, role_address: str) -> str:
+        """Resolve a role identifier to its positional D/T/R address.
+
+        Accepts either a positional address (e.g., "D1-R1") or a config
+        role ID (e.g., "r-president"). Returns the canonical positional
+        address in both cases.
+
+        This method does NOT acquire self._lock -- callers must hold it.
+
+        Args:
+            role_address: A D/T/R address or config role ID.
+
+        Returns:
+            The canonical positional address string.
+
+        Raises:
+            PactError: If the identifier cannot be resolved to any node.
+        """
+        # Try exact address lookup first (O(1))
+        if role_address in self._compiled_org.nodes:
+            return role_address
+
+        # Fallback: search by config role_id (O(n) over nodes)
+        node = self._compiled_org.get_node_by_role_id(role_address)
+        if node is not None:
+            return node.address
+
+        raise PactError(
+            f"Cannot resolve role address '{role_address}': not found as a "
+            f"positional address or config role ID in the compiled organization",
+            details={
+                "role_address": role_address,
+                "available_addresses": sorted(self._compiled_org.nodes.keys()),
+            },
+        )
+
+    # -------------------------------------------------------------------
     # State Mutation API
     # -------------------------------------------------------------------
 
     def grant_clearance(self, role_address: str, clearance: RoleClearance) -> None:
         """Grant clearance to a role. Thread-safe. Emits audit anchor.
 
+        Accepts both D/T/R positional addresses (e.g., "D1-R1") and config
+        role IDs (e.g., "r-president"). The address is resolved to its
+        canonical positional form before any store operations.
+
         FSM validation is enforced for "living" states (PENDING, ACTIVE,
         SUSPENDED). Terminal states (REVOKED, EXPIRED) and missing records
         allow unconditional overwrite to support re-granting and backup/restore.
 
         Args:
-            role_address: The D/T/R address of the role.
+            role_address: The D/T/R address or config role ID of the role.
             clearance: The RoleClearance to grant.
 
         Raises:
-            PactError: If the transition from the existing vetting status
-                to the new one is invalid per the FSM.
+            PactError: If the address cannot be resolved, or if the
+                transition from the existing vetting status to the new one
+                is invalid per the FSM.
         """
         _LIVING_STATES = {
             VettingStatus.PENDING,
@@ -1079,6 +1740,7 @@ class GovernanceEngine:
             VettingStatus.SUSPENDED,
         }
         with self._lock:
+            role_address = self._resolve_role_address(role_address)
             existing = self._clearance_store.get_clearance(role_address)
             if (
                 existing is not None
@@ -1087,6 +1749,11 @@ class GovernanceEngine:
             ):
                 validate_transition(existing.vetting_status, clearance.vetting_status)
             self._clearance_store.grant_clearance(clearance)
+
+            # N2: Clearance changes affect access decisions that may be
+            # cached alongside envelope context. Invalidate the role's
+            # cached envelopes so next computation uses fresh state.
+            self._cascade_invalidate(role_address)
 
         self._emit_audit(
             PactAuditAction.CLEARANCE_GRANTED.value,
@@ -1097,6 +1764,19 @@ class GovernanceEngine:
                 max_clearance=clearance.max_clearance.value,
                 vetting_status=clearance.vetting_status.value,
             ),
+        )
+
+        # N5: Emit observation for clearance grant
+        self._emit_observation(
+            event_type="clearance_change",
+            role_address=role_address,
+            level="info",
+            payload={
+                "change": "granted",
+                "max_clearance": clearance.max_clearance.value,
+                "vetting_status": clearance.vetting_status.value,
+                "compartments": sorted(clearance.compartments),
+            },
         )
 
         # Emit CapabilityAttestation via EATP (Section 5.7)
@@ -1129,12 +1809,18 @@ class GovernanceEngine:
     def revoke_clearance(self, role_address: str) -> None:
         """Revoke clearance for a role. Thread-safe. Emits audit anchor.
 
+        Accepts both D/T/R positional addresses and config role IDs.
         No-op if the clearance is already REVOKED (prevents audit log pollution).
 
         Args:
-            role_address: The D/T/R address whose clearance to revoke.
+            role_address: The D/T/R address or config role ID whose clearance
+                to revoke.
+
+        Raises:
+            PactError: If the address cannot be resolved.
         """
         with self._lock:
+            role_address = self._resolve_role_address(role_address)
             existing = self._clearance_store.get_clearance(role_address)
             if (
                 existing is not None
@@ -1142,6 +1828,9 @@ class GovernanceEngine:
             ):
                 return
             self._clearance_store.revoke_clearance(role_address)
+
+            # N2: Clearance revocation invalidates cached envelopes for the role.
+            self._cascade_invalidate(role_address)
 
         self._emit_audit(
             PactAuditAction.CLEARANCE_REVOKED.value,
@@ -1152,26 +1841,37 @@ class GovernanceEngine:
             ),
         )
 
+        # N5: Emit observation for clearance revocation
+        self._emit_observation(
+            event_type="clearance_change",
+            role_address=role_address,
+            level="critical",
+            payload={"change": "revoked"},
+        )
+
     def transition_clearance(
         self, role_address: str, new_status: VettingStatus
     ) -> None:
         """Transition an existing clearance's vetting status. Thread-safe.
 
+        Accepts both D/T/R positional addresses and config role IDs.
         Validates the FSM transition and emits an audit anchor. Use this
         for status changes (e.g., ACTIVE -> SUSPENDED for investigation,
         SUSPENDED -> ACTIVE for reinstatement).
 
         Args:
-            role_address: The D/T/R address of the role.
+            role_address: The D/T/R address or config role ID of the role.
             new_status: The target VettingStatus.
 
         Raises:
-            PactError: If no clearance exists for the role, or if the
-                transition is invalid per the FSM.
+            PactError: If the address cannot be resolved, if no clearance
+                exists for the role, or if the transition is invalid per
+                the FSM.
         """
         from dataclasses import replace
 
         with self._lock:
+            role_address = self._resolve_role_address(role_address)
             existing = self._clearance_store.get_clearance(role_address)
             if existing is None:
                 raise PactError(
@@ -1184,6 +1884,9 @@ class GovernanceEngine:
             validate_transition(existing.vetting_status, new_status)
             updated = replace(existing, vetting_status=new_status)
             self._clearance_store.grant_clearance(updated)
+
+            # N2: Clearance transition invalidates cached envelopes for the role.
+            self._cascade_invalidate(role_address)
 
         self._emit_audit(
             PactAuditAction.CLEARANCE_TRANSITIONED.value,
@@ -1374,6 +2077,9 @@ class GovernanceEngine:
             while len(self._bridge_approvals) > _MAX_BRIDGE_APPROVALS:
                 self._bridge_approvals.popitem(last=False)
 
+            # N2: Bridge approval invalidates cached envelopes at both endpoints.
+            self._invalidate_bridge_endpoints(source_address, target_address)
+
         self._emit_audit(
             PactAuditAction.BRIDGE_APPROVED.value,
             create_pact_audit_details(
@@ -1388,6 +2094,19 @@ class GovernanceEngine:
                 lca_address=approver_address,
                 approver_type=approver_type,
             ),
+        )
+
+        # N5: Emit observation for bridge approval
+        self._emit_observation(
+            event_type="bridge_event",
+            role_address=approver_address,
+            level="info",
+            payload={
+                "bridge_action": "approved",
+                "source_address": source_address,
+                "target_address": target_address,
+                "approver_type": approver_type,
+            },
         )
 
         return approval
@@ -1486,6 +2205,10 @@ class GovernanceEngine:
                 if key in self._bridge_approvals:
                     del self._bridge_approvals[key]
                     removed = True
+
+            # N2: Bridge rejection invalidates cached envelopes at both endpoints.
+            if removed:
+                self._invalidate_bridge_endpoints(source_address, target_address)
 
         rejector_type = "compliance" if is_compliance else "lca"
 
@@ -1684,6 +2407,21 @@ class GovernanceEngine:
             except Exception:
                 logger.exception("Failed to emit DelegationRecord for create_bridge")
 
+        # N5: Emit observation for bridge creation
+        self._emit_observation(
+            event_type="bridge_event",
+            role_address=bridge.role_a_address,
+            level="info",
+            payload={
+                "bridge_action": "created",
+                "bridge_id": bridge.id,
+                "bridge_type": bridge.bridge_type,
+                "role_a_address": bridge.role_a_address,
+                "role_b_address": bridge.role_b_address,
+                "lca_approver": approval.approved_by,
+            },
+        )
+
     def _validate_bridge_scope_locked(self, bridge: PactBridge) -> None:
         """Validate bridge scope against both endpoint envelopes. Caller holds lock."""
         has_classification = (
@@ -1815,6 +2553,11 @@ class GovernanceEngine:
 
             self._envelope_store.save_role_envelope(envelope)
 
+            # N2: Cascade-invalidate the target address and all descendants.
+            # The target role and any role beneath it in the D/T/R tree may
+            # have cached envelopes that depend on this role envelope.
+            self._cascade_invalidate(envelope.target_role_address)
+
         audit_action = (
             PactAuditAction.ENVELOPE_CREATED
             if is_new
@@ -1857,6 +2600,20 @@ class GovernanceEngine:
                     "Failed to emit DelegationRecord for set_role_envelope"
                 )
 
+        # N5: Emit observation for role envelope change
+        self._emit_observation(
+            event_type="envelope_change",
+            role_address=envelope.target_role_address,
+            level="info",
+            payload={
+                "envelope_id": envelope.id,
+                "envelope_type": "role",
+                "change": "created" if is_new else "modified",
+                "defining_role_address": envelope.defining_role_address,
+                "is_passthrough": is_passthrough,
+            },
+        )
+
     def set_task_envelope(self, envelope: TaskEnvelope) -> None:
         """Set a task envelope. Thread-safe. Emits audit anchor.
 
@@ -1883,6 +2640,15 @@ class GovernanceEngine:
                     child_envelope=envelope.envelope,
                 )
             self._envelope_store.save_task_envelope(envelope)
+
+            # N2: Invalidate any cached envelope entries that match this task_id.
+            # Task envelopes narrow the effective envelope for a specific task,
+            # so any cached entry with the same task_id must be evicted.
+            keys_to_evict = [
+                k for k in self._envelope_cache if k[1] == envelope.task_id
+            ]
+            for k in keys_to_evict:
+                del self._envelope_cache[k]
 
         self._emit_audit(
             PactAuditAction.ENVELOPE_CREATED.value,
@@ -1922,6 +2688,20 @@ class GovernanceEngine:
                 logger.exception(
                     "Failed to emit DelegationRecord for set_task_envelope"
                 )
+
+        # N5: Emit observation for task envelope creation
+        self._emit_observation(
+            event_type="envelope_change",
+            role_address=envelope.task_id,
+            level="info",
+            payload={
+                "envelope_id": envelope.id,
+                "envelope_type": "task",
+                "change": "created",
+                "task_id": envelope.task_id,
+                "parent_envelope_id": envelope.parent_envelope_id,
+            },
+        )
 
     # -------------------------------------------------------------------
     # Vacancy Designation API (Section 5.5)
@@ -2156,8 +2936,23 @@ class GovernanceEngine:
         """The EATP audit chain, or None if not configured."""
         return self._audit_chain
 
-    def _emit_audit(self, action: str, details: dict[str, Any]) -> None:
-        """Emit an audit anchor if audit_chain is configured.
+    @property
+    def audit_dispatcher(self) -> TieredAuditDispatcher | None:
+        """The tiered audit dispatcher, or None if not configured."""
+        return self._audit_dispatcher
+
+    def _emit_audit(
+        self,
+        action: str,
+        details: dict[str, Any],
+        *,
+        verification_level: VerificationLevel = VerificationLevel.AUTO_APPROVED,
+    ) -> None:
+        """Emit an audit anchor if audit_chain or audit_dispatcher is configured.
+
+        When a ``TieredAuditDispatcher`` is configured, anchors are routed
+        through it (gradient-aligned persistence tiers, PACT-08).  Otherwise
+        the legacy direct-append path is used for backward compatibility.
 
         Thread-safe: AuditChain has its own internal lock. SqliteAuditLog
         has its own write_lock.
@@ -2165,14 +2960,54 @@ class GovernanceEngine:
         Args:
             action: The audit action name.
             details: Structured details for the audit record.
+            verification_level: The PACT verification level for tier routing.
+                Defaults to AUTO_APPROVED for backward compatibility.
         """
-        # Emit to EATP audit chain if configured
+        agent_id = f"governance-engine:{self._compiled_org.org_id}"
+
+        # Route through tiered dispatcher if configured (PACT-08)
+        if self._audit_dispatcher is not None:
+            try:
+                from kailash.trust.pact.audit import AuditAnchor as PactAuditAnchor
+
+                anchor = PactAuditAnchor(
+                    agent_id=agent_id,
+                    action=action,
+                    verification_level=verification_level,
+                    metadata=details,
+                )
+                anchor.seal()
+                self._audit_dispatcher.dispatch(anchor, verification_level)
+            except Exception:
+                logger.exception(
+                    "Failed to dispatch tiered audit for action=%s -- "
+                    "falling through to direct emit",
+                    action,
+                )
+                # Fall through to legacy path on dispatcher failure
+                self._emit_audit_direct(action, details, verification_level)
+            else:
+                # Dispatcher handled it; still emit to SQLite audit log if present
+                self._emit_sqlite_audit(action, details)
+                return
+
+        # Legacy path: direct append to audit chain
+        self._emit_audit_direct(action, details, verification_level)
+        self._emit_sqlite_audit(action, details)
+
+    def _emit_audit_direct(
+        self,
+        action: str,
+        details: dict[str, Any],
+        verification_level: VerificationLevel = VerificationLevel.AUTO_APPROVED,
+    ) -> None:
+        """Direct-append to the EATP audit chain (legacy path)."""
         if self._audit_chain is not None:
             try:
                 self._audit_chain.append(
                     agent_id=f"governance-engine:{self._compiled_org.org_id}",
                     action=action,
-                    verification_level=VerificationLevel.AUTO_APPROVED,
+                    verification_level=verification_level,
                     metadata=details,
                 )
             except Exception:
@@ -2181,7 +3016,8 @@ class GovernanceEngine:
                     action,
                 )
 
-        # Also emit to SQLite audit log if configured
+    def _emit_sqlite_audit(self, action: str, details: dict[str, Any]) -> None:
+        """Emit to SQLite audit log if configured."""
         if self._sqlite_audit_log is not None:
             try:
                 self._sqlite_audit_log.append(action, details)
@@ -2206,13 +3042,60 @@ class GovernanceEngine:
             return (True, None)
         return self._sqlite_audit_log.verify_integrity()
 
-    def _emit_audit_unlocked(self, action: str, details: dict[str, Any]) -> None:
+    def _emit_audit_unlocked(
+        self,
+        action: str,
+        details: dict[str, Any],
+        *,
+        verification_level: VerificationLevel = VerificationLevel.AUTO_APPROVED,
+    ) -> None:
         """Emit audit anchor from within a locked section.
 
         Same as _emit_audit but named explicitly to indicate it is safe
         to call while holding self._lock (the audit chain uses its own lock).
         """
-        self._emit_audit(action, details)
+        self._emit_audit(action, details, verification_level=verification_level)
+
+    def _emit_observation(
+        self,
+        event_type: str,
+        role_address: str,
+        level: str = "info",
+        payload: dict[str, Any] | None = None,
+        correlation_id: str | None = None,
+    ) -> None:
+        """Emit an observation if an ObservationSink is configured.
+
+        Non-blocking: exceptions are logged but never re-raised, ensuring
+        that monitoring failures cannot disrupt governance decisions.
+
+        Args:
+            event_type: "verdict", "envelope_change", "clearance_change",
+                or "bridge_event".
+            role_address: D/T/R address of the primary role involved.
+            level: "info", "warn", or "critical".
+            payload: Event-specific structured data.
+            correlation_id: Optional cross-event tracing identifier.
+        """
+        if self._observation_sink is None:
+            return
+        try:
+            obs = Observation(
+                event_type=event_type,
+                role_address=role_address,
+                timestamp=datetime.now(UTC).isoformat(),
+                level=level,
+                payload=payload or {},
+                correlation_id=correlation_id,
+            )
+            self._observation_sink.emit(obs)
+        except Exception:
+            logger.exception(
+                "ObservationSink.emit() failed for event_type=%s, role_address=%s "
+                "-- continuing without observation",
+                event_type,
+                role_address,
+            )
 
     # -------------------------------------------------------------------
     # Multi-Level Verification

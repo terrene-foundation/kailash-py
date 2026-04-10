@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from kailash.trust.pact.addressing import Address
 from kailash.trust.pact.config import (
     CONFIDENTIALITY_ORDER,
     CommunicationConstraintConfig,
@@ -33,7 +34,6 @@ from kailash.trust.pact.config import (
     TemporalConstraintConfig,
     TrustPostureLevel,
 )
-from kailash.trust.pact.addressing import Address
 from kailash.trust.pact.exceptions import PactError
 from kailash.trust.pathutils import normalize_resource_path
 
@@ -868,7 +868,7 @@ def default_envelope_for_posture(
         ValueError: If the posture is not a recognized TrustPostureLevel.
     """
     configs: dict[TrustPostureLevel, dict[str, Any]] = {
-        TrustPostureLevel.PSEUDO_AGENT: {
+        TrustPostureLevel.PSEUDO: {
             "max_spend_usd": 0.0,
             "confidentiality": ConfidentialityLevel.PUBLIC,
             "allowed_actions": ["read"],
@@ -877,7 +877,7 @@ def default_envelope_for_posture(
             "read_paths": [],
             "write_paths": [],
         },
-        TrustPostureLevel.SUPERVISED: {
+        TrustPostureLevel.TOOL: {
             "max_spend_usd": 100.0,
             "confidentiality": ConfidentialityLevel.RESTRICTED,
             "allowed_actions": ["read", "write"],
@@ -886,7 +886,7 @@ def default_envelope_for_posture(
             "read_paths": ["/data/public", "/data/team"],
             "write_paths": ["/data/team"],
         },
-        TrustPostureLevel.SHARED_PLANNING: {
+        TrustPostureLevel.SUPERVISED: {
             "max_spend_usd": 1000.0,
             "confidentiality": ConfidentialityLevel.CONFIDENTIAL,
             "allowed_actions": ["read", "write", "plan", "propose"],
@@ -895,7 +895,7 @@ def default_envelope_for_posture(
             "read_paths": ["/data/public", "/data/team", "/data/department"],
             "write_paths": ["/data/team", "/data/department"],
         },
-        TrustPostureLevel.CONTINUOUS_INSIGHT: {
+        TrustPostureLevel.DELEGATING: {
             "max_spend_usd": 10000.0,
             "confidentiality": ConfidentialityLevel.SECRET,
             "allowed_actions": [
@@ -916,7 +916,7 @@ def default_envelope_for_posture(
             ],
             "write_paths": ["/data/team", "/data/department", "/data/org"],
         },
-        TrustPostureLevel.DELEGATED: {
+        TrustPostureLevel.AUTONOMOUS: {
             "max_spend_usd": 100000.0,
             "confidentiality": ConfidentialityLevel.TOP_SECRET,
             "allowed_actions": [

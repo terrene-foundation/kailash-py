@@ -17,17 +17,15 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import pytest
-
 from kailash.trust.posture.postures import (
-    PostureEvidence,
     PostureEvaluationResult,
+    PostureEvidence,
     PostureStateMachine,
     PostureStore,
     PostureTransitionRequest,
     TransitionResult,
     TrustPosture,
 )
-
 
 # ---------------------------------------------------------------------------
 # PostureEvidence tests
@@ -299,15 +297,15 @@ class TestPostureEvaluationResult:
         original = PostureEvaluationResult(
             decision="approved",
             rationale="Ready for upgrade.",
-            suggested_posture=TrustPosture.DELEGATED,
+            suggested_posture=TrustPosture.AUTONOMOUS,
             evaluator_id="eval-002",
         )
         d = original.to_dict()
         # Verify the posture is serialized as its value string
-        assert d["suggested_posture"] == "delegated"
+        assert d["suggested_posture"] == "autonomous"
 
         restored = PostureEvaluationResult.from_dict(d)
-        assert restored.suggested_posture == TrustPosture.DELEGATED
+        assert restored.suggested_posture == TrustPosture.AUTONOMOUS
 
     def test_evaluation_result_roundtrip_none_posture(self) -> None:
         """Roundtrip with suggested_posture=None works correctly."""
@@ -356,7 +354,7 @@ class TestPostureStoreProtocol:
                 self._history: List[TransitionResult] = []
 
             def get_posture(self, agent_id: str) -> TrustPosture:
-                return self._postures.get(agent_id, TrustPosture.SHARED_PLANNING)
+                return self._postures.get(agent_id, TrustPosture.SUPERVISED)
 
             def set_posture(self, agent_id: str, posture: TrustPosture) -> None:
                 self._postures[agent_id] = posture
@@ -380,7 +378,7 @@ class TestPostureStoreProtocol:
 
         class NotAStore:
             def get_posture(self, agent_id: str) -> TrustPosture:
-                return TrustPosture.SUPERVISED
+                return TrustPosture.TOOL
 
         obj = NotAStore()
         assert not isinstance(obj, PostureStore)
@@ -397,29 +395,29 @@ class TestPostureStateMachineBackwardCompat:
     def test_posture_state_machine_backward_compat_no_store(self) -> None:
         """store=None preserves the existing in-memory behavior."""
         machine = PostureStateMachine(
-            default_posture=TrustPosture.SHARED_PLANNING,
+            default_posture=TrustPosture.SUPERVISED,
             require_upgrade_approval=False,
         )
 
         # Default behavior: get_posture returns explicitly-set default
         posture = machine.get_posture("agent-001")
-        assert posture == TrustPosture.SHARED_PLANNING
+        assert posture == TrustPosture.SUPERVISED
 
         # set_posture works in-memory
-        machine.set_posture("agent-001", TrustPosture.DELEGATED)
-        assert machine.get_posture("agent-001") == TrustPosture.DELEGATED
+        machine.set_posture("agent-001", TrustPosture.AUTONOMOUS)
+        assert machine.get_posture("agent-001") == TrustPosture.AUTONOMOUS
 
         # Transition works
         result = machine.transition(
             PostureTransitionRequest(
                 agent_id="agent-001",
-                from_posture=TrustPosture.DELEGATED,
-                to_posture=TrustPosture.SUPERVISED,
+                from_posture=TrustPosture.AUTONOMOUS,
+                to_posture=TrustPosture.TOOL,
                 reason="Downgrade for review",
             )
         )
         assert result.success is True
-        assert machine.get_posture("agent-001") == TrustPosture.SUPERVISED
+        assert machine.get_posture("agent-001") == TrustPosture.TOOL
 
     def test_posture_state_machine_with_store(self) -> None:
         """When store is provided, it delegates get/set to the store."""
@@ -461,23 +459,23 @@ class TestPostureStateMachineBackwardCompat:
         )
 
         # set_posture via machine writes to the store
-        machine.set_posture("agent-X", TrustPosture.CONTINUOUS_INSIGHT)
-        assert store._postures["agent-X"] == TrustPosture.CONTINUOUS_INSIGHT
+        machine.set_posture("agent-X", TrustPosture.DELEGATING)
+        assert store._postures["agent-X"] == TrustPosture.DELEGATING
 
         # get_posture via machine reads from the store
-        assert machine.get_posture("agent-X") == TrustPosture.CONTINUOUS_INSIGHT
+        assert machine.get_posture("agent-X") == TrustPosture.DELEGATING
 
         # Transition updates the store
         result = machine.transition(
             PostureTransitionRequest(
                 agent_id="agent-X",
-                from_posture=TrustPosture.CONTINUOUS_INSIGHT,
-                to_posture=TrustPosture.DELEGATED,
+                from_posture=TrustPosture.DELEGATING,
+                to_posture=TrustPosture.AUTONOMOUS,
                 reason="Upgrade approved",
             )
         )
         assert result.success is True
-        assert store._postures["agent-X"] == TrustPosture.DELEGATED
+        assert store._postures["agent-X"] == TrustPosture.AUTONOMOUS
 
         # Transition is recorded in the store
         assert len(store._transitions) == 1
@@ -502,8 +500,8 @@ class TestPostureStateMachineBackwardCompat:
                 pass
 
         machine = PostureStateMachine(
-            default_posture=TrustPosture.SUPERVISED,
+            default_posture=TrustPosture.TOOL,
             store=StrictStore(),
         )
         # Should fall back to default_posture when store raises KeyError
-        assert machine.get_posture("unknown-agent") == TrustPosture.SUPERVISED
+        assert machine.get_posture("unknown-agent") == TrustPosture.TOOL

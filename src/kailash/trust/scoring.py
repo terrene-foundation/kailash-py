@@ -37,8 +37,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from kailash.trust.chain import ConstraintType, TrustLineageChain
-from kailash.trust.posture.postures import PostureStateMachine, TrustPosture
 from kailash.trust.chain_store import TrustStore
+from kailash.trust.posture.postures import PostureStateMachine, TrustPosture
 
 logger = logging.getLogger(__name__)
 
@@ -57,11 +57,11 @@ SCORING_WEIGHTS: Dict[str, int] = {
 final trust score.  The values MUST sum to 100."""
 
 POSTURE_SCORE_MAP: Dict[TrustPosture, int] = {
-    TrustPosture.DELEGATED: 20,
-    TrustPosture.CONTINUOUS_INSIGHT: 40,
-    TrustPosture.SHARED_PLANNING: 80,
-    TrustPosture.SUPERVISED: 100,
-    TrustPosture.PSEUDO_AGENT: 0,
+    TrustPosture.AUTONOMOUS: 20,
+    TrustPosture.DELEGATING: 40,
+    TrustPosture.SUPERVISED: 80,
+    TrustPosture.TOOL: 100,
+    TrustPosture.PSEUDO: 0,
 }
 """Maps each posture to a 0-100 factor score.  Stricter postures
 (more human oversight) yield higher trust factor scores because they
@@ -203,7 +203,9 @@ def score_to_grade(score: int) -> str:
     """
     if not (0 <= score <= 100):
         raise ValueError(f"Score must be between 0 and 100 inclusive, got {score}")
-    for grade, threshold in sorted(GRADE_THRESHOLDS.items(), key=lambda x: x[1], reverse=True):
+    for grade, threshold in sorted(
+        GRADE_THRESHOLDS.items(), key=lambda x: x[1], reverse=True
+    ):
         if score >= threshold:
             return grade
     return "F"
@@ -320,8 +322,8 @@ def _compute_posture_factor(
         Float between 0.0 and 1.0.
     """
     if posture_machine is None:
-        # Default to SHARED_PLANNING (moderate trust, autonomy_level=3)
-        posture = TrustPosture.SHARED_PLANNING
+        # Default to SUPERVISED (moderate trust, autonomy_level=3)
+        posture = TrustPosture.SUPERVISED
     else:
         posture = posture_machine.get_posture(agent_id)
 
@@ -515,16 +517,28 @@ async def compute_trust_score(
 
     # Apply weights to get per-factor contributions
     breakdown: Dict[str, float] = {
-        "chain_completeness": round(completeness_raw * SCORING_WEIGHTS["chain_completeness"] * scale, 2),
-        "delegation_depth": round(delegation_raw * SCORING_WEIGHTS["delegation_depth"] * scale, 2),
-        "constraint_coverage": round(constraint_raw * SCORING_WEIGHTS["constraint_coverage"] * scale, 2),
-        "posture_level": round(posture_raw * SCORING_WEIGHTS["posture_level"] * scale, 2),
-        "chain_recency": round(recency_raw * SCORING_WEIGHTS["chain_recency"] * scale, 2),
+        "chain_completeness": round(
+            completeness_raw * SCORING_WEIGHTS["chain_completeness"] * scale, 2
+        ),
+        "delegation_depth": round(
+            delegation_raw * SCORING_WEIGHTS["delegation_depth"] * scale, 2
+        ),
+        "constraint_coverage": round(
+            constraint_raw * SCORING_WEIGHTS["constraint_coverage"] * scale, 2
+        ),
+        "posture_level": round(
+            posture_raw * SCORING_WEIGHTS["posture_level"] * scale, 2
+        ),
+        "chain_recency": round(
+            recency_raw * SCORING_WEIGHTS["chain_recency"] * scale, 2
+        ),
     }
 
     # Add reasoning coverage factor if applicable
     if reasoning_required and reasoning_raw is not None:
-        breakdown["reasoning_coverage"] = round(reasoning_raw * _REASONING_COVERAGE_WEIGHT, 2)
+        breakdown["reasoning_coverage"] = round(
+            reasoning_raw * _REASONING_COVERAGE_WEIGHT, 2
+        )
 
     total = sum(breakdown.values())
     # Clamp to [0, 100] and round to integer
@@ -580,11 +594,20 @@ async def generate_trust_report(
 
     # --- Analyse chain completeness ---
     if not chain.capabilities or len(chain.capabilities) == 0:
-        risk_indicators.append("No capability attestations found; agent has no declared capabilities")
-        recommendations.append("Add at least one capability attestation to declare what the agent can do")
+        risk_indicators.append(
+            "No capability attestations found; agent has no declared capabilities"
+        )
+        recommendations.append(
+            "Add at least one capability attestation to declare what the agent can do"
+        )
 
-    if chain.constraint_envelope is None or not chain.constraint_envelope.active_constraints:
-        risk_indicators.append("No active constraints defined; agent behaviour is unconstrained")
+    if (
+        chain.constraint_envelope is None
+        or not chain.constraint_envelope.active_constraints
+    ):
+        risk_indicators.append(
+            "No active constraints defined; agent behaviour is unconstrained"
+        )
         recommendations.append(
             "Define a constraint envelope with resource limits, data scopes, "
             "or audit requirements to govern agent behaviour"
@@ -621,20 +644,24 @@ async def generate_trust_report(
     # --- Analyse posture ---
     if posture_machine is not None:
         posture = posture_machine.get_posture(agent_id)
-        if posture == TrustPosture.DELEGATED:
-            risk_indicators.append("Agent is running with full autonomy; no human oversight on actions")
-            recommendations.append(
-                "Consider transitioning to SHARED_PLANNING or CONTINUOUS_INSIGHT posture to add oversight"
+        if posture == TrustPosture.AUTONOMOUS:
+            risk_indicators.append(
+                "Agent is running with full autonomy; no human oversight on actions"
             )
-        elif posture == TrustPosture.PSEUDO_AGENT:
-            risk_indicators.append("Agent is PSEUDO_AGENT; it cannot perform any actions")
+            recommendations.append(
+                "Consider transitioning to SUPERVISED or DELEGATING posture to add oversight"
+            )
+        elif posture == TrustPosture.PSEUDO:
+            risk_indicators.append("Agent is PSEUDO; it cannot perform any actions")
             recommendations.append(
                 "Review blocking reason and consider upgrading posture if the issue has been resolved"
             )
 
     # --- Analyse reasoning coverage (only when REASONING_REQUIRED is active) ---
     if _has_reasoning_required_constraint(chain):
-        reasoning_coverage_contribution = trust_score.breakdown.get("reasoning_coverage", 0.0)
+        reasoning_coverage_contribution = trust_score.breakdown.get(
+            "reasoning_coverage", 0.0
+        )
         max_possible_reasoning = _REASONING_COVERAGE_WEIGHT
         if reasoning_coverage_contribution < max_possible_reasoning * 0.99:
             # Not at full coverage — compute actual percentage for the message
@@ -654,14 +681,18 @@ async def generate_trust_report(
     recency_contribution = trust_score.breakdown.get("chain_recency", 0.0)
     max_possible_recency = SCORING_WEIGHTS["chain_recency"]
     if recency_contribution < max_possible_recency * 0.5:
-        risk_indicators.append("Trust chain has not been updated recently; credentials or attestations may be stale")
+        risk_indicators.append(
+            "Trust chain has not been updated recently; credentials or attestations may be stale"
+        )
         recommendations.append(
             "Refresh the trust chain by re-attesting capabilities or updating the constraint envelope"
         )
 
     # --- Overall grade advice ---
     if trust_score.grade == "F":
-        recommendations.append("Trust score is critically low (grade F); review all chain components urgently")
+        recommendations.append(
+            "Trust score is critically low (grade F); review all chain components urgently"
+        )
     elif trust_score.grade == "D":
         recommendations.append(
             "Trust score is below acceptable threshold (grade D); address risk indicators to improve"
@@ -748,7 +779,9 @@ class BehavioralData:
                 f"time_at_current_posture_hours must be non-negative, got {self.time_at_current_posture_hours}"
             )
         if self.observation_window_hours < 0:
-            raise ValueError(f"observation_window_hours must be non-negative, got {self.observation_window_hours}")
+            raise ValueError(
+                f"observation_window_hours must be non-negative, got {self.observation_window_hours}"
+            )
         # Logical consistency: approved + denied <= total
         if self.approved_actions + self.denied_actions > self.total_actions:
             raise ValueError(
@@ -758,7 +791,9 @@ class BehavioralData:
             )
         # error_count <= total_actions
         if self.error_count > self.total_actions:
-            raise ValueError(f"error_count ({self.error_count}) exceeds total_actions ({self.total_actions})")
+            raise ValueError(
+                f"error_count ({self.error_count}) exceeds total_actions ({self.total_actions})"
+            )
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize to a JSON-friendly dict."""
@@ -847,7 +882,11 @@ class CombinedTrustScore:
         """Serialize to a JSON-friendly dict."""
         return {
             "structural_score": self.structural_score.to_dict(),
-            "behavioral_score": (self.behavioral_score.to_dict() if self.behavioral_score is not None else None),
+            "behavioral_score": (
+                self.behavioral_score.to_dict()
+                if self.behavioral_score is not None
+                else None
+            ),
             "combined_score": self.combined_score,
             "breakdown": dict(self.breakdown),
         }
@@ -861,11 +900,15 @@ class CombinedTrustScore:
         """
         combined_score = data["combined_score"]
         if not isinstance(combined_score, int) or not (0 <= combined_score <= 100):
-            raise ValueError(f"combined_score must be integer 0-100, got {combined_score}")
+            raise ValueError(
+                f"combined_score must be integer 0-100, got {combined_score}"
+            )
         return cls(
             structural_score=TrustScore.from_dict(data["structural_score"]),
             behavioral_score=(
-                BehavioralScore.from_dict(data["behavioral_score"]) if data["behavioral_score"] is not None else None
+                BehavioralScore.from_dict(data["behavioral_score"])
+                if data["behavioral_score"] is not None
+                else None
             ),
             combined_score=combined_score,
             breakdown=data["breakdown"],
@@ -921,12 +964,16 @@ def compute_behavioral_score(
     if data.observation_window_hours > 0:
         transitions_per_hour = data.posture_transitions / data.observation_window_hours
         # Normalize: 0 transitions = 1.0, >1 per hour = ~0.0
-        stability_raw = max(0.0, 1.0 - (transitions_per_hour * _POSTURE_STABILITY_WINDOW_HOURS / 10.0))
+        stability_raw = max(
+            0.0, 1.0 - (transitions_per_hour * _POSTURE_STABILITY_WINDOW_HOURS / 10.0)
+        )
     else:
         stability_raw = 0.0  # No observation window = unknown
 
     # Factor 4: time_at_posture — normalized to max
-    time_raw = min(1.0, data.time_at_current_posture_hours / _TIME_AT_POSTURE_FULL_SCORE_HOURS)
+    time_raw = min(
+        1.0, data.time_at_current_posture_hours / _TIME_AT_POSTURE_FULL_SCORE_HOURS
+    )
 
     # Factor 5: interaction_volume — log10 scaled
     if data.total_actions > 0:
@@ -940,9 +987,13 @@ def compute_behavioral_score(
     breakdown = {
         "approval_rate": round(approval_raw * BEHAVIORAL_WEIGHTS["approval_rate"], 2),
         "error_rate": round(error_raw * BEHAVIORAL_WEIGHTS["error_rate"], 2),
-        "posture_stability": round(stability_raw * BEHAVIORAL_WEIGHTS["posture_stability"], 2),
+        "posture_stability": round(
+            stability_raw * BEHAVIORAL_WEIGHTS["posture_stability"], 2
+        ),
         "time_at_posture": round(time_raw * BEHAVIORAL_WEIGHTS["time_at_posture"], 2),
-        "interaction_volume": round(volume_raw * BEHAVIORAL_WEIGHTS["interaction_volume"], 2),
+        "interaction_volume": round(
+            volume_raw * BEHAVIORAL_WEIGHTS["interaction_volume"], 2
+        ),
     }
 
     total = max(0, min(100, int(round(sum(breakdown.values())))))
@@ -1017,7 +1068,9 @@ async def compute_combined_trust_score(
     behavioral = compute_behavioral_score(agent_id, behavioral_data)
 
     # Blend scores
-    raw_combined = structural.score * structural_weight + behavioral.score * behavioral_weight
+    raw_combined = (
+        structural.score * structural_weight + behavioral.score * behavioral_weight
+    )
     combined = max(0, min(100, int(round(raw_combined))))
 
     return CombinedTrustScore(

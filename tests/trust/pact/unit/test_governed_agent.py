@@ -20,20 +20,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-
-from kailash.trust.pact.config import (
-    ConfidentialityLevel,
-    ConstraintEnvelopeConfig,
-    FinancialConstraintConfig,
-    OperationalConstraintConfig,
-    TrustPostureLevel,
-)
-from pact.examples.university.barriers import (
-    create_university_bridges,
-    create_university_ksps,
-)
-from pact.examples.university.clearance import create_university_clearances
-from pact.examples.university.org import create_university_org
 from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge
 from kailash.trust.pact.agent import (
     GovernanceBlockedError,
@@ -42,15 +28,24 @@ from kailash.trust.pact.agent import (
 )
 from kailash.trust.pact.clearance import RoleClearance
 from kailash.trust.pact.compilation import CompiledOrg
+from kailash.trust.pact.config import (
+    ConfidentialityLevel,
+    ConstraintEnvelopeConfig,
+    FinancialConstraintConfig,
+    OperationalConstraintConfig,
+    TrustPostureLevel,
+)
 from kailash.trust.pact.context import GovernanceContext
 from kailash.trust.pact.engine import GovernanceEngine
 from kailash.trust.pact.envelopes import RoleEnvelope
-from kailash.trust.pact.store import (
-    MemoryAccessPolicyStore,
-    MemoryClearanceStore,
-)
+from kailash.trust.pact.store import MemoryAccessPolicyStore, MemoryClearanceStore
 from kailash.trust.pact.verdict import GovernanceVerdict
-
+from pact.examples.university.barriers import (
+    create_university_bridges,
+    create_university_ksps,
+)
+from pact.examples.university.clearance import create_university_clearances
+from pact.examples.university.org import create_university_org
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -144,7 +139,7 @@ def governed_agent(engine: GovernanceEngine) -> PactGovernedAgent:
     agent = PactGovernedAgent(
         engine=engine,
         role_address=CS_CHAIR_ADDR,
-        posture=TrustPostureLevel.SHARED_PLANNING,
+        posture=TrustPostureLevel.SUPERVISED,
     )
     # Register known tools
     agent.register_tool("read", cost=0.0)
@@ -181,7 +176,7 @@ class TestConstruction:
         """GovernanceContext returned to the agent must be frozen (immutable)."""
         ctx = governed_agent.context
         with pytest.raises(AttributeError):
-            ctx.posture = TrustPostureLevel.DELEGATED  # type: ignore[misc]
+            ctx.posture = TrustPostureLevel.AUTONOMOUS  # type: ignore[misc]
 
     def test_context_has_correct_org_id(
         self, governed_agent: PactGovernedAgent
@@ -364,7 +359,7 @@ class TestExecuteToolVerdicts:
         agent = PactGovernedAgent(
             engine=engine,
             role_address=CS_CHAIR_ADDR,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
         )
         agent.register_tool("grade", cost=850.0)
         with caplog.at_level(logging.WARNING):

@@ -17,16 +17,6 @@ from __future__ import annotations
 from dataclasses import FrozenInstanceError
 
 import pytest
-
-from kailash.trust.pact.config import (
-    ConfidentialityLevel,
-    ConstraintEnvelopeConfig,
-    DepartmentConfig,
-    OperationalConstraintConfig,
-    OrgDefinition,
-    TeamConfig,
-    TrustPostureLevel,
-)
 from kailash.trust.pact.access import (
     AccessDecision,
     KnowledgeSharePolicy,
@@ -41,6 +31,15 @@ from kailash.trust.pact.compilation import (
     RoleDefinition,
     compile_org,
 )
+from kailash.trust.pact.config import (
+    ConfidentialityLevel,
+    ConstraintEnvelopeConfig,
+    DepartmentConfig,
+    OperationalConstraintConfig,
+    OrgDefinition,
+    TeamConfig,
+    TrustPostureLevel,
+)
 from kailash.trust.pact.envelopes import (
     MonotonicTighteningError,
     RoleEnvelope,
@@ -48,7 +47,6 @@ from kailash.trust.pact.envelopes import (
     intersect_envelopes,
 )
 from kailash.trust.pact.knowledge import KnowledgeItem
-
 
 # ---------------------------------------------------------------------------
 # Shared fixture
@@ -220,7 +218,7 @@ class TestCompromisedAgentWithinEnvelope:
         decision = can_access(
             role_address="D1-R1-T1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=two_dept_org,
             clearances=clearances,
             ksps=[],
@@ -247,7 +245,7 @@ class TestCompromisedAgentWithinEnvelope:
         decision = can_access(
             role_address="D1-R1-T1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=two_dept_org,
             clearances=clearances,
             ksps=[],
@@ -310,7 +308,7 @@ class TestBridgeCollusion:
         decision = can_access(
             role_address="D2-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=two_dept_org,
             clearances=clearances,
             ksps=[],
@@ -375,7 +373,7 @@ class TestPostureGaming:
         decision_high = can_access(
             role_address=role_addr,
             knowledge_item=item,
-            posture=TrustPostureLevel.CONTINUOUS_INSIGHT,
+            posture=TrustPostureLevel.DELEGATING,
             compiled_org=two_dept_org,
             clearances=clearances,
             ksps=[],

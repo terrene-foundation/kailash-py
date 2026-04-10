@@ -17,20 +17,18 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-
+from kailash.trust.pact.clearance import (
+    POSTURE_CEILING,
+    RoleClearance,
+    effective_clearance,
+)
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     OperationalConstraintConfig,
     TrustPostureLevel,
 )
-from kailash.trust.pact.clearance import (
-    POSTURE_CEILING,
-    RoleClearance,
-    effective_clearance,
-)
 from kailash.trust.pact.context import GovernanceContext
-
 
 # ---------------------------------------------------------------------------
 # Frozen immutability
@@ -54,7 +52,7 @@ class TestFrozen:
             created_at=datetime.now(UTC),
         )
         with pytest.raises(AttributeError):
-            ctx.posture = TrustPostureLevel.DELEGATED  # type: ignore[misc]
+            ctx.posture = TrustPostureLevel.AUTONOMOUS  # type: ignore[misc]
 
     def test_frozen_role_address(self) -> None:
         """Attempting to set role_address on a frozen context raises an error."""
@@ -209,7 +207,7 @@ class TestAllowedActionsFromEnvelope:
         )
         ctx = GovernanceContext(
             role_address="D1-R1",
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             effective_envelope=envelope,
             clearance=None,
             effective_clearance_level=None,
@@ -230,17 +228,17 @@ class TestEffectiveClearancePostureCapped:
     """effective_clearance_level must be capped by POSTURE_CEILING."""
 
     def test_effective_clearance_posture_capped(self) -> None:
-        """A role with SECRET clearance at SUPERVISED posture gets RESTRICTED."""
+        """A role with SECRET clearance at TOOL posture gets RESTRICTED."""
         clearance = RoleClearance(
             role_address="D1-R1",
             max_clearance=ConfidentialityLevel.SECRET,
         )
-        eff = effective_clearance(clearance, TrustPostureLevel.SUPERVISED)
+        eff = effective_clearance(clearance, TrustPostureLevel.TOOL)
         assert eff == ConfidentialityLevel.RESTRICTED
 
         ctx = GovernanceContext(
             role_address="D1-R1",
-            posture=TrustPostureLevel.SUPERVISED,
+            posture=TrustPostureLevel.TOOL,
             effective_envelope=None,
             clearance=clearance,
             effective_clearance_level=eff,
@@ -257,12 +255,12 @@ class TestEffectiveClearancePostureCapped:
             role_address="D1-R1",
             max_clearance=ConfidentialityLevel.TOP_SECRET,
         )
-        eff = effective_clearance(clearance, TrustPostureLevel.DELEGATED)
+        eff = effective_clearance(clearance, TrustPostureLevel.AUTONOMOUS)
         assert eff == ConfidentialityLevel.TOP_SECRET
 
         ctx = GovernanceContext(
             role_address="D1-R1",
-            posture=TrustPostureLevel.DELEGATED,
+            posture=TrustPostureLevel.AUTONOMOUS,
             effective_envelope=None,
             clearance=clearance,
             effective_clearance_level=eff,
@@ -279,7 +277,7 @@ class TestEffectiveClearancePostureCapped:
             role_address="D1-R1",
             max_clearance=ConfidentialityLevel.TOP_SECRET,
         )
-        eff = effective_clearance(clearance, TrustPostureLevel.PSEUDO_AGENT)
+        eff = effective_clearance(clearance, TrustPostureLevel.PSEUDO)
         assert eff == ConfidentialityLevel.PUBLIC
 
 

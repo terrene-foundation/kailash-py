@@ -12,9 +12,7 @@ Covers:
 from __future__ import annotations
 
 import pytest
-
 from kailash.trust.pact.audit import PactAuditAction, create_pact_audit_details
-
 
 # ===========================================================================
 # PactAuditAction enum
@@ -70,8 +68,11 @@ class TestPactAuditAction:
         - BRIDGE_CONSENT (Section 4.4 bilateral consent)
         - BRIDGE_REJECTED (Section 4.4 LCA rejection)
         - CLEARANCE_TRANSITIONED (#309 FSM transitions)
+        - PLAN_SUSPENDED (N3 Plan Re-Entry Guarantee)
+        - PLAN_RESUMED (N3 Plan Re-Entry Guarantee)
+        - RESUME_CONDITION_UPDATED (N3 Plan Re-Entry Guarantee)
         """
-        assert len(PactAuditAction) == 16
+        assert len(PactAuditAction) == 19
 
 
 # ===========================================================================

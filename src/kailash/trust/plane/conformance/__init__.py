@@ -642,7 +642,10 @@ class ConformanceSuite:
 
     def _test_constraint_hash_stable(self, project: Any) -> bool:
         """Verify deterministic hashing: identical content → same hash, different content → different hash."""
-        from kailash.trust.plane.models import ConstraintEnvelope, OperationalConstraints
+        from kailash.trust.plane.models import (
+            ConstraintEnvelope,
+            OperationalConstraints,
+        )
 
         env = project.manifest.constraint_envelope
         if env is None:
@@ -661,7 +664,10 @@ class ConformanceSuite:
 
     def _test_constraint_monotonic_tightening(self, project: Any) -> bool:
         """Verify using the PROJECT's constraint envelope, not synthetic ones."""
-        from kailash.trust.plane.models import ConstraintEnvelope, OperationalConstraints
+        from kailash.trust.plane.models import (
+            ConstraintEnvelope,
+            OperationalConstraints,
+        )
 
         env = project.manifest.constraint_envelope
         if env is None:
@@ -891,9 +897,8 @@ class ConformanceSuite:
 
         Fails if reasoning_trace_hash is missing or doesn't match.
         """
-        from kailash.trust.reasoning.traces import ReasoningTrace
-
         from kailash.trust.plane.models import DecisionRecord
+        from kailash.trust.reasoning.traces import ReasoningTrace
 
         # Record a decision to create an anchor with reasoning trace
         await project.record_decision(
@@ -961,11 +966,11 @@ class ConformanceSuite:
         from kailash.trust.posture.postures import TrustPosture
 
         all_postures = [
-            TrustPosture.PSEUDO_AGENT,
+            TrustPosture.PSEUDO,
+            TrustPosture.TOOL,
             TrustPosture.SUPERVISED,
-            TrustPosture.SHARED_PLANNING,
-            TrustPosture.CONTINUOUS_INSIGHT,
-            TrustPosture.DELEGATED,
+            TrustPosture.DELEGATING,
+            TrustPosture.AUTONOMOUS,
         ]
         # Current posture must be one of the 5
         if project.posture not in all_postures:
@@ -976,9 +981,7 @@ class ConformanceSuite:
             if new != target:
                 return False
         # Return to initial safe posture
-        await project.transition_posture(
-            TrustPosture.PSEUDO_AGENT, "conformance: cleanup"
-        )
+        await project.transition_posture(TrustPosture.PSEUDO, "conformance: cleanup")
         return True
 
     async def _test_posture_progression(self, project: Any) -> bool:
@@ -987,9 +990,9 @@ class ConformanceSuite:
 
         initial = project.posture
         target = (
-            TrustPosture.SUPERVISED
-            if initial != TrustPosture.SUPERVISED
-            else TrustPosture.SHARED_PLANNING
+            TrustPosture.TOOL
+            if initial != TrustPosture.TOOL
+            else TrustPosture.SUPERVISED
         )
         new = await project.transition_posture(target, "conformance test: progression")
         return new == target
@@ -999,23 +1002,20 @@ class ConformanceSuite:
         from kailash.trust.posture.postures import TrustPosture
 
         # Ensure we're not already at the lowest posture
-        if project.posture == TrustPosture.PSEUDO_AGENT:
-            await project.transition_posture(
-                TrustPosture.SUPERVISED, "conformance setup"
-            )
+        if project.posture == TrustPosture.PSEUDO:
+            await project.transition_posture(TrustPosture.TOOL, "conformance setup")
         # Now downgrade — must succeed immediately
         new = await project.transition_posture(
-            TrustPosture.PSEUDO_AGENT, "conformance test: instant downgrade"
+            TrustPosture.PSEUDO, "conformance test: instant downgrade"
         )
-        return new == TrustPosture.PSEUDO_AGENT
+        return new == TrustPosture.PSEUDO
 
     # --- Confidentiality tests ---
 
     async def _test_confidentiality_five_levels(self, project: Any) -> bool:
         """All 5 confidentiality levels work with VerificationBundle."""
-        from kailash.trust.reasoning.traces import ConfidentialityLevel
-
         from kailash.trust.plane.bundle import VerificationBundle
+        from kailash.trust.reasoning.traces import ConfidentialityLevel
 
         for level in [
             ConfidentialityLevel.PUBLIC,

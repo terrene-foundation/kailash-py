@@ -553,32 +553,73 @@ class AgentPosture(str, Enum):
     ceiling on a ``ConstraintEnvelope`` restricts the posture level regardless
     of what the trust posture system would otherwise allow.
 
-    The five postures are ordered by increasing autonomy:
+    The five postures use EATP canonical names (Decision 007) and are ordered
+    by increasing autonomy:
 
-    ``PSEUDO_AGENT`` < ``SUPERVISED`` < ``SHARED_PLANNING`` <
-    ``CONTINUOUS_INSIGHT`` < ``DELEGATED``.
+    ``PSEUDO`` < ``SUPERVISED`` < ``TOOL`` < ``DELEGATING`` < ``AUTONOMOUS``.
 
     ``str``-backed so existing wire formats that serialize the posture as a
     lowercase string (e.g. ``"supervised"``) round-trip unchanged. Equality
     against string values is preserved: ``AgentPosture.SUPERVISED ==
     "supervised"`` is ``True``.
+
+    Old names (``PSEUDO_AGENT``, ``SHARED_PLANNING``, ``CONTINUOUS_INSIGHT``,
+    ``DELEGATED``) are accepted via ``_missing_()`` for backward compatibility
+    with serialized data.
     """
 
-    PSEUDO_AGENT = "pseudo_agent"
+    PSEUDO = "pseudo"
     SUPERVISED = "supervised"
-    SHARED_PLANNING = "shared_planning"
-    CONTINUOUS_INSIGHT = "continuous_insight"
-    DELEGATED = "delegated"
+    TOOL = "tool"
+    DELEGATING = "delegating"
+    AUTONOMOUS = "autonomous"
+
+    @classmethod
+    def _missing_(cls, value: object) -> AgentPosture | None:
+        """Accept old enum names/values for backward compatibility.
+
+        Maps pre-Decision-007 names to their canonical equivalents so that
+        existing serialized envelopes deserialize without error.
+        """
+        if isinstance(value, str):
+            lowered = value.lower().strip()
+            aliases: dict[str, AgentPosture] = {
+                # Old enum values (wire-format strings)
+                "pseudo_agent": cls.PSEUDO,
+                "shared_planning": cls.TOOL,
+                "continuous_insight": cls.DELEGATING,
+                "delegated": cls.AUTONOMOUS,
+                # Old enum member names (uppercase)
+                "PSEUDO_AGENT": cls.PSEUDO,
+                "SHARED_PLANNING": cls.TOOL,
+                "CONTINUOUS_INSIGHT": cls.DELEGATING,
+                "DELEGATED": cls.AUTONOMOUS,
+            }
+            # Try exact match first (handles case-sensitive old values)
+            if value in aliases:
+                return aliases[value]
+            # Then try lowered match
+            if lowered in aliases:
+                return aliases[lowered]
+            # Normalize hyphens/spaces to underscores
+            normalized = lowered.replace("-", "_").replace(" ", "_")
+            if normalized in aliases:
+                return aliases[normalized]
+            # Try matching canonical values
+            for member in cls:
+                if member.value == normalized:
+                    return member
+        return None
 
     @staticmethod
     def ordering() -> dict[AgentPosture, int]:
         """Return the canonical ordering for posture comparison."""
         return {
-            AgentPosture.PSEUDO_AGENT: 0,
+            AgentPosture.PSEUDO: 0,
             AgentPosture.SUPERVISED: 1,
-            AgentPosture.SHARED_PLANNING: 2,
-            AgentPosture.CONTINUOUS_INSIGHT: 3,
-            AgentPosture.DELEGATED: 4,
+            AgentPosture.TOOL: 2,
+            AgentPosture.DELEGATING: 3,
+            AgentPosture.AUTONOMOUS: 4,
         }
 
     def fits_ceiling(self, ceiling: AgentPosture) -> bool:

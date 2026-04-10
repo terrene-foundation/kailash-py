@@ -39,11 +39,11 @@ class TestAgentPostureReExport:
 
     def test_five_canonical_values(self) -> None:
         assert [p.value for p in AgentPosture] == [
-            "pseudo_agent",
+            "pseudo",
             "supervised",
-            "shared_planning",
-            "continuous_insight",
-            "delegated",
+            "tool",
+            "delegating",
+            "autonomous",
         ]
 
 
@@ -52,11 +52,11 @@ class TestAgentPostureIntersect:
 
     def test_intersect_picks_stricter_of_ordered_pair(self) -> None:
         assert (
-            AgentPosture.SUPERVISED.intersect(AgentPosture.DELEGATED)
+            AgentPosture.SUPERVISED.intersect(AgentPosture.AUTONOMOUS)
             is AgentPosture.SUPERVISED
         )
         assert (
-            AgentPosture.DELEGATED.intersect(AgentPosture.SUPERVISED)
+            AgentPosture.AUTONOMOUS.intersect(AgentPosture.SUPERVISED)
             is AgentPosture.SUPERVISED
         )
 
@@ -101,11 +101,11 @@ class TestAgentPostureCoerce:
     @pytest.mark.parametrize(
         "value",
         [
-            "pseudo_agent",
+            "pseudo",
             "supervised",
-            "shared_planning",
-            "continuous_insight",
-            "delegated",
+            "tool",
+            "delegating",
+            "autonomous",
         ],
     )
     def test_coerce_valid_string(self, value: str) -> None:
@@ -131,8 +131,8 @@ class TestConstraintEnvelopePostureTyping:
         assert env.posture_ceiling is AgentPosture.SUPERVISED
 
     def test_enum_input_preserved(self) -> None:
-        env = ConstraintEnvelope(posture_ceiling=AgentPosture.DELEGATED)
-        assert env.posture_ceiling is AgentPosture.DELEGATED
+        env = ConstraintEnvelope(posture_ceiling=AgentPosture.AUTONOMOUS)
+        assert env.posture_ceiling is AgentPosture.AUTONOMOUS
 
     def test_invalid_string_rejected_with_field_context(self) -> None:
         with pytest.raises(
@@ -146,13 +146,13 @@ class TestConstraintEnvelopePostureTyping:
         assert encoded["posture_ceiling"] == "supervised"
 
     def test_from_dict_round_trip_preserves_enum(self) -> None:
-        env = ConstraintEnvelope(posture_ceiling=AgentPosture.SHARED_PLANNING)
+        env = ConstraintEnvelope(posture_ceiling=AgentPosture.TOOL)
         encoded = json.loads(env.to_canonical_json())
         # ``envelope_hash`` is computed, not a known input field; strip
         # before round-tripping.
         encoded.pop("envelope_hash", None)
         restored = ConstraintEnvelope.from_dict(encoded)
-        assert restored.posture_ceiling is AgentPosture.SHARED_PLANNING
+        assert restored.posture_ceiling is AgentPosture.TOOL
 
     def test_string_equality_preserved(self) -> None:
         # ``AgentPosture`` is ``str``-backed, so existing code paths that
@@ -165,7 +165,7 @@ class TestConstraintEnvelopeIntersectPostureCeiling:
     """``ConstraintEnvelope.intersect()`` tightens the posture ceiling."""
 
     def test_intersect_picks_stricter_ceiling(self) -> None:
-        a = ConstraintEnvelope(posture_ceiling=AgentPosture.DELEGATED)
+        a = ConstraintEnvelope(posture_ceiling=AgentPosture.AUTONOMOUS)
         b = ConstraintEnvelope(posture_ceiling=AgentPosture.SUPERVISED)
         result = a.intersect(b)
         assert result.posture_ceiling is AgentPosture.SUPERVISED
@@ -184,12 +184,12 @@ class TestConstraintEnvelopeIntersectPostureCeiling:
     def test_intersect_is_monotonic_never_loosens(self) -> None:
         # Intersecting any envelope with one carrying a stricter ceiling
         # can only tighten (never loosen) the posture ceiling.
-        baseline = ConstraintEnvelope(posture_ceiling=AgentPosture.DELEGATED)
-        stricter = ConstraintEnvelope(posture_ceiling=AgentPosture.PSEUDO_AGENT)
+        baseline = ConstraintEnvelope(posture_ceiling=AgentPosture.AUTONOMOUS)
+        stricter = ConstraintEnvelope(posture_ceiling=AgentPosture.PSEUDO)
         result = baseline.intersect(stricter)
-        assert result.posture_ceiling is AgentPosture.PSEUDO_AGENT
+        assert result.posture_ceiling is AgentPosture.PSEUDO
 
     def test_intersect_commutative(self) -> None:
-        a = ConstraintEnvelope(posture_ceiling=AgentPosture.DELEGATED)
+        a = ConstraintEnvelope(posture_ceiling=AgentPosture.AUTONOMOUS)
         b = ConstraintEnvelope(posture_ceiling=AgentPosture.SUPERVISED)
         assert a.intersect(b).posture_ceiling is b.intersect(a).posture_ceiling

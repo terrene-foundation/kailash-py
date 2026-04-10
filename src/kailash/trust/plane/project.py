@@ -40,7 +40,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
+from kailash.trust._locking import atomic_write as _atomic_write
+from kailash.trust._locking import file_lock as _file_lock
+from kailash.trust._locking import safe_read_json as _safe_read_json
 from kailash.trust.authority import AuthorityPermission, OrganizationalAuthority
 from kailash.trust.chain import (
     ActionResult,
@@ -48,17 +50,10 @@ from kailash.trust.chain import (
     CapabilityType,
     VerificationResult,
 )
-from kailash.trust.signing.crypto import generate_keypair
+from kailash.trust.chain_store.filesystem import FilesystemStore
 from kailash.trust.enforce.shadow import ShadowEnforcer
 from kailash.trust.enforce.strict import HeldBehavior, StrictEnforcer, Verdict
-from kailash.trust.posture.postures import (
-    PostureStateMachine,
-    PostureTransitionRequest,
-    TrustPosture,
-)
-from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
-from kailash.trust.chain_store.filesystem import FilesystemStore
-
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 from kailash.trust.plane.exceptions import (
     BudgetExhaustedError,
     ConstraintViolationError,
@@ -74,14 +69,16 @@ from kailash.trust.plane.models import (
     ProjectManifest,
     _decision_type_value,
 )
-from kailash.trust._locking import (
-    atomic_write as _atomic_write,
-    file_lock as _file_lock,
-    safe_read_json as _safe_read_json,
-)
 from kailash.trust.plane.session import AuditSession
 from kailash.trust.plane.store import TrustPlaneStore
 from kailash.trust.plane.store.filesystem import FileSystemTrustPlaneStore
+from kailash.trust.posture.postures import (
+    PostureStateMachine,
+    PostureTransitionRequest,
+    TrustPosture,
+)
+from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
+from kailash.trust.signing.crypto import generate_keypair
 
 logger = logging.getLogger(__name__)
 
@@ -126,9 +123,9 @@ def set_private_file_permissions(path: Path) -> None:
 
     if _sys.platform == "win32":
         try:
-            import win32security  # type: ignore[import-untyped]
-            import win32api  # type: ignore[import-untyped]
             import ntsecuritycon as con  # type: ignore[import-untyped]
+            import win32api  # type: ignore[import-untyped]
+            import win32security  # type: ignore[import-untyped]
 
             username = win32api.GetUserName()
             user_sid = win32security.LookupAccountName(None, username)[0]
@@ -1101,11 +1098,11 @@ class TrustProject:
         # Map posture to verification level
         posture = self.posture
         posture_level_map = {
-            TrustPosture.PSEUDO_AGENT: "FULL",
-            TrustPosture.SUPERVISED: "FULL",
-            TrustPosture.SHARED_PLANNING: "STANDARD",
-            TrustPosture.CONTINUOUS_INSIGHT: "STANDARD",
-            TrustPosture.DELEGATED: "QUICK",
+            TrustPosture.PSEUDO: "FULL",
+            TrustPosture.TOOL: "FULL",
+            TrustPosture.SUPERVISED: "STANDARD",
+            TrustPosture.DELEGATING: "STANDARD",
+            TrustPosture.AUTONOMOUS: "QUICK",
         }
         verification_level = posture_level_map.get(posture, "FULL")
 

@@ -17,21 +17,19 @@ structural containment, KSPs, bridges, clearance, and compartment checks.
 from __future__ import annotations
 
 import pytest
-
-from kailash.trust.pact.config import ConfidentialityLevel, TrustPostureLevel
 from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge, can_access
 from kailash.trust.pact.clearance import RoleClearance
 from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition
+from kailash.trust.pact.config import ConfidentialityLevel, TrustPostureLevel
 from kailash.trust.pact.knowledge import KnowledgeItem
-
-# Import the university example modules
-from pact.examples.university.org import create_university_org
-from pact.examples.university.clearance import create_university_clearances
 from pact.examples.university.barriers import (
     create_university_bridges,
     create_university_ksps,
 )
+from pact.examples.university.clearance import create_university_clearances
 
+# Import the university example modules
+from pact.examples.university.org import create_university_org
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -236,7 +234,7 @@ class TestScenario1FacultyBlockedFromDisciplinaryRecords:
         decision = can_access(
             role_address="D1-R1-D1-R1-D1-R1-T1-R1-R1",  # CS Faculty Member
             knowledge_item=student_disciplinary_records,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=university_org,
             clearances=clearances,
             ksps=ksps,
@@ -267,7 +265,7 @@ class TestScenario2DisciplinaryOfficerReadsStudentRecords:
         decision = can_access(
             role_address="D1-R1-D3-R1-T1-R1",  # Disciplinary Officer
             knowledge_item=student_disciplinary_records,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=university_org,
             clearances=clearances,
             ksps=ksps,
@@ -298,7 +296,7 @@ class TestScenario3IRBDirectorAccessesHumanSubjects:
         decision = can_access(
             role_address="D1-R1-D1-R1-D2-R1-T1-R1",  # IRB Director
             knowledge_item=human_subjects_data,
-            posture=TrustPostureLevel.CONTINUOUS_INSIGHT,
+            posture=TrustPostureLevel.DELEGATING,
             compiled_org=university_org,
             clearances=clearances,
             ksps=ksps,
@@ -329,7 +327,7 @@ class TestScenario4DeanBlockedFromHumanSubjects:
         decision = can_access(
             role_address="D1-R1-D1-R1-D1-R1",  # Dean of Engineering
             knowledge_item=human_subjects_data,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=university_org,
             clearances=clearances,
             ksps=ksps,
@@ -360,7 +358,7 @@ class TestScenario5ProvostReadsAdminBudget:
         decision = can_access(
             role_address="D1-R1-D1-R1",  # Provost
             knowledge_item=admin_budget_data,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=university_org,
             clearances=clearances,
             ksps=ksps,
@@ -391,7 +389,7 @@ class TestScenario6DeanEngReadsResearchViaBridge:
         decision = can_access(
             role_address="D1-R1-D1-R1-D1-R1",  # Dean of Engineering
             knowledge_item=medicine_research_data,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=university_org,
             clearances=clearances,
             ksps=ksps,
@@ -422,7 +420,7 @@ class TestScenario7FinanceBlockedFromAcademic:
         decision = can_access(
             role_address="D1-R1-D2-R1-T2-R1",  # Finance Director
             knowledge_item=academic_data,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=university_org,
             clearances=clearances,
             ksps=ksps,
@@ -453,7 +451,7 @@ class TestScenario8HRReadsAcademicPersonnelViaKSP:
         decision = can_access(
             role_address="D1-R1-D2-R1-T1-R1",  # HR Director
             knowledge_item=academic_personnel_info,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=university_org,
             clearances=clearances,
             ksps=ksps,
@@ -484,7 +482,7 @@ class TestScenario9CSChairReadsOwnData:
         decision = can_access(
             role_address="D1-R1-D1-R1-D1-R1-T1-R1",  # CS Chair
             knowledge_item=cs_department_data,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=university_org,
             clearances=clearances,
             ksps=ksps,
@@ -515,7 +513,7 @@ class TestScenario10VPAdminBlockedFromStudentAffairs:
         decision = can_access(
             role_address="D1-R1-D2-R1",  # VP Administration
             knowledge_item=student_affairs_data,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=university_org,
             clearances=clearances,
             ksps=ksps,

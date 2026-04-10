@@ -14,14 +14,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-
-from kailash.trust.pact.config import (
-    ConfidentialityLevel,
-    DepartmentConfig,
-    OrgDefinition,
-    TeamConfig,
-    TrustPostureLevel,
-)
 from kailash.trust.pact.access import (
     AccessDecision,
     KnowledgeSharePolicy,
@@ -30,8 +22,14 @@ from kailash.trust.pact.access import (
 )
 from kailash.trust.pact.clearance import RoleClearance, VettingStatus
 from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
+from kailash.trust.pact.config import (
+    ConfidentialityLevel,
+    DepartmentConfig,
+    OrgDefinition,
+    TeamConfig,
+    TrustPostureLevel,
+)
 from kailash.trust.pact.knowledge import KnowledgeItem
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -349,7 +347,7 @@ class TestCanAccessClassification:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.DELEGATED,
+            posture=TrustPostureLevel.AUTONOMOUS,
             compiled_org=simple_org,
             clearances=clearances,
             ksps=[],
@@ -375,7 +373,7 @@ class TestCanAccessClassification:
         decision = can_access(
             role_address="D1-R1-T1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.DELEGATED,
+            posture=TrustPostureLevel.AUTONOMOUS,
             compiled_org=simple_org,
             clearances=clearances,
             ksps=[],
@@ -400,7 +398,7 @@ class TestCanAccessClassification:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.PSEUDO_AGENT,
+            posture=TrustPostureLevel.PSEUDO,
             compiled_org=simple_org,
             clearances=clearances,
             ksps=[],
@@ -419,7 +417,7 @@ class TestCanAccessClassification:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.DELEGATED,
+            posture=TrustPostureLevel.AUTONOMOUS,
             compiled_org=simple_org,
             clearances={},  # No clearance for D1-R1
             ksps=[],
@@ -456,7 +454,7 @@ class TestCanAccessCompartments:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.CONTINUOUS_INSIGHT,
+            posture=TrustPostureLevel.DELEGATING,
             compiled_org=simple_org,
             clearances=clearances,
             ksps=[],
@@ -483,7 +481,7 @@ class TestCanAccessCompartments:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.CONTINUOUS_INSIGHT,
+            posture=TrustPostureLevel.DELEGATING,
             compiled_org=simple_org,
             clearances=clearances,
             ksps=[],
@@ -510,7 +508,7 @@ class TestCanAccessCompartments:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=simple_org,
             clearances=clearances,
             ksps=[],
@@ -544,7 +542,7 @@ class TestCanAccessSameUnit:
         decision = can_access(
             role_address="D1-R1-T1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=simple_org,
             clearances=clearances,
             ksps=[],
@@ -577,7 +575,7 @@ class TestCanAccessDownward:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=simple_org,
             clearances=clearances,
             ksps=[],
@@ -610,7 +608,7 @@ class TestCanAccessTInheritsD:
         decision = can_access(
             role_address="D1-R1-T1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=simple_org,
             clearances=clearances,
             ksps=[],
@@ -651,7 +649,7 @@ class TestCanAccessKSP:
         decision = can_access(
             role_address="D2-R1-T1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=two_dept_org,
             clearances=clearances,
             ksps=[ksp],
@@ -681,7 +679,7 @@ class TestCanAccessKSP:
         decision = can_access(
             role_address="D2-R1-T1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.CONTINUOUS_INSIGHT,
+            posture=TrustPostureLevel.DELEGATING,
             compiled_org=two_dept_org,
             clearances=clearances,
             ksps=[ksp],
@@ -712,7 +710,7 @@ class TestCanAccessKSP:
         decision = can_access(
             role_address="D2-R1-T1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=two_dept_org,
             clearances=clearances,
             ksps=[ksp],
@@ -754,7 +752,7 @@ class TestCanAccessBridge:
         decision = can_access(
             role_address="D2-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=two_dept_org,
             clearances=clearances,
             ksps=[],
@@ -787,7 +785,7 @@ class TestCanAccessBridge:
         decision = can_access(
             role_address="D2-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.CONTINUOUS_INSIGHT,
+            posture=TrustPostureLevel.DELEGATING,
             compiled_org=two_dept_org,
             clearances=clearances,
             ksps=[],
@@ -819,7 +817,7 @@ class TestCanAccessBridge:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=two_dept_org,
             clearances=clearances,
             ksps=[],
@@ -852,7 +850,7 @@ class TestCanAccessBridge:
         decision = can_access(
             role_address="D2-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=two_dept_org,
             clearances=clearances,
             ksps=[],
@@ -884,7 +882,7 @@ class TestCanAccessBridge:
         decision = can_access(
             role_address="D2-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=two_dept_org,
             clearances=clearances,
             ksps=[],
@@ -917,7 +915,7 @@ class TestCanAccessDefaultDeny:
         decision = can_access(
             role_address="D2-R1-T1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=two_dept_org,
             clearances=clearances,
             ksps=[],
@@ -942,7 +940,7 @@ class TestCanAccessDefaultDeny:
         decision = can_access(
             role_address="D1-R1-T2-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
             compiled_org=simple_org,
             clearances=clearances,
             ksps=[],
@@ -976,7 +974,7 @@ class TestCanAccessVettingStatus:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.DELEGATED,
+            posture=TrustPostureLevel.AUTONOMOUS,
             compiled_org=simple_org,
             clearances=clearances,
             ksps=[],
@@ -1001,7 +999,7 @@ class TestCanAccessVettingStatus:
         decision = can_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.DELEGATED,
+            posture=TrustPostureLevel.AUTONOMOUS,
             compiled_org=simple_org,
             clearances=clearances,
             ksps=[],

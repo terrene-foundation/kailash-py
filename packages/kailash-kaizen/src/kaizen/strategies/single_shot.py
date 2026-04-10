@@ -19,10 +19,20 @@ Created: 2025-10-01
 Updated: 2025-10-01 (Phase 2 Implementation)
 """
 
+import asyncio
+import concurrent.futures
+import json
+import logging
+import re
 from typing import Any, Dict, List
 
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
+logger = logging.getLogger(__name__)
+
+# Allowlist regex for MCP tool names — validates before execution
+_TOOL_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_.:-]{0,127}$")
 
 
 class SingleShotStrategy:
@@ -121,6 +131,121 @@ class SingleShotStrategy:
                 results, run_id = runtime.execute(
                     workflow.build(), parameters=workflow_params
                 )
+
+            # MCP tool-call execution loop (#377)
+            # After the LLM responds, check if it requested tool calls.
+            # If the agent has MCP support, execute them and re-submit
+            # results to the LLM for a follow-up response.
+            max_tool_rounds = 5
+            tool_round = 0
+            while tool_round < max_tool_rounds:
+                # Extract tool_calls from the LLM response
+                tool_calls = self._extract_tool_calls(results)
+                if not tool_calls:
+                    break
+
+                # Agent must support MCP tool execution
+                if not (
+                    hasattr(agent, "has_mcp_support")
+                    and agent.has_mcp_support()
+                    and hasattr(agent, "execute_mcp_tool")
+                ):
+                    logger.debug(
+                        "LLM requested tool calls but agent has no MCP support; "
+                        "returning raw response"
+                    )
+                    break
+
+                tool_round += 1
+                logger.info(
+                    "tool_call_loop.round",
+                    extra={
+                        "round": tool_round,
+                        "tool_count": len(tool_calls),
+                    },
+                )
+
+                # Execute each tool call via the agent's MCP client
+                tool_result_messages = []
+                assistant_content = self._extract_assistant_content(results)
+
+                for tc in tool_calls:
+                    tc_id = tc.get("id", f"call_{tool_round}")
+                    func_info = tc.get("function", {})
+                    tool_name = func_info.get("name", "")
+
+                    # Validate tool name to prevent path traversal or injection
+                    if not _TOOL_NAME_RE.match(tool_name):
+                        logger.warning(
+                            "tool_call_loop.invalid_tool_name",
+                            extra={"tool_name_length": len(tool_name)},
+                        )
+                        tool_result_messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc_id,
+                                "content": json.dumps(
+                                    {
+                                        "error": "Invalid tool name",
+                                        "status": "failed",
+                                    }
+                                ),
+                            }
+                        )
+                        continue
+
+                    try:
+                        tool_args = json.loads(func_info.get("arguments", "{}"))
+                    except json.JSONDecodeError:
+                        tool_args = {}
+
+                    try:
+                        tool_content = json.dumps(
+                            self._execute_mcp_tool_sync(agent, tool_name, tool_args)
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "tool_call_loop.tool_error",
+                            extra={
+                                "tool": tool_name,
+                                "error": str(exc),
+                            },
+                        )
+                        tool_content = json.dumps(
+                            {"error": "Tool execution failed", "status": "failed"}
+                        )
+
+                    tool_result_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc_id,
+                            "content": tool_content,
+                        }
+                    )
+
+                # Build updated messages: original + assistant w/ tool_calls + tool results
+                updated_messages = list(messages)
+                updated_messages.append(
+                    {
+                        "role": "assistant",
+                        "content": assistant_content,
+                        "tool_calls": tool_calls,
+                    }
+                )
+                updated_messages.extend(tool_result_messages)
+
+                # Re-execute workflow with updated conversation
+                workflow = self.build_workflow(agent)
+                if workflow is None:
+                    break
+                workflow_params = {"agent_exec": {"messages": updated_messages}}
+                with LocalRuntime() as runtime_next:
+                    results, run_id = runtime_next.execute(
+                        workflow.build(), parameters=workflow_params
+                    )
+
+                # Update messages for potential next round
+                messages = updated_messages
 
             # Task 2.10: Extension point - parse result
             parsed_result = self.parse_result(results)
@@ -400,6 +525,75 @@ class SingleShotStrategy:
                 content += "\n\nPlease respond in JSON format."
 
         return [{"role": "user", "content": content}]
+
+    # ------------------------------------------------------------------
+    # Tool-call helpers (#377)
+    # ------------------------------------------------------------------
+
+    def _extract_tool_calls(self, results: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract tool_calls from workflow results if present.
+
+        The LLMAgentNode stores its output under ``results["agent_exec"]``
+        with the LLM response nested at ``["response"]``.  The response dict
+        contains a ``tool_calls`` list when the model decides to invoke tools.
+
+        Returns:
+            List of tool-call dicts (OpenAI format), or empty list.
+        """
+        agent_output = results.get("agent_exec", {})
+        if not isinstance(agent_output, dict):
+            return []
+        response = agent_output.get("response", {})
+        if not isinstance(response, dict):
+            return []
+        tool_calls = response.get("tool_calls", [])
+        if not isinstance(tool_calls, list):
+            return []
+        return tool_calls
+
+    def _extract_assistant_content(self, results: Dict[str, Any]) -> str:
+        """Extract the assistant's text content from workflow results.
+
+        Used when building the conversation history that includes the
+        assistant message alongside its tool_calls.
+
+        Returns:
+            The content string, or empty string if absent.
+        """
+        agent_output = results.get("agent_exec", {})
+        if not isinstance(agent_output, dict):
+            return ""
+        response = agent_output.get("response", {})
+        if not isinstance(response, dict):
+            return ""
+        content = response.get("content", "")
+        if content is None:
+            return ""
+        return str(content)
+
+    def _execute_mcp_tool_sync(
+        self, agent: Any, tool_name: str, tool_args: Dict[str, Any]
+    ) -> Any:
+        """Execute an async ``agent.execute_mcp_tool`` from a sync context.
+
+        Uses the same async-to-sync bridging pattern established in
+        ``multi_cycle.py`` and ``agent_loop.py``:
+
+        * If there is already a running event loop (e.g. Jupyter, nested
+          async), run the coroutine in a ``ThreadPoolExecutor`` to avoid
+          a nested ``asyncio.run()`` which would raise ``RuntimeError``.
+        * Otherwise call ``asyncio.run()`` directly.
+        """
+        coro = agent.execute_mcp_tool(tool_name, tool_args)
+
+        try:
+            asyncio.get_running_loop()
+            # Inside an event loop -- use a thread pool to avoid nesting
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(asyncio.run, coro).result()
+        except RuntimeError:
+            # No running event loop -- safe to use asyncio.run() directly
+            return asyncio.run(coro)
 
     def _generate_skeleton_result(
         self, agent: Any, inputs: Dict[str, Any]

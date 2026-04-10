@@ -25,7 +25,10 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-
+from kailash.trust.pact.access import AccessDecision, KnowledgeSharePolicy, PactBridge
+from kailash.trust.pact.audit import AuditChain
+from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+from kailash.trust.pact.compilation import CompiledOrg, OrgNode
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
@@ -33,22 +36,13 @@ from kailash.trust.pact.config import (
     OperationalConstraintConfig,
     TrustPostureLevel,
 )
-from pact.examples.university.barriers import (
-    create_university_bridges,
-    create_university_ksps,
-)
-from pact.examples.university.clearance import create_university_clearances
-from pact.examples.university.org import create_university_org
-from kailash.trust.pact.access import AccessDecision, KnowledgeSharePolicy, PactBridge
-from kailash.trust.pact.clearance import RoleClearance, VettingStatus
-from kailash.trust.pact.exceptions import PactError
-from kailash.trust.pact.compilation import CompiledOrg, OrgNode
 from kailash.trust.pact.engine import GovernanceEngine
 from kailash.trust.pact.envelopes import (
     MonotonicTighteningError,
     RoleEnvelope,
     TaskEnvelope,
 )
+from kailash.trust.pact.exceptions import PactError
 from kailash.trust.pact.knowledge import KnowledgeItem
 from kailash.trust.pact.store import (
     MemoryAccessPolicyStore,
@@ -57,8 +51,12 @@ from kailash.trust.pact.store import (
     MemoryOrgStore,
 )
 from kailash.trust.pact.verdict import GovernanceVerdict
-from kailash.trust.pact.audit import AuditChain
-
+from pact.examples.university.barriers import (
+    create_university_bridges,
+    create_university_ksps,
+)
+from pact.examples.university.clearance import create_university_clearances
+from pact.examples.university.org import create_university_org
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -237,7 +235,7 @@ class TestCheckAccess:
         decision = engine_from_compiled.check_access(
             role_address="D1-R1-D1-R1-D1-R1-T1-R1",  # CS Chair
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
         )
         assert isinstance(decision, AccessDecision)
         assert decision.allowed is True
@@ -260,7 +258,7 @@ class TestCheckAccess:
         decision = engine_from_compiled.check_access(
             role_address="D1-R1-D1-R1-D1-R1-T1-R1-R1",  # CS Faculty
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
         )
         assert isinstance(decision, AccessDecision)
         assert decision.allowed is False
@@ -538,7 +536,7 @@ class TestStateMutation:
         decision = engine.check_access(
             role_address="D1-R1-D1-R1-D1-R1-T1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
         )
         assert decision.allowed is False  # No clearance
 
@@ -555,7 +553,7 @@ class TestStateMutation:
         decision = engine.check_access(
             role_address="D1-R1-D1-R1-D1-R1-T1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
         )
         assert decision.allowed is True
 
@@ -580,7 +578,7 @@ class TestStateMutation:
         decision = engine.check_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.DELEGATED,
+            posture=TrustPostureLevel.AUTONOMOUS,
         )
         assert decision.allowed is True
 
@@ -590,7 +588,7 @@ class TestStateMutation:
         decision = engine.check_access(
             role_address="D1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.DELEGATED,
+            posture=TrustPostureLevel.AUTONOMOUS,
         )
         assert decision.allowed is False
 
@@ -608,7 +606,7 @@ class TestStateMutation:
         decision_before = engine_from_compiled.check_access(
             role_address="D1-R1-D3-R1",  # VP Student Affairs
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
         )
         assert decision_before.allowed is False
 
@@ -633,7 +631,7 @@ class TestStateMutation:
         decision_after = engine_from_compiled.check_access(
             role_address="D1-R1-D3-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
         )
         assert decision_after.allowed is True
 
@@ -651,7 +649,7 @@ class TestStateMutation:
         decision_before = engine_from_compiled.check_access(
             role_address="D1-R1-D2-R1-T2-R1",  # Finance Director
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
         )
         assert decision_before.allowed is False
 
@@ -669,7 +667,7 @@ class TestStateMutation:
         decision_after = engine_from_compiled.check_access(
             role_address="D1-R1-D2-R1-T2-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
         )
         assert decision_after.allowed is True
 
@@ -1125,7 +1123,7 @@ class TestClearanceFSM:
         decision = engine.check_access(
             role_address="D1-R1-D1-R1-D1-R1-T1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
         )
         assert decision.allowed is True
 
@@ -1135,6 +1133,6 @@ class TestClearanceFSM:
         decision = engine.check_access(
             role_address="D1-R1-D1-R1-D1-R1-T1-R1",
             knowledge_item=item,
-            posture=TrustPostureLevel.SHARED_PLANNING,
+            posture=TrustPostureLevel.SUPERVISED,
         )
         assert decision.allowed is False

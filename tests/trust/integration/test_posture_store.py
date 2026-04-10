@@ -12,18 +12,16 @@ from __future__ import annotations
 
 import os
 import platform
-import stat
 import sqlite3
+import stat
 
 import pytest
-
 from kailash.trust.posture.posture_store import SQLitePostureStore, validate_agent_id
 from kailash.trust.posture.postures import (
     PostureTransition,
-    TrustPosture,
     TransitionResult,
+    TrustPosture,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -76,9 +74,9 @@ def test_create_store(db_path):
 
 def test_set_and_get_posture(store):
     """Setting a posture and retrieving it should return the same value."""
-    store.set_posture("agent-001", TrustPosture.SUPERVISED)
+    store.set_posture("agent-001", TrustPosture.TOOL)
     result = store.get_posture("agent-001")
-    assert result == TrustPosture.SUPERVISED
+    assert result == TrustPosture.TOOL
 
 
 # ---------------------------------------------------------------------------
@@ -102,24 +100,24 @@ def test_record_and_get_history(store):
     transitions = [
         TransitionResult(
             success=True,
-            from_posture=TrustPosture.SUPERVISED,
-            to_posture=TrustPosture.SHARED_PLANNING,
+            from_posture=TrustPosture.TOOL,
+            to_posture=TrustPosture.SUPERVISED,
             transition_type=PostureTransition.UPGRADE,
             reason="Initial upgrade",
             metadata={"agent_id": "agent-001"},
         ),
         TransitionResult(
             success=True,
-            from_posture=TrustPosture.SHARED_PLANNING,
-            to_posture=TrustPosture.CONTINUOUS_INSIGHT,
+            from_posture=TrustPosture.SUPERVISED,
+            to_posture=TrustPosture.DELEGATING,
             transition_type=PostureTransition.UPGRADE,
             reason="Second upgrade",
             metadata={"agent_id": "agent-001"},
         ),
         TransitionResult(
             success=False,
-            from_posture=TrustPosture.CONTINUOUS_INSIGHT,
-            to_posture=TrustPosture.DELEGATED,
+            from_posture=TrustPosture.DELEGATING,
+            to_posture=TrustPosture.AUTONOMOUS,
             transition_type=PostureTransition.UPGRADE,
             reason="Blocked by guard",
             blocked_by="approval_guard",
@@ -151,8 +149,8 @@ def test_history_limit(store):
         store.record_transition(
             TransitionResult(
                 success=True,
-                from_posture=TrustPosture.SUPERVISED,
-                to_posture=TrustPosture.SHARED_PLANNING,
+                from_posture=TrustPosture.TOOL,
+                to_posture=TrustPosture.SUPERVISED,
                 transition_type=PostureTransition.UPGRADE,
                 reason=f"transition-{i}",
                 metadata={"agent_id": "agent-002"},
@@ -177,12 +175,12 @@ def test_persistence_across_restarts(db_path):
     """Data should persist when the store is closed and reopened."""
     # First session: write data
     store1 = SQLitePostureStore(db_path)
-    store1.set_posture("agent-persist", TrustPosture.DELEGATED)
+    store1.set_posture("agent-persist", TrustPosture.AUTONOMOUS)
     store1.record_transition(
         TransitionResult(
             success=True,
-            from_posture=TrustPosture.SUPERVISED,
-            to_posture=TrustPosture.DELEGATED,
+            from_posture=TrustPosture.TOOL,
+            to_posture=TrustPosture.AUTONOMOUS,
             transition_type=PostureTransition.UPGRADE,
             reason="Persistence test",
             metadata={"agent_id": "agent-persist"},
@@ -194,7 +192,7 @@ def test_persistence_across_restarts(db_path):
     store2 = SQLitePostureStore(db_path)
     try:
         posture = store2.get_posture("agent-persist")
-        assert posture == TrustPosture.DELEGATED
+        assert posture == TrustPosture.AUTONOMOUS
 
         history = store2.get_history("agent-persist")
         assert len(history) == 1
@@ -329,15 +327,15 @@ class TestValidateAgentId:
 def test_context_manager(db_path):
     """SQLitePostureStore should work as a context manager."""
     with SQLitePostureStore(db_path) as store:
-        store.set_posture("agent-ctx", TrustPosture.CONTINUOUS_INSIGHT)
+        store.set_posture("agent-ctx", TrustPosture.DELEGATING)
         posture = store.get_posture("agent-ctx")
-        assert posture == TrustPosture.CONTINUOUS_INSIGHT
+        assert posture == TrustPosture.DELEGATING
 
     # After exiting the context, the connection should be closed.
     # Verify by opening a new store and checking data persisted.
     with SQLitePostureStore(db_path) as store2:
         posture = store2.get_posture("agent-ctx")
-        assert posture == TrustPosture.CONTINUOUS_INSIGHT
+        assert posture == TrustPosture.DELEGATING
 
 
 # ---------------------------------------------------------------------------
@@ -347,10 +345,10 @@ def test_context_manager(db_path):
 
 def test_set_posture_upsert(store):
     """Setting posture for an existing agent should update, not duplicate."""
-    store.set_posture("agent-upsert", TrustPosture.SUPERVISED)
-    store.set_posture("agent-upsert", TrustPosture.DELEGATED)
+    store.set_posture("agent-upsert", TrustPosture.TOOL)
+    store.set_posture("agent-upsert", TrustPosture.AUTONOMOUS)
     result = store.get_posture("agent-upsert")
-    assert result == TrustPosture.DELEGATED
+    assert result == TrustPosture.AUTONOMOUS
 
 
 def test_history_for_nonexistent_agent(store):
@@ -376,8 +374,8 @@ def test_emergency_downgrade_transition_type_preserved(store):
     """
     tr = TransitionResult(
         success=True,
-        from_posture=TrustPosture.DELEGATED,
-        to_posture=TrustPosture.PSEUDO_AGENT,
+        from_posture=TrustPosture.AUTONOMOUS,
+        to_posture=TrustPosture.PSEUDO,
         transition_type=PostureTransition.EMERGENCY_DOWNGRADE,
         reason="Security incident detected",
         metadata={"agent_id": "agent-emergency"},
@@ -393,8 +391,8 @@ def test_emergency_downgrade_transition_type_preserved(store):
         f"The store lost the transition_type and fell back to "
         f"_determine_transition_type() which returns DOWNGRADE."
     )
-    assert restored.from_posture == TrustPosture.DELEGATED
-    assert restored.to_posture == TrustPosture.PSEUDO_AGENT
+    assert restored.from_posture == TrustPosture.AUTONOMOUS
+    assert restored.to_posture == TrustPosture.PSEUDO
     assert restored.reason == "Security incident detected"
     assert restored.success is True
 
@@ -403,8 +401,8 @@ def test_record_transition_with_metadata(store):
     """Transition metadata should be preserved through round-trip."""
     tr = TransitionResult(
         success=True,
-        from_posture=TrustPosture.SUPERVISED,
-        to_posture=TrustPosture.SHARED_PLANNING,
+        from_posture=TrustPosture.TOOL,
+        to_posture=TrustPosture.SUPERVISED,
         transition_type=PostureTransition.UPGRADE,
         reason="With metadata",
         metadata={"agent_id": "agent-meta", "custom_key": "custom_value"},

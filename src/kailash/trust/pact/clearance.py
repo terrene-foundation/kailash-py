@@ -47,11 +47,11 @@ class VettingStatus(str, Enum):
 
 
 POSTURE_CEILING: dict[TrustPostureLevel, ConfidentialityLevel] = {
-    TrustPostureLevel.PSEUDO_AGENT: ConfidentialityLevel.PUBLIC,
-    TrustPostureLevel.SUPERVISED: ConfidentialityLevel.RESTRICTED,
-    TrustPostureLevel.SHARED_PLANNING: ConfidentialityLevel.CONFIDENTIAL,
-    TrustPostureLevel.CONTINUOUS_INSIGHT: ConfidentialityLevel.SECRET,
-    TrustPostureLevel.DELEGATED: ConfidentialityLevel.TOP_SECRET,
+    TrustPostureLevel.PSEUDO: ConfidentialityLevel.PUBLIC,
+    TrustPostureLevel.TOOL: ConfidentialityLevel.RESTRICTED,
+    TrustPostureLevel.SUPERVISED: ConfidentialityLevel.CONFIDENTIAL,
+    TrustPostureLevel.DELEGATING: ConfidentialityLevel.SECRET,
+    TrustPostureLevel.AUTONOMOUS: ConfidentialityLevel.TOP_SECRET,
 }
 
 # Numeric ordering for clearance comparisons
