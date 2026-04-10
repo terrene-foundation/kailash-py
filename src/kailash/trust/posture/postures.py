@@ -29,7 +29,8 @@ class TrustPosture(str, Enum):
     - PSEUDO: Agent is interface only; human performs all reasoning (autonomy_level=1)
 
     Old names (DELEGATED, CONTINUOUS_INSIGHT, SHARED_PLANNING, PSEUDO_AGENT) are
-    accepted via ``_missing_()`` for backward compatibility with serialized data.
+    accepted both as attribute aliases and via ``_missing_()`` for backward
+    compatibility with serialized data.
     """
 
     AUTONOMOUS = "autonomous"
@@ -37,6 +38,13 @@ class TrustPosture(str, Enum):
     SUPERVISED = "supervised"
     TOOL = "tool"
     PSEUDO = "pseudo"
+
+    # Backward-compatible aliases (pre-Decision-007 names).
+    # Each alias resolves to the canonical member with the same value.
+    DELEGATED = "autonomous"
+    CONTINUOUS_INSIGHT = "delegating"
+    SHARED_PLANNING = "supervised"
+    PSEUDO_AGENT = "pseudo"
 
     @classmethod
     def _missing_(cls, value: object) -> TrustPosture | None:

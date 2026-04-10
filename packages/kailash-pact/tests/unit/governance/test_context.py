@@ -18,19 +18,14 @@ from datetime import UTC, datetime
 
 import pytest
 
+from kailash.trust.pact.clearance import RoleClearance, effective_clearance
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     ConstraintEnvelopeConfig,
     OperationalConstraintConfig,
     TrustPostureLevel,
 )
-from kailash.trust.pact.clearance import (
-    POSTURE_CEILING,
-    RoleClearance,
-    effective_clearance,
-)
 from kailash.trust.pact.context import GovernanceContext
-
 
 # ---------------------------------------------------------------------------
 # Frozen immutability
@@ -230,12 +225,12 @@ class TestEffectiveClearancePostureCapped:
     """effective_clearance_level must be capped by POSTURE_CEILING."""
 
     def test_effective_clearance_posture_capped(self) -> None:
-        """A role with SECRET clearance at SUPERVISED posture gets RESTRICTED."""
+        """A role with SECRET clearance at TOOL posture gets RESTRICTED."""
         clearance = RoleClearance(
             role_address="D1-R1",
             max_clearance=ConfidentialityLevel.SECRET,
         )
-        eff = effective_clearance(clearance, TrustPostureLevel.SUPERVISED)
+        eff = effective_clearance(clearance, TrustPostureLevel.TOOL)
         assert eff == ConfidentialityLevel.RESTRICTED
 
         ctx = GovernanceContext(

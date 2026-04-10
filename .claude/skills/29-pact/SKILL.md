@@ -48,6 +48,20 @@ from pact.mcp import (
 )
 ```
 
+## TrustPostureLevel (Decision 007)
+
+Five canonical posture levels with autonomy gradient:
+
+| Canonical  | Autonomy | Ceiling      | Old Name (alias)   |
+| ---------- | -------- | ------------ | ------------------ |
+| PSEUDO     | 1        | PUBLIC       | PSEUDO_AGENT       |
+| TOOL       | 2        | RESTRICTED   | _(new, no old)_    |
+| SUPERVISED | 3        | CONFIDENTIAL | SHARED_PLANNING    |
+| DELEGATING | 4        | SECRET       | CONTINUOUS_INSIGHT |
+| AUTONOMOUS | 5        | TOP_SECRET   | DELEGATED          |
+
+Old names work as enum aliases (`TrustPostureLevel.PSEUDO_AGENT` resolves to `PSEUDO`). String deserialization of old values is handled by `_missing_()`.
+
 ## Rules
 
 See `.claude/rules/pact-governance.md` for security invariants.

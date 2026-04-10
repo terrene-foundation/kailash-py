@@ -18,7 +18,6 @@ import pytest
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -80,29 +79,24 @@ class TestDeferredMcpNoAutoConnect:
 # ---------------------------------------------------------------------------
 
 
-class TestLegacyKwargsIgnored:
-    """Unknown kwargs passed to BaseAgent.__init__ should not crash."""
+class TestUnknownKwargsRejected:
+    """SPEC-04 §10.2: Unknown kwargs MUST be rejected (no catch-all)."""
 
-    def test_unknown_kwargs_accepted(self) -> None:
-        """Extra kwargs are passed through to Node.__init__ without crashing."""
+    def test_unknown_kwargs_raise_type_error(self) -> None:
+        """Extra kwargs cause TypeError — the **kwargs catch-all is gone."""
         config = BaseAgentConfig()
-        # These unknown kwargs should be absorbed by **kwargs -> Node.__init__
-        agent = _StubAgent(
-            config=config,
-            mcp_servers=[],
-            unknown_param="value",
-            another_param=42,
-        )
-        assert agent is not None
+        with pytest.raises(TypeError):
+            _StubAgent(
+                config=config,
+                mcp_servers=[],
+                unknown_param="value",
+                another_param=42,
+            )
 
-    def test_agent_functional_with_extra_kwargs(self) -> None:
-        """Agent still works correctly even with extra kwargs."""
+    def test_known_kwargs_still_accepted(self) -> None:
+        """Valid params continue to work."""
         config = BaseAgentConfig()
-        agent = _StubAgent(
-            config=config,
-            mcp_servers=[],
-            legacy_flag=True,
-        )
+        agent = _StubAgent(config=config, mcp_servers=[])
         result = agent.run()
         assert result == {"text": "stub"}
 
@@ -112,84 +106,62 @@ class TestLegacyKwargsIgnored:
 # ---------------------------------------------------------------------------
 
 
-class TestExtensionShadowDeprecated:
-    """Overriding deprecated extension points must emit DeprecationWarning."""
+class TestExtensionPointOverrides:
+    """Subclass extension point overrides work via normal MRO."""
 
-    def test_override_pre_execution_hook_warns(self) -> None:
-        """Subclass overriding _pre_execution_hook emits DeprecationWarning."""
+    def test_override_pre_execution_hook_works(self) -> None:
+        """Subclass overriding _pre_execution_hook takes effect via MRO."""
+
+        class _CustomAgent(BaseAgent):
+            def _pre_execution_hook(self, inputs: Any) -> Any:
+                inputs["custom"] = True
+                return inputs
+
+        agent = _CustomAgent(config=BaseAgentConfig(), mcp_servers=[])
+        result = agent._pre_execution_hook({"key": "val"})
+        assert result["custom"] is True
+
+    def test_override_post_execution_hook_works(self) -> None:
+        """Subclass overriding _post_execution_hook takes effect via MRO."""
+
+        class _PostHookAgent(BaseAgent):
+            def _post_execution_hook(self, result: Any) -> Any:
+                result["hooked"] = True
+                return result
+
+        agent = _PostHookAgent(config=BaseAgentConfig(), mcp_servers=[])
+        result = agent._post_execution_hook({"text": "ok"})
+        assert result["hooked"] is True
+
+    def test_override_handle_error_works(self) -> None:
+        """Subclass overriding _handle_error takes effect via MRO."""
+
+        class _ErrorAgent(BaseAgent):
+            def _handle_error(self, error: Exception, context: Any) -> Any:
+                return {"custom_error": str(error)}
+
+        agent = _ErrorAgent(config=BaseAgentConfig(), mcp_servers=[])
+        result = agent._handle_error(ValueError("test"), {})
+        assert result["custom_error"] == "test"
+
+    def test_no_override_uses_default(self) -> None:
+        """Without override, the base implementation runs."""
+
+        class _CleanAgent(BaseAgent):
+            pass
+
+        agent = _CleanAgent(config=BaseAgentConfig(), mcp_servers=[])
+        result = agent._pre_execution_hook({"key": "val"})
+        assert result["key"] == "val"
+
+    def test_no_deprecation_warnings_on_subclass(self) -> None:
+        """Subclassing with overrides should NOT emit deprecation warnings."""
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
 
-            class _CustomAgent(BaseAgent):
-                def _pre_execution_hook(self, **kwargs: Any) -> None:
-                    pass
-
-                def run(self, **inputs: Any) -> dict[str, Any]:
-                    return {"text": "custom"}
-
-                async def run_async(self, **inputs: Any) -> dict[str, Any]:
-                    return {"text": "custom-async"}
-
-        deprecation_warnings = [
-            w for w in caught if issubclass(w.category, DeprecationWarning)
-        ]
-        assert len(deprecation_warnings) >= 1
-        assert "_pre_execution_hook" in str(deprecation_warnings[0].message)
-        assert "deprecated" in str(deprecation_warnings[0].message).lower()
-
-    def test_override_post_execution_hook_warns(self) -> None:
-        """Subclass overriding _post_execution_hook emits DeprecationWarning."""
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-
-            class _PostHookAgent(BaseAgent):
-                def _post_execution_hook(self, result: Any, **kwargs: Any) -> Any:
-                    return result
-
-                def run(self, **inputs: Any) -> dict[str, Any]:
-                    return {"text": "post"}
-
-                async def run_async(self, **inputs: Any) -> dict[str, Any]:
-                    return {"text": "post-async"}
-
-        deprecation_warnings = [
-            w for w in caught if issubclass(w.category, DeprecationWarning)
-        ]
-        assert len(deprecation_warnings) >= 1
-        assert "_post_execution_hook" in str(deprecation_warnings[0].message)
-
-    def test_override_handle_error_warns(self) -> None:
-        """Subclass overriding _handle_error emits DeprecationWarning."""
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-
-            class _ErrorAgent(BaseAgent):
-                def _handle_error(self, error: Exception, **kwargs: Any) -> Any:
-                    return {"error": str(error)}
-
-                def run(self, **inputs: Any) -> dict[str, Any]:
-                    return {"text": "err"}
-
-                async def run_async(self, **inputs: Any) -> dict[str, Any]:
-                    return {"text": "err-async"}
-
-        deprecation_warnings = [
-            w for w in caught if issubclass(w.category, DeprecationWarning)
-        ]
-        assert len(deprecation_warnings) >= 1
-        assert "_handle_error" in str(deprecation_warnings[0].message)
-
-    def test_no_override_no_warning(self) -> None:
-        """Subclass that does NOT override extension points emits no warning."""
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-
-            class _CleanAgent(BaseAgent):
-                def run(self, **inputs: Any) -> dict[str, Any]:
-                    return {"text": "clean"}
-
-                async def run_async(self, **inputs: Any) -> dict[str, Any]:
-                    return {"text": "clean-async"}
+            class _Agent(BaseAgent):
+                def _pre_execution_hook(self, inputs: Any) -> Any:
+                    return inputs
 
         deprecation_warnings = [
             w

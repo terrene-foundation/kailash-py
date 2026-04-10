@@ -1,18 +1,12 @@
 # Copyright 2026 Terrene Foundation
 # Licensed under the Apache License, Version 2.0
-"""Tests for BaseAgent SPEC-04 Wave 1G -- posture typing + @deprecated decorators.
-
-Covers CRITICAL #3 and #4 from the convergence spec compliance audit v2:
+"""Tests for BaseAgent SPEC-04 — posture typing + extension point architecture.
 
 - ``BaseAgentConfig.posture`` is typed ``Optional[AgentPosture]`` and
   coerces legacy string inputs while rejecting unknown values.
-- The seven extension-point slots on ``BaseAgent`` carry the
-  ``@deprecated`` decorator (detected via the ``_deprecated`` marker that
-  the decorator sets on the wrapped function).
-- Vanilla ``BaseAgent`` construction and execution emit zero
-  ``DeprecationWarning`` from the extension-point slots (internal callers
-  go through ``_invoke_extension_point``).
-- Direct external invocation of a deprecated slot DOES emit the warning.
+- The seven extension points are direct methods on BaseAgent (no shims).
+- Subclass overrides win via normal MRO — no dispatcher needed.
+- Vanilla ``BaseAgent`` construction emits zero ``DeprecationWarning``.
 """
 
 from __future__ import annotations
@@ -42,9 +36,6 @@ class TestBaseAgentConfigPostureType:
     def test_posture_field_annotation_is_agent_posture(self) -> None:
         fields = {f.name: f.type for f in dataclasses.fields(BaseAgentConfig)}
         annotation = fields["posture"]
-        # Annotation is ``Optional[AgentPosture]`` which reduces to
-        # ``typing.Optional[kailash.trust.envelope.AgentPosture]``. Accept
-        # either the raw class or the string form.
         assert "AgentPosture" in str(annotation)
 
     def test_none_is_default(self) -> None:
@@ -74,40 +65,34 @@ class TestBaseAgentConfigPostureType:
             assert config.posture is posture
 
 
-class TestSevenExtensionPointsDeprecated:
-    """Every extension point MUST carry ``@deprecated`` (SPEC-04 CRITICAL #3)."""
+class TestSevenExtensionPointsAreDirect:
+    """Extension points are direct methods — no dispatcher, no decorator."""
 
     @pytest.mark.parametrize("name", _EXTENSION_POINTS)
-    def test_slot_is_decorated(self, name: str) -> None:
+    def test_extension_point_is_callable(self, name: str) -> None:
+        assert callable(getattr(BaseAgent, name))
+
+    def test_all_seven_exist(self) -> None:
+        for name in _EXTENSION_POINTS:
+            assert hasattr(BaseAgent, name), f"{name} missing from BaseAgent"
+
+    @pytest.mark.parametrize("name", _EXTENSION_POINTS)
+    def test_no_deprecated_decorator(self, name: str) -> None:
+        """Extension points should NOT have deprecated decorators (removed in SPEC-04)."""
         slot = getattr(BaseAgent, name)
-        # The ``deprecated`` decorator in ``kaizen.core.deprecation`` sets
-        # ``_deprecated`` and ``_deprecated_message`` attributes on the
-        # wrapper function; assert both are present so a future refactor
-        # that drops the wrapper fails loudly.
-        assert (
-            getattr(slot, "_deprecated", False) is True
-        ), f"{name} is missing the @deprecated wrapper"
-        assert "deprecated" in slot._deprecated_message.lower()
+        assert not getattr(
+            slot, "_deprecated", False
+        ), f"{name} still has @deprecated — shim layer should be removed"
 
-    def test_all_seven_slots_decorated(self) -> None:
-        decorated = [
-            name
-            for name in _EXTENSION_POINTS
-            if getattr(getattr(BaseAgent, name), "_deprecated", False)
-        ]
-        assert (
-            len(decorated) == 7
-        ), f"expected 7 decorated extension points, got {len(decorated)}: {decorated}"
+    def test_subclass_override_wins_via_mro(self) -> None:
+        """Subclass overrides should work via normal Python MRO."""
 
-    def test_decorator_count_matches_spec(self) -> None:
-        # SPEC-04 validation criterion: ``grep -c "@deprecated"`` in
-        # base_agent.py MUST return 7. We assert the semantic equivalent
-        # via runtime introspection.
-        slot_names = _EXTENSION_POINTS
-        wrapped = sum(
-            1 for name in slot_names if hasattr(getattr(BaseAgent, name), "_deprecated")
-        )
-        assert wrapped == 7
+        class CustomAgent(BaseAgent):
+            def _default_signature(self):
+                return "custom"
+
+        agent = CustomAgent(config=BaseAgentConfig(), mcp_servers=[])
+        assert agent._default_signature() == "custom"
 
 
 class TestVanillaBaseAgentIsWarningFree:
@@ -122,48 +107,43 @@ class TestVanillaBaseAgentIsWarningFree:
             for w in captured
             if issubclass(w.category, DeprecationWarning)
             and "extension point" in str(w.message).lower()
-            or "BaseAgent extension points are deprecated" in str(w.message)
         ]
         assert offenders == [], (
             f"expected zero extension-point warnings on vanilla construction, "
             f"got {[str(w.message) for w in offenders]}"
         )
 
-    def test_direct_slot_invocation_emits_warning(self) -> None:
+    def test_direct_call_emits_no_warning(self) -> None:
+        """Direct calls to extension points should NOT emit warnings anymore."""
         agent = BaseAgent(config=BaseAgentConfig(), mcp_servers=[])
-        with pytest.warns(
-            DeprecationWarning, match="BaseAgent extension points are deprecated"
-        ):
-            agent._default_signature()
-
-    @pytest.mark.parametrize("name", _EXTENSION_POINTS)
-    def test_every_slot_emits_warning_when_called_directly(self, name: str) -> None:
-        agent = BaseAgent(config=BaseAgentConfig(), mcp_servers=[])
-        slot = getattr(agent, name)
-        # Call with the smallest possible argument set that satisfies each
-        # method signature. The arity varies: signature/strategy/prompt
-        # take no args; validate/hooks/error take 1-2.
         with warnings.catch_warnings(record=True) as captured:
             warnings.simplefilter("always")
-            try:
-                if name in {
-                    "_default_signature",
-                    "_default_strategy",
-                    "_generate_system_prompt",
-                }:
-                    slot()
-                elif name == "_validate_signature_output":
-                    slot({"response": "ok"})
-                elif name in {"_pre_execution_hook", "_post_execution_hook"}:
-                    slot({})
-                elif name == "_handle_error":
-                    try:
-                        slot(ValueError("x"), {"inputs": {}})
-                    except Exception:
-                        pass
-            except Exception:
-                # Some impls may raise on trivial args; the warning still
-                # fires before the body executes.
-                pass
+            agent._default_signature()
         deps = [w for w in captured if issubclass(w.category, DeprecationWarning)]
-        assert deps, f"expected DeprecationWarning on direct call to {name}"
+        assert not deps, "extension points should not emit deprecation warnings"
+
+
+class TestPostureImmutability:
+    """SPEC-04 §10.3: posture is immutable after construction."""
+
+    def test_posture_mutation_blocked(self) -> None:
+        config = BaseAgentConfig(posture=AgentPosture.SUPERVISED)
+        with pytest.raises(AttributeError, match="immutable after construction"):
+            config.posture = AgentPosture.AUTONOMOUS
+
+    def test_posture_set_during_construction_works(self) -> None:
+        config = BaseAgentConfig(posture="supervised")
+        assert config.posture is AgentPosture.SUPERVISED
+
+    def test_non_guarded_fields_still_mutable(self) -> None:
+        config = BaseAgentConfig()
+        config.model = "gpt-4o"
+        assert config.model == "gpt-4o"
+
+    def test_replace_creates_new_config_with_different_posture(self) -> None:
+        import dataclasses
+
+        original = BaseAgentConfig(posture=AgentPosture.SUPERVISED)
+        updated = dataclasses.replace(original, posture=AgentPosture.AUTONOMOUS)
+        assert original.posture is AgentPosture.SUPERVISED
+        assert updated.posture is AgentPosture.AUTONOMOUS

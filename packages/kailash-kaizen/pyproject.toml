@@ -68,6 +68,7 @@ dev = [
     "isort>=5.12",
     "ruff>=0.1.0",
     "fakeredis>=2.20.0",
+    "respx>=0.21.0",
 ]
 
 [project.urls]
@@ -85,6 +86,7 @@ markers = [
     "requires_azure: Tests requiring Azure AI Foundry credentials",
     "requires_docker: Tests requiring Docker Model Runner",
     "requires_google: Tests requiring Google Gemini credentials",
+    "regression: Regression tests for fixed bugs",
 ]
 asyncio_mode = "auto"
 
