@@ -32,7 +32,6 @@ from dataflow.adapters.source_adapter import (
     CircuitBreakerConfig,
     SourceState,
 )
-from dataflow.fabric.consumers import ConsumerFn, ConsumerRegistry
 from dataflow.fabric.config import (
     ApiKeyAuth,
     BasicAuth,
@@ -48,8 +47,24 @@ from dataflow.fabric.config import (
     StreamSourceConfig,
     WebhookConfig,
 )
+from dataflow.fabric.consumers import ConsumerFn, ConsumerRegistry
+from dataflow.fabric.integrity import (
+    FabricIntegrityConfig,
+    FabricIntegrityMiddleware,
+    classify_route,
+    get_current_integrity_trace,
+    get_fabric_hit_count,
+    record_fabric_hit,
+)
 
 __all__ = [
+    # Integrity middleware (gh#369)
+    "FabricIntegrityMiddleware",
+    "FabricIntegrityConfig",
+    "classify_route",
+    "record_fabric_hit",
+    "get_fabric_hit_count",
+    "get_current_integrity_trace",
     # Consumer adapters
     "ConsumerFn",
     "ConsumerRegistry",

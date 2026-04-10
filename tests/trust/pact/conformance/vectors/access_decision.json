@@ -1,0 +1,38 @@
+{
+  "description": "Canonical AccessDecision serialization vectors (allow and deny)",
+  "pact_type": "AccessDecision",
+  "vectors": [
+    {
+      "name": "access_allowed_same_unit",
+      "input": {
+        "allowed": true,
+        "reason": "Same unit access: role is within 'D1-R1-D2'",
+        "step_failed": null,
+        "audit_details": {
+          "role_address": "D1-R1-D2-R2",
+          "item_id": "doc-42",
+          "step": "4a",
+          "access_path": "same_unit"
+        },
+        "valid_until": null
+      },
+      "expected_canonical_json": "{\"allowed\": true, \"audit_details\": {\"access_path\": \"same_unit\", \"item_id\": \"doc-42\", \"role_address\": \"D1-R1-D2-R2\", \"step\": \"4a\"}, \"reason\": \"Same unit access: role is within 'D1-R1-D2'\", \"step_failed\": null, \"valid_until\": null}"
+    },
+    {
+      "name": "access_denied_missing_clearance",
+      "input": {
+        "allowed": false,
+        "reason": "No clearance found for role at address 'D1-R1-D3-R1'",
+        "step_failed": 1,
+        "audit_details": {
+          "role_address": "D1-R1-D3-R1",
+          "item_id": "doc-99",
+          "step": 1,
+          "detail": "missing_clearance"
+        },
+        "valid_until": null
+      },
+      "expected_canonical_json": "{\"allowed\": false, \"audit_details\": {\"detail\": \"missing_clearance\", \"item_id\": \"doc-99\", \"role_address\": \"D1-R1-D3-R1\", \"step\": 1}, \"reason\": \"No clearance found for role at address 'D1-R1-D3-R1'\", \"step_failed\": 1, \"valid_until\": null}"
+    }
+  ]
+}

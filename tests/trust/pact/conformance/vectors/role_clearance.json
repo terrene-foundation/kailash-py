@@ -1,0 +1,14 @@
+{
+  "description": "Canonical RoleClearance serialization vector",
+  "pact_type": "RoleClearance",
+  "input": {
+    "role_address": "D1-R1-D2-R2",
+    "max_clearance": "secret",
+    "compartments": ["alpha", "omega"],
+    "granted_by_role_address": "D1-R1",
+    "vetting_status": "active",
+    "review_at": "2026-06-15T00:00:00+00:00",
+    "nda_signed": true
+  },
+  "expected_canonical_json": "{\"compartments\": [\"alpha\", \"omega\"], \"granted_by_role_address\": \"D1-R1\", \"max_clearance\": \"secret\", \"nda_signed\": true, \"review_at\": \"2026-06-15T00:00:00+00:00\", \"role_address\": \"D1-R1-D2-R2\", \"vetting_status\": \"active\"}"
+}

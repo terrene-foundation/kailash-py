@@ -85,7 +85,9 @@ def get_adapter(
         )
 
     if provider == "anthropic":
-        from kaizen_agents.delegate.adapters.anthropic_adapter import AnthropicStreamAdapter
+        from kaizen_agents.delegate.adapters.anthropic_adapter import (
+            AnthropicStreamAdapter,
+        )
 
         return AnthropicStreamAdapter(
             api_key=api_key,
@@ -123,6 +125,59 @@ def get_adapter(
     )
 
 
+def get_embedding_adapter(
+    provider: str,
+    *,
+    model: str = "",
+    base_url: str | None = None,
+    **kwargs: Any,
+) -> Any:
+    """Create an embedding adapter for the named provider.
+
+    Currently only ``"ollama"`` is supported.  The returned adapter exposes
+    ``async def embed(inputs, *, model=None) -> list[list[float]]``.
+
+    Parameters
+    ----------
+    provider:
+        Provider identifier.  Currently: ``"ollama"``.
+    model:
+        Default embedding model for the adapter.
+    base_url:
+        Base URL override (for proxies or remote Ollama instances).
+    **kwargs:
+        Extra keyword arguments forwarded to the adapter constructor.
+
+    Returns
+    -------
+    An embedding adapter instance.
+
+    Raises
+    ------
+    ValueError:
+        If the provider name is not recognised.
+    """
+    provider = provider.lower().strip()
+
+    if provider == "ollama":
+        from kaizen_agents.delegate.adapters.ollama_adapter import (
+            OllamaEmbeddingAdapter,
+        )
+
+        adapter_kwargs: dict[str, Any] = {}
+        if base_url:
+            adapter_kwargs["base_url"] = base_url
+        if model:
+            adapter_kwargs["default_model"] = model
+        adapter_kwargs.update(kwargs)
+        return OllamaEmbeddingAdapter(**adapter_kwargs)
+
+    raise ValueError(
+        f"Unknown embedding provider '{provider}'.  "
+        f"Supported embedding providers: ollama"
+    )
+
+
 def get_adapter_for_model(
     model: str,
     *,
@@ -156,7 +211,8 @@ def get_adapter_for_model(
         if model.startswith(prefix):
             logger.debug(
                 "Auto-detected provider '%s' from model prefix '%s'",
-                detected_provider, prefix,
+                detected_provider,
+                prefix,
             )
             return get_adapter(detected_provider, model=model, **kwargs)
 

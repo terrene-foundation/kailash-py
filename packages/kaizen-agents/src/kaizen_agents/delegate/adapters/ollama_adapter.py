@@ -1,12 +1,21 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""Ollama local model streaming chat adapter.
+"""Ollama local model adapters -- streaming chat and embeddings.
 
-Implements the :class:`StreamingChatAdapter` protocol for local Ollama models.
-Uses ``httpx`` for async HTTP streaming against Ollama's ``/api/chat`` endpoint
-(already a dependency of the ``openai`` package).
+Implements the :class:`StreamingChatAdapter` protocol for local Ollama models
+and provides :class:`OllamaEmbeddingAdapter` for the ``/api/embed`` batch
+endpoint.
 
-No additional SDK install is required -- httpx is always available.
+Uses ``httpx`` for async HTTP communication against Ollama's REST API.
+
+Tool-capability detection
+-------------------------
+Not all Ollama model families support tool/function calling.  The
+:data:`OLLAMA_TOOL_CAPABLE_FAMILIES` frozenset lists known families that do,
+and :func:`model_supports_tools` performs the runtime check.  When tools are
+passed to a model that is not in the allowlist, a WARN log is emitted and the
+tools are stripped from the request so the model receives a plain chat prompt
+instead of silently ignoring them.
 """
 
 from __future__ import annotations
@@ -23,6 +32,49 @@ from kaizen_agents.delegate.adapters.protocol import StreamEvent
 logger = logging.getLogger(__name__)
 
 _DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
+
+# ---------------------------------------------------------------------------
+# Tool-capable model allowlist (#366)
+# ---------------------------------------------------------------------------
+
+#: Model families known to support Ollama's tool/function calling feature.
+#: The check is a prefix match against the model name before the first ``:``,
+#: so ``"llama3.1:8b-instruct-q8_0"`` matches ``"llama3.1"``.
+OLLAMA_TOOL_CAPABLE_FAMILIES: frozenset[str] = frozenset(
+    {
+        "llama3.1",
+        "llama3.2",
+        "qwen2.5",
+        "qwen3",
+        "qwq",
+        "mistral-nemo",
+        "mistral-small",
+        "command-r",
+        "command-r-plus",
+        "firefunction-v2",
+        "nemotron",
+    }
+)
+
+
+def model_supports_tools(model_name: str) -> bool:
+    """Return True when *model_name* belongs to a tool-capable family.
+
+    The family is extracted by taking the portion of the model name before
+    the first ``:``.  For example ``"llama3.1:8b-instruct-q8_0"`` yields
+    the family ``"llama3.1"``.
+
+    Parameters
+    ----------
+    model_name:
+        Full Ollama model identifier (e.g. ``"qwen2.5:14b"``).
+
+    Returns
+    -------
+    ``True`` if the model's family is in :data:`OLLAMA_TOOL_CAPABLE_FAMILIES`.
+    """
+    family = model_name.split(":")[0].lower()
+    return family in OLLAMA_TOOL_CAPABLE_FAMILIES
 
 
 class OllamaStreamAdapter:
@@ -81,6 +133,22 @@ class OllamaStreamAdapter:
         resolved_max = (
             max_tokens if max_tokens is not None else self._default_max_tokens
         )
+
+        # (#366) Tool-capability guard: strip tools for models that do not
+        # support function calling, with an explicit WARN so the caller
+        # knows the tools were dropped rather than silently ignored.
+        if tools and resolved_model and not model_supports_tools(resolved_model):
+            family = resolved_model.split(":")[0]
+            logger.warning(
+                "ollama.tools_stripped",
+                extra={
+                    "model": resolved_model,
+                    "family": family,
+                    "tool_count": len(tools),
+                    "reason": "model family not in OLLAMA_TOOL_CAPABLE_FAMILIES",
+                },
+            )
+            tools = None
 
         # Convert messages: Ollama supports a subset of OpenAI format
         # (role/content pairs).  System, user, assistant are supported natively.
@@ -275,6 +343,126 @@ class OllamaStreamAdapter:
             model=resp_model,
             usage=usage,
         )
+
+
+# ---------------------------------------------------------------------------
+# Embedding adapter (#365)
+# ---------------------------------------------------------------------------
+
+_DEFAULT_EMBEDDING_MODEL = "mxbai-embed-large"
+
+
+class OllamaEmbeddingAdapter:
+    """Async embedding adapter for Ollama's ``/api/embed`` batch endpoint.
+
+    Uses the modern ``/api/embed`` endpoint (not the deprecated single-input
+    ``/api/embeddings``) so the full input list is sent in one HTTP round-trip.
+
+    Parameters
+    ----------
+    base_url:
+        Ollama base URL.  Falls back to ``OLLAMA_BASE_URL`` env var or
+        ``http://localhost:11434``.
+    default_model:
+        Embedding model to use when none is supplied per-call.  Defaults to
+        ``mxbai-embed-large`` (1024 dimensions).
+    """
+
+    def __init__(
+        self,
+        *,
+        base_url: str | None = None,
+        default_model: str = _DEFAULT_EMBEDDING_MODEL,
+    ) -> None:
+        self._base_url = (
+            base_url or os.environ.get("OLLAMA_BASE_URL") or _DEFAULT_OLLAMA_BASE_URL
+        ).rstrip("/")
+        self._default_model = default_model
+
+    async def embed(
+        self,
+        inputs: list[str],
+        *,
+        model: str | None = None,
+    ) -> list[list[float]]:
+        """Generate embeddings for a batch of text inputs.
+
+        Parameters
+        ----------
+        inputs:
+            Text strings to embed.
+        model:
+            Override the adapter's default model for this call.
+
+        Returns
+        -------
+        A list of embedding vectors, one per input string.
+
+        Raises
+        ------
+        ConnectionError:
+            If the Ollama server returns a non-200 status.
+        ValueError:
+            If the response shape does not match expectations.
+        """
+        import httpx
+
+        resolved_model = model or self._default_model
+        url = f"{self._base_url}/api/embed"
+
+        request_body: dict[str, Any] = {
+            "model": resolved_model,
+            "input": inputs,
+        }
+
+        logger.debug(
+            "ollama.embed.start",
+            extra={
+                "model": resolved_model,
+                "input_count": len(inputs),
+                "endpoint": url,
+            },
+        )
+
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=10, read=120, write=30, pool=10)
+        ) as client:
+            resp = await client.post(url, json=request_body)
+
+            if resp.status_code != 200:
+                logger.warning(
+                    "ollama.embed.error",
+                    extra={"status": resp.status_code, "body": resp.text[:500]},
+                )
+                raise ConnectionError(
+                    f"Ollama /api/embed returned status {resp.status_code}"
+                )
+
+            data = resp.json()
+
+        embeddings = data.get("embeddings")
+        if embeddings is None:
+            raise ValueError(
+                "Ollama /api/embed response missing 'embeddings' key. "
+                "Ensure Ollama is updated to a version that supports /api/embed."
+            )
+
+        if len(embeddings) != len(inputs):
+            raise ValueError(
+                f"Ollama returned {len(embeddings)} embeddings for "
+                f"{len(inputs)} inputs"
+            )
+
+        logger.debug(
+            "ollama.embed.ok",
+            extra={
+                "model": resolved_model,
+                "input_count": len(inputs),
+                "dimensions": len(embeddings[0]) if embeddings else 0,
+            },
+        )
+
+        return embeddings
 
 
 def _convert_messages_for_ollama(

@@ -1,0 +1,16 @@
+{
+  "description": "Canonical GovernanceVerdict serialization vector",
+  "pact_type": "GovernanceVerdict",
+  "input": {
+    "level": "auto_approved",
+    "reason": "Action falls within all constraint dimensions",
+    "role_address": "D1-R1-D2-R2-T1-R3",
+    "action": "read_document",
+    "effective_envelope_snapshot": { "id": "env-001", "max_spend_usd": 1000.0 },
+    "audit_details": { "checked_dimensions": ["financial", "operational"] },
+    "access_decision": null,
+    "timestamp": "2026-01-15T10:30:00+00:00",
+    "envelope_version": "v1.0"
+  },
+  "expected_canonical_json": "{\"access_decision\": null, \"action\": \"read_document\", \"allowed\": true, \"audit_details\": {\"checked_dimensions\": [\"financial\", \"operational\"]}, \"effective_envelope_snapshot\": {\"id\": \"env-001\", \"max_spend_usd\": 1000.0}, \"envelope_version\": \"v1.0\", \"level\": \"auto_approved\", \"reason\": \"Action falls within all constraint dimensions\", \"role_address\": \"D1-R1-D2-R2-T1-R3\", \"timestamp\": \"2026-01-15T10:30:00+00:00\"}"
+}

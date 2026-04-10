@@ -25,6 +25,7 @@ dependencies = [
     "kailash>=2.7.0",
     "kailash-kaizen>=2.3.2",
     "kailash-pact>=0.4.1",
+    "httpx>=0.27.0",
     "openai>=1.30.0",
     "python-dotenv>=1.0.0",
     "structlog>=23.1.0",

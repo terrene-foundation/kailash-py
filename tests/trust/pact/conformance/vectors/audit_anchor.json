@@ -1,0 +1,19 @@
+{
+  "description": "Canonical AuditAnchor (N4) serialization vector",
+  "pact_type": "AuditAnchor",
+  "conformance_requirement": "N4",
+  "input": {
+    "anchor_id": "anc-n4-001",
+    "sequence": 0,
+    "previous_hash": null,
+    "agent_id": "agent-conformance-001",
+    "action": "envelope_created",
+    "verification_level": "AUTO_APPROVED",
+    "envelope_id": "env-001",
+    "result": "success",
+    "metadata": { "pact_action": "envelope_created", "role_address": "D1-R1" },
+    "timestamp": "2026-01-15T10:30:00+00:00"
+  },
+  "expected_content_hash": "3cad9e6dcf14bad42713dfe188a11b25869dd6bcf3290ba2341fa0abf8c41df0",
+  "expected_canonical_json": "{\"action\": \"envelope_created\", \"agent_id\": \"agent-conformance-001\", \"anchor_id\": \"anc-n4-001\", \"content_hash\": \"3cad9e6dcf14bad42713dfe188a11b25869dd6bcf3290ba2341fa0abf8c41df0\", \"envelope_id\": \"env-001\", \"metadata\": {\"pact_action\": \"envelope_created\", \"role_address\": \"D1-R1\"}, \"previous_hash\": null, \"result\": \"success\", \"sequence\": 0, \"timestamp\": \"2026-01-15T10:30:00+00:00\", \"verification_level\": \"AUTO_APPROVED\"}"
+}

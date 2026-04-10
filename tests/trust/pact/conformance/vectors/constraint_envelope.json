@@ -1,0 +1,36 @@
+{
+  "description": "Canonical ConstraintEnvelopeConfig serialization vector",
+  "pact_type": "ConstraintEnvelopeConfig",
+  "input": {
+    "id": "test-envelope-001",
+    "description": "Conformance test envelope",
+    "confidentiality_clearance": "confidential",
+    "financial": {
+      "max_spend_usd": 1000.0,
+      "api_cost_budget_usd": 500.0,
+      "requires_approval_above_usd": 100.0
+    },
+    "operational": {
+      "allowed_actions": ["read", "write", "deploy"],
+      "blocked_actions": ["delete_production"],
+      "max_actions_per_day": 100
+    },
+    "temporal": {
+      "active_hours_start": "09:00",
+      "active_hours_end": "17:00",
+      "timezone": "UTC"
+    },
+    "data_access": {
+      "read_paths": ["/data/public", "/data/team"],
+      "write_paths": ["/data/team"],
+      "blocked_data_types": ["pii"]
+    },
+    "communication": {
+      "internal_only": false,
+      "allowed_channels": ["slack", "email"],
+      "external_requires_approval": true
+    },
+    "max_delegation_depth": 3
+  },
+  "expected_canonical_json": "{\"communication\": {\"allowed_channels\": [\"slack\", \"email\"], \"external_requires_approval\": true, \"internal_only\": false, \"reasoning_required\": false}, \"confidentiality_clearance\": \"confidential\", \"data_access\": {\"blocked_data_types\": [\"pii\"], \"read_paths\": [\"/data/public\", \"/data/team\"], \"reasoning_required\": false, \"write_paths\": [\"/data/team\"]}, \"description\": \"Conformance test envelope\", \"expires_at\": null, \"financial\": {\"api_cost_budget_usd\": 500.0, \"max_spend_usd\": 1000.0, \"reasoning_required\": false, \"requires_approval_above_usd\": 100.0}, \"id\": \"test-envelope-001\", \"max_delegation_depth\": 3, \"operational\": {\"allowed_actions\": [\"read\", \"write\", \"deploy\"], \"blocked_actions\": [\"delete_production\"], \"max_actions_per_day\": 100, \"max_actions_per_hour\": null, \"rate_limit_window_type\": \"fixed\", \"reasoning_required\": false}, \"temporal\": {\"active_hours_end\": \"17:00\", \"active_hours_start\": \"09:00\", \"blackout_periods\": [], \"reasoning_required\": false, \"timezone\": \"UTC\"}}"
+}

@@ -24,14 +24,14 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from kailash.trust.pact.config import ConfidentialityLevel, TrustPostureLevel
 from kailash.trust.pact.clearance import (
+    _CLEARANCE_ORDER,
     RoleClearance,
     VettingStatus,
-    _CLEARANCE_ORDER,
     effective_clearance,
 )
 from kailash.trust.pact.compilation import CompiledOrg
+from kailash.trust.pact.config import ConfidentialityLevel, TrustPostureLevel
 from kailash.trust.pact.knowledge import KnowledgeItem
 
 logger = logging.getLogger(__name__)
@@ -142,6 +142,47 @@ class AccessDecision:
     step_failed: int | None = None  # 1-5, or None if allowed
     audit_details: dict[str, Any] = field(default_factory=dict)
     valid_until: datetime | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a plain dict suitable for JSON encoding.
+
+        Returns:
+            A dict representation of this access decision.
+            Datetimes serialize as ``.isoformat()``.
+        """
+        return {
+            "allowed": self.allowed,
+            "reason": self.reason,
+            "step_failed": self.step_failed,
+            "audit_details": self.audit_details,
+            "valid_until": (
+                self.valid_until.isoformat() if self.valid_until is not None else None
+            ),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AccessDecision:
+        """Deserialize from a dictionary.
+
+        Args:
+            data: Dict with serialized AccessDecision fields.
+
+        Returns:
+            An AccessDecision instance.
+
+        Raises:
+            KeyError: If required fields are missing.
+        """
+        valid_until = data.get("valid_until")
+        if isinstance(valid_until, str):
+            valid_until = datetime.fromisoformat(valid_until)
+        return cls(
+            allowed=data["allowed"],
+            reason=data["reason"],
+            step_failed=data.get("step_failed"),
+            audit_details=data.get("audit_details", {}),
+            valid_until=valid_until,
+        )
 
 
 # ---------------------------------------------------------------------------

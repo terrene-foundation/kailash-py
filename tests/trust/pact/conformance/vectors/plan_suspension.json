@@ -1,0 +1,21 @@
+{
+  "description": "Canonical PlanSuspension (N3) serialization vector",
+  "pact_type": "PlanSuspension",
+  "conformance_requirement": "N3",
+  "input": {
+    "plan_id": "plan-deploy-001",
+    "trigger": "budget",
+    "suspended_at": "2026-01-15T10:30:00+00:00",
+    "resume_conditions": [
+      {
+        "condition_type": "budget_replenished",
+        "satisfied": false,
+        "details": "Budget exhausted: $950/$1000 spent"
+      }
+    ],
+    "snapshot": { "last_action": "deploy_staging", "actions_completed": 47 },
+    "role_address": "D1-R1-D2-R2-T1-R3",
+    "suspension_id": "susp-n3-001"
+  },
+  "expected_canonical_json": "{\"plan_id\": \"plan-deploy-001\", \"resume_conditions\": [{\"condition_type\": \"budget_replenished\", \"details\": \"Budget exhausted: $950/$1000 spent\", \"satisfied\": false}], \"role_address\": \"D1-R1-D2-R2-T1-R3\", \"snapshot\": {\"actions_completed\": 47, \"last_action\": \"deploy_staging\"}, \"suspended_at\": \"2026-01-15T10:30:00+00:00\", \"suspension_id\": \"susp-n3-001\", \"trigger\": \"budget\"}"
+}

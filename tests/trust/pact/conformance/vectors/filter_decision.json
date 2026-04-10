@@ -1,0 +1,32 @@
+{
+  "description": "Canonical FilterDecision (N1) serialization vectors",
+  "pact_type": "FilterDecision",
+  "conformance_requirement": "N1",
+  "vectors": [
+    {
+      "name": "filter_allowed_with_narrowed_scope",
+      "input": {
+        "allowed": true,
+        "filtered_scope": {
+          "item_ids": ["doc-1", "doc-2"],
+          "classifications": ["public", "restricted"],
+          "owning_units": ["D1-R1-D2"],
+          "description": "Narrowed to team-visible documents"
+        },
+        "reason": "Query narrowed to role clearance scope",
+        "audit_anchor_id": "anchor-n1-001"
+      },
+      "expected_canonical_json": "{\"allowed\": true, \"audit_anchor_id\": \"anchor-n1-001\", \"filtered_scope\": {\"classifications\": [\"public\", \"restricted\"], \"description\": \"Narrowed to team-visible documents\", \"item_ids\": [\"doc-1\", \"doc-2\"], \"owning_units\": [\"D1-R1-D2\"]}, \"reason\": \"Query narrowed to role clearance scope\"}"
+    },
+    {
+      "name": "filter_denied",
+      "input": {
+        "allowed": false,
+        "filtered_scope": null,
+        "reason": "Role lacks clearance for requested classifications",
+        "audit_anchor_id": "anchor-n1-002"
+      },
+      "expected_canonical_json": "{\"allowed\": false, \"audit_anchor_id\": \"anchor-n1-002\", \"filtered_scope\": null, \"reason\": \"Role lacks clearance for requested classifications\"}"
+    }
+  ]
+}

@@ -141,6 +141,18 @@ class BaseAgentConfig:
 
         self._validate_parameters()
 
+    @property
+    def has_structured_output(self) -> bool:
+        """Check if this config requests structured output from the LLM.
+
+        Structured output (JSON mode / JSON schema) is incompatible with
+        function calling on some providers (notably Gemini).  This property
+        lets callers decide whether to inject tool-calling features.
+        """
+        if self.structured_output_mode == "off":
+            return False
+        return self.response_format is not None
+
     def _migrate_provider_config(self):
         """Migrate structured output keys from provider_config to response_format."""
         import warnings

@@ -15,13 +15,11 @@ Adapters:
     openai_stream   -- Low-level OpenAI SSE stream processor (internal)
 """
 
-from kaizen_agents.delegate.adapters.protocol import (
-    StreamEvent,
-    StreamingChatAdapter,
-)
+from kaizen_agents.delegate.adapters.protocol import StreamEvent, StreamingChatAdapter
 from kaizen_agents.delegate.adapters.registry import (
     get_adapter,
     get_adapter_for_model,
+    get_embedding_adapter,
 )
 
 __all__ = [
@@ -29,4 +27,5 @@ __all__ = [
     "StreamingChatAdapter",
     "get_adapter",
     "get_adapter_for_model",
+    "get_embedding_adapter",
 ]

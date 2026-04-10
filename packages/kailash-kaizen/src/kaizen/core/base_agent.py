@@ -180,16 +180,31 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         self.control_protocol = control_protocol
 
         # MCP initialization
+        # When mcp_servers is not specified (None), auto-inject the builtin
+        # MCP server UNLESS the config requests structured output.  Gemini
+        # (and potentially other providers) reject requests that combine
+        # function calling with JSON response mode (response_mime_type).
+        # Structured output takes priority over auto-tool discovery.
+        # See: https://github.com/terrene-foundation/kailash-py/issues/357
         if mcp_servers is None:
-            self._mcp_servers = [
-                {
-                    "name": "kaizen_builtin",
-                    "command": "python",
-                    "args": ["-m", "kaizen.mcp.builtin_server"],
-                    "transport": "stdio",
-                    "description": "Kaizen builtin tools (file, HTTP, bash, web)",
-                }
-            ]
+            if self.config.has_structured_output:
+                logger.debug(
+                    "MCP auto-discovery suppressed: config has structured output "
+                    "enabled (response_format=%s), which is incompatible with "
+                    "function calling on some providers (e.g. Gemini).",
+                    self.config.response_format,
+                )
+                self._mcp_servers = []
+            else:
+                self._mcp_servers = [
+                    {
+                        "name": "kaizen_builtin",
+                        "command": "python",
+                        "args": ["-m", "kaizen.mcp.builtin_server"],
+                        "transport": "stdio",
+                        "description": "Kaizen builtin tools (file, HTTP, bash, web)",
+                    }
+                ]
         else:
             self._mcp_servers = mcp_servers
 

@@ -1,5 +1,6 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
+# isort: skip_file
 """Unit tests for Ollama adapter bug fixes (#361, #363, #364, #367a-c)."""
 
 from __future__ import annotations
@@ -9,6 +10,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from kaizen_agents.delegate.adapters.ollama_adapter import (
     OllamaStreamAdapter,
     _convert_messages_for_ollama,
@@ -132,13 +134,13 @@ class TestStreamDisablesWhenToolsPresent:
     async def test_stream_false_with_tools(self) -> None:
         adapter = OllamaStreamAdapter(
             base_url="http://localhost:11434",
-            default_model="llama3",
+            default_model="llama3.1",
         )
 
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "model": "llama3",
+            "model": "llama3.1",
             "message": {"role": "assistant", "content": "Hello"},
             "done": True,
             "prompt_eval_count": 10,
@@ -173,7 +175,7 @@ class TestStreamDisablesWhenToolsPresent:
     async def test_stream_true_without_tools(self) -> None:
         adapter = OllamaStreamAdapter(
             base_url="http://localhost:11434",
-            default_model="llama3",
+            default_model="llama3.1",
         )
 
         # For the streaming path we need to mock the stream context manager.
@@ -188,7 +190,7 @@ class TestStreamDisablesWhenToolsPresent:
                 yield json.dumps(
                     {
                         "message": {"content": "hi"},
-                        "model": "llama3",
+                        "model": "llama3.1",
                         "done": True,
                         "prompt_eval_count": 1,
                         "eval_count": 1,
@@ -255,13 +257,13 @@ class TestKwargsMergesOptions:
     async def test_options_merged_not_replaced(self) -> None:
         adapter = OllamaStreamAdapter(
             base_url="http://localhost:11434",
-            default_model="llama3",
+            default_model="llama3.1",
         )
 
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "model": "llama3",
+            "model": "llama3.1",
             "message": {"role": "assistant", "content": "ok"},
             "done": True,
             "prompt_eval_count": 5,
@@ -312,13 +314,13 @@ class TestToolCallIdsUniqueAcrossTurns:
     async def test_ids_unique_across_multiple_tool_calls(self) -> None:
         adapter = OllamaStreamAdapter(
             base_url="http://localhost:11434",
-            default_model="llama3",
+            default_model="llama3.1",
         )
 
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "model": "llama3",
+            "model": "llama3.1",
             "message": {
                 "role": "assistant",
                 "content": "",

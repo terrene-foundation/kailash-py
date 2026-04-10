@@ -21,6 +21,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 from kailash.trust.pact.config import ConfidentialityLevel, TrustPostureLevel
 
@@ -163,3 +164,50 @@ class RoleClearance:
     vetting_status: VettingStatus = VettingStatus.ACTIVE
     review_at: datetime | None = None
     nda_signed: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a plain dict suitable for JSON encoding.
+
+        Returns:
+            A dict representation of this clearance assignment.
+            Enums serialize as ``.value``, datetimes as ``.isoformat()``,
+            frozensets as sorted lists (deterministic ordering).
+        """
+        return {
+            "role_address": self.role_address,
+            "max_clearance": self.max_clearance.value,
+            "compartments": sorted(self.compartments),
+            "granted_by_role_address": self.granted_by_role_address,
+            "vetting_status": self.vetting_status.value,
+            "review_at": (
+                self.review_at.isoformat() if self.review_at is not None else None
+            ),
+            "nda_signed": self.nda_signed,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> RoleClearance:
+        """Deserialize from a dictionary.
+
+        Args:
+            data: Dict with serialized RoleClearance fields.
+
+        Returns:
+            A RoleClearance instance.
+
+        Raises:
+            KeyError: If required fields are missing.
+            ValueError: If enum values are invalid.
+        """
+        review_at = data.get("review_at")
+        if isinstance(review_at, str):
+            review_at = datetime.fromisoformat(review_at)
+        return cls(
+            role_address=data["role_address"],
+            max_clearance=ConfidentialityLevel(data["max_clearance"]),
+            compartments=frozenset(data.get("compartments", [])),
+            granted_by_role_address=data.get("granted_by_role_address", ""),
+            vetting_status=VettingStatus(data.get("vetting_status", "active")),
+            review_at=review_at,
+            nda_signed=data.get("nda_signed", False),
+        )

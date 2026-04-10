@@ -1,0 +1,15 @@
+{
+  "description": "Canonical Observation (N5) serialization vector",
+  "pact_type": "Observation",
+  "conformance_requirement": "N5",
+  "input": {
+    "event_type": "verdict",
+    "role_address": "D1-R1-D2-R2-T1-R3",
+    "timestamp": "2026-01-15T10:30:00+00:00",
+    "level": "info",
+    "payload": { "verdict_level": "auto_approved", "action": "read_document" },
+    "correlation_id": "corr-n5-001",
+    "observation_id": "obs-n5-001"
+  },
+  "expected_canonical_json": "{\"correlation_id\": \"corr-n5-001\", \"event_type\": \"verdict\", \"level\": \"info\", \"observation_id\": \"obs-n5-001\", \"payload\": {\"action\": \"read_document\", \"verdict_level\": \"auto_approved\"}, \"role_address\": \"D1-R1-D2-R2-T1-R3\", \"timestamp\": \"2026-01-15T10:30:00+00:00\"}"
+}
