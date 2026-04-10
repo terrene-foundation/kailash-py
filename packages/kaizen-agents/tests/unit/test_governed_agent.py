@@ -147,7 +147,7 @@ class TestPostureCeiling:
         governed = L3GovernedAgent(
             agent,
             envelope=envelope,
-            posture=AgentPosture.DELEGATED,
+            posture=AgentPosture.DELEGATING,
             mcp_servers=[],
         )
         # Posture should be clamped down to supervised

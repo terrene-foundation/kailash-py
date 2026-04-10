@@ -67,7 +67,51 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["Delegate"]
+__all__ = ["Delegate", "ConstructorIOError", "ToolRegistryCollisionError"]
+
+
+# ---------------------------------------------------------------------------
+# Exceptions (SPEC-05 SS9.1, SS9.3)
+# ---------------------------------------------------------------------------
+
+
+class ConstructorIOError(RuntimeError):
+    """Raised when an outbound IO call is detected inside Delegate.__init__.
+
+    The Delegate constructor MUST be synchronous and free of any network,
+    filesystem, or subprocess calls.  MCP server discovery is deferred to
+    the first ``run()`` call via ``_ensure_mcp_configured()``.
+
+    See SPEC-05 SS9.1 for the full constructor security model.
+    """
+
+    def __init__(self, operation: str) -> None:
+        self.operation = operation
+        super().__init__(
+            f"Outbound IO detected in Delegate constructor: {operation}. "
+            f"IO is banned in __init__ to prevent deadlocks and credential "
+            f"leaks during construction. Use the deferred MCP pattern: pass "
+            f"mcp_servers= and let run() trigger discovery. "
+            f"See SPEC-05 SS9.1."
+        )
+
+
+class ToolRegistryCollisionError(ValueError):
+    """Raised when two tools with the same name are registered.
+
+    Attributes:
+        tool_name: The colliding tool name.
+        sources: The source identifiers that both registered the name.
+    """
+
+    def __init__(self, tool_name: str, sources: list[str]) -> None:
+        self.tool_name = tool_name
+        self.sources = sources
+        super().__init__(
+            f"Tool name collision: '{tool_name}' is registered by multiple "
+            f"sources: {sources}. Use distinct tool names or namespaced "
+            f"server names to avoid collisions."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -261,39 +305,63 @@ class Delegate:
     model:
         LLM model name (e.g., ``"claude-sonnet-4-20250514"``).
         Falls back to ``DEFAULT_LLM_MODEL`` env var if empty.
+    signature:
+        Optional Signature class for structured I/O.  When provided,
+        enables structured outputs on the inner BaseAgent.
     tools:
         List of tool names or a pre-built :class:`ToolRegistry`.
         When a list of strings is given, the Delegate creates an empty
         registry (tools must be registered separately).
     system_prompt:
         Override the default system prompt.
+    temperature:
+        Optional LLM temperature override.
+    max_tokens:
+        Optional max completion tokens override.
     max_turns:
         Maximum tool-calling loops per ``run()`` call.
+    mcp_servers:
+        Optional list of MCP server configurations.  Discovery is
+        deferred to the first ``run()`` call (no IO in constructor).
     budget_usd:
         Optional USD budget cap.  When set, the Delegate tracks
         estimated cost per turn and yields :class:`BudgetExhausted`
         when the budget is exceeded.
+    envelope:
+        Optional :class:`ConstraintEnvelope` for L3 governance.
+        When provided, wraps the inner agent with :class:`L3GovernedAgent`.
+    api_key:
+        Optional API key for the LLM provider.  Read from env if not set.
+    base_url:
+        Optional base URL override for the LLM provider endpoint.
+    inner_agent:
+        Optional pre-built :class:`BaseAgent` escape hatch.  When provided,
+        the Delegate wraps this agent directly instead of constructing one.
     adapter:
         Optional pre-built :class:`StreamingChatAdapter`.
     config:
         Optional pre-built :class:`KzConfig`.  When provided, ``model``,
         ``max_turns``, and other config fields are ignored.
-    envelope:
-        Optional :class:`ConstraintEnvelope` for L3 governance.
-        When provided, wraps the inner agent with :class:`L3GovernedAgent`.
     """
 
     def __init__(
         self,
         model: str = "",
         *,
+        signature: type[Signature] | None = None,
         tools: ToolRegistry | list[str] | None = None,
         system_prompt: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
         max_turns: int = 50,
+        mcp_servers: list[dict[str, Any]] | None = None,
         budget_usd: float | None = None,
+        envelope: ConstraintEnvelope | None = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        inner_agent: BaseAgent | None = None,
         adapter: StreamingChatAdapter | None = None,
         config: KzConfig | None = None,
-        envelope: ConstraintEnvelope | None = None,
     ) -> None:
         # Validate budget (safety guard -- permitted deterministic logic)
         if budget_usd is not None:
@@ -301,6 +369,16 @@ class Delegate:
                 raise ValueError("budget_usd must be finite")
             if budget_usd < 0:
                 raise ValueError("budget_usd must be non-negative")
+
+        # Store new parameters for wrapper/introspection access
+        self._signature = signature
+        self._api_key = api_key
+        self._base_url = base_url
+        self._inner_agent = inner_agent
+
+        # Deferred MCP configuration -- no IO in constructor (SPEC-05 SS9.1)
+        self._deferred_mcp = list(mcp_servers) if mcp_servers else None
+        self._mcp_configured = False
 
         # Resolve model from env if not provided
         resolved_model = model or os.environ.get("DEFAULT_LLM_MODEL", "")
@@ -587,15 +665,13 @@ class Delegate:
             loop = None
 
         if loop is not None and loop.is_running():
-            # Already in an async context -- cannot use asyncio.run()
-            # Use a background thread instead
-            import concurrent.futures
+            raise RuntimeError(
+                "Delegate.run_sync() cannot be called from inside a running "
+                "event loop (Jupyter, FastAPI handler, Nexus channel, async "
+                "test). Use `async for event in delegate.run(...)` instead."
+            )
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(asyncio.run, _collect())
-                return future.result()
-        else:
-            return asyncio.run(_collect())
+        return asyncio.run(_collect())
 
     def interrupt(self) -> None:
         """Signal the Delegate to stop after the current operation."""
@@ -604,6 +680,29 @@ class Delegate:
     def close(self) -> None:
         """Mark the Delegate as closed. Subsequent ``run()`` calls will fail."""
         self._closed = True
+
+    # ------------------------------------------------------------------
+    # Introspection (SPEC-05 SS5 public API surface)
+    # ------------------------------------------------------------------
+
+    @property
+    def core_agent(self) -> BaseAgent:
+        """The innermost BaseAgent (or user-provided inner_agent)."""
+        # Walk the wrapper stack via _loop_agent to the bottom
+        agent = self._loop_agent
+        while hasattr(agent, "_inner"):
+            agent = agent._inner
+        return agent
+
+    @property
+    def signature(self) -> type[Signature] | None:
+        """The Signature class passed to the constructor, or None."""
+        return self._signature
+
+    @property
+    def model(self) -> str:
+        """The resolved model name."""
+        return self._config.model or ""
 
     def __repr__(self) -> str:
         budget_str = (

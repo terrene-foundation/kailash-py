@@ -35,7 +35,11 @@ Sub-modules:
     - ``config/``: Three-level config loader
 """
 
-from kaizen_agents.delegate.delegate import Delegate
+from kaizen_agents.delegate.delegate import (
+    ConstructorIOError,
+    Delegate,
+    ToolRegistryCollisionError,
+)
 from kaizen_agents.delegate.events import (
     BudgetExhausted,
     DelegateEvent,
@@ -48,6 +52,8 @@ from kaizen_agents.delegate.events import (
 
 __all__ = [
     "Delegate",
+    "ConstructorIOError",
+    "ToolRegistryCollisionError",
     "DelegateEvent",
     "TextDelta",
     "ToolCallStart",
