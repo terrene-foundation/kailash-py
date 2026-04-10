@@ -44,15 +44,19 @@ Created: 2025-10-04 (Phase 3, Multi-Agent Patterns)
 """
 
 import json
+import logging
 import os
 import uuid
+import warnings
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.memory.shared_memory import SharedMemoryPool
-from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # Signature Definitions
@@ -93,11 +97,10 @@ class HandoffAgent(BaseAgent):
     """
     HandoffAgent: Evaluates task complexity and executes or escalates.
 
-    Responsibilities:
-    - Evaluate task complexity at current tier level
-    - Execute task if within capability
-    - Make handoff decision if too complex
-    - Write handoff decisions to shared memory
+    .. deprecated:: 0.9.0
+        Use a plain ``BaseAgent`` with ``TaskEvaluationSignature`` and pass it
+        to ``HandoffPattern``. Tier-level behaviour should come from the
+        agent's system prompt. This subclass will be removed in v1.0.
 
     Shared Memory Behavior:
     - Writes handoff decisions with tags: ["handoff", "tier", execution_id, "tier_<N>"]
@@ -121,6 +124,13 @@ class HandoffAgent(BaseAgent):
             tier_level: Tier level (1=basic, higher=more capable)
             agent_id: Unique identifier for this agent
         """
+        warnings.warn(
+            "HandoffAgent is deprecated since v0.9.0. "
+            "Use a plain BaseAgent with TaskEvaluationSignature instead. "
+            "This subclass will be removed in v1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             config=config,
             signature=TaskEvaluationSignature(),
@@ -129,7 +139,7 @@ class HandoffAgent(BaseAgent):
         )
         self.tier_level = tier_level
 
-    def evaluate_task(self, task: str, context: str = "") -> Dict[str, Any]:
+    def evaluate_task(self, task: str, context: str = "") -> dict[str, Any]:
         """
         Evaluate if this tier can handle the task.
 
@@ -219,7 +229,7 @@ class HandoffAgent(BaseAgent):
 
         return evaluation
 
-    def execute_task(self, task: str, context: str = "") -> Dict[str, Any]:
+    def execute_task(self, task: str, context: str = "") -> dict[str, Any]:
         """
         Execute task at this tier level.
 
@@ -288,11 +298,11 @@ class HandoffPattern(BaseMultiAgentPattern):
         shared_memory: SharedMemoryPool for coordination
     """
 
-    tiers: Dict[int, HandoffAgent]
+    tiers: dict[int, HandoffAgent]
 
     def execute_with_handoff(
         self, task: str, context: str = "", max_tier: int = 3
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute task with automatic handoff/escalation.
 
@@ -397,7 +407,7 @@ class HandoffPattern(BaseMultiAgentPattern):
         """
         self.tiers[tier_level] = agent
 
-    def get_handoff_history(self, execution_id: str) -> List[Dict[str, Any]]:
+    def get_handoff_history(self, execution_id: str) -> list[dict[str, Any]]:
         """
         Get handoff history for an execution.
 
@@ -451,14 +461,16 @@ class HandoffPattern(BaseMultiAgentPattern):
             return False
 
         # Check all agents have same shared memory
-        for tier_level, agent in self.tiers.items():
-            if hasattr(agent, "shared_memory"):
-                if agent.shared_memory is not self.shared_memory:
-                    return False
+        for _tier_level, agent in self.tiers.items():
+            if (
+                hasattr(agent, "shared_memory")
+                and agent.shared_memory is not self.shared_memory
+            ):
+                return False
 
         return True
 
-    def get_agents(self) -> List[BaseAgent]:
+    def get_agents(self) -> list[BaseAgent]:
         """
         Get all agents in this pattern.
 
@@ -467,7 +479,7 @@ class HandoffPattern(BaseMultiAgentPattern):
         """
         return list(self.tiers.values())
 
-    def get_agent_ids(self) -> List[str]:
+    def get_agent_ids(self) -> list[str]:
         """
         Get all agent IDs in this pattern.
 
@@ -484,13 +496,13 @@ class HandoffPattern(BaseMultiAgentPattern):
 
 def create_handoff_pattern(
     num_tiers: int = 3,
-    llm_provider: Optional[str] = None,
-    model: Optional[str] = None,
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-    shared_memory: Optional[SharedMemoryPool] = None,
-    tier_configs: Optional[Dict[int, Dict[str, Any]]] = None,
-    tiers: Optional[Dict[int, HandoffAgent]] = None,
+    llm_provider: str | None = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    shared_memory: SharedMemoryPool | None = None,
+    tier_configs: dict[int, dict[str, Any]] | None = None,
+    tiers: dict[int, HandoffAgent] | None = None,
 ) -> HandoffPattern:
     """
     Create handoff pattern with zero-config defaults.

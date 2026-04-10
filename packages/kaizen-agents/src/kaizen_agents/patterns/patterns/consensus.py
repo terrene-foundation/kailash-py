@@ -44,16 +44,17 @@ Reference: examples/2-multi-agent/consensus-voting/ (when created)
 import json
 import os
 import uuid
+import warnings
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from kaizen.tools.registry import ToolRegistry
 
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.memory.shared_memory import SharedMemoryPool
-from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
 
 # ============================================================================
 # Signature Definitions
@@ -103,11 +104,9 @@ class ProposerAgent(BaseAgent):
     """
     ProposerAgent: Creates proposals for voting.
 
-    Responsibilities:
-    - Create detailed proposals from topics
-    - Provide rationale for proposals
-    - Write proposals to shared memory
-    - Generate unique proposal IDs
+    .. deprecated:: 0.9.0
+        Use a plain ``BaseAgent`` with ``ProposalCreationSignature``. This
+        subclass will be removed in v1.0.
 
     Shared Memory Behavior:
     - Writes proposals with tags: ["proposal", request_id]
@@ -120,7 +119,7 @@ class ProposerAgent(BaseAgent):
         config: BaseAgentConfig,
         shared_memory: SharedMemoryPool,
         agent_id: str,
-        mcp_servers: Optional[List[Dict]] = None,
+        mcp_servers: list[dict] | None = None,
         tool_registry: Optional["ToolRegistry"] = None,
     ):
         """
@@ -133,6 +132,13 @@ class ProposerAgent(BaseAgent):
             mcp_servers: Optional MCP server configurations for tool discovery
             tool_registry: Optional tool registry for tool documentation injection
         """
+        warnings.warn(
+            "ProposerAgent is deprecated since v0.9.0. "
+            "Use a plain BaseAgent with ProposalCreationSignature instead. "
+            "This subclass will be removed in v1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             config=config,
             signature=ProposalCreationSignature(),
@@ -142,7 +148,7 @@ class ProposerAgent(BaseAgent):
         )
         self.tool_registry = tool_registry
 
-    def create_proposal(self, topic: str, context: str = "") -> Dict[str, Any]:
+    def create_proposal(self, topic: str, context: str = "") -> dict[str, Any]:
         """
         Create a proposal for voting.
 
@@ -196,12 +202,10 @@ class VoterAgent(BaseAgent):
     """
     VoterAgent: Evaluates proposals and casts votes.
 
-    Responsibilities:
-    - Read proposals from shared memory
-    - Evaluate proposals from specific perspective
-    - Cast votes (approve/reject/abstain)
-    - Provide reasoning and confidence
-    - Write votes to shared memory
+    .. deprecated:: 0.9.0
+        Use a plain ``BaseAgent`` with ``VotingSignature`` and set the
+        perspective via ``system_prompt``. This subclass will be removed
+        in v1.0.
 
     Shared Memory Behavior:
     - Reads proposals with tags: ["proposal"]
@@ -216,7 +220,7 @@ class VoterAgent(BaseAgent):
         shared_memory: SharedMemoryPool,
         agent_id: str,
         perspective: str = "general",
-        mcp_servers: Optional[List[Dict]] = None,
+        mcp_servers: list[dict] | None = None,
         tool_registry: Optional["ToolRegistry"] = None,
     ):
         """
@@ -230,6 +234,14 @@ class VoterAgent(BaseAgent):
             mcp_servers: Optional MCP server configurations for tool discovery
             tool_registry: Optional tool registry for tool documentation injection
         """
+        warnings.warn(
+            "VoterAgent is deprecated since v0.9.0. "
+            "Use a plain BaseAgent with VotingSignature and set the "
+            "perspective via system_prompt. "
+            "This subclass will be removed in v1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             config=config,
             signature=VotingSignature(),
@@ -240,7 +252,7 @@ class VoterAgent(BaseAgent):
         self.perspective = perspective
         self.tool_registry = tool_registry
 
-    def get_proposals(self) -> List[Dict[str, Any]]:
+    def get_proposals(self) -> list[dict[str, Any]]:
         """
         Get all proposals from shared memory.
 
@@ -269,7 +281,7 @@ class VoterAgent(BaseAgent):
 
         return proposals
 
-    def vote(self, proposal: Dict[str, Any]) -> Dict[str, Any]:
+    def vote(self, proposal: dict[str, Any]) -> dict[str, Any]:
         """
         Vote on a proposal.
 
@@ -344,12 +356,9 @@ class AggregatorAgent(BaseAgent):
     """
     AggregatorAgent: Tallies votes and determines consensus.
 
-    Responsibilities:
-    - Read votes from shared memory
-    - Tally votes by proposal
-    - Determine if consensus reached (>50% approve)
-    - Provide vote summary
-    - Return final decision
+    .. deprecated:: 0.9.0
+        Use a plain ``BaseAgent`` with ``ConsensusAggregationSignature``. This
+        subclass will be removed in v1.0.
 
     Shared Memory Behavior:
     - Reads votes with tags: ["vote", proposal_id]
@@ -361,7 +370,7 @@ class AggregatorAgent(BaseAgent):
         config: BaseAgentConfig,
         shared_memory: SharedMemoryPool,
         agent_id: str,
-        mcp_servers: Optional[List[Dict]] = None,
+        mcp_servers: list[dict] | None = None,
         tool_registry: Optional["ToolRegistry"] = None,
     ):
         """
@@ -374,6 +383,13 @@ class AggregatorAgent(BaseAgent):
             mcp_servers: Optional MCP server configurations for tool discovery
             tool_registry: Optional tool registry for tool documentation injection
         """
+        warnings.warn(
+            "AggregatorAgent is deprecated since v0.9.0. "
+            "Use a plain BaseAgent with ConsensusAggregationSignature instead. "
+            "This subclass will be removed in v1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             config=config,
             signature=ConsensusAggregationSignature(),
@@ -383,7 +399,7 @@ class AggregatorAgent(BaseAgent):
         )
         self.tool_registry = tool_registry
 
-    def aggregate_votes(self, proposal_id: str) -> Dict[str, Any]:
+    def aggregate_votes(self, proposal_id: str) -> dict[str, Any]:
         """
         Aggregate votes for a proposal and determine consensus.
 
@@ -427,10 +443,9 @@ class AggregatorAgent(BaseAgent):
             for insight in proposal_insights:
                 try:
                     content = insight.get("content", "{}")
-                    if isinstance(content, str):
-                        proposal_data = json.loads(content)
-                    else:
-                        proposal_data = content
+                    proposal_data = (
+                        json.loads(content) if isinstance(content, str) else content
+                    )
 
                     if proposal_data.get("proposal_id") == proposal_id:
                         proposal_text = proposal_data.get("proposal", "")
@@ -520,10 +535,10 @@ class ConsensusPattern(BaseMultiAgentPattern):
     """
 
     proposer: ProposerAgent
-    voters: List[VoterAgent]
+    voters: list[VoterAgent]
     aggregator: AggregatorAgent
 
-    def create_proposal(self, topic: str, context: str = "") -> Dict[str, Any]:
+    def create_proposal(self, topic: str, context: str = "") -> dict[str, Any]:
         """
         Convenience method: Create proposal.
 
@@ -536,7 +551,7 @@ class ConsensusPattern(BaseMultiAgentPattern):
         """
         return self.proposer.create_proposal(topic, context)
 
-    def collect_votes(self, proposal_id: str) -> List[Dict[str, Any]]:
+    def collect_votes(self, proposal_id: str) -> list[dict[str, Any]]:
         """
         Convenience method: Collect all votes for proposal.
 
@@ -570,7 +585,7 @@ class ConsensusPattern(BaseMultiAgentPattern):
 
         return votes
 
-    def determine_consensus(self, proposal_id: str) -> Dict[str, Any]:
+    def determine_consensus(self, proposal_id: str) -> dict[str, Any]:
         """
         Convenience method: Determine consensus.
 
@@ -582,7 +597,7 @@ class ConsensusPattern(BaseMultiAgentPattern):
         """
         return self.aggregator.aggregate_votes(proposal_id)
 
-    def get_agents(self) -> List[BaseAgent]:
+    def get_agents(self) -> list[BaseAgent]:
         """
         Get all agents in this pattern.
 
@@ -597,7 +612,7 @@ class ConsensusPattern(BaseMultiAgentPattern):
             agents.append(self.aggregator)
         return agents
 
-    def get_agent_ids(self) -> List[str]:
+    def get_agent_ids(self) -> list[str]:
         """
         Get all agent IDs in this pattern.
 
@@ -606,7 +621,7 @@ class ConsensusPattern(BaseMultiAgentPattern):
         """
         return [agent.agent_id for agent in self.get_agents() if agent is not None]
 
-    async def execute_async(self, topic: str, context: str = "") -> Dict[str, Any]:
+    async def execute_async(self, topic: str, context: str = "") -> dict[str, Any]:
         """
         Execute consensus pattern asynchronously using AsyncLocalRuntime.
 
@@ -645,15 +660,15 @@ class ConsensusPattern(BaseMultiAgentPattern):
 
 def create_consensus_pattern(
     num_voters: int = 3,
-    voter_perspectives: Optional[List[str]] = None,
-    llm_provider: Optional[str] = None,
-    model: Optional[str] = None,
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-    shared_memory: Optional[SharedMemoryPool] = None,
-    proposer_config: Optional[Dict[str, Any]] = None,
-    voter_config: Optional[Dict[str, Any]] = None,
-    aggregator_config: Optional[Dict[str, Any]] = None,
+    voter_perspectives: list[str] | None = None,
+    llm_provider: str | None = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    shared_memory: SharedMemoryPool | None = None,
+    proposer_config: dict[str, Any] | None = None,
+    voter_config: dict[str, Any] | None = None,
+    aggregator_config: dict[str, Any] | None = None,
 ) -> ConsensusPattern:
     """
     Create consensus pattern with zero-config defaults.
