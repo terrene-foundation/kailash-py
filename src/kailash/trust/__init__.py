@@ -50,6 +50,17 @@ from typing import TYPE_CHECKING
 # Trust subsystem shares the core kailash version
 from kailash import __version__  # noqa: F401
 
+# Audit Store (SPEC-08 canonical types)
+from kailash.trust.audit_store import (
+    AuditEvent,
+    AuditEventType,
+    AuditFilter,
+    AuditOutcome,
+    AuditStoreProtocol,
+    InMemoryAuditStore,
+    SqliteAuditStore,
+)
+
 # Authority types
 from kailash.trust.authority import (
     AuthorityPermission,
@@ -66,8 +77,10 @@ from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,
+)
+from kailash.trust.chain import ChainConstraintEnvelope as ConstraintEnvelope
+from kailash.trust.chain import (
     Constraint,
-    ChainConstraintEnvelope as ConstraintEnvelope,
     ConstraintType,
     DelegationLimits,
     DelegationRecord,
@@ -82,6 +95,14 @@ from kailash.trust.chain import (
 # Store types
 from kailash.trust.chain_store import TrustStore
 from kailash.trust.chain_store.memory import InMemoryTrustStore
+
+# Cost Event (SPEC-08 cost tracking with deduplication)
+from kailash.trust.cost_event import (
+    CostDeduplicator,
+    CostEvent,
+    CostEventError,
+    DuplicateCostError,
+)
 
 # Canonical envelope (SPEC-07 unification)
 from kailash.trust.envelope import AgentPosture, CommunicationConstraint
@@ -388,6 +409,19 @@ __all__ = [
     "sign_canonical_envelope",
     "to_plane_envelope",
     "verify_canonical_envelope",
+    # --- Audit Store (SPEC-08) ---
+    "AuditEvent",
+    "AuditEventType",
+    "AuditOutcome",
+    "AuditFilter",
+    "AuditStoreProtocol",
+    "InMemoryAuditStore",
+    "SqliteAuditStore",
+    # --- Cost Event (SPEC-08) ---
+    "CostEvent",
+    "CostDeduplicator",
+    "CostEventError",
+    "DuplicateCostError",
     # --- Crypto (lazy-loaded, requires pynacl) ---
     "generate_keypair",
     "sign",
