@@ -108,18 +108,33 @@ class BaseAgentConfig:
     # continue to work without churn.
     posture: Optional[AgentPosture] = None
 
+    # SPEC-04 §10.3: posture is immutable after construction to prevent
+    # posture tampering. The guard activates after __post_init__ completes.
+    _IMMUTABLE_AFTER_INIT = frozenset({"posture"})
+
+    def __setattr__(self, name: str, value: object) -> None:
+        if (
+            name in self._IMMUTABLE_AFTER_INIT
+            and hasattr(self, "_initialized")
+            and self._initialized
+        ):
+            raise AttributeError(
+                f"BaseAgentConfig.{name} is immutable after construction "
+                f"(SPEC-04 §10.3). Use dataclasses.replace() to create a "
+                f"new config with a different {name}."
+            )
+        super().__setattr__(name, value)
+
     def __post_init__(self):
-        """Validate configuration after initialization."""
+        """Validate and coerce fields."""
         # Set default permission_mode if not specified
         if self.permission_mode is None:
-            # Import here to avoid circular dependency
             from kaizen.core.autonomy.permissions.types import PermissionMode
 
             self.permission_mode = PermissionMode.DEFAULT
 
         # Coerce posture: accept a string wire value for backward compat
-        # and convert to the canonical AgentPosture enum. Invalid values
-        # raise a clear error at construction time (SPEC-04 § 1 item 4).
+        # and convert to the canonical AgentPosture enum (SPEC-04 §10.3).
         if self.posture is not None and not isinstance(self.posture, AgentPosture):
             if isinstance(self.posture, str):
                 try:
@@ -140,6 +155,9 @@ class BaseAgentConfig:
         self._migrate_provider_config()
 
         self._validate_parameters()
+
+        # Activate immutability guard for security-critical fields
+        self._initialized = True
 
     @property
     def has_structured_output(self) -> bool:
@@ -165,7 +183,6 @@ class BaseAgentConfig:
             and "type" in self.provider_config
         ):
             if self.response_format is None:
-                # Split: structured output keys → response_format, rest stays
                 response_format_parts = {}
                 remaining = {}
                 for k, v in self.provider_config.items():
@@ -185,7 +202,6 @@ class BaseAgentConfig:
                     stacklevel=3,
                 )
             else:
-                # Both set — strip structured output keys from provider_config
                 remaining = {
                     k: v
                     for k, v in self.provider_config.items()

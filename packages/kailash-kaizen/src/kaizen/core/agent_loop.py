@@ -334,12 +334,7 @@ class AgentLoop:
             # Load memory context
             _load_memory_context(agent, inputs, session_id)
 
-            # Pre-execution hook (SPEC-04: route through _invoke_extension_point
-            # so vanilla agents skip the deprecation warning path while
-            # subclass overrides continue to execute).
-            processed_inputs = agent._invoke_extension_point(
-                "_pre_execution_hook", inputs
-            )
+            processed_inputs = agent._pre_execution_hook(inputs)
 
             # Trigger PRE_AGENT_LOOP hook
             _trigger_hook_sync(
@@ -356,10 +351,10 @@ class AgentLoop:
             result = _execute_strategy(agent, processed_inputs)
 
             # Validate output
-            agent._invoke_extension_point("_validate_signature_output", result)
+            agent._validate_signature_output(result)
 
             # Post-execution hook
-            final_result = agent._invoke_extension_point("_post_execution_hook", result)
+            final_result = agent._post_execution_hook(result)
 
             # Trigger POST_AGENT_LOOP hook
             _trigger_hook_sync(
@@ -381,9 +376,7 @@ class AgentLoop:
             import gc
 
             gc.collect()
-            return agent._invoke_extension_point(
-                "_handle_error", error, {"inputs": inputs}
-            )
+            return agent._handle_error(error, {"inputs": inputs})
 
     @staticmethod
     async def run_async(agent, **inputs) -> Dict[str, Any]:
@@ -410,10 +403,7 @@ class AgentLoop:
             # Load memory context (sync -- memory is sync API)
             _load_memory_context(agent, inputs, session_id)
 
-            # Pre-execution hook (SPEC-04: route through _invoke_extension_point)
-            processed_inputs = agent._invoke_extension_point(
-                "_pre_execution_hook", inputs
-            )
+            processed_inputs = agent._pre_execution_hook(inputs)
 
             # Trigger PRE_AGENT_LOOP hook (async)
             await _trigger_hook_async(
@@ -430,10 +420,10 @@ class AgentLoop:
             result = await _execute_strategy_async(agent, processed_inputs)
 
             # Validate output
-            agent._invoke_extension_point("_validate_signature_output", result)
+            agent._validate_signature_output(result)
 
             # Post-execution hook
-            final_result = agent._invoke_extension_point("_post_execution_hook", result)
+            final_result = agent._post_execution_hook(result)
 
             # Trigger POST_AGENT_LOOP hook (async)
             await _trigger_hook_async(
@@ -454,6 +444,4 @@ class AgentLoop:
             return final_result
 
         except Exception as error:
-            return agent._invoke_extension_point(
-                "_handle_error", error, {"inputs": inputs}
-            )
+            return agent._handle_error(error, {"inputs": inputs})

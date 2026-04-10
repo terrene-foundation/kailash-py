@@ -29,8 +29,10 @@ class TestBaseAgentLineCount:
         )
         lines = path.read_text().splitlines()
         assert len(lines) < 1000, (
-            f"base_agent.py has {len(lines)} lines, must be under 1,000. "
-            f"Extract more responsibilities into separate modules."
+            f"base_agent.py has grown to {len(lines)} lines (budget: <1000). "
+            f"This likely indicates a merge regression that re-inlined mixin "
+            f"code. MCP methods belong in MCPMixin, A2A in A2AMixin. "
+            f"See journal/0003-RISK-spec04-silent-regression-via-parallel-merge.md"
         )
 
     def test_extracted_modules_exist(self):
