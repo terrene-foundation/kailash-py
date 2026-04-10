@@ -65,6 +65,9 @@ def _walk_and_check(obj: Any, path: str = "$") -> Any:
 def canonical_json_loads(text: str) -> Any:
     """Parse JSON with strict mode and duplicate key rejection.
 
+    Rejects NaN, Infinity, and -Infinity literals which are not valid
+    JSON per RFC 8259 but accepted by Python's ``json.loads`` default.
+
     Args:
         text: JSON string to parse.
 
@@ -74,11 +77,22 @@ def canonical_json_loads(text: str) -> Any:
     Raises:
         DuplicateKeyError: If any JSON object contains duplicate keys.
         json.JSONDecodeError: If the JSON is malformed.
+        ValueError: If NaN or Infinity literals are present.
     """
-    return json.loads(
+    result = json.loads(
         text,
         strict=True,
         object_pairs_hook=_make_duplicate_checker(),
+        parse_constant=_reject_nan_inf,
+    )
+    return result
+
+
+def _reject_nan_inf(constant: str) -> None:
+    """Reject NaN/Infinity which are not valid JSON per RFC 8259."""
+    raise ValueError(
+        f"Invalid JSON constant {constant!r} — NaN and Infinity "
+        f"are not permitted in canonical JSON (RFC 8259)"
     )
 
 
