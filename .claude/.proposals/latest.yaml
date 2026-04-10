@@ -240,4 +240,18 @@ changes:
     reason: "Added parallel-merge-workflow.md to the documentation references section"
     diff_lines: "+1"
 
+  # --- 2026-04-11: SPEC-04 post-mortem codification ---
+
+  - file: skills/30-claude-code-patterns/parallel-merge-workflow.md
+    action: modified
+    suggested_tier: cc
+    reason: "Added stale-base detection gate, mandatory numeric invariant rule, and post-merge invariant re-check. From 2026-04-11 post-mortem: worktree merge silently re-inlined 1,079 LOC of extracted code into base_agent.py because no LOC invariant test existed."
+    diff_lines: "+75 -2"
+
+  - file: rules/refactor-invariants.md
+    action: proposed
+    suggested_tier: coc
+    reason: "New rule: every refactor claiming to shrink a file MUST land a numeric invariant test in the same commit. Invariant MUST be in CI default test path. From SPEC-04 regression where planned TASK-04-50 was never committed."
+    diff_lines: "+60 (proposed, not yet created)"
+
 status: pending_review
