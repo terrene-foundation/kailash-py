@@ -22,6 +22,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from kailash.trust.pact.access import KnowledgeSharePolicy, PactBridge, can_access
+from kailash.trust.pact.clearance import RoleClearance, VettingStatus
+from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
 from kailash.trust.pact.config import (
     ConfidentialityLevel,
     DepartmentConfig,
@@ -29,15 +32,7 @@ from kailash.trust.pact.config import (
     TeamConfig,
     TrustPostureLevel,
 )
-from kailash.trust.pact.access import (
-    KnowledgeSharePolicy,
-    PactBridge,
-    can_access,
-)
-from kailash.trust.pact.clearance import RoleClearance, VettingStatus
-from kailash.trust.pact.compilation import CompiledOrg, RoleDefinition, compile_org
 from kailash.trust.pact.knowledge import KnowledgeItem
-
 
 # ---------------------------------------------------------------------------
 # Shared fixture: Financial services org (same structure as flagship scenario)
@@ -402,11 +397,11 @@ def test_clearance_level_matrix(
 # ===========================================================================
 
 _POSTURE_CEILING = {
-    TrustPostureLevel.PSEUDO_AGENT: ConfidentialityLevel.PUBLIC,
-    TrustPostureLevel.SUPERVISED: ConfidentialityLevel.RESTRICTED,
-    TrustPostureLevel.SHARED_PLANNING: ConfidentialityLevel.CONFIDENTIAL,
-    TrustPostureLevel.CONTINUOUS_INSIGHT: ConfidentialityLevel.SECRET,
-    TrustPostureLevel.DELEGATED: ConfidentialityLevel.TOP_SECRET,
+    TrustPostureLevel.PSEUDO: ConfidentialityLevel.PUBLIC,
+    TrustPostureLevel.TOOL: ConfidentialityLevel.RESTRICTED,
+    TrustPostureLevel.SUPERVISED: ConfidentialityLevel.CONFIDENTIAL,
+    TrustPostureLevel.DELEGATING: ConfidentialityLevel.SECRET,
+    TrustPostureLevel.AUTONOMOUS: ConfidentialityLevel.TOP_SECRET,
 }
 
 _POSTURE_CASES = [

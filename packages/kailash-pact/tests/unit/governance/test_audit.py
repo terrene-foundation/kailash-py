@@ -11,10 +11,7 @@ Covers:
 
 from __future__ import annotations
 
-import pytest
-
 from kailash.trust.pact.audit import PactAuditAction, create_pact_audit_details
-
 
 # ===========================================================================
 # PactAuditAction enum
@@ -60,8 +57,8 @@ class TestPactAuditAction:
     def test_all_audit_actions_exist(self) -> None:
         """All action types per thesis Section 5.7 normative mapping + LCA bridge approval + vacancy + bilateral consent."""
         assert (
-            len(PactAuditAction) == 16
-        )  # 14 original + BRIDGE_REJECTED (#231) + CLEARANCE_SUSPENDED (#309)
+            len(PactAuditAction) == 19
+        )  # 14 original + BRIDGE_REJECTED + CLEARANCE_TRANSITIONED + PLAN_SUSPENDED + PLAN_RESUMED + RESUME_CONDITION_UPDATED
 
 
 # ===========================================================================

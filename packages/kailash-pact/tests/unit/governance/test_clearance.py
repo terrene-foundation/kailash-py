@@ -18,14 +18,13 @@ from datetime import datetime, timezone
 
 import pytest
 
-from kailash.trust.pact.config import ConfidentialityLevel, TrustPostureLevel
 from kailash.trust.pact.clearance import (
     POSTURE_CEILING,
     RoleClearance,
     VettingStatus,
     effective_clearance,
 )
-
+from kailash.trust.pact.config import ConfidentialityLevel, TrustPostureLevel
 
 # ---------------------------------------------------------------------------
 # VettingStatus enum
@@ -59,31 +58,45 @@ class TestVettingStatus:
 class TestPostureCeiling:
     """POSTURE_CEILING maps every TrustPostureLevel to a ConfidentialityLevel."""
 
-    def test_pseudo_agent_ceiling_is_public(self) -> None:
+    def test_pseudo_ceiling_is_public(self) -> None:
+        assert POSTURE_CEILING[TrustPostureLevel.PSEUDO] == ConfidentialityLevel.PUBLIC
+
+    def test_tool_ceiling_is_restricted(self) -> None:
+        assert (
+            POSTURE_CEILING[TrustPostureLevel.TOOL] == ConfidentialityLevel.RESTRICTED
+        )
+
+    def test_supervised_ceiling_is_confidential(self) -> None:
+        assert (
+            POSTURE_CEILING[TrustPostureLevel.SUPERVISED]
+            == ConfidentialityLevel.CONFIDENTIAL
+        )
+
+    def test_delegating_ceiling_is_secret(self) -> None:
+        assert (
+            POSTURE_CEILING[TrustPostureLevel.DELEGATING] == ConfidentialityLevel.SECRET
+        )
+
+    def test_autonomous_ceiling_is_top_secret(self) -> None:
+        assert (
+            POSTURE_CEILING[TrustPostureLevel.AUTONOMOUS]
+            == ConfidentialityLevel.TOP_SECRET
+        )
+
+    def test_backward_compat_aliases_resolve_correctly(self) -> None:
+        """Old enum names resolve to the same ceiling as canonical names."""
         assert (
             POSTURE_CEILING[TrustPostureLevel.PSEUDO_AGENT]
             == ConfidentialityLevel.PUBLIC
         )
-
-    def test_supervised_ceiling_is_restricted(self) -> None:
-        assert (
-            POSTURE_CEILING[TrustPostureLevel.SUPERVISED]
-            == ConfidentialityLevel.RESTRICTED
-        )
-
-    def test_shared_planning_ceiling_is_confidential(self) -> None:
         assert (
             POSTURE_CEILING[TrustPostureLevel.SHARED_PLANNING]
             == ConfidentialityLevel.CONFIDENTIAL
         )
-
-    def test_continuous_insight_ceiling_is_secret(self) -> None:
         assert (
             POSTURE_CEILING[TrustPostureLevel.CONTINUOUS_INSIGHT]
             == ConfidentialityLevel.SECRET
         )
-
-    def test_delegated_ceiling_is_top_secret(self) -> None:
         assert (
             POSTURE_CEILING[TrustPostureLevel.DELEGATED]
             == ConfidentialityLevel.TOP_SECRET
@@ -207,18 +220,34 @@ class TestEffectiveClearance:
     @pytest.mark.parametrize(
         "posture, role_level, expected",
         [
-            # PSEUDO_AGENT ceiling = PUBLIC
+            # PSEUDO ceiling = PUBLIC
             (
-                TrustPostureLevel.PSEUDO_AGENT,
+                TrustPostureLevel.PSEUDO,
                 ConfidentialityLevel.PUBLIC,
                 ConfidentialityLevel.PUBLIC,
             ),
             (
-                TrustPostureLevel.PSEUDO_AGENT,
+                TrustPostureLevel.PSEUDO,
                 ConfidentialityLevel.SECRET,
                 ConfidentialityLevel.PUBLIC,
             ),
-            # SUPERVISED ceiling = RESTRICTED
+            # TOOL ceiling = RESTRICTED
+            (
+                TrustPostureLevel.TOOL,
+                ConfidentialityLevel.PUBLIC,
+                ConfidentialityLevel.PUBLIC,
+            ),
+            (
+                TrustPostureLevel.TOOL,
+                ConfidentialityLevel.RESTRICTED,
+                ConfidentialityLevel.RESTRICTED,
+            ),
+            (
+                TrustPostureLevel.TOOL,
+                ConfidentialityLevel.CONFIDENTIAL,
+                ConfidentialityLevel.RESTRICTED,
+            ),
+            # SUPERVISED ceiling = CONFIDENTIAL
             (
                 TrustPostureLevel.SUPERVISED,
                 ConfidentialityLevel.PUBLIC,
@@ -226,49 +255,33 @@ class TestEffectiveClearance:
             ),
             (
                 TrustPostureLevel.SUPERVISED,
-                ConfidentialityLevel.RESTRICTED,
-                ConfidentialityLevel.RESTRICTED,
+                ConfidentialityLevel.CONFIDENTIAL,
+                ConfidentialityLevel.CONFIDENTIAL,
             ),
             (
                 TrustPostureLevel.SUPERVISED,
-                ConfidentialityLevel.CONFIDENTIAL,
-                ConfidentialityLevel.RESTRICTED,
-            ),
-            # SHARED_PLANNING ceiling = CONFIDENTIAL
-            (
-                TrustPostureLevel.SHARED_PLANNING,
-                ConfidentialityLevel.PUBLIC,
-                ConfidentialityLevel.PUBLIC,
-            ),
-            (
-                TrustPostureLevel.SHARED_PLANNING,
-                ConfidentialityLevel.CONFIDENTIAL,
-                ConfidentialityLevel.CONFIDENTIAL,
-            ),
-            (
-                TrustPostureLevel.SHARED_PLANNING,
                 ConfidentialityLevel.TOP_SECRET,
                 ConfidentialityLevel.CONFIDENTIAL,
             ),
-            # CONTINUOUS_INSIGHT ceiling = SECRET
+            # DELEGATING ceiling = SECRET
             (
-                TrustPostureLevel.CONTINUOUS_INSIGHT,
+                TrustPostureLevel.DELEGATING,
                 ConfidentialityLevel.SECRET,
                 ConfidentialityLevel.SECRET,
             ),
             (
-                TrustPostureLevel.CONTINUOUS_INSIGHT,
+                TrustPostureLevel.DELEGATING,
                 ConfidentialityLevel.TOP_SECRET,
                 ConfidentialityLevel.SECRET,
             ),
-            # DELEGATED ceiling = TOP_SECRET
+            # AUTONOMOUS ceiling = TOP_SECRET
             (
-                TrustPostureLevel.DELEGATED,
+                TrustPostureLevel.AUTONOMOUS,
                 ConfidentialityLevel.TOP_SECRET,
                 ConfidentialityLevel.TOP_SECRET,
             ),
             (
-                TrustPostureLevel.DELEGATED,
+                TrustPostureLevel.AUTONOMOUS,
                 ConfidentialityLevel.PUBLIC,
                 ConfidentialityLevel.PUBLIC,
             ),
