@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "name": "turn_complete",
+  "input": {
+    "event_type": "turn_complete",
+    "text": "Analysis complete.",
+    "usage": {
+      "completion_tokens": 50,
+      "prompt_tokens": 100,
+      "total_tokens": 150
+    }
+  },
+  "expected_canonical_json": "{\"event_type\":\"turn_complete\",\"text\":\"Analysis complete.\",\"usage\":{\"completion_tokens\":50,\"prompt_tokens\":100,\"total_tokens\":150}}",
+  "metadata": {
+    "description": "The model has finished responding",
+    "spec_reference": "SPEC-09 S2.5"
+  }
+}

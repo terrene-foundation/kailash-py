@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "name": "tool_call_start",
+  "input": {
+    "event_type": "tool_call_start",
+    "call_id": "call_abc123",
+    "name": "read_file"
+  },
+  "expected_canonical_json": "{\"call_id\":\"call_abc123\",\"event_type\":\"tool_call_start\",\"name\":\"read_file\"}",
+  "metadata": {
+    "description": "A tool call has begun streaming",
+    "spec_reference": "SPEC-09 S2.5"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "name": "budget_exhausted",
+  "input": {
+    "event_type": "budget_exhausted",
+    "budget_usd": 1.0,
+    "consumed_usd": 1.05
+  },
+  "expected_canonical_json": "{\"budget_usd\":1.0,\"consumed_usd\":1.05,\"event_type\":\"budget_exhausted\"}",
+  "metadata": {
+    "description": "Budget has been exhausted; the agent is stopping. Per SPEC-09 S8.4.",
+    "spec_reference": "SPEC-09 S2.5, S8.4"
+  }
+}

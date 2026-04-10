@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "name": "structured_output",
+  "input": {
+    "text": "",
+    "model": "test-model-v1",
+    "usage": {
+      "completion_tokens": 20,
+      "prompt_tokens": 50,
+      "total_tokens": 70
+    },
+    "structured": {
+      "category": "billing",
+      "priority": "high",
+      "summary": "Customer requests refund"
+    },
+    "finish_reason": "stop"
+  },
+  "expected_canonical_json": "{\"finish_reason\":\"stop\",\"model\":\"test-model-v1\",\"structured\":{\"category\":\"billing\",\"priority\":\"high\",\"summary\":\"Customer requests refund\"},\"text\":\"\",\"usage\":{\"completion_tokens\":20,\"prompt_tokens\":50,\"total_tokens\":70}}",
+  "metadata": {
+    "description": "Agent result with structured output (classification result)",
+    "spec_reference": "SPEC-09 S3.3"
+  }
+}

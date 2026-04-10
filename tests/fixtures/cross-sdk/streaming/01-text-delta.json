@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "name": "text_delta",
+  "input": {
+    "event_type": "text_delta",
+    "text": "Hello"
+  },
+  "expected_canonical_json": "{\"event_type\":\"text_delta\",\"text\":\"Hello\"}",
+  "metadata": {
+    "description": "Incremental text fragment from the model",
+    "spec_reference": "SPEC-09 S2.5"
+  }
+}
