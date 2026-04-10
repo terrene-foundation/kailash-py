@@ -1,13 +1,18 @@
 """
-Unit tests for Ollama provider adapter.
+Unit tests for legacy Ollama provider adapter.
 
-Tests the OllamaProvider integration with Kaizen BaseAgent.
-Following TDD pattern from TODO-148/149.
+Tests the legacy OllamaProvider (from ``kaizen.providers.ollama_provider``)
+which exposes the pre-SPEC-02 API (OllamaConfig, generate, generate_vision,
+generate_stream). The new SPEC-02 ``OllamaProvider`` lives in
+``kaizen.providers.llm.ollama`` and is tested in
+``test_capability_protocols.py``.
 """
 
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from kaizen.providers.ollama_provider import OllamaConfig, OllamaProvider
 
 
 class TestOllamaProviderInitialization:
@@ -15,8 +20,6 @@ class TestOllamaProviderInitialization:
 
     def test_ollama_provider_initialization_default_config(self):
         """Test initializing OllamaProvider with default config."""
-        from kaizen.providers import OllamaProvider
-
         # Mock ollama to avoid actual connection
         mock_ollama = MagicMock()
         mock_ollama.list.return_value = {"models": []}
@@ -29,8 +32,6 @@ class TestOllamaProviderInitialization:
 
     def test_ollama_provider_initialization_custom_config(self):
         """Test initializing OllamaProvider with custom config."""
-        from kaizen.providers import OllamaConfig, OllamaProvider
-
         # Mock ollama
         mock_ollama = MagicMock()
         mock_ollama.list.return_value = {"models": []}
@@ -47,8 +48,6 @@ class TestOllamaProviderInitialization:
 
     def test_ollama_provider_initialization_checks_availability(self):
         """Test OllamaProvider checks Ollama availability on init."""
-        from kaizen.providers import OllamaProvider
-
         # Mock ollama that raises exception (not available)
         mock_ollama = MagicMock()
         mock_ollama.list.side_effect = Exception("Connection refused")
@@ -63,7 +62,7 @@ class TestTextGeneration:
 
     def test_ollama_text_generation_method_exists(self):
         """Test generate method exists."""
-        from kaizen.providers import OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaProvider
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -75,7 +74,7 @@ class TestTextGeneration:
 
     def test_ollama_text_generation_basic(self):
         """Test basic text generation."""
-        from kaizen.providers import OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaProvider
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -96,7 +95,7 @@ class TestTextGeneration:
 
     def test_ollama_text_generation_with_system_prompt(self):
         """Test text generation with system prompt."""
-        from kaizen.providers import OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaProvider
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -122,7 +121,7 @@ class TestTextGeneration:
 
     def test_ollama_text_generation_with_temperature(self):
         """Test text generation with custom temperature."""
-        from kaizen.providers import OllamaConfig, OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaConfig, OllamaProvider
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -145,7 +144,7 @@ class TestTextGeneration:
 
     def test_ollama_text_generation_error_handling(self):
         """Test error handling during text generation."""
-        from kaizen.providers import OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaProvider
 
         # Mock ollama that raises exception
         mock_ollama = MagicMock()
@@ -164,7 +163,7 @@ class TestVisionMessageFormat:
 
     def test_ollama_vision_message_format_method_exists(self):
         """Test generate_vision method exists."""
-        from kaizen.providers import OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaProvider
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -176,7 +175,7 @@ class TestVisionMessageFormat:
 
     def test_ollama_vision_message_format_with_image(self):
         """Test vision message includes image in correct format."""
-        from kaizen.providers import OllamaConfig, OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaConfig, OllamaProvider
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -207,7 +206,7 @@ class TestVisionMessageFormat:
 
     def test_ollama_vision_message_format_with_system_prompt(self):
         """Test vision message with system prompt."""
-        from kaizen.providers import OllamaConfig, OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaConfig, OllamaProvider
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -239,7 +238,7 @@ class TestVisionMessageFormat:
 
     def test_ollama_vision_message_format_error_handling(self):
         """Test error handling for vision generation."""
-        from kaizen.providers import OllamaConfig, OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaConfig, OllamaProvider
 
         # Mock ollama that raises exception
         mock_ollama = MagicMock()
@@ -261,7 +260,7 @@ class TestStreamingSupport:
 
     def test_ollama_streaming_method_exists(self):
         """Test generate_stream method exists."""
-        from kaizen.providers import OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaProvider
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -273,7 +272,7 @@ class TestStreamingSupport:
 
     def test_ollama_streaming_basic(self):
         """Test basic streaming generation."""
-        from kaizen.providers import OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaProvider
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -298,7 +297,7 @@ class TestStreamingSupport:
 
     def test_ollama_streaming_with_system_prompt(self):
         """Test streaming with system prompt."""
-        from kaizen.providers import OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaProvider
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -325,7 +324,7 @@ class TestStreamingSupport:
 
     def test_ollama_streaming_error_handling(self):
         """Test error handling in streaming."""
-        from kaizen.providers import OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaProvider
 
         # Mock ollama that raises exception
         mock_ollama = MagicMock()
@@ -340,7 +339,7 @@ class TestStreamingSupport:
 
     def test_ollama_streaming_empty_chunks_filtered(self):
         """Test that empty chunks are filtered out."""
-        from kaizen.providers import OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaProvider
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -368,7 +367,7 @@ class TestTimeoutConfiguration:
 
     def test_ollama_timeout_configuration_in_config(self):
         """Test timeout is configurable via OllamaConfig."""
-        from kaizen.providers import OllamaConfig, OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaConfig, OllamaProvider
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -382,7 +381,7 @@ class TestTimeoutConfiguration:
 
     def test_ollama_timeout_default_value(self):
         """Test default timeout value is reasonable."""
-        from kaizen.providers import OllamaConfig
+        from kaizen.providers.ollama_provider import OllamaConfig
 
         config = OllamaConfig()
         # Should have a default timeout (e.g., 120 seconds)
@@ -391,7 +390,7 @@ class TestTimeoutConfiguration:
 
     def test_ollama_timeout_applied_to_requests(self):
         """Test timeout is applied to Ollama requests."""
-        from kaizen.providers import OllamaConfig, OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaConfig, OllamaProvider
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -416,7 +415,7 @@ class TestOllamaProviderIntegration:
 
     def test_ollama_provider_with_multiple_models(self):
         """Test switching between different Ollama models."""
-        from kaizen.providers import OllamaConfig, OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaConfig, OllamaProvider
 
         # Mock ollama
         mock_ollama = MagicMock()
@@ -441,7 +440,7 @@ class TestOllamaProviderIntegration:
 
     def test_ollama_provider_config_dataclass(self):
         """Test OllamaConfig is a proper dataclass."""
-        from kaizen.providers import OllamaConfig
+        from kaizen.providers.ollama_provider import OllamaConfig
 
         config1 = OllamaConfig(model="llama2", temperature=0.7)
         config2 = OllamaConfig(model="llama2", temperature=0.7)
@@ -452,7 +451,7 @@ class TestOllamaProviderIntegration:
 
     def test_ollama_provider_response_format(self):
         """Test OllamaProvider response format is consistent."""
-        from kaizen.providers import OllamaProvider
+        from kaizen.providers.ollama_provider import OllamaProvider
 
         # Mock ollama
         mock_ollama = MagicMock()
