@@ -40,13 +40,14 @@ Created: 2025-10-04 (Sequential Pipeline Pattern)
 
 import json
 import uuid
+import warnings
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.memory.shared_memory import SharedMemoryPool
-from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
 
 # ============================================================================
 # Signature Definitions
@@ -76,11 +77,10 @@ class PipelineStageAgent(BaseAgent):
     """
     PipelineStageAgent: Processes input from previous stage.
 
-    Responsibilities:
-    - Process input from previous stage (or initial input)
-    - Produce output for next stage
-    - Write stage results to shared memory
-    - Support custom stage logic via inheritance
+    .. deprecated:: 0.9.0
+        Use a plain ``BaseAgent`` with ``StageProcessingSignature`` and pass it
+        to ``SequentialPipelinePattern.add_stage()``. This subclass will be
+        removed in v1.0.
 
     Shared Memory Behavior:
     - Writes stage results with tags: ["pipeline", "stage", pipeline_id, stage_name]
@@ -94,8 +94,8 @@ class PipelineStageAgent(BaseAgent):
         shared_memory: SharedMemoryPool,
         agent_id: str,
         stage_name: str,
-        pipeline_id: Optional[str] = None,
-        stage_index: Optional[int] = None,
+        pipeline_id: str | None = None,
+        stage_index: int | None = None,
     ):
         """
         Initialize PipelineStageAgent.
@@ -108,6 +108,13 @@ class PipelineStageAgent(BaseAgent):
             pipeline_id: Pipeline identifier (optional, for tracking)
             stage_index: Stage index in pipeline (optional, for ordering)
         """
+        warnings.warn(
+            "PipelineStageAgent is deprecated since v0.9.0. "
+            "Use a plain BaseAgent with StageProcessingSignature instead. "
+            "This subclass will be removed in v1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             config=config,
             signature=StageProcessingSignature(),
@@ -119,8 +126,8 @@ class PipelineStageAgent(BaseAgent):
         self.stage_index = stage_index
 
     def process_stage(
-        self, stage_input: str, context: str = "", pipeline_id: Optional[str] = None
-    ) -> Dict[str, Any]:
+        self, stage_input: str, context: str = "", pipeline_id: str | None = None
+    ) -> dict[str, Any]:
         """
         Process stage input and produce output.
 
@@ -220,26 +227,36 @@ class SequentialPipelinePattern(BaseMultiAgentPattern):
         shared_memory: SharedMemoryPool for coordination
     """
 
-    stages: List[PipelineStageAgent] = field(default_factory=list)
+    stages: list[BaseAgent] = field(default_factory=list)
 
-    def add_stage(self, agent: PipelineStageAgent) -> None:
+    def add_stage(self, agent: BaseAgent) -> None:
         """
         Add a stage to the pipeline.
 
-        Stages execute in the order they are added.
+        Stages execute in the order they are added. Accepts any ``BaseAgent``
+        instance -- a ``PipelineStageAgent`` is no longer required.
 
         Args:
-            agent: PipelineStageAgent to add
+            agent: BaseAgent to add as a pipeline stage.
+                If the agent does not have ``stage_name``, ``stage_index``,
+                or ``pipeline_id`` attributes they will be set automatically.
 
         Example:
-            >>> pipeline.add_stage(ExtractAgent())
-            >>> pipeline.add_stage(TransformAgent())
+            >>> pipeline.add_stage(my_agent)
         """
-        # Set stage index
-        agent.stage_index = len(self.stages)
+        # Set stage index if not present
+        if not hasattr(agent, "stage_index") or agent.stage_index is None:
+            agent.stage_index = len(self.stages)
+        else:
+            agent.stage_index = len(self.stages)
+
+        # Ensure stage_name is present (use agent_id as fallback)
+        if not hasattr(agent, "stage_name") or not agent.stage_name:
+            agent.stage_name = getattr(agent, "agent_id", f"stage_{len(self.stages)}")
+
         self.stages.append(agent)
 
-    def execute_pipeline(self, initial_input: str, context: str = "") -> Dict[str, Any]:
+    def execute_pipeline(self, initial_input: str, context: str = "") -> dict[str, Any]:
         """
         Execute pipeline with all stages in order.
 
@@ -309,7 +326,7 @@ class SequentialPipelinePattern(BaseMultiAgentPattern):
             "context": context,
         }
 
-    def get_stage_results(self, pipeline_id: str) -> List[Dict[str, Any]]:
+    def get_stage_results(self, pipeline_id: str) -> list[dict[str, Any]]:
         """
         Retrieve all stage results for a pipeline.
 
@@ -359,7 +376,7 @@ class SequentialPipelinePattern(BaseMultiAgentPattern):
 
         return stage_results
 
-    def get_agents(self) -> List[BaseAgent]:
+    def get_agents(self) -> list[BaseAgent]:
         """
         Get all agents in this pattern.
 
@@ -368,7 +385,7 @@ class SequentialPipelinePattern(BaseMultiAgentPattern):
         """
         return self.stages
 
-    def get_agent_ids(self) -> List[str]:
+    def get_agent_ids(self) -> list[str]:
         """
         Get all agent IDs in this pattern.
 
@@ -384,13 +401,13 @@ class SequentialPipelinePattern(BaseMultiAgentPattern):
 
 
 def create_sequential_pipeline(
-    llm_provider: Optional[str] = None,
-    model: Optional[str] = None,
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-    shared_memory: Optional[SharedMemoryPool] = None,
-    stage_configs: Optional[List[Dict[str, Any]]] = None,
-    stages: Optional[List[PipelineStageAgent]] = None,
+    llm_provider: str | None = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    shared_memory: SharedMemoryPool | None = None,
+    stage_configs: list[dict[str, Any]] | None = None,
+    stages: list[PipelineStageAgent] | None = None,
 ) -> SequentialPipelinePattern:
     """
     Create sequential pipeline pattern with zero-config defaults.

@@ -14,95 +14,87 @@ Architecture:
     pact.mcp               -- Governance enforcement on MCP tool invocations (kailash-pact)
 """
 
-__version__ = "0.7.2"
+__version__ = "0.8.0"
+
+# --- Trust types (re-exported from kailash.trust) ---
+from kailash.trust import (
+    AuditAnchor,
+    CapabilityAttestation,
+    ConfidentialityLevel,
+    TrustPosture,
+)
 
 # --- Governance (re-exported from kailash.trust.pact) ---
-from kailash.trust.pact import (
-    # Error hierarchy
-    PactError,
-    # Addressing
+from kailash.trust.pact import (  # Error hierarchy; Addressing; Compilation; Clearance; Knowledge; Access enforcement; Envelopes; Agent mapping; Governance context; Engine; Envelope adapter; Verdict; YAML loader; Explain/convenience API; Governed agent; Governance middleware; Governance decorators; Audit; Store protocols and implementations
+    MAX_STORE_SIZE,
+    POSTURE_CEILING,
+    AccessDecision,
+    AccessPolicyStore,
     Address,
     AddressError,
     AddressSegment,
-    GrammarError,
-    NodeType,
-    # Compilation
+    AgentRoleMapping,
+    BridgeSpec,
+    ClearanceSpec,
+    ClearanceStore,
     CompilationError,
     CompiledOrg,
-    OrgNode,
-    RoleDefinition,
-    VacancyStatus,
-    compile_org,
-    # Clearance
-    POSTURE_CEILING,
-    RoleClearance,
-    VettingStatus,
-    effective_clearance,
-    # Knowledge
-    KnowledgeItem,
-    # Access enforcement
-    AccessDecision,
-    KnowledgeSharePolicy,
-    PactBridge,
-    can_access,
-    # Envelopes
-    MonotonicTighteningError,
-    RoleEnvelope,
-    TaskEnvelope,
-    check_degenerate_envelope,
-    compute_effective_envelope,
-    default_envelope_for_posture,
-    intersect_envelopes,
-    # Agent mapping
-    AgentRoleMapping,
-    # Governance context
-    GovernanceContext,
-    # Engine
-    GovernanceEngine,
-    # Envelope adapter
-    EnvelopeAdapterError,
-    GovernanceEnvelopeAdapter,
-    # Verdict
-    GovernanceVerdict,
-    # YAML loader
     ConfigurationError,
-    ClearanceSpec,
+    EnvelopeAdapterError,
     EnvelopeSpec,
-    BridgeSpec,
+    EnvelopeStore,
+    GovernanceBlockedError,
+    GovernanceContext,
+    GovernanceEngine,
+    GovernanceEnvelopeAdapter,
+    GovernanceHeldError,
+    GovernanceVerdict,
+    GrammarError,
+    KnowledgeItem,
+    KnowledgeSharePolicy,
     KspSpec,
     LoadedOrg,
-    load_org_yaml,
-    # Explain/convenience API
-    describe_address,
-    explain_access,
-    explain_envelope,
-    # Governed agent
-    GovernanceBlockedError,
-    GovernanceHeldError,
-    PactGovernedAgent,
-    # Governance middleware
-    PactGovernanceMiddleware,
-    # Governance decorators
-    governed_tool,
-    # Audit
-    PactAuditAction,
-    create_pact_audit_details,
-    # Store protocols and implementations
-    MAX_STORE_SIZE,
-    AccessPolicyStore,
-    ClearanceStore,
-    EnvelopeStore,
     MemoryAccessPolicyStore,
     MemoryClearanceStore,
     MemoryEnvelopeStore,
     MemoryOrgStore,
+    MonotonicTighteningError,
+    NodeType,
+    OrgNode,
     OrgStore,
+    PactAuditAction,
+    PactBridge,
+    PactError,
+    PactGovernanceMiddleware,
+    PactGovernedAgent,
+    RoleClearance,
+    RoleDefinition,
+    RoleEnvelope,
+    TaskEnvelope,
+    VacancyStatus,
+    VettingStatus,
+    can_access,
+    check_degenerate_envelope,
+    compile_org,
+    compute_effective_envelope,
+    create_pact_audit_details,
+    default_envelope_for_posture,
+    describe_address,
+    effective_clearance,
+    explain_access,
+    explain_envelope,
+    governed_tool,
+    intersect_envelopes,
+    load_org_yaml,
 )
+
+# --- Audit chain (re-exported from kailash.trust.pact.audit) ---
+from kailash.trust.pact.audit import AuditChain
 
 # --- Config types (re-exported from kailash.trust.pact.config) ---
 from kailash.trust.pact.config import (
-    AgentConfig,
     CONFIDENTIALITY_ORDER,
+    AgentConfig,
     CommunicationConstraintConfig,
     ConstraintDimension,
     ConstraintEnvelopeConfig,
@@ -123,31 +115,19 @@ from kailash.trust.pact.config import (
     WorkspaceConfig,
 )
 
-# --- Trust types (re-exported from kailash.trust) ---
-from kailash.trust import (
-    AuditAnchor,
-    CapabilityAttestation,
-    ConfidentialityLevel,
-    TrustPosture,
-)
-
-# --- Audit chain (re-exported from kailash.trust.pact.audit) ---
-from kailash.trust.pact.audit import AuditChain
-
 # --- Gradient engine (re-exported from kailash.trust.pact.gradient) ---
 from kailash.trust.pact.gradient import EvaluationResult, GradientEngine
-
-# --- Testing utilities (stays in kailash-pact) ---
-from pact.governance.testing import MockGovernedAgent
+from pact.costs import CostTracker
 
 # --- Enforcement modes ---
 from pact.enforcement import EnforcementMode, validate_enforcement_mode
 
 # --- PactEngine (Dual Plane bridge) ---
 from pact.engine import PactEngine
-from pact.work import WorkResult, WorkSubmission
-from pact.costs import CostTracker
 from pact.events import EventBus
+
+# --- Testing utilities (stays in kailash-pact) ---
+from pact.governance.testing import MockGovernedAgent
 
 # --- MCP governance ---
 from pact.mcp import (
@@ -162,6 +142,7 @@ from pact.mcp import (
     McpInvocationResult,
     McpToolPolicy,
 )
+from pact.work import WorkResult, WorkSubmission
 
 __all__ = [
     # Error hierarchy

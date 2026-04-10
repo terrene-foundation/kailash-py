@@ -43,16 +43,17 @@ Reference: SupervisorWorkerPattern, ConsensusPattern
 import json
 import os
 import uuid
+import warnings
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
     from kaizen.tools.registry import ToolRegistry
 
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.memory.shared_memory import SharedMemoryPool
-from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
 from kaizen.signatures import InputField, OutputField, Signature
+from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
 
 # ============================================================================
 # Signature Definitions
@@ -109,12 +110,10 @@ class ProponentAgent(BaseAgent):
     """
     ProponentAgent: Argues FOR a position.
 
-    Responsibilities:
-    - Construct arguments FOR the topic
-    - Provide key points and evidence
-    - Rebut opponent's arguments
-    - Maintain FOR position throughout debate
-    - Write arguments to shared memory
+    .. deprecated:: 0.9.0
+        Use a plain ``BaseAgent`` with ``ArgumentConstructionSignature`` and a
+        system prompt that instructs it to argue FOR. This subclass will be
+        removed in v1.0.
 
     Shared Memory Behavior:
     - Writes arguments with tags: ["argument", "for", debate_id]
@@ -127,7 +126,7 @@ class ProponentAgent(BaseAgent):
         config: BaseAgentConfig,
         shared_memory: SharedMemoryPool,
         agent_id: str,
-        mcp_servers: Optional[List[Dict]] = None,
+        mcp_servers: list[dict] | None = None,
         tool_registry: Optional["ToolRegistry"] = None,
     ):
         """
@@ -140,6 +139,14 @@ class ProponentAgent(BaseAgent):
             mcp_servers: Optional MCP server configurations for tool discovery
             tool_registry: Optional tool registry for tool documentation injection
         """
+        warnings.warn(
+            "ProponentAgent is deprecated since v0.9.0. "
+            "Use a plain BaseAgent with ArgumentConstructionSignature and a "
+            "system prompt for the 'for' role. "
+            "This subclass will be removed in v1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             config=config,
             signature=ArgumentConstructionSignature(),
@@ -149,7 +156,7 @@ class ProponentAgent(BaseAgent):
         )
         self.tool_registry = tool_registry
 
-    def construct_argument(self, topic: str, context: str = "") -> Dict[str, Any]:
+    def construct_argument(self, topic: str, context: str = "") -> dict[str, Any]:
         """
         Build argument FOR position.
 
@@ -200,7 +207,7 @@ class ProponentAgent(BaseAgent):
 
         return argument_data
 
-    def rebut(self, opponent_argument: Dict[str, Any], topic: str) -> Dict[str, Any]:
+    def rebut(self, opponent_argument: dict[str, Any], topic: str) -> dict[str, Any]:
         """
         Counter opponent's argument.
 
@@ -280,12 +287,10 @@ class OpponentAgent(BaseAgent):
     """
     OpponentAgent: Argues AGAINST a position.
 
-    Responsibilities:
-    - Construct arguments AGAINST the topic
-    - Provide key points and evidence
-    - Rebut proponent's arguments
-    - Maintain AGAINST position throughout debate
-    - Write arguments to shared memory
+    .. deprecated:: 0.9.0
+        Use a plain ``BaseAgent`` with ``ArgumentConstructionSignature`` and a
+        system prompt that instructs it to argue AGAINST. This subclass will be
+        removed in v1.0.
 
     Shared Memory Behavior:
     - Writes arguments with tags: ["argument", "against", debate_id]
@@ -298,7 +303,7 @@ class OpponentAgent(BaseAgent):
         config: BaseAgentConfig,
         shared_memory: SharedMemoryPool,
         agent_id: str,
-        mcp_servers: Optional[List[Dict]] = None,
+        mcp_servers: list[dict] | None = None,
         tool_registry: Optional["ToolRegistry"] = None,
     ):
         """
@@ -311,6 +316,14 @@ class OpponentAgent(BaseAgent):
             mcp_servers: Optional MCP server configurations for tool discovery
             tool_registry: Optional tool registry for tool documentation injection
         """
+        warnings.warn(
+            "OpponentAgent is deprecated since v0.9.0. "
+            "Use a plain BaseAgent with ArgumentConstructionSignature and a "
+            "system prompt for the 'against' role. "
+            "This subclass will be removed in v1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             config=config,
             signature=ArgumentConstructionSignature(),
@@ -320,7 +333,7 @@ class OpponentAgent(BaseAgent):
         )
         self.tool_registry = tool_registry
 
-    def construct_argument(self, topic: str, context: str = "") -> Dict[str, Any]:
+    def construct_argument(self, topic: str, context: str = "") -> dict[str, Any]:
         """
         Build argument AGAINST position.
 
@@ -371,7 +384,7 @@ class OpponentAgent(BaseAgent):
 
         return argument_data
 
-    def rebut(self, proponent_argument: Dict[str, Any], topic: str) -> Dict[str, Any]:
+    def rebut(self, proponent_argument: dict[str, Any], topic: str) -> dict[str, Any]:
         """
         Counter proponent's argument.
 
@@ -453,12 +466,10 @@ class JudgeAgent(BaseAgent):
     """
     JudgeAgent: Evaluates arguments and makes decision.
 
-    Responsibilities:
-    - Read all arguments from shared memory
-    - Evaluate both sides (FOR and AGAINST)
-    - Determine winner (for/against/tie)
-    - Provide reasoning and confidence
-    - Write judgment to shared memory
+    .. deprecated:: 0.9.0
+        Use a plain ``BaseAgent`` with ``JudgmentSignature`` and a system prompt
+        that instructs it to judge impartially. This subclass will be removed
+        in v1.0.
 
     Shared Memory Behavior:
     - Reads arguments with tags: ["argument", debate_id]
@@ -472,7 +483,7 @@ class JudgeAgent(BaseAgent):
         config: BaseAgentConfig,
         shared_memory: SharedMemoryPool,
         agent_id: str,
-        mcp_servers: Optional[List[Dict]] = None,
+        mcp_servers: list[dict] | None = None,
         tool_registry: Optional["ToolRegistry"] = None,
     ):
         """
@@ -485,6 +496,14 @@ class JudgeAgent(BaseAgent):
             mcp_servers: Optional MCP server configurations for tool discovery
             tool_registry: Optional tool registry for tool documentation injection
         """
+        warnings.warn(
+            "JudgeAgent is deprecated since v0.9.0. "
+            "Use a plain BaseAgent with JudgmentSignature and a system prompt "
+            "for the judge role. "
+            "This subclass will be removed in v1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             config=config,
             signature=JudgmentSignature(),
@@ -494,7 +513,7 @@ class JudgeAgent(BaseAgent):
         )
         self.tool_registry = tool_registry
 
-    def get_arguments(self, debate_id: str) -> Dict[str, Any]:
+    def get_arguments(self, debate_id: str) -> dict[str, Any]:
         """
         Read all arguments for debate.
 
@@ -554,7 +573,7 @@ class JudgeAgent(BaseAgent):
             "against_rebuttal": opponent_rebuttal,
         }
 
-    def judge_debate(self, debate_id: str) -> Dict[str, Any]:
+    def judge_debate(self, debate_id: str) -> dict[str, Any]:
         """
         Evaluate arguments and make decision.
 
@@ -678,7 +697,7 @@ class DebatePattern(BaseMultiAgentPattern):
     opponent: OpponentAgent
     judge: JudgeAgent
 
-    def debate(self, topic: str, context: str = "", rounds: int = 1) -> Dict[str, Any]:
+    def debate(self, topic: str, context: str = "", rounds: int = 1) -> dict[str, Any]:
         """
         Run debate with N rounds.
 
@@ -706,7 +725,7 @@ class DebatePattern(BaseMultiAgentPattern):
         opponent_arg["debate_id"] = debate_id
 
         # Additional rounds: Rebuttals
-        for round_num in range(1, rounds):
+        for _round_num in range(1, rounds):
             proponent_reb = self.proponent.rebut(opponent_arg, topic)
             opponent_reb = self.opponent.rebut(proponent_arg, topic)
 
@@ -728,7 +747,7 @@ class DebatePattern(BaseMultiAgentPattern):
             "judgment": judgment,
         }
 
-    def get_judgment(self, debate_id: str) -> Dict[str, Any]:
+    def get_judgment(self, debate_id: str) -> dict[str, Any]:
         """
         Get final judgment for debate.
 
@@ -762,7 +781,7 @@ class DebatePattern(BaseMultiAgentPattern):
                 return None
         return content
 
-    def get_agents(self) -> List[BaseAgent]:
+    def get_agents(self) -> list[BaseAgent]:
         """
         Get all agents in this pattern.
 
@@ -778,7 +797,7 @@ class DebatePattern(BaseMultiAgentPattern):
             agents.append(self.judge)
         return agents
 
-    def get_agent_ids(self) -> List[str]:
+    def get_agent_ids(self) -> list[str]:
         """
         Get all agent IDs in this pattern.
 
@@ -789,7 +808,7 @@ class DebatePattern(BaseMultiAgentPattern):
 
     async def execute_async(
         self, topic: str, context: str = "", rounds: int = 1
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute debate pattern asynchronously using AsyncLocalRuntime.
 
@@ -820,14 +839,14 @@ class DebatePattern(BaseMultiAgentPattern):
 
 
 def create_debate_pattern(
-    llm_provider: Optional[str] = None,
-    model: Optional[str] = None,
-    temperature: Optional[float] = None,
-    max_tokens: Optional[int] = None,
-    shared_memory: Optional[SharedMemoryPool] = None,
-    proponent_config: Optional[Dict[str, Any]] = None,
-    opponent_config: Optional[Dict[str, Any]] = None,
-    judge_config: Optional[Dict[str, Any]] = None,
+    llm_provider: str | None = None,
+    model: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    shared_memory: SharedMemoryPool | None = None,
+    proponent_config: dict[str, Any] | None = None,
+    opponent_config: dict[str, Any] | None = None,
+    judge_config: dict[str, Any] | None = None,
 ) -> DebatePattern:
     """
     Create debate pattern with zero-config defaults.

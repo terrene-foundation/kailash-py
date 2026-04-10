@@ -47,6 +47,7 @@ from kaizen_agents.patterns.patterns.sequential import (
 )
 from kaizen_agents.patterns.patterns.supervisor_worker import (
     CoordinatorAgent,
+    DelegationCapExceeded,
     ProgressMonitoringSignature,
     ResultAggregationSignature,
     SupervisorAgent,
@@ -64,8 +65,10 @@ __all__ = [
     "CoordinatorAgent",
     "create_supervisor_worker_pattern",
     "TaskDelegationSignature",
+    "TaskExecutionSignature",
     "ResultAggregationSignature",
     "ProgressMonitoringSignature",
+    "DelegationCapExceeded",
     "ConsensusPattern",
     "ProposerAgent",
     "VoterAgent",

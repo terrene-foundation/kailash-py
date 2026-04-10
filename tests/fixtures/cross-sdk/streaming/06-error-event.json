@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "name": "error_event",
+  "input": {
+    "event_type": "error",
+    "error": "Provider returned HTTP 429",
+    "details": {
+      "retry_after_seconds": 30
+    }
+  },
+  "expected_canonical_json": "{\"details\":{\"retry_after_seconds\":30},\"error\":\"Provider returned HTTP 429\",\"event_type\":\"error\"}",
+  "metadata": {
+    "description": "An error occurred during execution",
+    "spec_reference": "SPEC-09 S2.5"
+  }
+}

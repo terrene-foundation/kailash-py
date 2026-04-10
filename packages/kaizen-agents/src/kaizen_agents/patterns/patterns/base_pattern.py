@@ -4,11 +4,14 @@ Base Multi-Agent Pattern
 Abstract base class for all multi-agent coordination patterns.
 Provides common infrastructure for pattern creation, shared memory management,
 and agent coordination.
+
+All patterns accept plain BaseAgent instances -- role and behaviour come from
+the agent's config/system_prompt, not from specialised subclasses.
 """
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from kaizen.memory.shared_memory import SharedMemoryPool
 
@@ -19,13 +22,16 @@ class BaseMultiAgentPattern(ABC):
     Abstract base class for multi-agent coordination patterns.
 
     All multi-agent patterns extend this base class and provide:
-    - Shared memory pool for agent coordination
+    - Shared memory pool for agent coordination (auto-created if not provided)
     - Agent initialization and management
     - Pattern-specific coordination logic
     - Convenience methods for common operations
 
+    Agents are plain ``BaseAgent`` instances -- role comes from
+    ``config.system_prompt``, not from specialised subclasses.
+
     Attributes:
-        shared_memory: SharedMemoryPool instance for agent coordination
+        shared_memory: SharedMemoryPool instance for agent coordination.
 
     Example:
         >>> class MyPattern(BaseMultiAgentPattern):
@@ -40,7 +46,7 @@ class BaseMultiAgentPattern(ABC):
     shared_memory: SharedMemoryPool
 
     @abstractmethod
-    def get_agents(self) -> List[Any]:
+    def get_agents(self) -> list[Any]:
         """
         Get all agents in this pattern.
 
@@ -55,7 +61,7 @@ class BaseMultiAgentPattern(ABC):
         pass
 
     @abstractmethod
-    def get_agent_ids(self) -> List[str]:
+    def get_agent_ids(self) -> list[str]:
         """
         Get all agent IDs in this pattern.
 
@@ -68,6 +74,23 @@ class BaseMultiAgentPattern(ABC):
             >>> print(f"Agent IDs: {agent_ids}")
         """
         pass
+
+    def get_agent_names(self) -> list[str]:
+        """
+        Get human-readable names of all agents in this pattern.
+
+        Falls back to agent_id when no ``name`` attribute is present.
+
+        Returns:
+            List of agent name strings
+        """
+        names: list[str] = []
+        for agent in self.get_agents():
+            name = getattr(agent, "name", None) or getattr(
+                agent, "agent_id", str(agent)
+            )
+            names.append(str(name))
+        return names
 
     def clear_shared_memory(self):
         """
@@ -87,10 +110,10 @@ class BaseMultiAgentPattern(ABC):
 
     def get_shared_insights(
         self,
-        tags: Optional[List[str]] = None,
-        agent_id: Optional[str] = None,
-        segment: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        tags: list[str] | None = None,
+        agent_id: str | None = None,
+        segment: str | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Retrieve insights from shared memory with optional filtering.
 
@@ -122,7 +145,7 @@ class BaseMultiAgentPattern(ABC):
             limit=1000,  # Large number to get all insights
         )
 
-    def count_insights_by_tags(self, tags: List[str]) -> int:
+    def count_insights_by_tags(self, tags: list[str]) -> int:
         """
         Count insights matching given tags.
 
@@ -177,9 +200,11 @@ class BaseMultiAgentPattern(ABC):
 
         # Check all agents have the same shared memory instance
         for agent in agents:
-            if hasattr(agent, "shared_memory"):
-                if agent.shared_memory is not self.shared_memory:
-                    return False
+            if (
+                hasattr(agent, "shared_memory")
+                and agent.shared_memory is not self.shared_memory
+            ):
+                return False
 
         return True
 

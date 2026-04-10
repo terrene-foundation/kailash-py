@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "name": "tool_use",
+  "input": {
+    "text": "I found 3 files matching your query.",
+    "model": "test-model-v1",
+    "usage": {
+      "completion_tokens": 150,
+      "prompt_tokens": 200,
+      "total_tokens": 350
+    },
+    "structured": null,
+    "finish_reason": "stop"
+  },
+  "expected_canonical_json": "{\"finish_reason\":\"stop\",\"model\":\"test-model-v1\",\"structured\":null,\"text\":\"I found 3 files matching your query.\",\"usage\":{\"completion_tokens\":150,\"prompt_tokens\":200,\"total_tokens\":350}}",
+  "metadata": {
+    "description": "Agent result after tool use with accumulated text",
+    "spec_reference": "SPEC-09 S3.3"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "name": "basic_text",
+  "input": {
+    "text": "Hello, world!",
+    "model": "test-model-v1",
+    "usage": {
+      "completion_tokens": 5,
+      "prompt_tokens": 10,
+      "total_tokens": 15
+    },
+    "structured": null,
+    "finish_reason": "stop"
+  },
+  "expected_canonical_json": "{\"finish_reason\":\"stop\",\"model\":\"test-model-v1\",\"structured\":null,\"text\":\"Hello, world!\",\"usage\":{\"completion_tokens\":5,\"prompt_tokens\":10,\"total_tokens\":15}}",
+  "metadata": {
+    "description": "Basic text-only agent result with no structured output",
+    "spec_reference": "SPEC-09 S3.3"
+  }
+}

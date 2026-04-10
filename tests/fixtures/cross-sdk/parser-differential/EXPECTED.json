@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "name": "parser_differential_manifest",
+  "vectors": {
+    "01-duplicate-keys.json": {
+      "valid": false,
+      "reason": "Duplicate key 'a' in object — Python last-wins vs Rust reject"
+    },
+    "02-i64-overflow.json": {
+      "valid": true,
+      "reason": "Large integer within JSON spec range — both SDKs parse as number"
+    },
+    "03-trailing-comma.json": {
+      "valid": false,
+      "reason": "Trailing comma not valid JSON per RFC 8259"
+    },
+    "04-lone-surrogate.json": {
+      "valid": false,
+      "reason": "Lone Unicode surrogate — unpaired \\uD800 is invalid UTF-8"
+    },
+    "05-nan-inf-literals.json": {
+      "valid": false,
+      "reason": "NaN/Infinity are not valid JSON values per RFC 8259"
+    },
+    "06-deep-nesting.json": {
+      "valid": true,
+      "reason": "256-level nesting — valid JSON, both SDKs handle it"
+    },
+    "07-empty-key.json": {
+      "valid": true,
+      "reason": "Empty string as key is valid JSON per RFC 8259"
+    },
+    "08-large-exponent.json": {
+      "valid": true,
+      "reason": "Large exponent number — valid JSON, may lose precision"
+    }
+  },
+  "metadata": {
+    "description": "Expected parse/reject decisions for each differential vector",
+    "spec_reference": "SPEC-09 S8.2"
+  }
+}

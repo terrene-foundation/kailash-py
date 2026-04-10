@@ -4,11 +4,10 @@ SupervisorWorkerPattern - Multi-Agent Coordination Pattern
 Production-ready supervisor-worker pattern with centralized task delegation.
 Provides zero-config factory function with progressive configuration support.
 
-Pattern Components:
-- SupervisorAgent: Breaks requests into tasks, delegates, aggregates results
-- WorkerAgent: Executes assigned tasks independently
-- CoordinatorAgent: Monitors progress and tracks active workers
-- SupervisorWorkerPattern: Pattern container with convenience methods
+SPEC-10: Pattern accepts plain BaseAgent instances. Role comes from
+config/system_prompt, not from specialised subclasses.
+The ``SupervisorAgent``, ``WorkerAgent``, and ``CoordinatorAgent`` names
+are kept as backward-compatible deprecated aliases.
 
 Usage:
     # Zero-config
@@ -26,21 +25,22 @@ Usage:
     )
 
 Architecture:
-    User Request → SupervisorAgent (delegates)
+    User Request → Supervisor BaseAgent (delegates)
                 → SharedMemoryPool (writes tasks)
-                → WorkerAgents (read & execute)
+                → Worker BaseAgents (read & execute)
                 → SharedMemoryPool (write results)
-                → SupervisorAgent (aggregates)
+                → Supervisor BaseAgent (aggregates)
                 → Final Result
 
-Author: Kaizen Framework Team
-Created: 2025-10-04 (Phase 3, Multi-Agent Patterns)
-Reference: examples/2-multi-agent/supervisor-worker/workflow.py
+Copyright 2025 Terrene Foundation (Singapore CLG)
+Licensed under Apache-2.0
 """
 
 import json
+import logging
 import os
 import uuid
+import warnings
 from dataclasses import dataclass
 from typing import Any
 
@@ -53,6 +53,8 @@ from kaizen_agents.patterns._reasoning_bridge import (
 )
 from kaizen_agents.patterns.patterns.base_pattern import BaseMultiAgentPattern
 
+logger = logging.getLogger(__name__)
+
 # A2A imports for capability-based agent selection
 try:
     from kaizen.nodes.ai.a2a import A2AAgentCard, Capability
@@ -62,6 +64,23 @@ except ImportError:
     A2A_AVAILABLE = False
     Capability = None
     A2AAgentCard = None
+
+
+# ============================================================================
+# Security — delegation depth limiting (S10.1)
+# ============================================================================
+
+
+class DelegationCapExceeded(RuntimeError):
+    """Raised when the delegation count exceeds the configured cap."""
+
+    def __init__(self, cap: int, count: int) -> None:
+        super().__init__(
+            f"Delegation cap exceeded: {count} delegations attempted, "
+            f"cap is {cap}. Raise max_total_delegations to allow more."
+        )
+        self.cap = cap
+        self.count = count
 
 
 # ============================================================================
@@ -118,6 +137,10 @@ class SupervisorAgent(BaseAgent):
     """
     SupervisorAgent: Breaks requests into tasks, delegates to workers, aggregates results.
 
+    .. deprecated:: 0.9.0
+        Use a plain ``BaseAgent`` with ``TaskDelegationSignature`` and pass it
+        to ``SupervisorWorkerPattern``. This subclass will be removed in v1.0.
+
     Responsibilities:
     - Receive user requests
     - Break requests into discrete tasks
@@ -134,7 +157,12 @@ class SupervisorAgent(BaseAgent):
     """
 
     def __init__(
-        self, config: BaseAgentConfig, shared_memory: SharedMemoryPool, agent_id: str
+        self,
+        config: BaseAgentConfig,
+        shared_memory: SharedMemoryPool,
+        agent_id: str,
+        *,
+        max_total_delegations: int = 20,
     ):
         """
         Initialize SupervisorAgent.
@@ -143,7 +171,16 @@ class SupervisorAgent(BaseAgent):
             config: Agent configuration
             shared_memory: Shared memory pool for collaboration
             agent_id: Unique identifier for this agent
+            max_total_delegations: Maximum number of delegations per request
+                (default: 20). Prevents runaway recursive delegation.
         """
+        warnings.warn(
+            "SupervisorAgent is deprecated since v0.9.0. "
+            "Use a plain BaseAgent with TaskDelegationSignature instead. "
+            "This subclass will be removed in v1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             config=config,
             signature=TaskDelegationSignature(),
@@ -153,6 +190,8 @@ class SupervisorAgent(BaseAgent):
 
         # A2A capability matching is available via worker to_a2a_card() method
         self.a2a_coordinator = "capability_matching" if A2A_AVAILABLE else None
+        self.max_total_delegations = max_total_delegations
+        self._delegation_count = 0
 
     def select_worker_for_task(
         self, task: str, available_workers: list[BaseAgent], return_score: bool = False
@@ -233,10 +272,22 @@ class SupervisorAgent(BaseAgent):
 
         Returns:
             List of tasks created and delegated
+
+        Raises:
+            DelegationCapExceeded: When the delegation count exceeds
+                ``max_total_delegations``.
         """
         # Handle edge case: num_tasks = 0
         if num_tasks == 0:
             return []
+
+        # S10.1: enforce delegation cap
+        self._delegation_count += 1
+        if self._delegation_count > self.max_total_delegations:
+            raise DelegationCapExceeded(
+                cap=self.max_total_delegations,
+                count=self._delegation_count,
+            )
 
         # Generate request ID
         request_id = f"request_{uuid.uuid4().hex[:8]}"
@@ -462,12 +513,9 @@ class WorkerAgent(BaseAgent):
     """
     WorkerAgent: Executes assigned tasks independently.
 
-    Responsibilities:
-    - Read assigned tasks from shared memory
-    - Execute tasks independently
-    - Write results to shared memory
-    - Mark tasks as completed
-    - Report failures
+    .. deprecated:: 0.9.0
+        Use a plain ``BaseAgent`` with ``TaskExecutionSignature``. This
+        subclass will be removed in v1.0.
 
     Shared Memory Behavior:
     - Reads tasks with tags: ["task", "pending", agent_id]
@@ -487,6 +535,13 @@ class WorkerAgent(BaseAgent):
             shared_memory: Shared memory pool for collaboration
             agent_id: Unique identifier for this agent
         """
+        warnings.warn(
+            "WorkerAgent is deprecated since v0.9.0. "
+            "Use a plain BaseAgent with TaskExecutionSignature instead. "
+            "This subclass will be removed in v1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             config=config,
             signature=TaskExecutionSignature(),
@@ -575,11 +630,9 @@ class CoordinatorAgent(BaseAgent):
     """
     CoordinatorAgent: Monitors progress and handles conflicts.
 
-    Responsibilities:
-    - Monitor worker progress
-    - Detect conflicts (duplicate task assignments)
-    - Track active workers
-    - Report system status
+    .. deprecated:: 0.9.0
+        Use a plain ``BaseAgent`` with ``ProgressMonitoringSignature``. This
+        subclass will be removed in v1.0.
 
     Shared Memory Behavior:
     - Reads ALL insights (exclude_own=False)
@@ -598,6 +651,13 @@ class CoordinatorAgent(BaseAgent):
             shared_memory: Shared memory pool for collaboration
             agent_id: Unique identifier for this agent
         """
+        warnings.warn(
+            "CoordinatorAgent is deprecated since v0.9.0. "
+            "Use a plain BaseAgent with ProgressMonitoringSignature instead. "
+            "This subclass will be removed in v1.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(
             config=config,
             signature=ProgressMonitoringSignature(),
@@ -681,16 +741,15 @@ class SupervisorWorkerPattern(BaseMultiAgentPattern):
         a2a_coordinator: A2ACoordinator for capability-based selection
     """
 
-    supervisor: SupervisorAgent
-    workers: list[WorkerAgent]
-    coordinator: CoordinatorAgent
+    supervisor: BaseAgent  # Accepts any BaseAgent (or deprecated SupervisorAgent)
+    workers: list  # list[BaseAgent]
+    coordinator: BaseAgent  # Accepts any BaseAgent (or deprecated CoordinatorAgent)
 
     def __post_init__(self):
         """Initialize A2A coordinator after dataclass initialization."""
-        # A2A coordinator delegates to supervisor's coordinator
-        self.a2a_coordinator = (
-            self.supervisor.a2a_coordinator if self.supervisor else None
-        )
+        # A2A coordinator delegates to supervisor's coordinator (if available).
+        # Plain BaseAgent instances may not have a2a_coordinator attribute.
+        self.a2a_coordinator = getattr(self.supervisor, "a2a_coordinator", None)
 
     def delegate(
         self, request: str, num_tasks: int | None = None

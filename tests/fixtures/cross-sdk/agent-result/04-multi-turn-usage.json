@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "name": "multi_turn_usage",
+  "input": {
+    "text": "Analysis complete. The system has 2 critical issues.",
+    "model": "test-model-v1",
+    "usage": {
+      "completion_tokens": 500,
+      "prompt_tokens": 2000,
+      "total_tokens": 2500
+    },
+    "structured": null,
+    "finish_reason": "stop"
+  },
+  "expected_canonical_json": "{\"finish_reason\":\"stop\",\"model\":\"test-model-v1\",\"structured\":null,\"text\":\"Analysis complete. The system has 2 critical issues.\",\"usage\":{\"completion_tokens\":500,\"prompt_tokens\":2000,\"total_tokens\":2500}}",
+  "metadata": {
+    "description": "Agent result with multi-turn accumulated token usage",
+    "spec_reference": "SPEC-09 S3.3"
+  }
+}

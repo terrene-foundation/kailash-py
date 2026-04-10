@@ -286,4 +286,30 @@ changes:
     reason: "Updated frozen-context example from DELEGATED to AUTONOMOUS"
     diff_lines: "+1 -1"
 
+  # --- 2026-04-11: Full convergence — all 10 SPECs complete ---
+
+  - file: skills/04-kaizen/kaizen-delegate.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "SPEC-05 Delegate facade completion — ConstructorIOError, ToolRegistryCollisionError, run_sync loop guard, deferred MCP, introspection properties. Captures the composition-over-inheritance facade pattern."
+    diff_lines: "+50 -5"
+
+  - file: skills/04-kaizen/kaizen-multi-provider.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "SPEC-02 provider registry completion — ProviderCapability enum (10 members), prefix-dispatch model detection, CostTracker with thread-safe accumulation, 14 registered providers."
+    diff_lines: "+30 -5"
+
+  - file: rules/refactor-invariants.md
+    action: created
+    suggested_tier: coc
+    reason: "New rule: every refactor that claims to reduce LOC MUST land a line-count invariant test in the same commit. From SPEC-04 regression where base_agent.py regrew from 994→2103 LOC because the guard test was planned but never committed."
+    diff_lines: "+60"
+
+  - file: skills/01-core-sdk/cross-sdk-canonical-json.md
+    action: created
+    suggested_tier: coc
+    reason: "SPEC-09 canonical JSON module (trust._json) — DuplicateKeyError, parse_constant NaN/Inf rejection, sorted-key deterministic output. Cross-SDK parser differential documentation with 8 edge-case vectors."
+    diff_lines: "+80"
+
 status: pending_review
