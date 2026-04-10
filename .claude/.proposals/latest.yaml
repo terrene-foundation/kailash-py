@@ -254,4 +254,36 @@ changes:
     reason: "New rule: every refactor claiming to shrink a file MUST land a numeric invariant test in the same commit. Invariant MUST be in CI default test path. From SPEC-04 regression where planned TASK-04-50 was never committed."
     diff_lines: "+60 (proposed, not yet created)"
 
+  # --- 2026-04-11: CI fix + Decision 007 backward compat ---
+
+  - file: skills/29-pact/SKILL.md
+    action: modified
+    suggested_tier: coc
+    reason: "Added TrustPostureLevel (Decision 007) section — 5 canonical posture names, POSTURE_CEILING mapping, backward-compatible aliases table, _missing_() mechanism"
+    diff_lines: "+30 -0"
+
+  - file: skills/29-pact/pact-access-enforcement.md
+    action: modified
+    suggested_tier: coc
+    reason: "Updated POSTURE_CEILING code examples to canonical names, added backward-compat alias docs, fixed SUPERVISED→TOOL ceiling example"
+    diff_lines: "+15 -10"
+
+  - file: skills/29-pact/pact-envelopes.md
+    action: modified
+    suggested_tier: coc
+    reason: "Replaced default-envelope-by-posture table with canonical 5-level names including new TOOL posture, added backward-compat note"
+    diff_lines: "+12 -8"
+
+  - file: skills/29-pact/pact-governance-engine.md
+    action: modified
+    suggested_tier: coc
+    reason: "Updated check_access() code example from CONTINUOUS_INSIGHT to DELEGATING"
+    diff_lines: "+1 -1"
+
+  - file: skills/29-pact/pact-governed-agents.md
+    action: modified
+    suggested_tier: coc
+    reason: "Updated frozen-context example from DELEGATED to AUTONOMOUS"
+    diff_lines: "+1 -1"
+
 status: pending_review

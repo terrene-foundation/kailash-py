@@ -34,7 +34,7 @@ item = KnowledgeItem(
 decision = engine.check_access(
     role_address="D1-R1-D2-R1-T1-R1",
     knowledge_item=item,
-    posture=TrustPostureLevel.SHARED_PLANNING,
+    posture=TrustPostureLevel.SUPERVISED,
 )
 
 decision.allowed      # bool
@@ -72,18 +72,22 @@ Effective clearance = `min(role.max_clearance, POSTURE_CEILING[posture])`.
 ```python
 from kailash.trust.pact.clearance import POSTURE_CEILING, effective_clearance
 
-# The mapping:
-# PSEUDO_AGENT     -> PUBLIC
-# SUPERVISED       -> RESTRICTED
-# SHARED_PLANNING  -> CONFIDENTIAL
-# CONTINUOUS_INSIGHT -> SECRET
-# DELEGATED        -> TOP_SECRET
+# Canonical POSTURE_CEILING mapping (Decision 007):
+# PSEUDO       -> PUBLIC        (autonomy_level=1)
+# TOOL         -> RESTRICTED    (autonomy_level=2)
+# SUPERVISED   -> CONFIDENTIAL  (autonomy_level=3)
+# DELEGATING   -> SECRET        (autonomy_level=4)
+# AUTONOMOUS   -> TOP_SECRET    (autonomy_level=5)
+#
+# Backward-compatible aliases (enum aliases, not _missing_):
+#   PSEUDO_AGENT -> PSEUDO, SHARED_PLANNING -> SUPERVISED,
+#   CONTINUOUS_INSIGHT -> DELEGATING, DELEGATED -> AUTONOMOUS
 
-eff = effective_clearance(clearance, TrustPostureLevel.SUPERVISED)
-# Even SECRET clearance is capped at RESTRICTED when SUPERVISED
+eff = effective_clearance(clearance, TrustPostureLevel.TOOL)
+# Even SECRET clearance is capped at RESTRICTED when TOOL posture
 ```
 
-A role with TOP_SECRET clearance operating at SUPERVISED posture can only access RESTRICTED data.
+A role with TOP_SECRET clearance operating at TOOL posture can only access RESTRICTED data.
 
 ## Step 3: Compartment Check
 
@@ -194,7 +198,7 @@ from kailash.trust.pact.access import can_access
 decision = can_access(
     role_address="D1-R1-D3-R1-T1-R1",
     knowledge_item=item,
-    posture=TrustPostureLevel.SHARED_PLANNING,
+    posture=TrustPostureLevel.SUPERVISED,
     compiled_org=compiled_org,
     clearances={"D1-R1-D3-R1-T1-R1": clearance},
     ksps=[ksp],

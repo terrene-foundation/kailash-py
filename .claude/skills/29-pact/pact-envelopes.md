@@ -217,13 +217,15 @@ env = default_envelope_for_posture(TrustPostureLevel.SUPERVISED)
 # max_spend_usd=100.0, allowed_actions=["read", "write"], internal_only=True
 ```
 
-| Posture            | max_spend_usd | Allowed Actions            | Internal Only |
-| ------------------ | ------------- | -------------------------- | ------------- |
-| PSEUDO_AGENT       | 0             | read                       | Yes           |
-| SUPERVISED         | 100           | read, write                | Yes           |
-| SHARED_PLANNING    | 1,000         | read, write, plan, propose | No            |
-| CONTINUOUS_INSIGHT | 10,000        | +execute, deploy           | No            |
-| DELEGATED          | 100,000       | +approve, delegate         | No            |
+| Posture (canonical) | Autonomy | max_spend_usd | Allowed Actions            | Internal Only |
+| ------------------- | -------- | ------------- | -------------------------- | ------------- |
+| PSEUDO              | 1        | 0             | read                       | Yes           |
+| TOOL                | 2        | 50            | read, write                | Yes           |
+| SUPERVISED          | 3        | 1,000         | read, write, plan, propose | No            |
+| DELEGATING          | 4        | 10,000        | +execute, deploy           | No            |
+| AUTONOMOUS          | 5        | 100,000       | +approve, delegate         | No            |
+
+Old names (`PSEUDO_AGENT`, `SHARED_PLANNING`, `CONTINUOUS_INSIGHT`, `DELEGATED`) are accepted as enum aliases and via `_missing_()` for backward compatibility with serialized data.
 
 ## Degenerate Envelope Detection
 

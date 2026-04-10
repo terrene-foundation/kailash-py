@@ -24,7 +24,7 @@ ctx = agent.context                        # GovernanceContext (frozen=True)
 ctx.allowed_actions                        # frozenset({"read", "write"})
 ctx.posture                                # TrustPostureLevel.SUPERVISED
 ctx.effective_clearance_level              # ConfidentialityLevel.RESTRICTED
-# ctx.posture = TrustPostureLevel.DELEGATED  -> FrozenInstanceError
+# ctx.posture = TrustPostureLevel.AUTONOMOUS  -> FrozenInstanceError
 ```
 
 ### Tool Registration (Default-Deny)

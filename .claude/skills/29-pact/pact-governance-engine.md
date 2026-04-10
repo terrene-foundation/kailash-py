@@ -119,7 +119,7 @@ item = KnowledgeItem(
 decision = engine.check_access(
     role_address="D1-R1-D2-R1-T1-R1",
     knowledge_item=item,
-    posture=TrustPostureLevel.CONTINUOUS_INSIGHT,
+    posture=TrustPostureLevel.DELEGATING,
 )
 decision.allowed      # bool
 decision.reason       # str
