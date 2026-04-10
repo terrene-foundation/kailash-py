@@ -214,4 +214,30 @@ changes:
     suggested_tier: skip
     reason: "BUILD-local project skill — ML engine quick reference"
 
+  # --- 2026-04-10 session additions: full clearance of 30 GH issues ---
+
+  - file: skills/29-pact/pact-conformance-features.md
+    action: created
+    suggested_tier: coc
+    reason: "PACT N1-N6 conformance features (KnowledgeFilter, EnvelopeCache, PlanSuspension, AuditTiers, ObservationSink, cross-SDK vectors) — language-agnostic spec, both Python and Rust SDKs implement the same semantics. Documents integration order, engine init params, wire format values."
+    diff_lines: "+180"
+
+  - file: skills/29-pact/SKILL.md
+    action: modified
+    suggested_tier: coc
+    reason: "Added pact-conformance-features.md to the index table"
+    diff_lines: "+1"
+
+  - file: skills/30-claude-code-patterns/parallel-merge-workflow.md
+    action: created
+    suggested_tier: cc
+    reason: "Reusable pattern for merging 5+ parallel worktree changes to the same file via specialist delegation. Validated on 2026-04-10 PACT N1-N5 merge (5 worktrees → engine.py 2329→3211 lines, 1192 tests passing on first merged run). Pure CC pattern, not SDK-specific."
+    diff_lines: "+60"
+
+  - file: skills/30-claude-code-patterns/SKILL.md
+    action: modified
+    suggested_tier: cc
+    reason: "Added parallel-merge-workflow.md to the documentation references section"
+    diff_lines: "+1"
+
 status: pending_review

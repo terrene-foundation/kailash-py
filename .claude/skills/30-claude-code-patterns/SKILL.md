@@ -124,6 +124,7 @@ Critical info at beginning/end of context. Middle gets less attention. Trim tool
 - **[Artifact Design Guide](artifact-design.md)** — Templates, frontmatter, structural patterns
 - **[Anti-Patterns Catalog](anti-patterns.md)** — Common mistakes and fixes
 - **[Token Budget Guide](token-budget.md)** — Measurement and optimization
+- **[Parallel Merge Workflow](parallel-merge-workflow.md)** — Merging 5+ parallel worktree changes to the same file via specialist delegation
 
 ## When to Use This Skill
 
