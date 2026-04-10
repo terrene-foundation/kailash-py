@@ -15,14 +15,21 @@ from __future__ import annotations
 import pytest
 
 from kailash.trust._json import canonical_json_dumps
-from kaizen_agents.events import (
-    BudgetExhausted,
-    ErrorEvent,
-    TextDelta,
-    ToolCallEnd,
-    ToolCallStart,
-    TurnComplete,
-)
+
+try:
+    from kaizen_agents.events import (
+        BudgetExhausted,
+        ErrorEvent,
+        TextDelta,
+        ToolCallEnd,
+        ToolCallStart,
+        TurnComplete,
+    )
+except ImportError:
+    pytest.skip(
+        "kaizen_agents not installed — streaming equivalence tests require it",
+        allow_module_level=True,
+    )
 
 
 def _event_to_wire_dict(event) -> dict:
