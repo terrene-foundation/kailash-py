@@ -628,6 +628,27 @@ best = await routing.select_best("analyze revenue data", [agent1, agent2, agent3
 
 `score()` returns `[0.0, 1.0]`. Accepts `Capability` dataclasses (`.name` + `.description`) or plain strings. `select_best()` returns the highest-scoring candidate or `None` when empty.
 
+### Convergence Status (SPEC-02 / SPEC-05 / SPEC-10)
+
+Three convergence SPECs have shipped on the `feat/spec04-baseagent-slim` branch:
+
+**SPEC-02 (Provider Split)** -- The provider monolith (`kaizen.nodes.ai.ai_providers`) is now split into per-provider modules under `kaizen/providers/`. See **[kaizen-multi-provider](kaizen-multi-provider.md)** for the updated registry, protocols, and CostTracker.
+
+- `kaizen.providers.base` -- `ProviderCapability` enum (10 members), 5 runtime-checkable protocols
+- `kaizen.providers.registry` -- `ProviderRegistry` with 14 provider entries and prefix-dispatch model detection
+- `kaizen.providers.cost` -- `CostTracker` with thread-safe accumulation
+- Backward-compat shim at `kaizen.nodes.ai.ai_providers` re-exports all public names
+
+**SPEC-05 (Delegate Facade)** -- Delegate is now a composition facade wrapping `AgentLoop -> [L3GovernedAgent] -> [MonitoredAgent]`. See **[kaizen-delegate](kaizen-delegate.md)** for the updated API surface.
+
+- `ConstructorIOError` -- raised on outbound IO in `__init__`
+- `ToolRegistryCollisionError` -- raised on duplicate tool name registration
+- `run_sync()` refuses under a running event loop with an actionable error message
+- Deferred MCP: `mcp_servers=` stores configs, connects on first `run()`
+- Introspection: `.core_agent`, `.signature`, `.model` read-only properties
+
+**SPEC-10 (Multi-Agent)** -- 11 deprecated agent subclasses (SupervisorAgent, WorkerAgent, CoordinatorAgent, PipelineStageAgent, etc.) now emit `DeprecationWarning`. Composition patterns accept plain `BaseAgent` instances. `max_total_delegations` cap (default 20) with `DelegationCapExceeded` exception.
+
 ## Related Skills
 
 - **[01-core-sdk](../../01-core-sdk/SKILL.md)** - Core workflow patterns
