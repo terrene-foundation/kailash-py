@@ -228,6 +228,12 @@ class CommunicationConstraints:
 class ConstraintEnvelope:
     """Structured constraints across all 5 EATP dimensions.
 
+    .. deprecated::
+        This is the legacy trust-plane constraint envelope. The canonical
+        PACT envelope is ``kailash.trust.pact.config.ConstraintEnvelopeConfig``
+        (SPEC-07). This class remains for trust-plane backward compatibility
+        and will be removed in a future major release.
+
     Maps directly to EATP ConstraintType enum values:
     - OPERATIONAL → what the AI can do
     - DATA_ACCESS → what data it can see/modify

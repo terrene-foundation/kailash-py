@@ -9,7 +9,6 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
-
 from kailash.db.connection import ConnectionManager
 from kailash_ml.engines.feature_store import FeatureStore
 from kailash_ml.engines.hyperparameter_search import (
@@ -18,19 +17,10 @@ from kailash_ml.engines.hyperparameter_search import (
     SearchConfig,
     SearchResult,
     SearchSpace,
-    TrialResult,
 )
-from kailash_ml.engines.model_registry import (
-    LocalFileArtifactStore,
-    ModelRegistry,
-)
-from kailash_ml.engines.training_pipeline import (
-    EvalSpec,
-    ModelSpec,
-    TrainingPipeline,
-)
+from kailash_ml.engines.model_registry import LocalFileArtifactStore, ModelRegistry
+from kailash_ml.engines.training_pipeline import EvalSpec, ModelSpec, TrainingPipeline
 from kailash_ml.types import FeatureField, FeatureSchema
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -166,6 +156,7 @@ async def test_bayesian_search_converges(
     sample_schema: FeatureSchema,
 ) -> None:
     """Bayesian search runs and returns results."""
+    pytest.importorskip("optuna", reason="optuna required for Bayesian search")
     result = await search.search(
         sample_df,
         sample_schema,

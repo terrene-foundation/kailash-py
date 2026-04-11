@@ -615,9 +615,9 @@ class PipelineExecutor:
                 }
             )
 
-            # Step 2: Serialize
+            # Step 2: Serialize (off event loop — CPU-bound for large products)
             step_start = time.monotonic()
-            data_bytes = _serialize(raw_data)
+            data_bytes = await asyncio.to_thread(_serialize, raw_data)
             steps.append(
                 {
                     "name": "serialize",
@@ -652,9 +652,9 @@ class PipelineExecutor:
                     f"({self._max_result_bytes / (1024 * 1024):.0f} MB limit)"
                 )
 
-            # Step 4: Content hash
+            # Step 4: Content hash (off event loop — CPU-bound for large payloads)
             step_start = time.monotonic()
-            new_hash = _content_hash(data_bytes)
+            new_hash = await asyncio.to_thread(_content_hash, data_bytes)
             steps.append(
                 {
                     "name": "hash",
