@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-kaizen"
-version = "2.7.0"
+version = "2.7.1"
 description = "Advanced AI agent framework built on Kailash SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -23,7 +23,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "kailash>=2.8.0",
+    "kailash>=2.8.1",
     "pydantic>=2.0.0",
     "typing-extensions>=4.5.0",
     "PyJWT>=2.8.0",
