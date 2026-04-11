@@ -6,7 +6,7 @@ MockProvider patching is handled in root conftest.py.
 
 # Verify root conftest.py patch was applied (for debugging)
 try:
-    from kaizen.nodes.ai.ai_providers import PROVIDERS
+    from kaizen.providers.registry import PROVIDERS
 
     MockProviderClass = PROVIDERS.get("mock")
     if MockProviderClass:

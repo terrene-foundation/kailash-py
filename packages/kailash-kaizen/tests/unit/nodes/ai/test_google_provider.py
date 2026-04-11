@@ -2,7 +2,7 @@
 
 import pytest
 
-from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider, get_provider
+from kaizen.providers import GoogleGeminiProvider, get_provider
 
 
 class TestGoogleGeminiProvider:

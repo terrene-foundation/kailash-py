@@ -58,8 +58,8 @@ class TestGeminiAudioIntegration:
         VERIFICATION: Response must contain evidence the audio was processed,
         not a generic "I can't process audio" response.
         """
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
         from kaizen.nodes.ai.audio_utils import encode_audio, get_audio_media_type
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
         assert provider.is_available(), "Google API not available"
@@ -85,9 +85,9 @@ class TestGeminiAudioIntegration:
 
         # INTENT VALIDATION: Audio was actually processed
         assert response["content"], "Response content should not be empty"
-        assert len(response["content"]) >= 10, (
-            "Response should have substantial content"
-        )
+        assert (
+            len(response["content"]) >= 10
+        ), "Response should have substantial content"
 
         # Negative check: Response should NOT indicate audio processing failure
         failure_indicators = [
@@ -113,7 +113,7 @@ class TestGeminiAudioIntegration:
         USER INTENT: When I provide an audio file path, the provider
         should load and process it correctly.
         """
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -137,8 +137,8 @@ class TestGeminiAudioIntegration:
         USER INTENT: When I provide raw audio bytes, the provider
         should process them correctly.
         """
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
         from kaizen.nodes.ai.audio_utils import get_audio_media_type
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -173,8 +173,8 @@ class TestGeminiAudioUrlIntegration:
         USER INTENT: When I provide an audio data URL (like image_url format),
         the provider should process it correctly.
         """
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
         from kaizen.nodes.ai.audio_utils import encode_audio, get_audio_media_type
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -209,7 +209,7 @@ class TestUnhandledContentTypeWarning:
         """
         import warnings
 
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -277,7 +277,7 @@ class TestAudioFieldIntegration:
         USER INTENT: I should be able to use AudioField with providers
         for a complete workflow.
         """
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
         from kaizen.signatures.multi_modal import AudioField
 
         field = AudioField()

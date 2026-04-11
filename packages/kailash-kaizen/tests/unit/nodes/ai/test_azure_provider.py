@@ -1,7 +1,8 @@
 """Unit tests for Azure AI Foundry provider."""
 
 import pytest
-from kaizen.nodes.ai.ai_providers import AzureAIFoundryProvider
+
+from kaizen.providers import AzureAIFoundryProvider
 
 
 class TestAzureAIFoundryProvider:

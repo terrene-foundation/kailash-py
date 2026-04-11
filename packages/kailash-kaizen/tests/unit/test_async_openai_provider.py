@@ -17,7 +17,7 @@ import pytest
 
 # Direct import to avoid circular dependencies
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-from kaizen.nodes.ai.ai_providers import OpenAIProvider
+from kaizen.providers import OpenAIProvider
 
 
 class TestOpenAIProviderAsync:

@@ -8,16 +8,12 @@ from unittest.mock import MagicMock, patch
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "src"))
 
-from kaizen.nodes.ai.ai_providers import (
-    AnthropicProvider,
-    OllamaProvider,
-    OpenAIProvider,
-)
 from kaizen.nodes.ai.vision_utils import (
     encode_image,
     get_media_type,
     validate_image_size,
 )
+from kaizen.providers import AnthropicProvider, OllamaProvider, OpenAIProvider
 
 
 class TestVisionSupport(unittest.TestCase):

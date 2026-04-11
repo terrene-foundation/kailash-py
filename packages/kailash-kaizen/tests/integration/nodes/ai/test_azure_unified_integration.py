@@ -16,8 +16,8 @@ import os
 
 import pytest
 
-from kaizen.nodes.ai.ai_providers import get_provider
 from kaizen.nodes.ai.unified_azure_provider import UnifiedAzureProvider
+from kaizen.providers import get_provider
 
 
 @pytest.fixture

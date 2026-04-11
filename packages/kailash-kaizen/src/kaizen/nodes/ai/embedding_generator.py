@@ -658,7 +658,7 @@ class EmbeddingGeneratorNode(Node):
     ) -> list[float]:
         """Generate embedding using external provider."""
         try:
-            from .ai_providers import get_provider
+            from kaizen.providers.registry import get_provider
 
             # Get the provider instance
             provider_instance = get_provider(provider, "embeddings")

@@ -10,7 +10,7 @@ import os
 
 import pytest
 
-from kaizen.nodes.ai.ai_providers import PerplexityProvider
+from kaizen.providers import PerplexityProvider
 
 # Skip all tests if API key is not available
 pytestmark = pytest.mark.skipif(

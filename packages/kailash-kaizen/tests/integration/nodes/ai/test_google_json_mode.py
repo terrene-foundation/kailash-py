@@ -32,7 +32,7 @@ class TestGoogleGeminiJSONMode:
 
     def test_json_object_mode(self):
         """Should return valid JSON with json_object response_format."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
         assert provider.is_available(), "Provider should be available"
@@ -72,7 +72,7 @@ class TestGoogleGeminiJSONMode:
 
     def test_json_schema_mode(self):
         """Should return valid JSON adhering to schema with json_schema response_format."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -133,7 +133,7 @@ class TestGoogleGeminiJSONMode:
 
     def test_json_mode_prevents_markdown(self):
         """Should NOT return markdown when JSON mode is enabled."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -159,9 +159,9 @@ class TestGoogleGeminiJSONMode:
         # Should NOT contain markdown formatting
         assert "**" not in content, "Response should not contain markdown bold"
         assert "```" not in content, "Response should not contain code blocks"
-        assert content.strip().startswith("{") or content.strip().startswith("["), (
-            "Response should start with JSON object or array"
-        )
+        assert content.strip().startswith("{") or content.strip().startswith(
+            "["
+        ), "Response should start with JSON object or array"
 
         # Should be valid JSON (array or object both acceptable)
         parsed = json.loads(content)
@@ -174,7 +174,7 @@ class TestGoogleGeminiJSONModeAsync:
     @pytest.mark.asyncio
     async def test_json_object_mode_async(self):
         """Should return valid JSON with json_object response_format (async)."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -204,7 +204,7 @@ class TestGoogleGeminiJSONModeAsync:
     @pytest.mark.asyncio
     async def test_json_schema_mode_async(self):
         """Should return valid JSON adhering to schema (async)."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -264,7 +264,7 @@ class TestAdditionalPropertiesFalseRegression:
 
     def test_json_schema_with_additional_properties_false(self):
         """Schema with additionalProperties: false must not cause 400 error."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -314,7 +314,7 @@ class TestAdditionalPropertiesFalseRegression:
     @pytest.mark.asyncio
     async def test_json_schema_with_additional_properties_false_async(self):
         """Async: schema with additionalProperties: false must not cause 400 error."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -366,7 +366,7 @@ class TestMediScribeScenario:
 
     def test_medical_soap_extraction(self):
         """Reproduce the MediScribe SOAP note extraction scenario."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 

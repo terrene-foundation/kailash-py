@@ -21,7 +21,7 @@ class TestGoogleGeminiProviderRealAPI:
 
     def test_chat_simple_response(self):
         """Should generate a real chat response."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
         assert provider.is_available(), "Provider should be available"
@@ -49,7 +49,7 @@ class TestGoogleGeminiProviderRealAPI:
 
     def test_chat_with_system_message(self):
         """Should properly handle system messages."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -72,7 +72,7 @@ class TestGoogleGeminiProviderRealAPI:
 
     def test_chat_multi_turn_conversation(self):
         """Should handle multi-turn conversations."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -93,7 +93,7 @@ class TestGoogleGeminiProviderRealAPI:
 
     def test_embeddings_single_text(self):
         """Should generate embeddings for a single text."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -106,7 +106,7 @@ class TestGoogleGeminiProviderRealAPI:
 
     def test_embeddings_multiple_texts(self):
         """Should generate embeddings for multiple texts."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -119,7 +119,7 @@ class TestGoogleGeminiProviderRealAPI:
 
     def test_vision_with_base64_image(self):
         """Should process images via base64 encoding."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -157,7 +157,7 @@ class TestGoogleGeminiProviderRealAPI:
 
     def test_generation_config_temperature(self):
         """Should respect temperature setting."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -174,7 +174,7 @@ class TestGoogleGeminiProviderRealAPI:
 
     def test_generation_config_max_tokens(self):
         """Should respect max_tokens limit."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -193,7 +193,7 @@ class TestGoogleGeminiProviderRealAPI:
 
     def test_finish_reason_stop(self):
         """Should return 'stop' finish reason for normal completion."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -209,7 +209,7 @@ class TestGoogleGeminiProviderRealAPI:
 
     def test_usage_metrics_populated(self):
         """Should populate usage metrics correctly."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -231,7 +231,7 @@ class TestGoogleGeminiAsyncRealAPI:
     @pytest.mark.asyncio
     async def test_chat_async(self):
         """Should generate chat response asynchronously."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -251,7 +251,7 @@ class TestGoogleGeminiAsyncRealAPI:
     @pytest.mark.asyncio
     async def test_embed_async(self):
         """Should generate embeddings asynchronously."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -267,7 +267,7 @@ class TestGoogleProviderViaRegistry:
 
     def test_get_provider_google(self):
         """Should get Google provider via registry."""
-        from kaizen.nodes.ai.ai_providers import get_provider
+        from kaizen.providers import get_provider
 
         provider = get_provider("google")
         assert provider.is_available()
@@ -281,7 +281,7 @@ class TestGoogleProviderViaRegistry:
 
     def test_get_provider_gemini_alias(self):
         """Should get Google provider via 'gemini' alias."""
-        from kaizen.nodes.ai.ai_providers import get_provider
+        from kaizen.providers import get_provider
 
         provider = get_provider("gemini")
         assert provider.is_available()

@@ -11,7 +11,7 @@ import pytest
 )
 def test_verify_provider_class():
     """Verify that get_provider('mock') returns KaizenMockProvider during test."""
-    from kaizen.nodes.ai.ai_providers import PROVIDERS, get_provider
+    from kaizen.providers import PROVIDERS, get_provider
 
     # Check registry
     print(f"\nPROVIDERS['mock']: {PROVIDERS['mock']}")
