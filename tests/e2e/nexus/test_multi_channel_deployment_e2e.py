@@ -383,7 +383,7 @@ class TestResourceSystemE2E:
         """
         from nexus.resources import NexusResourceManager
 
-        from kailash.mcp_server import MCPServer
+        from kailash_mcp import MCPServer
 
         nexus = Nexus(
             api_port=8016,
@@ -435,7 +435,7 @@ class TestResourceSystemE2E:
         """
         from nexus.resources import NexusResourceManager
 
-        from kailash.mcp_server import MCPServer
+        from kailash_mcp import MCPServer
 
         nexus = Nexus(auto_discovery=False, enable_durability=False)
 

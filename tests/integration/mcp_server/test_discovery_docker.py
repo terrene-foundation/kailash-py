@@ -15,7 +15,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
-from kailash.mcp_server.discovery import (
+from kailash_mcp.discovery.discovery import (
     FileBasedDiscovery,
     HealthChecker,
     LoadBalancer,

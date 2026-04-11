@@ -1,6 +1,6 @@
 """Unit tests for MCP configuration management.
 
-Tests for the configuration system components in kailash.mcp_server.utils.config.
+Tests for the configuration system components in kailash_mcp.utils.config.
 NO MOCKING - This is a unit test file for isolated component testing.
 """
 
@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from kailash.mcp_server.utils.config import (
+from kailash_mcp.utils.config import (
     ConfigManager,
     create_default_config,
     load_config_file,

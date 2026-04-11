@@ -13,15 +13,15 @@ from pathlib import Path
 
 import pytest
 
-from kailash.mcp_server import (
+from kailash_mcp import (
     MCPClient,
     MCPServer,
     ServiceRegistry,
     discover_mcp_servers,
     get_mcp_client,
 )
-from kailash.mcp_server.auth import APIKeyAuth
-from kailash.mcp_server.discovery import ServerInfo
+from kailash_mcp.auth.providers import APIKeyAuth
+from kailash_mcp.discovery.discovery import ServerInfo
 from tests.utils.docker_config import ensure_docker_services, get_redis_url
 
 

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import pytest_asyncio
 
-from kailash.mcp_server.subscriptions import (
+from kailash_mcp.advanced.subscriptions import (
     AggregationTransformer,
     DataEnrichmentTransformer,
     FormatConverterTransformer,

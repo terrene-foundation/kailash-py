@@ -10,7 +10,7 @@ import pytest
 from nexus import Nexus
 from nexus.resources import NexusResourceManager
 
-from kailash.mcp_server import MCPServer
+from kailash_mcp import MCPServer
 from kailash.workflow.builder import WorkflowBuilder
 
 

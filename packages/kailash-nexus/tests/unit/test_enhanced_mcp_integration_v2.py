@@ -34,7 +34,7 @@ class TestEnhancedMCPIntegration:
         assert app._enable_discovery is False
         assert app.name == "nexus"
 
-    @patch("kailash.mcp_server.auth.APIKeyAuth")
+    @patch("kailash_mcp.auth.providers.APIKeyAuth")
     def test_nexus_initialization_with_options(self, mock_auth):
         """Test Nexus initializes with custom options."""
         from nexus.core import Nexus
@@ -210,7 +210,7 @@ class TestMCPServerCreation:
         assert hasattr(app, "_mcp_server")
         assert app._mcp_server is not None
 
-    @patch("kailash.mcp_server.auth.APIKeyAuth")
+    @patch("kailash_mcp.auth.providers.APIKeyAuth")
     def test_nexus_with_auth_configuration(self, mock_auth):
         """Test creating Nexus with authentication configuration."""
         from nexus.core import Nexus
@@ -235,7 +235,7 @@ class TestMCPServerCreation:
         finally:
             del os.environ["NEXUS_API_KEY_TESTUSER"]
 
-    @patch("kailash.mcp_server.MCPServer", side_effect=ImportError("MCP not available"))
+    @patch("kailash_mcp.MCPServer", side_effect=ImportError("MCP not available"))
     def test_fallback_to_simple_server(self, mock_mcp_server):
         """Test fallback to simple server when Core SDK not available."""
         from nexus.core import Nexus

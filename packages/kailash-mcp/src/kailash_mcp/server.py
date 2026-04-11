@@ -30,7 +30,7 @@ Basic Usage:
 Production Usage:
     Main server with all production features:
 
-    >>> from kailash.mcp_server import MCPServer
+    >>> from kailash_mcp import MCPServer
     >>> server = MCPServer("my-server", enable_cache=True)
     >>> @server.tool(cache_key="search", cache_ttl=600)
     ... def search(query: str) -> dict:
@@ -40,7 +40,7 @@ Production Usage:
 Enhanced Production Usage:
     Server with authentication and monitoring:
 
-    >>> from kailash.mcp_server.auth import APIKeyAuth
+    >>> from kailash_mcp.auth.providers import APIKeyAuth
     >>> auth = APIKeyAuth({"user1": "secret-key"})
     >>> server = MCPServer(
     ...     "my-server",
@@ -311,7 +311,7 @@ class MCPServer:
 
     Kailash Philosophy Integration:
         Using nodes as MCP tools:
-        >>> from kailash.mcp_server import MCPServer
+        >>> from kailash_mcp import MCPServer
         >>> from kailash.nodes import PythonCodeNode
         >>>
         >>> server = MCPServer("my-server")
@@ -342,7 +342,7 @@ class MCPServer:
         >>> server.run()
 
         With authentication and advanced features:
-        >>> from kailash.mcp_server.auth import APIKeyAuth
+        >>> from kailash_mcp.auth.providers import APIKeyAuth
         >>> auth = APIKeyAuth({"user1": "secret-key"})
         >>> server = MCPServer(
         ...     "my-server",

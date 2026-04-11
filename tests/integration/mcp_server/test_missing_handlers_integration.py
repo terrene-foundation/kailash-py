@@ -10,9 +10,9 @@ from typing import Any, Dict
 import pytest
 import pytest_asyncio
 
-from kailash.mcp_server.auth import AuthManager
-from kailash.mcp_server.protocol import get_protocol_manager
-from kailash.mcp_server.server import MCPServer
+from kailash_mcp.auth.providers import AuthManager
+from kailash_mcp.protocol.protocol import get_protocol_manager
+from kailash_mcp.server import MCPServer
 from kailash.middleware.gateway.event_store import EventStore
 from tests.integration.docker_test_base import DockerIntegrationTestBase
 from tests.utils.docker_config import ensure_docker_services
@@ -79,7 +79,7 @@ class TestLoggingSetLevelIntegration(DockerIntegrationTestBase):
         await server._handle_logging_set_level({"level": "ERROR"}, "req_123")
 
         # Create a test logger
-        test_logger = logging.getLogger("kailash.mcp_server.test")
+        test_logger = logging.getLogger("kailash_mcp.test")
 
         # Capture log output
         import io

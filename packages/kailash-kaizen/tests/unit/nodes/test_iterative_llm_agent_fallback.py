@@ -95,7 +95,7 @@ class TestIterativeLLMAgentFallback:
             assert "tool1" in result["tool_outputs"]
             assert "tool2" in result["tool_outputs"]
 
-    @patch("kailash.mcp_server.MCPClient")
+    @patch("kailash_mcp.MCPClient")
     def test_mcp_timeout_fallback(self, mock_mcp_client):
         """Test handling of MCP timeouts with fallback."""
         # Setup mock that times out

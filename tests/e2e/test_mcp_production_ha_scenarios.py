@@ -18,16 +18,16 @@ import pytest
 import pytest_asyncio
 import redis.asyncio as redis
 
-from kailash.mcp_server import MCPClient, MCPServer
-from kailash.mcp_server.auth import APIKeyAuth
-from kailash.mcp_server.discovery import (
+from kailash_mcp import MCPClient, MCPServer
+from kailash_mcp.auth.providers import APIKeyAuth
+from kailash_mcp.discovery.discovery import (
     HealthChecker,
     LoadBalancer,
     ServerInfo,
     ServiceMesh,
     ServiceRegistry,
 )
-from kailash.mcp_server.oauth import ResourceServer
+from kailash_mcp.auth.oauth import ResourceServer
 from tests.utils.docker_config import (
     ensure_docker_services,
     get_postgres_connection_string,
@@ -39,7 +39,7 @@ def run_mcp_server(server_id: int, port: int, redis_url: str):
     """Run an MCP server instance in a separate process."""
     import asyncio
 
-    from kailash.mcp_server import MCPServer
+    from kailash_mcp import MCPServer
 
     async def _run_server():
         # Create server with unique name
@@ -367,7 +367,7 @@ class TestMCPHighAvailability:
             # Create isolated registry with health checking (use file-based to avoid cross-test pollution)
             with tempfile.TemporaryDirectory() as tmpdir:
                 registry_path = Path(tmpdir) / "failover_test.json"
-                from kailash.mcp_server.discovery import FileBasedDiscovery
+                from kailash_mcp.discovery.discovery import FileBasedDiscovery
 
                 discovery = FileBasedDiscovery(registry_path)
                 registry = ServiceRegistry(backends=[discovery])
@@ -581,7 +581,7 @@ class TestMCPSecurityProduction:
         db_conn = get_postgres_connection_string()
 
         # Create OAuth2 provider with proper configuration
-        from kailash.mcp_server.oauth import (
+        from kailash_mcp.auth.oauth import (
             AuthorizationServer,
             InMemoryClientStore,
             InMemoryTokenStore,

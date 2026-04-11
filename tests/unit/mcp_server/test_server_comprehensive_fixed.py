@@ -13,9 +13,9 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from kailash.mcp_server.auth import APIKeyAuth, BasicAuth
-from kailash.mcp_server.errors import MCPError, MCPErrorCode
-from kailash.mcp_server.server import MCPServer, MCPServerBase
+from kailash_mcp.auth.providers import APIKeyAuth, BasicAuth
+from kailash_mcp.errors import MCPError, MCPErrorCode
+from kailash_mcp.server import MCPServer, MCPServerBase
 
 
 class TestMCPServerBase:
@@ -101,7 +101,7 @@ class TestMCPServerBase:
         mock_fastmcp_instance = Mock()
         mock_fastmcp.return_value = mock_fastmcp_instance
 
-        with patch("kailash.mcp_server.server.logger"):
+        with patch("kailash_mcp.server.logger"):
             with patch.dict("sys.modules", {"fastmcp": Mock(FastMCP=mock_fastmcp)}):
                 server._init_mcp()
 
@@ -121,7 +121,7 @@ class TestMCPServerBase:
         server = TestServer()
 
         # Mock FastMCP import to fail
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
             with patch.dict("sys.modules", {"fastmcp": None}):
                 server._init_mcp()
 
@@ -207,7 +207,7 @@ class TestMCPServer:
         mock_fastmcp_instance = Mock()
         mock_fastmcp.return_value = mock_fastmcp_instance
 
-        with patch("kailash.mcp_server.server.logger"):
+        with patch("kailash_mcp.server.logger"):
             with patch.dict("sys.modules", {"fastmcp": Mock(FastMCP=mock_fastmcp)}):
                 server._init_mcp()
 
@@ -223,7 +223,7 @@ class TestMCPServer:
         mock_fastmcp_instance = Mock()
         mock_fastmcp.return_value = mock_fastmcp_instance
 
-        with patch("kailash.mcp_server.server.logger"):
+        with patch("kailash_mcp.server.logger"):
             with patch.dict("sys.modules", {"fastmcp": None}):  # Independent fails
                 with patch.dict(
                     "sys.modules", {"mcp.server": Mock(FastMCP=mock_fastmcp)}
@@ -238,7 +238,7 @@ class TestMCPServer:
         server = MCPServer("test-server")
 
         # Mock both FastMCP imports to fail
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
             with patch.dict("sys.modules", {"fastmcp": None}):
                 with patch.dict("sys.modules", {"mcp.server": None}):
                     server._init_mcp()
@@ -268,7 +268,7 @@ class TestMCPServer:
         """Test _create_fallback_server with proper logging."""
         server = MCPServer("test-server")
 
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
             fallback = server._create_fallback_server()
 
             mock_logger.info.assert_any_call("Creating fallback server implementation")
@@ -290,7 +290,7 @@ class TestMCPServerRunMethod:
         mock_mcp = Mock()
         server._mcp = mock_mcp
 
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
             mock_mcp.run.side_effect = KeyboardInterrupt()  # Simulate stopping
 
             server.run()
@@ -341,7 +341,7 @@ class TestMCPServerRunMethod:
         mock_mcp.run.side_effect = RuntimeError("Server failed")
         server._mcp = mock_mcp
 
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
             with pytest.raises(RuntimeError, match="Server failed"):
                 server.run()
 
@@ -397,7 +397,7 @@ class TestMCPServerRunMethod:
         server._mcp = mock_mcp
 
         with patch.object(server, "health_check") as mock_health:
-            with patch("kailash.mcp_server.server.logger") as mock_logger:
+            with patch("kailash_mcp.server.logger") as mock_logger:
                 mock_health.return_value = {
                     "status": "degraded",
                     "issues": ["Test issue"],
@@ -443,7 +443,7 @@ class TestMCPServerToolDecorator:
         """Test tool decorator with required_permissions (multiple)."""
         server = MCPServer("test-server")
 
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
 
             @server.tool(required_permissions=["admin.execute", "user.read"])
             def test_tool():

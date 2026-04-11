@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock
 import pytest
 import pytest_asyncio
 
-from kailash.mcp_server.server import MCPServer
-from kailash.mcp_server.subscriptions import (
+from kailash_mcp.server import MCPServer
+from kailash_mcp.advanced.subscriptions import (
     ResourceChange,
     ResourceChangeType,
     ResourceSubscriptionManager,

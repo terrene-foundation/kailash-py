@@ -21,8 +21,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 class TestEnhancedMCPServerCreation:
     """Test creation of enhanced MCP server using Core SDK."""
 
-    @patch("kailash.mcp_server.MCPServer")
-    @patch("kailash.mcp_server.auth.APIKeyAuth")
+    @patch("kailash_mcp.MCPServer")
+    @patch("kailash_mcp.auth.providers.APIKeyAuth")
     def test_create_sdk_mcp_server_without_auth(self, mock_auth, mock_server):
         """Test creating MCP server without authentication."""
         from nexus.core import Nexus
@@ -40,8 +40,8 @@ class TestEnhancedMCPServerCreation:
         assert call_args["auth_provider"] is None
         assert call_args["enable_streaming"] is True
 
-    @patch("kailash.mcp_server.MCPServer")
-    @patch("kailash.mcp_server.auth.APIKeyAuth")
+    @patch("kailash_mcp.MCPServer")
+    @patch("kailash_mcp.auth.providers.APIKeyAuth")
     def test_create_sdk_mcp_server_with_auth(self, mock_auth, mock_server):
         """Test creating MCP server with authentication enabled."""
         from nexus.core import Nexus
@@ -60,7 +60,7 @@ class TestEnhancedMCPServerCreation:
         call_args = mock_server.call_args[1]
         assert call_args["auth_provider"] == mock_auth_instance
 
-    @patch("kailash.mcp_server.MCPServer")
+    @patch("kailash_mcp.MCPServer")
     def test_create_sdk_mcp_server_with_transports(self, mock_server):
         """Test creating MCP server with multiple transports."""
         from nexus.core import Nexus
@@ -73,7 +73,7 @@ class TestEnhancedMCPServerCreation:
         assert call_args["enable_http_transport"] is True
         assert call_args["enable_sse_transport"] is True
 
-    @patch("kailash.mcp_server.MCPServer")
+    @patch("kailash_mcp.MCPServer")
     def test_create_sdk_mcp_server_with_rate_limiting(self, mock_server):
         """Test creating MCP server with rate limiting."""
         from nexus.core import Nexus
@@ -87,7 +87,7 @@ class TestEnhancedMCPServerCreation:
         call_args = mock_server.call_args[1]
         assert call_args["rate_limit_config"] == rate_config
 
-    @patch("kailash.mcp_server.MCPServer")
+    @patch("kailash_mcp.MCPServer")
     def test_create_sdk_mcp_server_with_discovery(self, mock_server):
         """Test creating MCP server with discovery enabled."""
         from nexus.core import Nexus
@@ -342,7 +342,7 @@ class TestErrorHandling:
 
         # When SDK MCP server creation fails, Nexus sets _mcp_server to None
         with patch(
-            "kailash.mcp_server.MCPServer",
+            "kailash_mcp.MCPServer",
             side_effect=ImportError("Server creation failed"),
         ):
             app = Nexus(enable_http_transport=True)
@@ -351,7 +351,7 @@ class TestErrorHandling:
             assert app._mcp_server is None
             assert app._mcp_channel is None
 
-    @patch("kailash.mcp_server.MCPServer", side_effect=ImportError)
+    @patch("kailash_mcp.MCPServer", side_effect=ImportError)
     def test_workflow_registration_without_mcp(self, mock_server):
         """Test workflow registration when MCP is not available."""
         from kailash.workflow.builder import WorkflowBuilder

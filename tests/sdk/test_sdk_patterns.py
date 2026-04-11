@@ -402,7 +402,7 @@ def test_mcp_patterns():
 
     @test("MCP server module exists")
     def _():
-        from kailash.mcp_server import MCPServer
+        from kailash_mcp import MCPServer
 
         assert MCPServer is not None
 
@@ -410,7 +410,7 @@ def test_mcp_patterns():
 
     @test("MCP server has required methods")
     def _():
-        from kailash.mcp_server import MCPServer
+        from kailash_mcp import MCPServer
 
         server = MCPServer(name="test-server")
         assert hasattr(server, "tool")

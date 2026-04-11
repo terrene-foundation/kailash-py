@@ -20,7 +20,7 @@ Features:
 Examples:
     Structured tool with validation:
 
-    >>> from kailash.mcp_server.advanced_features import StructuredTool
+    >>> from kailash_mcp.advanced.features import StructuredTool
     >>>
     >>> @StructuredTool(
     ...     output_schema={
@@ -37,7 +37,7 @@ Examples:
 
     Resource template with dynamic URIs:
 
-    >>> from kailash.mcp_server.advanced_features import ResourceTemplate
+    >>> from kailash_mcp.advanced.features import ResourceTemplate
     >>>
     >>> template = ResourceTemplate(
     ...     uri_template="files://{path}",
@@ -53,7 +53,7 @@ Examples:
 
     Multi-modal content:
 
-    >>> from kailash.mcp_server.advanced_features import MultiModalContent
+    >>> from kailash_mcp.advanced.features import MultiModalContent
     >>>
     >>> content = MultiModalContent()
     >>> content.add_text("Here is the analysis:")

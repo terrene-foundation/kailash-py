@@ -298,7 +298,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
 
     # ========== MCP Tool Execution Tests ==========
 
-    @patch("kailash.mcp_server.MCPClient")
+    @patch("kailash_mcp.MCPClient")
     def test_execute_mcp_tool_call_success(self, mock_mcp_client_class):
         """Test successful MCP tool execution."""
         mock_client = MagicMock()
@@ -336,7 +336,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
         self.assertEqual(result["server"], "test-server")
         mock_client.call_tool.assert_called_once()
 
-    @patch("kailash.mcp_server.MCPClient")
+    @patch("kailash_mcp.MCPClient")
     def test_execute_mcp_tool_call_failure(self, mock_mcp_client_class):
         """Test MCP tool execution failure handling."""
         mock_client = MagicMock()

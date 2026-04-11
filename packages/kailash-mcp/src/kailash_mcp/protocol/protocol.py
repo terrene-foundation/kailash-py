@@ -22,7 +22,7 @@ enhanced functionality for production use cases.
 Examples:
     Progress reporting:
 
-    >>> from kailash.mcp_server.protocol import ProgressManager
+    >>> from kailash_mcp.protocol.protocol import ProgressManager
     >>> progress = ProgressManager()
     >>>
     >>> # Start progress tracking
@@ -33,7 +33,7 @@ Examples:
 
     Request cancellation:
 
-    >>> from kailash.mcp_server.protocol import CancellationManager
+    >>> from kailash_mcp.protocol.protocol import CancellationManager
     >>> cancellation = CancellationManager()
     >>>
     >>> # Check if request should be cancelled
@@ -42,7 +42,7 @@ Examples:
 
     Completion system:
 
-    >>> from kailash.mcp_server.protocol import CompletionManager
+    >>> from kailash_mcp.protocol.protocol import CompletionManager
     >>> completion = CompletionManager()
     >>>
     >>> # Get completions for a prompt argument

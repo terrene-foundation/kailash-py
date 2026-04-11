@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kailash.mcp_server.errors import MCPError, MCPErrorCode
-from kailash.mcp_server.protocol import (
+from kailash_mcp.errors import MCPError, MCPErrorCode
+from kailash_mcp.protocol.protocol import (
     CancellationManager,
     CompletionManager,
     MessageType,
@@ -463,7 +463,7 @@ class TestConvenienceFunctions:
 
     def test_start_progress_convenience(self):
         """Test start_progress convenience function."""
-        from kailash.mcp_server.protocol import start_progress
+        from kailash_mcp.protocol.protocol import start_progress
 
         token = start_progress("test_operation", total=100)
         assert isinstance(token, ProgressToken)
@@ -473,7 +473,7 @@ class TestConvenienceFunctions:
     @pytest.mark.asyncio
     async def test_update_progress_convenience(self):
         """Test update_progress convenience function."""
-        from kailash.mcp_server.protocol import start_progress, update_progress
+        from kailash_mcp.protocol.protocol import start_progress, update_progress
 
         token = start_progress("test_operation", total=100)
         await update_progress(token, progress=50)
@@ -482,7 +482,7 @@ class TestConvenienceFunctions:
     @pytest.mark.asyncio
     async def test_is_cancelled_convenience(self):
         """Test is_cancelled convenience function."""
-        from kailash.mcp_server.protocol import cancel_request, is_cancelled
+        from kailash_mcp.protocol.protocol import cancel_request, is_cancelled
 
         request_id = "test_request_123"
         assert not is_cancelled(request_id)

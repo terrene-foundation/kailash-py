@@ -19,9 +19,9 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from kailash.mcp_server.auth import APIKeyAuth, BasicAuth
-from kailash.mcp_server.errors import MCPError, MCPErrorCode
-from kailash.mcp_server.server import MCPServer, MCPServerBase
+from kailash_mcp.auth.providers import APIKeyAuth, BasicAuth
+from kailash_mcp.errors import MCPError, MCPErrorCode
+from kailash_mcp.server import MCPServer, MCPServerBase
 
 
 class TestMCPServerBase:
@@ -127,7 +127,7 @@ class TestMCPServerBase:
         server = TestServer()
 
         # Mock FastMCP import to fail
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
             with patch.dict("sys.modules", {"fastmcp": None}):
                 server._init_mcp()
 
@@ -242,7 +242,7 @@ class TestMCPServer:
         # Mock both FastMCP imports to fail
         with patch.dict("sys.modules", {"fastmcp": None}):
             with patch.dict("sys.modules", {"mcp.server": None}):
-                with patch("kailash.mcp_server.server.logger") as mock_logger:
+                with patch("kailash_mcp.server.logger") as mock_logger:
                     server._init_mcp()
 
                     # Should create fallback server
@@ -270,7 +270,7 @@ class TestMCPServer:
         """Test _create_fallback_server with proper logging."""
         server = MCPServer("test-server")
 
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
             fallback = server._create_fallback_server()
 
             mock_logger.info.assert_any_call("Creating fallback server implementation")
@@ -285,7 +285,7 @@ class TestMCPServer:
         server = MCPServer("test-server")
         fallback = server._create_fallback_server()
 
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
 
             @fallback.tool()
             def test_tool():
@@ -298,7 +298,7 @@ class TestMCPServer:
         server = MCPServer("test-server")
         fallback = server._create_fallback_server()
 
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
 
             @fallback.resource("test://resource")
             def test_resource():
@@ -313,7 +313,7 @@ class TestMCPServer:
         server = MCPServer("test-server")
         fallback = server._create_fallback_server()
 
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
 
             @fallback.prompt("test_prompt")
             def test_prompt():
@@ -341,7 +341,7 @@ class TestMCPServer:
         def test_prompt():
             return "prompt"
 
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
             with pytest.raises(NotImplementedError):
                 fallback.run()
 
@@ -385,7 +385,7 @@ class TestMCPServerToolDecorator:
         """Test tool decorator with required_permissions (multiple)."""
         server = MCPServer("test-server")
 
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
 
             @server.tool(required_permissions=["admin.execute", "user.read"])
             def test_tool():
@@ -730,7 +730,7 @@ class TestMCPServerRunMethod:
         # Mock transport configuration
         server.config.set("server.transport", "stdio")
 
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
             mock_mcp.run.side_effect = KeyboardInterrupt  # Simulate stopping
 
             # Enhanced server catches KeyboardInterrupt and logs it
@@ -759,7 +759,7 @@ class TestMCPServerRunMethod:
         server.config.set("server.transport", "http")
         server.config.set("server.http_port", 8080)
 
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
             mock_mcp.run.side_effect = KeyboardInterrupt()  # Simulate stopping
 
             # Enhanced server catches KeyboardInterrupt and logs it
@@ -788,7 +788,7 @@ class TestMCPServerRunMethod:
         server.config.set("server.transport", "sse")
         server.config.set("server.sse_port", 8081)
 
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
             mock_mcp.run.side_effect = KeyboardInterrupt()  # Simulate stopping
 
             # Enhanced server catches KeyboardInterrupt and logs it
@@ -839,7 +839,7 @@ class TestMCPServerRunMethod:
         mock_mcp.run.side_effect = RuntimeError("Server failed")
         server._mcp = mock_mcp
 
-        with patch("kailash.mcp_server.server.logger") as mock_logger:
+        with patch("kailash_mcp.server.logger") as mock_logger:
             with pytest.raises(RuntimeError, match="Server failed"):
                 server.run()
 
@@ -888,7 +888,7 @@ class TestMCPServerInitialization:
             pytest.skip("mcp.server.fastmcp not available")
         circuit_breaker_config = {"failure_threshold": 5, "timeout": 60}
 
-        with patch("kailash.mcp_server.errors.CircuitBreakerRetry") as mock_cb:
+        with patch("kailash_mcp.errors.CircuitBreakerRetry") as mock_cb:
             mock_cb_instance = Mock()
             mock_cb.return_value = mock_cb_instance
 

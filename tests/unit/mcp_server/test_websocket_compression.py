@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from kailash.mcp_server.server import MCPServer
+from kailash_mcp.server import MCPServer
 
 
 class TestWebSocketCompression:

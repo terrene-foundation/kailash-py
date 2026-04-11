@@ -22,8 +22,8 @@ from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
 # Import canonical Kailash MCP components from the kailash_mcp package
-# (SPEC-01: kailash.mcp_server shim is deprecated; canonical location is
-# kailash_mcp). Optional extra -- kailash_mcp ships separately.
+# (SPEC-01: canonical location is kailash_mcp).
+# Optional extra -- kailash_mcp ships separately.
 try:
     from kailash_mcp import MCPServer
     from kailash_mcp.utils import CacheManager, ConfigManager, MetricsCollector

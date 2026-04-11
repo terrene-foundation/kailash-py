@@ -13,7 +13,7 @@ class TestIterativeLLMAgentMCPIntegration:
         """Set up test fixtures."""
         self.agent = IterativeLLMAgentNode()
 
-    @patch("kailash.mcp_server.MCPClient")
+    @patch("kailash_mcp.MCPClient")
     def test_end_to_end_with_real_mcp_execution(self, mock_mcp_client):
         """Test end-to-end execution with real MCP tool calls."""
         # Setup mock MCP client that returns realistic responses
@@ -133,7 +133,7 @@ class TestIterativeLLMAgentMCPIntegration:
                     step_result = exec_results["steps_completed"][0]
                     assert "Mock execution result" in step_result["output"]
 
-    @patch("kailash.mcp_server.MCPClient")
+    @patch("kailash_mcp.MCPClient")
     def test_error_handling_in_mcp_execution(self, mock_mcp_client):
         """Test error handling when MCP tool execution fails."""
         # Setup mock MCP client that fails

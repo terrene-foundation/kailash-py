@@ -17,8 +17,8 @@ import pytest
 import pytest_asyncio
 import websockets
 
-from kailash.mcp_server.protocol import ResourceChange, ResourceChangeType
-from kailash.mcp_server.server import MCPServer
+from kailash_mcp.protocol.protocol import ResourceChange, ResourceChangeType
+from kailash_mcp.server import MCPServer
 
 
 class MCPTestClient:

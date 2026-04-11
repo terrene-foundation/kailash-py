@@ -17,9 +17,9 @@ from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature
 
 try:
-    from kailash.mcp_server import MCPClient
-    from kailash.mcp_server.registry import ServiceRegistry
-    from kailash.mcp_server.service_mesh import ServiceMesh
+    from kailash_mcp import MCPClient
+    from kailash_mcp.discovery.registry_integration import ServiceRegistry
+    from kailash_mcp.service_mesh import ServiceMesh
 
     KAILASH_MCP_AVAILABLE = True
 except ImportError:
@@ -1159,7 +1159,7 @@ async def main():
 
 if __name__ == "__main__":
     if not KAILASH_MCP_AVAILABLE:
-        print("⚠️  Warning: kailash.mcp_server not available. Install with:")
+        print("⚠️  Warning: kailash_mcp not available. Install with:")
         print("   pip install kailash")
         print("\nRunning in demonstration mode with simulated MCP infrastructure.\n")
 

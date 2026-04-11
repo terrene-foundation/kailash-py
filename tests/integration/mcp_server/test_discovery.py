@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kailash.mcp_server.discovery import (
+from kailash_mcp.discovery.discovery import (
     DiscoveryBackend,
     FileBasedDiscovery,
     HealthChecker,
@@ -20,7 +20,7 @@ from kailash.mcp_server.discovery import (
     discover_mcp_servers,
     get_mcp_client,
 )
-from kailash.mcp_server.errors import ServiceDiscoveryError
+from kailash_mcp.errors import ServiceDiscoveryError
 
 
 class TestServerInfo:
@@ -893,7 +893,7 @@ class TestServiceMesh:
             args=["-m", "server"],
         )
 
-        with patch("kailash.mcp_server.client.MCPClient") as mock_mcp_client:
+        with patch("kailash_mcp.client.MCPClient") as mock_mcp_client:
             mock_client = MagicMock()
             mock_mcp_client.return_value = mock_client
 
@@ -908,7 +908,7 @@ class TestServiceMesh:
             name="http-server", transport="http", url="http://localhost:8080"
         )
 
-        with patch("kailash.mcp_server.client.MCPClient") as mock_mcp_client:
+        with patch("kailash_mcp.client.MCPClient") as mock_mcp_client:
             mock_client = MagicMock()
             mock_mcp_client.return_value = mock_client
 
@@ -931,7 +931,7 @@ class TestConvenienceFunctions:
     async def test_discover_mcp_servers(self):
         """Test discover_mcp_servers convenience function."""
         with patch(
-            "kailash.mcp_server.discovery.create_default_registry"
+            "kailash_mcp.discovery.discovery.create_default_registry"
         ) as mock_create:
             mock_registry = AsyncMock()
             mock_registry.discover_servers.return_value = [
@@ -948,9 +948,9 @@ class TestConvenienceFunctions:
     async def test_get_mcp_client(self):
         """Test get_mcp_client convenience function."""
         with patch(
-            "kailash.mcp_server.discovery.create_default_registry"
+            "kailash_mcp.discovery.discovery.create_default_registry"
         ) as mock_create:
-            with patch("kailash.mcp_server.discovery.ServiceMesh") as mock_mesh_class:
+            with patch("kailash_mcp.discovery.discovery.ServiceMesh") as mock_mesh_class:
                 mock_registry = AsyncMock()
                 mock_mesh = AsyncMock()
                 mock_client = MagicMock()

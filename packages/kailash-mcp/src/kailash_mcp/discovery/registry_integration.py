@@ -16,8 +16,8 @@ Features:
 Examples:
     Auto-registration with file registry:
 
-    >>> from kailash.mcp_server import MCPServer
-    >>> from kailash.mcp_server.registry_integration import ServerRegistrar
+    >>> from kailash_mcp import MCPServer
+    >>> from kailash_mcp.discovery.registry_integration import ServerRegistrar
     >>>
     >>> server = MCPServer("my-server")
     >>> registrar = ServerRegistrar(server)
@@ -31,7 +31,7 @@ Examples:
 
     Custom registry backend:
 
-    >>> from kailash.mcp_server.discovery import ServiceRegistry, FileBasedDiscovery
+    >>> from kailash_mcp.discovery.discovery import ServiceRegistry, FileBasedDiscovery
     >>>
     >>> registry = ServiceRegistry([FileBasedDiscovery("custom_registry.json")])
     >>> registrar = ServerRegistrar(server, registry=registry)
@@ -525,8 +525,8 @@ def enable_auto_discovery(server, **kwargs):
         ServerRegistrar instance
 
     Examples:
-        >>> from kailash.mcp_server import MCPServer
-        >>> from kailash.mcp_server.registry_integration import enable_auto_discovery
+        >>> from kailash_mcp import MCPServer
+        >>> from kailash_mcp.discovery.registry_integration import enable_auto_discovery
         >>>
         >>> server = MCPServer("my-server")
         >>> registrar = enable_auto_discovery(server, enable_network_discovery=True)

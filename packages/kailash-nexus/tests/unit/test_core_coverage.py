@@ -79,7 +79,7 @@ class TestNexusInitialization:
         assert nexus._mcp_port == 4001
 
     @patch("nexus.core.create_gateway")
-    @patch("kailash.mcp_server.auth.APIKeyAuth")
+    @patch("kailash_mcp.auth.providers.APIKeyAuth")
     def test_enterprise_features_enabled(self, mock_auth, mock_create_gateway):
         """Test Nexus initialization with enterprise features enabled."""
         mock_gateway = Mock()
@@ -386,7 +386,7 @@ class TestNexusMultipleInstances:
     """Test multiple Nexus instances (FastAPI-style)."""
 
     @patch("nexus.core.create_gateway")
-    @patch("kailash.mcp_server.auth.APIKeyAuth")
+    @patch("kailash_mcp.auth.providers.APIKeyAuth")
     def test_multiple_independent_instances(self, mock_auth, mock_create_gateway):
         """Test that multiple Nexus instances are independent."""
         mock_gateway1 = Mock()
@@ -447,7 +447,7 @@ class TestNexusAdvancedFeatures:
         assert nexus._gateway == mock_gateway
 
     @patch("nexus.core.create_gateway")
-    @patch("kailash.mcp_server.auth.APIKeyAuth")
+    @patch("kailash_mcp.auth.providers.APIKeyAuth")
     def test_boolean_configuration_flags(self, mock_auth, mock_create_gateway):
         """Test boolean configuration flags are properly handled."""
         mock_gateway = Mock()

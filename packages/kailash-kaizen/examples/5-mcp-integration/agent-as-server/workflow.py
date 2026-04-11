@@ -6,26 +6,26 @@ allowing external clients to consume agent capabilities via the Model Context
 Protocol (MCP) using real JSON-RPC 2.0.
 
 ✅ MIGRATED TO PRODUCTION MCP (2025-10-04)
-- Uses kailash.mcp_server (production-ready, 100% MCP spec compliant)
-- Direct kailash.mcp_server.MCPServer usage (BaseAgent helper has known issue)
+- Uses kailash_mcp (production-ready, 100% MCP spec compliant)
+- Direct kailash_mcp.MCPServer usage (BaseAgent helper has known issue)
 - Real JSON-RPC 2.0 protocol (no mocking)
 - Multi-transport support (STDIO, HTTP, WebSocket, SSE)
 - Enterprise features (auth, auto-discovery, metrics)
 
 Key Migration Changes:
-1. Imports: kaizen.mcp → kailash.mcp_server
-2. Setup: Manual MCPServerConfig → kailash.mcp_server.MCPServer()
+1. Imports: kaizen.mcp → kailash_mcp
+2. Setup: Manual MCPServerConfig → kailash_mcp.MCPServer()
 3. Tools: Manual tool dicts → @server.tool() decorator
 4. Lifecycle: Manual server management → server.run() (blocking) or async server.start()
 5. Registry: Manual MCPRegistry → enable_auto_discovery()
 
 Note on BaseAgent Helper:
 - BaseAgent.expose_as_mcp_server() exists but has a known issue with tool naming
-- This example uses direct kailash.mcp_server API until the helper is fixed
+- This example uses direct kailash_mcp API until the helper is fixed
 - Issue: @server.tool(name=...) doesn't accept 'name' parameter
 
 Key Features:
-- Real MCP server implementation using production kailash.mcp_server
+- Real MCP server implementation using production kailash_mcp
 - Expose agent methods as MCP tools via decorator
 - JSON-RPC 2.0 server endpoints with real protocol
 - Production-ready server lifecycle management
@@ -37,7 +37,7 @@ can connect to and use for intelligent question answering, with full MCP
 protocol compliance including tool discovery, invocation, and monitoring.
 
 Learning Objectives:
-- Use kailash.mcp_server.MCPServer for production MCP server creation
+- Use kailash_mcp.MCPServer for production MCP server creation
 - Expose agent capabilities as MCP tools via @server.tool() decorator
 - Implement real JSON-RPC 2.0 server protocol
 - Handle server lifecycle with production patterns
@@ -57,7 +57,7 @@ from kaizen.memory import SharedMemoryPool
 from kaizen.signatures import InputField, OutputField, Signature
 
 # Production MCP imports
-from kailash.mcp_server import MCPServer, enable_auto_discovery
+from kailash_mcp import MCPServer, enable_auto_discovery
 
 logger = logging.getLogger(__name__)
 
@@ -123,10 +123,10 @@ class TextAnalysisSignature(Signature):
 
 class MCPServerAgent(BaseAgent):
     """
-    Agent exposed as an MCP server using production kailash.mcp_server.
+    Agent exposed as an MCP server using production kailash_mcp.
 
     This agent:
-    1. Creates production MCPServer from kailash.mcp_server
+    1. Creates production MCPServer from kailash_mcp
     2. Exposes agent methods as MCP tools via @server.tool() decorator
     3. Handles JSON-RPC 2.0 requests via production MCP server
     4. Manages server lifecycle with built-in features
@@ -171,7 +171,7 @@ class MCPServerAgent(BaseAgent):
             return None
 
         try:
-            from kailash.mcp_server.auth import APIKeyAuth, BearerTokenAuth, JWTAuth
+            from kailash_mcp.auth.providers import APIKeyAuth, BearerTokenAuth, JWTAuth
 
             auth_type = self.server_config.auth_type.lower()
 
@@ -208,7 +208,7 @@ class MCPServerAgent(BaseAgent):
 
     def expose_as_server(self):
         """
-        Expose agent as MCP server using production kailash.mcp_server.
+        Expose agent as MCP server using production kailash_mcp.
 
         Returns:
             MCPServer instance ready to run
@@ -478,7 +478,7 @@ class MCPServerAgent(BaseAgent):
 
 
 def example_basic_server():
-    """Example 1: Basic MCP server setup with production kailash.mcp_server."""
+    """Example 1: Basic MCP server setup with production kailash_mcp."""
     print("=" * 70)
     print("Example 1: Basic MCP Server Setup (Production)")
     print("=" * 70)
@@ -666,7 +666,7 @@ def main():
     print("=" * 70)
     print()
     print("This example demonstrates PRODUCTION MCP server implementation:")
-    print("  • Production kailash.mcp_server.MCPServer")
+    print("  • Production kailash_mcp.MCPServer")
     print("  • Real JSON-RPC 2.0 protocol handling")
     print("  • Tool exposure via @server.tool() decorator")
     print("  • Enterprise features: auth, discovery, metrics")
@@ -679,7 +679,7 @@ def main():
     print()
     print("Note on BaseAgent Helper:")
     print("  • BaseAgent.expose_as_mcp_server() has known tool naming issue")
-    print("  • This example uses direct kailash.mcp_server API (workaround)")
+    print("  • This example uses direct kailash_mcp API (workaround)")
     print("  • Issue will be fixed in future Core SDK update")
     print()
     print("=" * 70)
@@ -705,7 +705,7 @@ def main():
     print("=" * 70)
     print()
     print("What you learned:")
-    print("  ✓ How to use kailash.mcp_server.MCPServer for production MCP")
+    print("  ✓ How to use kailash_mcp.MCPServer for production MCP")
     print("  ✓ How to expose agent methods via @server.tool() decorator")
     print("  ✓ How to configure authentication providers")
     print("  ✓ How to enable auto-discovery and service registration")
@@ -723,7 +723,7 @@ def main():
     print()
     print("Migration from deprecated kaizen.mcp:")
     print("  • Old: Manual MCPServerConfig + MCPRegistry + handle_mcp_request()")
-    print("  • New: kailash.mcp_server.MCPServer + @server.tool() decorator")
+    print("  • New: kailash_mcp.MCPServer + @server.tool() decorator")
     print("  • Result: 60% less code, production-ready features built-in")
     print()
 

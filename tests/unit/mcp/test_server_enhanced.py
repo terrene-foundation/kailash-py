@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from kailash.mcp_server.server import MCPServer
+from kailash_mcp.server import MCPServer
 
 
 class TestMCPServer:
@@ -15,7 +15,7 @@ class TestMCPServer:
 
     def test_import_mcp_server(self):
         """Test that MCPServer can be imported."""
-        from kailash.mcp_server.server import MCPServer
+        from kailash_mcp.server import MCPServer
 
         assert MCPServer is not None
 
@@ -37,7 +37,7 @@ class TestMCPServer:
         assert server.cache.enabled is True
         assert server.cache.default_ttl == 600
 
-    @patch("kailash.mcp_server.server.logger")
+    @patch("kailash_mcp.server.logger")
     def test_mcp_initialization_provides_interface(self, mock_logger):
         """Test that MCP initialization provides required interface."""
         server = MCPServer("interface-test")

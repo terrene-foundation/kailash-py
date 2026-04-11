@@ -312,4 +312,4 @@ changes:
     reason: "SPEC-09 canonical JSON module (trust._json) — DuplicateKeyError, parse_constant NaN/Inf rejection, sorted-key deterministic output. Cross-SDK parser differential documentation with 8 edge-case vectors."
     diff_lines: "+80"
 
-status: pending_review
+status: reviewed

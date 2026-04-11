@@ -2,14 +2,14 @@
 Tests for Agent as MCP Client Example
 
 MIGRATED TO KAILASH.MCP_SERVER (2025-12-29)
-These tests use the production kailash.mcp_server implementation.
+These tests use the production kailash_mcp implementation.
 
 3-Tier Testing Strategy:
 - Tier 1 (Unit): Agent logic with minimal mocking
-- Tier 2 (Integration): Real MCP connections via kailash.mcp_server.MCPClient
-- Tier 3 (E2E): Complete workflows with kailash.mcp_server infrastructure
+- Tier 2 (Integration): Real MCP connections via kailash_mcp.MCPClient
+- Tier 3 (E2E): Complete workflows with kailash_mcp infrastructure
 
-NO MOCKING of MCP protocol - uses real MCPClient from kailash.mcp_server.
+NO MOCKING of MCP protocol - uses real MCPClient from kailash_mcp.
 """
 
 import asyncio
@@ -47,8 +47,8 @@ TaskAnalysisSignature = agent_as_client_example.TaskAnalysisSignature
 ToolInvocationSignature = agent_as_client_example.ToolInvocationSignature
 ResultSynthesisSignature = agent_as_client_example.ResultSynthesisSignature
 
-# Production MCP infrastructure - kailash.mcp_server
-from kailash.mcp_server import MCPClient
+# Production MCP infrastructure - kailash_mcp
+from kailash_mcp import MCPClient
 from kaizen.memory import SharedMemoryPool
 
 logger = logging.getLogger(__name__)
@@ -207,9 +207,9 @@ class TestMCPClientAgentInitialization:
 
 
 class TestMCPClientIntegration:
-    """Test real MCP connections using kailash.mcp_server.MCPClient - NO MOCKING.
+    """Test real MCP connections using kailash_mcp.MCPClient - NO MOCKING.
 
-    Uses production kailash.mcp_server.MCPClient for real MCP protocol testing.
+    Uses production kailash_mcp.MCPClient for real MCP protocol testing.
     """
 
     def test_mcp_client_creation(self):
@@ -399,7 +399,7 @@ class TestMCPClientWorkflows:
 
 
 class TestMCPClientPerformance:
-    """Test performance characteristics using kailash.mcp_server.MCPClient."""
+    """Test performance characteristics using kailash_mcp.MCPClient."""
 
     def test_mcp_client_creation_performance(self):
         """Test MCPClient creation is fast."""

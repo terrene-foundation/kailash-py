@@ -1,6 +1,6 @@
 """Unit tests for MCP metrics collection framework.
 
-Tests for the metrics collection system components in kailash.mcp_server.utils.metrics.
+Tests for the metrics collection system components in kailash_mcp.utils.metrics.
 NO MOCKING - This is a unit test file for isolated component testing.
 """
 
@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from kailash.mcp_server.utils.metrics import (
+from kailash_mcp.utils.metrics import (
     MetricsCollector,
     get_metrics,
     reset_metrics,
