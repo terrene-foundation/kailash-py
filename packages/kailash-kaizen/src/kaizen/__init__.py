@@ -6,7 +6,7 @@ auto-optimization, and enhanced AI agent capabilities built on top of the
 proven Kailash SDK infrastructure.
 """
 
-__version__ = "2.6.0"
+__version__ = "2.7.0"
 __author__ = "Terrene Foundation"
 __license__ = "Apache-2.0"
 
@@ -15,7 +15,9 @@ __license__ = "Apache-2.0"
 try:
     from kaizen_agents import Agent  # Full async Agent (requires kaizen-agents)
 except ImportError:
-    from kaizen.core.agents import Agent  # type: ignore[assignment]  # CoreAgent fallback
+    from kaizen.core.agents import (
+        Agent,  # type: ignore[assignment]  # CoreAgent fallback
+    )
 
 # Import nodes module to trigger agent registration
 # Agent nodes are registered when kaizen-agents is installed
