@@ -1,8 +1,15 @@
 """
 Shared fixtures and configuration for performance benchmarks.
+
+Requires pytest-benchmark. This conftest is loaded only when running
+tests from the benchmarks/ directory.
 """
 
 import pytest
+
+pytest.importorskip(
+    "pytest_benchmark", reason="pytest-benchmark required for benchmarks"
+)
 
 
 def pytest_configure(config):
