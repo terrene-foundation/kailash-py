@@ -907,7 +907,12 @@ Check the documentation or explore available resources.
 
         return transports
 
-    def register(self, name: str, workflow: Workflow):
+    def register(
+        self,
+        name: str,
+        workflow: Workflow,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
         """Register a workflow to be available on all channels.
 
         Zero-config registration: Single registration → Multi-channel exposure (API, CLI, MCP)
@@ -916,6 +921,7 @@ Check the documentation or explore available resources.
         Args:
             name: Workflow identifier
             workflow: Workflow instance or WorkflowBuilder
+            metadata: Optional structured metadata (version, author, tags, description, etc.)
         """
         import time
 
@@ -925,8 +931,24 @@ Check the documentation or explore available resources.
         if hasattr(workflow, "build"):
             workflow = workflow.build()
 
-        # Store internally via HandlerRegistry
-        self._registry.register_workflow(name, workflow)
+        # Store internally via HandlerRegistry FIRST so metadata
+        # validation (JSON-serializable, size cap) runs before we touch
+        # the workflow object. If validation fails, the caller's
+        # workflow is left untouched and the ValueError surfaces
+        # cleanly — no half-mutated state to clean up.
+        self._registry.register_workflow(name, workflow, metadata=metadata)
+
+        # Merge caller-supplied metadata into the Workflow object itself
+        # so downstream consumers that read workflow.metadata (MCP
+        # workflow:// resource, OpenAPI schema derivation, etc.) see the
+        # supplied fields without a second lookup. Caller values take
+        # precedence over existing keys. We assign a NEW dict rather
+        # than mutating in place: the same Workflow instance may be
+        # registered under multiple names (shared builder output), and
+        # in-place mutation would leak metadata across registrations.
+        if metadata and hasattr(workflow, "metadata"):
+            existing = workflow.metadata if workflow.metadata else {}
+            workflow.metadata = {**existing, **metadata}
 
         # Validate PythonCodeNode sandbox issues at registration time
         self._validate_workflow_sandbox(name, workflow)
@@ -1781,6 +1803,7 @@ Check the documentation or explore available resources.
         name: str,
         description: str = "",
         tags: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ):
         """Decorator to register an async function as a multi-channel workflow.
 
@@ -1795,6 +1818,7 @@ Check the documentation or explore available resources.
             name: Workflow name for registration.
             description: Optional description for the workflow.
             tags: Optional tags for categorization.
+            metadata: Optional structured metadata (version, author, tags, etc.).
 
         Returns:
             Decorator function.
@@ -1809,7 +1833,9 @@ Check the documentation or explore available resources.
         """
 
         def decorator(func):
-            self.register_handler(name, func, description=description, tags=tags)
+            self.register_handler(
+                name, func, description=description, tags=tags, metadata=metadata
+            )
             return func
 
         return decorator
@@ -1821,6 +1847,7 @@ Check the documentation or explore available resources.
         description: str = "",
         tags: Optional[List[str]] = None,
         input_mapping: Optional[Dict[str, str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ):
         """Register an async/sync function as a multi-channel workflow.
 
@@ -1835,6 +1862,7 @@ Check the documentation or explore available resources.
             tags: Optional tags for categorization.
             input_mapping: Optional mapping of workflow input names to handler
                 parameter names. If None, identity mapping is used.
+            metadata: Optional structured metadata (version, author, tags, etc.).
 
         Raises:
             TypeError: If handler_func is not callable.
@@ -1862,11 +1890,12 @@ Check the documentation or explore available resources.
             handler_func,
             description=description or getattr(handler_func, "__doc__", "") or "",
             tags=tags,
+            metadata=metadata,
             workflow=workflow,
         )
 
         # Delegate to register() for multi-channel exposure
-        self.register(name, workflow)
+        self.register(name, workflow, metadata=metadata)
 
         logger.info(f"Handler '{name}' registered (function: {handler_func.__name__})")
 

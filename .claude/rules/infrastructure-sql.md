@@ -104,11 +104,53 @@ self._store: dict = {}  # Grows without bound -> OOM
 
 Default bound: 10,000 entries.
 
-### 8. Lazy Driver Imports
+### 8. Adapter Classes MUST Import Drivers Lazily
 
-`aiosqlite`, `asyncpg`, `aiomysql` are in base `pip install kailash`. Lazy imports remain acceptable for consistency.
+Every adapter class wrapping an optional backend driver (`motor`, `pymongo`, `aiomysql`, `asyncpg`, `aiosqlite`, `aiokafka`, `redis.asyncio`, etc.) MUST import the driver **inside** `connect()` / `__aenter__` and raise a descriptive `ImportError` at the call site if missing. Top-level `from <driver> import ...` on the adapter module is BLOCKED.
 
-**Why:** Eager driver imports force installation of all database drivers even when only one backend is used, bloating dependency footprint for single-database deployments.
+```python
+# DO
+class MongoDBAdapter(BaseAdapter):
+    async def connect(self) -> None:
+        try:
+            from motor.motor_asyncio import AsyncIOMotorClient
+        except ImportError as exc:
+            raise ImportError(
+                "MongoDB support requires motor. pip install motor pymongo"
+            ) from exc
+        self._client = AsyncIOMotorClient(self._url)
+
+# DO NOT — top-level import kills every consumer
+from motor.motor_asyncio import AsyncIOMotorClient  # breaks `from dataflow import DataFlow`
+```
+
+**BLOCKED rationalizations:** "motor is in our main deps anyway"; "the driver is small"; "users who don't want MongoDB will install kailash[sql-only]".
+
+**Why:** A top-level `from motor...` executes on `from dataflow import DataFlow` even for PostgreSQL-only projects. When the driver is absent the package fails to import at all — users see cryptic errors from modules they never intended to use. Lazy imports turn that into actionable errors at `connect()` time.
+
+### 8a. Lazy-Import Regression Test Required
+
+Every lazy-driver adapter MUST have a regression test that asserts the top-level package import succeeds with the driver absent. Static grep alone is BLOCKED — a future "tidy up imports" refactor silently reintroduces the bug.
+
+```python
+# DO
+def test_dataflow_importable_without_motor(monkeypatch):
+    import sys
+    class _Block:
+        def find_module(self, name, path=None):
+            return self if name.startswith("motor") else None
+        def load_module(self, name):
+            raise ImportError(f"simulated: {name} not installed")
+    monkeypatch.setattr(sys, "meta_path", [_Block(), *sys.meta_path])
+    for mod in [m for m in sys.modules if m.startswith(("dataflow", "motor"))]:
+        sys.modules.pop(mod, None)
+    from dataflow import DataFlow
+    assert DataFlow is not None
+```
+
+**Why:** Without a behavioral test the pattern is only human-enforced. The MongoDB adapter regression that motivated this rule had passed code review — the lazy pattern only surfaced when a downstream Docker build died on missing motor.
+
+Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-11) — `packages/kailash-dataflow/src/dataflow/adapters/mongodb.py` imported `motor.motor_asyncio` at module top, breaking `from dataflow import DataFlow` for every non-MongoDB project.
 
 ## MUST NOT
 

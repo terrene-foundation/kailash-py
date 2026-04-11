@@ -116,6 +116,11 @@ class TestTokenTypeValidation:
         mw = JWTMiddleware.__new__(JWTMiddleware)
         mw.config = config
         mw._jwks_client = None
+        # SPEC-06: JWTMiddleware delegates crypto to JWTValidator.
+        # Construct the validator explicitly since __new__ bypassed __init__.
+        from kailash.trust.auth.jwt import JWTValidator
+
+        mw._validator = JWTValidator(mw.config)
         return mw
 
     def test_access_token_accepted(self):
@@ -163,6 +168,11 @@ class TestErrorMessageSanitization:
         mw = JWTMiddleware.__new__(JWTMiddleware)
         mw.config = config
         mw._jwks_client = None
+        # SPEC-06: JWTMiddleware delegates crypto to JWTValidator.
+        # Construct the validator explicitly since __new__ bypassed __init__.
+        from kailash.trust.auth.jwt import JWTValidator
+
+        mw._validator = JWTValidator(mw.config)
         return mw
 
     def test_algorithm_mismatch_doesnt_reveal_config(self):
@@ -213,6 +223,11 @@ class TestTokenExtraction:
         mw = JWTMiddleware.__new__(JWTMiddleware)
         mw.config = config
         mw._jwks_client = None
+        # SPEC-06: JWTMiddleware delegates crypto to JWTValidator.
+        # Construct the validator explicitly since __new__ bypassed __init__.
+        from kailash.trust.auth.jwt import JWTValidator
+
+        mw._validator = JWTValidator(mw.config)
         return mw
 
     def test_extract_from_bearer_header(self):
@@ -336,6 +351,11 @@ class TestTokenVerification:
         mw = JWTMiddleware.__new__(JWTMiddleware)
         mw.config = config
         mw._jwks_client = None
+        # SPEC-06: JWTMiddleware delegates crypto to JWTValidator.
+        # Construct the validator explicitly since __new__ bypassed __init__.
+        from kailash.trust.auth.jwt import JWTValidator
+
+        mw._validator = JWTValidator(mw.config)
         return mw
 
     def _make_token(self, payload, secret=None, algorithm="HS256"):
@@ -519,6 +539,11 @@ class TestPathExemptions:
         mw = JWTMiddleware.__new__(JWTMiddleware)
         mw.config = config
         mw._jwks_client = None
+        # SPEC-06: JWTMiddleware delegates crypto to JWTValidator.
+        # Construct the validator explicitly since __new__ bypassed __init__.
+        from kailash.trust.auth.jwt import JWTValidator
+
+        mw._validator = JWTValidator(mw.config)
         return mw
 
     def test_exact_path_match(self):
@@ -557,10 +582,13 @@ class TestPathExemptions:
 
     def test_default_exempt_paths(self):
         """Default exempt paths include standard endpoints."""
+        from kailash.trust.auth.jwt import JWTValidator
+
         config = JWTConfig(secret="test-secret-key-for-jwt-unit-testing")
         mw = JWTMiddleware.__new__(JWTMiddleware)
         mw.config = config
         mw._jwks_client = None
+        mw._validator = JWTValidator(mw.config)
 
         assert mw._is_path_exempt("/health") is True
         assert mw._is_path_exempt("/metrics") is True
@@ -581,6 +609,11 @@ class TestUserCreation:
         mw = JWTMiddleware.__new__(JWTMiddleware)
         mw.config = config
         mw._jwks_client = None
+        # SPEC-06: JWTMiddleware delegates crypto to JWTValidator.
+        # Construct the validator explicitly since __new__ bypassed __init__.
+        from kailash.trust.auth.jwt import JWTValidator
+
+        mw._validator = JWTValidator(mw.config)
         return mw
 
     def test_standard_claims(self):
@@ -726,6 +759,11 @@ class TestTokenCreation:
         mw = JWTMiddleware.__new__(JWTMiddleware)
         mw.config = config
         mw._jwks_client = None
+        # SPEC-06: JWTMiddleware delegates crypto to JWTValidator.
+        # Construct the validator explicitly since __new__ bypassed __init__.
+        from kailash.trust.auth.jwt import JWTValidator
+
+        mw._validator = JWTValidator(mw.config)
         return mw
 
     def test_create_access_token(self):

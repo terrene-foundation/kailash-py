@@ -7,9 +7,7 @@ extracted from core.py into nexus/registry.py.
 """
 
 import pytest
-
 from nexus.registry import HandlerDef, HandlerParam, HandlerRegistry
-
 
 # ---------------------------------------------------------------------------
 # HandlerParam tests
@@ -142,6 +140,148 @@ class TestHandlerRegistryWorkflows:
         reg.register_workflow("test", wf2)
         assert reg.get_workflow("test") is wf2
         assert reg.workflow_count == 1
+
+    def test_register_workflow_without_metadata(self):
+        """Metadata is optional — omitting it yields an empty dict."""
+        reg = HandlerRegistry()
+        reg.register_workflow("plain", object())
+        assert reg.get_workflow_metadata("plain") == {}
+
+    def test_register_workflow_with_metadata(self):
+        """Structured metadata round-trips through the registry."""
+        reg = HandlerRegistry()
+        meta = {
+            "version": "1.2.0",
+            "author": "advisory-team",
+            "tags": ["hr", "advisory"],
+            "description": "Employment law advisory workflow",
+        }
+        reg.register_workflow("advisory", object(), metadata=meta)
+        assert reg.get_workflow_metadata("advisory") == meta
+
+    def test_get_workflow_metadata_unknown_workflow(self):
+        """Querying metadata for a nonexistent workflow returns empty dict."""
+        reg = HandlerRegistry()
+        assert reg.get_workflow_metadata("nonexistent") == {}
+
+    def test_register_workflow_metadata_does_not_leak_across_names(self):
+        """Metadata is scoped per workflow name."""
+        reg = HandlerRegistry()
+        reg.register_workflow("a", object(), metadata={"version": "1.0"})
+        reg.register_workflow("b", object(), metadata={"version": "2.0"})
+        assert reg.get_workflow_metadata("a") == {"version": "1.0"}
+        assert reg.get_workflow_metadata("b") == {"version": "2.0"}
+
+    def test_register_workflow_rejects_non_json_serializable_metadata(self):
+        """Non-JSON-serializable metadata is refused at registration time."""
+        import pytest
+
+        reg = HandlerRegistry()
+
+        class _NotSerializable:
+            pass
+
+        with pytest.raises(ValueError, match="not JSON-serializable"):
+            reg.register_workflow("bad", object(), metadata={"obj": _NotSerializable()})
+        # The bad registration must not leave a phantom entry behind
+        assert reg.get_workflow("bad") is None
+        assert reg.get_workflow_metadata("bad") == {}
+
+    def test_register_workflow_rejects_oversize_metadata(self):
+        """Metadata exceeding the byte cap is refused."""
+        import pytest
+
+        reg = HandlerRegistry()
+        # 64 KiB cap — 100 KiB of payload blows past it
+        oversized = {"payload": "x" * (100 * 1024)}
+        with pytest.raises(ValueError, match="exceeds"):
+            reg.register_workflow("big", object(), metadata=oversized)
+        assert reg.get_workflow("big") is None
+
+
+class TestNexusRegisterMetadataFlow:
+    """End-to-end: metadata passed to Nexus.register() reaches consumers.
+
+    The MCP workflow:// resource, OpenAPI schema derivation, and any
+    other downstream code that reads ``workflow.metadata`` MUST see the
+    structured metadata supplied at registration time.
+    """
+
+    def _fake_workflow(self, metadata=None):
+        """Minimal Workflow stand-in — exposes a mutable metadata dict."""
+
+        class _FakeWorkflow:
+            pass
+
+        wf = _FakeWorkflow()
+        wf.metadata = dict(metadata) if metadata else {}
+        return wf
+
+    def test_register_merges_metadata_into_workflow_object(self):
+        """Nexus.register(metadata=...) updates workflow.metadata in place."""
+        # Import via the public package entry so the monkey-patch surface
+        # matches what users actually call.
+        from nexus.core import Nexus
+
+        app = Nexus.__new__(Nexus)  # bypass full __init__ (transport setup)
+        from nexus.registry import HandlerRegistry
+
+        app._registry = HandlerRegistry()
+        app._http_transport = type("T", (), {"gateway": None})()
+        app._performance_metrics = {"workflow_registration_time": []}
+        app._api_port = 8000
+
+        wf = self._fake_workflow()
+        meta = {
+            "version": "1.2.0",
+            "author": "advisory-team",
+            "tags": ["hr", "advisory"],
+        }
+        app.register("advisory", wf, metadata=meta)
+
+        # Downstream consumers read workflow.metadata
+        assert wf.metadata["version"] == "1.2.0"
+        assert wf.metadata["author"] == "advisory-team"
+        assert wf.metadata["tags"] == ["hr", "advisory"]
+
+        # Registry also exposes the same metadata
+        assert app._registry.get_workflow_metadata("advisory") == meta
+
+    def test_register_metadata_overrides_workflow_defaults(self):
+        """Caller metadata wins over values already on the workflow."""
+        from nexus.core import Nexus
+        from nexus.registry import HandlerRegistry
+
+        app = Nexus.__new__(Nexus)
+        app._registry = HandlerRegistry()
+        app._http_transport = type("T", (), {"gateway": None})()
+        app._performance_metrics = {"workflow_registration_time": []}
+        app._api_port = 8000
+
+        wf = self._fake_workflow(metadata={"version": "0.0.1", "internal": "keep"})
+        app.register("wf", wf, metadata={"version": "2.0.0"})
+
+        # Override wins
+        assert wf.metadata["version"] == "2.0.0"
+        # Existing keys not touched by caller metadata survive
+        assert wf.metadata["internal"] == "keep"
+
+    def test_register_without_metadata_leaves_workflow_untouched(self):
+        """Omitting metadata must not touch workflow.metadata."""
+        from nexus.core import Nexus
+        from nexus.registry import HandlerRegistry
+
+        app = Nexus.__new__(Nexus)
+        app._registry = HandlerRegistry()
+        app._http_transport = type("T", (), {"gateway": None})()
+        app._performance_metrics = {"workflow_registration_time": []}
+        app._api_port = 8000
+
+        wf = self._fake_workflow(metadata={"version": "0.0.1"})
+        app.register("wf", wf)
+
+        assert wf.metadata == {"version": "0.0.1"}
+        assert app._registry.get_workflow_metadata("wf") == {}
 
 
 class TestHandlerRegistryHandlers:

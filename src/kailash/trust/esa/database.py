@@ -157,7 +157,12 @@ class DatabaseESA(EnterpriseSystemAgent):
 
     def _parse_connection_endpoint(self, connection_string: str) -> str:
         """
-        Parse connection string to extract endpoint.
+        Parse connection string to extract endpoint (credentials removed).
+
+        Uses ``urllib.parse`` so percent-encoded credentials — e.g. a
+        password containing ``@`` encoded as ``%40`` — are handled
+        correctly. The previous regex (``[^@]+@``) locked onto the first
+        ``@`` and misparsed URLs whose credentials contained that byte.
 
         Args:
             connection_string: Database connection string
@@ -165,14 +170,19 @@ class DatabaseESA(EnterpriseSystemAgent):
         Returns:
             Endpoint string (e.g., "postgresql://host:5432/dbname")
         """
-        # Remove credentials for endpoint display
-        # Format: postgresql://user:pass@host:port/db -> postgresql://host:port/db
-        pattern = r"([^:]+)://[^@]+@(.+)"
-        match = re.match(pattern, connection_string)
-        if match:
-            protocol, rest = match.groups()
-            return f"{protocol}://{rest}"
-        return connection_string
+        from urllib.parse import urlparse, urlunparse
+
+        try:
+            parsed = urlparse(connection_string)
+        except (ValueError, AttributeError):
+            return connection_string
+
+        if not (parsed.username or parsed.password):
+            return connection_string
+
+        host = parsed.hostname or ""
+        netloc = f"{host}:{parsed.port}" if parsed.port else host
+        return urlunparse(parsed._replace(netloc=netloc))
 
     # =========================================================================
     # Connection Management
@@ -222,26 +232,49 @@ class DatabaseESA(EnterpriseSystemAgent):
             )
 
     async def _init_mysql(self) -> None:
-        """Initialize MySQL connection using aiomysql."""
+        """Initialize MySQL connection using aiomysql.
+
+        Uses ``urllib.parse`` + ``unquote`` so passwords containing
+        special characters (``@``, ``#``, ``%``, ``:``) round-trip
+        correctly through the URL. The previous hand-rolled regex
+        parser rejected valid percent-encoded passwords. Null bytes
+        (``\\x00``) are rejected after decoding — see
+        ``trust-plane-security.md`` § "validate_id()" for the
+        equivalent pattern on record IDs. Other control characters
+        are intentionally permitted because some production
+        passwords legitimately contain them.
+        """
         try:
+            from urllib.parse import urlparse
+
             import aiomysql
+            from kailash.utils.url_credentials import (
+                decode_userinfo_or_raise,
+                preencode_password_special_chars,
+            )
 
-            # Parse connection string
-            # Format: mysql://user:pass@host:port/db
-            pattern = r"mysql://([^:]+):([^@]+)@([^:/]+):?(\d+)?/(.+)"
-            match = re.match(pattern, self.connection_string)
-            if not match:
-                raise ValueError("Invalid MySQL connection string format")
+            # Pre-encode raw ``#$@?`` in password so raw DATABASE_URLs
+            # work uniformly across every dialect parse site.
+            parsed = urlparse(preencode_password_special_chars(self.connection_string))
+            if parsed.scheme != "mysql":
+                raise ValueError(
+                    f"Invalid MySQL connection string scheme: {parsed.scheme}"
+                )
+            if not parsed.hostname:
+                raise ValueError("Invalid MySQL connection string: missing host")
+            if not parsed.path or parsed.path == "/":
+                raise ValueError("Invalid MySQL connection string: missing database")
 
-            user, password, host, port, database = match.groups()
-            port = int(port) if port else 3306
+            # Decode userinfo and reject null bytes via the shared helper —
+            # see ``kailash/utils/url_credentials.py`` for the rationale.
+            user, password = decode_userinfo_or_raise(parsed, default_user="root")
 
             self._pool = await aiomysql.create_pool(
-                host=host,
-                port=port,
+                host=parsed.hostname,
+                port=parsed.port or 3306,
                 user=user,
                 password=password,
-                db=database,
+                db=parsed.path.lstrip("/"),
                 minsize=1,
                 maxsize=10,
             )

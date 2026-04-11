@@ -55,11 +55,14 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-# SQLAlchemy imports for DataFlow model definitions
+# SQLAlchemy availability probe — DataFlow auto-generates the SQL schema
+# from Python type hints, so the symbols themselves are not imported as
+# names. The probe simply records whether the package is installed so
+# downstream code can emit a descriptive error at use time.
 try:
-    from sqlalchemy import Column, DateTime, Float, Integer, String, Text
+    import sqlalchemy  # noqa: F401 -- availability probe, not a name import
 
     SQLALCHEMY_AVAILABLE = True
 except ImportError:
@@ -85,10 +88,6 @@ except ImportError:
 # Model imports
 from kaizen_agents.patterns.models import (
     WORKFLOW_STATUS_VALUES,
-    AgentExecutionRecord,
-    WorkflowCheckpoint,
-    WorkflowState,
-    validate_agent_execution_record,
     validate_workflow_checkpoint,
     validate_workflow_state,
 )
@@ -245,7 +244,7 @@ class OrchestrationStateManager:
             workflow_id: str
             status: str
             start_time: datetime
-            end_time: Optional[datetime] = None
+            end_time: datetime | None = None
             runtime_id: str
             routing_strategy: str
             max_concurrent: int = 10
@@ -253,11 +252,9 @@ class OrchestrationStateManager:
             completed_tasks: int = 0
             failed_tasks: int = 0
             success_rate: float = 0.0
-            error_message: Optional[str] = None
-            error_type: Optional[str] = None
-            metadata: Optional[dict] = (
-                None  # JSON field - DataFlow handles serialization
-            )
+            error_message: str | None = None
+            error_type: str | None = None
+            metadata: dict | None = None  # JSON field - DataFlow handles serialization
 
         # Register AgentExecutionRecord model
         @self.db.model
@@ -273,11 +270,11 @@ class OrchestrationStateManager:
             retry_count: int = 0
             max_retries: int = 3
             start_time: datetime
-            end_time: Optional[datetime] = None
+            end_time: datetime | None = None
             execution_time_seconds: float = 0.0
-            result: Optional[dict] = None  # JSON field - DataFlow handles serialization
-            error: Optional[str] = None
-            error_stack_trace: Optional[str] = None
+            result: dict | None = None  # JSON field - DataFlow handles serialization
+            error: str | None = None
+            error_stack_trace: str | None = None
             cost_usd: float = 0.0
             budget_remaining_usd: float = 0.0
 
@@ -289,13 +286,13 @@ class OrchestrationStateManager:
             workflow_state_id: str  # Foreign key to WorkflowState
             checkpoint_number: int
             checkpoint_type: str
-            snapshot_data: Optional[dict] = (
+            snapshot_data: dict | None = (
                 None  # JSON field - DataFlow handles serialization
             )
             created_at_timestamp: datetime
             size_bytes: int = 0
             compression_ratio: float = 1.0
-            parent_checkpoint_id: Optional[str] = None
+            parent_checkpoint_id: str | None = None
 
         logger.info(
             "DataFlow models registered: 33 nodes generated "
@@ -321,13 +318,20 @@ class OrchestrationStateManager:
 
                 import psycopg2
 
+                from kailash.utils.url_credentials import decode_userinfo_or_raise
+
                 parsed = urlparse(self.connection_string)
+                # Decode userinfo and reject null bytes via the shared
+                # helper — see ``kailash/utils/url_credentials.py``.
+                user, password = decode_userinfo_or_raise(
+                    parsed, default_user="postgres"
+                )
                 conn = psycopg2.connect(
                     host=parsed.hostname,
                     port=parsed.port or 5432,
                     database=parsed.path.lstrip("/"),
-                    user=parsed.username,
-                    password=parsed.password,
+                    user=user,
+                    password=password,
                     connect_timeout=5,  # Fail fast
                 )
                 cursor = conn.cursor()
@@ -342,13 +346,25 @@ class OrchestrationStateManager:
 
                 import pymysql
 
-                parsed = urlparse(self.connection_string)
+                from kailash.utils.url_credentials import (
+                    decode_userinfo_or_raise,
+                    preencode_password_special_chars,
+                )
+
+                # Pre-encode raw ``#$@?`` in password so raw DATABASE_URLs
+                # work uniformly, then decode + null-byte check via the
+                # shared helper (MySQL C client truncation makes a
+                # null-byte auth-bypass attack trivial without the check).
+                parsed = urlparse(
+                    preencode_password_special_chars(self.connection_string)
+                )
+                user, password = decode_userinfo_or_raise(parsed, default_user="root")
                 conn = pymysql.connect(
                     host=parsed.hostname,
                     port=parsed.port or 3306,
                     database=parsed.path.lstrip("/"),
-                    user=parsed.username,
-                    password=parsed.password,
+                    user=user,
+                    password=password,
                     connect_timeout=5,
                 )
                 cursor = conn.cursor()
@@ -394,8 +410,8 @@ class OrchestrationStateManager:
         self,
         workflow_id: str,
         status: str,
-        metadata: Optional[Dict[str, Any]] = None,
-        runtime_id: Optional[str] = None,
+        metadata: dict[str, Any] | None = None,
+        runtime_id: str | None = None,
         routing_strategy: str = "semantic",
         max_concurrent: int = 10,
         total_tasks: int = 0,
@@ -502,7 +518,7 @@ class OrchestrationStateManager:
 
     async def load_workflow_state(
         self, workflow_id: str, include_records: bool = True
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Load WorkflowState by workflow_id with optional related records.
 
@@ -622,8 +638,7 @@ class OrchestrationStateManager:
                 )
 
             logger.info(
-                f"Workflow state loaded: workflow_id={workflow_id}, "
-                f"records={len(agent_records)}"
+                f"Workflow state loaded: workflow_id={workflow_id}, records={len(agent_records)}"
             )
 
             return {
@@ -648,9 +663,9 @@ class OrchestrationStateManager:
     async def save_checkpoint(
         self,
         workflow_id: str,
-        checkpoint_data: Dict[str, Any],
+        checkpoint_data: dict[str, Any],
         checkpoint_type: str = "AUTO",
-        parent_checkpoint_id: Optional[str] = None,
+        parent_checkpoint_id: str | None = None,
     ) -> str:
         """
         Create WorkflowCheckpoint with gzip compression.
@@ -744,7 +759,7 @@ class OrchestrationStateManager:
                 f"Failed to save checkpoint for {workflow_id}: {e}"
             ) from e
 
-    async def load_checkpoint(self, checkpoint_id: str) -> Dict[str, Any]:
+    async def load_checkpoint(self, checkpoint_id: str) -> dict[str, Any]:
         """
         Load WorkflowCheckpoint and decompress snapshot data.
 
@@ -834,7 +849,7 @@ class OrchestrationStateManager:
                 f"Failed to load checkpoint {checkpoint_id}: {e}"
             ) from e
 
-    async def list_active_workflows(self) -> List[Dict[str, Any]]:
+    async def list_active_workflows(self) -> list[dict[str, Any]]:
         """
         Query WorkflowState with status IN (PENDING, RUNNING).
 
@@ -990,14 +1005,18 @@ class OrchestrationStateManager:
 
     def __del__(self):
         if getattr(self, "runtime", None) is not None:
+            import contextlib
             import warnings
 
             warnings.warn(
                 f"Unclosed {self.__class__.__name__}. Call close() explicitly.",
                 ResourceWarning,
                 source=self,
+                stacklevel=2,
             )
-            try:
+            # Finalizer cleanup — failure is expected when the interpreter
+            # is shutting down and cannot run the full close() path, per
+            # rules/zero-tolerance.md Rule 3 "Acceptable: except: pass in
+            # hooks/cleanup where failure is expected".
+            with contextlib.suppress(Exception):
                 self.close()
-            except Exception:
-                pass

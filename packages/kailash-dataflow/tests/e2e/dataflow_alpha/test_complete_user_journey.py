@@ -40,7 +40,7 @@ class TestCompleteUserJourney:
     def clean_environment(self, database_url):
         """Create a clean temporary environment for testing."""
         # Clean up database tables before test
-        from urllib.parse import urlparse
+        from urllib.parse import unquote, urlparse
 
         import psycopg2
 
@@ -49,8 +49,8 @@ class TestCompleteUserJourney:
             host=parsed.hostname,
             port=parsed.port or 5432,
             database=parsed.path[1:],
-            user=parsed.username,
-            password=parsed.password,
+            user=unquote(parsed.username) if parsed.username else None,
+            password=unquote(parsed.password) if parsed.password else None,
         )
         cursor = conn.cursor()
 
@@ -93,8 +93,8 @@ class TestCompleteUserJourney:
                     host=parsed.hostname,
                     port=parsed.port or 5432,
                     database=parsed.path[1:],
-                    user=parsed.username,
-                    password=parsed.password,
+                    user=unquote(parsed.username) if parsed.username else None,
+                    password=unquote(parsed.password) if parsed.password else None,
                 )
                 cursor = conn.cursor()
 
@@ -207,11 +207,11 @@ class TestCompleteUserJourney:
 
     def test_step5_workflow_integration(self, clean_environment, database_url):
         """Step 5: Test integration with Kailash workflows."""
-        from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.sdk_exceptions import WorkflowValidationError
         from kailash.workflow.builder import WorkflowBuilder
+
+        from dataflow import DataFlow
 
         # Set up DataFlow
         db = DataFlow(database_url=database_url)
@@ -252,13 +252,13 @@ class TestCompleteUserJourney:
 
                 user_result = results["create_user"]
                 if isinstance(user_result, dict) and "data" in user_result:
-                    assert user_result["data"]["name"] == "Bob Smith", (
-                        "Workflow result incorrect"
-                    )
+                    assert (
+                        user_result["data"]["name"] == "Bob Smith"
+                    ), "Workflow result incorrect"
                 else:
-                    assert user_result["name"] == "Bob Smith", (
-                        "Workflow result incorrect"
-                    )
+                    assert (
+                        user_result["name"] == "Bob Smith"
+                    ), "Workflow result incorrect"
             except WorkflowValidationError:
                 # This is a known issue with generated nodes - they work directly but not in workflows
                 print(
@@ -392,9 +392,9 @@ class TestCompleteUserJourney:
             except Exception as e:
                 # Error should be clear and helpful, not AttributeError
                 assert "AttributeError" not in str(e), f"Unhelpful error: {e}"
-                assert "'DataFlowConfig' object has no attribute" not in str(e), (
-                    f"Configuration error: {e}"
-                )
+                assert "'DataFlowConfig' object has no attribute" not in str(
+                    e
+                ), f"Configuration error: {e}"
 
             # Test non-existent record handling
             read_node = db._nodes["TestModelReadNode"]()
@@ -427,9 +427,9 @@ class TestCompleteUserJourney:
             operation_time = time.time() - start_time
 
             # Should be reasonably fast (not simulation delay)
-            assert operation_time < 2.0, (
-                f"Single operation too slow: {operation_time:.2f}s"
-            )
+            assert (
+                operation_time < 2.0
+            ), f"Single operation too slow: {operation_time:.2f}s"
             assert result is not None, "Performance test operation failed"
 
             # Test multiple operations
@@ -482,11 +482,11 @@ class TestCompleteUserJourney:
 
     def test_alpha_release_readiness_checklist(self, clean_environment, database_url):
         """Final checklist: All alpha release requirements met."""
-        from dataflow import DataFlow
-
         from kailash.runtime.local import LocalRuntime
         from kailash.sdk_exceptions import WorkflowValidationError
         from kailash.workflow.builder import WorkflowBuilder
+
+        from dataflow import DataFlow
 
         # Alpha readiness checklist
         checklist = {

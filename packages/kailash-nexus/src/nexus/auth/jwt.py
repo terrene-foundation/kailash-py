@@ -15,13 +15,12 @@ import inspect
 import logging
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
-
 from kailash.trust.auth.exceptions import ExpiredTokenError, InvalidTokenError
 from kailash.trust.auth.jwt import JWTConfig, JWTValidator
 from kailash.trust.auth.models import AuthenticatedUser
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 logger = logging.getLogger(__name__)
 
@@ -273,12 +272,71 @@ class JWTMiddleware(BaseHTTPMiddleware):
 
         return None
 
-    # --- Delegate token creation to validator ---
+    # --- Delegate token operations to validator ---
+    #
+    # SPEC-06 extracted the crypto path from the middleware into
+    # JWTValidator. These thin delegates preserve the pre-migration
+    # API so external consumers (and the unit test suite) that call
+    # mw.create_access_token / mw._verify_token / mw._create_user_from_payload
+    # continue to work unchanged during the deprecation window.
+    #
+    # Each delegate guards against a bypassed ``__init__`` (e.g., a
+    # caller using ``__new__`` to construct the middleware without
+    # ``self._validator`` being set). The guard converts what would
+    # otherwise be an uninformative ``AttributeError`` on ``None`` into
+    # a typed ``RuntimeError`` that names the root cause. The hot path
+    # is unaffected because ``__init__`` always assigns
+    # ``self._validator = JWTValidator(self.config)``.
+
+    def _require_validator(self) -> "JWTValidator":
+        """Return ``self._validator`` or raise if it was never assigned.
+
+        Red-team R1 C.2 follow-up: if a caller constructs the
+        middleware via ``__new__`` (the test suite does this) and
+        forgets to assign ``_validator``, every delegate would raise
+        a raw ``AttributeError`` on ``None``. The typed error here
+        identifies the root cause unambiguously.
+        """
+        validator = getattr(self, "_validator", None)
+        if validator is None:
+            raise RuntimeError(
+                "JWTMiddleware._validator is not set. This usually means "
+                "the middleware was constructed via __new__ without "
+                "calling __init__ — assign mw._validator = "
+                "JWTValidator(mw.config) before calling any delegate."
+            )
+        return validator
 
     def create_access_token(self, **kwargs: Any) -> str:
         """Create a new access token. Delegates to JWTValidator."""
-        return self._validator.create_access_token(**kwargs)
+        return self._require_validator().create_access_token(**kwargs)
 
     def create_refresh_token(self, **kwargs: Any) -> str:
         """Create a refresh token. Delegates to JWTValidator."""
-        return self._validator.create_refresh_token(**kwargs)
+        return self._require_validator().create_refresh_token(**kwargs)
+
+    def _verify_token(self, token: str) -> Dict[str, Any]:
+        """Verify a JWT token. Delegates to JWTValidator.verify_token.
+
+        Kept on the middleware for backward compatibility with callers
+        from before the SPEC-06 crypto extraction.
+        """
+        return self._require_validator().verify_token(token)
+
+    def _create_user_from_payload(self, payload: Dict[str, Any]) -> AuthenticatedUser:
+        """Build an AuthenticatedUser from a verified JWT payload.
+
+        Delegates to JWTValidator.create_user_from_payload — kept on
+        the middleware for backward compatibility with callers from
+        before the SPEC-06 crypto extraction.
+        """
+        return self._require_validator().create_user_from_payload(payload)
+
+    def _is_path_exempt(self, path: str) -> bool:
+        """Check whether a request path bypasses JWT validation.
+
+        Delegates to JWTValidator.is_path_exempt — kept on the
+        middleware for backward compatibility with callers from
+        before the SPEC-06 crypto extraction.
+        """
+        return self._require_validator().is_path_exempt(path)

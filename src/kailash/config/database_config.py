@@ -7,6 +7,7 @@ scattered parameters with structured, validated configuration.
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
+from urllib.parse import quote_plus
 
 logger = logging.getLogger(__name__)
 
@@ -133,11 +134,75 @@ class DatabaseConfig:
         return config
 
     def get_masked_connection_string(self) -> str:
-        """Get connection string with password masked for logging."""
-        import re
+        """Get connection string with credentials masked for logging.
 
-        pattern = r"(://[^:]+:)[^@]+(@)"
-        return re.sub(pattern, r"\1***\2", self.connection_string)
+        Masks:
+        - ``user:password@`` userinfo in the authority component
+        - ``password=`` and ``sslpassword=`` / ``sslkey=`` in the query
+          string (PostgreSQL and MySQL both accept passwords via query)
+
+        Uses ``urllib.parse`` rather than a regex so percent-encoded
+        credentials (passwords containing ``%40`` / ``%23`` / ``%3A``)
+        are handled correctly — a regex that locks onto the first ``@``
+        mis-masks such URLs. When the URL has nothing to mask, the
+        original string is returned verbatim so empty-netloc schemes
+        (``sqlite:///tmp/app.db``) are not rewritten by urlunparse.
+        """
+        from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
+        connection_string = self.connection_string
+        try:
+            parsed = urlparse(connection_string)
+        except (ValueError, AttributeError):
+            return connection_string
+
+        has_userinfo = bool(parsed.username or parsed.password)
+        # Must match the set in dataflow/utils/masking.py::_SENSITIVE_QUERY_KEYS
+        # AND both Redis rate-limit _sanitize_url helpers
+        # (src/kailash/trust/rate_limit/backends/redis.py and
+        # packages/kailash-nexus/src/nexus/auth/rate_limit/backends/redis.py).
+        # Four sites total — any divergence produces a leak path the
+        # other maskers would have caught. If you add a key here, add it
+        # to all four sites in the same commit.
+        sensitive = {
+            "password",
+            "sslpassword",
+            "sslkey",
+            "authtoken",
+            "token",
+            "apikey",
+        }
+        query_has_secret = False
+        if parsed.query:
+            query_has_secret = any(
+                k.lower() in sensitive
+                for k, _ in parse_qsl(parsed.query, keep_blank_values=True)
+            )
+
+        # Nothing to mask — return the exact input so schemes without a
+        # netloc (sqlite, file) are not rewritten by urlunparse.
+        if not has_userinfo and not query_has_secret:
+            return connection_string
+
+        # Mask userinfo section (user:password@host -> ***@host).
+        if has_userinfo:
+            host = parsed.hostname or ""
+            if ":" in host:  # IPv6 — bracket the host
+                host = f"[{host}]"
+            netloc = f"***@{host}"
+            if parsed.port:
+                netloc = f"{netloc}:{parsed.port}"
+            parsed = parsed._replace(netloc=netloc)
+
+        # Mask credential-bearing query-string fields.
+        if query_has_secret:
+            pairs = parse_qsl(parsed.query, keep_blank_values=True)
+            masked_pairs = [
+                (k, "***" if k.lower() in sensitive else v) for k, v in pairs
+            ]
+            parsed = parsed._replace(query=urlencode(masked_pairs))
+
+        return urlunparse(parsed)
 
     def is_encrypted(self) -> bool:
         """Check if connection uses encryption."""
@@ -235,9 +300,15 @@ class DatabaseConfigBuilder:
         password: str = "",
         **kwargs,
     ) -> DatabaseConfig:
-        """Build PostgreSQL configuration."""
+        """Build PostgreSQL configuration.
+
+        Username and password are URL-encoded so special characters
+        (``@``, ``#``, ``%``, ``:``, etc.) in credentials are handled
+        correctly.
+        """
         connection_string = (
-            f"postgresql://{username}:{password}@{host}:{port}/{database}"
+            f"postgresql://{quote_plus(username)}:{quote_plus(password)}"
+            f"@{host}:{port}/{database}"
         )
 
         return DatabaseConfig(
@@ -260,8 +331,15 @@ class DatabaseConfigBuilder:
         password: str = "",
         **kwargs,
     ) -> DatabaseConfig:
-        """Build MySQL configuration."""
-        connection_string = f"mysql://{username}:{password}@{host}:{port}/{database}"
+        """Build MySQL configuration.
+
+        Username and password are URL-encoded so special characters
+        in credentials are handled correctly.
+        """
+        connection_string = (
+            f"mysql://{quote_plus(username)}:{quote_plus(password)}"
+            f"@{host}:{port}/{database}"
+        )
 
         return DatabaseConfig(
             connection_string=connection_string,
@@ -299,14 +377,49 @@ class AsyncDatabaseConfigBuilder:
         password: str = "",
         **kwargs,
     ) -> AsyncDatabaseConfig:
-        """Build async PostgreSQL configuration."""
+        """Build async PostgreSQL configuration.
+
+        Username and password are URL-encoded so special characters
+        in credentials are handled correctly.
+        """
         connection_string = (
-            f"postgresql://{username}:{password}@{host}:{port}/{database}"
+            f"postgresql://{quote_plus(username)}:{quote_plus(password)}"
+            f"@{host}:{port}/{database}"
         )
 
         return AsyncDatabaseConfig(
             connection_string=connection_string,
             database_type="postgresql",
+            host=host,
+            port=port,
+            database=database,
+            username=username,
+            password=password,
+            **kwargs,
+        )
+
+    @staticmethod
+    def mysql(
+        host: str = "localhost",
+        port: int = 3306,
+        database: str = "mysql",
+        username: str = "root",
+        password: str = "",
+        **kwargs,
+    ) -> AsyncDatabaseConfig:
+        """Build async MySQL configuration.
+
+        Username and password are URL-encoded so special characters
+        in credentials are handled correctly.
+        """
+        connection_string = (
+            f"mysql://{quote_plus(username)}:{quote_plus(password)}"
+            f"@{host}:{port}/{database}"
+        )
+
+        return AsyncDatabaseConfig(
+            connection_string=connection_string,
+            database_type="mysql",
             host=host,
             port=port,
             database=database,

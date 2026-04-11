@@ -13,11 +13,7 @@ import contextlib
 import logging
 from typing import Any, Dict, List, Optional
 
-from kailash.db.dialect import (
-    DatabaseType,
-    QueryDialect,
-    detect_dialect,
-)
+from kailash.db.dialect import DatabaseType, QueryDialect, detect_dialect
 
 logger = logging.getLogger(__name__)
 
@@ -337,12 +333,22 @@ class ConnectionManager:
 
         from urllib.parse import urlparse
 
-        parsed = urlparse(self.url)
+        from kailash.utils.url_credentials import (
+            decode_userinfo_or_raise,
+            preencode_password_special_chars,
+        )
+
+        # Pre-encode raw ``#$@?`` in the password so operators who
+        # paste a literal DATABASE_URL work uniformly across sites,
+        # then decode userinfo and reject null bytes via the shared
+        # helper — see ``kailash/utils/url_credentials.py``.
+        parsed = urlparse(preencode_password_special_chars(self.url))
+        user, password = decode_userinfo_or_raise(parsed, default_user="root")
         self._pool = await aiomysql.create_pool(
             host=parsed.hostname or "localhost",
             port=parsed.port or 3306,
-            user=parsed.username or "root",
-            password=parsed.password or "",
+            user=user,
+            password=password,
             db=parsed.path.lstrip("/") if parsed.path else "",
         )
         logger.debug("MySQL pool created")

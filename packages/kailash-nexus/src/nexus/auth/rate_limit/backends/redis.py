@@ -91,18 +91,54 @@ class RedisBackend(RateLimitBackend):
 
     @staticmethod
     def _sanitize_url(url: str) -> str:
-        """Remove credentials from Redis URL for safe logging."""
+        """Remove credentials from Redis URL for safe logging.
+
+        Masks both ``user:password@`` userinfo (replaced with
+        ``***@host``) and ``?password=`` query-string credentials —
+        Redis accepts passwords in both forms and the masker MUST
+        handle both. The userinfo-replacement form matches the other
+        masking helpers in ``kailash.config.database_config`` and
+        ``dataflow.utils.masking`` so an operator grepping for ``***@``
+        finds every masked URL uniformly.
+
+        On parse failure returns a distinct sentinel
+        ``"<unparseable redis url>"`` rather than ``"redis://***"`` so
+        the failure mode is distinguishable from a successful mask.
+        """
         try:
-            from urllib.parse import urlparse
+            from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
             parsed = urlparse(url)
-            if parsed.username or parsed.password:
+            sensitive = {
+                "password",
+                "sslpassword",
+                "sslkey",
+                "token",
+                "authtoken",
+                "apikey",
+            }
+            has_userinfo = bool(parsed.username or parsed.password)
+            query_has_secret = False
+            if parsed.query:
+                query_has_secret = any(
+                    k.lower() in sensitive
+                    for k, _ in parse_qsl(parsed.query, keep_blank_values=True)
+                )
+            if not has_userinfo and not query_has_secret:
+                return url
+
+            if has_userinfo:
                 safe_host = parsed.hostname or "localhost"
                 safe_port = f":{parsed.port}" if parsed.port else ""
-                return f"{parsed.scheme}://{safe_host}{safe_port}{parsed.path}"
-            return url
+                new_netloc = f"***@{safe_host}{safe_port}"
+                parsed = parsed._replace(netloc=new_netloc)
+            if query_has_secret:
+                pairs = parse_qsl(parsed.query, keep_blank_values=True)
+                masked = [(k, "***" if k.lower() in sensitive else v) for k, v in pairs]
+                parsed = parsed._replace(query=urlencode(masked))
+            return urlunparse(parsed)
         except Exception:
-            return "redis://***"
+            return "<unparseable redis url>"
 
     async def initialize(self) -> None:
         """Initialize Redis connection pool.
