@@ -197,7 +197,7 @@ class UnifiedCache:
                 value = await self.redis_client.get(redis_key)  # type: ignore[reportOptionalMemberAccess]
                 return json.loads(value) if value else None
             except Exception as e:
-                logger.error(f"Redis get error: {e}")
+                logger.error("cache.redis.get.error error=%s", e)
                 return None
         else:
             return self.lru_cache.get(key)  # type: ignore[reportOptionalMemberAccess]
@@ -212,7 +212,7 @@ class UnifiedCache:
                 await self.redis_client.setex(redis_key, cache_ttl, serialized_value)  # type: ignore[reportOptionalMemberAccess]
                 return True
             except Exception as e:
-                logger.error(f"Redis set error: {e}")
+                logger.error("cache.redis.set.error error=%s", e)
                 return False
         else:
             self.lru_cache.set(key, value, ttl or self.ttl)  # type: ignore[reportOptionalMemberAccess]
@@ -247,7 +247,7 @@ class UnifiedCache:
         async with self._flight_lock:
             if key in self._in_flight:
                 # Wait for the existing computation
-                logger.debug(f"Cache key {key} already being computed, waiting...")
+                logger.debug("cache.get_or_compute.waiting key=%s", key)
                 return await self._in_flight[key]
 
             # Start new computation
@@ -256,7 +256,7 @@ class UnifiedCache:
 
         try:
             # Compute the value
-            logger.debug(f"Computing value for cache key {key}")
+            logger.debug("cache.get_or_compute.start key=%s", key)
             value = await compute_func()
 
             # Cache the result
@@ -373,11 +373,19 @@ class CacheManager:
                 # Try to get from cache
                 result = cache.get(cache_key)
                 if result is not None:
-                    logger.debug(f"Cache hit for {func.__name__}: {cache_key}")
+                    logger.debug(
+                        "cache.sync.hit func=%s key=%s",
+                        func.__name__,
+                        cache_key,
+                    )
                     return result
 
                 # Execute function and cache result
-                logger.debug(f"Cache miss for {func.__name__}: {cache_key}")
+                logger.debug(
+                    "cache.sync.miss func=%s key=%s",
+                    func.__name__,
+                    cache_key,
+                )
                 result = func(*args, **kwargs)
                 cache.set(cache_key, result)
                 return result
@@ -390,11 +398,19 @@ class CacheManager:
                 # Try to get from cache
                 result = cache.get(cache_key)
                 if result is not None:
-                    logger.debug(f"Cache hit for {func.__name__}: {cache_key}")
+                    logger.debug(
+                        "cache.async.hit func=%s key=%s",
+                        func.__name__,
+                        cache_key,
+                    )
                     return result
 
                 # Execute function and cache result
-                logger.debug(f"Cache miss for {func.__name__}: {cache_key}")
+                logger.debug(
+                    "cache.async.miss func=%s key=%s",
+                    func.__name__,
+                    cache_key,
+                )
                 result = await func(*args, **kwargs)
                 cache.set(cache_key, result)
                 return result
@@ -411,17 +427,28 @@ class CacheManager:
         """Initialize Redis connection."""
         try:
             import redis.asyncio as redis
+            from urllib.parse import urlparse
 
             redis_url = self.config.get("redis_url", "redis://localhost:6379")
             # Validate Redis URL scheme to prevent SSRF (H4)
             validate_redis_url(redis_url)
             self._redis = redis.from_url(redis_url, decode_responses=True)
-            logger.info(f"Initialized Redis cache backend: {redis_url}")
+            # Mask credentials: log only scheme://host:port — never
+            # the userinfo or query-string password. See security.md
+            # § "No secrets in logs".
+            _parsed = urlparse(redis_url)
+            _safe_port = f":{_parsed.port}" if _parsed.port else ""
+            logger.info(
+                "Initialized Redis cache backend: %s://%s%s",
+                _parsed.scheme,
+                _parsed.hostname or "localhost",
+                _safe_port,
+            )
         except ImportError:
             logger.warning("Redis not available. Install with: pip install redis")
             self.enabled = False
         except Exception as e:
-            logger.error(f"Failed to initialize Redis: {e}")
+            logger.error("cache.redis.init.error error=%s", e)
             self.enabled = False
 
     async def get_redis(self, key: str) -> Optional[Any]:
@@ -432,7 +459,7 @@ class CacheManager:
             value = await self._redis.get(self._make_redis_key(key))
             return json.loads(value) if value else None
         except Exception as e:
-            logger.error(f"Redis get error: {e}")
+            logger.error("cache.redis.get.error error=%s", e)
             return None
 
     async def set_redis(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
@@ -448,7 +475,7 @@ class CacheManager:
                 await self._redis.set(redis_key, serialized_value)
             return True
         except Exception as e:
-            logger.error(f"Redis set error: {e}")
+            logger.error("cache.redis.set.error error=%s", e)
             return False
 
     def _make_redis_key(self, key: str) -> str:

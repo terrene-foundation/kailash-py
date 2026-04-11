@@ -1193,9 +1193,19 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
         try:
             await self.redis_client.ping()
             await self.redis_pubsub.ping()
-            self.logger.info(f"Connected to Redis at {self.redis_url}")
+            # Mask credentials: log only scheme://host:port.
+            from urllib.parse import urlparse
+
+            _parsed = urlparse(self.redis_url)
+            _safe_port = f":{_parsed.port}" if _parsed.port else ""
+            self.logger.info(
+                "Connected to Redis at %s://%s%s",
+                _parsed.scheme,
+                _parsed.hostname or "localhost",
+                _safe_port,
+            )
         except Exception as e:
-            self.logger.error(f"Failed to connect to Redis: {e}")
+            self.logger.error("subscriptions.redis.connect.error error=%s", e)
             raise
 
         # Register this instance
@@ -1212,7 +1222,8 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
         await self._load_distributed_subscriptions()
 
         self.logger.info(
-            f"Distributed subscription manager initialized (instance: {self.server_instance_id})"
+            "subscriptions.distributed.initialized instance=%s",
+            self.server_instance_id,
         )
 
     async def shutdown(self):
@@ -1306,7 +1317,10 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
         await self.redis_client.hset(instance_key, mapping=instance_data)
         await self.redis_client.expire(instance_key, self.instance_timeout)
 
-        self.logger.info(f"Registered instance {self.server_instance_id}")
+        self.logger.info(
+            "subscriptions.instance.registered instance=%s",
+            self.server_instance_id,
+        )
 
     async def _unregister_instance(self):
         """Unregister this server instance from Redis."""
@@ -1316,7 +1330,10 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
         # Clean up instance subscriptions
         await self.redis_client.delete(f"mcp:instance_subs:{self.server_instance_id}")
 
-        self.logger.info(f"Unregistered instance {self.server_instance_id}")
+        self.logger.info(
+            "subscriptions.instance.unregistered instance=%s",
+            self.server_instance_id,
+        )
 
     async def _heartbeat_loop(self):
         """Send periodic heartbeats to indicate this instance is alive."""
@@ -1335,13 +1352,15 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
                 await self.redis_client.hset(instance_key, "subscriptions", sub_count)
 
                 self.logger.debug(
-                    f"Heartbeat sent (instance: {self.server_instance_id}, subscriptions: {sub_count})"
+                    "subscriptions.heartbeat.sent instance=%s subscriptions=%d",
+                    self.server_instance_id,
+                    sub_count,
                 )
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.error(f"Heartbeat error: {e}")
+                self.logger.error("subscriptions.heartbeat.error error=%s", e)
 
     async def _instance_monitor(self):
         """Monitor other instances and handle failures."""
@@ -1381,17 +1400,23 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
                 dead_instances = self._other_instances - current_instances
 
                 if new_instances:
-                    self.logger.info(f"New instances detected: {new_instances}")
+                    self.logger.info(
+                        "subscriptions.instances.detected new_instances=%r",
+                        sorted(new_instances),
+                    )
 
                 if dead_instances:
-                    self.logger.info(f"Dead instances detected: {dead_instances}")
+                    self.logger.info(
+                        "subscriptions.instances.dead dead_instances=%r",
+                        sorted(dead_instances),
+                    )
 
                 self._other_instances = current_instances
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                self.logger.error(f"Instance monitor error: {e}")
+                self.logger.error("subscriptions.instance_monitor.error error=%s", e)
 
     async def _cleanup_dead_instance(self, instance_id: str):
         """Clean up subscriptions from a dead instance."""
@@ -1411,14 +1436,20 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
                 await pipeline.execute()
 
                 self.logger.info(
-                    f"Cleaned up {len(dead_subscriptions)} subscriptions from dead instance {instance_id}"
+                    "subscriptions.dead_instance.cleaned count=%d instance=%s",
+                    len(dead_subscriptions),
+                    instance_id,
                 )
 
             # Remove instance record
             await self.redis_client.delete(f"mcp:instances:{instance_id}")
 
         except Exception as e:
-            self.logger.error(f"Error cleaning up dead instance {instance_id}: {e}")
+            self.logger.error(
+                "subscriptions.dead_instance.cleanup.error instance=%s error=%s",
+                instance_id,
+                e,
+            )
 
     async def _replicate_subscription_to_redis(self, subscription_id: str):
         """Replicate subscription data to Redis."""
@@ -1446,7 +1477,7 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
         instance_subs_key = f"mcp:instance_subs:{self.server_instance_id}"
         await self.redis_client.sadd(instance_subs_key, subscription_id)
 
-        self.logger.debug(f"Replicated subscription {subscription_id} to Redis")
+        self.logger.debug("subscriptions.replicate subscription_id=%s", subscription_id)
 
     async def _remove_subscription_from_redis(self, subscription_id: str):
         """Remove subscription data from Redis."""
@@ -1457,7 +1488,7 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
         instance_subs_key = f"mcp:instance_subs:{self.server_instance_id}"
         await self.redis_client.srem(instance_subs_key, subscription_id)
 
-        self.logger.debug(f"Removed subscription {subscription_id} from Redis")
+        self.logger.debug("subscriptions.remove subscription_id=%s", subscription_id)
 
     async def _load_distributed_subscriptions(self):
         """Load subscription data for other instances from Redis."""
@@ -1480,11 +1511,13 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
                 len(subs) for subs in self._instance_subscriptions.values()
             )
             self.logger.info(
-                f"Loaded {total_distributed_subs} distributed subscriptions from {len(self._instance_subscriptions)} instances"
+                "subscriptions.loaded total=%d instances=%d",
+                total_distributed_subs,
+                len(self._instance_subscriptions),
             )
 
         except Exception as e:
-            self.logger.error(f"Error loading distributed subscriptions: {e}")
+            self.logger.error("subscriptions.load.error error=%s", e)
 
     async def _distribute_resource_change(
         self, change: Union[ResourceChange, Dict[str, Any]]
@@ -1510,10 +1543,14 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
         try:
             await self.redis_client.publish(channel, json.dumps(change_data))
             self.logger.debug(
-                f"Distributed resource change for {change_data['uri']} to {len(self._other_instances)} instances"
+                "subscriptions.resource_change.distributed uri=%s instances=%d",
+                change_data["uri"],
+                len(self._other_instances),
             )
         except Exception as e:
-            self.logger.error(f"Error distributing resource change: {e}")
+            self.logger.error(
+                "subscriptions.resource_change.distribute.error error=%s", e
+            )
 
     async def _notification_listener(self):
         """Listen for distributed resource change notifications."""
@@ -1523,7 +1560,7 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
             await pubsub.subscribe(channel)
 
             self.logger.info(
-                f"Listening for distributed notifications on channel: {channel}"
+                "subscriptions.notification_listener.start channel=%s", channel
             )
 
             async for message in pubsub.listen():
@@ -1548,18 +1585,21 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
                         await super().process_resource_change(change)
 
                         self.logger.debug(
-                            f"Processed distributed resource change from {source_instance}: {change_data['uri']}"
+                            "subscriptions.distributed_change.processed source=%s uri=%s",
+                            source_instance,
+                            change_data["uri"],
                         )
 
                     except Exception as e:
                         self.logger.error(
-                            f"Error processing distributed notification: {e}"
+                            "subscriptions.distributed_notification.error error=%s",
+                            e,
                         )
 
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            self.logger.error(f"Notification listener error: {e}")
+            self.logger.error("subscriptions.notification_listener.error error=%s", e)
 
     def get_distributed_stats(self) -> Dict[str, Any]:
         """Get statistics about the distributed subscription system."""
