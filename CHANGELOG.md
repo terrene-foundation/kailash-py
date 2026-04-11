@@ -15,6 +15,65 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### Platform Architecture Convergence Complete — 2026-04-11
+
+kailash 2.8.0 + kailash-kaizen 2.7.0 + kaizen-agents 0.9.0 + kailash-pact 0.8.1 + kailash-dataflow 2.0.2 + kailash-ml 0.8.0
+
+#### [kailash 2.8.0]
+
+##### Added
+
+- **CostEvent** frozen dataclass with call_id dedup and `CostDeduplicator` bounded LRU (SPEC-08)
+- **Canonical JSON** module (`kailash.trust._json`) with duplicate key rejection, NaN/Inf rejection, sorted-key deterministic output (SPEC-09)
+- **Cross-SDK test vectors** for agent-result, streaming, and parser-differential edge cases (SPEC-09)
+- **TrustPosture backward-compatible aliases** — `PSEUDO_AGENT`, `SHARED_PLANNING`, `CONTINUOUS_INSIGHT`, `DELEGATED` resolve to canonical names via enum aliases (Decision 007)
+
+##### Fixed
+
+- CI: `kailash-mcp` sub-package now installed in unified-ci.yml
+- `PactAuditAction` count assertion (16→19)
+
+#### [kailash-kaizen 2.7.0]
+
+##### Added
+
+- **SPEC-02 Provider registry** — 14 providers with prefix-dispatch model detection, `CostTracker` with thread-safe accumulation, 390 tests
+- **SPEC-04 BaseAgent slimming** — 2103→859 LOC, removed duplicate MCP methods, eliminated extension point shim layer, posture immutability guard
+
+##### Fixed
+
+- `AgentPosture.DELEGATED` → `AgentPosture.DELEGATING` (Decision 007 alignment)
+
+#### [kaizen-agents 0.9.0]
+
+##### Added
+
+- **SPEC-05 Delegate facade** — `ConstructorIOError`, `ToolRegistryCollisionError`, `run_sync()` event loop guard, deferred MCP, introspection properties (`.core_agent`, `.signature`, `.model`), 57 new tests
+- **SPEC-10 Multi-agent deprecation** — 11 subclasses emit `DeprecationWarning`, `max_total_delegations` cap (default 20), `DelegationCapExceeded` error, 30 new tests
+
+#### [kailash-pact 0.8.1]
+
+##### Fixed
+
+- Version consistency: `__init__.py` 0.7.2 → 0.8.1 to match `pyproject.toml`
+- PACT tests updated from old posture names to canonical Decision 007 names
+- `TrustPostureLevel` backward-compatible enum aliases
+
+#### [kailash-dataflow 2.0.2]
+
+##### Fixed
+
+- Platform clearance fixes from full convergence
+
+#### [kailash-ml 0.8.0]
+
+##### Added
+
+- PCA dimensionality reduction engine
+- Full clearance features (8 ML engine improvements)
+
+---
+
 ### Platform Architecture Convergence — 2026-04-09
 
 kailash 2.7.0 + kailash-kaizen 2.6.0 + kailash-nexus 2.0.0 + kaizen-agents 0.8.0 + kailash-mcp 0.2.0 + kailash-dataflow 2.0.1

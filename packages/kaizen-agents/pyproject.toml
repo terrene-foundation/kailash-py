@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kaizen-agents"
-version = "0.8.0"
+version = "0.9.0"
 description = "PACT-governed autonomous agent engines built on Kailash Kaizen SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "kailash>=2.7.0",
+    "kailash>=2.8.0",
     "kailash-kaizen>=2.3.2",
     "kailash-pact>=0.4.1",
     "httpx>=0.27.0",

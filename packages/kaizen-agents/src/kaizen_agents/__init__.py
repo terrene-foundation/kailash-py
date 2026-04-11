@@ -14,12 +14,11 @@ Provides:
 - Governance: accountability, clearance, cascade, vacancy, dereliction, bypass, budget
 """
 
-__version__ = "0.8.0"
-
-from kaizen_agents.supervisor import GovernedSupervisor, SupervisorResult
+__version__ = "0.9.0"
 
 # Delegate facade — the primary entry point for autonomous AI execution
 from kaizen_agents.delegate import Delegate
+from kaizen_agents.supervisor import GovernedSupervisor, SupervisorResult
 
 # Canonical async Agent API (moved from kailash-kaizen api/)
 try:
