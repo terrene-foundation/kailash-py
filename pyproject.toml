@@ -33,12 +33,13 @@ dependencies = [
     "cryptography>=41.0",
     "PyJWT>=2.8",
     # Server (API gateway, Nexus endpoints, webhooks)
+    # Note: websockets is pulled in transitively via uvicorn[standard].
+    # If core adds direct websocket use, declare it here per dependencies.md.
     "aiohttp>=3.12.4",
     "aiohttp-cors>=0.7.0",
     "fastapi>=0.115.12",
     "httpx>=0.25.0",
     "uvicorn[standard]>=0.31.0",
-    "websockets>=12.0",
     # CLI
     "click>=8.0",
     # HTTP (sync + async API calls)
@@ -125,6 +126,9 @@ dev = [
     "pytest-xdist>=3.6.0",
     "ruff>=0.11.12",
     "twine>=6.1.0",
+    # MCP integration/e2e tests connect to MCP servers over raw WebSocket;
+    # production code uses aiohttp/starlette, so this is test-only.
+    "websockets>=12.0",
 ]
 # Documentation
 docs = [
@@ -197,3 +201,30 @@ known_first_party = ["kailash", "kaizen", "kaizen_agents", "dataflow", "nexus", 
 "tests/trust/plane/e2e/test_mcp_server.py" = ["E402"]
 # RAG nodes with embedded Python code strings
 "src/kailash/nodes/rag/privacy.py" = ["F821"]
+
+# --- Monorepo sub-package sources ------------------------------------------
+#
+# Every sub-package under ``packages/*`` MUST be resolved from its local
+# source tree during ``uv sync`` / ``uv pip install``, not from PyPI.
+# Without these path overrides the root kailash package pins newer
+# versions (e.g. ``kailash-dataflow>=2.0.3``) that may not yet be
+# published, causing ``uv sync`` to fail with a resolver error.
+#
+# See ``.claude/rules/python-environment.md`` MUST Rule 2: PYTHONPATH
+# prefixes as a workaround are BLOCKED; editable installs via path
+# sources are the canonical fix.
+#
+# Origin: ``workspaces/arbor-upstream-fixes`` red team round 1 — the
+# regression test file required ``PYTHONPATH=packages/...`` to import
+# sub-package modules, which violates the rule. Path sources make the
+# sub-packages importable from the root venv without a PYTHONPATH
+# prefix.
+[tool.uv.sources]
+kailash-dataflow = { path = "packages/kailash-dataflow", editable = true }
+kailash-nexus = { path = "packages/kailash-nexus", editable = true }
+kailash-kaizen = { path = "packages/kailash-kaizen", editable = true }
+kailash-mcp = { path = "packages/kailash-mcp", editable = true }
+kailash-pact = { path = "packages/kailash-pact", editable = true }
+kailash-ml = { path = "packages/kailash-ml", editable = true }
+kailash-align = { path = "packages/kailash-align", editable = true }
+kaizen-agents = { path = "packages/kaizen-agents", editable = true }
