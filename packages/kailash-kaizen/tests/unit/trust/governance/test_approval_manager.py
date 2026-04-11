@@ -10,8 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from kailash.runtime import AsyncLocalRuntime
-
-from kaizen.trust.governance import (
+from kailash.trust.governance import (
     ApprovalLevel,
     ApprovalManager,
     ApprovalPolicy,

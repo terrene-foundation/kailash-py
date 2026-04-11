@@ -17,6 +17,23 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import pytest
+from kailash.trust.orchestration.integration.registry_aware import (
+    CapabilityBasedSelector,
+    HealthAwareSelector,
+    RegistryAwareRuntime,
+    RegistryAwareRuntimeConfig,
+    RoundRobinSelector,
+)
+
+# Note: NO MOCKING in integration tests - use real implementations
+from kailash.trust.orchestration.integration.secure_channel import (
+    DelegationMessage,
+    DelegationMessageType,
+    DelegationResult,
+    SecureOrchestrationChannel,
+)
+from kailash.trust.registry.store import InMemoryAgentRegistryStore
+
 from kaizen.trust import (  # Crypto; Chain; Authority; Operations; Registry; Messaging; Orchestration
     AgentHealthMonitor,
     AgentMetadata,
@@ -53,22 +70,6 @@ from kaizen.trust import (  # Crypto; Chain; Authority; Operations; Registry; Me
     sign,
     verify_signature,
 )
-from kaizen.trust.orchestration.integration.registry_aware import (
-    CapabilityBasedSelector,
-    HealthAwareSelector,
-    RegistryAwareRuntime,
-    RegistryAwareRuntimeConfig,
-    RoundRobinSelector,
-)
-
-# Note: NO MOCKING in integration tests - use real implementations
-from kaizen.trust.orchestration.integration.secure_channel import (
-    DelegationMessage,
-    DelegationMessageType,
-    DelegationResult,
-    SecureOrchestrationChannel,
-)
-from kaizen.trust.registry.store import InMemoryAgentRegistryStore
 
 
 class TestAgent:

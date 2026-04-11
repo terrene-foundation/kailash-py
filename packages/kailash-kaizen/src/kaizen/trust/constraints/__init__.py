@@ -3,7 +3,7 @@ Extensible constraint system for EATP.
 Provides plugin architecture for custom constraint dimensions.
 """
 
-from kaizen.trust.constraints.builtin import (
+from kailash.trust.constraints.builtin import (
     CommunicationDimension,
     CostLimitDimension,
     DataAccessDimension,
@@ -12,13 +12,13 @@ from kaizen.trust.constraints.builtin import (
     TimeDimension,
     register_builtin_dimensions,
 )
-from kaizen.trust.constraints.dimension import (
+from kailash.trust.constraints.dimension import (
     ConstraintCheckResult,
     ConstraintDimension,
     ConstraintDimensionRegistry,
     ConstraintValue,
 )
-from kaizen.trust.constraints.evaluator import (
+from kailash.trust.constraints.evaluator import (
     EvaluationResult,
     InteractionMode,
     MultiDimensionEvaluator,

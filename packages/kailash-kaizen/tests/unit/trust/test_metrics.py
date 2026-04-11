@@ -19,13 +19,13 @@ Coverage:
 """
 
 import pytest
-from kaizen.trust.metrics import (
+from kailash.trust.metrics import (
     POSTURE_LEVEL_MAP,
     ConstraintMetrics,
     PostureMetrics,
     TrustMetricsCollector,
 )
-from kaizen.trust.postures import TrustPosture
+from kailash.trust.posture.postures import TrustPosture
 
 
 @pytest.fixture

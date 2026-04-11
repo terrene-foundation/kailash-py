@@ -11,14 +11,14 @@ Tests cover:
 from datetime import datetime, timezone
 
 import pytest
-from kaizen.trust.chain import (
+from kailash.trust.chain import (
     AuthorityType,
     DelegationRecord,
     GenesisRecord,
     TrustLineageChain,
 )
-from kaizen.trust.exceptions import DelegationCycleError
-from kaizen.trust.graph_validator import DelegationGraph, DelegationGraphValidator
+from kailash.trust.exceptions import DelegationCycleError
+from kailash.trust.graph_validator import DelegationGraph, DelegationGraphValidator
 
 
 def _make_genesis(agent_id: str = "agent-A") -> GenesisRecord:

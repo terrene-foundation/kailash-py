@@ -19,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from kaizen.trust.chain import (
+from kailash.trust.chain import (
     ActionResult,
     AuthorityType,
     CapabilityAttestation,
@@ -30,20 +30,20 @@ from kaizen.trust.chain import (
     VerificationLevel,
     VerificationResult,
 )
-from kaizen.trust.crl import (
-    CertificateRevocationList,
-    CRLEntry,
-    verify_delegation_with_crl,
-)
-from kaizen.trust.crypto import generate_keypair
-from kaizen.trust.exceptions import TrustChainNotFoundError
-from kaizen.trust.revocation import (
+from kailash.trust.exceptions import TrustChainNotFoundError
+from kailash.trust.revocation import (
     CascadeRevocationManager,
     InMemoryDelegationRegistry,
     InMemoryRevocationBroadcaster,
     RevocationEvent,
     RevocationType,
 )
+from kailash.trust.signing.crl import (
+    CertificateRevocationList,
+    CRLEntry,
+    verify_delegation_with_crl,
+)
+from kailash.trust.signing.crypto import generate_keypair
 
 
 class TestRevokedChainImmediatelyInvalid:
@@ -76,12 +76,12 @@ class TestRevokedChainImmediatelyInvalid:
         """
         # Initially, the delegation should be valid (not in CRL)
         initial_result = verify_delegation_with_crl(sample_delegation_id, crl)
-        assert initial_result.valid is True, (
-            "Delegation should be valid before revocation"
-        )
-        assert initial_result.entry is None, (
-            "No CRL entry should exist before revocation"
-        )
+        assert (
+            initial_result.valid is True
+        ), "Delegation should be valid before revocation"
+        assert (
+            initial_result.entry is None
+        ), "No CRL entry should exist before revocation"
 
         # Add revocation to CRL
         crl.add_revocation(
@@ -93,9 +93,9 @@ class TestRevokedChainImmediatelyInvalid:
 
         # IMMEDIATELY after revocation, verification should fail
         post_revocation_result = verify_delegation_with_crl(sample_delegation_id, crl)
-        assert post_revocation_result.valid is False, (
-            "Delegation should be invalid immediately after revocation"
-        )
+        assert (
+            post_revocation_result.valid is False
+        ), "Delegation should be invalid immediately after revocation"
         assert post_revocation_result.entry is not None, "CRL entry should be returned"
         assert post_revocation_result.entry.reason == "Security breach detected"
         assert "revoked" in post_revocation_result.reason.lower()
@@ -255,9 +255,9 @@ class TestCascadeRevocationTiming:
         assert root_idx >= 0, "Root should be in history"
         assert child1_idx >= 0, "Child1 should be in history"
         # Grandchild should come after child1 (its parent)
-        assert grandchild_idx > child1_idx or child1_idx == grandchild_idx, (
-            "Grandchild should be revoked after (or with) its parent"
-        )
+        assert (
+            grandchild_idx > child1_idx or child1_idx == grandchild_idx
+        ), "Grandchild should be revoked after (or with) its parent"
 
 
 class TestNoActionDuringRevocation:
@@ -297,9 +297,9 @@ class TestNoActionDuringRevocation:
         # (In a real async system, this would test concurrent access)
         for _ in range(10):
             result = verify_delegation_with_crl(delegation_id, crl)
-            assert result.valid is False, (
-                "Verification should fail once revocation is initiated"
-            )
+            assert (
+                result.valid is False
+            ), "Verification should fail once revocation is initiated"
 
     def test_crl_verification_atomicity(self):
         """

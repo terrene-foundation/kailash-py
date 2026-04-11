@@ -16,9 +16,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from kailash.runtime import AsyncLocalRuntime
+from kailash.trust.governance.cost_estimator import ExternalAgentCostEstimator
 from kailash.workflow.builder import WorkflowBuilder
-
-from kaizen.trust.governance.cost_estimator import ExternalAgentCostEstimator
 
 logger = logging.getLogger(__name__)
 

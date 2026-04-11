@@ -15,11 +15,10 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from kaizen.trust.chain import CapabilityType
-from kaizen.trust.esa.api import APIESA, ESAResult, RateLimitConfig, RateLimitTracker
-from kaizen.trust.esa.base import SystemConnectionInfo, SystemMetadata
-from kaizen.trust.esa.exceptions import ESAConnectionError, ESAOperationError
+from kailash.trust.chain import CapabilityType
+from kailash.trust.esa.api import APIESA, ESAResult, RateLimitConfig, RateLimitTracker
+from kailash.trust.esa.base import SystemConnectionInfo, SystemMetadata
+from kailash.trust.esa.exceptions import ESAConnectionError, ESAOperationError
 
 
 @pytest.fixture

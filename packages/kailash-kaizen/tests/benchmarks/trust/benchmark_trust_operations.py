@@ -30,22 +30,23 @@ from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
 import pytest
+from kailash.trust.cache import TrustChainCache
+from kailash.trust.chain import (
+    ActionResult,
+    CapabilityType,
+    TrustLineageChain,
+    VerificationLevel,
+)
+from kailash.trust.exceptions import TrustChainNotFoundError
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
+from kailash.trust.signing.crypto import generate_keypair
+
 from kaizen.trust.authority import (
     AuthorityPermission,
     AuthorityType,
     OrganizationalAuthority,
     OrganizationalAuthorityRegistry,
 )
-from kaizen.trust.cache import TrustChainCache
-from kaizen.trust.chain import (
-    ActionResult,
-    CapabilityType,
-    TrustLineageChain,
-    VerificationLevel,
-)
-from kaizen.trust.crypto import generate_keypair
-from kaizen.trust.exceptions import TrustChainNotFoundError
-from kaizen.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
 
 # ============================================================================
 # In-Memory Trust Store (NO MOCKING - Real implementation for benchmarks)
@@ -144,7 +145,7 @@ class InMemoryAuthorityRegistry:
         include_inactive: bool = False,
     ) -> OrganizationalAuthority:
         """Retrieve an authority."""
-        from kaizen.trust.exceptions import AuthorityNotFoundError
+        from kailash.trust.exceptions import AuthorityNotFoundError
 
         if authority_id not in self._authorities:
             raise AuthorityNotFoundError(authority_id)
@@ -622,9 +623,9 @@ def test_benchmark_cache_hit_rate_under_load(benchmark, trust_cache, established
 
     # Check hit rate
     load_result = asyncio.run(simulate_cache_load())
-    assert load_result["hit_rate"] > 0.85, (
-        f"Cache hit rate ({load_result['hit_rate']:.2%}) below 85% target"
-    )
+    assert (
+        load_result["hit_rate"] > 0.85
+    ), f"Cache hit rate ({load_result['hit_rate']:.2%}) below 85% target"
 
 
 # ============================================================================

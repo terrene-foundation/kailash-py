@@ -9,7 +9,7 @@ new hash computation.
 from datetime import datetime, timezone
 
 import pytest
-from kaizen.trust.chain import (
+from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,

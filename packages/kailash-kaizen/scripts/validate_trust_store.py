@@ -43,7 +43,7 @@ def validate_imports():
         return False
 
     try:
-        from kaizen.trust.exceptions import (
+        from kailash.trust.exceptions import (
             TrustChainInvalidError,
             TrustChainNotFoundError,
             TrustStoreDatabaseError,
@@ -127,7 +127,7 @@ def validate_exception_hierarchy():
     print("\n✓ Validating exception hierarchy...")
 
     try:
-        from kaizen.trust.exceptions import (
+        from kailash.trust.exceptions import (
             TrustChainInvalidError,
             TrustChainNotFoundError,
             TrustError,
@@ -136,19 +136,19 @@ def validate_exception_hierarchy():
         )
 
         # Verify inheritance
-        assert issubclass(TrustStoreError, TrustError), (
-            "TrustStoreError should inherit from TrustError"
-        )
+        assert issubclass(
+            TrustStoreError, TrustError
+        ), "TrustStoreError should inherit from TrustError"
         print("  ✓ TrustStoreError inherits from TrustError")
 
-        assert issubclass(TrustChainInvalidError, TrustStoreError), (
-            "TrustChainInvalidError should inherit from TrustStoreError"
-        )
+        assert issubclass(
+            TrustChainInvalidError, TrustStoreError
+        ), "TrustChainInvalidError should inherit from TrustStoreError"
         print("  ✓ TrustChainInvalidError inherits from TrustStoreError")
 
-        assert issubclass(TrustStoreDatabaseError, TrustStoreError), (
-            "TrustStoreDatabaseError should inherit from TrustStoreError"
-        )
+        assert issubclass(
+            TrustStoreDatabaseError, TrustStoreError
+        ), "TrustStoreDatabaseError should inherit from TrustStoreError"
         print("  ✓ TrustStoreDatabaseError inherits from TrustStoreError")
 
         # Verify exception instantiation
@@ -157,9 +157,9 @@ def validate_exception_hierarchy():
         print("  ✓ TrustChainNotFoundError instantiates correctly")
 
         exc2 = TrustChainInvalidError("Test error", agent_id="test-agent")
-        assert "Test error" in str(exc2), (
-            "Exception message should contain custom message"
-        )
+        assert "Test error" in str(
+            exc2
+        ), "Exception message should contain custom message"
         print("  ✓ TrustChainInvalidError instantiates correctly")
 
         exc3 = TrustStoreDatabaseError("DB error", operation="store_chain")
@@ -225,12 +225,12 @@ def validate_trust_chain_serialization():
 
         # Test deserialization
         restored_chain = TrustLineageChain.from_dict(chain_dict)
-        assert restored_chain.genesis.agent_id == "agent-test", (
-            "Deserialized chain should preserve agent_id"
-        )
-        assert len(restored_chain.capabilities) == 1, (
-            "Deserialized chain should preserve capabilities"
-        )
+        assert (
+            restored_chain.genesis.agent_id == "agent-test"
+        ), "Deserialized chain should preserve agent_id"
+        assert (
+            len(restored_chain.capabilities) == 1
+        ), "Deserialized chain should preserve capabilities"
         print("  ✓ Chain deserialization from dict works")
 
         # Test hash computation
@@ -277,17 +277,17 @@ def validate_store_methods_syntax():
         ]
 
         for method_name in required_methods:
-            assert hasattr(store, method_name), (
-                f"Store should have {method_name} method"
-            )
+            assert hasattr(
+                store, method_name
+            ), f"Store should have {method_name} method"
             method = getattr(store, method_name)
             assert callable(method), f"{method_name} should be callable"
 
             # Check if method is async
             if method_name != "__init__":
-                assert inspect.iscoroutinefunction(method), (
-                    f"{method_name} should be async"
-                )
+                assert inspect.iscoroutinefunction(
+                    method
+                ), f"{method_name} should be async"
 
             print(f"  ✓ {method_name}() exists and is async")
 

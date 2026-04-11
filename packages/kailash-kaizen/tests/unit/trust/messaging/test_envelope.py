@@ -14,8 +14,7 @@ import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
-
-from kaizen.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
+from kailash.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
 
 
 class TestMessageMetadata:

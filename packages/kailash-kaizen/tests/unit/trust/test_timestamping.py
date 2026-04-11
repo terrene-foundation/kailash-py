@@ -18,8 +18,8 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
-from kaizen.trust.merkle import MerkleTree
-from kaizen.trust.timestamping import (
+from kailash.trust.signing.merkle import MerkleTree
+from kailash.trust.signing.timestamping import (
     LocalTimestampAuthority,
     RFC3161TimestampAuthority,
     TimestampAnchorManager,
@@ -56,7 +56,7 @@ def local_authority():
 @pytest.fixture
 def local_authority_with_keys():
     """Create a local authority with pre-generated keys."""
-    from kaizen.trust.crypto import generate_keypair
+    from kailash.trust.signing.crypto import generate_keypair
 
     private_key, public_key = generate_keypair()
     return LocalTimestampAuthority(
@@ -979,7 +979,9 @@ class TestCARE049SecurityFeatures:
 
     def test_default_clock_drift_threshold(self):
         """Default clock drift threshold is set correctly."""
-        from kaizen.trust.timestamping import DEFAULT_CLOCK_DRIFT_THRESHOLD_SECONDS
+        from kailash.trust.signing.timestamping import (
+            DEFAULT_CLOCK_DRIFT_THRESHOLD_SECONDS,
+        )
 
         authority = LocalTimestampAuthority(production_warning=False)
         assert authority._clock_drift_threshold == DEFAULT_CLOCK_DRIFT_THRESHOLD_SECONDS

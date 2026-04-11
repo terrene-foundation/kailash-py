@@ -9,7 +9,7 @@ Tests cover:
 - Signature replay attack prevention
 - Signing payload correctness
 
-These tests use REAL Ed25519 cryptography from kaizen.trust.crypto.
+These tests use REAL Ed25519 cryptography from kailash.trust.signing.crypto.
 NO MOCKING of cryptographic operations.
 """
 
@@ -18,13 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from kaizen.trust.authority import (
-    AuthorityPermission,
-    AuthorityType,
-    OrganizationalAuthority,
-    OrganizationalAuthorityRegistry,
-)
-from kaizen.trust.chain import (
+from kailash.trust.chain import (
     CapabilityAttestation,
     CapabilityType,
     ConstraintEnvelope,
@@ -34,15 +28,22 @@ from kaizen.trust.chain import (
     VerificationLevel,
     VerificationResult,
 )
-from kaizen.trust.crypto import (
+from kailash.trust.exceptions import TrustChainNotFoundError
+from kailash.trust.operations import TrustKeyManager, TrustOperations
+from kailash.trust.signing.crypto import (
     NACL_AVAILABLE,
     generate_keypair,
     serialize_for_signing,
     sign,
     verify_signature,
 )
-from kaizen.trust.exceptions import TrustChainNotFoundError
-from kaizen.trust.operations import TrustKeyManager, TrustOperations
+
+from kaizen.trust.authority import (
+    AuthorityPermission,
+    AuthorityType,
+    OrganizationalAuthority,
+    OrganizationalAuthorityRegistry,
+)
 from kaizen.trust.store import PostgresTrustStore
 
 # Skip tests if PyNaCl not available

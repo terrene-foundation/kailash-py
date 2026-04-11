@@ -37,8 +37,8 @@ class TestReasoningShimImports:
         assert trace.confidence is None  # optional
 
     def test_import_from_reasoning_submodule(self):
-        """Types should also be importable from kaizen.trust.reasoning."""
-        from kaizen.trust.reasoning import ConfidentialityLevel, ReasoningTrace
+        """Types should also be importable from kailash.trust.reasoning.traces."""
+        from kailash.trust.reasoning.traces import ConfidentialityLevel, ReasoningTrace
 
         assert ConfidentialityLevel.PUBLIC.value == "public"
         assert ReasoningTrace is not None

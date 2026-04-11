@@ -13,9 +13,8 @@ import hashlib
 from datetime import datetime, timezone
 
 import pytest
-from kaizen.trust.audit_store import AuditRecord
-from kaizen.trust.chain import ActionResult, AuditAnchor
-from kaizen.trust.merkle import (
+from kailash.trust.chain import ActionResult, AuditAnchor
+from kailash.trust.signing.merkle import (
     MerkleNode,
     MerkleProof,
     MerkleTree,
@@ -23,6 +22,8 @@ from kaizen.trust.merkle import (
     get_proof_length,
     verify_merkle_proof,
 )
+
+from kaizen.trust.audit_store import AuditRecord
 
 # =============================================================================
 # Fixtures

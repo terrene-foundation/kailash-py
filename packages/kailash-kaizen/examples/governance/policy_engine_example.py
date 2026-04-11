@@ -8,7 +8,7 @@ with time, location, environment, provider, and tag-based policies.
 import asyncio
 from datetime import datetime, timezone
 
-from kaizen.trust.governance import (
+from kailash.trust.governance import (
     ConflictResolutionStrategy,
     EnvironmentCondition,
     ExternalAgentPolicy,

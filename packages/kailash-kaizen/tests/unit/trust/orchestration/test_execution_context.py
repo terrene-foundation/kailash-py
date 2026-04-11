@@ -11,12 +11,12 @@ Test Intent:
 from datetime import datetime
 
 import pytest
-from kaizen.trust.orchestration.exceptions import (
+from kailash.trust.orchestration.exceptions import (
     ConstraintLooseningError,
     ContextPropagationError,
     DelegationChainError,
 )
-from kaizen.trust.orchestration.execution_context import (
+from kailash.trust.orchestration.execution_context import (
     ContextMergeStrategy,
     DelegationEntry,
     TrustExecutionContext,

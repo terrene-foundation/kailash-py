@@ -15,11 +15,10 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from kaizen.trust.chain import VerificationLevel
-from kaizen.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
-from kaizen.trust.messaging.replay_protection import InMemoryReplayProtection
-from kaizen.trust.messaging.verifier import MessageVerificationResult, MessageVerifier
+from kailash.trust.chain import VerificationLevel
+from kailash.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
+from kailash.trust.messaging.replay_protection import InMemoryReplayProtection
+from kailash.trust.messaging.verifier import MessageVerificationResult, MessageVerifier
 
 
 class TestMessageVerificationResult:

@@ -12,10 +12,11 @@ to provide trust-aware access to REST APIs with:
 import asyncio
 from datetime import datetime, timedelta
 
+from kailash.trust.chain import CapabilityType
+from kailash.trust.esa import APIESA, ESAResult, RateLimitConfig, SystemMetadata
+from kailash.trust.operations import CapabilityRequest, TrustOperations
+
 from kaizen.trust.authority import OrganizationalAuthorityRegistry
-from kaizen.trust.chain import CapabilityType
-from kaizen.trust.esa import APIESA, ESAResult, RateLimitConfig, SystemMetadata
-from kaizen.trust.operations import CapabilityRequest, TrustOperations
 from kaizen.trust.store import PostgresTrustStore
 
 
@@ -30,7 +31,7 @@ async def example_basic_usage():
     await trust_ops.initialize()
 
     # Register organization authority
-    from kaizen.trust.crypto import generate_keypair
+    from kailash.trust.signing.crypto import generate_keypair
 
     private_key, public_key = generate_keypair()
     key_manager.register_key("org-acme-key", private_key)

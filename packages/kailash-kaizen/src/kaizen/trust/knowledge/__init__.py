@@ -89,9 +89,9 @@ Example (Trust Knowledge Bridge):
     trusted = await bridge.query_by_trust_level(min_confidence=0.9)
 """
 
-from kaizen.trust.knowledge.bridge import InMemoryKnowledgeStore, TrustKnowledgeBridge
-from kaizen.trust.knowledge.entry import KnowledgeEntry, KnowledgeType
-from kaizen.trust.knowledge.provenance import (
+from kailash.trust.knowledge.bridge import InMemoryKnowledgeStore, TrustKnowledgeBridge
+from kailash.trust.knowledge.entry import KnowledgeEntry, KnowledgeType
+from kailash.trust.knowledge.provenance import (
     InMemoryProvenanceStore,
     ProvenanceChain,
     ProvenanceRecord,

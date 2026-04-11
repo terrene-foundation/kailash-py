@@ -16,10 +16,10 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from kaizen.trust.messaging.channel import ChannelStatistics, SecureChannel
-from kaizen.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
-from kaizen.trust.messaging.replay_protection import InMemoryReplayProtection
-from kaizen.trust.messaging.verifier import MessageVerificationResult
+from kailash.trust.messaging.channel import ChannelStatistics, SecureChannel
+from kailash.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
+from kailash.trust.messaging.replay_protection import InMemoryReplayProtection
+from kailash.trust.messaging.verifier import MessageVerificationResult
 
 # Module-level patch for sign function in unit tests
 SIGN_MOCK_PATCH = "kaizen.trust.messaging.signer.sign"

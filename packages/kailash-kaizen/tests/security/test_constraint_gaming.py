@@ -35,33 +35,34 @@ from typing import Any, Dict
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from kaizen.trust.audit_store import (
-    AppendOnlyAuditStore,
-    AuditRecord,
-    AuditStoreImmutabilityError,
-)
-from kaizen.trust.chain import ActionResult, AuditAnchor
-from kaizen.trust.constraint_validator import (
+from kailash.trust.chain import ActionResult, AuditAnchor
+from kailash.trust.constraint_validator import (
     ConstraintValidator,
     ConstraintViolation,
     ValidationResult,
 )
-from kaizen.trust.constraints.builtin import (
+from kailash.trust.constraints.builtin import (
     CostLimitDimension,
     DataAccessDimension,
     RateLimitDimension,
     ResourceDimension,
     TimeDimension,
 )
-from kaizen.trust.constraints.dimension import (
+from kailash.trust.constraints.dimension import (
     ConstraintCheckResult,
     ConstraintDimensionRegistry,
     ConstraintValue,
 )
-from kaizen.trust.constraints.evaluator import (
+from kailash.trust.constraints.evaluator import (
     EvaluationResult,
     InteractionMode,
     MultiDimensionEvaluator,
+)
+
+from kaizen.trust.audit_store import (
+    AppendOnlyAuditStore,
+    AuditRecord,
+    AuditStoreImmutabilityError,
 )
 
 
@@ -435,7 +436,7 @@ class TestDefaultsAreRestrictive:
     def registry(self) -> ConstraintDimensionRegistry:
         """Create a ConstraintDimensionRegistry with built-in dimensions."""
         registry = ConstraintDimensionRegistry()
-        from kaizen.trust.constraints.builtin import register_builtin_dimensions
+        from kailash.trust.constraints.builtin import register_builtin_dimensions
 
         register_builtin_dimensions(registry)
         return registry
@@ -625,7 +626,7 @@ class TestBatchSplittingCounted:
     def registry(self) -> ConstraintDimensionRegistry:
         """Create a ConstraintDimensionRegistry with built-in dimensions."""
         registry = ConstraintDimensionRegistry()
-        from kaizen.trust.constraints.builtin import register_builtin_dimensions
+        from kailash.trust.constraints.builtin import register_builtin_dimensions
 
         register_builtin_dimensions(registry)
         return registry
@@ -733,7 +734,7 @@ class TestConcurrentLimitsEnforced:
     def registry(self) -> ConstraintDimensionRegistry:
         """Create a ConstraintDimensionRegistry with built-in dimensions."""
         registry = ConstraintDimensionRegistry()
-        from kaizen.trust.constraints.builtin import register_builtin_dimensions
+        from kailash.trust.constraints.builtin import register_builtin_dimensions
 
         register_builtin_dimensions(registry)
         return registry
@@ -989,7 +990,7 @@ class TestApprovalRequiredBlocking:
         Expected: Operations requiring approval should be blocked until approved.
         This tests the ApprovalStatus enum behavior.
         """
-        from kaizen.trust.governance import ApprovalStatus
+        from kailash.trust.governance import ApprovalStatus
 
         # Pending status should block
         assert ApprovalStatus.PENDING.value == "pending"
@@ -1017,7 +1018,7 @@ class TestApprovalRequiredBlocking:
         Expected: Rejected requests cannot be converted to approved.
         This is enforced in ApprovalManager.approve_request.
         """
-        from kaizen.trust.governance import ApprovalRequest, ApprovalStatus
+        from kailash.trust.governance import ApprovalRequest, ApprovalStatus
 
         # Create a rejected request
         request = ApprovalRequest(

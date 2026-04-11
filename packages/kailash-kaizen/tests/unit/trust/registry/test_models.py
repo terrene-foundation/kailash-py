@@ -13,7 +13,11 @@ from datetime import datetime
 from typing import Any, Dict
 
 import pytest
-from kaizen.trust.registry.models import AgentMetadata, AgentStatus, RegistrationRequest
+from kailash.trust.registry.models import (
+    AgentMetadata,
+    AgentStatus,
+    RegistrationRequest,
+)
 
 
 class TestAgentStatus:

@@ -34,16 +34,16 @@ class TestSecureKeyStorageSalt:
 
     def test_no_static_salt_in_source(self):
         """The static salt string must not appear in security.py."""
-        from kaizen.trust.security import SecureKeyStorage
+        from kailash.trust.security import SecureKeyStorage
 
         source = inspect.getsource(SecureKeyStorage)
-        assert "kaizen-trust-security-salt" not in source, (
-            "Static salt b'kaizen-trust-security-salt' still present in SecureKeyStorage"
-        )
+        assert (
+            "kaizen-trust-security-salt" not in source
+        ), "Static salt b'kaizen-trust-security-salt' still present in SecureKeyStorage"
 
     def test_different_instances_get_different_salts(self, master_key_env):
         """Two instances without explicit salt should get different salts."""
-        from kaizen.trust.security import SecureKeyStorage
+        from kailash.trust.security import SecureKeyStorage
 
         storage1 = SecureKeyStorage(master_key_env)
         storage2 = SecureKeyStorage(master_key_env)
@@ -52,7 +52,7 @@ class TestSecureKeyStorageSalt:
 
     def test_explicit_salt_is_used(self, master_key_env):
         """When salt is provided, it should be used."""
-        from kaizen.trust.security import SecureKeyStorage
+        from kailash.trust.security import SecureKeyStorage
 
         explicit_salt = os.urandom(32)
         storage = SecureKeyStorage(master_key_env, salt=explicit_salt)
@@ -61,7 +61,7 @@ class TestSecureKeyStorageSalt:
 
     def test_salt_from_env_variable(self, master_key_env, monkeypatch):
         """Salt from environment variable is used when available."""
-        from kaizen.trust.security import SecureKeyStorage
+        from kailash.trust.security import SecureKeyStorage
 
         salt = os.urandom(32)
         salt_b64 = base64.b64encode(salt).decode()
@@ -75,7 +75,7 @@ class TestSecureKeyStorageSalt:
 
     def test_store_and_retrieve_with_random_salt(self, master_key_env):
         """Store and retrieve should work with per-instance random salt."""
-        from kaizen.trust.security import SecureKeyStorage
+        from kailash.trust.security import SecureKeyStorage
 
         storage = SecureKeyStorage(master_key_env)
         storage.store_key("key-001", b"my-private-key-data")
@@ -85,7 +85,7 @@ class TestSecureKeyStorageSalt:
 
     def test_same_salt_produces_same_encryption(self, master_key_env):
         """Same salt should produce same Fernet key (deterministic)."""
-        from kaizen.trust.security import SecureKeyStorage
+        from kailash.trust.security import SecureKeyStorage
 
         salt = os.urandom(32)
         storage1 = SecureKeyStorage(master_key_env, salt=salt)

@@ -11,8 +11,7 @@ Tests cover:
 from datetime import datetime, timedelta, timezone
 
 import pytest
-
-from kaizen.trust.chain import (
+from kailash.trust.chain import (
     ActionResult,
     AuditAnchor,
     AuthorityType,

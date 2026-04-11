@@ -17,28 +17,27 @@ from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import pytest
-
-from kaizen.trust.chain import (
-    ActionResult,
-    AuditAnchor,
-    CapabilityType,
-    VerificationLevel,
-    VerificationResult,
-)
-from kaizen.trust.exceptions import (
-    ConstraintViolationError,
-    TrustChainNotFoundError,
-    TrustError,
-    VerificationFailedError,
-)
-from kaizen.trust.execution_context import ExecutionContext, HumanOrigin
-from kaizen.trust.trusted_agent import (
+from kailash.trust.agents.trusted_agent import (
     TrustContext,
     TrustContextManager,
     TrustedAgent,
     TrustedAgentConfig,
     TrustedSupervisorAgent,
 )
+from kailash.trust.chain import (
+    ActionResult,
+    AuditAnchor,
+    CapabilityType,
+    VerificationLevel,
+    VerificationResult,
+)
+from kailash.trust.exceptions import (
+    ConstraintViolationError,
+    TrustChainNotFoundError,
+    TrustError,
+    VerificationFailedError,
+)
+from kailash.trust.execution_context import ExecutionContext, HumanOrigin
 
 
 # Helper to create mock VerificationResult

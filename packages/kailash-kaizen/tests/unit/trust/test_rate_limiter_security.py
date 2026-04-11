@@ -12,7 +12,7 @@ import asyncio
 from unittest.mock import patch
 
 import pytest
-from kaizen.trust.security import RateLimitExceededError, TrustRateLimiter
+from kailash.trust.security import RateLimitExceededError, TrustRateLimiter
 
 
 class TestRateLimiterMemoryDoS:
@@ -24,9 +24,9 @@ class TestRateLimiterMemoryDoS:
 
     def test_rate_limiter_max_authorities_constant_exists(self):
         """ROUND5-007: Verify MAX_TRACKED_AUTHORITIES constant exists and equals 10000."""
-        assert hasattr(TrustRateLimiter, "MAX_TRACKED_AUTHORITIES"), (
-            "ROUND5-007: TrustRateLimiter missing MAX_TRACKED_AUTHORITIES constant"
-        )
+        assert hasattr(
+            TrustRateLimiter, "MAX_TRACKED_AUTHORITIES"
+        ), "ROUND5-007: TrustRateLimiter missing MAX_TRACKED_AUTHORITIES constant"
         assert TrustRateLimiter.MAX_TRACKED_AUTHORITIES == 10000, (
             f"ROUND5-007: MAX_TRACKED_AUTHORITIES should be 10000, "
             f"got {TrustRateLimiter.MAX_TRACKED_AUTHORITIES}"
@@ -88,9 +88,9 @@ class TestRateLimiterMemoryDoS:
 
             # Should never exceed MAX_TRACKED_AUTHORITIES
             final_count = len(limiter._operations["establish"])
-            assert final_count <= 3, (
-                f"ROUND5-007: Memory DoS possible! {final_count} > 3 authorities"
-            )
+            assert (
+                final_count <= 3
+            ), f"ROUND5-007: Memory DoS possible! {final_count} > 3 authorities"
 
         finally:
             TrustRateLimiter.MAX_TRACKED_AUTHORITIES = original_max
@@ -184,9 +184,9 @@ class TestRateLimiterMemoryDoS:
             await limiter.record_operation("establish", "auth-new")
 
             # auth-0 should be evicted (empty timestamp list gets priority)
-            assert "auth-0" not in limiter._operations["establish"], (
-                "ROUND5-007: Authority with empty timestamps should be evicted first"
-            )
+            assert (
+                "auth-0" not in limiter._operations["establish"]
+            ), "ROUND5-007: Authority with empty timestamps should be evicted first"
 
             # Other authorities should still be present
             assert "auth-1" in limiter._operations["establish"]
@@ -219,16 +219,16 @@ class TestRateLimiterMemoryDoS:
                 await limiter.record_operation("establish", f"est-{i}")
 
             # Verify should be unaffected by establish evictions
-            assert len(limiter._operations["verify"]) == 2, (
-                "ROUND5-007: verify authorities affected by establish eviction!"
-            )
+            assert (
+                len(limiter._operations["verify"]) == 2
+            ), "ROUND5-007: verify authorities affected by establish eviction!"
             assert "ver-1" in limiter._operations["verify"]
             assert "ver-2" in limiter._operations["verify"]
 
             # Establish should be bounded by MAX
-            assert len(limiter._operations["establish"]) <= 3, (
-                "ROUND5-007: establish memory not bounded"
-            )
+            assert (
+                len(limiter._operations["establish"]) <= 3
+            ), "ROUND5-007: establish memory not bounded"
 
         finally:
             TrustRateLimiter.MAX_TRACKED_AUTHORITIES = original_max

@@ -18,19 +18,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from kaizen.trust import (
-    AuthorityType,
-    CapabilityAttestation,
-    CapabilityType,
-    GenesisRecord,
-    OrganizationalAuthorityRegistry,
-    TrustKeyManager,
-    TrustLineageChain,
-    TrustOperations,
-    generate_keypair,
-    sign,
-)
-from kaizen.trust.a2a import (  # Models; Exceptions
+from kailash.trust.a2a import (  # Models; Exceptions
     A2AAuthenticator,
     A2AError,
     A2AMethodHandlers,
@@ -51,6 +39,19 @@ from kaizen.trust.a2a import (  # Models; Exceptions
     TrustExtensions,
     create_a2a_app,
     extract_token_from_header,
+)
+
+from kaizen.trust import (
+    AuthorityType,
+    CapabilityAttestation,
+    CapabilityType,
+    GenesisRecord,
+    OrganizationalAuthorityRegistry,
+    TrustKeyManager,
+    TrustLineageChain,
+    TrustOperations,
+    generate_keypair,
+    sign,
 )
 
 # Note: NO MOCKING in integration tests - use real implementations

@@ -30,13 +30,13 @@ from dataclasses import asdict
 from io import StringIO
 
 import pytest
-from kaizen.trust.crypto import NACL_AVAILABLE, generate_keypair, sign
-from kaizen.trust.key_manager import (
+from kailash.trust.key_manager import (
     AWSKMSKeyManager,
     InMemoryKeyManager,
     KeyManagerError,
     KeyMetadata,
 )
+from kailash.trust.signing.crypto import NACL_AVAILABLE, generate_keypair, sign
 
 # Skip all tests if PyNaCl not available
 pytestmark = pytest.mark.skipif(not NACL_AVAILABLE, reason="PyNaCl not installed")

@@ -12,9 +12,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, Tuple
 
 import pytest
-from kaizen.trust.crypto import serialize_for_signing, sign, verify_signature
-from kaizen.trust.key_manager import InMemoryKeyManager
-from kaizen.trust.multi_sig import (
+from kailash.trust.key_manager import InMemoryKeyManager
+from kailash.trust.signing.crypto import serialize_for_signing, sign, verify_signature
+from kailash.trust.signing.multi_sig import (
     DuplicateSignatureError,
     InsufficientSignaturesError,
     MultiSigError,

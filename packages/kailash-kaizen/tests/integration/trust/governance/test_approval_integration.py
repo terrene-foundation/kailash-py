@@ -12,8 +12,9 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
+from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
-from kaizen.trust.governance import (
+from kailash.trust.governance import (
     ApprovalAuditLogModel,
     ApprovalLevel,
     ApprovalManager,
@@ -23,8 +24,6 @@ from kaizen.trust.governance import (
     ApprovalRequestModel,
     ApprovalStatus,
 )
-
-from dataflow import DataFlow
 
 
 @pytest.fixture

@@ -17,7 +17,7 @@ NO MOCKING - uses InMemoryKnowledgeStore and InMemoryProvenanceStore.
 from datetime import datetime, timezone
 
 import pytest
-from kaizen.trust.knowledge import (
+from kailash.trust.knowledge import (
     InMemoryKnowledgeStore,
     InMemoryProvenanceStore,
     KnowledgeEntry,

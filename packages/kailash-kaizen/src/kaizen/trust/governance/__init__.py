@@ -74,25 +74,11 @@ Examples:
     >>> await manager.approve_request(approval_id, "lead-456")
 """
 
-from kaizen.trust.governance.approval_manager import (
-    ApprovalLevel,
-    ApprovalManager,
-    ApprovalPolicy,
-    ApprovalRequest,
-    ApprovalResult,
-    ApprovalStatus,
-)
-from kaizen.trust.governance.budget_enforcer import (
-    BudgetCheckResult,
-    ExternalAgentBudget,
-    ExternalAgentBudgetEnforcer,
-)
-from kaizen.trust.governance.budget_reset import BudgetResetService
-from kaizen.trust.governance.cost_estimator import (
+from kailash.trust.governance.cost_estimator import (
     CostEstimate,
     ExternalAgentCostEstimator,
 )
-from kaizen.trust.governance.models import (
+from kailash.trust.governance.models import (
     ApprovalAuditLogModel,
     ApprovalPolicyModel,
     ApprovalRequestModel,
@@ -101,7 +87,7 @@ from kaizen.trust.governance.models import (
     BudgetUsageLogModel,
     ExternalAgentBudgetModel,
 )
-from kaizen.trust.governance.policy_engine import (
+from kailash.trust.governance.policy_engine import (
     ConflictResolutionStrategy,
     EnvironmentCondition,
     ExternalAgentPolicy,
@@ -116,18 +102,33 @@ from kaizen.trust.governance.policy_engine import (
     TagCondition,
     TimeWindowCondition,
 )
-from kaizen.trust.governance.policy_models import (
+from kailash.trust.governance.policy_models import (
     ExternalAgentPolicyModel,
     PolicyEvaluationLogModel,
     PolicyViolationModel,
 )
-from kaizen.trust.governance.rate_limiter import (
+from kailash.trust.governance.rate_limiter import (
     ExternalAgentRateLimiter,
     RateLimitCheckResult,
     RateLimitConfig,
     RateLimitError,
     RateLimitMetrics,
 )
+
+from kaizen.trust.governance.approval_manager import (
+    ApprovalLevel,
+    ApprovalManager,
+    ApprovalPolicy,
+    ApprovalRequest,
+    ApprovalResult,
+    ApprovalStatus,
+)
+from kaizen.trust.governance.budget_enforcer import (
+    BudgetCheckResult,
+    ExternalAgentBudget,
+    ExternalAgentBudgetEnforcer,
+)
+from kaizen.trust.governance.budget_reset import BudgetResetService
 
 __all__ = [
     # Cost estimation

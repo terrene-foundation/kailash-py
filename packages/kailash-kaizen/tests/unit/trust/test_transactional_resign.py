@@ -16,8 +16,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
-from kaizen.trust.authority import AuthorityPermission, OrganizationalAuthority
-from kaizen.trust.chain import (
+from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,
@@ -25,10 +24,12 @@ from kaizen.trust.chain import (
     GenesisRecord,
     TrustLineageChain,
 )
-from kaizen.trust.crypto import generate_keypair, sign, verify_signature
-from kaizen.trust.key_manager import InMemoryKeyManager
-from kaizen.trust.operations import TrustKeyManager
-from kaizen.trust.rotation import CredentialRotationManager, RotationError
+from kailash.trust.key_manager import InMemoryKeyManager
+from kailash.trust.operations import TrustKeyManager
+from kailash.trust.signing.crypto import generate_keypair, sign, verify_signature
+from kailash.trust.signing.rotation import CredentialRotationManager, RotationError
+
+from kaizen.trust.authority import AuthorityPermission, OrganizationalAuthority
 from kaizen.trust.store import InMemoryTrustStore, TransactionContext
 
 
@@ -51,7 +52,7 @@ class InMemoryAuthorityRegistry:
     async def get_authority(self, authority_id: str) -> OrganizationalAuthority:
         """Get an authority by ID."""
         if authority_id not in self._authorities:
-            from kaizen.trust.exceptions import AuthorityNotFoundError
+            from kailash.trust.exceptions import AuthorityNotFoundError
 
             raise AuthorityNotFoundError(authority_id)
         return self._authorities[authority_id]
@@ -168,7 +169,7 @@ def create_test_chain(
     Returns:
         A fully signed TrustLineageChain
     """
-    from kaizen.trust.crypto import serialize_for_signing
+    from kailash.trust.signing.crypto import serialize_for_signing
 
     # Create genesis
     genesis = GenesisRecord(
@@ -639,7 +640,7 @@ class TestAtomicResigning:
         self, trust_store, key_manager, authority_registry, sample_authority
     ):
         """Test that signatures verify with new key."""
-        from kaizen.trust.crypto import serialize_for_signing
+        from kailash.trust.signing.crypto import serialize_for_signing
 
         await trust_store.initialize()
         await authority_registry.register_authority(sample_authority)
@@ -1193,9 +1194,9 @@ class TestCARE048RollbackMechanism:
         # All chains should be restored to original signatures
         for agent_id, original_sig in original_signatures.items():
             chain = await failing_store.get_chain(agent_id)
-            assert chain.genesis.signature == original_sig, (
-                f"Chain {agent_id} was not rolled back to original signature"
-            )
+            assert (
+                chain.genesis.signature == original_sig
+            ), f"Chain {agent_id} was not rolled back to original signature"
 
     async def test_rollback_failure_logs_critical_and_reports_inconsistent_state(
         self, authority_registry, sample_authority

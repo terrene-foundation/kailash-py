@@ -7,15 +7,9 @@ Tests the CredentialRotationManager in isolation using mocked dependencies.
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 import kailash.trust.signing.rotation as rotation_module
-from kaizen.trust.authority import (
-    AuthorityPermission,
-    OrganizationalAuthority,
-    OrganizationalAuthorityRegistry,
-)
-from kaizen.trust.chain import (
+import pytest
+from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,
@@ -23,15 +17,21 @@ from kaizen.trust.chain import (
     GenesisRecord,
     TrustLineageChain,
 )
-from kaizen.trust.exceptions import AuthorityInactiveError, AuthorityNotFoundError
-from kaizen.trust.operations import TrustKeyManager
-from kaizen.trust.rotation import (
+from kailash.trust.exceptions import AuthorityInactiveError, AuthorityNotFoundError
+from kailash.trust.operations import TrustKeyManager
+from kailash.trust.signing.rotation import (
     CredentialRotationManager,
     RotationError,
     RotationResult,
     RotationStatus,
     RotationStatusInfo,
     ScheduledRotation,
+)
+
+from kaizen.trust.authority import (
+    AuthorityPermission,
+    OrganizationalAuthority,
+    OrganizationalAuthorityRegistry,
 )
 from kaizen.trust.store import PostgresTrustStore
 
@@ -186,7 +186,7 @@ class TestCredentialRotationManager:
             patch.object(rotation_module, "serialize_for_signing") as mock_serialize,
         ):
             # Generate a real keypair for the new key
-            from kaizen.trust.crypto import generate_keypair as real_gen
+            from kailash.trust.signing.crypto import generate_keypair as real_gen
 
             new_private_key, new_public_key = real_gen()
             mock_gen.return_value = (new_private_key, new_public_key)

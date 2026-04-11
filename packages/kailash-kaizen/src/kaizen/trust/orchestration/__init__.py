@@ -39,7 +39,7 @@ Example:
     )
 """
 
-from kaizen.trust.orchestration.exceptions import (
+from kailash.trust.orchestration.exceptions import (
     ConstraintLooseningError,
     ContextPropagationError,
     DelegationChainError,
@@ -47,18 +47,18 @@ from kaizen.trust.orchestration.exceptions import (
     PolicyViolationError,
     TrustVerificationFailedError,
 )
-from kaizen.trust.orchestration.execution_context import (
+from kailash.trust.orchestration.execution_context import (
     ContextMergeStrategy,
     DelegationEntry,
     TrustExecutionContext,
 )
-from kaizen.trust.orchestration.policy import (
+from kailash.trust.orchestration.policy import (
     PolicyResult,
     PolicyType,
     TrustPolicy,
     TrustPolicyEngine,
 )
-from kaizen.trust.orchestration.runtime import (
+from kailash.trust.orchestration.runtime import (
     TrustAwareOrchestrationRuntime,
     TrustAwareRuntimeConfig,
 )

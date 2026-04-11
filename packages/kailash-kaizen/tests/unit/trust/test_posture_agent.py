@@ -19,8 +19,8 @@ from typing import Any, Dict, Optional
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from kaizen.trust.posture_agent import AuditEntry, PostureAwareAgent
-from kaizen.trust.postures import PostureStateMachine, TrustPosture
+from kailash.trust.agents.posture_agent import AuditEntry, PostureAwareAgent
+from kailash.trust.posture.postures import PostureStateMachine, TrustPosture
 
 
 # Mock base agent for testing

@@ -10,7 +10,7 @@ These are Tier 1 unit tests - fast, isolated, no external dependencies.
 from __future__ import annotations
 
 import pytest
-from kaizen.trust.postures import (
+from kailash.trust.posture.postures import (
     PostureStateMachine,
     PostureTransition,
     PostureTransitionRequest,
@@ -35,17 +35,17 @@ class TestMaxHistorySizeAttribute:
         """ROUND6-002: Verify _max_history_size is set to 10000."""
         machine = PostureStateMachine()
 
-        assert machine._max_history_size == 10000, (
-            f"_max_history_size should be 10000, got {machine._max_history_size}"
-        )
+        assert (
+            machine._max_history_size == 10000
+        ), f"_max_history_size should be 10000, got {machine._max_history_size}"
 
     def test_max_history_size_is_integer(self):
         """ROUND6-002: Verify _max_history_size is an integer."""
         machine = PostureStateMachine()
 
-        assert isinstance(machine._max_history_size, int), (
-            "_max_history_size should be an integer"
-        )
+        assert isinstance(
+            machine._max_history_size, int
+        ), "_max_history_size should be an integer"
 
 
 class TestRecordTransitionMethodExists:
@@ -55,17 +55,17 @@ class TestRecordTransitionMethodExists:
         """ROUND6-002: Verify _record_transition method exists."""
         machine = PostureStateMachine()
 
-        assert hasattr(machine, "_record_transition"), (
-            "PostureStateMachine must have _record_transition method"
-        )
+        assert hasattr(
+            machine, "_record_transition"
+        ), "PostureStateMachine must have _record_transition method"
 
     def test_record_transition_is_callable(self):
         """ROUND6-002: Verify _record_transition is callable."""
         machine = PostureStateMachine()
 
-        assert callable(machine._record_transition), (
-            "_record_transition must be callable"
-        )
+        assert callable(
+            machine._record_transition
+        ), "_record_transition must be callable"
 
 
 class TestHistoryBoundsBasic:
@@ -111,9 +111,9 @@ class TestHistoryBoundsBasic:
 
         # Verify history is bounded
         history_size = len(machine._transition_history)
-        assert history_size <= max_size, (
-            f"History size {history_size} exceeds max {max_size}"
-        )
+        assert (
+            history_size <= max_size
+        ), f"History size {history_size} exceeds max {max_size}"
 
     def test_history_trimmed_by_10_percent(self):
         """ROUND6-002: When history exceeds max, oldest 10% are trimmed."""
@@ -148,9 +148,9 @@ class TestHistoryBoundsBasic:
         history_size = len(machine._transition_history)
         expected_after_trim = max_size - (max_size // 10)  # 90
 
-        assert history_size <= max_size, (
-            f"History size {history_size} should not exceed max {max_size}"
-        )
+        assert (
+            history_size <= max_size
+        ), f"History size {history_size} should not exceed max {max_size}"
 
 
 class TestMostRecentTransitionsPreserved:
@@ -202,9 +202,9 @@ class TestMostRecentTransitionsPreserved:
         ]
 
         # All or most of new_batch should be preserved since they are recent
-        assert len(preserved_recent) > 0, (
-            "Recent transitions should be preserved after trimming"
-        )
+        assert (
+            len(preserved_recent) > 0
+        ), "Recent transitions should be preserved after trimming"
 
         # Check that old entries were trimmed (if trimming occurred)
         if len(history) < 60:  # Trimming occurred
@@ -241,9 +241,9 @@ class TestEmergencyDowngradeUsesBoundedHistory:
 
         # Verify history is bounded
         history_size = len(machine._transition_history)
-        assert history_size <= max_size, (
-            f"History size {history_size} exceeds max {max_size} after emergency downgrades"
-        )
+        assert (
+            history_size <= max_size
+        ), f"History size {history_size} exceeds max {max_size} after emergency downgrades"
 
     def test_emergency_downgrade_transitions_recorded(self):
         """Test that emergency downgrade transitions are properly recorded."""
@@ -296,9 +296,9 @@ class TestTransitionViaGuardsUsesBoundedHistory:
 
         # Verify history is bounded
         history_size = len(machine._transition_history)
-        assert history_size <= max_size, (
-            f"History size {history_size} exceeds max {max_size}"
-        )
+        assert (
+            history_size <= max_size
+        ), f"History size {history_size} exceeds max {max_size}"
 
     def test_blocked_transitions_also_recorded(self):
         """Test that blocked transitions are also recorded in bounded history."""
@@ -328,9 +328,9 @@ class TestTransitionViaGuardsUsesBoundedHistory:
 
         # Verify history is bounded
         history_size = len(machine._transition_history)
-        assert history_size <= max_size, (
-            f"History size {history_size} exceeds max {max_size}"
-        )
+        assert (
+            history_size <= max_size
+        ), f"History size {history_size} exceeds max {max_size}"
 
         # Verify some blocked transitions are in history
         history = machine.get_transition_history()
@@ -364,9 +364,9 @@ class TestHistoryRetrievalAfterBounding:
 
         # Get history for specific agent
         agent_history = machine.get_transition_history(agent_id="agent-0")
-        assert all(h.metadata.get("agent_id") == "agent-0" for h in agent_history), (
-            "Filtered history should only contain specified agent"
-        )
+        assert all(
+            h.metadata.get("agent_id") == "agent-0" for h in agent_history
+        ), "Filtered history should only contain specified agent"
 
         # Get with limit
         limited = machine.get_transition_history(limit=5)
@@ -498,6 +498,6 @@ class TestEdgeCases:
             )
 
         # Should have trimmed - size should be <= max
-        assert len(machine._transition_history) <= 10, (
-            "History should be trimmed after exceeding max"
-        )
+        assert (
+            len(machine._transition_history) <= 10
+        ), "History should be trimmed after exceeding max"

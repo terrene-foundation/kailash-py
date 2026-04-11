@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 import pytest
-from kaizen.trust.postures import (
+from kailash.trust.posture.postures import (
     PostureConstraints,
     PostureResult,
     PostureStateMachine,
@@ -643,7 +643,7 @@ class TestAllExports:
 
     def test_all_exports(self):
         """Test all expected exports are in __all__."""
-        from kaizen.trust.postures import __all__
+        from kailash.trust.posture.postures import __all__
 
         expected = [
             "TrustPosture",

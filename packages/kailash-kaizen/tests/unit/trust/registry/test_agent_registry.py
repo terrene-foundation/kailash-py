@@ -16,15 +16,18 @@ from typing import List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from kaizen.trust.registry.agent_registry import AgentRegistry, DiscoveryQuery
-from kaizen.trust.registry.exceptions import (
+from kailash.trust.registry.agent_registry import AgentRegistry, DiscoveryQuery
+from kailash.trust.registry.exceptions import (
     AgentNotFoundError,
     TrustVerificationError,
     ValidationError,
 )
-from kaizen.trust.registry.models import AgentMetadata, AgentStatus, RegistrationRequest
-from kaizen.trust.registry.store import InMemoryAgentRegistryStore
+from kailash.trust.registry.models import (
+    AgentMetadata,
+    AgentStatus,
+    RegistrationRequest,
+)
+from kailash.trust.registry.store import InMemoryAgentRegistryStore
 
 
 class TestAgentRegistryInitialization:

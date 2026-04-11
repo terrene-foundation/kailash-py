@@ -23,26 +23,27 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from kaizen.trust.authority import (
-    AuthorityPermission,
-    OrganizationalAuthority,
-    OrganizationalAuthorityRegistry,
-)
-from kaizen.trust.chain import (
+from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,
     GenesisRecord,
     TrustLineageChain,
 )
-from kaizen.trust.crypto import generate_keypair, sign, verify_signature
-from kaizen.trust.exceptions import (
+from kailash.trust.exceptions import (
     AuthorityNotFoundError,
     DelegationError,
     TrustChainNotFoundError,
     TrustError,
 )
-from kaizen.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
+from kailash.trust.signing.crypto import generate_keypair, sign, verify_signature
+
+from kaizen.trust.authority import (
+    AuthorityPermission,
+    OrganizationalAuthority,
+    OrganizationalAuthorityRegistry,
+)
 from kaizen.trust.store import InMemoryTrustStore
 
 

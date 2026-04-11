@@ -33,13 +33,13 @@ Example:
     )
 """
 
-from kaizen.trust.orchestration.integration.registry_aware import (
+from kailash.trust.orchestration.integration.registry_aware import (
     AgentSelector,
     CapabilityBasedSelector,
     HealthAwareSelector,
     RegistryAwareRuntime,
 )
-from kaizen.trust.orchestration.integration.secure_channel import (
+from kailash.trust.orchestration.integration.secure_channel import (
     DelegationMessage,
     DelegationMessageType,
     DelegationResult,

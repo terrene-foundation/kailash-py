@@ -25,12 +25,7 @@ from typing import Any, Dict, List, Optional, Set
 from unittest.mock import patch
 
 import pytest
-from kaizen.trust.crl import (
-    CertificateRevocationList,
-    CRLEntry,
-    verify_delegation_with_crl,
-)
-from kaizen.trust.revocation.broadcaster import (
+from kailash.trust.revocation.broadcaster import (
     CascadeRevocationManager,
     DeadLetterEntry,
     InMemoryDelegationRegistry,
@@ -39,6 +34,12 @@ from kaizen.trust.revocation.broadcaster import (
     RevocationType,
     TrustRevocationList,
 )
+from kailash.trust.signing.crl import (
+    CertificateRevocationList,
+    CRLEntry,
+    verify_delegation_with_crl,
+)
+
 from kaizen.trust.store import InMemoryTrustStore, TransactionContext
 
 # =============================================================================
@@ -340,7 +341,7 @@ class TestStoreTransactionIsolation:
         await store.initialize()
 
         # Need to import chain creation helpers
-        from kaizen.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
+        from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
 
         # Create a test chain
         genesis = GenesisRecord(
@@ -396,7 +397,7 @@ class TestStoreTransactionIsolation:
         store = InMemoryTrustStore()
         await store.initialize()
 
-        from kaizen.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
+        from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
 
         # Create original chain
         genesis = GenesisRecord(
@@ -444,7 +445,7 @@ class TestStoreTransactionIsolation:
         store = InMemoryTrustStore()
         await store.initialize()
 
-        from kaizen.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
+        from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
 
         genesis = GenesisRecord(
             id="genesis-no-commit-test",

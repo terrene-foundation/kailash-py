@@ -25,14 +25,14 @@ Test Categories:
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from kaizen.trust.crypto import NACL_AVAILABLE
-from kaizen.trust.key_manager import (
+from kailash.trust.key_manager import (
     AWSKMSKeyManager,
     InMemoryKeyManager,
     KeyManagerError,
     KeyManagerInterface,
     KeyMetadata,
 )
+from kailash.trust.signing.crypto import NACL_AVAILABLE
 
 # Skip crypto tests if PyNaCl not available
 pytestmark = pytest.mark.skipif(not NACL_AVAILABLE, reason="PyNaCl not installed")
@@ -376,7 +376,7 @@ class TestInMemoryKeyManagerBackwardCompat:
         key_manager = InMemoryKeyManager()
 
         # Generate a test key
-        from kaizen.trust.crypto import generate_keypair
+        from kailash.trust.signing.crypto import generate_keypair
 
         private_key, _ = generate_keypair()
 
@@ -396,7 +396,7 @@ class TestInMemoryKeyManagerBackwardCompat:
         """Registered key can be used for signing."""
         key_manager = InMemoryKeyManager()
 
-        from kaizen.trust.crypto import generate_keypair
+        from kailash.trust.signing.crypto import generate_keypair
 
         private_key, public_key = generate_keypair()
 
@@ -513,7 +513,7 @@ class TestKeyManagerError:
 
     def test_error_inherits_from_trust_error(self):
         """KeyManagerError inherits from TrustError."""
-        from kaizen.trust.exceptions import TrustError
+        from kailash.trust.exceptions import TrustError
 
         error = KeyManagerError("Test")
         assert isinstance(error, TrustError)

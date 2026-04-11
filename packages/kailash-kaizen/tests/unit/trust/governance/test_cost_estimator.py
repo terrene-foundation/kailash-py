@@ -7,7 +7,7 @@ Intent: Verify cost calculations are accurate, conservative, and handle all plat
 """
 
 import pytest
-from kaizen.trust.governance import CostEstimate, ExternalAgentCostEstimator
+from kailash.trust.governance import CostEstimate, ExternalAgentCostEstimator
 
 
 class TestExternalAgentCostEstimator:

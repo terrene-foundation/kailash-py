@@ -15,7 +15,7 @@ from typing import List
 
 import pytest
 import pytest_asyncio
-from kaizen.trust.chain import (
+from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,
@@ -26,11 +26,12 @@ from kaizen.trust.chain import (
     GenesisRecord,
     TrustLineageChain,
 )
-from kaizen.trust.exceptions import (
+from kailash.trust.exceptions import (
     TrustChainInvalidError,
     TrustChainNotFoundError,
     TrustStoreDatabaseError,
 )
+
 from kaizen.trust.store import PostgresTrustStore
 
 

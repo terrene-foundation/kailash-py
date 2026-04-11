@@ -14,7 +14,7 @@ Tests cover:
 from datetime import datetime, timezone
 
 import pytest
-from kaizen.trust.knowledge import KnowledgeEntry, KnowledgeType
+from kailash.trust.knowledge import KnowledgeEntry, KnowledgeType
 
 
 class TestKnowledgeType:
