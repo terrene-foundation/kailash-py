@@ -18,16 +18,17 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 import pytest_asyncio
-from kaizen.trust.authority import AuthorityPermission, OrganizationalAuthority
-from kaizen.trust.chain import AuthorityType, CapabilityType
-from kaizen.trust.crypto import generate_keypair
-from kaizen.trust.knowledge import (
+from kailash.trust.chain import AuthorityType, CapabilityType
+from kailash.trust.knowledge import (
     InMemoryKnowledgeStore,
     InMemoryProvenanceStore,
     ProvRelation,
     TrustKnowledgeBridge,
 )
-from kaizen.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
+from kailash.trust.signing.crypto import generate_keypair
+
+from kaizen.trust.authority import AuthorityPermission, OrganizationalAuthority
 from kaizen.trust.store import InMemoryTrustStore
 
 
@@ -55,11 +56,11 @@ class InMemoryAuthorityRegistry:
     ) -> OrganizationalAuthority:
         authority = self._authorities.get(authority_id)
         if authority is None:
-            from kaizen.trust.exceptions import AuthorityNotFoundError
+            from kailash.trust.exceptions import AuthorityNotFoundError
 
             raise AuthorityNotFoundError(authority_id)
         if not authority.is_active and not include_inactive:
-            from kaizen.trust.exceptions import AuthorityInactiveError
+            from kailash.trust.exceptions import AuthorityInactiveError
 
             raise AuthorityInactiveError(authority_id)
         return authority
@@ -366,7 +367,7 @@ class TestTrustVerificationFailures:
         )
 
         # Create knowledge directly in store (bypassing normal flow)
-        from kaizen.trust.knowledge import KnowledgeEntry, KnowledgeType
+        from kailash.trust.knowledge import KnowledgeEntry, KnowledgeType
 
         entry = KnowledgeEntry.create(
             content="Knowledge from unestablished agent",
@@ -396,7 +397,7 @@ class TestTrustVerificationFailures:
         )
 
         # Create knowledge with fake trust chain
-        from kaizen.trust.knowledge import KnowledgeEntry, KnowledgeType
+        from kailash.trust.knowledge import KnowledgeEntry, KnowledgeType
 
         entry = KnowledgeEntry.create(
             content="Suspicious knowledge",

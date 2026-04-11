@@ -12,13 +12,13 @@ Tests cover:
 from typing import Any, Dict
 
 import pytest
-from kaizen.trust.constraints import (
+from kailash.trust.constraints import (
     ConstraintCheckResult,
     ConstraintDimension,
     ConstraintDimensionRegistry,
     ConstraintValue,
 )
-from kaizen.trust.constraints.evaluator import (
+from kailash.trust.constraints.evaluator import (
     EvaluationResult,
     InteractionMode,
     MultiDimensionEvaluator,

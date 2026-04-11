@@ -14,18 +14,17 @@ from typing import Any, Dict, List, Optional
 
 from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
+from kailash.trust.chain import TrustLineageChain
 
 # ---------- shared types (from kailash.trust) ----------
 from kailash.trust.chain_store import TransactionContext, TrustStore  # noqa: F401
 from kailash.trust.chain_store.memory import InMemoryTrustStore  # noqa: F401
-
-from kaizen.trust.chain import TrustLineageChain
-from kaizen.trust.exceptions import (
+from kailash.trust.exceptions import (
     TrustChainInvalidError,
     TrustChainNotFoundError,
     TrustStoreDatabaseError,
 )
+from kailash.workflow.builder import WorkflowBuilder
 
 
 class PostgresTrustStore(TrustStore):

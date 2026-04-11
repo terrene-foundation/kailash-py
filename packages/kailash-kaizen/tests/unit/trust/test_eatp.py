@@ -20,14 +20,20 @@ from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from kaizen.trust.constraint_validator import (
+from kailash.trust.agents.pseudo_agent import (
+    AuthProvider,
+    PseudoAgent,
+    PseudoAgentConfig,
+    PseudoAgentFactory,
+    create_pseudo_agent_for_testing,
+)
+from kailash.trust.constraint_validator import (
     ConstraintValidator,
     ConstraintViolation,
     DelegationConstraintValidator,
     ValidationResult,
 )
-from kaizen.trust.execution_context import (
+from kailash.trust.execution_context import (
     ExecutionContext,
     HumanOrigin,
     execution_context,
@@ -37,13 +43,6 @@ from kaizen.trust.execution_context import (
     get_trace_id,
     require_current_context,
     set_current_context,
-)
-from kaizen.trust.pseudo_agent import (
-    AuthProvider,
-    PseudoAgent,
-    PseudoAgentConfig,
-    PseudoAgentFactory,
-    create_pseudo_agent_for_testing,
 )
 
 # =============================================================================

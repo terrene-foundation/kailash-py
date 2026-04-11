@@ -15,19 +15,19 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from kaizen.trust.crypto import generate_keypair, sign, verify_signature
-from kaizen.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
-from kaizen.trust.messaging.replay_protection import (
+from kailash.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
+from kailash.trust.messaging.replay_protection import (
     InMemoryReplayProtection,
     ReplayProtection,
 )
-from kaizen.trust.orchestration.execution_context import TrustExecutionContext
-from kaizen.trust.orchestration.integration.secure_channel import (
+from kailash.trust.orchestration.execution_context import TrustExecutionContext
+from kailash.trust.orchestration.integration.secure_channel import (
     DelegationMessage,
     DelegationMessageType,
     DelegationResult,
     SecureOrchestrationChannel,
 )
+from kailash.trust.signing.crypto import generate_keypair, sign, verify_signature
 
 
 class TestCryptographicOperations:

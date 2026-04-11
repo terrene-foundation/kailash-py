@@ -27,7 +27,7 @@ Test categories:
 from typing import Any, Dict
 
 import pytest
-from kaizen.trust.constraint_validator import (
+from kailash.trust.constraint_validator import (
     ConstraintValidator,
     ConstraintViolation,
     ValidationResult,

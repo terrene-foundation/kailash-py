@@ -19,6 +19,8 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from kailash.trust.cache import CacheStats, TrustChainCache
+
 from kaizen.trust import (
     AuthorityType,
     CapabilityAttestation,
@@ -27,7 +29,6 @@ from kaizen.trust import (
     GenesisRecord,
     TrustLineageChain,
 )
-from kaizen.trust.cache import CacheStats, TrustChainCache
 
 # Fixtures
 

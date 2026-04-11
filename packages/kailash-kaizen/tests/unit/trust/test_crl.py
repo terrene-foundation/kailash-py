@@ -17,14 +17,14 @@ Coverage:
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from kaizen.trust.crl import (
+from kailash.trust.signing.crl import (
     CertificateRevocationList,
     CRLEntry,
     CRLMetadata,
     CRLVerificationResult,
     verify_delegation_with_crl,
 )
-from kaizen.trust.crypto import generate_keypair
+from kailash.trust.signing.crypto import generate_keypair
 
 
 class TestCRLEntry:
@@ -526,7 +526,7 @@ class TestCertificateRevocationListSync:
 
     def test_refresh_from_broadcaster(self, crl):
         """Test syncing CRL from broadcaster event history."""
-        from kaizen.trust.revocation import RevocationEvent, RevocationType
+        from kailash.trust.revocation import RevocationEvent, RevocationType
 
         # Create mock history
         history = [
@@ -554,7 +554,7 @@ class TestCertificateRevocationListSync:
 
     def test_refresh_from_broadcaster_skips_duplicates(self, crl):
         """Test that refresh skips already-added entries."""
-        from kaizen.trust.revocation import RevocationEvent, RevocationType
+        from kailash.trust.revocation import RevocationEvent, RevocationType
 
         history = [
             RevocationEvent(
@@ -914,7 +914,7 @@ class TestCRLIntegration:
 
     def test_crl_with_broadcaster_sync(self):
         """Test CRL syncing with broadcaster history."""
-        from kaizen.trust.revocation import (
+        from kailash.trust.revocation import (
             CascadeRevocationManager,
             InMemoryDelegationRegistry,
             InMemoryRevocationBroadcaster,

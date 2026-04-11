@@ -12,9 +12,9 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from kaizen.trust.orchestration.exceptions import PolicyViolationError
-from kaizen.trust.orchestration.execution_context import TrustExecutionContext
-from kaizen.trust.orchestration.policy import (
+from kailash.trust.orchestration.exceptions import PolicyViolationError
+from kailash.trust.orchestration.execution_context import TrustExecutionContext
+from kailash.trust.orchestration.policy import (
     PolicyResult,
     PolicyType,
     TrustPolicy,

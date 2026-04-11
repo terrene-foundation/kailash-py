@@ -58,7 +58,7 @@ Example:
     trl.close()
 """
 
-from kaizen.trust.revocation.broadcaster import (
+from kailash.trust.revocation.broadcaster import (
     CascadeRevocationManager,
     DeadLetterEntry,
     DelegationRegistry,

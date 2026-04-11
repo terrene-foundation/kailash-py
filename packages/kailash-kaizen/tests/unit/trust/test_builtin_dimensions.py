@@ -14,7 +14,7 @@ Tests cover:
 from datetime import datetime, time
 
 import pytest
-from kaizen.trust.constraints.builtin import (
+from kailash.trust.constraints.builtin import (
     CommunicationDimension,
     CostLimitDimension,
     DataAccessDimension,
@@ -195,9 +195,9 @@ class TestResourceDimension:
         for path in traversal_paths:
             result = dimension.check(constraint, {"resource_requested": path})
             assert result.satisfied is False, f"Path traversal not blocked: {path}"
-            assert "path traversal" in result.reason.lower(), (
-                f"Wrong reason for {path}: {result.reason}"
-            )
+            assert (
+                "path traversal" in result.reason.lower()
+            ), f"Wrong reason for {path}: {result.reason}"
 
     def test_resource_null_byte_blocked(self, dimension: ResourceDimension):
         """Null byte injection is blocked (CARE-046)."""
@@ -213,9 +213,9 @@ class TestResourceDimension:
         for path in null_paths:
             result = dimension.check(constraint, {"resource_requested": path})
             assert result.satisfied is False, f"Null byte not blocked: {path!r}"
-            assert "null byte" in result.reason.lower(), (
-                f"Wrong reason for {path!r}: {result.reason}"
-            )
+            assert (
+                "null byte" in result.reason.lower()
+            ), f"Wrong reason for {path!r}: {result.reason}"
 
     def test_resource_case_sensitive_matching(self, dimension: ResourceDimension):
         """Pattern matching is case-sensitive (CARE-046)."""

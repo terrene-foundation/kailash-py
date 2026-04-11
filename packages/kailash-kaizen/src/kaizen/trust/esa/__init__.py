@@ -57,8 +57,8 @@ Example:
     )
 """
 
-from kaizen.trust.esa.api import APIESA, ESAResult, RateLimitConfig
-from kaizen.trust.esa.base import (
+from kailash.trust.esa.api import APIESA, ESAResult, RateLimitConfig
+from kailash.trust.esa.base import (
     CapabilityMetadata,
     EnterpriseSystemAgent,
     ESAConfig,
@@ -67,8 +67,8 @@ from kaizen.trust.esa.base import (
     SystemConnectionInfo,
     SystemMetadata,
 )
-from kaizen.trust.esa.database import DatabaseESA, DatabaseType, QueryParseResult
-from kaizen.trust.esa.discovery import (
+from kailash.trust.esa.database import DatabaseESA, DatabaseType, QueryParseResult
+from kailash.trust.esa.discovery import (
     APICapabilityDiscoverer,
     CapabilityDiscoverer,
     DatabaseCapabilityDiscoverer,
@@ -76,7 +76,7 @@ from kaizen.trust.esa.discovery import (
     DiscoveryResult,
     DiscoveryStatus,
 )
-from kaizen.trust.esa.exceptions import (
+from kailash.trust.esa.exceptions import (
     ESAAuthorizationError,
     ESACapabilityNotFoundError,
     ESAConnectionError,
@@ -85,7 +85,7 @@ from kaizen.trust.esa.exceptions import (
     ESANotEstablishedError,
     ESAOperationError,
 )
-from kaizen.trust.esa.registry import (
+from kailash.trust.esa.registry import (
     ESAAlreadyRegisteredError,
     ESANotFoundError,
     ESARegistration,

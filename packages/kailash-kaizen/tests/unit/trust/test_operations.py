@@ -15,8 +15,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from kaizen.trust.chain import (
+from kailash.trust.chain import (
     ActionResult,
     AuditAnchor,
     AuthorityType,
@@ -31,13 +30,13 @@ from kaizen.trust.chain import (
     VerificationLevel,
     VerificationResult,
 )
-from kaizen.trust.crypto import NACL_AVAILABLE, generate_keypair
-from kaizen.trust.operations import (
+from kailash.trust.operations import (
     CapabilityRequest,
     ConstraintEvaluationResult,
     TrustKeyManager,
     TrustOperations,
 )
+from kailash.trust.signing.crypto import NACL_AVAILABLE, generate_keypair
 
 # Skip crypto tests if PyNaCl not available
 pytestmark = pytest.mark.skipif(not NACL_AVAILABLE, reason="PyNaCl not installed")
@@ -545,7 +544,7 @@ class TestDelegateOperation:
 
         # When delegating with additional constraints, they should be added
         # not replace existing ones (constraint tightening principle)
-        from kaizen.trust.chain import DelegationRecord
+        from kailash.trust.chain import DelegationRecord
 
         delegation = DelegationRecord(
             id="del-001",
@@ -572,7 +571,7 @@ class TestDelegateOperation:
 
     def test_delegation_record_creation(self):
         """DelegationRecord correctly stores delegation details."""
-        from kaizen.trust.chain import DelegationRecord
+        from kailash.trust.chain import DelegationRecord
 
         delegation = DelegationRecord(
             id="del-001",
@@ -597,7 +596,7 @@ class TestDelegateOperation:
 
     def test_delegation_expiry_check(self):
         """Delegation correctly identifies expired delegations."""
-        from kaizen.trust.chain import DelegationRecord
+        from kailash.trust.chain import DelegationRecord
 
         # Non-expired delegation
         future_delegation = DelegationRecord(
@@ -791,7 +790,7 @@ class TestAuditQueryServiceDataClasses:
 
     def test_action_summary_creation(self):
         """ActionSummary stores action statistics."""
-        from kaizen.trust.audit_service import ActionSummary
+        from kailash.trust.audit_service import ActionSummary
 
         summary = ActionSummary(
             action="analyze_data",
@@ -813,7 +812,7 @@ class TestAuditQueryServiceDataClasses:
 
     def test_agent_audit_summary_creation(self):
         """AgentAuditSummary stores agent-level statistics."""
-        from kaizen.trust.audit_service import ActionSummary, AgentAuditSummary
+        from kailash.trust.audit_service import ActionSummary, AgentAuditSummary
 
         action_summary = ActionSummary(
             action="analyze_data",
@@ -841,7 +840,7 @@ class TestAuditQueryServiceDataClasses:
 
     def test_compliance_report_creation(self):
         """ComplianceReport stores compliance statistics."""
-        from kaizen.trust.audit_service import ComplianceReport
+        from kailash.trust.audit_service import ComplianceReport
 
         report = ComplianceReport(
             start_time=datetime(2025, 1, 1, 0, 0, 0),
@@ -863,7 +862,7 @@ class TestAuditQueryServiceDataClasses:
 
     def test_compliance_report_success_rate_zero_actions(self):
         """ComplianceReport handles zero actions gracefully."""
-        from kaizen.trust.audit_service import ComplianceReport
+        from kailash.trust.audit_service import ComplianceReport
 
         report = ComplianceReport(
             start_time=datetime(2025, 1, 1, 0, 0, 0),
@@ -875,7 +874,7 @@ class TestAuditQueryServiceDataClasses:
 
     def test_compliance_report_to_dict(self):
         """ComplianceReport serializes correctly."""
-        from kaizen.trust.audit_service import ComplianceReport
+        from kailash.trust.audit_service import ComplianceReport
 
         report = ComplianceReport(
             start_time=datetime(2025, 1, 1, 0, 0, 0),

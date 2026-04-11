@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import pytest
-from kaizen.trust.postures import (
+from kailash.trust.posture.postures import (
     PostureConstraints,
     PostureResult,
     TrustPosture,

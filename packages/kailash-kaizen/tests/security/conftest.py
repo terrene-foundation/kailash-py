@@ -7,8 +7,8 @@ but cryptographic operations use REAL keys.
 """
 
 import pytest
-from kaizen.trust.crypto import NACL_AVAILABLE, generate_keypair
-from kaizen.trust.key_manager import InMemoryKeyManager, KeyMetadata
+from kailash.trust.key_manager import InMemoryKeyManager, KeyMetadata
+from kailash.trust.signing.crypto import NACL_AVAILABLE, generate_keypair
 
 
 @pytest.fixture

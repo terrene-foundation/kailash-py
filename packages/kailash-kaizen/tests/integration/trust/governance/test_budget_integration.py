@@ -11,16 +11,15 @@ CRITICAL: Uses real PostgreSQL/SQLite for NO MOCKING policy (Tier 2-3).
 from datetime import datetime
 
 import pytest
+from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
-from kaizen.trust.governance import (
+from kailash.trust.governance import (
     BudgetHistoryModel,
     BudgetResetService,
     ExternalAgentBudget,
     ExternalAgentBudgetEnforcer,
     ExternalAgentBudgetModel,
 )
-
-from dataflow import DataFlow
 
 
 @pytest.fixture
@@ -343,7 +342,7 @@ class TestBudgetEnforcementWithRealDatabase:
         Action: Estimate cost for copilot_studio
         Expected: Cost matches CostEstimator directly
         """
-        from kaizen.trust.governance import ExternalAgentCostEstimator
+        from kailash.trust.governance import ExternalAgentCostEstimator
 
         cost_estimator = ExternalAgentCostEstimator()
         enforcer = ExternalAgentBudgetEnforcer(

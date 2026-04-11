@@ -9,7 +9,7 @@ Tests cover:
 """
 
 import pytest
-from kaizen.trust.exceptions import (
+from kailash.trust.exceptions import (
     AgentAlreadyEstablishedError,
     AuthorityInactiveError,
     AuthorityNotFoundError,
@@ -305,9 +305,9 @@ class TestExceptionHierarchy:
         ]
 
         for exc in exceptions:
-            assert isinstance(exc, TrustError), (
-                f"{type(exc).__name__} should inherit from TrustError"
-            )
+            assert isinstance(
+                exc, TrustError
+            ), f"{type(exc).__name__} should inherit from TrustError"
 
     def test_exceptions_can_be_caught_by_base(self):
         """All trust exceptions can be caught by TrustError."""

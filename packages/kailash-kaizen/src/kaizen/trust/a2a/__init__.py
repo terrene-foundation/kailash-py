@@ -34,9 +34,9 @@ Example:
     ... )
 """
 
-from kaizen.trust.a2a.agent_card import AgentCardCache, AgentCardGenerator
-from kaizen.trust.a2a.auth import A2AAuthenticator, extract_token_from_header
-from kaizen.trust.a2a.exceptions import (
+from kailash.trust.a2a.agent_card import AgentCardCache, AgentCardGenerator
+from kailash.trust.a2a.auth import A2AAuthenticator, extract_token_from_header
+from kailash.trust.a2a.exceptions import (
     A2AError,
     A2AServiceError,
     AgentCardError,
@@ -52,8 +52,8 @@ from kaizen.trust.a2a.exceptions import (
     TokenExpiredError,
     TrustVerificationError,
 )
-from kaizen.trust.a2a.jsonrpc import A2AMethodHandlers, JsonRpcHandler
-from kaizen.trust.a2a.models import (
+from kailash.trust.a2a.jsonrpc import A2AMethodHandlers, JsonRpcHandler
+from kailash.trust.a2a.models import (
     A2AToken,
     AgentCapability,
     AgentCard,
@@ -67,7 +67,7 @@ from kaizen.trust.a2a.models import (
     VerificationRequest,
     VerificationResponse,
 )
-from kaizen.trust.a2a.service import A2AService, create_a2a_app
+from kailash.trust.a2a.service import A2AService, create_a2a_app
 
 __all__ = [
     # Service

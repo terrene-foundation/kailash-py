@@ -16,15 +16,14 @@ These tests use REAL infrastructure (NO MOCKING):
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from kaizen.trust.chain import (
+from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,
     GenesisRecord,
     TrustLineageChain,
 )
-from kaizen.trust.crypto import generate_keypair, sign
-from kaizen.trust.knowledge import (
+from kailash.trust.knowledge import (
     InMemoryProvenanceStore,
     KnowledgeEntry,
     KnowledgeType,
@@ -32,6 +31,7 @@ from kaizen.trust.knowledge import (
     ProvenanceRecord,
     ProvRelation,
 )
+from kailash.trust.signing.crypto import generate_keypair, sign
 
 
 class TestProvJsonExportE2E:

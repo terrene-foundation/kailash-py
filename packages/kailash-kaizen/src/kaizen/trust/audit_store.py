@@ -15,7 +15,6 @@ from typing import Any, Dict, List, Optional
 
 from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 # ---------- shared types (from kailash.trust) ----------
 from kailash.trust.audit_store import (  # noqa: F401
@@ -27,9 +26,9 @@ from kailash.trust.audit_store import (  # noqa: F401
     AuditStoreImmutabilityError,
     IntegrityVerificationResult,
 )
-
-from kaizen.trust.chain import ActionResult, AuditAnchor
-from kaizen.trust.exceptions import TrustStoreDatabaseError
+from kailash.trust.chain import ActionResult, AuditAnchor
+from kailash.trust.exceptions import TrustStoreDatabaseError
+from kailash.workflow.builder import WorkflowBuilder
 
 
 class PostgresAuditStore(AuditStore):

@@ -61,7 +61,7 @@ Example:
 """
 
 # Phase 3 Week 9: A2A HTTP Service
-from kaizen.trust.a2a import (
+from kailash.trust.a2a import (
     A2AAuthenticator,
     A2AError,
     A2AMethodHandlers,
@@ -76,10 +76,10 @@ from kaizen.trust.a2a import (
     AuditQueryRequest,
     AuditQueryResponse,
 )
-from kaizen.trust.a2a import AuthenticationError as A2AAuthenticationError
-from kaizen.trust.a2a import AuthorizationError as A2AAuthorizationError
-from kaizen.trust.a2a import DelegationError as A2ADelegationError
-from kaizen.trust.a2a import (
+from kailash.trust.a2a import AuthenticationError as A2AAuthenticationError
+from kailash.trust.a2a import AuthorizationError as A2AAuthorizationError
+from kailash.trust.a2a import DelegationError as A2ADelegationError
+from kailash.trust.a2a import (
     DelegationRequest,
     DelegationResponse,
     InvalidTokenError,
@@ -94,40 +94,25 @@ from kaizen.trust.a2a import (
     TokenExpiredError,
     TrustExtensions,
 )
-from kaizen.trust.a2a import (
+from kailash.trust.a2a import (
     TrustVerificationError as A2ATrustVerificationError,  # Service; Agent Card; JSON-RPC; Authentication; Request/Response Models; Exceptions
 )
-from kaizen.trust.a2a import (
+from kailash.trust.a2a import (
     VerificationRequest,
     VerificationResponse,
     create_a2a_app,
     extract_token_from_header,
 )
-from kaizen.trust.audit_service import (
+from kailash.trust.audit_service import (
     ActionSummary,
     AgentAuditSummary,
     AuditQueryService,
     ComplianceReport,
 )
-from kaizen.trust.audit_store import (
-    AppendOnlyAuditStore,
-    AuditAnchorNotFoundError,
-    AuditRecord,
-    AuditStore,
-    AuditStoreError,
-    AuditStoreImmutabilityError,
-    IntegrityVerificationResult,
-    PostgresAuditStore,
-)
-from kaizen.trust.authority import (
-    AuthorityPermission,
-    OrganizationalAuthority,
-    OrganizationalAuthorityRegistry,
-)
 
 # Phase 3 Week 11: Trust Chain Caching
-from kaizen.trust.cache import CacheEntry, CacheStats, TrustChainCache
-from kaizen.trust.chain import (
+from kailash.trust.cache import CacheEntry, CacheStats, TrustChainCache
+from kailash.trust.chain import (
     ActionResult,
     AuditAnchor,
     AuthorityType,
@@ -144,13 +129,13 @@ from kaizen.trust.chain import (
 )
 
 # CARE-028: Posture Circuit Breaker
-from kaizen.trust.circuit_breaker import (
+from kailash.trust.circuit_breaker import (
     CircuitBreakerConfig,
     CircuitState,
     FailureEvent,
     PostureCircuitBreaker,
 )
-from kaizen.trust.constraint_validator import (
+from kailash.trust.constraint_validator import (
     ConstraintValidator,
     ConstraintViolation,
     DelegationConstraintValidator,
@@ -158,14 +143,14 @@ from kaizen.trust.constraint_validator import (
 )
 
 # CARE-013: Certificate Revocation List (CRL)
-from kaizen.trust.crl import (
+from kailash.trust.crl import (
     CertificateRevocationList,
     CRLEntry,
     CRLMetadata,
     CRLVerificationResult,
     verify_delegation_with_crl,
 )
-from kaizen.trust.crypto import (
+from kailash.trust.crypto import (
     generate_keypair,
     hash_chain,
     serialize_for_signing,
@@ -174,7 +159,7 @@ from kaizen.trust.crypto import (
 )
 
 # Phase 3 Week 10: Enterprise System Agent (ESA)
-from kaizen.trust.esa import (  # Base ESA; ESA Exceptions
+from kailash.trust.esa import (  # Base ESA; ESA Exceptions
     CapabilityMetadata,
     EnterpriseSystemAgent,
     ESAAuthorizationError,
@@ -190,7 +175,7 @@ from kaizen.trust.esa import (  # Base ESA; ESA Exceptions
     SystemConnectionInfo,
     SystemMetadata,
 )
-from kaizen.trust.exceptions import (
+from kailash.trust.exceptions import (
     AgentAlreadyEstablishedError,
     AuthorityInactiveError,
     AuthorityNotFoundError,
@@ -209,7 +194,7 @@ from kaizen.trust.exceptions import (
 )
 
 # EATP v0.8.0 - Enterprise Agent Trust Protocol
-from kaizen.trust.execution_context import (
+from kailash.trust.execution_context import (
     ExecutionContext,
     HumanOrigin,
     execution_context,
@@ -222,7 +207,7 @@ from kaizen.trust.execution_context import (
 )
 
 # CARE-005: HSM/KMS Integration
-from kaizen.trust.key_manager import (
+from kailash.trust.key_manager import (
     AWSKMSKeyManager,
     InMemoryKeyManager,
     KeyManagerError,
@@ -233,7 +218,7 @@ from kaizen.trust.key_manager import (
 # CARE-038: Trust Knowledge Bridge
 # CARE-037: Provenance Schema
 # CARE-036: Knowledge Entry Structures
-from kaizen.trust.knowledge import (
+from kailash.trust.knowledge import (
     InMemoryKnowledgeStore,
     InMemoryProvenanceStore,
     KnowledgeEntry,
@@ -245,7 +230,7 @@ from kaizen.trust.knowledge import (
 )
 
 # CARE-012: Merkle Tree Audit Verification
-from kaizen.trust.merkle import (
+from kailash.trust.merkle import (
     MerkleNode,
     MerkleProof,
     MerkleTree,
@@ -255,7 +240,7 @@ from kaizen.trust.merkle import (
 )
 
 # Week 6: Secure Communication
-from kaizen.trust.messaging import (  # Envelope; Signer; Verifier; Replay Protection; Channel; Exceptions
+from kailash.trust.messaging import (  # Envelope; Signer; Verifier; Replay Protection; Channel; Exceptions
     ChannelError,
     ChannelStatistics,
     InMemoryReplayProtection,
@@ -275,7 +260,7 @@ from kaizen.trust.messaging import (  # Envelope; Signer; Verifier; Replay Prote
 )
 
 # CARE-030: Trust Metrics Collection
-from kaizen.trust.metrics import (
+from kailash.trust.metrics import (
     POSTURE_LEVEL_MAP,
     ConstraintMetrics,
     PostureMetrics,
@@ -283,7 +268,7 @@ from kaizen.trust.metrics import (
 )
 
 # CARE-011: Multi-Signature Genesis Records
-from kaizen.trust.multi_sig import (
+from kailash.trust.multi_sig import (
     DuplicateSignatureError,
     InsufficientSignaturesError,
     MultiSigError,
@@ -296,15 +281,9 @@ from kaizen.trust.multi_sig import (
     create_genesis_payload,
     verify_multi_sig,
 )
-from kaizen.trust.operations import (
-    CapabilityRequest,
-    ConstraintEvaluationResult,
-    TrustKeyManager,
-    TrustOperations,
-)
 
 # Week 7: Orchestration Integration
-from kaizen.trust.orchestration import (  # Execution Context; Policy; Runtime; Exceptions
+from kailash.trust.orchestration import (  # Execution Context; Policy; Runtime; Exceptions
     ConstraintLooseningError,
     ContextMergeStrategy,
     ContextPropagationError,
@@ -323,14 +302,14 @@ from kaizen.trust.orchestration import (  # Execution Context; Policy; Runtime; 
 )
 
 # CARE-029: Posture-Aware Agent
-from kaizen.trust.posture_agent import (
+from kailash.trust.posture_agent import (
     ApprovalHandler,
     AuditEntry,
     CircuitBreaker,
     NotificationHandler,
     PostureAwareAgent,
 )
-from kaizen.trust.pseudo_agent import (
+from kailash.trust.pseudo_agent import (
     AuthProvider,
     PseudoAgent,
     PseudoAgentConfig,
@@ -338,14 +317,17 @@ from kaizen.trust.pseudo_agent import (
     create_pseudo_agent_for_testing,
 )
 
+# EATP Reasoning Trace Extension
+from kailash.trust.reasoning import ConfidentialityLevel, ReasoningTrace
+
 # Week 5: Agent Discovery & Registration
-from kaizen.trust.registry import (
+from kailash.trust.registry import (
     AgentAlreadyRegisteredError,
     AgentHealthMonitor,
     AgentMetadata,
 )
-from kaizen.trust.registry import AgentNotFoundError as RegistryAgentNotFoundError
-from kaizen.trust.registry import (
+from kailash.trust.registry import AgentNotFoundError as RegistryAgentNotFoundError
+from kailash.trust.registry import (
     AgentRegistry,
     AgentRegistryStore,
     AgentStatus,
@@ -356,10 +338,10 @@ from kaizen.trust.registry import (
     RegistryError,
     TrustVerificationError,
 )
-from kaizen.trust.registry import ValidationError as RegistryValidationError
+from kailash.trust.registry import ValidationError as RegistryValidationError
 
 # CARE-007: Revocation Event Broadcasting
-from kaizen.trust.revocation import (
+from kailash.trust.revocation import (
     CascadeRevocationManager,
     DeadLetterEntry,
     DelegationRegistry,
@@ -372,7 +354,7 @@ from kaizen.trust.revocation import (
 )
 
 # Phase 3 Week 11: Credential Rotation
-from kaizen.trust.rotation import (
+from kailash.trust.rotation import (
     CredentialRotationManager,
     RotationError,
     RotationResult,
@@ -382,7 +364,7 @@ from kaizen.trust.rotation import (
 )
 
 # Phase 3 Week 11: Security Hardening
-from kaizen.trust.security import (  # Validators; Key Storage; Rate Limiting; Audit Logging; Security Exceptions
+from kailash.trust.security import (  # Validators; Key Storage; Rate Limiting; Audit Logging; Security Exceptions
     EncryptionError,
     RateLimitExceededError,
     SecureKeyStorage,
@@ -395,17 +377,9 @@ from kaizen.trust.security import (  # Validators; Key Storage; Rate Limiting; A
     TrustSecurityValidator,
     ValidationError,
 )
-from kaizen.trust.store import (
-    InMemoryTrustStore,
-    PostgresTrustStore,
-    TransactionContext,
-)
-
-# EATP Reasoning Trace Extension
-from kaizen.trust.reasoning import ConfidentialityLevel, ReasoningTrace
 
 # CARE-014: External Timestamp Anchoring
-from kaizen.trust.timestamping import (
+from kailash.trust.timestamping import (
     LocalTimestampAuthority,
     RFC3161TimestampAuthority,
     TimestampAnchorManager,
@@ -416,12 +390,39 @@ from kaizen.trust.timestamping import (
     TimestampToken,
     verify_timestamp_token,
 )
-from kaizen.trust.trusted_agent import (
+from kailash.trust.trusted_agent import (
     TrustContext,
     TrustContextManager,
     TrustedAgent,
     TrustedAgentConfig,
     TrustedSupervisorAgent,
+)
+
+from kaizen.trust.audit_store import (
+    AppendOnlyAuditStore,
+    AuditAnchorNotFoundError,
+    AuditRecord,
+    AuditStore,
+    AuditStoreError,
+    AuditStoreImmutabilityError,
+    IntegrityVerificationResult,
+    PostgresAuditStore,
+)
+from kaizen.trust.authority import (
+    AuthorityPermission,
+    OrganizationalAuthority,
+    OrganizationalAuthorityRegistry,
+)
+from kaizen.trust.operations import (
+    CapabilityRequest,
+    ConstraintEvaluationResult,
+    TrustKeyManager,
+    TrustOperations,
+)
+from kaizen.trust.store import (
+    InMemoryTrustStore,
+    PostgresTrustStore,
+    TransactionContext,
 )
 
 __all__ = [

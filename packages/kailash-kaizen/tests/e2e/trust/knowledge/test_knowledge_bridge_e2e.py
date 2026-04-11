@@ -19,17 +19,18 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 import pytest_asyncio
-from kaizen.trust.authority import AuthorityPermission, OrganizationalAuthority
-from kaizen.trust.chain import AuthorityType, CapabilityType
-from kaizen.trust.crypto import generate_keypair
-from kaizen.trust.knowledge import (
+from kailash.trust.chain import AuthorityType, CapabilityType
+from kailash.trust.knowledge import (
     InMemoryKnowledgeStore,
     InMemoryProvenanceStore,
     ProvenanceChain,
     ProvRelation,
     TrustKnowledgeBridge,
 )
-from kaizen.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
+from kailash.trust.operations import CapabilityRequest, TrustKeyManager, TrustOperations
+from kailash.trust.signing.crypto import generate_keypair
+
+from kaizen.trust.authority import AuthorityPermission, OrganizationalAuthority
 from kaizen.trust.store import InMemoryTrustStore
 
 
@@ -57,11 +58,11 @@ class InMemoryAuthorityRegistry:
     ) -> OrganizationalAuthority:
         authority = self._authorities.get(authority_id)
         if authority is None:
-            from kaizen.trust.exceptions import AuthorityNotFoundError
+            from kailash.trust.exceptions import AuthorityNotFoundError
 
             raise AuthorityNotFoundError(authority_id)
         if not authority.is_active and not include_inactive:
-            from kaizen.trust.exceptions import AuthorityInactiveError
+            from kailash.trust.exceptions import AuthorityInactiveError
 
             raise AuthorityInactiveError(authority_id)
         return authority
@@ -240,9 +241,9 @@ class TestTrustworthyKnowledgeLedgerE2E:
 
         # High confidence entries (>= 0.9)
         high_confidence = await bridge.query_by_trust_level(min_confidence=0.9)
-        assert len(high_confidence) >= 3, (
-            "Should have at least 3 high-confidence entries"
-        )
+        assert (
+            len(high_confidence) >= 3
+        ), "Should have at least 3 high-confidence entries"
 
         # Medium confidence entries (>= 0.85)
         medium_confidence = await bridge.query_by_trust_level(min_confidence=0.85)
@@ -349,9 +350,9 @@ class TestTrustworthyKnowledgeLedgerE2E:
 
         for entry in entries:
             verification = await bridge.verify_knowledge_trust(entry.entry_id)
-            assert verification["valid"] is True, (
-                f"Entry {entry.entry_id} should have valid trust: {verification}"
-            )
+            assert (
+                verification["valid"] is True
+            ), f"Entry {entry.entry_id} should have valid trust: {verification}"
             assert verification["has_trust_operations"] is True
             assert "chain_hash" in verification
 
@@ -449,7 +450,7 @@ class TestTrustworthyKnowledgeLedgerE2E:
         )
 
         # Create invalid knowledge (directly in store, bypassing trust)
-        from kaizen.trust.knowledge import KnowledgeEntry, KnowledgeType
+        from kailash.trust.knowledge import KnowledgeEntry, KnowledgeType
 
         invalid_entry = KnowledgeEntry.create(
             content="Suspicious knowledge from unknown source",

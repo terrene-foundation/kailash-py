@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from kailash.trust.orchestration.execution_context import TrustExecutionContext
 from kailash.trust.orchestration.runtime import (
     TrustAwareOrchestrationRuntime,
@@ -196,27 +195,27 @@ class TestKaizenShimReExports:
     """Test that Kaizen orchestration shims properly re-export updated types."""
 
     def test_kaizen_orchestration_runtime_importable(self):
-        """TrustAwareOrchestrationRuntime should import from kaizen.trust.orchestration."""
-        from kaizen.trust.orchestration import TrustAwareOrchestrationRuntime
+        """TrustAwareOrchestrationRuntime should import from kailash.trust.orchestration."""
+        from kailash.trust.orchestration import TrustAwareOrchestrationRuntime
 
         assert TrustAwareOrchestrationRuntime is not None
 
     def test_kaizen_orchestration_runtime_shim_matches_eatp(self):
         """Kaizen shim should re-export the same class as EATP."""
-        from kaizen.trust.orchestration.runtime import (
-            TrustAwareOrchestrationRuntime as KaizenRuntime,
-        )
-
         from kailash.trust.orchestration.runtime import (
             TrustAwareOrchestrationRuntime as EatpRuntime,
+        )
+        from kailash.trust.orchestration.runtime import (
+            TrustAwareOrchestrationRuntime as KaizenRuntime,
         )
 
         assert KaizenRuntime is EatpRuntime
 
     def test_policy_enforce_constraint_with_reasoning_required(self):
         """Policies should support REASONING_REQUIRED constraint type."""
+        from kailash.trust.orchestration import TrustPolicy
+
         from kaizen.trust import ConstraintType
-        from kaizen.trust.orchestration import TrustPolicy
 
         policy = TrustPolicy.enforce_constraint(
             constraint_type=ConstraintType.REASONING_REQUIRED.value,

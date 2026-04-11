@@ -9,7 +9,7 @@ import base64
 import secrets
 
 import pytest
-from kaizen.trust.crypto import (
+from kailash.trust.signing.crypto import (
     NACL_AVAILABLE,
     SALT_LENGTH,
     derive_key_with_salt,

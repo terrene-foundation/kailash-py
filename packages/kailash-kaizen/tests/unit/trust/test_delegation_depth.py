@@ -8,7 +8,7 @@ Tests cover:
 """
 
 import pytest
-from kaizen.trust.crypto import NACL_AVAILABLE
+from kailash.trust.signing.crypto import NACL_AVAILABLE
 
 # Skip crypto tests if PyNaCl not available
 pytestmark = pytest.mark.skipif(not NACL_AVAILABLE, reason="PyNaCl not installed")
@@ -19,7 +19,7 @@ class TestDelegationLimits:
 
     def test_default_values(self):
         """Default values should be reasonable."""
-        from kaizen.trust.chain import DelegationLimits
+        from kailash.trust.chain import DelegationLimits
 
         limits = DelegationLimits()
         assert limits.max_depth == 10
@@ -29,7 +29,7 @@ class TestDelegationLimits:
 
     def test_custom_values(self):
         """Custom values should be accepted."""
-        from kaizen.trust.chain import DelegationLimits
+        from kailash.trust.chain import DelegationLimits
 
         limits = DelegationLimits(
             max_depth=5,
@@ -44,28 +44,28 @@ class TestDelegationLimits:
 
     def test_max_depth_must_be_at_least_one(self):
         """max_depth < 1 should raise ValueError."""
-        from kaizen.trust.chain import DelegationLimits
+        from kailash.trust.chain import DelegationLimits
 
         with pytest.raises(ValueError, match="max_depth must be at least 1"):
             DelegationLimits(max_depth=0)
 
     def test_max_depth_negative_raises(self):
         """Negative max_depth should raise ValueError."""
-        from kaizen.trust.chain import DelegationLimits
+        from kailash.trust.chain import DelegationLimits
 
         with pytest.raises(ValueError, match="max_depth must be at least 1"):
             DelegationLimits(max_depth=-1)
 
     def test_max_chain_length_must_be_ge_max_depth(self):
         """max_chain_length < max_depth should raise ValueError."""
-        from kaizen.trust.chain import DelegationLimits
+        from kailash.trust.chain import DelegationLimits
 
         with pytest.raises(ValueError, match="max_chain_length must be >= max_depth"):
             DelegationLimits(max_depth=10, max_chain_length=5)
 
     def test_max_chain_length_equals_max_depth(self):
         """max_chain_length == max_depth should be valid."""
-        from kaizen.trust.chain import DelegationLimits
+        from kailash.trust.chain import DelegationLimits
 
         limits = DelegationLimits(max_depth=10, max_chain_length=10)
         assert limits.max_chain_length == 10
@@ -76,14 +76,14 @@ class TestMaxDelegationDepthConstant:
 
     def test_constant_exists(self):
         """MAX_DELEGATION_DEPTH must be defined in operations module."""
-        from kaizen.trust.operations import MAX_DELEGATION_DEPTH
+        from kailash.trust.operations import MAX_DELEGATION_DEPTH
 
         assert isinstance(MAX_DELEGATION_DEPTH, int)
         assert MAX_DELEGATION_DEPTH > 0
 
     def test_default_value_is_10(self):
         """Default MAX_DELEGATION_DEPTH should be 10."""
-        from kaizen.trust.operations import MAX_DELEGATION_DEPTH
+        from kailash.trust.operations import MAX_DELEGATION_DEPTH
 
         assert MAX_DELEGATION_DEPTH == 10
 
@@ -96,14 +96,14 @@ class TestTrustOperationsDepthConfig:
         # Check the __init__ signature accepts max_delegation_depth
         import inspect
 
-        from kaizen.trust.operations import TrustOperations
+        from kailash.trust.operations import TrustOperations
 
         sig = inspect.signature(TrustOperations.__init__)
         assert "max_delegation_depth" in sig.parameters
 
     def test_calculate_delegation_depth_method_exists(self):
         """TrustOperations must have _calculate_delegation_depth method."""
-        from kaizen.trust.operations import TrustOperations
+        from kailash.trust.operations import TrustOperations
 
         assert hasattr(TrustOperations, "_calculate_delegation_depth")
 
@@ -111,7 +111,7 @@ class TestTrustOperationsDepthConfig:
         """TrustOperations should use MAX_DELEGATION_DEPTH as default."""
         from unittest.mock import MagicMock
 
-        from kaizen.trust.operations import (
+        from kailash.trust.operations import (
             MAX_DELEGATION_DEPTH,
             TrustKeyManager,
             TrustOperations,
@@ -128,7 +128,7 @@ class TestTrustOperationsDepthConfig:
         """TrustOperations should accept custom max_delegation_depth."""
         from unittest.mock import MagicMock
 
-        from kaizen.trust.operations import TrustKeyManager, TrustOperations
+        from kailash.trust.operations import TrustKeyManager, TrustOperations
 
         authority_registry = MagicMock()
         key_manager = TrustKeyManager()
@@ -148,8 +148,8 @@ class TestCalculateDelegationDepth:
         from datetime import datetime, timezone
         from unittest.mock import MagicMock
 
-        from kaizen.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
-        from kaizen.trust.operations import TrustKeyManager, TrustOperations
+        from kailash.trust.chain import AuthorityType, GenesisRecord, TrustLineageChain
+        from kailash.trust.operations import TrustKeyManager, TrustOperations
 
         authority_registry = MagicMock()
         key_manager = TrustKeyManager()
@@ -174,13 +174,13 @@ class TestCalculateDelegationDepth:
         from datetime import datetime, timezone
         from unittest.mock import MagicMock
 
-        from kaizen.trust.chain import (
+        from kailash.trust.chain import (
             AuthorityType,
             DelegationRecord,
             GenesisRecord,
             TrustLineageChain,
         )
-        from kaizen.trust.operations import TrustKeyManager, TrustOperations
+        from kailash.trust.operations import TrustKeyManager, TrustOperations
 
         authority_registry = MagicMock()
         key_manager = TrustKeyManager()
@@ -237,7 +237,7 @@ class TestDelegationDepthEnforcement:
         from datetime import datetime, timedelta, timezone
         from unittest.mock import AsyncMock, MagicMock
 
-        from kaizen.trust.chain import (
+        from kailash.trust.chain import (
             AuthorityType,
             CapabilityAttestation,
             CapabilityType,
@@ -246,8 +246,8 @@ class TestDelegationDepthEnforcement:
             GenesisRecord,
             TrustLineageChain,
         )
-        from kaizen.trust.exceptions import DelegationError
-        from kaizen.trust.operations import TrustKeyManager, TrustOperations
+        from kailash.trust.exceptions import DelegationError
+        from kailash.trust.operations import TrustKeyManager, TrustOperations
 
         # Setup mocks
         authority_registry = MagicMock()
@@ -343,7 +343,7 @@ class TestDelegationDepthEnforcement:
         from datetime import datetime, timedelta, timezone
         from unittest.mock import AsyncMock, MagicMock
 
-        from kaizen.trust.chain import (
+        from kailash.trust.chain import (
             AuthorityType,
             CapabilityAttestation,
             CapabilityType,
@@ -352,8 +352,8 @@ class TestDelegationDepthEnforcement:
             GenesisRecord,
             TrustLineageChain,
         )
-        from kaizen.trust.crypto import generate_keypair
-        from kaizen.trust.operations import TrustKeyManager, TrustOperations
+        from kailash.trust.operations import TrustKeyManager, TrustOperations
+        from kailash.trust.signing.crypto import generate_keypair
 
         # Setup mocks
         authority_registry = MagicMock()

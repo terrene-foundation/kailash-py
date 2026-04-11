@@ -12,7 +12,8 @@ Tests cover:
 from datetime import datetime
 
 import pytest
-from kaizen.trust.crypto import (
+from kailash.trust.exceptions import InvalidSignatureError
+from kailash.trust.signing.crypto import (
     NACL_AVAILABLE,
     generate_keypair,
     hash_chain,
@@ -21,7 +22,6 @@ from kaizen.trust.crypto import (
     sign,
     verify_signature,
 )
-from kaizen.trust.exceptions import InvalidSignatureError
 
 # Skip crypto tests if PyNaCl not available
 pytestmark = pytest.mark.skipif(not NACL_AVAILABLE, reason="PyNaCl not installed")
@@ -186,7 +186,7 @@ class TestSerialization:
 
     def test_serialize_enum(self):
         """Enum is converted to value."""
-        from kaizen.trust.chain import ActionResult
+        from kailash.trust.chain import ActionResult
 
         result = serialize_for_signing({"result": ActionResult.SUCCESS})
         assert result == '{"result":"success"}'

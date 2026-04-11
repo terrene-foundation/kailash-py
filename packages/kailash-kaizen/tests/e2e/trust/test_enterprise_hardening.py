@@ -19,6 +19,21 @@ from typing import Any, Dict, List
 from uuid import uuid4
 
 import pytest
+from kailash.trust.cache import CacheStats, TrustChainCache
+from kailash.trust.chain import TrustLineageChain
+from kailash.trust.security import (
+    SecureKeyStorage,
+    SecurityAuditLogger,
+    TrustRateLimiter,
+    TrustSecurityValidator,
+    ValidationError,
+)
+from kailash.trust.signing.rotation import (
+    CredentialRotationManager,
+    RotationError,
+    RotationResult,
+    RotationStatusInfo,
+)
 
 # Import trust framework components
 from kaizen.trust import (
@@ -33,21 +48,6 @@ from kaizen.trust.authority import (
     AuthorityPermission,
     AuthorityType,
     OrganizationalAuthority,
-)
-from kaizen.trust.cache import CacheStats, TrustChainCache
-from kaizen.trust.chain import TrustLineageChain
-from kaizen.trust.rotation import (
-    CredentialRotationManager,
-    RotationError,
-    RotationResult,
-    RotationStatusInfo,
-)
-from kaizen.trust.security import (
-    SecureKeyStorage,
-    SecurityAuditLogger,
-    TrustRateLimiter,
-    TrustSecurityValidator,
-    ValidationError,
 )
 
 # ============================================================================
@@ -76,7 +76,7 @@ class InMemoryTrustStore:
         self, agent_id: str, include_inactive: bool = False
     ) -> TrustLineageChain:
         if agent_id not in self._chains:
-            from kaizen.trust.exceptions import TrustChainNotFoundError
+            from kailash.trust.exceptions import TrustChainNotFoundError
 
             raise TrustChainNotFoundError(agent_id)
         return self._chains[agent_id]
@@ -124,7 +124,7 @@ class InMemoryAuthorityRegistry:
 
     async def get_authority(self, authority_id: str) -> OrganizationalAuthority:
         if authority_id not in self._authorities:
-            from kaizen.trust.exceptions import AuthorityNotFoundError
+            from kailash.trust.exceptions import AuthorityNotFoundError
 
             raise AuthorityNotFoundError(authority_id)
         return self._authorities[authority_id]
@@ -192,9 +192,9 @@ class TestCachePerformance:
         avg_store = sum(store_times) / len(store_times)
         avg_cache = sum(cache_times) / len(cache_times)
 
-        assert avg_cache < avg_store, (
-            f"Cache ({avg_cache:.3f}ms) should be faster than store ({avg_store:.3f}ms)"
-        )
+        assert (
+            avg_cache < avg_store
+        ), f"Cache ({avg_cache:.3f}ms) should be faster than store ({avg_store:.3f}ms)"
         assert result is not None
 
     async def test_cache_miss_handling(self):
@@ -370,9 +370,9 @@ class TestCachePerformance:
             times.append((time.perf_counter() - start) * 1000)
 
         avg_time = sum(times) / len(times)
-        assert avg_time < 1.0, (
-            f"Average access time {avg_time:.3f}ms exceeds 1ms target"
-        )
+        assert (
+            avg_time < 1.0
+        ), f"Average access time {avg_time:.3f}ms exceeds 1ms target"
 
 
 # ============================================================================
@@ -902,9 +902,9 @@ class TestPerformanceTargets:
         avg_time = sum(flat_times) / len(flat_times)
         operations_per_second = len(flat_times) / (total_time / 1000)
 
-        assert operations_per_second > 10000, (
-            f"Throughput ({operations_per_second:.0f} ops/s) below 10K target"
-        )
+        assert (
+            operations_per_second > 10000
+        ), f"Throughput ({operations_per_second:.0f} ops/s) below 10K target"
 
     async def test_memory_efficiency(self):
         """

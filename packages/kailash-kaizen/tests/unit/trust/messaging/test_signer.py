@@ -14,10 +14,10 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from kaizen.trust.exceptions import TrustChainNotFoundError
-from kaizen.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
-from kaizen.trust.messaging.exceptions import SigningError
-from kaizen.trust.messaging.signer import MessageSigner
+from kailash.trust.exceptions import TrustChainNotFoundError
+from kailash.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
+from kailash.trust.messaging.exceptions import SigningError
+from kailash.trust.messaging.signer import MessageSigner
 
 
 class TestMessageSignerInitialization:

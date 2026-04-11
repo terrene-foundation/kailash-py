@@ -15,13 +15,13 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 import pytest
-from kaizen.trust.orchestration.execution_context import TrustExecutionContext
-from kaizen.trust.orchestration.integration.registry_aware import (
+from kailash.trust.orchestration.execution_context import TrustExecutionContext
+from kailash.trust.orchestration.integration.registry_aware import (
     CapabilityBasedSelector,
     RegistryAwareRuntime,
     RegistryAwareRuntimeConfig,
 )
-from kaizen.trust.orchestration.runtime import (
+from kailash.trust.orchestration.runtime import (
     TrustAwareOrchestrationRuntime,
     TrustAwareRuntimeConfig,
     TrustedWorkflowStatus,
@@ -212,7 +212,7 @@ class TestRegistryAwareWorkflows:
         with matching capabilities should be selected.
         """
         # Register agents in the runtime's registry
-        from kaizen.trust.registry.models import RegistrationRequest
+        from kailash.trust.registry.models import RegistrationRequest
 
         await registry_aware_runtime._registry.register(
             RegistrationRequest(
@@ -274,7 +274,7 @@ class TestRegistryAwareWorkflows:
         3. Execute and return results
         """
         # Register agents in the runtime's registry
-        from kaizen.trust.registry.models import RegistrationRequest
+        from kailash.trust.registry.models import RegistrationRequest
 
         await registry_aware_runtime._registry.register(
             RegistrationRequest(
@@ -345,7 +345,7 @@ class TestRegistryAwareWorkflows:
         for parallel processing.
         """
         # Register agents in the runtime's registry
-        from kaizen.trust.registry.models import RegistrationRequest
+        from kailash.trust.registry.models import RegistrationRequest
 
         await registry_aware_runtime._registry.register(
             RegistrationRequest(

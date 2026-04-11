@@ -11,8 +11,9 @@ CRITICAL: Uses real infrastructure for NO MOCKING policy (Tier 3).
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
-from kaizen.trust.governance import (
+from kailash.trust.governance import (
     ApprovalLevel,
     ApprovalManager,
     ApprovalPolicy,
@@ -21,8 +22,6 @@ from kaizen.trust.governance import (
     ApprovalRequestModel,
     ApprovalStatus,
 )
-
-from dataflow import DataFlow
 
 
 @pytest.fixture

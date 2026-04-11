@@ -42,9 +42,9 @@ Example:
         pass
 """
 
-from kaizen.trust.messaging.channel import ChannelStatistics, SecureChannel
-from kaizen.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
-from kaizen.trust.messaging.exceptions import (
+from kailash.trust.messaging.channel import ChannelStatistics, SecureChannel
+from kailash.trust.messaging.envelope import MessageMetadata, SecureMessageEnvelope
+from kailash.trust.messaging.exceptions import (
     ChannelError,
     MessageExpiredError,
     MessagingError,
@@ -53,12 +53,12 @@ from kaizen.trust.messaging.exceptions import (
     SigningError,
     VerificationError,
 )
-from kaizen.trust.messaging.replay_protection import (
+from kailash.trust.messaging.replay_protection import (
     InMemoryReplayProtection,
     ReplayProtection,
 )
-from kaizen.trust.messaging.signer import MessageSigner
-from kaizen.trust.messaging.verifier import MessageVerificationResult, MessageVerifier
+from kailash.trust.messaging.signer import MessageSigner
+from kailash.trust.messaging.verifier import MessageVerificationResult, MessageVerifier
 
 __all__ = [
     # Envelope

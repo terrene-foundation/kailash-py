@@ -31,12 +31,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from kaizen.trust.authority import (
-    AuthorityPermission,
-    OrganizationalAuthority,
-    OrganizationalAuthorityRegistry,
-)
-from kaizen.trust.chain import (
+from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,
@@ -47,21 +42,27 @@ from kaizen.trust.chain import (
     TrustLineageChain,
     VerificationLevel,
 )
-from kaizen.trust.constraint_validator import ConstraintValidator, ConstraintViolation
-from kaizen.trust.crypto import (
+from kailash.trust.constraint_validator import ConstraintValidator, ConstraintViolation
+from kailash.trust.exceptions import (
+    CapabilityNotFoundError,
+    ConstraintViolationError,
+    DelegationError,
+    TrustChainNotFoundError,
+)
+from kailash.trust.operations import TrustKeyManager, TrustOperations
+from kailash.trust.signing.crypto import (
     NACL_AVAILABLE,
     generate_keypair,
     serialize_for_signing,
     sign,
     verify_signature,
 )
-from kaizen.trust.exceptions import (
-    CapabilityNotFoundError,
-    ConstraintViolationError,
-    DelegationError,
-    TrustChainNotFoundError,
+
+from kaizen.trust.authority import (
+    AuthorityPermission,
+    OrganizationalAuthority,
+    OrganizationalAuthorityRegistry,
 )
-from kaizen.trust.operations import TrustKeyManager, TrustOperations
 from kaizen.trust.store import InMemoryTrustStore
 
 # Skip all tests if PyNaCl is not available

@@ -48,17 +48,21 @@ Example:
     results = await registry.discover(query)
 """
 
-from kaizen.trust.registry.agent_registry import AgentRegistry, DiscoveryQuery
-from kaizen.trust.registry.exceptions import (
+from kailash.trust.registry.agent_registry import AgentRegistry, DiscoveryQuery
+from kailash.trust.registry.exceptions import (
     AgentAlreadyRegisteredError,
     AgentNotFoundError,
     RegistryError,
     TrustVerificationError,
     ValidationError,
 )
-from kaizen.trust.registry.health import AgentHealthMonitor, HealthStatus
-from kaizen.trust.registry.models import AgentMetadata, AgentStatus, RegistrationRequest
-from kaizen.trust.registry.store import AgentRegistryStore, PostgresAgentRegistryStore
+from kailash.trust.registry.health import AgentHealthMonitor, HealthStatus
+from kailash.trust.registry.models import (
+    AgentMetadata,
+    AgentStatus,
+    RegistrationRequest,
+)
+from kailash.trust.registry.store import AgentRegistryStore, PostgresAgentRegistryStore
 
 __all__ = [
     # Models

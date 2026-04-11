@@ -16,13 +16,13 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from kaizen.trust.circuit_breaker import (
+from kailash.trust.circuit_breaker import (
     CircuitBreakerConfig,
     CircuitState,
     FailureEvent,
     PostureCircuitBreaker,
 )
-from kaizen.trust.postures import (
+from kailash.trust.posture.postures import (
     PostureStateMachine,
     PostureTransitionRequest,
     TrustPosture,

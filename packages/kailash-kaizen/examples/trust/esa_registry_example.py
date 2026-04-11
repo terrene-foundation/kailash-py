@@ -8,9 +8,8 @@ including registration, discovery, health monitoring, and retrieval.
 import asyncio
 from typing import Any, Dict, List
 
-from kaizen.trust.authority import OrganizationalAuthorityRegistry
-from kaizen.trust.chain import CapabilityType
-from kaizen.trust.esa import (
+from kailash.trust.chain import CapabilityType
+from kailash.trust.esa import (
     EnterpriseSystemAgent,
     ESAConfig,
     ESARegistry,
@@ -19,7 +18,9 @@ from kaizen.trust.esa import (
     SystemMetadata,
     SystemType,
 )
-from kaizen.trust.operations import CapabilityRequest, TrustOperations
+from kailash.trust.operations import CapabilityRequest, TrustOperations
+
+from kaizen.trust.authority import OrganizationalAuthorityRegistry
 from kaizen.trust.store import PostgresTrustStore
 
 # =========================================================================
@@ -130,7 +131,7 @@ async def example_basic_registration():
     # 1. Setup trust infrastructure
     trust_store = PostgresTrustStore()
     authority_registry = OrganizationalAuthorityRegistry()
-    from kaizen.trust.operations import TrustKeyManager
+    from kailash.trust.operations import TrustKeyManager
 
     key_manager = TrustKeyManager()
 
@@ -138,7 +139,7 @@ async def example_basic_registration():
     await trust_ops.initialize()
 
     # Create organizational authority
-    from kaizen.trust.crypto import generate_ed25519_keypair
+    from kailash.trust.signing.crypto import generate_ed25519_keypair
 
     private_key, public_key = generate_ed25519_keypair()
     key_manager.register_key("org-acme-key", private_key)
@@ -222,14 +223,14 @@ async def example_multiple_esas_by_type():
     # Setup (same as example 1)
     trust_store = PostgresTrustStore()
     authority_registry = OrganizationalAuthorityRegistry()
-    from kaizen.trust.operations import TrustKeyManager
+    from kailash.trust.operations import TrustKeyManager
 
     key_manager = TrustKeyManager()
 
     trust_ops = TrustOperations(authority_registry, key_manager, trust_store)
     await trust_ops.initialize()
 
-    from kaizen.trust.crypto import generate_ed25519_keypair
+    from kailash.trust.signing.crypto import generate_ed25519_keypair
 
     private_key, public_key = generate_ed25519_keypair()
     key_manager.register_key("org-acme-key", private_key)
@@ -330,14 +331,14 @@ async def example_health_monitoring():
     # Setup
     trust_store = PostgresTrustStore()
     authority_registry = OrganizationalAuthorityRegistry()
-    from kaizen.trust.operations import TrustKeyManager
+    from kailash.trust.operations import TrustKeyManager
 
     key_manager = TrustKeyManager()
 
     trust_ops = TrustOperations(authority_registry, key_manager, trust_store)
     await trust_ops.initialize()
 
-    from kaizen.trust.crypto import generate_ed25519_keypair
+    from kailash.trust.signing.crypto import generate_ed25519_keypair
 
     private_key, public_key = generate_ed25519_keypair()
     key_manager.register_key("org-acme-key", private_key)
@@ -412,14 +413,14 @@ async def example_unregister():
     # Setup
     trust_store = PostgresTrustStore()
     authority_registry = OrganizationalAuthorityRegistry()
-    from kaizen.trust.operations import TrustKeyManager
+    from kailash.trust.operations import TrustKeyManager
 
     key_manager = TrustKeyManager()
 
     trust_ops = TrustOperations(authority_registry, key_manager, trust_store)
     await trust_ops.initialize()
 
-    from kaizen.trust.crypto import generate_ed25519_keypair
+    from kailash.trust.signing.crypto import generate_ed25519_keypair
 
     private_key, public_key = generate_ed25519_keypair()
     key_manager.register_key("org-acme-key", private_key)

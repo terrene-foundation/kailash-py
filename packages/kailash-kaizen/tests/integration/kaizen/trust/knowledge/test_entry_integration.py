@@ -12,15 +12,15 @@ for Tier 2 integration testing of knowledge entries with trust chains.
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from kaizen.trust.chain import (
+from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,
     GenesisRecord,
     TrustLineageChain,
 )
-from kaizen.trust.crypto import generate_keypair, sign
-from kaizen.trust.knowledge import KnowledgeEntry, KnowledgeType
+from kailash.trust.knowledge import KnowledgeEntry, KnowledgeType
+from kailash.trust.signing.crypto import generate_keypair, sign
 
 
 class TestKnowledgeEntryWithTrustChain:

@@ -19,7 +19,7 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
-from kaizen.trust.governance import ExternalAgentRateLimiter, RateLimitConfig
+from kailash.trust.governance import ExternalAgentRateLimiter, RateLimitConfig
 
 # Skip all tests if Redis not available
 try:
@@ -123,17 +123,17 @@ class TestRateLimitingPreventsExcessiveInvocations:
             print("Step 1: Making 10 invocations (should all be allowed)...")
             for i in range(10):
                 result = await limiter.check_rate_limit("agent-hr", "user-alice")
-                assert result.allowed is True, (
-                    f"Invocation {i + 1}/10 should be allowed"
-                )
+                assert (
+                    result.allowed is True
+                ), f"Invocation {i + 1}/10 should be allowed"
                 await limiter.record_invocation("agent-hr", "user-alice")
 
             # Step 2: 11th invocation blocked by per_minute limit
             print("Step 2: Attempting 11th invocation (should be blocked)...")
             result = await limiter.check_rate_limit("agent-hr", "user-alice")
-            assert result.allowed is False, (
-                "11th invocation should be blocked by per_minute limit"
-            )
+            assert (
+                result.allowed is False
+            ), "11th invocation should be blocked by per_minute limit"
             assert result.limit_exceeded == "per_minute"
             assert result.retry_after_seconds is not None
 
@@ -150,17 +150,17 @@ class TestRateLimitingPreventsExcessiveInvocations:
                 for i in range(10):
                     result = await limiter.check_rate_limit("agent-hr", "user-alice")
                     total_made += 1
-                    assert result.allowed is True, (
-                        f"Invocation {total_made}/50 should be allowed"
-                    )
+                    assert (
+                        result.allowed is True
+                    ), f"Invocation {total_made}/50 should be allowed"
                     await limiter.record_invocation("agent-hr", "user-alice")
 
             # Step 4: 51st invocation blocked by per_hour limit
             print("Step 4: Attempting 51st invocation (should be blocked by hour)...")
             result = await limiter.check_rate_limit("agent-hr", "user-alice")
-            assert result.allowed is False, (
-                "51st invocation should be blocked by per_hour limit"
-            )
+            assert (
+                result.allowed is False
+            ), "51st invocation should be blocked by per_hour limit"
             # Note: May return per_minute since minute limit (10) is also reached
             assert result.limit_exceeded in (
                 "per_minute",
@@ -179,9 +179,9 @@ class TestRateLimitingPreventsExcessiveInvocations:
             hour_count = await redis_client.zcard(hour_key)
 
             # Minute window should have 10 entries (only the last batch is within 60s)
-            assert minute_count == 10, (
-                f"Minute window should have 10 entries, got {minute_count}"
-            )
+            assert (
+                minute_count == 10
+            ), f"Minute window should have 10 entries, got {minute_count}"
 
             # Hour window should have 50 entries (all invocations in last hour)
             assert hour_count == 50, f"Hour window should have 50 entries"
@@ -244,18 +244,18 @@ class TestPerUserRateLimitingIsolation:
             print("Step 1: User A making 5 invocations...")
             for i in range(5):
                 result = await limiter.check_rate_limit("agent-finance", "user-alice")
-                assert result.allowed is True, (
-                    f"User A invocation {i + 1} should be allowed"
-                )
+                assert (
+                    result.allowed is True
+                ), f"User A invocation {i + 1} should be allowed"
                 await limiter.record_invocation("agent-finance", "user-alice")
 
             # Step 2: User B makes 5 invocations (separate quota)
             print("Step 2: User B making 5 invocations (separate quota)...")
             for i in range(5):
                 result = await limiter.check_rate_limit("agent-finance", "user-bob")
-                assert result.allowed is True, (
-                    f"User B invocation {i + 1} should be allowed (separate quota)"
-                )
+                assert (
+                    result.allowed is True
+                ), f"User B invocation {i + 1} should be allowed (separate quota)"
                 await limiter.record_invocation("agent-finance", "user-bob")
 
             # Step 3: User A 6th invocation blocked
@@ -273,9 +273,9 @@ class TestPerUserRateLimitingIsolation:
             # Step 5: User C makes 1 invocation (fresh quota)
             print("Step 5: User C making 1 invocation (fresh quota)...")
             result_c = await limiter.check_rate_limit("agent-finance", "user-charlie")
-            assert result_c.allowed is True, (
-                "User C should have fresh quota (not affected by A and B)"
-            )
+            assert (
+                result_c.allowed is True
+            ), "User C should have fresh quota (not affected by A and B)"
             await limiter.record_invocation("agent-finance", "user-charlie")
 
             # Verify Redis keys are separate
@@ -355,9 +355,9 @@ class TestRateLimitPerformanceUnderLoad:
                     latency_ms = (end - start) * 1000
                     user_latencies.append(latency_ms)
 
-                    assert result.allowed is True, (
-                        f"User {user_id} invocation should be allowed"
-                    )
+                    assert (
+                        result.allowed is True
+                    ), f"User {user_id} invocation should be allowed"
                     await limiter.record_invocation("agent-api", user_id)
 
                 return user_latencies
@@ -372,9 +372,9 @@ class TestRateLimitPerformanceUnderLoad:
 
             # Check for errors
             errors = [r for r in results if isinstance(r, Exception)]
-            assert len(errors) == 0, (
-                f"Should have no errors, got: {[str(e) for e in errors]}"
-            )
+            assert (
+                len(errors) == 0
+            ), f"Should have no errors, got: {[str(e) for e in errors]}"
 
             # Collect all latencies
             for user_latencies in results:
@@ -558,9 +558,9 @@ class TestBurstHandlingProductionScenario:
             print("Step 2: Making 10 more invocations (burst allowance)...")
             for i in range(10):
                 result = await limiter.check_rate_limit("agent-burst", "user-spike")
-                assert result.allowed is True, (
-                    f"Burst invocation {i + 11} should be allowed"
-                )
+                assert (
+                    result.allowed is True
+                ), f"Burst invocation {i + 11} should be allowed"
                 await limiter.record_invocation("agent-burst", "user-spike")
 
             print("Step 3: Attempting 21st invocation (exceeds burst)...")
@@ -625,17 +625,17 @@ class TestFailOpenProductionBehavior:
             )
             result = await limiter.check_rate_limit("agent-critical", "user-prod")
 
-            assert result.allowed is True, (
-                "Should allow request when Redis unavailable (fail-open)"
-            )
+            assert (
+                result.allowed is True
+            ), "Should allow request when Redis unavailable (fail-open)"
             assert result.remaining == -1, "Remaining should be unknown"
 
             # Verify fail-open metrics
             metrics = limiter.get_metrics()
             if metrics:
-                assert metrics.fail_open_total >= 1, (
-                    "Should track fail-open occurrences"
-                )
+                assert (
+                    metrics.fail_open_total >= 1
+                ), "Should track fail-open occurrences"
                 print(f"Fail-open count: {metrics.fail_open_total}")
 
             print("✓ E2E test passed: Fail-open ensures availability when Redis fails")

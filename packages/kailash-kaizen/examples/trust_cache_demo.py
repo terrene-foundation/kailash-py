@@ -13,6 +13,8 @@ import asyncio
 import time
 from datetime import datetime
 
+from kailash.trust.cache import TrustChainCache
+
 from kaizen.trust import (
     AuthorityType,
     CapabilityAttestation,
@@ -21,7 +23,6 @@ from kaizen.trust import (
     GenesisRecord,
     TrustLineageChain,
 )
-from kaizen.trust.cache import TrustChainCache
 
 
 def create_sample_chain(agent_id: str) -> TrustLineageChain:

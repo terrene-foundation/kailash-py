@@ -15,20 +15,19 @@ from typing import Any, Dict, List, Optional
 
 from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 # ---------- shared types (from kailash.trust) ----------
-from kailash.trust.authority import (
+from kailash.trust.authority import (  # noqa: F401
     AuthorityPermission,
     OrganizationalAuthority,
-)  # noqa: F401
+)
 from kailash.trust.chain import AuthorityType  # noqa: F401
-
-from kaizen.trust.exceptions import (
+from kailash.trust.exceptions import (
     AuthorityInactiveError,
     AuthorityNotFoundError,
     TrustStoreDatabaseError,
 )
+from kailash.workflow.builder import WorkflowBuilder
 
 
 class OrganizationalAuthorityRegistry:

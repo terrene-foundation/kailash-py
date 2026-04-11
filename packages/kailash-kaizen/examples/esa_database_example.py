@@ -8,10 +8,11 @@ with automatic capability discovery and constraint enforcement.
 import asyncio
 from datetime import datetime
 
+from kailash.trust.chain import CapabilityType
+from kailash.trust.esa import DatabaseESA, DatabaseType
+from kailash.trust.operations import CapabilityRequest, TrustOperations
+
 from kaizen.trust.authority import OrganizationalAuthorityRegistry
-from kaizen.trust.chain import CapabilityType
-from kaizen.trust.esa import DatabaseESA, DatabaseType
-from kaizen.trust.operations import CapabilityRequest, TrustOperations
 from kaizen.trust.store import PostgresTrustStore
 
 
@@ -39,7 +40,7 @@ async def main():
     await authority_registry.initialize()
 
     # Register organizational authority
-    from kaizen.trust.crypto import generate_keypair
+    from kailash.trust.signing.crypto import generate_keypair
 
     private_key, public_key = generate_keypair()
 
@@ -51,7 +52,7 @@ async def main():
     )
 
     # Create trust operations
-    from kaizen.trust.operations import TrustKeyManager
+    from kailash.trust.operations import TrustKeyManager
 
     key_manager = TrustKeyManager()
     key_manager.register_key("key-acme-001", private_key)

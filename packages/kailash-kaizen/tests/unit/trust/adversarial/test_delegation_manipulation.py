@@ -32,13 +32,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from kaizen.trust.authority import (
-    AuthorityPermission,
-    AuthorityType,
-    OrganizationalAuthority,
-    OrganizationalAuthorityRegistry,
-)
-from kaizen.trust.chain import (
+from kailash.trust.chain import (
     CapabilityAttestation,
     CapabilityType,
     Constraint,
@@ -49,26 +43,33 @@ from kaizen.trust.chain import (
     TrustLineageChain,
     VerificationLevel,
 )
-from kaizen.trust.constraint_validator import (
+from kailash.trust.constraint_validator import (
     ConstraintValidator,
     ConstraintViolation,
     ValidationResult,
 )
-from kaizen.trust.crypto import (
+from kailash.trust.exceptions import (
+    ConstraintViolationError,
+    DelegationCycleError,
+    DelegationError,
+    TrustChainNotFoundError,
+)
+from kailash.trust.graph_validator import DelegationGraph, DelegationGraphValidator
+from kailash.trust.operations import TrustKeyManager, TrustOperations
+from kailash.trust.signing.crypto import (
     NACL_AVAILABLE,
     generate_keypair,
     serialize_for_signing,
     sign,
     verify_signature,
 )
-from kaizen.trust.exceptions import (
-    ConstraintViolationError,
-    DelegationCycleError,
-    DelegationError,
-    TrustChainNotFoundError,
+
+from kaizen.trust.authority import (
+    AuthorityPermission,
+    AuthorityType,
+    OrganizationalAuthority,
+    OrganizationalAuthorityRegistry,
 )
-from kaizen.trust.graph_validator import DelegationGraph, DelegationGraphValidator
-from kaizen.trust.operations import TrustKeyManager, TrustOperations
 from kaizen.trust.store import InMemoryTrustStore
 
 # Skip tests if PyNaCl not available
@@ -313,9 +314,9 @@ class TestReplayOldDelegationRecord:
         result = verify_signature(
             replayed_payload, replayed_delegation.signature, public_key
         )
-        assert result is False, (
-            "Replayed delegation with different timestamp should not verify"
-        )
+        assert (
+            result is False
+        ), "Replayed delegation with different timestamp should not verify"
 
 
 class TestSelfDelegationCycleDetected:
@@ -886,9 +887,9 @@ class TestDelegationWithFutureTimestampRejected:
 
         # The delegation is dated in the future - this is suspicious
         # Systems should check that delegated_at <= current_time
-        assert future_delegation.delegated_at > datetime.now(timezone.utc), (
-            "Delegation is dated in the future"
-        )
+        assert future_delegation.delegated_at > datetime.now(
+            timezone.utc
+        ), "Delegation is dated in the future"
 
 
 class TestEmptyConstraintSetBlocksEverything:
@@ -916,9 +917,9 @@ class TestEmptyConstraintSetBlocksEverything:
 
         # Empty child constraints means "inherit parent's" - this is VALID
         # The child is NOT saying "no constraints" but "inherit constraints"
-        assert result.valid is True, (
-            "Empty child constraints should inherit parent's (not remove all)"
-        )
+        assert (
+            result.valid is True
+        ), "Empty child constraints should inherit parent's (not remove all)"
 
     def test_child_cannot_remove_all_constraints(self):
         """
@@ -937,7 +938,7 @@ class TestEmptyConstraintSetBlocksEverything:
 
         result = validator.validate_inheritance(parent_constraints, child_constraints)
 
-        assert result.valid is False, (
-            "Child should not be able to remove parent's forbidden_actions"
-        )
+        assert (
+            result.valid is False
+        ), "Child should not be able to remove parent's forbidden_actions"
         assert ConstraintViolation.FORBIDDEN_ACTION_REMOVED in result.violations

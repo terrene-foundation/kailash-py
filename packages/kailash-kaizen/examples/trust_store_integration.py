@@ -16,7 +16,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional
 
-from kaizen.trust.chain import (
+from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,
@@ -27,6 +27,7 @@ from kaizen.trust.chain import (
     GenesisRecord,
     TrustLineageChain,
 )
+
 from kaizen.trust.store import PostgresTrustStore
 
 

@@ -17,9 +17,8 @@ from datetime import datetime, timedelta, timezone
 from typing import List
 
 import pytest
-
-from kaizen.trust.cache import CacheEntry, CacheStats, TrustChainCache
-from kaizen.trust.chain import (
+from kailash.trust.cache import CacheEntry, CacheStats, TrustChainCache
+from kailash.trust.chain import (
     AuthorityType,
     CapabilityAttestation,
     CapabilityType,

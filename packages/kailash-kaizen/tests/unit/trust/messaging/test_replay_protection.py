@@ -15,8 +15,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 import pytest
-
-from kaizen.trust.messaging.replay_protection import InMemoryReplayProtection
+from kailash.trust.messaging.replay_protection import InMemoryReplayProtection
 
 
 class TestInMemoryReplayProtection:

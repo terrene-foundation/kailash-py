@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 # Set encryption key (in production, load from secure environment)
 os.environ["KAIZEN_TRUST_ENCRYPTION_KEY"] = "secure-master-key-for-demo"
 
-from kaizen.trust.security import (
+from kailash.trust.security import (
     EncryptionError,
     RateLimitExceededError,
     SecureKeyStorage,

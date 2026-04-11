@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
-from kaizen.trust.revocation import (
+from kailash.trust.revocation import (
     CascadeRevocationManager,
     DeadLetterEntry,
     InMemoryDelegationRegistry,

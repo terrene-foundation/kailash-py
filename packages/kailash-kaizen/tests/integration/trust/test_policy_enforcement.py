@@ -14,18 +14,18 @@ import asyncio
 from datetime import datetime
 
 import pytest
-from kaizen.trust.orchestration.exceptions import (
+from kailash.trust.orchestration.exceptions import (
     PolicyViolationError,
     TrustVerificationFailedError,
 )
-from kaizen.trust.orchestration.execution_context import TrustExecutionContext
-from kaizen.trust.orchestration.policy import (
+from kailash.trust.orchestration.execution_context import TrustExecutionContext
+from kailash.trust.orchestration.policy import (
     PolicyResult,
     PolicyType,
     TrustPolicy,
     TrustPolicyEngine,
 )
-from kaizen.trust.orchestration.runtime import (
+from kailash.trust.orchestration.runtime import (
     TrustAwareOrchestrationRuntime,
     TrustAwareRuntimeConfig,
 )
