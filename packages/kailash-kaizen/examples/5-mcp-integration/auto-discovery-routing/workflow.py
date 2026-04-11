@@ -11,7 +11,7 @@ This example shows:
 4. Health checking and failover
 5. Performance-based routing decisions
 
-Uses kailash.mcp_server (NOT deprecated kaizen.mcp).
+Uses kailash_mcp (NOT deprecated kaizen.mcp).
 """
 
 import asyncio
@@ -26,7 +26,7 @@ from kaizen.signatures import InputField, OutputField, Signature
 
 # Kailash SDK MCP - Production infrastructure
 try:
-    from kailash.mcp_server import (
+    from kailash_mcp import (
         MCPClient,
         ServerInfo,
         ServiceMesh,
@@ -38,7 +38,7 @@ try:
 except ImportError:
     KAILASH_MCP_AVAILABLE = False
     print(
-        "Warning: kailash.mcp_server not available. Install with: pip install kailash"
+        "Warning: kailash_mcp not available. Install with: pip install kailash"
     )
 
 logging.basicConfig(level=logging.INFO)
@@ -131,7 +131,7 @@ class AutoDiscoveryRoutingAgent(BaseAgent):
 
         if not KAILASH_MCP_AVAILABLE:
             raise ImportError(
-                "kailash.mcp_server required for auto-discovery routing. "
+                "kailash_mcp required for auto-discovery routing. "
                 "Install with: pip install kailash"
             )
 

@@ -10,7 +10,8 @@ Prerequisites:
 """
 
 import pytest
-from kaizen.nodes.ai.ai_providers import AzureAIFoundryProvider
+
+from kaizen.providers import AzureAIFoundryProvider
 
 
 @pytest.fixture

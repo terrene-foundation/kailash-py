@@ -11,7 +11,8 @@ Prerequisites:
 """
 
 import pytest
-from kaizen.nodes.ai.ai_providers import DockerModelRunnerProvider
+
+from kaizen.providers import DockerModelRunnerProvider
 
 
 @pytest.fixture

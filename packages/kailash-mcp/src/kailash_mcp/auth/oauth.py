@@ -19,7 +19,7 @@ Features:
 Examples:
     OAuth 2.1 Authorization Server:
 
-    >>> from kailash.mcp_server.oauth import AuthorizationServer
+    >>> from kailash_mcp.auth.oauth import AuthorizationServer
     >>>
     >>> auth_server = AuthorizationServer(
     ...     issuer="https://auth.example.com",
@@ -37,8 +37,8 @@ Examples:
 
     Resource Server Integration:
 
-    >>> from kailash.mcp_server.oauth import ResourceServer
-    >>> from kailash.mcp_server import MCPServer
+    >>> from kailash_mcp.auth.oauth import ResourceServer
+    >>> from kailash_mcp import MCPServer
     >>>
     >>> resource_server = ResourceServer(
     ...     issuer="https://auth.example.com",
@@ -53,7 +53,7 @@ Examples:
 
     Client Credentials Flow:
 
-    >>> from kailash.mcp_server.oauth import OAuth2Client
+    >>> from kailash_mcp.auth.oauth import OAuth2Client
     >>>
     >>> oauth_client = OAuth2Client(
     ...     client_id="client123",

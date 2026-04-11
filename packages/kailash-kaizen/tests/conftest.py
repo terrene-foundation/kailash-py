@@ -25,23 +25,20 @@ except ImportError:
 use_real_providers = os.getenv("USE_REAL_PROVIDERS", "").lower() == "true"
 
 if not use_real_providers:
-    # Only patch for unit tests — try kaizen.nodes.ai first, fall back to kailash.nodes.ai
+    # Patch the canonical provider registry for unit tests
     try:
-        try:
-            import kaizen.nodes.ai.ai_providers as ai_providers_module
-        except ImportError as _e:
-            raise ImportError(f"kaizen.nodes.ai not available: {_e}") from _e
-
+        import kaizen.providers as providers_module
+        import kaizen.providers.registry as registry_module
         from tests.utils.kaizen_mock_provider import KaizenMockProvider
 
         # Store original for potential restore
-        _original_mock_provider = ai_providers_module.PROVIDERS.get("mock")
+        _original_mock_provider = registry_module.PROVIDERS.get("mock")
 
         # CRITICAL: Patch the PROVIDERS registry - this is how providers are instantiated
-        ai_providers_module.PROVIDERS["mock"] = KaizenMockProvider
+        registry_module.PROVIDERS["mock"] = KaizenMockProvider
 
         # Also patch the class itself for direct imports
-        ai_providers_module.MockProvider = KaizenMockProvider
+        providers_module.MockProvider = KaizenMockProvider
 
     except (ImportError, AttributeError) as e:
         print(f"MockProvider check failed: {e}")
@@ -58,14 +55,14 @@ import time
 from typing import Any, Dict, List, Optional
 
 import pytest
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
+
 from kaizen.core.config import KaizenConfig
 from kaizen.core.framework import Kaizen
 
 # Import new BaseAgent architecture (Phase 1)
 from kaizen.signatures import InputField, OutputField, Signature
-
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 
 # Import real LLM providers for integration/E2E tests
 
@@ -733,7 +730,7 @@ def _patch_core_sdk_mock_provider():
     signature-based JSON formats and returns appropriate structured data.
     """
     try:
-        from kaizen.nodes.ai import MockProvider
+        from kaizen.providers import MockProvider
 
         # Store original chat method
 
@@ -782,11 +779,11 @@ def pytest_configure(config):
     else:
         # Register Kaizen mock provider BEFORE any tests import it (unit tests only)
         try:
-            import kaizen.nodes.ai as ai_module
+            import kaizen.providers as providers_mod
             from tests.utils.kaizen_mock_provider import KaizenMockProvider
 
-            if hasattr(ai_module, "MockProvider"):
-                ai_module.MockProvider = KaizenMockProvider
+            if hasattr(providers_mod, "MockProvider"):
+                providers_mod.MockProvider = KaizenMockProvider
         except (ImportError, AttributeError):
             pass  # AI provider modules not available
 

@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from kailash.mcp_server.client import MCPClient
+from kailash_mcp.client import MCPClient
 
 
 class MockResource:

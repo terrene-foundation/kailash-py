@@ -2,10 +2,10 @@
 Integration test fixtures for MCP examples.
 
 Provides real MCP server instances for client tests using production
-kailash.mcp_server infrastructure (NO MOCKING).
+kailash_mcp infrastructure (NO MOCKING).
 
 ✅ UPDATED (2025-10-04): Uses real Kailash SDK MCP infrastructure
-- Real MCPServer from kailash.mcp_server
+- Real MCPServer from kailash_mcp
 - Real JSON-RPC 2.0 protocol
 - No manual tool copying (deprecated populate_agent_tools removed)
 - Automatic tool discovery via protocol
@@ -16,7 +16,7 @@ import logging
 import pytest
 
 # Real MCP infrastructure from Kailash SDK
-from kailash.mcp_server import SimpleMCPServer
+from kailash_mcp import SimpleMCPServer
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 @pytest.fixture(scope="session")
 def real_mcp_test_server():
     """
-    Start a real MCP server for integration tests using kailash.mcp_server.
+    Start a real MCP server for integration tests using kailash_mcp.
 
     This server exposes tools via real JSON-RPC 2.0 protocol:
     - question_answering: Answer questions
@@ -128,7 +128,7 @@ def mcp_server_info(real_mcp_test_server):
     Provide MCP server connection info for tests.
 
     Returns server config for use with BaseAgent.setup_mcp_client()
-    or direct kailash.mcp_server.MCPClient usage.
+    or direct kailash_mcp.MCPClient usage.
 
     NO MANUAL TOOL COPYING - Tools are discovered via real JSON-RPC protocol.
     """
@@ -157,7 +157,7 @@ def mcp_tools_server_info(real_mcp_test_server_with_tools):
     Provide MCP tools server connection info for tests.
 
     Returns server config for use with BaseAgent.setup_mcp_client()
-    or direct kailash.mcp_server.MCPClient usage.
+    or direct kailash_mcp.MCPClient usage.
     """
     return {
         "server": real_mcp_test_server_with_tools["server"],

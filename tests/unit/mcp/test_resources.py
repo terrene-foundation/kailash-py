@@ -14,7 +14,7 @@ import pytest
 # The kailash.mcp.__init__ imports from a Rust native module (kailash._kailash).
 # When the native module is not built, we need to import ResourceCache by path
 # manipulation to avoid the __init__ import chain.
-from kailash.mcp_server.resource_cache import ResourceCache
+from kailash_mcp.advanced.resource_cache import ResourceCache
 
 
 class TestResourceCache:

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kailash.mcp_server.advanced_features import (
+from kailash_mcp.advanced.features import (
     BinaryResourceHandler,
     CancellationContext,
     Content,
@@ -26,7 +26,7 @@ from kailash.mcp_server.advanced_features import (
     create_progress_reporter,
     structured_tool,
 )
-from kailash.mcp_server.errors import MCPError, MCPErrorCode, ValidationError
+from kailash_mcp.errors import MCPError, MCPErrorCode, ValidationError
 
 
 class TestContent:
@@ -87,7 +87,7 @@ class TestResourceChange:
 
     def test_resource_change_creation(self):
         """Test creating resource change notification."""
-        from kailash.mcp_server.advanced_features import ChangeType
+        from kailash_mcp.advanced.features import ChangeType
 
         change = ResourceChange(
             uri="file://document.pdf",
@@ -103,7 +103,7 @@ class TestResourceChange:
 
     def test_resource_change_to_dict(self):
         """Test converting resource change to dictionary."""
-        from kailash.mcp_server.advanced_features import ChangeType
+        from kailash_mcp.advanced.features import ChangeType
 
         change = ResourceChange(
             uri="file://document.pdf", change_type=ChangeType.CREATED
@@ -434,7 +434,7 @@ class TestStructuredTool:
     async def test_structured_tool_with_progress(self):
         """Test structured tool with progress reporting."""
         with patch(
-            "kailash.mcp_server.advanced_features.get_protocol_manager"
+            "kailash_mcp.advanced.features.get_protocol_manager"
         ) as mock_protocol:
             mock_manager = MagicMock()
             mock_progress = MagicMock()
@@ -522,7 +522,7 @@ class TestResourceTemplate:
     @pytest.mark.asyncio
     async def test_notify_change(self):
         """Test notifying subscribers of changes."""
-        from kailash.mcp_server.advanced_features import ChangeType
+        from kailash_mcp.advanced.features import ChangeType
 
         callback_called = False
         received_change = None
@@ -747,7 +747,7 @@ class TestProgressReporter:
     def test_progress_reporter_initialization(self):
         """Test progress reporter initialization."""
         with patch(
-            "kailash.mcp_server.advanced_features.get_protocol_manager"
+            "kailash_mcp.advanced.features.get_protocol_manager"
         ) as mock_protocol:
             mock_manager = MagicMock()
             mock_progress = MagicMock()
@@ -768,7 +768,7 @@ class TestProgressReporter:
     async def test_progress_reporter_update(self):
         """Test updating progress."""
         with patch(
-            "kailash.mcp_server.advanced_features.get_protocol_manager"
+            "kailash_mcp.advanced.features.get_protocol_manager"
         ) as mock_protocol:
             mock_manager = MagicMock()
             mock_progress = MagicMock()
@@ -791,7 +791,7 @@ class TestProgressReporter:
     async def test_progress_reporter_increment(self):
         """Test incrementing progress."""
         with patch(
-            "kailash.mcp_server.advanced_features.get_protocol_manager"
+            "kailash_mcp.advanced.features.get_protocol_manager"
         ) as mock_protocol:
             mock_manager = MagicMock()
             mock_progress = MagicMock()
@@ -814,7 +814,7 @@ class TestProgressReporter:
     async def test_progress_reporter_context_manager(self):
         """Test progress reporter as context manager."""
         with patch(
-            "kailash.mcp_server.advanced_features.get_protocol_manager"
+            "kailash_mcp.advanced.features.get_protocol_manager"
         ) as mock_protocol:
             mock_manager = MagicMock()
             mock_progress = MagicMock()
@@ -846,7 +846,7 @@ class TestCancellationContext:
     def test_is_cancelled(self):
         """Test checking cancellation status."""
         with patch(
-            "kailash.mcp_server.advanced_features.get_protocol_manager"
+            "kailash_mcp.advanced.features.get_protocol_manager"
         ) as mock_protocol:
             mock_manager = MagicMock()
             mock_cancellation = MagicMock()
@@ -863,7 +863,7 @@ class TestCancellationContext:
     def test_check_cancellation_not_cancelled(self):
         """Test check_cancellation when not cancelled."""
         with patch(
-            "kailash.mcp_server.advanced_features.get_protocol_manager"
+            "kailash_mcp.advanced.features.get_protocol_manager"
         ) as mock_protocol:
             mock_manager = MagicMock()
             mock_cancellation = MagicMock()
@@ -880,7 +880,7 @@ class TestCancellationContext:
     def test_check_cancellation_cancelled(self):
         """Test check_cancellation when cancelled."""
         with patch(
-            "kailash.mcp_server.advanced_features.get_protocol_manager"
+            "kailash_mcp.advanced.features.get_protocol_manager"
         ) as mock_protocol:
             mock_manager = MagicMock()
             mock_cancellation = MagicMock()
@@ -899,7 +899,7 @@ class TestCancellationContext:
     def test_add_cleanup_function(self):
         """Test adding cleanup function."""
         with patch(
-            "kailash.mcp_server.advanced_features.get_protocol_manager"
+            "kailash_mcp.advanced.features.get_protocol_manager"
         ) as mock_protocol:
             mock_manager = MagicMock()
             mock_cancellation = MagicMock()
@@ -938,7 +938,7 @@ class TestConvenienceFunctions:
     async def test_create_progress_reporter(self):
         """Test create_progress_reporter convenience function."""
         with patch(
-            "kailash.mcp_server.advanced_features.get_protocol_manager"
+            "kailash_mcp.advanced.features.get_protocol_manager"
         ) as mock_protocol:
             mock_manager = MagicMock()
             mock_progress = MagicMock()

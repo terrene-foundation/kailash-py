@@ -14,7 +14,7 @@ import pytest
 import pytest_asyncio
 import redis.asyncio as redis
 
-from kailash.mcp_server import MCPServer
+from kailash_mcp import MCPServer
 from tests.utils.docker_config import ensure_docker_services, get_redis_url
 
 logger = logging.getLogger(__name__)

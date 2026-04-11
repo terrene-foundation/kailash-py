@@ -3,7 +3,8 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from kaizen.nodes.ai.ai_providers import DockerModelRunnerProvider
+
+from kaizen.providers import DockerModelRunnerProvider
 
 
 class TestDockerModelRunnerProvider:

@@ -15,7 +15,7 @@ class TestMCPServerBaseFunctionality:
     def test_mcp_server_base_initialization(self):
         """Test MCPServerBase initialization and configuration."""
         try:
-            from kailash.mcp_server.server import MCPServerBase
+            from kailash_mcp.server import MCPServerBase
 
             # Create a concrete implementation for testing
             class TestServer(MCPServerBase):
@@ -40,7 +40,7 @@ class TestMCPServerBaseFunctionality:
     def test_tool_decorator_functionality(self):
         """Test tool registration using decorators."""
         try:
-            from kailash.mcp_server.server import MCPServerBase
+            from kailash_mcp.server import MCPServerBase
 
             class TestServer(MCPServerBase):
                 def setup(self):
@@ -74,7 +74,7 @@ class TestMCPServerBaseFunctionality:
     def test_resource_decorator_functionality(self):
         """Test resource registration using decorators."""
         try:
-            from kailash.mcp_server.server import MCPServerBase
+            from kailash_mcp.server import MCPServerBase
 
             class TestServer(MCPServerBase):
                 def setup(self):
@@ -107,7 +107,7 @@ class TestMCPServerBaseFunctionality:
     def test_prompt_decorator_functionality(self):
         """Test prompt registration using decorators."""
         try:
-            from kailash.mcp_server.server import MCPServerBase
+            from kailash_mcp.server import MCPServerBase
 
             class TestServer(MCPServerBase):
                 def setup(self):
@@ -144,7 +144,7 @@ class TestMCPServerConfiguration:
     def test_mcp_server_initialization_with_defaults(self):
         """Test MCPServer initialization with default settings."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             # Create server with defaults
             server = MCPServer("default-server")
@@ -171,7 +171,7 @@ class TestMCPServerConfiguration:
     def test_mcp_server_initialization_with_custom_config(self):
         """Test MCPServer initialization with custom configuration."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             # Custom configuration (updated for new MCPServer signature)
             config = {
@@ -201,7 +201,7 @@ class TestMCPServerConfiguration:
     def test_mcp_server_auth_configuration(self):
         """Test MCPServer authentication configuration."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             # Mock auth provider
             mock_auth_provider = Mock()
@@ -223,7 +223,7 @@ class TestMCPServerToolManagement:
     def test_tool_registration_and_execution(self):
         """Test tool registration and execution."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer("tool-server")
 
@@ -249,7 +249,7 @@ class TestMCPServerToolManagement:
     def test_tool_with_complex_parameters(self):
         """Test tool registration with complex parameter types."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer("complex-tool-server")
 
@@ -289,7 +289,7 @@ class TestMCPServerToolManagement:
     def test_tool_error_handling(self):
         """Test tool error handling and reporting."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer("error-server")
 
@@ -316,7 +316,7 @@ class TestMCPServerToolManagement:
     def test_tool_caching_functionality(self):
         """Test tool caching with TTL support."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer("cache-server", enable_cache=True, cache_ttl=300)
 
@@ -360,7 +360,7 @@ class TestMCPServerResourceManagement:
     def test_resource_registration_and_access(self):
         """Test resource registration and access."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer("resource-server")
 
@@ -383,7 +383,7 @@ class TestMCPServerResourceManagement:
     def test_resource_with_streaming_support(self):
         """Test resource with streaming data support."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer("streaming-server")
 
@@ -409,7 +409,7 @@ class TestMCPServerResourceManagement:
     def test_resource_pattern_matching(self):
         """Test resource pattern matching for wildcard URIs."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer("pattern-server")
 
@@ -446,7 +446,7 @@ class TestMCPServerPromptManagement:
     def test_prompt_registration_and_generation(self):
         """Test prompt registration and generation."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer("prompt-server")
 
@@ -480,7 +480,7 @@ class TestMCPServerPromptManagement:
     def test_prompt_with_dynamic_content(self):
         """Test prompt generation with dynamic content."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer("dynamic-prompt-server")
 
@@ -524,7 +524,7 @@ class TestMCPServerAuthenticationAndSecurity:
     def test_authentication_middleware(self):
         """Test authentication middleware functionality."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             # Mock auth provider
             mock_auth = Mock()
@@ -560,7 +560,7 @@ class TestMCPServerAuthenticationAndSecurity:
     def test_rate_limiting_functionality(self):
         """Test rate limiting functionality."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer(
                 "rate-limited-server",
@@ -603,7 +603,7 @@ class TestMCPServerAuthenticationAndSecurity:
     def test_permission_based_access_control(self):
         """Test permission-based access control."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             # Mock permission manager
             mock_permissions = Mock()
@@ -653,7 +653,7 @@ class TestMCPServerMonitoringAndMetrics:
     def test_metrics_collection(self):
         """Test metrics collection functionality."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer("metrics-server", enable_metrics=True)
 
@@ -683,7 +683,7 @@ class TestMCPServerMonitoringAndMetrics:
     def test_performance_monitoring(self):
         """Test performance monitoring and alerting."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer(
                 "performance-server",
@@ -719,7 +719,7 @@ class TestMCPServerMonitoringAndMetrics:
     def test_health_check_endpoint(self):
         """Test health check endpoint functionality."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer("health-server", enable_monitoring=True)
 
@@ -754,7 +754,7 @@ class TestMCPServerIntegrationAndEdgeCases:
         try:
             import threading
 
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer("concurrent-server")
 
@@ -802,7 +802,7 @@ class TestMCPServerIntegrationAndEdgeCases:
     def test_error_aggregation_and_reporting(self):
         """Test error aggregation and reporting functionality."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer("error-server", error_aggregation=True)
 
@@ -842,7 +842,7 @@ class TestMCPServerIntegrationAndEdgeCases:
     def test_graceful_shutdown_handling(self):
         """Test graceful shutdown handling."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer("shutdown-server")
 
@@ -866,7 +866,7 @@ class TestMCPServerIntegrationAndEdgeCases:
     def test_configuration_validation(self):
         """Test server configuration validation."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             # Test that server accepts various configuration options
             server1 = MCPServer(
@@ -901,7 +901,7 @@ class TestMCPServerIntegrationAndEdgeCases:
     def test_memory_management_and_cleanup(self):
         """Test memory management and resource cleanup."""
         try:
-            from kailash.mcp_server.server import MCPServer
+            from kailash_mcp.server import MCPServer
 
             server = MCPServer("memory-server", enable_cache=True)
 

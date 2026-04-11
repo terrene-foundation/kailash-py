@@ -1,24 +1,20 @@
 """AI and ML nodes for the Kailash SDK."""
 
 # Import A2A communication nodes
+# Import from canonical provider locations (SPEC-02)
+from kaizen.providers.base import LLMProvider
+from kaizen.providers.llm.anthropic import AnthropicProvider
+from kaizen.providers.llm.azure import AzureAIFoundryProvider
+from kaizen.providers.llm.docker import DockerModelRunnerProvider
+from kaizen.providers.llm.google import GoogleGeminiProvider
+from kaizen.providers.llm.mock import MockProvider
+from kaizen.providers.llm.ollama import OllamaProvider
+from kaizen.providers.llm.openai import OpenAIProvider
+from kaizen.providers.llm.perplexity import PerplexityProvider
+from kaizen.providers.registry import PROVIDERS, get_available_providers, get_provider
+
 from .a2a import A2AAgentNode, A2ACoordinatorNode, SharedMemoryPoolNode
 from .agents import ChatAgent, FunctionCallingAgent, PlanningAgent, RetrievalAgent
-
-# Import from unified ai_providers module
-from .ai_providers import (
-    PROVIDERS,
-    AnthropicProvider,
-    AzureAIFoundryProvider,
-    DockerModelRunnerProvider,
-    GoogleGeminiProvider,
-    LLMProvider,
-    MockProvider,
-    OllamaProvider,
-    OpenAIProvider,
-    PerplexityProvider,
-    get_available_providers,
-    get_provider,
-)
 from .embedding_generator import EmbeddingGeneratorNode
 from .hybrid_search import AdaptiveSearchNode, HybridSearchNode
 

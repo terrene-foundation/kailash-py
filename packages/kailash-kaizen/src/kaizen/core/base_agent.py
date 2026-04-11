@@ -303,7 +303,7 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
 
     async def _simple_execute_async(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Simple async execution using direct provider call (fallback)."""
-        from kaizen.nodes.ai.ai_providers import OpenAIProvider
+        from kaizen.providers.llm.openai import OpenAIProvider
 
         provider = OpenAIProvider(use_async=True)
 

@@ -18,9 +18,9 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from kailash.mcp_server.auth import APIKeyAuth
-from kailash.mcp_server.client import MCPClient
-from kailash.mcp_server.errors import (
+from kailash_mcp.auth.providers import APIKeyAuth
+from kailash_mcp.client import MCPClient
+from kailash_mcp.errors import (
     AuthenticationError,
     CircuitBreakerRetry,
     ExponentialBackoffRetry,

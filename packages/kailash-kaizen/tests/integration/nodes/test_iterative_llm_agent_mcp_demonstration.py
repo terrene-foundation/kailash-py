@@ -14,7 +14,7 @@ from kaizen.nodes.ai.iterative_llm_agent import IterativeLLMAgentNode
 class TestIterativeLLMAgentMCPDemonstration:
     """Demonstration of IterativeLLMAgent with real MCP tool execution."""
 
-    @patch("kailash.mcp_server.MCPClient")
+    @patch("kailash_mcp.MCPClient")
     def test_demonstrate_real_mcp_execution_flow(self, mock_mcp_client):
         """
         Demonstrates the complete flow of real MCP tool execution in IterativeLLMAgent.
@@ -258,7 +258,7 @@ class TestIterativeLLMAgentMCPDemonstration:
                             )
 
         # Test 2: Real execution (use_real_mcp=True)
-        with patch("kailash.mcp_server.MCPClient") as mock_mcp_client:
+        with patch("kailash_mcp.MCPClient") as mock_mcp_client:
             mock_client = MagicMock()
             mock_client.call_tool = AsyncMock(
                 return_value={

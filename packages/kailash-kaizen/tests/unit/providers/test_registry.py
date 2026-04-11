@@ -9,7 +9,7 @@ Covers:
 - ``get_provider_for_model`` prefix dispatch exhaustively.
 - ``get_streaming_provider`` capability gating.
 - ``get_available_providers`` returns structured info for every entry.
-- Backward-compat: ``kaizen.nodes.ai.ai_providers`` re-exports match
+- Backward-compat: ``kaizen.providers`` re-exports match
   ``kaizen.providers.registry`` exports.
 """
 
@@ -229,21 +229,19 @@ class TestGetAvailableProviders:
 
 
 class TestBackwardCompatShim:
-    """kaizen.nodes.ai.ai_providers re-exports match kaizen.providers.registry."""
+    """kaizen.providers re-exports match kaizen.providers.registry."""
 
     def test_providers_dict_is_same_object(self):
-        from kaizen.nodes.ai.ai_providers import PROVIDERS as OLD_PROVIDERS
+        from kaizen.providers import PROVIDERS as OLD_PROVIDERS
 
         assert OLD_PROVIDERS is PROVIDERS
 
     def test_get_provider_is_same_function(self):
-        from kaizen.nodes.ai.ai_providers import get_provider as old_get_provider
+        from kaizen.providers import get_provider as old_get_provider
 
         assert old_get_provider is get_provider
 
     def test_get_available_providers_is_same_function(self):
-        from kaizen.nodes.ai.ai_providers import (
-            get_available_providers as old_get_available,
-        )
+        from kaizen.providers import get_available_providers as old_get_available
 
         assert old_get_available is get_available_providers

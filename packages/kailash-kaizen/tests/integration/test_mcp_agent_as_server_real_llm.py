@@ -3,11 +3,11 @@ Integration Tests for Agent-as-Server MCP Example with REAL LLM Providers.
 
 ⚠️ MIGRATION IN PROGRESS (2025-10-04)
 These tests were designed for the deprecated kaizen.mcp implementation.
-The examples have been migrated to use kailash.mcp_server directly.
+The examples have been migrated to use kailash_mcp directly.
 
 Tests need refactoring to:
 1. Remove kaizen.mcp imports (deprecated)
-2. Use kailash.mcp_server.MCPServer or example's migrated server
+2. Use kailash_mcp.MCPServer or example's migrated server
 3. Test real JSON-RPC protocol behavior, not deprecated implementations
 
 See: tests/integration/MCP_INTEGRATION_TEST_MIGRATION_STATUS.md
@@ -16,7 +16,7 @@ Tests that the LLM can actually:
 1. Process MCP tool requests with natural language via real protocol
 2. Generate responses based on tool schemas from real JSON-RPC
 3. Handle JSON-RPC 2.0 requests/responses with production server
-4. Execute server workflows end-to-end with kailash.mcp_server
+4. Execute server workflows end-to-end with kailash_mcp
 
 Uses REAL providers (openai gpt-4o-mini or ollama) - NO MOCKING.
 Requires environment variables: OPENAI_API_KEY or running Ollama instance.
@@ -53,15 +53,15 @@ TextAnalysisSignature = agent_as_server_example.TextAnalysisSignature
 
 import logging
 
-# Real MCP infrastructure - UPDATED to use kailash.mcp_server
+# Real MCP infrastructure - UPDATED to use kailash_mcp
 # NOTE: kaizen.mcp has been deprecated and removed
-# Tests now use production kailash.mcp_server infrastructure
+# Tests now use production kailash_mcp infrastructure
 from kaizen.memory import SharedMemoryPool
 
 # Real LLM provider fixtures
 
-# TODO: Import kailash.mcp_server.MCPServer when tests are refactored
-# from kailash.mcp_server import MCPServer
+# TODO: Import kailash_mcp.MCPServer when tests are refactored
+# from kailash_mcp import MCPServer
 
 
 logger = logging.getLogger(__name__)

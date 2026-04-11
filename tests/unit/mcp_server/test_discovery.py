@@ -22,14 +22,14 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from kailash.mcp_server.discovery import (
+from kailash_mcp.discovery.discovery import (
     DiscoveryBackend,
     FileBasedDiscovery,
     NetworkDiscovery,
     ServerInfo,
     ServiceRegistry,
 )
-from kailash.mcp_server.errors import ServiceDiscoveryError
+from kailash_mcp.errors import ServiceDiscoveryError
 
 
 class TestServerInfo:
@@ -436,7 +436,7 @@ class TestFileBasedDiscovery:
         # Write invalid JSON
         Path(self.registry_path).write_text("invalid json")
 
-        with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+        with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
             registry = self.discovery._read_registry()
 
             # Should return default registry
@@ -449,7 +449,7 @@ class TestFileBasedDiscovery:
         # Remove file
         Path(self.registry_path).unlink()
 
-        with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+        with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
             registry = self.discovery._read_registry()
 
             # Should return default registry
@@ -498,7 +498,7 @@ class TestFileBasedDiscovery:
         with patch.object(self.discovery, "_write_registry") as mock_write:
             mock_write.side_effect = Exception("Write failed")
 
-            with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+            with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
                 result = await self.discovery.register_server(server_info)
 
                 assert result is False
@@ -534,7 +534,7 @@ class TestFileBasedDiscovery:
         with patch.object(self.discovery, "_write_registry") as mock_write:
             mock_write.side_effect = Exception("Write failed")
 
-            with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+            with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
                 result = await self.discovery.deregister_server("server-123")
 
                 assert result is False
@@ -601,7 +601,7 @@ class TestFileBasedDiscovery:
         with patch.object(self.discovery, "_read_registry") as mock_read:
             mock_read.side_effect = Exception("Read failed")
 
-            with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+            with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
                 servers = await self.discovery.get_servers()
 
                 assert servers == []
@@ -705,7 +705,7 @@ class TestFileBasedDiscovery:
         with patch.object(self.discovery, "_write_registry") as mock_write:
             mock_write.side_effect = Exception("Write failed")
 
-            with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+            with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
                 result = await self.discovery.update_server_health(
                     "server-123", "healthy"
                 )
@@ -808,7 +808,7 @@ class TestFileBasedDiscovery:
     async def test_file_based_discovery_save_registry_exception(self):
         """Test save_registry method handles exceptions."""
         with patch("aiofiles.open", side_effect=Exception("Save failed")):
-            with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+            with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
                 with pytest.raises(Exception):
                     await self.discovery.save_registry("/invalid/path")
 
@@ -849,7 +849,7 @@ class TestFileBasedDiscovery:
     @pytest.mark.asyncio
     async def test_file_based_discovery_load_registry_missing_file(self):
         """Test load_registry method with missing file."""
-        with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+        with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
             await self.discovery.load_registry("/non/existent/path")
 
             mock_logger.warning.assert_called_once()
@@ -863,7 +863,7 @@ class TestFileBasedDiscovery:
 
         try:
             with patch("aiofiles.open", side_effect=Exception("Load failed")):
-                with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+                with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
                     with pytest.raises(Exception, match="Load failed"):
                         await self.discovery.load_registry(test_path)
 
@@ -1002,7 +1002,7 @@ class TestNetworkDiscovery:
         data = json.dumps(announcement).encode()
         addr = ("192.168.1.100", 8765)
 
-        with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+        with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
             await self.discovery._process_announcement(data, addr)
 
             # Check discovered servers
@@ -1020,7 +1020,7 @@ class TestNetworkDiscovery:
         data = b"invalid json"
         addr = ("192.168.1.100", 8765)
 
-        with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+        with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
             await self.discovery._process_announcement(data, addr)
 
             # Should not add any servers
@@ -1168,7 +1168,7 @@ class TestNetworkDiscovery:
         """Test NetworkDiscovery _send_message method without transport."""
         message = {"type": "test", "data": "value"}
 
-        with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+        with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
             self.discovery._send_message(message)
 
             mock_logger.warning.assert_called_once()
@@ -1209,7 +1209,7 @@ class TestNetworkDiscovery:
         self.discovery._discovery_socket = mock_socket
         self.discovery.running = True
 
-        with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+        with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
             self.discovery.stop_discovery()
 
             assert self.discovery.running is False
@@ -1221,7 +1221,7 @@ class TestNetworkDiscovery:
         """Test NetworkDiscovery stop_discovery method without socket."""
         self.discovery.running = True
 
-        with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+        with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
             self.discovery.stop_discovery()
 
             assert self.discovery.running is False
@@ -1290,7 +1290,7 @@ class TestNetworkDiscovery:
         }
         addr = ("192.168.1.100", 8765)
 
-        with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+        with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
             await self.discovery._handle_discovery_message(message, addr)
 
             # Should add server to discovered servers
@@ -1316,7 +1316,7 @@ class TestNetworkDiscovery:
         message = {"type": "unknown_type", "data": "value"}
         addr = ("192.168.1.100", 8765)
 
-        with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+        with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
             await self.discovery._handle_discovery_message(message, addr)
 
             mock_logger.debug.assert_called_once()
@@ -1368,7 +1368,7 @@ class TestNetworkDiscovery:
         data = b"invalid json"
         addr = ("192.168.1.100", 8765)
 
-        with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+        with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
             self.discovery.datagram_received(data, addr)
 
             mock_logger.warning.assert_called_once()
@@ -1382,7 +1382,7 @@ class TestNetworkDiscovery:
         with patch("asyncio.get_running_loop") as mock_loop:
             mock_loop.side_effect = Exception("Test error")
 
-            with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+            with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
                 self.discovery.datagram_received(data, addr)
 
                 mock_logger.error.assert_called_once()
@@ -1395,7 +1395,7 @@ class TestServiceRegistry:
         """Test that ServiceRegistry class exists and can be imported."""
         # This test ensures the class exists for future implementation
         try:
-            from kailash.mcp_server.discovery import ServiceRegistry
+            from kailash_mcp.discovery.discovery import ServiceRegistry
 
             assert ServiceRegistry is not None
         except ImportError:

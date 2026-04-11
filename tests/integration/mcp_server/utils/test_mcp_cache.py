@@ -1,6 +1,6 @@
 """Unit tests for MCP cache functionality.
 
-Tests for the caching utilities in kailash.mcp_server.utils.cache.
+Tests for the caching utilities in kailash_mcp.utils.cache.
 NO MOCKING of external dependencies - This is a unit test file (Tier 1)
 for isolated component testing.
 """
@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from kailash.mcp_server.utils.cache import (
+from kailash_mcp.utils.cache import (
     CacheManager,
     LRUCache,
     UnifiedCache,

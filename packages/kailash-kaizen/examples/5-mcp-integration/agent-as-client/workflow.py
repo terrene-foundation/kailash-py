@@ -5,14 +5,14 @@ This example demonstrates how Kaizen agents consume external MCP tools using
 the Kailash SDK's production-ready MCP implementation with real JSON-RPC 2.0.
 
 ✅ MIGRATED TO PRODUCTION MCP (2025-10-04)
-- Uses kailash.mcp_server (production-ready, 100% MCP spec compliant)
+- Uses kailash_mcp (production-ready, 100% MCP spec compliant)
 - BaseAgent helpers: setup_mcp_client(), call_mcp_tool()
 - Real JSON-RPC 2.0 protocol (no mocking)
 - Multi-transport support (STDIO, HTTP, WebSocket, SSE)
 - Enterprise features (auth, retry, circuit breaker, metrics)
 
 Key Migration Changes:
-1. Imports: kaizen.mcp → kailash.mcp_server (via BaseAgent)
+1. Imports: kaizen.mcp → kailash_mcp (via BaseAgent)
 2. Setup: MCPConnection → BaseAgent.setup_mcp_client()
 3. Invocation: connection.call_tool() → BaseAgent.call_mcp_tool()
 4. Configuration: URL-based → Transport-based configs
@@ -45,10 +45,10 @@ from kaizen.core.base_agent import BaseAgent
 from kaizen.memory import SharedMemoryPool
 from kaizen.signatures import InputField, OutputField, Signature
 
-# NOTE: kailash.mcp_server imported via BaseAgent helpers
+# NOTE: kailash_mcp imported via BaseAgent helpers
 # - BaseAgent.setup_mcp_client() handles MCPClient creation
 # - BaseAgent.call_mcp_tool() handles tool invocation
-# - No direct kailash.mcp_server imports needed in agent code
+# - No direct kailash_mcp imports needed in agent code
 
 logger = logging.getLogger(__name__)
 
@@ -609,7 +609,7 @@ async def main_async():
     print("  → Authentication via headers/tokens")
     print("  → Automatic memory storage for tool calls")
     print()
-    print("Migration from kaizen.mcp to kailash.mcp_server:")
+    print("Migration from kaizen.mcp to kailash_mcp:")
     print("  → Replaced MCPConnection with BaseAgent.setup_mcp_client()")
     print("  → Replaced manual tool invocation with call_mcp_tool()")
     print("  → Added async/await for all MCP methods")

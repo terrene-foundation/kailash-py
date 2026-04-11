@@ -1,6 +1,6 @@
 """Unit tests for MCP client functionality.
 
-Tests for the enhanced MCP client in kailash.mcp_server.client.
+Tests for the enhanced MCP client in kailash_mcp.client.
 NO MOCKING of external dependencies - This is a unit test file (Tier 1)
 for isolated component testing.
 """
@@ -13,14 +13,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kailash.mcp_server.auth import (
+from kailash_mcp.auth.providers import (
     APIKeyAuth,
     AuthManager,
     PermissionManager,
     RateLimiter,
 )
-from kailash.mcp_server.client import MCPClient
-from kailash.mcp_server.errors import (
+from kailash_mcp.client import MCPClient
+from kailash_mcp.errors import (
     AuthenticationError,
     CircuitBreakerRetry,
     ExponentialBackoffRetry,

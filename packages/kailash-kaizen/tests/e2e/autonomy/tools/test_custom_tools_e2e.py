@@ -30,7 +30,7 @@ import pytest
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import InputField, OutputField, Signature
 
-from kailash.mcp_server import MCPServer
+from kailash_mcp import MCPServer
 from tests.utils.cost_tracking import get_global_tracker
 from tests.utils.reliability_helpers import (
     OllamaHealthChecker,

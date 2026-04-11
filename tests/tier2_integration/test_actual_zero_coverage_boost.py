@@ -73,7 +73,7 @@ class TestActualZeroCoverageModules:
     def test_ai_registry_server_coverage(self):
         """Test src/kailash/mcp_server/ai_registry_server.py (0% coverage)."""
         try:
-            from kailash.mcp_server.ai_registry_server import AIRegistryServer
+            from kailash_mcp.contrib.ai_registry import AIRegistryServer
 
             # Test class exists
             assert AIRegistryServer is not None
@@ -296,7 +296,7 @@ class TestModuleDiscovery:
             "kailash.middleware.database",
             "kailash.middleware.storage",
             "kailash.monitoring",
-            "kailash.mcp_server",
+            "kailash_mcp",
         ]
 
         for module_path in potential_modules:

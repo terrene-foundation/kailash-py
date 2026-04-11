@@ -25,7 +25,7 @@ class TestMCPServerInfo:
 
     def test_mcp_server_info_creation(self):
         """Test creating ServerInfo instances."""
-        from kailash.mcp_server.discovery import ServerInfo
+        from kailash_mcp.discovery.discovery import ServerInfo
 
         # Basic server info
         server = ServerInfo(
@@ -63,7 +63,7 @@ class TestMCPServerInfo:
 
     def test_server_status_enum(self):
         """Test health status values."""
-        from kailash.mcp_server.discovery import ServerInfo
+        from kailash_mcp.discovery.discovery import ServerInfo
 
         # Test health status string values
         server = ServerInfo(name="test", transport="http", health_status="healthy")
@@ -74,7 +74,7 @@ class TestMCPServerInfo:
 
     def test_mcp_server_info_equality(self):
         """Test ServerInfo equality comparison."""
-        from kailash.mcp_server.discovery import ServerInfo
+        from kailash_mcp.discovery.discovery import ServerInfo
 
         server1 = ServerInfo(
             name="Test Server",
@@ -106,7 +106,7 @@ class TestDiscoveryStrategyInterface:
         """Test DiscoveryBackend abstract interface."""
         import abc
 
-        from kailash.mcp_server.discovery import DiscoveryBackend
+        from kailash_mcp.discovery.discovery import DiscoveryBackend
 
         # Verify it's an abstract class
         assert issubclass(DiscoveryBackend, abc.ABC)
@@ -154,7 +154,7 @@ class TestStaticDiscovery:
         import os
         import tempfile
 
-        from kailash.mcp_server.discovery import FileBasedDiscovery
+        from kailash_mcp.discovery.discovery import FileBasedDiscovery
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             # Create a test registry file
@@ -180,7 +180,7 @@ class TestStaticDiscovery:
         import os
         import tempfile
 
-        from kailash.mcp_server.discovery import FileBasedDiscovery, ServerInfo
+        from kailash_mcp.discovery.discovery import FileBasedDiscovery, ServerInfo
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             # Create initial registry with one server
@@ -215,7 +215,7 @@ class TestFileBasedDiscovery:
     @patch("pathlib.Path.read_text")
     def test_file_based_discovery_initialization(self, mock_read_text, mock_exists):
         """Test FileBasedDiscovery initialization and file handling."""
-        from kailash.mcp_server.discovery import FileBasedDiscovery
+        from kailash_mcp.discovery.discovery import FileBasedDiscovery
 
         mock_exists.return_value = True
         mock_read_text.return_value = (

@@ -1,6 +1,6 @@
 """Unit tests for MCP error handling framework.
 
-Tests for the error handling system components in kailash.mcp_server.errors.
+Tests for the error handling system components in kailash_mcp.errors.
 NO MOCKING - This is a unit test file for isolated component testing.
 """
 
@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from kailash.mcp_server.errors import (
+from kailash_mcp.errors import (
     AuthenticationError,
     AuthorizationError,
     CircuitBreakerRetry,

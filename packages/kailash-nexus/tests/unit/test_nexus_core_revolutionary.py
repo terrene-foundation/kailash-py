@@ -76,7 +76,7 @@ class TestRevolutionaryNexusCore:
         assert app1._api_port != app2._api_port
 
         # Test enterprise options at construction
-        with patch("kailash.mcp_server.auth.APIKeyAuth") as mock_auth:
+        with patch("kailash_mcp.auth.providers.APIKeyAuth") as mock_auth:
             mock_auth.return_value = Mock()
             enterprise_app = Nexus(
                 enable_auth=True, enable_monitoring=True, rate_limit=1000

@@ -1,6 +1,6 @@
 """Unit tests for MCP authentication framework.
 
-Tests for the authentication system components in kailash.mcp_server.auth.
+Tests for the authentication system components in kailash_mcp.auth.providers.
 NO MOCKING - This is a unit test file for isolated component testing.
 """
 
@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from kailash.mcp_server.auth import (
+from kailash_mcp.auth.providers import (
     APIKeyAuth,
     AuthenticationError,
     BasicAuth,

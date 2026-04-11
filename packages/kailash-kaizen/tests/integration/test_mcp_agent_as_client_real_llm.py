@@ -3,7 +3,7 @@ Integration Tests for Agent-as-Client MCP Example with REAL LLM Providers.
 
 ⚠️ MIGRATION IN PROGRESS (2025-10-04)
 These tests were designed for the deprecated kaizen.mcp implementation.
-The examples have been migrated to use kailash.mcp_server via BaseAgent helpers.
+The examples have been migrated to use kailash_mcp via BaseAgent helpers.
 
 Tests need refactoring to:
 1. Remove populate_agent_tools() calls (deprecated manual tool copying)
@@ -53,7 +53,7 @@ ResultSynthesisSignature = agent_as_client_example.ResultSynthesisSignature
 
 import logging
 
-# Real MCP infrastructure - UPDATED to use kailash.mcp_server
+# Real MCP infrastructure - UPDATED to use kailash_mcp
 # NOTE: kaizen.mcp has been deprecated and removed
 # Tests now use real Kailash SDK MCP infrastructure
 from kaizen.memory import SharedMemoryPool

@@ -2161,7 +2161,7 @@ Final Answer: 6 hours"""
             base_url: Optional per-request base URL override.
         """
         try:
-            from .ai_providers import get_provider
+            from kaizen.providers.registry import get_provider
 
             # Get the provider instance
             provider_instance = get_provider(provider)

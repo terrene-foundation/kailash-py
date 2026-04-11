@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import pytest_asyncio
 
-from kailash.mcp_server.subscriptions import (
+from kailash_mcp.advanced.subscriptions import (
     REDIS_AVAILABLE,
     DistributedSubscriptionManager,
     ResourceChange,
@@ -66,7 +66,7 @@ class TestDistributedSubscriptionManager:
     def distributed_manager(self, mock_redis_client, mock_redis_pubsub):
         """Create distributed subscription manager with mocked Redis."""
         with patch(
-            "kailash.mcp_server.subscriptions.redis.Redis.from_url"
+            "kailash_mcp.advanced.subscriptions.redis.Redis.from_url"
         ) as mock_from_url:
             # Return different mocks for different calls
             call_count = 0
@@ -96,7 +96,7 @@ class TestDistributedSubscriptionManager:
 
     def test_initialization_without_redis(self):
         """Test that initialization fails without Redis available."""
-        with patch("kailash.mcp_server.subscriptions.REDIS_AVAILABLE", False):
+        with patch("kailash_mcp.advanced.subscriptions.REDIS_AVAILABLE", False):
             with pytest.raises(ImportError, match="Redis support not available"):
                 DistributedSubscriptionManager()
 

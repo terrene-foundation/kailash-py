@@ -14,10 +14,10 @@ import pytest
 import pytest_asyncio
 import websockets
 
-from kailash.mcp_server.auth import APIKeyAuth, AuthManager
-from kailash.mcp_server.protocol import ResourceChange, ResourceChangeType
-from kailash.mcp_server.server import MCPServer
-from kailash.mcp_server.subscriptions import ResourceSubscriptionManager
+from kailash_mcp.auth.providers import APIKeyAuth, AuthManager
+from kailash_mcp.protocol.protocol import ResourceChange, ResourceChangeType
+from kailash_mcp.server import MCPServer
+from kailash_mcp.advanced.subscriptions import ResourceSubscriptionManager
 
 
 class TestMCPResourceSubscriptionIntegration:
@@ -342,7 +342,7 @@ class TestMCPResourceSubscriptionIntegration:
         """Test subscription with authentication requirements."""
         from unittest.mock import AsyncMock, Mock
 
-        from kailash.mcp_server.auth import PermissionError as PermissionDeniedError
+        from kailash_mcp.auth.providers import PermissionError as PermissionDeniedError
 
         # Create server with authentication enabled
         auth_provider = Mock()

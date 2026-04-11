@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kailash.mcp_server.errors import AuthenticationError, AuthorizationError
-from kailash.mcp_server.oauth import (
+from kailash_mcp.errors import AuthenticationError, AuthorizationError
+from kailash_mcp.auth.oauth import (
     AccessToken,
     AuthorizationCode,
     AuthorizationServer,
@@ -470,7 +470,7 @@ class TestAuthorizationServer:
 
     def setup_method(self):
         """Set up test environment."""
-        with patch("kailash.mcp_server.oauth.JWTManager") as mock_jwt:
+        with patch("kailash_mcp.auth.oauth.JWTManager") as mock_jwt:
             mock_jwt_instance = MagicMock()
             mock_jwt.return_value = mock_jwt_instance
 
@@ -671,7 +671,7 @@ class TestResourceServer:
 
     def setup_method(self):
         """Set up test environment."""
-        with patch("kailash.mcp_server.oauth.JWTManager") as mock_jwt:
+        with patch("kailash_mcp.auth.oauth.JWTManager") as mock_jwt:
             mock_jwt_instance = MagicMock()
             mock_jwt.return_value = mock_jwt_instance
 

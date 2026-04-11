@@ -14,10 +14,10 @@ import aiohttp
 import pytest
 import redis.asyncio as redis
 
-from kailash.mcp_server import MCPClient, MCPServer
-from kailash.mcp_server.auth import APIKeyAuth
-from kailash.mcp_server.discovery import FileBasedDiscovery, ServerInfo, ServiceRegistry
-from kailash.mcp_server.transports import (
+from kailash_mcp import MCPClient, MCPServer
+from kailash_mcp.auth.providers import APIKeyAuth
+from kailash_mcp.discovery.discovery import FileBasedDiscovery, ServerInfo, ServiceRegistry
+from kailash_mcp.transports.transports import (
     EnhancedStdioTransport,
     SSETransport,
     StreamableHTTPTransport,
@@ -345,7 +345,7 @@ class TestMCPHealthChecking:
     @pytest.mark.asyncio
     async def test_http_health_check(self):
         """Test HTTP-based health checking."""
-        from kailash.mcp_server.discovery import HealthChecker
+        from kailash_mcp.discovery.discovery import HealthChecker
 
         # Use test API server for health checks
         test_api_url = "http://localhost:8888"

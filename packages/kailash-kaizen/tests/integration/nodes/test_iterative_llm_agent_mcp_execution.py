@@ -80,7 +80,7 @@ class TestIterativeLLMAgentMCPExecution:
                                 # Verify LLM was called for direct response
                                 mock_llm.assert_called()
 
-    @patch("kailash.mcp_server.MCPClient")
+    @patch("kailash_mcp.MCPClient")
     def test_real_mcp_execution_initialization(self, mock_mcp_client):
         """Test that MCP client is initialized when using real execution."""
         # Setup mock MCP client

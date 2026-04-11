@@ -2,8 +2,8 @@
 
 import pytest
 
-from kaizen.nodes.ai.ai_providers import PROVIDERS, get_provider
 from kaizen.nodes.ai.unified_azure_provider import UnifiedAzureProvider
+from kaizen.providers import PROVIDERS, get_provider
 
 
 class TestAzureProviderRegistry:

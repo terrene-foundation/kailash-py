@@ -11,6 +11,7 @@ Tests the async capabilities of BaseAgent including:
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.config import BaseAgentConfig
 from kaizen.signatures import InputField, OutputField, Signature
@@ -129,7 +130,7 @@ class TestBaseAgentRunAsync:
         agent = BaseAgent(config=config, signature=SimpleQASignature())
 
         # Mock at the provider factory level - where LLMAgentNode gets providers
-        with patch("kaizen.nodes.ai.ai_providers.get_provider") as mock_get_provider:
+        with patch("kaizen.providers.get_provider") as mock_get_provider:
             mock_provider = AsyncMock()
             mock_get_provider.return_value = mock_provider
 
@@ -179,7 +180,7 @@ class TestBaseAgentRunAsync:
         )
         agent = BaseAgent(config=config, signature=SimpleQASignature())
 
-        with patch("kaizen.nodes.ai.ai_providers.get_provider") as mock_get_provider:
+        with patch("kaizen.providers.get_provider") as mock_get_provider:
             mock_provider = AsyncMock()
             mock_get_provider.return_value = mock_provider
             mock_provider.chat_async = AsyncMock(
@@ -237,7 +238,7 @@ class TestBaseAgentRunAsync:
 
         agent = HookedAgent(config=config, signature=SimpleQASignature())
 
-        with patch("kaizen.nodes.ai.ai_providers.get_provider") as mock_get_provider:
+        with patch("kaizen.providers.get_provider") as mock_get_provider:
             mock_provider = AsyncMock()
             mock_get_provider.return_value = mock_provider
             mock_provider.chat_async = AsyncMock(
@@ -287,7 +288,7 @@ class TestBaseAgentRunAsync:
             config=config, signature=SimpleQASignature(), memory=mock_memory
         )
 
-        with patch("kaizen.nodes.ai.ai_providers.get_provider") as mock_get_provider:
+        with patch("kaizen.providers.get_provider") as mock_get_provider:
             mock_provider = AsyncMock()
             mock_get_provider.return_value = mock_provider
             mock_provider.chat_async = AsyncMock(
@@ -333,7 +334,7 @@ class TestBaseAgentRunAsync:
         )
         agent = BaseAgent(config=config, signature=SimpleQASignature())
 
-        with patch("kaizen.nodes.ai.ai_providers.get_provider") as mock_get_provider:
+        with patch("kaizen.providers.get_provider") as mock_get_provider:
             mock_provider = AsyncMock()
             mock_get_provider.return_value = mock_provider
 
@@ -358,7 +359,7 @@ class TestAsyncBackwardsCompatibility:
         )
         agent = BaseAgent(config=config, signature=SimpleQASignature())
 
-        with patch("kaizen.nodes.ai.ai_providers.get_provider"):
+        with patch("kaizen.providers.get_provider"):
             # Sync run should still work
             try:
                 # Note: Will fail without proper mocking but method should exist
@@ -397,7 +398,7 @@ class TestConcurrentAsyncExecution:
         )
         agent = BaseAgent(config=config, signature=SimpleQASignature())
 
-        with patch("kaizen.nodes.ai.ai_providers.get_provider") as mock_get_provider:
+        with patch("kaizen.providers.get_provider") as mock_get_provider:
             mock_provider = AsyncMock()
             mock_get_provider.return_value = mock_provider
 

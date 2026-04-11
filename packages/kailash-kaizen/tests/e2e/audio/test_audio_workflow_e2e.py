@@ -55,8 +55,8 @@ class TestAudioWorkflowE2E:
         from kailash.runtime import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
         from kaizen.nodes.ai.audio_utils import encode_audio, get_audio_media_type
+        from kaizen.providers import GoogleGeminiProvider
 
         # Prepare audio content
         audio_base64 = encode_audio(test_audio)
@@ -109,8 +109,8 @@ class TestAudioWorkflowE2E:
         2. Answer relates to the audio
         3. Multi-turn conversation maintains context
         """
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
         from kaizen.nodes.ai.audio_utils import encode_audio, get_audio_media_type
+        from kaizen.providers import GoogleGeminiProvider
 
         provider = GoogleGeminiProvider()
 
@@ -159,7 +159,7 @@ class TestAudioWorkflowE2E:
         2. to_base64() produces valid data URL
         3. Provider accepts AudioField output
         """
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
+        from kaizen.providers import GoogleGeminiProvider
         from kaizen.signatures.multi_modal import AudioField
 
         # Load audio with AudioField
@@ -258,8 +258,8 @@ class TestAudioFormatsE2E:
 
     def test_e2e_wav_format(self, test_audio):
         """Test WAV format processing."""
-        from kaizen.nodes.ai.ai_providers import GoogleGeminiProvider
         from kaizen.nodes.ai.audio_utils import get_audio_media_type
+        from kaizen.providers import GoogleGeminiProvider
 
         assert get_audio_media_type(test_audio) == "audio/wav"
 
@@ -292,6 +292,6 @@ class TestAudioFormatsE2E:
 
         for filename, expected_mime in test_cases:
             actual_mime = get_audio_media_type(filename)
-            assert actual_mime == expected_mime, (
-                f"Expected {expected_mime} for {filename}, got {actual_mime}"
-            )
+            assert (
+                actual_mime == expected_mime
+            ), f"Expected {expected_mime} for {filename}, got {actual_mime}"

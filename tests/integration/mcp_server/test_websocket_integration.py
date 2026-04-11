@@ -11,8 +11,8 @@ import pytest
 import websockets
 from websockets.server import serve
 
-from kailash.mcp_server.client import MCPClient
-from kailash.mcp_server.errors import TransportError
+from kailash_mcp.client import MCPClient
+from kailash_mcp.errors import TransportError
 
 
 class TestWebSocketTransportOriginalBugFix:

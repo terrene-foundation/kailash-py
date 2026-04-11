@@ -63,8 +63,8 @@ import asyncio
 import sys
 from pathlib import Path
 
-from kailash.mcp_server import MCPServer
-from kailash.mcp_server.auth import APIKeyAuth
+from kailash_mcp import MCPServer
+from kailash_mcp.auth.providers import APIKeyAuth
 from kailash.middleware.gateway.event_store import EventStore
 import redis.asyncio as redis
 
@@ -542,8 +542,8 @@ class TestMCPResourceE2E:
         server_script.write_text(
             """
 import asyncio
-from kailash.mcp_server import MCPServer
-from kailash.mcp_server.auth import APIKeyAuth
+from kailash_mcp import MCPServer
+from kailash_mcp.auth.providers import APIKeyAuth
 
 async def main():
     auth = APIKeyAuth(keys={

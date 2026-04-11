@@ -17,7 +17,7 @@ class TestServerInfoFunctionality:
     def test_server_info_initialization_and_auto_values(self):
         """Test ServerInfo auto-generates missing values and validates data."""
         try:
-            from kailash.mcp_server.discovery import ServerInfo
+            from kailash_mcp.discovery.discovery import ServerInfo
 
             # Test basic initialization
             server = ServerInfo(
@@ -41,7 +41,7 @@ class TestServerInfoFunctionality:
     def test_server_info_health_status_integration(self):
         """Test ServerInfo health status handling and response time extraction."""
         try:
-            from kailash.mcp_server.discovery import ServerInfo
+            from kailash_mcp.discovery.discovery import ServerInfo
 
             # Test health data integration
             health_data = {
@@ -80,7 +80,7 @@ class TestServerInfoFunctionality:
     def test_server_info_is_healthy_functionality(self):
         """Test is_healthy method with age-based health validation."""
         try:
-            from kailash.mcp_server.discovery import ServerInfo
+            from kailash_mcp.discovery.discovery import ServerInfo
 
             current_time = time.time()
 
@@ -123,7 +123,7 @@ class TestServerInfoFunctionality:
     def test_server_info_serialization_roundtrip(self):
         """Test to_dict and from_dict serialization roundtrip."""
         try:
-            from kailash.mcp_server.discovery import ServerInfo
+            from kailash_mcp.discovery.discovery import ServerInfo
 
             # Create server with complex data
             original_server = ServerInfo(
@@ -169,7 +169,7 @@ class TestServerInfoFunctionality:
     def test_server_info_endpoint_extraction_logic(self):
         """Test endpoint extraction for different transport types."""
         try:
-            from kailash.mcp_server.discovery import ServerInfo
+            from kailash_mcp.discovery.discovery import ServerInfo
 
             # Test stdio transport endpoint
             stdio_server = ServerInfo(
@@ -215,7 +215,7 @@ class TestFileBasedDiscoveryFunctionality:
     async def test_file_based_discovery_registration_and_persistence(self):
         """Test file-based server registration and file persistence."""
         try:
-            from kailash.mcp_server.discovery import FileBasedDiscovery, ServerInfo
+            from kailash_mcp.discovery.discovery import FileBasedDiscovery, ServerInfo
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 registry_file = Path(temp_dir) / "test_servers.json"
@@ -258,7 +258,7 @@ class TestFileBasedDiscoveryFunctionality:
     async def test_file_based_discovery_server_retrieval(self):
         """Test discovering servers from file storage."""
         try:
-            from kailash.mcp_server.discovery import FileBasedDiscovery, ServerInfo
+            from kailash_mcp.discovery.discovery import FileBasedDiscovery, ServerInfo
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 registry_file = Path(temp_dir) / "discovery_test.json"
@@ -332,7 +332,7 @@ class TestFileBasedDiscoveryFunctionality:
     async def test_file_based_discovery_server_deregistration(self):
         """Test server deregistration and file updates."""
         try:
-            from kailash.mcp_server.discovery import FileBasedDiscovery, ServerInfo
+            from kailash_mcp.discovery.discovery import FileBasedDiscovery, ServerInfo
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 registry_file = Path(temp_dir) / "deregister_test.json"
@@ -386,7 +386,7 @@ class TestServiceRegistryIntegration:
     async def test_service_registry_multi_backend_coordination(self):
         """Test ServiceRegistry coordinating multiple discovery backends."""
         try:
-            from kailash.mcp_server.discovery import ServerInfo, ServiceRegistry
+            from kailash_mcp.discovery.discovery import ServerInfo, ServiceRegistry
 
             # Mock multiple backends
             backend1 = AsyncMock()
@@ -432,7 +432,7 @@ class TestServiceRegistryIntegration:
     async def test_service_registry_server_discovery_aggregation(self):
         """Test ServiceRegistry aggregating servers from multiple backends."""
         try:
-            from kailash.mcp_server.discovery import ServerInfo, ServiceRegistry
+            from kailash_mcp.discovery.discovery import ServerInfo, ServiceRegistry
 
             backend1 = AsyncMock()
             backend2 = AsyncMock()
@@ -504,7 +504,7 @@ class TestServiceRegistryIntegration:
     async def test_service_registry_dict_to_server_info_conversion(self):
         """Test ServiceRegistry converting dict configurations to ServerInfo objects."""
         try:
-            from kailash.mcp_server.discovery import ServerInfo, ServiceRegistry
+            from kailash_mcp.discovery.discovery import ServerInfo, ServiceRegistry
 
             backend = AsyncMock()
             backend.register_server.return_value = True
@@ -544,7 +544,7 @@ class TestServiceRegistryIntegration:
     async def test_service_registry_partial_backend_failure_handling(self):
         """Test ServiceRegistry handling partial backend failures gracefully."""
         try:
-            from kailash.mcp_server.discovery import ServerInfo, ServiceRegistry
+            from kailash_mcp.discovery.discovery import ServerInfo, ServiceRegistry
 
             # Setup backends with one failing
             working_backend = AsyncMock()
@@ -560,7 +560,7 @@ class TestServiceRegistryIntegration:
                 name="resilience-test", transport="http", url="http://test:8080"
             )
 
-            with patch("kailash.mcp_server.discovery.logger") as mock_logger:
+            with patch("kailash_mcp.discovery.discovery.logger") as mock_logger:
                 success = await registry.register_server(server)
 
                 # Should succeed because one backend worked
@@ -587,7 +587,7 @@ class TestNetworkDiscoveryFunctionality:
     async def test_network_discovery_port_scanning(self):
         """Test NetworkDiscovery port scanning functionality."""
         try:
-            from kailash.mcp_server.discovery import NetworkDiscovery
+            from kailash_mcp.discovery.discovery import NetworkDiscovery
 
             discovery = NetworkDiscovery()
 
@@ -625,7 +625,7 @@ class TestNetworkDiscoveryFunctionality:
     async def test_network_discovery_server_detection(self):
         """Test NetworkDiscovery server detection and capability probing."""
         try:
-            from kailash.mcp_server.discovery import NetworkDiscovery, ServerInfo
+            from kailash_mcp.discovery.discovery import NetworkDiscovery, ServerInfo
 
             discovery = NetworkDiscovery()
 
@@ -695,7 +695,7 @@ class TestServiceMeshAndLoadBalancing:
     async def test_load_balancer_server_selection_strategies(self):
         """Test LoadBalancer server selection with different strategies."""
         try:
-            from kailash.mcp_server.discovery import LoadBalancer, ServerInfo
+            from kailash_mcp.discovery.discovery import LoadBalancer, ServerInfo
 
             # Create servers with different response times
             servers = [
@@ -756,7 +756,7 @@ class TestServiceMeshAndLoadBalancing:
     async def test_service_mesh_client_management(self):
         """Test ServiceMesh client creation and management."""
         try:
-            from kailash.mcp_server.discovery import (
+            from kailash_mcp.discovery.discovery import (
                 ServerInfo,
                 ServiceMesh,
                 ServiceRegistry,
@@ -822,7 +822,7 @@ class TestDiscoveryErrorHandling:
     async def test_file_discovery_with_corrupted_registry_file(self):
         """Test FileBasedDiscovery handling of corrupted registry files."""
         try:
-            from kailash.mcp_server.discovery import FileBasedDiscovery
+            from kailash_mcp.discovery.discovery import FileBasedDiscovery
 
             with tempfile.TemporaryDirectory() as temp_dir:
                 registry_file = Path(temp_dir) / "corrupted.json"
@@ -845,7 +845,7 @@ class TestDiscoveryErrorHandling:
     async def test_registry_with_no_backends(self):
         """Test ServiceRegistry behavior with no backends configured."""
         try:
-            from kailash.mcp_server.discovery import ServerInfo, ServiceRegistry
+            from kailash_mcp.discovery.discovery import ServerInfo, ServiceRegistry
 
             # Create registry with empty backends list
             registry = ServiceRegistry(backends=[])
@@ -867,7 +867,7 @@ class TestDiscoveryErrorHandling:
     async def test_network_discovery_timeout_handling(self):
         """Test NetworkDiscovery handling of network timeouts."""
         try:
-            from kailash.mcp_server.discovery import NetworkDiscovery
+            from kailash_mcp.discovery.discovery import NetworkDiscovery
 
             discovery = NetworkDiscovery()
 
@@ -890,7 +890,7 @@ class TestDiscoveryErrorHandling:
     def test_server_info_edge_cases(self):
         """Test ServerInfo handling of edge cases and invalid data."""
         try:
-            from kailash.mcp_server.discovery import ServerInfo
+            from kailash_mcp.discovery.discovery import ServerInfo
 
             # Test with minimal data
             minimal_server = ServerInfo(name="", transport="")

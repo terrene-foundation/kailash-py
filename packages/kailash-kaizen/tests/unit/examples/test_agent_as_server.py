@@ -2,14 +2,14 @@
 Tests for Agent as MCP Server Example
 
 MIGRATED TO KAILASH.MCP_SERVER (2025-12-29)
-These tests use the production kailash.mcp_server implementation.
+These tests use the production kailash_mcp implementation.
 
 3-Tier Testing Strategy:
 - Tier 1 (Unit): Agent and server setup logic
-- Tier 2 (Integration): Real MCP server from kailash.mcp_server.MCPServer
+- Tier 2 (Integration): Real MCP server from kailash_mcp.MCPServer
 - Tier 3 (E2E): Complete server workflows with real JSON-RPC protocol
 
-NO MOCKING of MCP protocol - uses production kailash.mcp_server.MCPServer.
+NO MOCKING of MCP protocol - uses production kailash_mcp.MCPServer.
 """
 
 import asyncio
@@ -46,8 +46,8 @@ MCPServerAgent = agent_as_server_example.MCPServerAgent
 QuestionAnsweringSignature = agent_as_server_example.QuestionAnsweringSignature
 TextAnalysisSignature = agent_as_server_example.TextAnalysisSignature
 
-# Production MCP infrastructure - kailash.mcp_server
-from kailash.mcp_server import MCPServer
+# Production MCP infrastructure - kailash_mcp
+from kailash_mcp import MCPServer
 from kaizen.memory import SharedMemoryPool
 
 logger = logging.getLogger(__name__)
@@ -201,9 +201,9 @@ class TestMCPServerAgentInitialization:
 
 
 class TestMCPServerIntegration:
-    """Test real MCP server using kailash.mcp_server.MCPServer - NO MOCKING.
+    """Test real MCP server using kailash_mcp.MCPServer - NO MOCKING.
 
-    Uses production kailash.mcp_server.MCPServer for real MCP protocol testing.
+    Uses production kailash_mcp.MCPServer for real MCP protocol testing.
     """
 
     def test_mcp_server_creation(self):
@@ -234,7 +234,7 @@ class TestMCPServerIntegration:
     def test_mcp_server_with_auth(self):
         """Test MCPServer with authentication."""
         try:
-            from kailash.mcp_server.auth import APIKeyAuth
+            from kailash_mcp.auth.providers import APIKeyAuth
 
             auth = APIKeyAuth({"test-key": {"permissions": ["*"]}})
             server = MCPServer(name="auth-server", auth_provider=auth)
@@ -244,7 +244,7 @@ class TestMCPServerIntegration:
 
 
 class TestMCPServerAgentExposure:
-    """Test MCPServerAgent server exposure via kailash.mcp_server."""
+    """Test MCPServerAgent server exposure via kailash_mcp."""
 
     def test_agent_expose_as_server(self):
         """Test agent can be exposed as MCP server."""
@@ -377,7 +377,7 @@ class TestMCPServerToolInvocation:
 class TestMCPServerWorkflows:
     """Test complete MCP server workflows.
 
-    Uses kailash.mcp_server.MCPServer for production server patterns.
+    Uses kailash_mcp.MCPServer for production server patterns.
     """
 
     def test_agent_has_start_server_method(self):
@@ -490,7 +490,7 @@ class TestMCPServerWorkflows:
 
 
 class TestMCPServerPerformance:
-    """Test server performance characteristics using kailash.mcp_server.MCPServer."""
+    """Test server performance characteristics using kailash_mcp.MCPServer."""
 
     def test_mcp_server_creation_performance(self):
         """Test MCPServer creation is fast."""

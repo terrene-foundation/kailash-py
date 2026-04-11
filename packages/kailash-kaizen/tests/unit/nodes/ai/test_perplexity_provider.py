@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from kaizen.nodes.ai.ai_providers import PerplexityProvider
+from kaizen.providers import PerplexityProvider
 
 
 class TestPerplexityProviderAvailability:
@@ -743,28 +743,28 @@ class TestPerplexityProviderRegistry:
 
     def test_provider_in_registry(self):
         """Should be registered in PROVIDERS dict."""
-        from kaizen.nodes.ai.ai_providers import PROVIDERS
+        from kaizen.providers import PROVIDERS
 
         assert "perplexity" in PROVIDERS
         assert PROVIDERS["perplexity"] is PerplexityProvider
 
     def test_pplx_alias_in_registry(self):
         """Should have pplx alias in PROVIDERS dict."""
-        from kaizen.nodes.ai.ai_providers import PROVIDERS
+        from kaizen.providers import PROVIDERS
 
         assert "pplx" in PROVIDERS
         assert PROVIDERS["pplx"] is PerplexityProvider
 
     def test_get_provider_returns_perplexity(self):
         """Should return PerplexityProvider from get_provider."""
-        from kaizen.nodes.ai.ai_providers import get_provider
+        from kaizen.providers import get_provider
 
         provider = get_provider("perplexity")
         assert isinstance(provider, PerplexityProvider)
 
     def test_get_provider_with_alias(self):
         """Should return PerplexityProvider using pplx alias."""
-        from kaizen.nodes.ai.ai_providers import get_provider
+        from kaizen.providers import get_provider
 
         provider = get_provider("pplx")
         assert isinstance(provider, PerplexityProvider)

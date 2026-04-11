@@ -18,7 +18,7 @@ Features:
 Examples:
     Enhanced STDIO transport:
 
-    >>> from kailash.mcp_server.transports import EnhancedStdioTransport
+    >>> from kailash_mcp.transports.transports import EnhancedStdioTransport
     >>> transport = EnhancedStdioTransport(
     ...     command="python",
     ...     args=["-m", "my_mcp_server"],
@@ -29,7 +29,7 @@ Examples:
 
     SSE transport with security:
 
-    >>> from kailash.mcp_server.transports import SSETransport
+    >>> from kailash_mcp.transports.transports import SSETransport
     >>> transport = SSETransport(
     ...     base_url="https://api.example.com/mcp",
     ...     auth_header="Bearer token123",
@@ -38,7 +38,7 @@ Examples:
 
     StreamableHTTP with session management:
 
-    >>> from kailash.mcp_server.transports import StreamableHTTPTransport
+    >>> from kailash_mcp.transports.transports import StreamableHTTPTransport
     >>> transport = StreamableHTTPTransport(
     ...     base_url="https://api.example.com/mcp",
     ...     session_management=True,

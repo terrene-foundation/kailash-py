@@ -12,16 +12,16 @@ import time
 import aiohttp
 import pytest
 
-from kailash.mcp_server import (
+from kailash_mcp import (
     MCPClient,
     MCPServer,
     ServiceRegistry,
     discover_mcp_servers,
     get_mcp_client,
 )
-from kailash.mcp_server.auth import APIKeyAuth, AuthManager
-from kailash.mcp_server.discovery import ServerInfo
-from kailash.mcp_server.errors import AuthenticationError, MCPError
+from kailash_mcp.auth.providers import APIKeyAuth, AuthManager
+from kailash_mcp.discovery.discovery import ServerInfo
+from kailash_mcp.errors import AuthenticationError, MCPError
 from tests.utils.docker_config import ensure_docker_services, get_redis_url
 
 
@@ -110,7 +110,7 @@ class TestMCPServerIntegration:
         assert hasattr(client, "enable_metrics")
 
         # HTTP client with auth
-        from kailash.mcp_server.auth import APIKeyAuth
+        from kailash_mcp.auth.providers import APIKeyAuth
 
         auth = APIKeyAuth({"test_key": {"permissions": ["tools"]}})
         http_client = MCPClient(auth_provider=auth, enable_http_transport=True)
@@ -161,7 +161,7 @@ class TestMCPServerIntegration:
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             temp_registry_path = f.name
 
-        from kailash.mcp_server.discovery import FileBasedDiscovery
+        from kailash_mcp.discovery.discovery import FileBasedDiscovery
 
         file_discovery = FileBasedDiscovery(temp_registry_path)
         registry = ServiceRegistry(backends=[file_discovery])
@@ -201,7 +201,7 @@ class TestMCPServerIntegration:
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             temp_registry_path = f.name
 
-        from kailash.mcp_server.discovery import FileBasedDiscovery
+        from kailash_mcp.discovery.discovery import FileBasedDiscovery
 
         file_discovery = FileBasedDiscovery(temp_registry_path)
         registry = ServiceRegistry(backends=[file_discovery])

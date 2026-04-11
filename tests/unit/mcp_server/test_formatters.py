@@ -1,6 +1,6 @@
 """Unit tests for MCP response formatters.
 
-Tests for the formatting utilities in kailash.mcp_server.utils.formatters.
+Tests for the formatting utilities in kailash_mcp.utils.formatters.
 NO MOCKING - This is a unit test file for isolated component testing.
 """
 
@@ -9,7 +9,7 @@ from datetime import datetime
 
 import pytest
 
-from kailash.mcp_server.utils.formatters import (
+from kailash_mcp.utils.formatters import (
     JSONFormatter,
     MarkdownFormatter,
     MetricsFormatter,
