@@ -312,9 +312,32 @@ class BaseAgent(MCPMixin, A2AMixin, Node):
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
 
-        user_content = " | ".join(
-            str(v) for v in inputs.values() if not str(v).startswith("_")
-        )
+        # Build user content, detecting multimodal inputs (#410)
+        from kaizen.strategies.async_single_shot import _classify_input_value
+
+        text_parts: list[str] = []
+        multimodal_parts: list[dict] = []
+        has_multimodal = False
+
+        for k, v in inputs.items():
+            if v is None or str(k).startswith("_"):
+                continue
+            content_part = _classify_input_value(v, k, {})
+            if content_part is not None:
+                has_multimodal = True
+                multimodal_parts.append(content_part)
+            else:
+                text_parts.append(str(v))
+
+        if has_multimodal:
+            content_list: list[dict] = []
+            if text_parts:
+                content_list.append({"type": "text", "text": " | ".join(text_parts)})
+            content_list.extend(multimodal_parts)
+            user_content = content_list
+        else:
+            user_content = " | ".join(text_parts) if text_parts else "No input provided"
+
         messages.append({"role": "user", "content": user_content})
 
         response = await provider.chat_async(
