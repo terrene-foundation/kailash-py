@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: System :: Distributed Computing",
 ]
 dependencies = [
-    "kailash>=2.8.0",
+    "kailash>=2.8.1",
     "starlette>=0.36.0",
     "fastapi>=0.104.0",
     "websockets>=12.0",

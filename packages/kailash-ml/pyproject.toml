@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kailash-ml"
-version = "0.8.0"
+version = "0.8.1"
 description = "Machine learning lifecycle for the Kailash ecosystem"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -27,7 +27,7 @@ classifiers = [
 readme = "README.md"
 keywords = ["ml", "machine-learning", "kailash", "automl", "feature-store", "model-registry"]
 dependencies = [
-    "kailash>=2.8.0",
+    "kailash>=2.8.1",
     "kailash-dataflow>=1.0",
     "kailash-nexus>=1.0",
     "polars>=1.0",
