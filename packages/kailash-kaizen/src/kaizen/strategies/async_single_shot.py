@@ -10,7 +10,7 @@ Provides async execution for improved performance:
 import json
 import logging
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
@@ -19,6 +19,83 @@ logger = logging.getLogger(__name__)
 
 # Allowlist regex for MCP tool names — validates before execution
 _TOOL_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_.:-]{0,127}$")
+
+
+def _classify_input_value(
+    value: Any, desc: str, field_info: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    """Classify an input value as a multimodal content part, or None for text.
+
+    Returns a content-part dict (e.g. ``{"type": "image_url", ...}``) when the
+    value is binary data or an already-structured content part.  Returns None
+    when the value should be rendered as plain text.
+
+    This function is provider-agnostic -- it produces the multimodal content
+    list format understood by all major LLM providers.
+    """
+    import base64
+
+    # Already a structured content part dict (caller pre-built it)
+    if isinstance(value, dict) and "type" in value:
+        return value
+
+    # Raw bytes -- detect media type and build a content part
+    if isinstance(value, (bytes, bytearray)):
+        media_type = (
+            field_info.get("media_type", "") if isinstance(field_info, dict) else ""
+        )
+        if not media_type:
+            media_type = _guess_media_type(value)
+
+        b64_data = base64.b64encode(value).decode("ascii")
+
+        if media_type.startswith("audio/"):
+            return {
+                "type": "input_audio",
+                "input_audio": {
+                    "data": b64_data,
+                    "format": media_type.split("/", 1)[1],
+                },
+            }
+        # Images (and unknown binary) use the image_url data-URI form
+        return {
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:{media_type};base64,{b64_data}",
+            },
+        }
+
+    return None
+
+
+def _guess_media_type(data: bytes) -> str:
+    """Best-effort media type detection from magic bytes.
+
+    Falls back to ``application/octet-stream`` when the format is unknown.
+    """
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:4] == b"GIF8":
+        return "image/gif"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    # MP3 sync word (0xFFE0-0xFFFF) or ID3 tag
+    if data[:3] == b"ID3" or (
+        len(data) >= 2 and data[0] == 0xFF and (data[1] & 0xE0) == 0xE0
+    ):
+        return "audio/mpeg"
+    # OGG container (Vorbis / Opus)
+    if data[:4] == b"OggS":
+        return "audio/ogg"
+    # WAV
+    if data[:4] == b"RIFF" and data[8:12] == b"WAVE":
+        return "audio/wav"
+    # FLAC
+    if data[:4] == b"fLaC":
+        return "audio/flac"
+    return "application/octet-stream"
 
 
 class AsyncSingleShotStrategy:
@@ -331,29 +408,65 @@ class AsyncSingleShotStrategy:
     def _create_messages_from_inputs(
         self, agent: Any, inputs: Dict[str, Any]
     ) -> List[Dict[str, str]]:
-        """Transform signature inputs into OpenAI message format."""
-        message_parts = []
+        """Transform signature inputs into OpenAI message format.
+
+        Handles both text-only inputs (flat string content) and multimodal
+        inputs containing bytes or structured content parts (content list).
+        Binary data (bytes) is converted to the provider-agnostic multimodal
+        content list format rather than being coerced to a string
+        representation like ``b'\\xff\\xfb...'``.
+        """
+        text_parts: List[str] = []
+        multimodal_parts: List[Dict[str, Any]] = []
+        has_multimodal = False
 
         if hasattr(agent.signature, "input_fields"):
             for field_name, field_info in agent.signature.input_fields.items():
-                if field_name in inputs and inputs[field_name]:
+                if field_name in inputs and inputs[field_name] is not None:
                     desc = field_info.get("desc", field_name.title())
                     value = inputs[field_name]
-                    message_parts.append(f"{desc}: {value}")
+                    content_part = _classify_input_value(value, desc, field_info)
+                    if content_part is not None:
+                        has_multimodal = True
+                        multimodal_parts.append(content_part)
+                    else:
+                        text_parts.append(f"{desc}: {value}")
         else:
-            message_parts = [f"{k}: {v}" for k, v in inputs.items() if v]
+            for k, v in inputs.items():
+                if v is not None:
+                    content_part = _classify_input_value(v, k.title(), {})
+                    if content_part is not None:
+                        has_multimodal = True
+                        multimodal_parts.append(content_part)
+                    else:
+                        text_parts.append(f"{k}: {v}")
 
-        content = "\n\n".join(message_parts) if message_parts else "No input provided"
-
-        # FIX: If using response_format with type=json_object (strict=False),
-        # OpenAI requires "json" to be mentioned in messages
+        # Build the json_object suffix if needed
+        json_suffix = ""
         if hasattr(agent, "config") and hasattr(agent.config, "response_format"):
             response_format = agent.config.response_format
             if (
                 isinstance(response_format, dict)
                 and response_format.get("type") == "json_object"
             ):
-                content += "\n\nPlease respond in JSON format."
+                json_suffix = "\n\nPlease respond in JSON format."
+
+        if has_multimodal:
+            # Build a content list combining text and multimodal parts
+            content_list: List[Dict[str, Any]] = []
+            if text_parts:
+                combined_text = "\n\n".join(text_parts) + json_suffix
+                content_list.append({"type": "text", "text": combined_text})
+            elif json_suffix:
+                content_list.append(
+                    {"type": "text", "text": "No text input provided" + json_suffix}
+                )
+            content_list.extend(multimodal_parts)
+            return [{"role": "user", "content": content_list}]
+
+        # Common case: all inputs are text — flat string content
+        content = "\n\n".join(text_parts) if text_parts else "No input provided"
+        content += json_suffix
 
         return [{"role": "user", "content": content}]
 
