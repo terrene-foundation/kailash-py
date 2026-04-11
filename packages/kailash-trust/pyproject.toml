@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "kailash-trust"
 version = "0.1.0"
-description = "Legacy eatp.* namespace shim — re-exports kailash.trust.* for backward compatibility"
+description = "Kailash Trust — EATP trust plane integration"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [
