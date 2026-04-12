@@ -1,0 +1,40 @@
+# Session Notes — 2026-04-06 (All 10 Issues + Security Hardening + PR Review)
+
+### Read These Files First (in order)
+
+1. `workspaces/issues-294-303/.spec-coverage` — verified 55/55 spec items implemented
+2. `workspaces/issues-294-303/04-validate/02-final-convergence.md` — convergence report
+3. `packages/kailash-ml/src/kailash_ml/engines/data_explorer.py` — _sanitize_float, pairwise-complete correlation
+4. `packages/kailash-dataflow/src/dataflow/features/express.py` — bulk_upsert with structured returns
+5. `packages/kailash-align/src/kailash_align/agents/` — 4 Kaizen agents + tools + orchestrator
+6. `src/kailash/mcp/contrib/nexus.py` — list_events, list_channels, security-hardened test_handler
+7. `.claude/agents/frameworks/ml-specialist.md` — updated with correlation robustness pattern
+8. `.claude/agents/frameworks/align-specialist.md` — updated with agents + on-prem patterns
+
+## Accomplished
+
+- **10/10 GH issues closed** (#294-#303), **0 open issues**, **0 open PRs** (verified: `gh issue list` returns empty)
+- **3 PRs merged**: #304 (all 10 issues, 39 files, +3731 lines), #305 (CI threshold fix), #306 (security hardening)
+- **Security fixes** (PR #306): removed unsafe `__import__()` from Tier 1 list_handlers, fixed test_handler code injection via base64 env vars, added shlex.quote() to onprem commands
+- **PR #287 closed** (external contributor) — fix already on main, thanked contributor with constructive feedback
+- **Codification**: ml-specialist + align-specialist agent descriptions updated with new patterns
+- **CI green**: unified-ci SUCCESS, package-specific workflows passing with corrected thresholds
+
+## Outstanding
+
+- [ ] Cross-SDK inspection: file issues on kailash-rs for #295 (correlation NaN), #296 (bulk_upsert), #299 (list_events) if Rust equivalents exist (verified: not yet filed)
+- [ ] SQL dialect `conflict_columns` lack identifier validation — `dialects.py:120` joins column names without regex check, pre-existing HIGH from security review (verified: `grep -n "conflict_cols_str" dialects.py` shows unvalidated join at line 120)
+
+### Oversight — Verify Before Starting
+
+- [ ] `gh issue list --state open` returns 0 (verified 2026-04-06: 0)
+- [ ] `gh pr list --state open` returns 0 (verified 2026-04-06: 0)
+- [ ] `git log --oneline -3` shows #304, #305, #306 merged
+
+### Oversight — Verify After Completing
+
+- [ ] `uv run pytest packages/kailash-ml/tests/unit/test_data_explorer.py -x` — expect 80 passed
+- [ ] `uv run pytest packages/kailash-align/tests/ -x -q` — expect 391 passed
+- [ ] `uv run pytest tests/unit/mcp/ -x -q` — expect 151 passed
+- [ ] `grep -c "_try_runtime_handlers" src/kailash/mcp/contrib/nexus.py` — expect 0 (removed)
+- [ ] `grep -c "shlex.quote" packages/kailash-align/src/kailash_align/onprem.py` — expect 3

@@ -1,0 +1,37 @@
+# Session Notes — 2026-04-06 (PACT Clearance FSM)
+
+### Read These Files First (in order)
+
+1. `workspaces/pact-309-308/.spec-coverage` — 13/13 spec items verified
+2. `workspaces/pact-309-308/04-validate/01-convergence-report.md` — red team convergence
+3. `src/kailash/trust/pact/clearance.py` — SUSPENDED enum, _VALID_TRANSITIONS FSM, validate_transition()
+4. `src/kailash/trust/pact/engine.py` — grant_clearance() FSM validation, transition_clearance(), revoke guard
+5. `.claude/.proposals/latest.yaml` — 2 COC artifact changes pending loom /sync
+
+## Accomplished
+
+- **#309 closed** — SUSPENDED VettingStatus + FSM transition validation (PR #310 merged)
+- **15 files changed**, +465/-82 lines, 1033 tests passing (35 new, 0 regressions)
+- **FSM**: PENDING->ACTIVE->SUSPENDED->ACTIVE (reinstatement) or ->REVOKED (terminal)
+- **revoke_clearance()** now preserves record with REVOKED status (audit trail)
+- **Pre-existing bug fixed**: AuditChain.from_dict() called nonexistent verify_integrity()
+- **Security hardened**: revoke guard against already-revoked, FSM bypass protection
+- **Cross-SDK**: esperie-enterprise/kailash-rs#221 filed, duplicate #220 closed
+- **Codified**: pact-specialist agent + governance-engine skill updated with FSM pattern
+- **#308 analyzed**: all 5 governance helpers already at L1 — kailash-rs tracking only
+
+## Outstanding
+
+- [ ] #308 remains OPEN — kailash-rs tracking issue, no Python work needed (verified: `gh issue view 308` state=OPEN)
+- [ ] Loom `/sync py` needed to distribute codified artifacts to COC template (proposal at `.claude/.proposals/latest.yaml`)
+- [ ] esperie-enterprise/kailash-rs#221 open — Rust side needs SUSPENDED + FSM implementation
+
+## Oversight — Verify Before Starting
+
+- [ ] `git log --oneline -3` shows fab83792 merge of PR #310
+- [ ] `gh issue list --state open` shows only #308
+
+## Oversight — Verify After Completing
+
+- [ ] All pact tests pass: `uv run pytest tests/trust/pact/ -x -q` (expect 1033 passed)
+- [ ] No open kailash-py issues except #308: `gh issue list --state open`
