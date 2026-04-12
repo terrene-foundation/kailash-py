@@ -15,6 +15,33 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### Post-Convergence Security Hardening — 2026-04-12
+
+kailash 2.8.4 + kailash-dataflow 2.0.6 + kailash-kaizen 2.7.3
+
+#### Security
+
+- **SQL injection fix in kaizen security audit** (`kailash-kaizen 2.7.3`): `query_events()` in `security/audit.py` built a raw f-string `WHERE` clause from caller-supplied `event_type` and `agent_id` — these arguments could contain SQL metacharacters. Fixed to use parameterized queries; identifier path validated with `re.match` before interpolation.
+- **Identifier fingerprint error messages** (`kailash 2.8.4`, `kailash-dataflow 2.0.6`): all `IdentifierError` messages now emit a hex fingerprint of the offending input (`hash(name) & 0xFFFF:04x`) rather than echoing the raw value, preventing log-poisoning / stored-XSS via crafted identifier names.
+- **CAS fail-closed guards** (`kailash 2.8.4`): `cache.py` CAS path now raises `CASConflictError` on version mismatch instead of silently overwriting. Guards added to the async write-through path.
+- **Tenant-scoped cache `_clear`** (`kailash 2.8.4`): `InMemoryCache._clear()` now accepts an optional `tenant_id` parameter; without it the method refuses to clear across tenants, preventing accidental cross-tenant cache eviction.
+- **`schema_manager` defense-in-depth** (`kailash 2.8.4`): `SchemaManager.drop_table()` and `drop_column()` require `force_drop=True` per `rules/dataflow-identifier-safety.md` Rule 4; previously a missing flag would silently drop.
+- **EATP human-origin identifier validation** (`kailash 2.8.4`): `eatp_human_origin.py` migration now routes all dynamic identifiers through `dialect.quote_identifier()` — the earlier version interpolated tenant-supplied model names directly into DDL.
+- **Audit forwarding with `exc_info`** (`kailash-kaizen 2.7.3`): audit `logger.error()` calls in `core/autonomy/observability/audit.py` and `security/audit.py` now pass `exc_info=True` so stack traces appear in the log pipeline instead of just the message string.
+- **Classification fail-closed** (`kailash-dataflow 2.0.6`): `ClassificationPolicy.classify()` changed default from `PUBLIC` (fail-open) to `HIGHLY_CONFIDENTIAL` (fail-closed) for unclassified fields, matching kailash-rs semantics per EATP D6 (cross-SDK alignment #418). A WARN log is emitted when the default is applied.
+- **Connection parser consolidated credential decode** (`kailash-dataflow 2.0.6`): `connection_parser.py` now routes credential decode through the shared `decode_userinfo_or_raise` helper, eliminating a hand-rolled `unquote()` site that lacked null-byte rejection.
+
+#### Fixed
+
+- **Cache CAS + tenant eviction** (`kailash 2.8.4`): `cache.py` CAS version eviction path now correctly scopes eviction to the originating tenant's partition; previously a version mismatch could evict entries belonging to a different tenant.
+- **Bulk operations WARN on partial failure** (`kailash 2.8.4`): `bulk_operations.py` `BulkCreate._handle_batch_error()` and `BulkUpsert` now emit a structured `WARN` log when `failed > 0`, including attempted count, failure count, and first error sample. Previously these swallowed exceptions silently.
+- **`CoreErrorEnhancer` runtime/validation exports** (`kailash 2.8.4`): `src/kailash/runtime/validation/__init__.py` now exports `CoreErrorEnhancer` so downstream importers can reach it via the public package path without private module traversal.
+- **Strategy deprecations in kaizen** (`kailash-kaizen 2.7.3`): `async_single_shot.py` and `single_shot.py` emit `DeprecationWarning` when called, directing users to the canonical `DelegateEngine` strategies.
+
+#### Breaking Changes
+
+- **`ClassificationPolicy.classify()` default changed** (`kailash-dataflow 2.0.6`): unclassified fields now default to `HIGHLY_CONFIDENTIAL` instead of `PUBLIC`. Callers that relied on implicit PUBLIC classification must now explicitly annotate fields with `@classify("field", DataClassification.PUBLIC)`. See migration notes in `packages/kailash-dataflow/CHANGELOG.md`.
+
 ### Platform Architecture Convergence — Completion — 2026-04-12
 
 kailash 2.8.3 + kailash-ml 0.9.0 + kailash-dataflow 2.0.5 + kaizen-agents 0.9.2
