@@ -238,6 +238,46 @@ except Exception:
 - "We return a failure list, that's enough"
 - "We already log at DEBUG"
 
+### 8. Schema-Revealing Field Names MUST Be Logged At DEBUG Or Hashed
+
+Structured log lines that emit schema-level identifiers (model names, column names, field names from classification/masking/validation code paths) MUST be logged at DEBUG level — not WARN or INFO. If an operational WARN is genuinely needed for the condition, emit a counter or a hash, not the raw field name.
+
+```python
+# DO — schema names at DEBUG only; operational signal via counter
+logger.debug(
+    "classification.default_applied",
+    extra={"model": model_name, "field": field_name, "default": default},
+)
+# Operators who need to audit unclassified fields enable DEBUG.
+metrics.classification_defaults.inc()  # operational signal without field name
+
+# DO — hash when WARN is required
+field_hash = hashlib.sha256(f"{model_name}.{field_name}".encode()).hexdigest()[:8]
+logger.warning(
+    "classification.default_applied",
+    extra={"field_hash": field_hash, "default": default},
+)
+
+# DO NOT — schema names at WARN bleed into log aggregators
+logger.warning(
+    "classification.default_applied",
+    extra={"model": "users", "field": "ssn", "default": "public"},
+)
+# ↑ any log aggregator with broader access than the database now knows
+# the schema has `users.ssn`, which is schema-level sensitive info
+```
+
+**BLOCKED responses:**
+
+- "The field name isn't the value, it's just the schema"
+- "Operators need to see which fields are unclassified"
+- "Log aggregator access is the same as database access"
+- "DEBUG is off in prod, nobody will see it"
+
+**Why:** Log aggregators (Datadog, Splunk, CloudWatch) are typically accessible to a broader audience than the production database — SREs, on-call engineers, support staff, third-party observability vendors. A WARN log containing `field=ssn` reveals the schema has an `ssn` column to everyone with log read permission, even if the VALUES never leak. Classification metadata is itself schema-level PII-adjacency. DEBUG-level field names stay out of alerting paths and routine dashboards; operators who need to audit unclassified fields enable DEBUG explicitly for the audit window.
+
+Origin: Red team review of PR #430 (2026-04-12) flagged `packages/kailash-dataflow/src/dataflow/classification/policy.py::ClassificationPolicy.classify` emitting field names at WARN. Downgraded to DEBUG in commit 62d64ac7.
+
 ## MUST NOT
 
 - **No log-and-continue on caught exceptions without action.** If you catch an exception, log it AND either retry, fall back, or re-raise. `logger.error(...); pass` is BLOCKED — same class as `except: pass` in `rules/zero-tolerance.md` Rule 3. **Exception:** hooks and cleanup paths where failure is expected — log at WARN and continue, same carve-out as `zero-tolerance.md` Rule 3.
