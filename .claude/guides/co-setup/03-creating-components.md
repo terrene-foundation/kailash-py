@@ -4,7 +4,11 @@ How to create each component type for any domain.
 
 ## Agents
 
-**Location**: `.claude/agents/` (shared) or `.claude/agents/project/` (project-specific)
+**Location depends on repo type**:
+
+- **BUILD repos** (kailash-py, kailash-rs, kailash-prism — this repo): canonical subdirectories — `.claude/agents/frameworks/`, `.claude/agents/analysis/`, `.claude/agents/quality/`, etc. BUILD repos do NOT use `agents/project/`.
+- **loom/** (COC authority): canonical subdirectories + `.claude/variants/{lang}/agents/` for language-specific variants. No `project/`.
+- **Downstream USE project repos** (consumer projects): `.claude/agents/project/<name>.md` — project-specific, stays local.
 
 **Purpose**: Specialized sub-processes with deep domain knowledge and procedural directives.
 

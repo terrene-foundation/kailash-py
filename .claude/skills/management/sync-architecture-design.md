@@ -173,8 +173,10 @@ Layer E: Project-Local (NEVER synced)
   pyproject.toml                         -- Project dependencies (version pins updated, structure preserved)
   .env / .env.example                    -- Project configuration
   .claude/learning/                      -- Per-repo learning data
-  .claude/agents/project/                -- Project-specific agents from /codify
-  .claude/skills/project/                -- Project-specific skills from /codify
+  .claude/agents/project/                -- DOWNSTREAM USE REPOS ONLY (project-specific /codify output).
+                                         -- BUILD repos (kailash-py/rs/prism) MUST NOT have this directory —
+                                         -- /codify writes to canonical locations in BUILD for upstream flow.
+  .claude/skills/project/                -- DOWNSTREAM USE REPOS ONLY (same as above)
   workspaces/                            -- Project workspace state
   journal/                               -- Project journal entries
   conftest.py                            -- Project test configuration
@@ -315,7 +317,7 @@ Phase 3: TRANSFORM
       4. Strip builder-only references (contrib, tests/utils/test-env)
       5. Apply rule softening (if applicable per transform type)
       6. Apply CLAUDE.md special handling (if file is CLAUDE.md)
-      7. Apply command-specific transforms (codify.md -> project/ output paths)
+      7. Apply command-specific transforms (codify.md -> project/ output paths — USE template only; source BUILD repo keeps canonical /codify routing)
     - Compute synced file hash (post-transform)
     - Stage in memory (do not write yet)
 
@@ -394,10 +396,14 @@ Transform Registry:
     Applied to: Root CLAUDE.md only
 
   codify_command_rewrite
-    Rewrite /codify output paths:
+    Rewrite /codify output paths for USE-template delivery:
       agents/ -> agents/project/
       skills/ -> skills/project/
-    Applied to: commands/codify.md only
+    Applied to: commands/codify.md only, and ONLY during loom/→USE-template sync.
+    Scope: USE-template side ONLY. The BUILD repo (kailash-py/rs/prism) keeps its
+    own codify.md with canonical routing ("write to canonical locations + create
+    proposal") so BUILD-side /codify output flows UPSTREAM via .proposals/latest.yaml.
+    Do NOT apply this transform to a BUILD repo's own codify.md.
 
   exclusion_filter
     Entire files excluded from sync.
@@ -454,8 +460,8 @@ CLAUDE.md                    # Project-specific directives
 pyproject.toml               # Project dependencies (version pins updated separately)
 .env / .env.example          # Project configuration
 conftest.py                  # Project test configuration
-.claude/agents/project/      # Project-specific agents
-.claude/skills/project/      # Project-specific skills
+.claude/agents/project/      # Project-specific agents (USE repos only; BUILD repos do NOT have this)
+.claude/skills/project/      # Project-specific skills (USE repos only; BUILD repos do NOT have this)
 .claude/learning/            # Per-repo learning data
 workspaces/                  # Project workspace state
 journal/                     # Project journal entries

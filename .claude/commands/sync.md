@@ -15,6 +15,17 @@ loom/ (source) → kailash-coc-claude-py/ (USE template) → THIS REPO
                                                               ↑ you are here
 ```
 
+## BUILD vs USE Repo Distinction
+
+**This repo (kailash-py) is a BUILD repo** — it's the source of truth for the Kailash Python SDK. BUILD repos have a dual relationship with the COC system:
+
+- **Pulls from template** (this command): receives shared agents/skills/rules/commands from `kailash-coc-claude-py`
+- **Pushes back via /codify**: writes knowledge to **canonical locations** (`agents/frameworks/`, `skills/NN-name/`, `rules/*.md`) AND creates `.claude/.proposals/latest.yaml` for upstream flow to loom
+
+**BUILD repos MUST NOT have `agents/project/` or `skills/project/` subdirectories** — those are a downstream-USE-only convention. If /codify puts knowledge in `project/` in a BUILD repo, it won't flow upstream. See `rules/artifact-flow.md`.
+
+Downstream USE repos (consumer projects that `pip install kailash`) write all /codify output to `project/` because their knowledge stays local.
+
 ## Merge Semantics
 
 This is a **merge**, not an overwrite. Three categories of files:
@@ -22,7 +33,8 @@ This is a **merge**, not an overwrite. Three categories of files:
 | Category             | Examples                                        | Behavior                      |
 | -------------------- | ----------------------------------------------- | ----------------------------- |
 | **Shared artifacts** | agents/analyst.md, rules/security.md            | **Updated** from template     |
-| **Project-specific** | agents/project/_, skills/project/_, workspaces/ | **Preserved** — never touched |
+| **Project-specific (USE repos only)** | agents/project/, skills/project/ | **Preserved** — never touched. NOT present in BUILD repos. |
+| **Workspaces**       | workspaces/                                     | **Preserved** — never touched |
 | **Per-repo data**    | learning/\*, .proposals/                        | **Preserved** — never touched |
 
 **Rule**: If a file exists in BOTH the template and this repo, the template version wins (it's the upstream source). If a file exists ONLY in this repo, it's preserved. If a file exists ONLY in the template, it's added.
