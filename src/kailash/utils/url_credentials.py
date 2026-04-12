@@ -21,11 +21,8 @@ into a single helper makes the drift structurally impossible.
 
 from __future__ import annotations
 
-import logging
 from typing import Optional, Tuple
 from urllib.parse import ParseResult, unquote
-
-logger = logging.getLogger(__name__)
 
 __all__ = [
     "decode_userinfo_or_raise",
