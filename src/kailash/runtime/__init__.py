@@ -17,6 +17,7 @@ from kailash.runtime.progress import (
 from kailash.runtime.runner import WorkflowRunner
 from kailash.runtime.shutdown import ShutdownCoordinator
 from kailash.runtime.signals import QueryRegistry, SignalChannel
+from kailash.runtime.watchdog import EventLoopWatchdog, StallReport
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,8 @@ __all__ = [
     "ShutdownCoordinator",
     "SignalChannel",
     "QueryRegistry",
+    "EventLoopWatchdog",
+    "StallReport",
     "get_runtime",
     "report_progress",
 ]
