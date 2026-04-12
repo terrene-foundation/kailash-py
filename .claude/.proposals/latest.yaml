@@ -532,8 +532,9 @@ changes:
 # resets status to pending_review because the new entries have not been
 # classified by loom yet. The 51 prior entries remain intact.
 
-status: pending_review
-reviewed_date: "2026-04-11"
+status: distributed
+reviewed_date: "2026-04-12"
+distributed_date: "2026-04-12"
 reviewed_notes: |
   Most of this proposal was already upstreamed in a prior sync cycle (identical
   in loom/ vs kailash-py/). Only two files had genuinely new changes from the
