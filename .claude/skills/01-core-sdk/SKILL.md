@@ -60,6 +60,11 @@ with LocalRuntime() as runtime:
 - **[pythoncode-best-practices](pythoncode-best-practices.md)** - PythonCode node best practices
 - **[mcp-integration-guide](mcp-integration-guide.md)** - Model Context Protocol integration
 
+### Runtime Diagnostics
+
+- **[runtime-progress](runtime-progress.md)** - ProgressRegistry for node progress tracking (contextvars, thread-safe callbacks, bounded deque)
+- **[runtime-watchdog](runtime-watchdog.md)** - EventLoopWatchdog for asyncio stall detection (heartbeat + thread, StallReport, task stack capture)
+
 ## Key Concepts
 
 ### Canonical Node Pattern (4-Parameter)

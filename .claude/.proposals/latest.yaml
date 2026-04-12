@@ -549,3 +549,38 @@ reviewed_notes: |
   - rules/refactor-invariants.md — listed as "created" in the proposal but the
     file does not exist in kailash-py/.claude/rules/. Deferred; the BUILD repo
     should actually author it in a follow-up /codify, then sync.
+
+  # --- 2026-04-12: convergence-202 completion + CI fix codify ---
+  # Origin: feat/convergence-202-completion branch, PR #423
+  # SDK version at codify time: 2.8.2
+  # Session: fix(ci): resolve 6 CI failures + convergence-202 final issues
+
+  - file: skills/01-core-sdk/SKILL.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Added 'Runtime Diagnostics' subsection with two new sub-file references: runtime-progress.md (ProgressRegistry) and runtime-watchdog.md (EventLoopWatchdog)"
+    diff_lines: "+5"
+
+  - file: skills/01-core-sdk/runtime-progress.md
+    action: created
+    suggested_tier: coc-py
+    reason: "New skill documenting ProgressRegistry — contextvars propagation, thread-safe callback broadcasting, bounded deque, report_progress() convenience, LocalRuntime wiring via progress_registry property"
+    diff_lines: "+85"
+
+  - file: skills/01-core-sdk/runtime-watchdog.md
+    action: created
+    suggested_tier: coc-py
+    reason: "New skill documenting EventLoopWatchdog — two-part heartbeat+thread architecture, StallReport dataclass, task stack capture, async context manager usage, resource cleanup with __del__ warning"
+    diff_lines: "+75"
+
+  - file: skills/31-error-troubleshooting/SKILL.md
+    action: modified
+    suggested_tier: coc
+    reason: "New 'Static Analysis False Positives' section — 3 CodeQL patterns: __getattr__ lazy loading (TYPE_CHECKING import fix), empty except clauses (explanatory comment fix), overly complex __del__ (_warnings=warnings default parameter fix)"
+    diff_lines: "+50"
+
+  - file: skills/12-testing-strategies/SKILL.md
+    action: modified
+    suggested_tier: coc
+    reason: "New 'Optional Dependency Testing' section — pytest.importorskip pattern for extras like [hpo], [redis], [vault]. Includes placement guidance (module scope vs function scope)"
+    diff_lines: "+25"
