@@ -15,6 +15,41 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### Arbor Upstream Fixes — Security Patch — 2026-04-12
+
+kailash 2.8.2 + kailash-dataflow 2.0.4 + kailash-nexus 2.0.1 + kailash-mcp 0.2.1 + kailash-kaizen 2.7.2 + kaizen-agents 0.9.1
+
+#### Security
+
+- **HIGH — null-byte MySQL auth-bypass** (kailash 2.8.2, kailash-dataflow 2.0.4, kaizen-agents 0.9.1): a crafted `mysql://user:%00bypass@host/db` URL would decode to `\x00bypass`, the MySQL C client truncates at null, and the driver sends an empty password against any row in `mysql.user` with an empty `authentication_string`. Null-byte rejection existed at 2 of 5 MySQL credential-decode sites. R3 consolidates all 6 sites (`db/connection.py`, `trust/esa/database.py`, `nodes/data/async_sql.py`, `dataflow/core/pool_utils.py`, `kaizen-agents/state_manager.py`, plus dict-returning `ConnectionParser.parse_connection_string`) through the new shared helper `kailash.utils.url_credentials.decode_userinfo_or_raise`, eliminating the drift class.
+- **HIGH — clear-text credential logging in DataFlow adapter init** (kailash-dataflow 2.0.4): `factory.py` logged the raw `connection_string` in a structured `extra={...}` field at adapter creation time, leaking PostgreSQL/MySQL passwords into log pipelines. Now routes through `dataflow.utils.masking.mask_url`. Companion `postgresql.py` and `mysql.py` connection-pool init logs converted from f-string to structured positional-arg format to clear CodeQL `py/clear-text-logging` taint flow and to satisfy `rules/observability.md` "no f-string log messages."
+- **MED — Redis sanitize sentinel collision** (kailash 2.8.2, kailash-nexus 2.0.1): both `_sanitize_url` helpers in `trust/rate_limit/backends/redis.py` and `nexus/auth/rate_limit/backends/redis.py` returned `"redis://***"` on parse failure — indistinguishable from a successfully-masked URL. Replaced with the distinct sentinel `"<unparseable redis url>"` so log triage can tell the failure mode apart from the success mode.
+- **MED — Redis masking form drift** (kailash 2.8.2, kailash-nexus 2.0.1): both Redis backends previously stripped userinfo entirely (`host:port` with no `@`) while the other three masking helpers (`database_config.get_masked_connection_string`, `dataflow.utils.masking.mask_url`) used `***@host`. The drift made operators grepping for `***@` miss every Redis log. Aligned both backends to `***@host` form.
+- **LOW — JWT delegate `__new__`-bypass** (kailash-nexus 2.0.1): the SPEC-06 backward-compat delegate methods on `JWTMiddleware` would raise an opaque `AttributeError: 'NoneType'` when a caller constructed the middleware via `__new__` without assigning `_validator`. Added `_require_validator()` guard that raises a typed `RuntimeError` naming the root cause.
+- **MCP credential leak in Redis URL logs** (kailash-mcp 0.2.1): `cache.py` and `advanced/subscriptions.py` logged Redis URLs via unstructured f-strings, exposing passwords in log pipelines. Replaced with `urlparse`-based structured format that emits only scheme, host, and port. 24 additional unstructured log lines in the same files were converted to structured form to satisfy `rules/observability.md` MUST NOT "No unstructured f'...' log messages."
+
+#### Fixed
+
+- **Arbor #3 — Nexus workflow metadata** (kailash-nexus 2.0.1): `Nexus.register()` now accepts a `metadata=` kwarg. Metadata is JSON-validated (64 KiB cap) before mutating the workflow and stored as a shallow copy so caller post-register mutations don't leak through. `@handler` decorator and `register_handler()` also accept metadata. Cross-SDK: `esperie-enterprise/kailash-rs#323`.
+- **Arbor #4 — Dependency hygiene** (kailash 2.8.2, kailash-dataflow 2.0.4, kailash-kaizen 2.7.2): removed undeclared `numpy`, `aiohttp` from kailash-dataflow main deps (not imported in src/); added `requests>=2.32` to kailash-kaizen (3 lazy import sites in providers/embedding, config, signatures); kept `websockets>=12.0` in kailash-nexus (directly imported by transports); root kailash moved `websockets` to dev extras. `uv pip check` clean (142 packages).
+- **Arbor #5 — DATABASE_URL special characters** (kailash 2.8.2, kailash-dataflow 2.0.4, kaizen-agents 0.9.1): four builder methods (`DatabaseConfigBuilder.{postgresql,mysql}` + `AsyncDatabaseConfigBuilder.{postgresql,mysql}`) now URL-encode credentials via `quote_plus`. Nine downstream parse sites now `unquote` credentials after `urlparse`. The hand-rolled regex MySQL parser in `trust/esa/database.py` (which rejected valid percent-encoded passwords) is removed. The pre-encoder helper `_encode_password_special_chars` is promoted to `kailash.utils.url_credentials.preencode_password_special_chars` and applied at all 6 dialect parse sites uniformly.
+- **DataFlow MongoDB lazy import** (kailash-dataflow 2.0.4): `motor` was imported unconditionally at module top, breaking `from dataflow import DataFlow` for projects without motor installed. Moved import inside `MongoDBAdapter.connect()` with a descriptive `ImportError` pointing at `pip install motor pymongo`.
+- **ModelRegistry deprecation warning** (kailash-dataflow 2.0.4): `LocalRuntime.execute()` emitted a `DeprecationWarning` on every `ModelRegistry` call. Fixed by setting `runtime._cleanup_registered = True` after constructing the registry-owned runtime.
+- **47 JWT auth tests** (kailash-nexus 2.0.1): test helpers used `__new__` to bypass `JWTMiddleware.__init__` but never assigned `mw._validator` after SPEC-06 extracted the crypto path. Updated 8 `_make_middleware` helpers + 1 inline case. Pass count: 428/475 → 475/475.
+- **MongoDB replica-set URL masking** (kailash-dataflow 2.0.4): `mask_url()` now handles comma-separated netloc (replica-set) URLs and query-string credentials; `mongodb.py` delegates to the canonical masker.
+
+#### Changed
+
+- **Editable sub-package install via `[tool.uv.sources]`** (root `pyproject.toml`): all 8 monorepo sub-packages now resolve from local source via path overrides, eliminating the `PYTHONPATH=packages/.../src:...` workaround that violated `rules/python-environment.md` MUST Rule 2 and the `uv sync` resolution failure caused by root pinning `kailash-dataflow>=2.0.3` against PyPI's only-2.0.0.
+
+#### Internal
+
+- **62 new regression tests** in `tests/regression/test_arbor_database_url_special_chars.py` covering builder encoding, downstream parse decoding, null-byte rejection (via the shared helper), `connection_parser` inline defense, Redis masking sentinel + drift alignment, JWT delegate None defense, preencoder consolidation across all 6 sites, and Nexus metadata shallow-copy semantics.
+- **40/40 Nexus registry metadata tests** including 11 metadata-specific cases.
+- **Red team converged at R3** with 0 CRITICAL / 0 HIGH / 0 MEDIUM findings across three independent rounds. Prior session's "COMPLETE" claim was premature — R1 surfaced 1 HIGH (the null-byte drift), R2 surfaced 2 LOW pre-existing items, R3 resolved everything.
+- **Rule updates** originating from this session: `rules/infrastructure-sql.md` Rule 8a (lazy-import regression test); `rules/python-environment.md` MUST Rule 1 (explicit venv interpreter) + MUST Rule 2 (monorepo editable installs).
+- **CodeQL alert handling**: 4 new alerts from PR 421 (1 unused logger fixed, 3 false-positive availability-probe patterns dismissed via API). 3 pre-existing HIGH alerts on dataflow adapter init fixed inline as part of the security narrative.
+
 ### Platform Architecture Convergence Complete — 2026-04-11
 
 kailash 2.8.0 + kailash-kaizen 2.7.0 + kaizen-agents 0.9.0 + kailash-pact 0.8.1 + kailash-dataflow 2.0.2 + kailash-ml 0.8.0
