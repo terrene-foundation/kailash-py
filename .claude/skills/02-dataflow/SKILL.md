@@ -153,6 +153,11 @@ Each `@db.model` class generates:
 
 - **[dataflow-ml-integration](dataflow-ml-integration.md)** - kailash-ml FeatureStore integration (ConnectionManager, point-in-time queries, polars interop)
 
+### Provenance & Audit
+
+- **[dataflow-provenance-audit](dataflow-provenance-audit.md)** - Provenance[T] field tracking, audit trail persistence, EventStoreBackend
+- **[dataflow-fabric-cache-consumers](dataflow-fabric-cache-consumers.md)** - Fabric cache control, consumer adapters, MCP tool generation
+
 ### Troubleshooting
 
 - **[dataflow-gotchas](dataflow-gotchas.md)** - Common pitfalls
