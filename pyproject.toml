@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash"
-version = "2.8.2"
+version = "2.8.3"
 description = "Python SDK for the Kailash container-node architecture"
 authors = [
     {name = "Terrene Foundation", email = "info@terrene.foundation"}
@@ -90,7 +90,7 @@ pact = [
     "kailash-pact>=0.8.1",
 ]
 ml = [
-    "kailash-ml>=0.8.1",
+    "kailash-ml>=0.9.0",
 ]
 align = [
     "kailash-align>=0.3.0",

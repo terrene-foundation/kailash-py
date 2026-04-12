@@ -15,6 +15,38 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### Platform Architecture Convergence — Completion — 2026-04-12
+
+kailash 2.8.3 + kailash-ml 0.9.0 + kailash-dataflow 2.0.5 + kaizen-agents 0.9.2
+
+#### Added
+
+- **EventLoopWatchdog** (kailash 2.8.3): async stall detection that fires when the event loop blocks for longer than a configurable threshold, emitting structured WARN logs with stack traces of the blocking coroutine. Integrated into `AsyncLocalRuntime`.
+- **ProgressUpdate contract** (kailash 2.8.3): long-running nodes can now emit structured progress updates via `ProgressRegistry`, enabling real-time status reporting to callers without polling.
+- **PACT N4/N5/N6 exports** (kailash 2.8.3): complete public API surface for PACT conformance types with cross-SDK vector integrity verification (32 conformance tests, SHA-256 vector checksums).
+- **Cross-SDK conformance CI** (kailash 2.8.3): new GitHub Actions workflow validates PACT N6 byte-identical JSON serialization against committed test vectors on every push to trust/pact code.
+- **Convergence verification script** (`scripts/verify-convergence.py`): automated check that all convergence-202 deliverables are present and wired.
+- **v2-to-v3 migration guide** expanded with convergence deliverables and upgrade paths.
+
+#### Changed
+
+- **DriftMonitor API rename** (kailash-ml 0.9.0, **breaking**): `set_reference()` → `set_reference_data()`, `_load_baseline`/`_store_baseline` → `_load_performance_baseline`/`_store_performance_baseline`. New `DriftCallback` type alias for the `on_drift_detected` handler. The `DriftSpec.on_drift_detected` field is now properly typed as `DriftCallback | None` instead of `Any`.
+- **CodeQL sanitizer barriers** (kailash-dataflow 2.0.5): `safe_log_value()` helper added to `dataflow.utils.masking` as a taint-sink barrier for structured log fields. PostgreSQL, MySQL, and factory adapter init logs now route connection coordinates through this helper, eliminating false-positive HIGH alerts from CodeQL's `py/clear-text-logging-sensitive-data` rule.
+- **SQLAlchemy availability probe** (kaizen-agents 0.9.2): replaced `try/import/except` pattern with `importlib.util.find_spec()` to eliminate CodeQL unused-import false positives.
+- **MongoDB adapter typing** (kailash-dataflow 2.0.5): motor type hints changed from `TYPE_CHECKING` forward references to `Any` to avoid CodeQL false positives on unused imports.
+
+#### Fixed
+
+- **PACT N6 conformance CI** (kailash 2.8.3): workflow was failing with `No module named pytest` because `uv sync` doesn't install optional extras. Fixed to use `uv pip install -e ".[trust,dev]"`.
+- **Watchdog `loop=` deprecation** (kailash 2.8.3): removed deprecated `loop=` parameter from `asyncio.ensure_future` calls in the watchdog module.
+- **Progress registry orphan wiring** (kailash 2.8.3): `ProgressRegistry` context var lifecycle fixed under exception paths to prevent orphaned registries.
+
+#### Internal
+
+- **Specs authority system** synced from loom — `specs/_index.md` manifest and domain-organized spec files now available for all phase commands.
+- **Convergence-202 knowledge codified** into skills and proposal manifest (95+ entries at `pending_review`).
+- **12 institutional patterns** from R1/R2/R3 audit rounds captured as rule updates and CodeQL configuration.
+
 ### Arbor Upstream Fixes — Security Patch — 2026-04-12
 
 kailash 2.8.2 + kailash-dataflow 2.0.4 + kailash-nexus 2.0.1 + kailash-mcp 0.2.1 + kailash-kaizen 2.7.2 + kaizen-agents 0.9.1
