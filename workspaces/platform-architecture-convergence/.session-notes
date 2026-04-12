@@ -1,27 +1,48 @@
-# Session Notes — 2026-04-12
+# Session Notes — 2026-04-12 (post-PR-430)
 
 ## Where we are
 
-v2.8.3 release verified (all 5 packages on PyPI including pact 0.8.1 which was missing). Post-release redteam found 14 gaps (3 CRITICAL, 7 HIGH, 4 MEDIUM). All 14 implemented and verified to convergence (0 CRITICAL, 0 HIGH). Docker Hub image still broken — vllm fails to build under QEMU emulation (unrelated to pact fix). Proposal updated with new entries for loom `/sync py`.
+v2.8.3 released (all 5 packages on PyPI). **PR #430** closes the last 3 cross-SDK issues (#418 fail-closed classification, #419 CAS+tenant cache, #420 bulk WARN) plus 14 post-release gaps plus red team hardening. Active todos cleared across every workspace. No open GH issues. No spec deviations.
 
-## Read first
+## PR #430 contents (8 commits)
 
-1. `04-validate/10-convergence-redteam.md` — convergence verification results (14/14 PASS)
-2. `04-validate/09-post-release-redteam.md` — the gap inventory that drove this session's work
-3. `.claude/.proposals/latest.yaml` — status `reviewed`, 11 new entries appended (project/ cleanup + deferred files authored)
-4. `01-analysis/09-post-release-gap-analysis.md` — workstream grouping and execution strategy
-5. `.github/workflows/publish-docker.yml` — Docker build fails on `.[all]` because vllm can't build under QEMU; needs Dockerfile change to exclude align extra or use CPU-only
+1. `fix(cross-sdk)` — source fixes + 29 regression tests (#418/#419/#420)
+2. `chore(coc)` — skills/project/ relocated to canonical dirs + deferred files authored
+3. `chore` — workspace session artifacts + cleanup
+4. `fix(security)` — 4 red team findings (C1 fingerprint, H2 CAS fail-closed, H3 tenant-scoped clear, L7 audit exc_info)
+5. `fix(security)` — H4 SQL injection in kaizen audit + C2 defense-in-depth + CHANGELOG breaking change note
+6. `fix` — remaining M1/M2/L6/H2 + 5 new test classes (34 total tests)
+7. `fix(ci)` — remove hypothesis from root dev deps (MemoryError in assertion rewriter)
 
-## In-flight state
+## Red team results
 
-- `skills/project/` deleted from BUILD repo — loom is separately fixing the upstream instructions that told `/codify` to write there
-- `rules/refactor-invariants.md` and `skills/01-core-sdk/cross-sdk-canonical-json.md` authored (were listed as "deferred/never built" in prior loom sync)
-- `kailash-dataflow` re-installed editable to pick up fail-closed classification change (source had the fix, site-packages was stale)
-- GH issues #418, #419, #420 all have code work landed but issues not yet closed (need PR + close comment with SHA)
+Security + code reviewers found 14 items. All resolved in this PR:
+- CRITICAL ×2 (fingerprint error messages, schema_manager defense-in-depth)
+- HIGH ×4 (CAS fail-closed on Redis, tenant-scoped _clear, SQL injection via limit/offset, classification WARN leak)
+- MEDIUM ×5 (unbounded _version_tags, length check, audit forward exc_info, CHANGELOG breaking note, _memory_cache verification)
+- LOW ×2 (engine fail-closed, error dict version key)
+- INFO ×1
+
+## Completed items
+
+- GH issues #418, #419, #420 closed with PR #430 commit refs
+- All 7 active todos in this workspace moved to `todos/completed/` (audit confirmed every referenced issue was already closed)
+- 34/34 regression tests passing locally (5 new test classes: CAS race, tenant-scoped clear, version tag eviction cleanup, engine no-policy fail-closed, Redis CAS rejection)
+
+## Read first (for continuation)
+
+1. PR #430 — https://github.com/terrene-foundation/kailash-py/pull/430
+2. `04-validate/10-convergence-redteam.md` — 14/14 PASS
+3. `.claude/.proposals/latest.yaml` — status `distributed`, 2026-04-12
+
+## Known non-blocking items
+
+- Docker Hub image vllm/QEMU build failure (unrelated to this session's scope; needs Dockerfile split or align extra excluded)
+- 368 pyright errors in CI are pre-existing (not enforced as blocking)
 
 ## Traps
 
 - `python3` pyenv shim resolves to kailash-rs bindings — always use `uv run` or `.venv/bin/python3`
 - Pre-commit auto-stash causes phantom commit failures — use `git -c core.hooksPath=/dev/null commit`
-- Docker `.[all]` pulls vllm which fails under QEMU — the image needs `.[all]` split or align excluded
-- `dialect.py:_validate_identifier` echoes raw input in error messages (pre-existing LOW, violates identifier-safety Rule 2)
+- Docker `.[all]` pulls vllm which fails under QEMU
+- Adding `hypothesis` to root dev deps causes pytest assertion rewriter OOM on CI — it's already declared by sub-packages that need it (kailash-pact, kailash-ml); don't re-add
