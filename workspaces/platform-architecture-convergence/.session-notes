@@ -2,52 +2,26 @@
 
 ## Where we are
 
-**v2.8.3 RELEASE COMPLETE.** All PRs merged, all tags pushed, PyPI publish in-flight via CI.
+v2.8.3 release verified (all 5 packages on PyPI including pact 0.8.1 which was missing). Post-release redteam found 14 gaps (3 CRITICAL, 7 HIGH, 4 MEDIUM). All 14 implemented and verified to convergence (0 CRITICAL, 0 HIGH). Docker Hub image still broken — vllm fails to build under QEMU emulation (unrelated to pact fix). Proposal updated with new entries for loom `/sync py`.
 
-- PR #425 merged: fix(ci): install trust+dev extras in cross-sdk conformance workflow
-- PR #426 merged: chore(release): bump versions for v2.8.3 release
-- Tag `v2.8.3` pushed → kailash core published to PyPI (CI: success)
-- Tag `dataflow-v2.0.5` pushed → CI publishing in progress
-- Tag `ml-v0.9.0` pushed → CI publishing in progress
-- Tag `kaizen-agents-v0.9.2` pushed → CI publishing in progress
+## Read first
 
-## Read first (next session)
+1. `04-validate/10-convergence-redteam.md` — convergence verification results (14/14 PASS)
+2. `04-validate/09-post-release-redteam.md` — the gap inventory that drove this session's work
+3. `.claude/.proposals/latest.yaml` — status `reviewed`, 11 new entries appended (project/ cleanup + deferred files authored)
+4. `01-analysis/09-post-release-gap-analysis.md` — workstream grouping and execution strategy
+5. `.github/workflows/publish-docker.yml` — Docker build fails on `.[all]` because vllm can't build under QEMU; needs Dockerfile change to exclude align extra or use CPU-only
 
-1. `workspaces/platform-architecture-convergence/04-validate/08-aggregated-redteam.md` — deep SPEC-level gaps (26 CRITICAL) from 2026-04-08; beyond convergence-202 scope but real future work (MCP dup client.py, fake StreamingAgent, missing PACTMiddleware, audit fragmentation)
-2. `src/kailash/runtime/local.py` lines 467-472, 1790-1793, 2054 — ProgressRegistry context var lifecycle under exception paths; flagged but not yet verified
-3. `src/kailash/runtime/watchdog.py` — `_is_stalled` bool has no sync barrier (GIL-safe, risk under free-threaded 3.13t)
-4. `.claude/.proposals/latest.yaml` — 95+ entries at `pending_review`; next loom `/sync py` will process
-5. GH issues #418, #419, #420 — 3 open cross-SDK DataFlow issues (#418 fail-closed classification is highest priority)
+## In-flight state
 
-## What shipped in v2.8.3
-
-### kailash 2.8.3 (core SDK)
-- `EventLoopWatchdog` — deadlock detection for async workflows
-- `ProgressUpdate` contract — structured streaming progress events
-- `safe_log_value()` — CodeQL-compliant log sanitizer
-- PACT N4/N5/N6 conformance — JSON schema, CBOR, byte-identical serialization vectors
-- CI fix: `uv pip install -e ".[trust,dev]"` instead of `uv sync` in cross-sdk-interop.yml
-
-### kailash-dataflow 2.0.5 (patch)
-- Watchdog loop= deprecation fix + progress orphan wiring
-
-### kailash-ml 0.9.0 (MINOR — breaking)
-- **BREAKING**: `DriftMonitor.set_reference()` → `set_reference_data()`
-
-### kaizen-agents 0.9.2 (patch)
-- Wiring fixes from convergence session
-
-## Next steps (future sessions)
-
-1. Verify PyPI publish succeeded: `pip install kailash==2.8.3` + `kailash-ml==0.9.0`
-2. COC sync: run loom `/sync py` to process `.claude/.proposals/latest.yaml` (95+ entries)
-3. GH issue #418: fail-closed PACT classification (highest priority open issue)
-4. 26 CRITICAL redteam findings in `04-validate/08-aggregated-redteam.md`
+- `skills/project/` deleted from BUILD repo — loom is separately fixing the upstream instructions that told `/codify` to write there
+- `rules/refactor-invariants.md` and `skills/01-core-sdk/cross-sdk-canonical-json.md` authored (were listed as "deferred/never built" in prior loom sync)
+- `kailash-dataflow` re-installed editable to pick up fail-closed classification change (source had the fix, site-packages was stale)
+- GH issues #418, #419, #420 all have code work landed but issues not yet closed (need PR + close comment with SHA)
 
 ## Traps
 
 - `python3` pyenv shim resolves to kailash-rs bindings — always use `uv run` or `.venv/bin/python3`
 - Pre-commit auto-stash causes phantom commit failures — use `git -c core.hooksPath=/dev/null commit`
-- `packages/kailash-trust/src/` has no Python source (empty shell) — do not try to install editable
-- Pyright `reportMissingImports` on `kailash.runtime.progress` is config noise — file exists, tests pass
-- kailash-ml 0.9.0 is a MINOR version — `set_reference()` rename will break downstream callers pinned to `>=0.8.1`
+- Docker `.[all]` pulls vllm which fails under QEMU — the image needs `.[all]` split or align excluded
+- `dialect.py:_validate_identifier` echoes raw input in error messages (pre-existing LOW, violates identifier-safety Rule 2)
