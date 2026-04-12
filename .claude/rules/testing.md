@@ -87,6 +87,49 @@ def test_issue_42_user_creation_preserves_explicit_id():
     assert result["id"] == "custom-id-value"
 ```
 
+### MUST: Behavioral Regression Tests Over Source-Grep
+
+Regression tests MUST exercise the actual code path (call the function, assert the raise/return). Grepping source files for literal substrings is BLOCKED as the sole assertion.
+
+```python
+# DO — behavioral: call the function, assert the contract
+@pytest.mark.regression
+def test_null_byte_rejected_in_credential_decode():
+    """Regression: DATABASE_URL with null byte after percent-decode."""
+    from kailash.utils.url_credentials import decode_userinfo_or_raise
+    parsed = urlparse("mysql://user:%00bypass@host/db")
+    with pytest.raises(ValueError, match="null byte"):
+        decode_userinfo_or_raise(parsed)
+
+# DO NOT — source-grep: pins implementation, breaks on refactor
+@pytest.mark.regression
+def test_null_byte_check_exists():
+    src = open("src/kailash/db/connection.py").read()
+    assert "\\x00" in src  # breaks when logic moves to shared helper
+```
+
+**Why:** Source-grep tests pin the implementation, not the contract; refactoring to a shared helper (the right move) breaks them. Behavioral tests survive refactors and survive being moved between modules.
+
+Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-12)
+
+### MUST: Verified Numerical Claims In Session Notes
+
+Any numerical claim about test counts, file counts, or coverage in session notes / wrapup MUST be produced by a verifying command (`pytest --collect-only -q | wc -l`, `git diff --stat`) at the moment of writing. Hand-typed numbers are BLOCKED.
+
+```bash
+# DO — verified: run the command, paste the output
+# "62 regression tests pass" — verified via:
+.venv/bin/python -m pytest tests/regression/ --collect-only -q 2>&1 | grep -c '::'
+# Output: 62
+
+# DO NOT — hand-recall: author guesses a round number
+# "86 regression tests pass" — author's recall; actual was 46.
+```
+
+**Why:** The "claim a number, never verify" pattern bypassed the audit-mode rule and produced a 40-test discrepancy in this session. A verifying command costs 2 seconds and converts a memory bug into a script.
+
+Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-12)
+
 ## 3-Tier Testing
 
 ### Tier 1 (Unit): Mocking allowed, <1s per test

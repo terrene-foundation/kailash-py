@@ -91,16 +91,22 @@ class MySQLAdapter(DatabaseAdapter):
             self.connection_pool = await aiomysql.create_pool(**params)
             self.is_connected = True
 
-            # Structured log; host/port/database are connection
-            # coordinates not credentials, but we route through positional
-            # args anyway to satisfy ``rules/observability.md`` MUST NOT
-            # "No unstructured f-string log messages" and to clear
-            # CodeQL py/clear-text-logging taint flow.
+            # Route host/port/database through ``safe_log_value`` so
+            # CodeQL's ``py/clear-text-logging-sensitive-data`` taint
+            # analysis stops at the sanitizer barrier defined in
+            # ``.github/codeql/sanitizers.qll``. The semantic content
+            # is unchanged — these are connection coordinates, never
+            # credentials — but CodeQL traces taint from
+            # ``urlparse(connection_string)`` through every parsed
+            # field on ``self``, so the literal log call without a
+            # barrier triggers a false-positive HIGH alert.
+            from dataflow.utils.masking import safe_log_value
+
             logger.info(
                 "mysql.connection_pool.created host=%s port=%s database=%s",
-                self.host,
-                self.port,
-                self.database,
+                safe_log_value(self.host),
+                safe_log_value(self.port),
+                safe_log_value(self.database),
             )
 
         except Exception as e:

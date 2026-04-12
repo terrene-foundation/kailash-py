@@ -31,6 +31,12 @@ jobs:
         uses: github/codeql-action/init@v4
         with:
           languages: python
+          # Custom config declares sanitizer barriers for our in-house
+          # masking helpers (dataflow.utils.masking.mask_url +
+          # safe_log_value) so the py/clear-text-logging-sensitive-data
+          # rule does not false-positive on adapter init log lines.
+          # Origin: workspaces/arbor-upstream-fixes (2026-04-12 R3).
+          config-file: ./.github/codeql/codeql-config.yml
           queries: security-and-quality
 
       - name: Autobuild

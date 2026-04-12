@@ -60,6 +60,31 @@ tests/
 | Nexus API     | 3    | Real HTTP requests to running server                       |
 | Kaizen Agents | 2    | Real LLM calls with response caching                       |
 
+## Regression Test Design
+
+Regression tests lock in bug fixes. They MUST exercise the actual
+code path -- call the function, assert the raise or return value.
+**Source-grep tests are BLOCKED as the sole assertion** because they
+pin the implementation, not the contract: when the fix moves to a
+shared helper (the right refactor), the grep breaks even though the
+protection is still in place.
+
+```python
+# Behavioral (survives refactors)
+@pytest.mark.regression
+def test_null_byte_rejected():
+    parsed = urlparse("mysql://user:%00x@h/db")
+    with pytest.raises(ValueError, match="null byte"):
+        decode_userinfo_or_raise(parsed)
+
+# Source-grep (BLOCKED as sole assertion)
+def test_null_byte_exists_in_source():
+    assert "\\x00" in open("src/kailash/db/connection.py").read()
+```
+
+See `rules/testing.md` "MUST: Behavioral Regression Tests Over
+Source-Grep" for the full rule and rationale.
+
 ## Critical Rules
 
 - Tier 1: Mock external dependencies

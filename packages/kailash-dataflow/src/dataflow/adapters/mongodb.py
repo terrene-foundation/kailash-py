@@ -10,12 +10,19 @@ descriptive ``ImportError`` at connect time if motor is missing.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from dataflow.adapters.base_adapter import BaseAdapter
 
-if TYPE_CHECKING:  # pragma: no cover — typing-only import
-    from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+# Motor types are runtime-only — see ``connect()`` for the lazy import.
+# The class attributes ``_client`` and ``_db`` are typed as ``Any`` so
+# CodeQL's static analysis does not flag a TYPE_CHECKING-block import
+# as unused (the alternative — string forward references inside an
+# ``if TYPE_CHECKING:`` block — generates a ``py/unused-import`` false
+# positive because CodeQL does not parse string annotations).
+# The runtime types are ``motor.motor_asyncio.AsyncIOMotorClient`` and
+# ``motor.motor_asyncio.AsyncIOMotorDatabase`` respectively; see the
+# docstrings on the attributes for documentation.
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +67,11 @@ class MongoDBAdapter(BaseAdapter):
         self.database_name = database_name
         self.client_options = kwargs
 
-        self._client: Optional["AsyncIOMotorClient"] = None
-        self._db: Optional["AsyncIOMotorDatabase"] = None
+        # Runtime type: motor.motor_asyncio.AsyncIOMotorClient (typed
+        # as Any to avoid CodeQL's TYPE_CHECKING-block false positive).
+        self._client: Optional[Any] = None
+        # Runtime type: motor.motor_asyncio.AsyncIOMotorDatabase.
+        self._db: Optional[Any] = None
         self._connected = False
 
         logger.info(

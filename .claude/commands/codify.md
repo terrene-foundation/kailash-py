@@ -116,36 +116,116 @@ Validate that generated agents and skills are correct, complete, and secure. **c
 
 1. Create `.claude/.proposals/` directory if it doesn't exist
 2. Read the SDK version from `pyproject.toml` (py) or `Cargo.toml` (rs) and the COC artifact version from `.claude/VERSION`
-3. Generate `.claude/.proposals/latest.yaml` listing all artifact changes:
+3. **Check for existing proposal** — read `.claude/.proposals/latest.yaml` if it exists:
+   - **`status: pending_review`** → this proposal has NOT been reviewed at loom/ yet. MUST NOT overwrite. **Append** this session's changes to the existing `changes:` array (see append format below).
+   - **`status: reviewed`** → loom/ has classified this proposal but may not have distributed yet. **Append** — new changes since review still need upstream attention.
+   - **`status: distributed`** → fully processed (classified AND distributed to USE templates). Safe to **create fresh** — archive the old file to `.claude/.proposals/archive/{codify_date}-{source_repo}.yaml` first.
+   - **File does not exist** → **create fresh**.
 
-```yaml
-source_repo: kailash-py # or kailash-rs
-codify_date: YYYY-MM-DD
-codify_session: "type(scope): description of work"
-sdk_version: "2.2.1" # from pyproject.toml or Cargo.toml
-coc_version: "1.0.0" # from .claude/VERSION
+   **BLOCKED:** Overwriting a `pending_review` or `reviewed` proposal. This destroys unprocessed changes from prior `/codify` sessions that loom/ has not yet classified.
 
-changes:
-  - file: relative/path/to/artifact.md
-    action: created | modified
-    suggested_tier: cc | co | coc | coc-py | coc-rs
-    reason: "Why this artifact was created/changed"
-    diff_lines: "+N -N" # for modifications
+4. Generate or append `.claude/.proposals/latest.yaml`:
 
-status: pending_review
-```
+   **Fresh proposal** (new file or after archiving a `distributed` proposal):
 
-4. For each changed artifact, suggest a tier:
+   ```yaml
+   source_repo: kailash-py # or kailash-rs
+   codify_date: YYYY-MM-DD
+   codify_session: "type(scope): description of work"
+   sdk_version: "2.2.1" # from pyproject.toml or Cargo.toml
+   coc_version: "1.0.0" # from .claude/VERSION
+
+   changes:
+     - file: relative/path/to/artifact.md
+       action: created | modified
+       suggested_tier: cc | co | coc | coc-py | coc-rs
+       reason: "Why this artifact was created/changed"
+       diff_lines: "+N -N" # for modifications
+
+   status: pending_review
+   ```
+
+   **Appending to existing proposal** (status is `pending_review` or `reviewed`):
+   - Keep ALL existing top-level fields and `changes:` entries intact
+   - Add a YAML comment separator with the session date
+   - Append new `changes:` entries below the separator
+   - Update `codify_date` and `codify_session` to reflect the latest session
+   - Update `sdk_version` and `coc_version` if they changed
+   - If status was `reviewed`, reset to `pending_review` (new unreviewed changes added)
+
+   ```yaml
+   # Existing entries preserved above...
+
+   # --- YYYY-MM-DD session: type(scope): description ---
+
+     - file: relative/path/to/new-artifact.md
+       action: created
+       suggested_tier: coc
+       reason: "Why this artifact was created"
+       diff_lines: "+80"
+
+   status: pending_review  # reset if was reviewed — new unreviewed changes added
+   ```
+
+5. For each changed artifact, suggest a tier:
    - **cc**: Claude Code universal (guides, cc-audit)
    - **co**: Methodology universal (CO principles, journal, communication)
    - **coc**: Codegen, language-agnostic (workflow phases, analysis patterns)
    - **coc-py** / **coc-rs**: Language-specific (code examples, SDK patterns)
 
-5. Report to the developer:
+6. Report to the developer:
 
-> Artifacts updated locally and available in this repo. Proposal created at
-> `.claude/.proposals/latest.yaml` with {N} changes for upstream review.
-> When ready, open loom/ and run `/sync {py|rs}` to classify and distribute.
+   **If fresh proposal:**
+
+   > Artifacts updated locally. Proposal created at `.claude/.proposals/latest.yaml`
+   > with {N} changes for upstream review.
+   > When ready, open loom/ and run `/sync {py|rs}` to classify and distribute.
+
+   **If appended to existing:**
+
+   > Artifacts updated locally. Appended {N} new changes to existing proposal
+   > (`.claude/.proposals/latest.yaml`, now {total} changes, status reset to pending_review).
+   > Prior {prior_count} changes from earlier sessions are preserved.
+   > When ready, open loom/ and run `/sync {py|rs}` to classify and distribute.
+
+### 8. Create upstream proposal (loom only — targets atelier/)
+
+**This step applies ONLY when running at loom/.** Detect by: git remote contains `loom`, or `.claude/sync-manifest.yaml` exists in the repo root.
+
+**If this is NOT loom/**: SKIP this step.
+
+**If this is loom/**: Check whether any artifacts updated in steps 3-4 are CC or CO tier (domain-agnostic methodology, not COC-specific). CC/CO artifacts originate at atelier/ and should be proposed upstream.
+
+1. Identify which updated artifacts are CC or CO tier (guides, rules, agents that are methodology-level, not SDK-specific)
+2. If none qualify, skip — report "No CC/CO changes to propose upstream"
+3. If CC/CO changes exist, apply the **same append-not-overwrite logic** as Step 7 to `.claude/.proposals/latest.yaml`:
+   - Check existing status (`pending_review` / `reviewed` / `distributed` / missing)
+   - Append or create fresh accordingly
+   - Use `source_repo: loom` and `upstream_target: atelier`
+
+   ```yaml
+   source_repo: loom
+   upstream_target: atelier
+   codify_date: YYYY-MM-DD
+   codify_session: "type(scope): description"
+   loom_version: "X.Y.Z"
+   coc_version: "X.Y.Z"
+
+   changes:
+     - file: rules/rule-authoring.md
+       action: created
+       suggested_tier: cc
+       canonical_path: .claude/rules/rule-authoring.md
+       reason: "..."
+       adaptation_notes: "Notes on what atelier needs to adjust"
+
+   status: pending_review
+   ```
+
+4. Report:
+   > {N} CC/CO artifacts proposed for upstream to atelier/.
+   > Proposal at `.claude/.proposals/latest.yaml` (status: pending_review).
+   > When ready, the atelier maintainer reviews and adapts for atelier context.
 
 See `rules/artifact-flow.md` for the full flow rules.
 
@@ -171,11 +251,12 @@ Deploy these agents as a team for codification:
 - **testing-specialist** — Verify any code examples in skills are testable
 - **security-reviewer** — Audit agents/skills for prompt injection, insecure patterns, secrets exposure
 
-**Upstream proposal (step 7 — BUILD repos only):**
+**Upstream proposals (steps 7-8):**
 
-- Only in BUILD repos (kailash-py, kailash-rs): generate `.claude/.proposals/latest.yaml` with tier suggestions
+- BUILD repos (kailash-py, kailash-rs): append to `.claude/.proposals/latest.yaml` — never overwrite unprocessed proposals
+- loom/: CC/CO artifacts proposed upstream to atelier/ via `.claude/.proposals/latest.yaml`
 - Downstream project repos: skip proposal creation, changes stay local
-- See `rules/artifact-flow.md` for the controlled flow: BUILD repo → loom/ → templates
+- See `rules/artifact-flow.md` for the controlled flow and proposal status lifecycle
 
 ### Journal (MUST — phase-complete gate)
 

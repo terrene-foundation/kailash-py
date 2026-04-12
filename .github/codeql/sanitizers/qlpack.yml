@@ -1,0 +1,19 @@
+# CodeQL pack metadata for the kailash-py custom sanitizer barriers.
+#
+# This pack declares the in-house URL masker (`dataflow.utils.masking.mask_url`)
+# and log-field sanitizer (`dataflow.utils.masking.safe_log_value`) as
+# CodeQL Sanitizer barriers for the `py/clear-text-logging-sensitive-data`
+# rule. CodeQL's default model does not know about our custom helpers,
+# so without this pack the rule traces taint from `urlparse` through
+# every parsed field on `self` and flags structured log calls that
+# never actually emit credentials.
+#
+# Origin: workspaces/arbor-upstream-fixes/.session-notes (2026-04-12)
+
+name: terrene-foundation/kailash-py-sanitizers
+version: 1.0.0
+library: true
+extensionTargets:
+  codeql/python-queries: "*"
+dataExtensions:
+  - sanitizers.model.yml

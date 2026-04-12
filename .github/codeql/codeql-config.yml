@@ -1,0 +1,61 @@
+# CodeQL analysis configuration for kailash-py
+#
+# Origin: workspaces/arbor-upstream-fixes/.session-notes (2026-04-12) — R3
+# session ran into a class of CodeQL false positives where the
+# `py/clear-text-logging-sensitive-data` rule traced taint from
+# `urlparse(connection_string)` through every parsed field on `self`,
+# flagging structured log calls that emitted only connection coordinates
+# (host/port/database) and never credentials. The fix is a custom
+# sanitizer model declared in `.github/codeql/sanitizers.qll` that tells
+# CodeQL which functions are taint barriers — specifically
+# `dataflow.utils.masking.mask_url` (the credential-stripping URL masker)
+# and `dataflow.utils.masking.safe_log_value` (the explicit barrier
+# helper used at every adapter log site).
+#
+# This config also documents the path filters that prevent CodeQL from
+# scanning generated artifacts and vendor directories where false
+# positives would otherwise pile up.
+
+name: "kailash-py CodeQL config"
+
+# Use the security-and-quality query suite. The custom sanitizer model
+# is loaded via the `packs:` directive below.
+queries:
+  - uses: security-and-quality
+
+# Custom CodeQL pack with the sanitizer barrier definitions for
+# `dataflow.utils.masking.mask_url` and
+# `dataflow.utils.masking.safe_log_value`. The pack is distributed
+# alongside the source tree so it follows the same review and PR
+# discipline as the rest of the codebase.
+packs:
+  - "./.github/codeql/sanitizers"
+
+# Paths to scan. The default is the entire repo; we explicitly include
+# the source roots so CodeQL scans only authoritative code, not
+# generated artifacts (build/, dist/, .venv/, __pycache__).
+paths:
+  - "src/"
+  - "packages/*/src/"
+
+# Paths to exclude from analysis. Tests, examples, and migration
+# artifacts are excluded because:
+#   - Tests intentionally exercise edge cases (e.g., crafted credentials
+#     in regression tests for the null-byte auth-bypass) that CodeQL
+#     would flag as real findings.
+#   - Examples and demos contain pedagogical code with simplified
+#     credential handling.
+#   - Build/cache directories are not source.
+paths-ignore:
+  - "tests/"
+  - "**/tests/"
+  - "examples/"
+  - "**/examples/"
+  - "build/"
+  - "**/build/"
+  - "dist/"
+  - "**/dist/"
+  - ".venv/"
+  - "**/__pycache__/"
+  - "docs/_build/"
+  - "**/migrations/"

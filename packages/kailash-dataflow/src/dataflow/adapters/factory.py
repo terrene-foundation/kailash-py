@@ -134,13 +134,17 @@ class AdapterFactory:
             # contains the password in the userinfo and possibly in
             # query params. ``mask_url`` from dataflow.utils.masking
             # routes through the same canonical 6-key sensitive set
-            # used by every other masking helper in the codebase.
-            from dataflow.utils.masking import mask_url
+            # used by every other masking helper in the codebase, AND
+            # is declared as a CodeQL sanitizer barrier in
+            # ``.github/codeql/sanitizers.qll`` so the
+            # ``py/clear-text-logging-sensitive-data`` rule recognizes
+            # the call as a taint sink-cleansing operation.
+            from dataflow.utils.masking import mask_url, safe_log_value
 
             logger.info(
                 "factory.created_adapter_for",
                 extra={
-                    "db_type": db_type,
+                    "db_type": safe_log_value(db_type),
                     "connection_string": mask_url(connection_string),
                 },
             )
