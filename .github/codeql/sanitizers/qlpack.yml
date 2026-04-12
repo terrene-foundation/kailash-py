@@ -12,8 +12,7 @@
 
 name: terrene-foundation/kailash-py-sanitizers
 version: 1.0.0
-library: false
-suites: codeql-suites
+library: true
 extensionTargets:
   codeql/python-queries: "*"
 dataExtensions:
