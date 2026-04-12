@@ -74,6 +74,57 @@ Common error patterns and solutions for Kailash SDK.
 - Azure using canonical env vars (`AZURE_ENDPOINT`, `AZURE_API_KEY`)?
 - `structured_output_mode="explicit"` for new agents?
 
+## Static Analysis False Positives
+
+### CodeQL: `__getattr__` Lazy Loading
+
+**Symptom:** CodeQL reports "Explicit export is not defined" (`py/undefined-export`)
+for names in `__all__` resolved by a module-level `__getattr__` function.
+
+**Fix:** Add a `TYPE_CHECKING`-guarded import for the reported name:
+
+```python
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mypackage.submodule import LazyName as LazyName  # explicit re-export
+
+def __getattr__(name: str):
+    if name == "LazyName":
+        from mypackage.submodule import LazyName
+        return LazyName
+    raise AttributeError(...)
+
+__all__ = ["LazyName"]  # CodeQL now sees the TYPE_CHECKING import
+```
+
+The `as LazyName` re-export syntax prevents "unused import" warnings from other linters.
+
+### CodeQL: Empty Except Clauses
+
+**Fix:** Add a comment explaining intent. CodeQL accepts `except: pass` with an inline comment:
+
+```python
+except ValueError:
+    pass  # Callback already unregistered; silently ignore duplicate removal
+
+except asyncio.CancelledError:
+    pass  # Expected: we just cancelled this task above
+```
+
+### CodeQL: Overly Complex `__del__`
+
+**Fix:** Use the `_warnings=warnings` default parameter pattern and minimize branching:
+
+```python
+def __del__(self, _warnings=warnings) -> None:
+    if not getattr(self, "_closed", True):
+        _warnings.warn("Resource was not closed.", ResourceWarning, stacklevel=1)
+```
+
+Avoids conditional `import warnings` inside `__del__` that CodeQL flags as complex.
+The default parameter captures the module at definition time, surviving interpreter shutdown.
+
 ## Git Hook Traps
 
 ### Pre-Commit Auto-Stash Phantom Failure

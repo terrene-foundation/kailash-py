@@ -464,6 +464,12 @@ class LocalRuntime(
             except ImportError:
                 logger.warning("ResourceLimitEnforcer not available")
 
+        # Progress reporting registry — callers register callbacks to
+        # receive ProgressUpdate events from nodes during execution.
+        from kailash.runtime.progress import ProgressRegistry
+
+        self._progress_registry = ProgressRegistry()
+
         # Initialize comprehensive retry policy engine
         self._retry_policy_engine = None
         self._circuit_breaker = None
@@ -1331,6 +1337,17 @@ class LocalRuntime(
                 )
 
     @property
+    def progress_registry(self) -> "ProgressRegistry":  # noqa: F821
+        """Registry for progress callbacks during workflow execution.
+
+        Register callbacks to receive ProgressUpdate events from nodes:
+
+            >>> runtime = LocalRuntime()
+            >>> runtime.progress_registry.register(lambda u: print(u.message))
+        """
+        return self._progress_registry
+
+    @property
     def shutdown_coordinator(self) -> "ShutdownCoordinator":  # noqa: F821
         """Get or lazily create the ShutdownCoordinator for this runtime.
 
@@ -1778,6 +1795,13 @@ class LocalRuntime(
             workflow_context["signal_channel"] = _signal_channel
             workflow_context["query_registry"] = _query_registry
 
+            # === Progress Reporting ===
+            # Set the progress registry context var so report_progress()
+            # works inside Node.run() during this execution.
+            from kailash.runtime.progress import _current_progress_registry
+
+            _progress_token = _current_progress_registry.set(self._progress_registry)
+
             # === Checkpoint/Restore (TODO-005/006) ===
             # Create or reuse an ExecutionTracker for this workflow execution.
             # The tracker records per-node completion and outputs so that
@@ -2025,6 +2049,9 @@ class LocalRuntime(
 
             # === Signal/Query System Cleanup (TODO-010) ===
             self._workflow_signals.pop(_signal_key, None)
+
+            # === Progress Reporting Cleanup ===
+            _current_progress_registry.reset(_progress_token)
 
             return results, run_id
 

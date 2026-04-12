@@ -1,0 +1,62 @@
+name: Cross-SDK Conformance
+
+# Runs PACT N6 conformance vectors to ensure byte-for-byte parity
+# with kailash-rs canonical JSON serialization.
+# Triggered on PRs that touch trust/pact code.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/kailash/trust/pact/**"
+      - "tests/trust/pact/conformance/**"
+      - "PACT_VECTORS.sha256"
+  push:
+    branches: [main]
+    paths:
+      - "src/kailash/trust/pact/**"
+      - "tests/trust/pact/conformance/**"
+      - "PACT_VECTORS.sha256"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  conformance:
+    name: PACT N6 Conformance Vectors
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: |
+          uv venv
+          uv sync
+
+      - name: Verify vector integrity
+        run: |
+          cd tests/trust/pact/conformance/vectors
+          shasum -a 256 -c ../../../../../PACT_VECTORS.sha256
+
+      - name: Run N6 conformance tests
+        run: |
+          uv run python -m pytest tests/trust/pact/conformance/test_n6_conformance.py -v --tb=short
+
+      - name: Run full PACT test suite
+        run: |
+          uv run python -m pytest tests/trust/pact/ -v --tb=short -q

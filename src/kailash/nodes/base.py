@@ -1426,8 +1426,14 @@ class Node(ABC):
             validated_inputs = self.validate_inputs(**merged_inputs)
             self.logger.debug(f"Validated inputs for {self.id}: {validated_inputs}")
 
-            # Execute node logic
-            outputs = self.run(**validated_inputs)
+            # Execute node logic with progress context
+            from kailash.runtime.progress import _current_node_id
+
+            node_id_token = _current_node_id.set(self.id)
+            try:
+                outputs = self.run(**validated_inputs)
+            finally:
+                _current_node_id.reset(node_id_token)
 
             # Validate outputs
             validated_outputs = self.validate_outputs(outputs)
@@ -2017,8 +2023,14 @@ class AsyncTypedNode(TypedNode):
                 f"Validated inputs for async node {self.id}: {validated_inputs}"
             )
 
-            # Execute async node logic
-            outputs = await self.async_run(**validated_inputs)
+            # Execute async node logic with progress context
+            from kailash.runtime.progress import _current_node_id
+
+            node_id_token = _current_node_id.set(self.id)
+            try:
+                outputs = await self.async_run(**validated_inputs)
+            finally:
+                _current_node_id.reset(node_id_token)
 
             # Validate outputs (includes port validation)
             validated_outputs = self.validate_outputs(outputs)

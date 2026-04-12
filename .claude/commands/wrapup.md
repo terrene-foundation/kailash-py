@@ -15,6 +15,7 @@ Do NOT duplicate these — the next session reads them directly:
 - **Outstanding work** — `workspaces/<project>/todos/active/`
 - **Decisions & discoveries** — `workspaces/<project>/journal/`
 - **Phase outputs** — `01-analysis/`, `02-plans/`, `03-user-flows/`, `04-validate/`
+- **Domain specs** — `specs/` (detailed domain truth, always current)
 - **Project context** — `CLAUDE.md`
 
 ## What ONLY wrapup can provide

@@ -9,15 +9,13 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
-
-from kailash.db.connection import ConnectionManager
 from kailash_ml.engines.drift_monitor import (
     DriftMonitor,
     DriftReport,
-    FeatureDriftResult,
     PerformanceDegradationReport,
 )
 
+from kailash.db.connection import ConnectionManager
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -50,7 +48,7 @@ async def test_detect_distribution_shift(monitor: DriftMonitor) -> None:
     reference = pl.DataFrame({"score": rng.normal(50, 10, 5000).tolist()})
     current = pl.DataFrame({"score": rng.normal(70, 10, 5000).tolist()})
 
-    await monitor.set_reference("model_a", reference, ["score"])
+    await monitor.set_reference_data("model_a", reference, ["score"])
     report = await monitor.check_drift("model_a", current)
 
     assert isinstance(report, DriftReport)
@@ -70,7 +68,7 @@ async def test_stable_distribution_no_alert(monitor: DriftMonitor) -> None:
     rng2 = np.random.RandomState(123)
     current = pl.DataFrame({"score": rng2.normal(50, 10, 5000).tolist()})
 
-    await monitor.set_reference("model_b", reference, ["score"])
+    await monitor.set_reference_data("model_b", reference, ["score"])
     report = await monitor.check_drift("model_b", current)
 
     assert report.overall_drift_detected is False
@@ -87,7 +85,7 @@ async def test_moderate_shift(monitor: DriftMonitor) -> None:
     rng2 = np.random.RandomState(123)
     current = pl.DataFrame({"score": rng2.normal(55, 10, 5000).tolist()})
 
-    await monitor.set_reference("model_moderate", reference, ["score"])
+    await monitor.set_reference_data("model_moderate", reference, ["score"])
     report = await monitor.check_drift("model_moderate", current)
 
     # May or may not trigger depending on exact PSI
@@ -106,7 +104,7 @@ async def test_categorical_drift_detection(monitor: DriftMonitor) -> None:
     reference = pl.DataFrame({"category": ["A"] * 400 + ["B"] * 400 + ["C"] * 200})
     current = pl.DataFrame({"category": ["A"] * 100 + ["B"] * 100 + ["C"] * 800})
 
-    await monitor.set_reference("model_c", reference, ["category"])
+    await monitor.set_reference_data("model_c", reference, ["category"])
     report = await monitor.check_drift("model_c", current)
 
     assert report.overall_drift_detected is True
@@ -136,7 +134,7 @@ async def test_multi_feature_drift(monitor: DriftMonitor) -> None:
         }
     )
 
-    await monitor.set_reference("multi", reference, ["stable", "drifting"])
+    await monitor.set_reference_data("multi", reference, ["stable", "drifting"])
     report = await monitor.check_drift("multi", current)
 
     assert report.overall_drift_detected is True
@@ -196,7 +194,7 @@ async def test_drift_report_persisted(monitor: DriftMonitor) -> None:
     reference = pl.DataFrame({"val": rng.normal(0, 1, 1000).tolist()})
     current = pl.DataFrame({"val": rng.normal(5, 1, 1000).tolist()})
 
-    await monitor.set_reference("persist_test", reference, ["val"])
+    await monitor.set_reference_data("persist_test", reference, ["val"])
     await monitor.check_drift("persist_test", current)
 
     history = await monitor.get_drift_history("persist_test")
@@ -211,7 +209,7 @@ async def test_multiple_drift_reports_persisted(monitor: DriftMonitor) -> None:
     rng = np.random.RandomState(42)
     reference = pl.DataFrame({"val": rng.normal(0, 1, 1000).tolist()})
 
-    await monitor.set_reference("multi_check", reference, ["val"])
+    await monitor.set_reference_data("multi_check", reference, ["val"])
 
     for _ in range(3):
         current = pl.DataFrame({"val": rng.normal(0, 1, 1000).tolist()})
@@ -228,7 +226,7 @@ async def test_multiple_drift_reports_persisted(monitor: DriftMonitor) -> None:
 
 @pytest.mark.integration
 async def test_no_reference_raises(monitor: DriftMonitor) -> None:
-    """check_drift without set_reference raises ValueError."""
+    """check_drift without set_reference_data raises ValueError."""
     current = pl.DataFrame({"val": [1.0, 2.0, 3.0]})
     with pytest.raises(ValueError, match="No reference set"):
         await monitor.check_drift("nonexistent", current)
@@ -241,8 +239,8 @@ async def test_reference_update(monitor: DriftMonitor) -> None:
     ref1 = pl.DataFrame({"val": rng.normal(0, 1, 100).tolist()})
     ref2 = pl.DataFrame({"val": rng.normal(5, 1, 200).tolist()})
 
-    await monitor.set_reference("update_test", ref1, ["val"])
-    await monitor.set_reference("update_test", ref2, ["val"])
+    await monitor.set_reference_data("update_test", ref1, ["val"])
+    await monitor.set_reference_data("update_test", ref2, ["val"])
 
     # Should use ref2 as reference
     current = pl.DataFrame({"val": rng.normal(5, 1, 100).tolist()})

@@ -10,7 +10,6 @@ from unittest.mock import AsyncMock
 import numpy as np
 import polars as pl
 import pytest
-
 from kailash_ml.engines.drift_monitor import DriftMonitor, DriftSpec
 
 
@@ -48,7 +47,7 @@ async def monitor(conn):
             "feature_b": np.random.normal(5, 2, 100).tolist(),
         }
     )
-    await mon.set_reference("test-model", ref_data, ["feature_a", "feature_b"])
+    await mon.set_reference_data("test-model", ref_data, ["feature_a", "feature_b"])
     return mon
 
 

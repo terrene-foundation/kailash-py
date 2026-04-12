@@ -7,6 +7,11 @@ Use ``from kailash_ml import FeatureStore`` to load a specific engine.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from kailash_ml.engines.drift_monitor import DriftCallback as DriftCallback
+
 from kailash_ml._version import __version__
 from kailash_ml.engines.data_explorer import AlertConfig
 from kailash_ml.types import (
@@ -26,6 +31,7 @@ def __getattr__(name: str):  # noqa: N807
         "ModelRegistry": "kailash_ml.engines.model_registry",
         "TrainingPipeline": "kailash_ml.engines.training_pipeline",
         "InferenceServer": "kailash_ml.engines.inference_server",
+        "DriftCallback": "kailash_ml.engines.drift_monitor",
         "DriftMonitor": "kailash_ml.engines.drift_monitor",
         "HyperparameterSearch": "kailash_ml.engines.hyperparameter_search",
         "AutoMLEngine": "kailash_ml.engines.automl_engine",
@@ -77,6 +83,7 @@ __all__ = [
     "ModelRegistry",
     "TrainingPipeline",
     "InferenceServer",
+    "DriftCallback",
     "DriftMonitor",
     "HyperparameterSearch",
     "AutoMLEngine",

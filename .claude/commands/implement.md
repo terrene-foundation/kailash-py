@@ -17,6 +17,7 @@ description: "Load phase 03 (implement) for the current workspace. Repeat until 
 - If `$ARGUMENTS` specifies a specific todo, focus on that one
 - Otherwise, pick the next active todo
 - Reference plans in `workspaces/<project>/02-plans/` for context
+- If any file in `briefs/` was modified after `specs/_index.md`, STOP — briefs changed since analysis. Flag for user decision: re-run `/analyze` or acknowledge the brief change.
 
 ## Execution Model
 
@@ -37,9 +38,11 @@ You MUST always use the todo-manager to create detailed todos for EVERY SINGLE T
 
 Before implementing ANY todo, re-read the source material that spawned it:
 
-1. **Re-read the plan section** in `02-plans/` that this todo implements — not the whole directory, but the specific plan paragraphs. If the plan describes a `DataFabric` class with 3 methods, you are building that class with those 3 methods.
-2. **Re-read relevant journals** in `workspaces/<project>/journal/` — decisions, trade-offs, and risks from analysis inform how to implement. If a journal says "chose event-driven over polling because of X," the implementation must be event-driven.
-3. **Re-read the todo itself** — the description, not just the title. Todos have implementation details that get ignored when agents skim titles.
+1. **Re-read the relevant spec files** — check `specs/_index.md`, identify which spec files cover the domain of this todo, and read them. The spec is the authority on what to build. If the spec says `create_user(name, email, password_hash)`, that is the signature.
+2. **Re-read the plan section** in `02-plans/` that this todo implements — not the whole directory, but the specific plan paragraphs. If the plan describes a `DataFabric` class with 3 methods, you are building that class with those 3 methods.
+3. **Re-read relevant journals** in `workspaces/<project>/journal/` — decisions, trade-offs, and risks from analysis inform how to implement. If a journal says "chose event-driven over polling because of X," the implementation must be event-driven.
+4. **Re-read the todo itself** — the description, not just the title. Todos have implementation details that get ignored when agents skim titles.
+5. **Read current source code** before calling any existing service or function. Do not trust plans, specs, or previous todos for current method signatures — the code is the truth for what exists NOW. Specs are the truth for what SHOULD exist.
 
 **Why this step exists**: Without it, agents implement from vague memory of what they think the todo means, not from what was actually specified. Plans describe 15 details; agents remember 3. The other 12 become mock data and missing features.
 
@@ -60,15 +63,7 @@ Always involve tdd-implementer, testing-specialists, value auditor, ai ui ux spe
 
 ### 5. Testing requirements
 
-Follow the **test-once protocol** from `rules/testing.md`:
-
-1. **Baseline**: Run `pytest tests/ -x --tb=short -q` ONCE before implementing. Record pass/fail counts.
-2. **TDD cycle**: tdd-implementer runs affected tests during red-green-refactor (the ONE authoritative run).
-3. **Regression check**: Run full suite ONCE when todo is complete. Compare against baseline -- any new failures = regression, STOP and fix.
-4. **Write `.test-results`** to `workspaces/<project>/.test-results` (commit hash, pass/fail counts, regression count).
-5. **Bug fixes** MUST include regression test in `tests/regression/` marked `@pytest.mark.regression`.
-
-Do NOT run the full suite multiple times per todo. Do NOT re-run tests that tdd-implementer already ran.
+Follow the **test-once protocol** from `rules/testing.md`: baseline ONCE before implementing, TDD cycle during red-green-refactor, regression check ONCE when todo complete, write `.test-results`. Bug fixes MUST include regression test marked `@pytest.mark.regression`.
 
 ### 6. LLM usage
 
@@ -86,27 +81,14 @@ Before moving ANY todo from `active/` to `completed/`, MUST:
 2. **Check every detail** — not "does the file exist" but "does the implementation match what the plan specified, line by line"
 3. **Check wiring** — if the todo involves UI, verify it calls real APIs (not mock/generated data). If it involves an architecture component, verify the designed abstraction exists (not ad-hoc replacements).
 4. **Check journals** — if analysis journals flagged risks or constraints for this area, verify they were addressed
-5. **Write verification record** — append a `## Verification` section to the todo file listing what was checked (plan reference, wiring status, journal constraints addressed). This is the audit trail — without it, "verified" is an unsubstantiated claim.
+5. **Write verification record** — append a `## Verification` section to the todo file listing what was checked (plan reference, wiring status, journal constraints addressed)
+6. **Update specs + deviation check** — if this todo changed domain truth, update the relevant spec file immediately (`rules/specs-authority.md` MUST Rule 5). If implementation deviates from spec, STOP: update spec with deviation and rationale, flag user-visible changes for approval before marking complete. **Only the orchestrator writes to `specs/`** — specialist agents report domain truth changes in their output; orchestrator applies them sequentially.
 
-A todo is complete when the plan says X and the code does X. Not when the code does something and happens to compile.
+A todo is complete when the spec says X and the code does X. Not when the code does something and happens to compile.
 
-### 8. Integration hygiene checklist (end of each cycle)
+### 8. Integration hygiene (end of each cycle)
 
-Before reporting the cycle complete, print this 4-line check and tick each box:
-
-```
-[ ] Every new endpoint has entry + exit + error logs (observability.md § Mandatory Log Points)
-[ ] Every integration point (DB, HTTP, MQ) logged with correlation ID
-[ ] Zero raw SQL / direct HTTP / mock data introduced (framework-first.md § Work-Domain Binding)
-[ ] Log triage clean or each WARN explicitly acknowledged (observability.md MUST Rule 5)
-```
-
-If any box cannot be ticked, fix before closing the cycle. The `integration-hygiene.js` PostToolUse hook catches most violations as they land; this checklist is the final pass.
-
-At the end of each implementation cycle, update documentation at the **project root** (not workspace):
-
-- `docs/` — complete codebase docs; `docs/00-authority/` — authoritative `README.md` + `CLAUDE.md`
-- Focus on essence and intent ('what it is', 'how to use it'), not status/progress
+Verify per `rules/observability.md`: new endpoints have logs, integration points have correlation IDs, zero raw SQL/mock data, log triage clean. The `integration-hygiene.js` hook catches most violations; this is the final pass. Update `docs/` at project root (essence and intent, not status).
 
 ## Agent Teams
 
@@ -129,10 +111,8 @@ Deploy these agents as a team for each implementation cycle:
 
 **Frontend team (when implementing frontend):**
 
-- **uiux-designer** — Design system, visual hierarchy, responsive layouts
+- **uiux-designer** — Design system, visual hierarchy, AI interaction patterns
 - **react-specialist** or **flutter-specialist** — Framework-specific implementation
-- **uiux-designer** — AI interaction patterns (if AI-facing UI)
-- **react-specialist** — Responsive UI components
 
 **Recovery (invoke when builds break):**
 

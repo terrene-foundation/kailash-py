@@ -13,6 +13,8 @@ description: "Load phase 02 (todos) for the current workspace"
 ## Phase Check
 
 - Read files in `workspaces/<project>/02-plans/` for context
+- Read `specs/_index.md` and all relevant spec files for domain truth (MUST — see `rules/specs-authority.md`). **If `specs/_index.md` does not exist, STOP — return to `/analyze` Step 5. Do NOT create specs during /todos.**
+- Read ALL journal entries from `/analyze` phase — especially DECISION, TRADE-OFF, and DISCOVERY types. Journal is a read-gate, not just a write-gate.
 - Check if `todos/active/` already has files (resuming)
 - All todos go into `workspaces/<project>/todos/active/`
 
@@ -47,6 +49,8 @@ Reference plans in `workspaces/<project>/02-plans/` and work through every singl
 - Each todo should be detailed enough to implement independently
 - If the plans reference it, there must be a todo for it
 - For large projects (20+ todos), organize into numbered milestones/groups for clarity
+- Each todo MUST reference which spec file(s) it implements (e.g., "Implements: specs/authentication.md §Login Flow")
+- Update spec files if /todos planning reveals new contracts or interfaces (first-instance update discipline)
 
 **CRITICAL: Integration wiring is a separate todo.** Every component that consumes or produces data MUST have TWO todos:
 
