@@ -1427,10 +1427,7 @@ class Node(ABC):
             self.logger.debug(f"Validated inputs for {self.id}: {validated_inputs}")
 
             # Execute node logic with progress context
-            from kailash.runtime.progress import (
-                _current_node_id,
-                _current_progress_registry,
-            )
+            from kailash.runtime.progress import _current_node_id
 
             node_id_token = _current_node_id.set(self.id)
             try:
@@ -2027,10 +2024,7 @@ class AsyncTypedNode(TypedNode):
             )
 
             # Execute async node logic with progress context
-            from kailash.runtime.progress import (
-                _current_node_id,
-                _current_progress_registry,
-            )
+            from kailash.runtime.progress import _current_node_id
 
             node_id_token = _current_node_id.set(self.id)
             try:
