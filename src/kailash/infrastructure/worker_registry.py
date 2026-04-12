@@ -20,13 +20,10 @@ the target dialect automatically.
 from __future__ import annotations
 
 import logging
-import re
 import time
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
-
-_TABLE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 __all__ = [
     "SQLWorkerRegistry",
@@ -57,10 +54,9 @@ class SQLWorkerRegistry:
         task_queue: Any,
         table_name: str = "kailash_worker_registry",
     ) -> None:
-        if not _TABLE_NAME_RE.match(table_name):
-            raise ValueError(
-                f"Invalid table name '{table_name}': must match [a-zA-Z_][a-zA-Z0-9_]*"
-            )
+        from kailash.db.dialect import _validate_identifier
+
+        _validate_identifier(table_name)
         self._conn = conn
         self._task_queue = task_queue
         self._table = table_name

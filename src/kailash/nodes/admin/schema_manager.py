@@ -227,7 +227,12 @@ class AdminSchemaManager:
             "admin_schema_version",
         ]
 
+        # Defense-in-depth: validate each identifier even though the list
+        # is hardcoded. Prevents regression if the list ever becomes dynamic.
+        from kailash.db.dialect import _validate_identifier
+
         for table in tables_to_drop:
+            _validate_identifier(table)
             try:
                 self.db_node.execute(query=f"DROP TABLE IF EXISTS {table} CASCADE")
             except Exception as e:
@@ -397,10 +402,13 @@ class AdminSchemaManager:
 
     def _get_table_row_counts(self) -> Dict[str, int]:
         """Get row counts for all admin tables."""
+        from kailash.db.dialect import _validate_identifier
+
         tables = ["users", "roles", "user_role_assignments", "permission_cache"]
         counts = {}
 
         for table in tables:
+            _validate_identifier(table)  # Defense-in-depth
             try:
                 result = self.db_node.execute(
                     query=f"SELECT COUNT(*) as count FROM {table}",

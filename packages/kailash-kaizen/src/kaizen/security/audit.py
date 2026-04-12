@@ -299,11 +299,15 @@ class AuditTrailProvider:
             order_dir = "DESC" if order == "desc" else "ASC"
             query += f" ORDER BY {sort_column} {order_dir}"
 
-            # Add pagination
+            # Add pagination — coerce to int to prevent SQL injection.
+            # Type annotations (Optional[int]) are not enforced at runtime,
+            # so a caller passing a string would interpolate into the query.
             if limit is not None:
-                query += f" LIMIT {limit}"
+                query += " LIMIT %s"
+                params.append(int(limit))
             if offset is not None:
-                query += f" OFFSET {offset}"
+                query += " OFFSET %s"
+                params.append(int(offset))
 
             cursor = self._conn.cursor()
             cursor.execute(query, params)
