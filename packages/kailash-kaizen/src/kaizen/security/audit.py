@@ -171,6 +171,7 @@ class AuditTrailProvider:
                 logger.warning(
                     "audit.canonical_forward_failed event_id=%s",
                     event_id,
+                    exc_info=True,
                 )
 
         return event_id

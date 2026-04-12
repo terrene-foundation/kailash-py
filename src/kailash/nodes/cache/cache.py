@@ -492,6 +492,7 @@ class CacheNode(AsyncNode):
                 "value": None,
                 "hit": False,
                 "key": full_key,
+                "version": None,
                 "error": str(e),
             }
 
@@ -516,6 +517,20 @@ class CacheNode(AsyncNode):
         try:
             # CAS check: if expected_version is provided, verify it
             # matches the current version before allowing the write.
+            # CAS is only supported for the memory backend — the version
+            # tags live in-process and cannot guarantee atomicity across
+            # Redis or hybrid backends (fail-closed per zero-tolerance §2).
+            if expected_version is not None and backend != CacheBackend.MEMORY:
+                return {
+                    "success": False,
+                    "key": full_key,
+                    "cas_failed": True,
+                    "error": (
+                        "CAS (expected_version) is only supported with "
+                        "backend='memory'. Redis and hybrid backends require "
+                        "server-side CAS (e.g., Redis WATCH/MULTI)."
+                    ),
+                }
             if expected_version is not None:
                 current_version = self._version_tags.get(full_key)
                 if current_version != expected_version:
@@ -662,48 +677,52 @@ class CacheNode(AsyncNode):
             }
 
     async def _clear(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        """Clear all cache entries."""
+        """Clear cache entries, optionally scoped to tenant and/or namespace."""
         backend = CacheBackend(kwargs.get("backend", "memory"))
         namespace = kwargs.get("namespace", "")
+        tenant_id = kwargs.get("tenant_id", "")
 
         try:
             cleared_count = 0
 
+            # Build the key prefix for scoped clearing.
+            # Per rules/tenant-isolation.md MUST Rule 3, invalidation
+            # entry points MUST accept tenant_id for scoped clearing.
+            prefix = self._build_key("", namespace, tenant_id).rstrip(":")
+            has_scope = bool(prefix)
+
+            def _matches(k: str) -> bool:
+                return k.startswith(f"{prefix}:") if has_scope else True
+
             if backend == CacheBackend.REDIS and self._redis_client:
-                if namespace:
-                    # Clear only namespaced keys
-                    pattern = f"{namespace}:*"
+                if has_scope:
+                    pattern = f"{prefix}:*"
                     keys = await self._redis_client.keys(pattern)
                     if keys:
                         cleared_count = await self._redis_client.delete(*keys)
                 else:
-                    # Clear all
                     await self._redis_client.flushdb()
                     cleared_count = -1  # Unknown count
 
             elif backend == CacheBackend.HYBRID:
                 # Clear memory
-                if namespace:
-                    mem_keys = [
-                        k
-                        for k in self._memory_cache.keys()
-                        if k.startswith(f"{namespace}:")
-                    ]
-                    for k in mem_keys:
-                        del self._memory_cache[k]
-                        del self._access_times[k]
-                        self._access_counts.pop(k, None)
-                    cleared_count += len(mem_keys)
-                else:
-                    cleared_count += len(self._memory_cache)
+                mem_keys = [k for k in self._memory_cache.keys() if _matches(k)]
+                for k in mem_keys:
+                    del self._memory_cache[k]
+                    del self._access_times[k]
+                    self._access_counts.pop(k, None)
+                    self._version_tags.pop(k, None)
+                cleared_count += len(mem_keys)
+                if not has_scope:
                     self._memory_cache.clear()
                     self._access_times.clear()
                     self._access_counts.clear()
+                    self._version_tags.clear()
 
                 # Clear Redis
                 if self._redis_client:
-                    if namespace:
-                        pattern = f"{namespace}:*"
+                    if has_scope:
+                        pattern = f"{prefix}:*"
                         keys = await self._redis_client.keys(pattern)
                         if keys:
                             cleared_count += await self._redis_client.delete(*keys)
@@ -712,22 +731,18 @@ class CacheNode(AsyncNode):
 
             else:
                 # Memory cache
-                if namespace:
-                    mem_keys = [
-                        k
-                        for k in self._memory_cache.keys()
-                        if k.startswith(f"{namespace}:")
-                    ]
-                    for k in mem_keys:
-                        del self._memory_cache[k]
-                        del self._access_times[k]
-                        self._access_counts.pop(k, None)
-                    cleared_count = len(mem_keys)
-                else:
-                    cleared_count = len(self._memory_cache)
+                mem_keys = [k for k in self._memory_cache.keys() if _matches(k)]
+                for k in mem_keys:
+                    del self._memory_cache[k]
+                    del self._access_times[k]
+                    self._access_counts.pop(k, None)
+                    self._version_tags.pop(k, None)
+                cleared_count = len(mem_keys)
+                if not has_scope:
                     self._memory_cache.clear()
                     self._access_times.clear()
                     self._access_counts.clear()
+                    self._version_tags.clear()
 
             return {
                 "success": True,

@@ -352,6 +352,7 @@ class AuditTrailManager:
                     "audit.canonical_forward_failed agent_id=%s action=%s",
                     agent_id,
                     action,
+                    exc_info=True,
                 )
 
         logger.info(
