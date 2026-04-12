@@ -326,6 +326,28 @@ class CacheNode(AsyncNode):
 
         start_time = time.time()
 
+        # Fail-closed guard: CAS (expected_version) is only supported
+        # with the in-process memory backend. Reject at the outer boundary
+        # so we never attempt backend initialization for a request that
+        # cannot be served correctly. See rules/zero-tolerance.md §2.
+        if (
+            operation == "set"
+            and kwargs.get("expected_version") is not None
+            and backend != CacheBackend.MEMORY
+        ):
+            return {
+                "success": False,
+                "key": kwargs.get("key", ""),
+                "cas_failed": True,
+                "error": (
+                    "CAS (expected_version) is only supported with "
+                    "backend='memory'. Redis and hybrid backends require "
+                    "server-side CAS (e.g., Redis WATCH/MULTI)."
+                ),
+                "operation_time": 0.0,
+                "backend_used": backend.value,
+            }
+
         try:
             # Initialize backend if needed
             await self._ensure_backend(backend, kwargs)
@@ -1240,6 +1262,7 @@ class CacheNode(AsyncNode):
                 del self._memory_cache[key]
                 del self._access_times[key]
                 self._access_counts.pop(key, None)
+                self._version_tags.pop(key, None)
                 self._cache_stats["evictions"] += 1
 
         elif eviction_policy == EvictionPolicy.LFU:
@@ -1251,6 +1274,7 @@ class CacheNode(AsyncNode):
                 del self._memory_cache[key]
                 del self._access_times[key]
                 del self._access_counts[key]
+                self._version_tags.pop(key, None)
                 self._cache_stats["evictions"] += 1
 
         elif eviction_policy == EvictionPolicy.TTL:
@@ -1268,6 +1292,7 @@ class CacheNode(AsyncNode):
                 del self._memory_cache[key]
                 del self._access_times[key]
                 self._access_counts.pop(key, None)
+                self._version_tags.pop(key, None)
                 self._cache_stats["evictions"] += 1
 
         elif eviction_policy == EvictionPolicy.FIFO:
@@ -1277,6 +1302,7 @@ class CacheNode(AsyncNode):
                 del self._memory_cache[key]
                 del self._access_times[key]
                 self._access_counts.pop(key, None)
+                self._version_tags.pop(key, None)
                 self._cache_stats["evictions"] += 1
 
     def run(self, **kwargs) -> Dict[str, Any]:

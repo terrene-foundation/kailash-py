@@ -204,7 +204,11 @@ class ClassificationPolicy:
             fc = model_fields.get(field_name)
             if fc is not None:
                 return fc.classification.value
-            logger.warning(
+            # Log at DEBUG only: emitting field names at WARN leaks
+            # schema information to any log aggregator with broader
+            # access than the database itself. Operators who need to
+            # audit unclassified fields can enable DEBUG explicitly.
+            logger.debug(
                 "classification.default_applied",
                 extra={
                     "model": model_name,
