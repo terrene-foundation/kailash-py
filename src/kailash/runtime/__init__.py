@@ -8,6 +8,12 @@ from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.runtime.distributed import DistributedRuntime, TaskQueue, Worker
 from kailash.runtime.local import LocalRuntime
 from kailash.runtime.parallel_cyclic import ParallelCyclicRuntime
+from kailash.runtime.progress import (
+    ProgressCallback,
+    ProgressRegistry,
+    ProgressUpdate,
+    report_progress,
+)
 from kailash.runtime.runner import WorkflowRunner
 from kailash.runtime.shutdown import ShutdownCoordinator
 from kailash.runtime.signals import QueryRegistry, SignalChannel
@@ -19,6 +25,9 @@ __all__ = [
     "AsyncLocalRuntime",
     "DistributedRuntime",
     "ParallelCyclicRuntime",
+    "ProgressCallback",
+    "ProgressRegistry",
+    "ProgressUpdate",
     "TaskQueue",
     "Worker",
     "WorkflowRunner",
@@ -26,6 +35,7 @@ __all__ = [
     "SignalChannel",
     "QueryRegistry",
     "get_runtime",
+    "report_progress",
 ]
 
 
