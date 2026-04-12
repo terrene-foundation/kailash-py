@@ -2,13 +2,37 @@
 # SPDX-License-Identifier: Apache-2.0
 """PACT governance layer -- D/T/R grammar, addressing, clearance, access enforcement, envelopes."""
 
-from kailash.trust.pact.exceptions import PactError
+from kailash.trust.pact.access import (
+    AccessDecision,
+    KnowledgeSharePolicy,
+    PactBridge,
+    can_access,
+)
 from kailash.trust.pact.addressing import (
     Address,
     AddressError,
     AddressSegment,
     GrammarError,
     NodeType,
+)
+from kailash.trust.pact.agent import (
+    GovernanceBlockedError,
+    GovernanceHeldError,
+    PactGovernedAgent,
+)
+from kailash.trust.pact.agent_mapping import AgentRoleMapping
+from kailash.trust.pact.audit import (
+    AuditAnchor,
+    AuditChain,
+    PactAuditAction,
+    TieredAuditDispatcher,
+    create_pact_audit_details,
+)
+from kailash.trust.pact.clearance import (
+    POSTURE_CEILING,
+    RoleClearance,
+    VettingStatus,
+    effective_clearance,
 )
 from kailash.trust.pact.compilation import (
     CompilationError,
@@ -19,17 +43,13 @@ from kailash.trust.pact.compilation import (
     VacancyStatus,
     compile_org,
 )
-from kailash.trust.pact.access import (
-    AccessDecision,
-    KnowledgeSharePolicy,
-    PactBridge,
-    can_access,
-)
-from kailash.trust.pact.clearance import (
-    POSTURE_CEILING,
-    RoleClearance,
-    VettingStatus,
-    effective_clearance,
+from kailash.trust.pact.context import GovernanceContext
+from kailash.trust.pact.decorators import governed_tool
+from kailash.trust.pact.eatp_emitter import InMemoryPactEmitter, PactEatpEmitter
+from kailash.trust.pact.engine import GovernanceEngine
+from kailash.trust.pact.envelope_adapter import (
+    EnvelopeAdapterError,
+    GovernanceEnvelopeAdapter,
 )
 from kailash.trust.pact.envelopes import (
     MonotonicTighteningError,
@@ -42,19 +62,18 @@ from kailash.trust.pact.envelopes import (
     default_envelope_for_posture,
     intersect_envelopes,
 )
-from kailash.trust.pact.agent import (
-    GovernanceBlockedError,
-    GovernanceHeldError,
-    PactGovernedAgent,
+from kailash.trust.pact.exceptions import PactError
+from kailash.trust.pact.explain import (
+    describe_address,
+    explain_access,
+    explain_envelope,
 )
-from kailash.trust.pact.agent_mapping import AgentRoleMapping
-from kailash.trust.pact.context import GovernanceContext
-from kailash.trust.pact.decorators import governed_tool
-from kailash.trust.pact.middleware import PactGovernanceMiddleware
 from kailash.trust.pact.knowledge import KnowledgeItem
-from kailash.trust.pact.audit import (
-    PactAuditAction,
-    create_pact_audit_details,
+from kailash.trust.pact.middleware import PactGovernanceMiddleware
+from kailash.trust.pact.observation import (
+    InMemoryObservationSink,
+    Observation,
+    ObservationSink,
 )
 from kailash.trust.pact.store import (
     MAX_STORE_SIZE,
@@ -66,17 +85,6 @@ from kailash.trust.pact.store import (
     MemoryEnvelopeStore,
     MemoryOrgStore,
     OrgStore,
-)
-from kailash.trust.pact.engine import GovernanceEngine
-from kailash.trust.pact.eatp_emitter import InMemoryPactEmitter, PactEatpEmitter
-from kailash.trust.pact.envelope_adapter import (
-    EnvelopeAdapterError,
-    GovernanceEnvelopeAdapter,
-)
-from kailash.trust.pact.explain import (
-    describe_address,
-    explain_access,
-    explain_envelope,
 )
 from kailash.trust.pact.verdict import GovernanceVerdict
 from kailash.trust.pact.yaml_loader import (
@@ -132,9 +140,16 @@ __all__ = [
     "compute_effective_envelope",
     "default_envelope_for_posture",
     "intersect_envelopes",
-    # Audit (Ref-4003)
+    # Audit (Ref-4003, N4 conformance)
+    "AuditAnchor",
+    "AuditChain",
     "PactAuditAction",
+    "TieredAuditDispatcher",
     "create_pact_audit_details",
+    # Observation (N5 conformance)
+    "InMemoryObservationSink",
+    "Observation",
+    "ObservationSink",
     # Store protocols and implementations (Ref-4001, 4002)
     "MAX_STORE_SIZE",
     "AccessPolicyStore",
