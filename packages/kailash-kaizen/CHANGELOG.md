@@ -5,6 +5,17 @@ All notable changes to the Kaizen AI Agent Framework will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.3] - 2026-04-12 — Post-Convergence Security Hardening
+
+### Security
+
+- **SQL injection fix in `security/audit.py` `query_events()`**: the prior implementation built a raw f-string `WHERE` clause from caller-supplied `event_type` and `agent_id` parameters. These arguments could contain SQL metacharacters, enabling injection via crafted event type strings. Fixed to use parameterized queries; identifier segments validated with `re.match` before interpolation.
+- **Audit forwarding with `exc_info=True`**: `logger.error()` calls in `core/autonomy/observability/audit.py` and `security/audit.py` now include `exc_info=True`, ensuring stack traces appear in the log pipeline rather than just the message string. Previously, exceptions were swallowed silently on the audit forwarding path.
+
+### Changed
+
+- **Strategy deprecation warnings**: `async_single_shot.py` and `single_shot.py` now emit `DeprecationWarning` when invoked, directing users to `DelegateEngine` as the canonical async strategy. The single-shot strategies remain functional but are officially deprecated.
+
 ## [2.3.0] - 2026-03-25
 
 ### Changed

@@ -17,9 +17,9 @@
 
 | Package          | Tag Pattern        | Current Version |
 | ---------------- | ------------------ | --------------- |
-| kailash (core)   | `v*`               | 2.8.3           |
-| kailash-dataflow | `dataflow-v*`      | 2.0.5           |
-| kailash-kaizen   | `kaizen-v*`        | 2.7.2           |
+| kailash (core)   | `v*`               | 2.8.4           |
+| kailash-dataflow | `dataflow-v*`      | 2.0.6           |
+| kailash-kaizen   | `kaizen-v*`        | 2.7.3           |
 | kailash-nexus    | `nexus-v*`         | 2.0.1           |
 | kailash-pact     | `pact-v*`          | 0.8.1           |
 | kailash-ml       | `ml-v*`            | 0.9.0           |

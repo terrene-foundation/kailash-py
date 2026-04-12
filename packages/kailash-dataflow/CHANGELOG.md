@@ -1,5 +1,22 @@
 # DataFlow Changelog
 
+## [2.0.6] - 2026-04-12 — Post-Convergence Security Hardening
+
+### Security
+
+- **Classification fail-closed** (cross-SDK alignment #418, EATP D6): `ClassificationPolicy.classify()` default changed from `PUBLIC` (fail-open) to `HIGHLY_CONFIDENTIAL` (fail-closed) for unclassified fields, matching kailash-rs semantics. A `WARN` log is emitted each time the fail-closed default is applied so operators can identify and classify missing fields.
+  - **Breaking**: Fields that were implicitly readable as PUBLIC must now carry `@classify("field", DataClassification.PUBLIC)`. Failure to classify will result in redaction for all callers without explicit PUBLIC clearance.
+- **Connection parser consolidated credential decode**: `connection_parser.py` now routes credential extraction through the shared `kailash.utils.url_credentials.decode_userinfo_or_raise` helper. The prior hand-rolled `unquote()` call lacked null-byte rejection, enabling the `mysql://user:%00bypass@host/db` auth-bypass (same class as R3 null-byte CVE).
+- **Identifier fingerprint error messages**: `IdentifierError` messages from `dialect.quote_identifier()` now emit a hex fingerprint (`hash(name) & 0xFFFF:04x`) instead of echoing the raw identifier value, preventing log-poisoning via crafted model or column names.
+- **Cache CAS + tenant eviction** (#419): `InMemoryCache` CAS path now scopes version-eviction to the originating tenant's partition. A version mismatch no longer silently evicts cache entries belonging to a different tenant.
+- **Tenant-scoped `_clear`**: `InMemoryCache._clear()` requires an explicit `tenant_id` when the cache is operating in multi-tenant mode; clearing all tenants at once is blocked without an explicit override flag.
+
+### Fixed
+
+- **Regression tests** (34 total, 5 new test classes): `test_classification_fail_closed.py`, `test_cache_cas_tenant.py`, `test_create_index_identifier_validation.py`, `test_loc_invariants.py`, plus additions to existing regression files.
+
+---
+
 ## [2.0.0] - unreleased — DataFlow 2.0 Perfection Sprint
 
 Comprehensive rework of DataFlow's core, cache, fabric, security, and
