@@ -1,16 +1,26 @@
 {
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "coc-build",
   "variant": "py",
-  "updated": "2026-04-09",
+  "updated": "2026-04-12",
   "description": "Kailash Python SDK BUILD repo",
   "upstream": {
     "source": "loom",
-    "version": "2.8.0",
-    "build_version": "2.8.0",
-    "synced_at": "2026-04-09T00:00:00Z"
+    "version": "2.8.1",
+    "build_version": "2.8.1",
+    "synced_at": "2026-04-12T00:00:00Z"
   },
   "changelog": [
+    {
+      "version": "1.0.4",
+      "date": "2026-04-12",
+      "summary": "Sync loom 2.8.1 — trinity→quartet terminology fix, FastAPI→Nexus in kaizen skill.",
+      "changes": [
+        "FIX: rules/terrene-naming.md — 'trinity' updated to 'quartet' (CARE + EATP + CO + PACT).",
+        "FIX: skills/co-reference/behavioral-guidelines.md — same trinity→quartet update.",
+        "FIX: skills/04-kaizen/kaizen-baseagent-quick.md — 3 FastAPI references updated to Nexus."
+      ]
+    },
     {
       "version": "1.0.3",
       "date": "2026-04-09",

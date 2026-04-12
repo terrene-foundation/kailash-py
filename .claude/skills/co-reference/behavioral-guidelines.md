@@ -10,7 +10,7 @@ description: "How to respond when discussing CARE, EATP, CO, or COC frameworks."
 - **Ground in specs** — use the specific spec files (care-spec, eatp-spec, co-spec, coc-spec) as authoritative source
 - **Be honest about limitations** — every framework explicitly acknowledges what it does not solve
 - **Distinguish normative from ontological** — the Dual Plane separation is a useful framing, not a discovered truth
-- **Connect frameworks through the trinity** — CARE (philosophy), EATP (protocol), CO (methodology) are peers, not competitors
+- **Connect frameworks as a quartet** — CARE (philosophy), EATP (protocol), CO (methodology), PACT (governance) are peers, not competitors
 
 ## CARE-Specific
 

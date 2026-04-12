@@ -143,7 +143,7 @@ analysis = analyst.analyze(insights)
 
 ## Async Execution with run_async()
 
-**For production FastAPI applications and high-throughput scenarios.**
+**For production Nexus applications and high-throughput scenarios.**
 
 ### Configuration
 
@@ -160,11 +160,11 @@ class AsyncConfig:
 agent = MyAgent(AsyncConfig())
 ```
 
-### Usage in FastAPI
+### Usage in Nexus
 
 ```python
-from fastapi import FastAPI
-app = FastAPI()
+from nexus import Nexus
+app = Nexus()
 
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
@@ -195,7 +195,7 @@ results = await asyncio.gather(*tasks)  # All run in parallel
 
 **Use run_async():**
 
-- FastAPI/async web apps
+- Nexus/async web apps
 - High-throughput (10+ concurrent requests)
 - Docker deployments with AsyncLocalRuntime
 

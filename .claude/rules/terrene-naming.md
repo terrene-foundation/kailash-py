@@ -49,6 +49,6 @@ See `rules/independence.md` for the full no-commercial-coupling policy.
 - Constraint dimensions: **Financial, Operational, Temporal, Data Access, Communication** (these exact five names — no synonyms, no reordering)
 - CO = Cognitive Orchestration (domain-agnostic base methodology)
 - COC = Cognitive Orchestration for Codegen (CO applied to software development)
-- CO sits in the trinity: CARE (philosophy) + EATP (protocol) + CO (methodology)
+- The four Terrene Foundation standards: CARE (philosophy) + EATP (protocol) + CO (methodology) + PACT (governance) — all peers
 
 **Why:** Inconsistent terminology across repos fragments institutional knowledge and makes cross-document search unreliable.
