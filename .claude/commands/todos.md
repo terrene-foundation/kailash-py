@@ -22,6 +22,8 @@ description: "Load phase 02 (todos) for the current workspace"
 
 This phase executes under the **autonomous execution model** (see `rules/autonomous-execution.md`). All effort estimates in todos MUST use autonomous execution cycles, not human-days. When referencing external plans that estimate in human-days, apply the 10x multiplier to translate. Do not phase work based on "team bandwidth" — phase based on dependency order and validation gates.
 
+**Per-session capacity budget (MUST):** Each todo MUST fit within a single session's capacity — ≤500 LOC load-bearing logic, ≤5–10 simultaneous invariants, ≤3–4 call-graph hops, describable in 3 sentences. See `rules/autonomous-execution.md` § Per-Session Capacity Budget. Todos that exceed the budget MUST be sharded at this phase, not deferred to `/implement`.
+
 **The /todos approval gate is a structural gate**: the human approves the plan (what and why), not the execution (how and when). Once approved, /implement executes autonomously.
 
 ## Workflow

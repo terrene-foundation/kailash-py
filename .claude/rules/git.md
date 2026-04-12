@@ -27,12 +27,14 @@ All protected repos require PRs to main. Direct push is rejected by GitHub.
 
 **Why:** Direct pushes bypass CI checks and code review, allowing broken or unreviewed code to reach the release branch.
 
-| Repository                                 | Branch | Protection          |
-| ------------------------------------------ | ------ | ------------------- |
-| `terrene-foundation/kailash-py`            | `main` | Full (admin bypass) |
-| `terrene-foundation/kailash-coc-claude-py` | `main` | Full (admin bypass) |
-| `terrene-foundation/kailash-coc-claude-rs` | `main` | Full (admin bypass) |
-| `esperie/kailash-rs`                       | `main` | Full (admin bypass) |
+| Repository                                    | Branch | Protection          |
+| --------------------------------------------- | ------ | ------------------- |
+| `terrene-foundation/kailash-py`               | `main` | Full (admin bypass) |
+| `terrene-foundation/kailash-coc-claude-py`    | `main` | Full (admin bypass) |
+| `terrene-foundation/kailash-coc-claude-rs`    | `main` | Full (admin bypass) |
+| `esperie/kailash-rs`                          | `main` | Full (admin bypass) |
+| `terrene-foundation/kailash-prism`            | `main` | Full (admin bypass) |
+| `terrene-foundation/kailash-coc-claude-prism` | `main` | Full (admin bypass) |
 
 **Owner workflow**: Branch → commit → push → PR → `gh pr merge <N> --admin --merge --delete-branch`
 
@@ -91,9 +93,7 @@ gh issue close 374 --comment "Covered by recent refactor"
 - "Obsoleted by refactor"
 - "Resolved without code change"
 
-**Why:** Three issues (#351, #370, #374) were closed in this session's lineage with zero delivered code; the next-session plan only caught it on a manual re-audit. The commit-reference requirement is the cheapest structural gate against this failure.
-
-Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-12)
+**Why:** Issues closed with zero delivered code references break traceability; the next session cannot verify whether the fix actually shipped.
 
 ## Pre-Commit Hook Workarounds
 
@@ -114,7 +114,7 @@ EOF
 
 # DO NOT — silent --no-verify with no documentation
 git commit --no-verify -m "fix(security): add null-byte rejection"
-# ↑ no record of why hooks were skipped; next session repeats discovery
+# no record of why hooks were skipped; next session repeats discovery
 ```
 
 **BLOCKED rationalizations:**
@@ -124,5 +124,3 @@ git commit --no-verify -m "fix(security): add null-byte rejection"
 - "The auto-stash bug is a known issue"
 
 **Why:** Recurring across sessions; without documentation each session re-discovers the workaround at high cost. With documentation the next agent finds it via `git log --grep`.
-
-Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-12)
