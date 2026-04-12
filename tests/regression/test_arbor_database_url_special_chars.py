@@ -515,8 +515,17 @@ class TestArborMysqlUrlDecoding:
         # Accept both single-line and multi-line import forms (formatter-agnostic)
         assert "from kailash.utils.url_credentials import" in source
         assert "decode_userinfo_or_raise" in source
-        # Both dialects (PostgreSQL + MySQL) must call the helper
-        assert source.count("decode_userinfo_or_raise(parsed") >= 2
+        # Both dialects (PostgreSQL + MySQL) must call the helper. Count
+        # call sites by `decode_userinfo_or_raise(` (open-paren agnostic
+        # to argument-line wrapping by isort/black/ruff). The import
+        # statement on line 1 is excluded by requiring an open paren.
+        call_sites = sum(
+            1 for line in source.splitlines() if "decode_userinfo_or_raise(" in line
+        )
+        assert call_sites >= 2, (
+            f"expected ≥2 decode_userinfo_or_raise() call sites in "
+            f"state_manager.py (one per dialect), found {call_sites}"
+        )
 
     def test_connection_parser_rejects_null_byte_credentials(self):
         """``ConnectionParser.parse_connection_string`` rejects \\x00 in creds.
