@@ -109,6 +109,38 @@ async def drop_model(self, model_name: str) -> None:
 
 **Why:** Dropped data is unrecoverable. The explicit flag is the last human gate before destruction; without it, a typo or a mis-scoped rm-equivalent takes the production table with it.
 
+### 5. Hardcoded Identifier Lists MUST Still Validate
+
+Even when an identifier list is a static Python literal in the source file, every element MUST route through `_validate_identifier()` (or `dialect.quote_identifier()`) at the call site before interpolation into DDL. "The list is hardcoded, so it's safe" is BLOCKED.
+
+```python
+# DO — defense-in-depth validation on hardcoded list
+from kailash.db.dialect import _validate_identifier
+
+tables_to_drop = ["users", "roles", "permissions"]
+for table in tables_to_drop:
+    _validate_identifier(table)  # defense-in-depth
+    await conn.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+
+# DO NOT — assume hardcoded means safe
+tables_to_drop = ["users", "roles", "permissions"]
+for table in tables_to_drop:
+    await conn.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+# ↑ works today; breaks the moment someone makes the list dynamic
+# (e.g., reads from config, appends from a function parameter)
+```
+
+**BLOCKED rationalizations:**
+
+- "The list is hardcoded so there's no injection vector"
+- "Adding validation is overkill for a static list"
+- "We'll add validation when the list becomes dynamic"
+- "This is an admin-only path, no attacker can reach it"
+
+**Why:** Hardcoded lists become dynamic lists. A future refactor that reads the table list from a config file, or appends a caller-supplied suffix, or loops over model names from a registry, silently re-opens the injection vector with no test signal because the validation call was never there. The validation call is a permanent marker of intent that survives the refactor.
+
+Origin: Red team review of PR #430 (2026-04-12) surfaced this in `src/kailash/nodes/admin/schema_manager.py::_drop_existing_schema` and `_get_table_row_counts` — hardcoded lists without validation. Fixed in commit 803e10e0.
+
 ## MUST NOT
 
 - Use `f"..."` or `%` formatting to interpolate a dynamic identifier into DDL

@@ -158,6 +158,10 @@ Each `@db.model` class generates:
 - **[dataflow-provenance-audit](dataflow-provenance-audit.md)** - Provenance[T] field tracking, audit trail persistence, EventStoreBackend
 - **[dataflow-fabric-cache-consumers](dataflow-fabric-cache-consumers.md)** - Fabric cache control, consumer adapters, MCP tool generation
 
+### Cache Patterns
+
+- **[cache-cas-fail-closed](cache-cas-fail-closed.md)** - CAS (compare-and-swap) fail-closed pattern when primitive can only be satisfied by one backend
+
 ### Troubleshooting
 
 - **[dataflow-gotchas](dataflow-gotchas.md)** - Common pitfalls

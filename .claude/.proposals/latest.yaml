@@ -532,9 +532,12 @@ changes:
 # resets status to pending_review because the new entries have not been
 # classified by loom yet. The 51 prior entries remain intact.
 
-status: reviewed
+status: pending_review
 reviewed_date: "2026-04-12"
 distributed_date: "2026-04-12"
+# Status reset to pending_review on 2026-04-12 (post-v2.8.4 codify) —
+# per rules/artifact-flow.md MUST "Reset Status on Append", new entries
+# appended below have not been classified by loom yet.
 reviewed_notes: |
   Most of this proposal was already upstreamed in a prior sync cycle (identical
   in loom/ vs kailash-py/). Only two files had genuinely new changes from the
@@ -651,3 +654,70 @@ reviewed_notes: |
     suggested_tier: coc
     reason: "Previously deferred. Documents trust._json module — canonical_json_loads (duplicate key + NaN/Inf rejection), canonical_json_dumps (sorted keys), DuplicateKeyError, 8-row parser differential table. Cross-SDK parity per EATP D6."
     diff_lines: "+80"
+
+  # --- 2026-04-12: post-v2.8.4 codify — red team institutional learnings ---
+  # Origin: PR #430 red team review + CI failure analysis (2026-04-12)
+  # SDK version at codify time: 2.8.4
+  # Session: post-v2.8.4 codify pass capturing 4 nuggets from PR #430 review
+
+  - file: rules/dataflow-identifier-safety.md
+    action: modified
+    suggested_tier: coc
+    reason: |
+      Added MUST Rule 5 "Hardcoded Identifier Lists MUST Still Validate" —
+      defense-in-depth: every element of a static list MUST route through
+      _validate_identifier() at the call site, even when the list is a
+      Python literal. Prevents regression if the list later becomes
+      dynamic (reads from config, appends caller input, etc.). BLOCKED
+      rationalizations for "hardcoded so safe". Origin: PR #430 red team
+      found schema_manager._drop_existing_schema and _get_table_row_counts
+      interpolating hardcoded lists without validation; fixed in 803e10e0.
+    diff_lines: "+50"
+
+  - file: rules/python-environment.md
+    action: modified
+    suggested_tier: coc
+    reason: |
+      Added MUST Rule 4 "MUST NOT Duplicate Sub-Package Test Deps In Root
+      Dev Deps" — re-declaring a sub-package's test dep at the root level
+      installs it into the root venv where pytest plugin discovery loads
+      it for every test run. For hypothesis specifically, this triggers a
+      MemoryError in pytest's assertion rewriter during collection. Cost
+      hours of debugging on CI before root cause was isolated. BLOCKED
+      rationalizations. Origin: PR #430 CI failure (commit a9fd4e56).
+    diff_lines: "+55"
+
+  - file: rules/observability.md
+    action: modified
+    suggested_tier: coc
+    reason: |
+      Added MUST Rule 8 "Schema-Revealing Field Names MUST Be Logged At
+      DEBUG Or Hashed" — structured log lines containing model/field/column
+      names from classification/masking/validation code paths MUST use
+      DEBUG level or hash the identifier. Operational WARN signal via
+      counter, not via raw field name. Log aggregators typically have
+      broader access than the database, so schema names in logs leak
+      PII-adjacency metadata. Origin: PR #430 red team found
+      classification.default_applied at WARN level with field name in
+      structured extra; downgraded to DEBUG in 62d64ac7.
+    diff_lines: "+50"
+
+  - file: skills/02-dataflow/cache-cas-fail-closed.md
+    action: created
+    suggested_tier: coc-py
+    reason: |
+      New skill: CAS (compare-and-swap) fail-closed pattern when the
+      primitive's correctness depends on in-process state. Rejects CAS
+      requests at the outer API boundary when backend != memory, returns
+      structured error directing caller to server-side CAS (Redis
+      WATCH/MULTI). Covers the general pattern: when a primitive can only
+      be correctly served by one backend, fail-closed at the API edge
+      rather than silently degrade. Origin: PR #430 red team review of
+      CacheNode CAS implementation; guard added in 62d64ac7.
+    diff_lines: "+100"
+
+  - file: skills/02-dataflow/SKILL.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Added 'Cache Patterns' section referencing cache-cas-fail-closed.md"
+    diff_lines: "+4"

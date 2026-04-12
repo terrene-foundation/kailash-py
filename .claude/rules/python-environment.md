@@ -151,6 +151,53 @@ debugging time every session.
 
 Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-12)
 
+### 4. MUST NOT Duplicate Sub-Package Test Deps In Root Dev Deps
+
+A dev dependency declared by a sub-package (`packages/*/pyproject.toml`)
+MUST NOT also be declared in the root `pyproject.toml [dev]` section.
+Re-declaring at the root is BLOCKED — it installs the package into the
+root test venv where pytest's plugin auto-discovery loads it for every
+test run, including runs that don't need it.
+
+```toml
+# DO — sub-packages own their test deps
+# packages/kailash-pact/pyproject.toml:
+[project.optional-dependencies]
+test = ["hypothesis>=6.98"]
+
+# pyproject.toml [dev]:
+# (no hypothesis entry — sub-package venv provides it for its own tests)
+
+# DO NOT — duplicate the dep at the root
+[project.optional-dependencies]
+dev = [
+    "hypothesis>=6.0.0",   # already in kailash-pact + kailash-ml
+]
+```
+
+**BLOCKED rationalizations:**
+
+- "The version is different, it's not a duplicate"
+- "hypothesis is small, it won't hurt to install at root"
+- "Our test command might need it someday"
+- "The sub-package pin is for test-time only, this one is for dev-time"
+
+**Why:** `hypothesis` registers itself as a pytest plugin. When pytest
+starts a test run in the root venv, it auto-discovers hypothesis and
+imports `hypothesis.internal.conjecture.shrinking.collection` through
+pytest's assertion rewriter. The recursive AST rewrite of that module
+exhausts memory on GitHub runners, producing a `MemoryError` during
+test collection with no root-cause signal (the stack trace points at
+`_pytest/assertion/rewrite.py` internals). This bit us twice — once
+caught by main CI, once in a cross-SDK PR — and cost hours of
+debugging. Root cause: the root venv shouldn't install what only
+sub-package test venvs need.
+
+Origin: PR #430 CI failure (2026-04-12), commit a9fd4e56 — hypothesis
+was added to root `[dev]` to enable a prior test collection workaround
+and surfaced as a MemoryError three commits later. Fixed by removing
+hypothesis from root dev deps.
+
 ## Rules
 
 - `.venv/` MUST be in `.gitignore`
