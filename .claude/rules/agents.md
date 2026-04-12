@@ -17,6 +17,12 @@ When working with Kailash frameworks, MUST consult the relevant specialist:
 
 **Why:** Framework specialists encode hard-won patterns and constraints that generalist agents miss, leading to subtle misuse of DataFlow, Nexus, or Kaizen APIs.
 
+## Specs Context in Delegation (MUST)
+
+Every specialist delegation prompt MUST include relevant spec file content from `specs/`. Read `specs/_index.md`, select relevant files, include them inline. See `rules/specs-authority.md` MUST Rule 7 for the full protocol and examples.
+
+**Why:** Specialists without domain context produce technically correct but intent-misaligned output (e.g., schemas without tenant_id because multi-tenancy wasn't communicated).
+
 ## Analysis Chain (Complex Features)
 
 1. **analyst** → Identify failure points

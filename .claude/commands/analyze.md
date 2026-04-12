@@ -68,13 +68,29 @@ Document analysis in `workspaces/<project>/01-analysis/`, plans in `workspaces/<
 - Use as many subdirectories and files as required
 - Name them sequentially as 01-, 02-, etc, for easy referencing
 
-### 5. Red team
+### 5. Create specs/ (MUST — before red team)
 
-Work with red team agents to scrutinize analysis, plans and user flows.
+Create `specs/` at the project root with detailed domain specification files. Specs are organized by the project's domain ontology (components, modules, features, user needs), NOT by process stages. See `rules/specs-authority.md`.
+
+1. **Create `specs/_index.md`** — a lean manifest listing every spec file with domain and one-line description
+2. **Create domain spec files** — one per major domain area discovered during analysis. Each file must be detailed enough to be the authority on its topic: every flow, contract, constraint, edge case, and decision.
+3. **Brief traceability** — for each requirement sentence in `briefs/`, confirm a corresponding spec file section exists. Missing mappings are BLOCKING — they become the requirements that silently disappear.
+
+The structure is project-defined. Examples:
+
+- SaaS: `authentication.md`, `billing.md`, `data-model.md`, `notifications.md`
+- SDK: `core-api.md`, `configuration.md`, `error-handling.md`, `extensibility.md`
+- ML: `data-pipeline.md`, `model-architecture.md`, `training.md`, `serving.md`
+- Non-coding: organized by whatever domain structure fits
+
+### 6. Red team
+
+Work with red team agents to scrutinize analysis, plans, user flows, AND specs.
 
 - Identify any gaps, regardless how small
 - Always go back to first principles, identify the roots, and plan the most optimal and elegant implementations
 - Analysis, user flows must flow into plans
+- Verify every brief requirement appears in at least one spec file
 
 ## Agent Teams
 

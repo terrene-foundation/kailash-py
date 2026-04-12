@@ -66,13 +66,15 @@ This closes the feedback loop: observe → digest → **codify into real artifac
 
 ### 2. Deep knowledge extraction
 
-Using as many subagents as required, peruse `docs/`, especially `docs/00-authority/`.
+Using as many subagents as required, peruse `docs/`, especially `docs/00-authority/`, and `specs/` for domain specifications.
 
 - Read beyond the docs into the intent of this project/product
+- Read `specs/` to understand the detailed domain truth — specs contain the nuanced decisions, contracts, and constraints that should inform agent and skill updates
 - Understand the roles and use of agents, skills, docs:
   - **Agents** — What to do, how to think about this, following procedural directives
   - **Skills** — Distilled knowledge for 100% situational awareness
   - **`docs/`** — Full knowledge base
+  - **`specs/`** — Detailed domain specifications (authority on what the system does)
 
 ### 3. Update existing agents
 
@@ -98,136 +100,13 @@ Ensure user-facing documentation reflects new capabilities. Verify README.md, do
 
 Validate that generated agents and skills are correct, complete, and secure. **claude-code-architect** verifies cc-artifacts compliance (descriptions under 120 chars, agents under 400 lines, commands under 150 lines, rules path-scoped, SKILL.md progressive disclosure).
 
-### 7. Create upstream proposal (BUILD repos only)
+### 7. Create upstream proposal (BUILD repos) / 8. Upstream to atelier (loom only)
 
-**This step applies ONLY to BUILD repos** (kailash-py, kailash-rs). Detect by checking:
+Follow the proposal protocol in `guides/co-setup/09-proposal-protocol.md`. Key rules:
 
-- Git remote contains `kailash-py` or `kailash-rs`, OR
-- `pyproject.toml` contains `name = "kailash"` or `Cargo.toml` contains `name = "kailash"`
-
-**If this is a downstream project repo** (anything else): SKIP this step. Downstream repos consume COC artifacts from templates — they do not propose changes upstream. Artifact changes from `/codify` in downstream repos stay local to that project. Report:
-
-> Artifacts updated locally. This is a downstream project repo — changes stay local.
-> Only BUILD repos (kailash-py, kailash-rs) create upstream proposals.
-
-**If this is a BUILD repo**: Create a proposal for upstream review at loom/ (source of truth).
-
-**DO NOT sync directly to COC template repos.** All distribution flows through loom/ via `/sync`.
-
-1. Create `.claude/.proposals/` directory if it doesn't exist
-2. Read the SDK version from `pyproject.toml` (py) or `Cargo.toml` (rs) and the COC artifact version from `.claude/VERSION`
-3. **Check for existing proposal** — read `.claude/.proposals/latest.yaml` if it exists:
-   - **`status: pending_review`** → this proposal has NOT been reviewed at loom/ yet. MUST NOT overwrite. **Append** this session's changes to the existing `changes:` array (see append format below).
-   - **`status: reviewed`** → loom/ has classified this proposal but may not have distributed yet. **Append** — new changes since review still need upstream attention.
-   - **`status: distributed`** → fully processed (classified AND distributed to USE templates). Safe to **create fresh** — archive the old file to `.claude/.proposals/archive/{codify_date}-{source_repo}.yaml` first.
-   - **File does not exist** → **create fresh**.
-
-   **BLOCKED:** Overwriting a `pending_review` or `reviewed` proposal. This destroys unprocessed changes from prior `/codify` sessions that loom/ has not yet classified.
-
-4. Generate or append `.claude/.proposals/latest.yaml`:
-
-   **Fresh proposal** (new file or after archiving a `distributed` proposal):
-
-   ```yaml
-   source_repo: kailash-py # or kailash-rs
-   codify_date: YYYY-MM-DD
-   codify_session: "type(scope): description of work"
-   sdk_version: "2.2.1" # from pyproject.toml or Cargo.toml
-   coc_version: "1.0.0" # from .claude/VERSION
-
-   changes:
-     - file: relative/path/to/artifact.md
-       action: created | modified
-       suggested_tier: cc | co | coc | coc-py | coc-rs
-       reason: "Why this artifact was created/changed"
-       diff_lines: "+N -N" # for modifications
-
-   status: pending_review
-   ```
-
-   **Appending to existing proposal** (status is `pending_review` or `reviewed`):
-   - Keep ALL existing top-level fields and `changes:` entries intact
-   - Add a YAML comment separator with the session date
-   - Append new `changes:` entries below the separator
-   - Update `codify_date` and `codify_session` to reflect the latest session
-   - Update `sdk_version` and `coc_version` if they changed
-   - If status was `reviewed`, reset to `pending_review` (new unreviewed changes added)
-
-   ```yaml
-   # Existing entries preserved above...
-
-   # --- YYYY-MM-DD session: type(scope): description ---
-
-     - file: relative/path/to/new-artifact.md
-       action: created
-       suggested_tier: coc
-       reason: "Why this artifact was created"
-       diff_lines: "+80"
-
-   status: pending_review  # reset if was reviewed — new unreviewed changes added
-   ```
-
-5. For each changed artifact, suggest a tier:
-   - **cc**: Claude Code universal (guides, cc-audit)
-   - **co**: Methodology universal (CO principles, journal, communication)
-   - **coc**: Codegen, language-agnostic (workflow phases, analysis patterns)
-   - **coc-py** / **coc-rs**: Language-specific (code examples, SDK patterns)
-
-6. Report to the developer:
-
-   **If fresh proposal:**
-
-   > Artifacts updated locally. Proposal created at `.claude/.proposals/latest.yaml`
-   > with {N} changes for upstream review.
-   > When ready, open loom/ and run `/sync {py|rs}` to classify and distribute.
-
-   **If appended to existing:**
-
-   > Artifacts updated locally. Appended {N} new changes to existing proposal
-   > (`.claude/.proposals/latest.yaml`, now {total} changes, status reset to pending_review).
-   > Prior {prior_count} changes from earlier sessions are preserved.
-   > When ready, open loom/ and run `/sync {py|rs}` to classify and distribute.
-
-### 8. Create upstream proposal (loom only — targets atelier/)
-
-**This step applies ONLY when running at loom/.** Detect by: git remote contains `loom`, or `.claude/sync-manifest.yaml` exists in the repo root.
-
-**If this is NOT loom/**: SKIP this step.
-
-**If this is loom/**: Check whether any artifacts updated in steps 3-4 are CC or CO tier (domain-agnostic methodology, not COC-specific). CC/CO artifacts originate at atelier/ and should be proposed upstream.
-
-1. Identify which updated artifacts are CC or CO tier (guides, rules, agents that are methodology-level, not SDK-specific)
-2. If none qualify, skip — report "No CC/CO changes to propose upstream"
-3. If CC/CO changes exist, apply the **same append-not-overwrite logic** as Step 7 to `.claude/.proposals/latest.yaml`:
-   - Check existing status (`pending_review` / `reviewed` / `distributed` / missing)
-   - Append or create fresh accordingly
-   - Use `source_repo: loom` and `upstream_target: atelier`
-
-   ```yaml
-   source_repo: loom
-   upstream_target: atelier
-   codify_date: YYYY-MM-DD
-   codify_session: "type(scope): description"
-   loom_version: "X.Y.Z"
-   coc_version: "X.Y.Z"
-
-   changes:
-     - file: rules/rule-authoring.md
-       action: created
-       suggested_tier: cc
-       canonical_path: .claude/rules/rule-authoring.md
-       reason: "..."
-       adaptation_notes: "Notes on what atelier needs to adjust"
-
-   status: pending_review
-   ```
-
-4. Report:
-   > {N} CC/CO artifacts proposed for upstream to atelier/.
-   > Proposal at `.claude/.proposals/latest.yaml` (status: pending_review).
-   > When ready, the atelier maintainer reviews and adapts for atelier context.
-
-See `rules/artifact-flow.md` for the full flow rules.
+- **BUILD repos** (kailash-py, kailash-rs): Create/append proposal at `.claude/.proposals/latest.yaml` for loom/ review. **Append, never overwrite** unprocessed proposals. See `rules/artifact-flow.md`.
+- **loom/**: Propose CC/CO-tier artifacts upstream to atelier/ using the same append-not-overwrite protocol.
+- **Downstream project repos**: SKIP. Changes stay local.
 
 ## Agent Teams
 
@@ -250,13 +129,6 @@ Deploy these agents as a team for codification:
 - **gold-standards-validator** — Terrene naming, licensing accuracy, terminology standards
 - **testing-specialist** — Verify any code examples in skills are testable
 - **security-reviewer** — Audit agents/skills for prompt injection, insecure patterns, secrets exposure
-
-**Upstream proposals (steps 7-8):**
-
-- BUILD repos (kailash-py, kailash-rs): append to `.claude/.proposals/latest.yaml` — never overwrite unprocessed proposals
-- loom/: CC/CO artifacts proposed upstream to atelier/ via `.claude/.proposals/latest.yaml`
-- Downstream project repos: skip proposal creation, changes stay local
-- See `rules/artifact-flow.md` for the controlled flow and proposal status lifecycle
 
 ### Journal (MUST — phase-complete gate)
 
