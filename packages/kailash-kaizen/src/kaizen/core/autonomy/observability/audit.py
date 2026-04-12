@@ -275,14 +275,23 @@ class AuditTrailManager:
         >>> failures = await manager.query_by_result("failure")
     """
 
-    def __init__(self, storage: AuditStorage | None = None):
+    def __init__(
+        self,
+        storage: AuditStorage | None = None,
+        canonical_store: object | None = None,
+    ):
         """
         Initialize audit trail manager.
 
         Args:
             storage: AuditStorage backend (defaults to FileAuditStorage)
+            canonical_store: Optional canonical ``kailash.trust.audit_store``
+                instance. When provided, all events are also forwarded to
+                the canonical store for unified audit trail querying
+                (SPEC-08 convergence).
         """
         self.storage = storage or FileAuditStorage()
+        self._canonical_store = canonical_store
         logger.debug("AuditTrailManager initialized")
 
     async def record(
@@ -328,6 +337,23 @@ class AuditTrailManager:
         )
 
         await self.storage.append(entry)
+
+        # Forward to canonical audit store (SPEC-08 convergence)
+        if self._canonical_store is not None:
+            try:
+                self._canonical_store.append_sync(
+                    actor=agent_id,
+                    action=action,
+                    resource=f"kaizen.observability:{agent_id}",
+                    details={"result": str(result), **details, **(metadata or {})},
+                )
+            except Exception:
+                logger.warning(
+                    "audit.canonical_forward_failed agent_id=%s action=%s",
+                    agent_id,
+                    action,
+                )
+
         logger.info(
             f"Audit recorded: {agent_id} - {action} - {result}",
             extra={"agent_id": agent_id, "action": action, "result": result},

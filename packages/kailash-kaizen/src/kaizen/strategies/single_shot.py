@@ -29,6 +29,8 @@ from typing import Any, Dict, List
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
+from kaizen.core.deprecation import deprecated
+
 logger = logging.getLogger(__name__)
 
 # Allowlist regex for MCP tool names — validates before execution
@@ -348,9 +350,16 @@ class SingleShotStrategy:
 
     # Task 2.11: Extension Points
 
+    @deprecated(
+        "Use composition wrappers (MonitoredAgent, GovernedAgent, StreamingAgent) instead.",
+        since="2.5.0",
+    )
     def pre_execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
         Extension point: Preprocess inputs before execution.
+
+        .. deprecated:: 2.5.0
+            Use composition wrappers (MonitoredAgent, GovernedAgent, StreamingAgent) instead.
 
         Override in subclasses to customize input preprocessing.
 
@@ -452,9 +461,16 @@ class SingleShotStrategy:
         # Fallback: return raw result
         return raw_result
 
+    @deprecated(
+        "Use composition wrappers (MonitoredAgent, GovernedAgent, StreamingAgent) instead.",
+        since="2.5.0",
+    )
     def post_execute(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """
         Extension point: Post-process final result.
+
+        .. deprecated:: 2.5.0
+            Use composition wrappers (MonitoredAgent, GovernedAgent, StreamingAgent) instead.
 
         Override in subclasses to customize post-processing.
 

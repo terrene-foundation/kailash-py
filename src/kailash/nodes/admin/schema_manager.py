@@ -49,7 +49,7 @@ class AdminSchemaManager:
 
             # Drop existing tables if requested
             if drop_existing:
-                self._drop_existing_schema()
+                self._drop_existing_schema(force_drop=True)
 
             # Load and execute schema
             schema_path = Path(__file__).parent / "schema.sql"
@@ -208,8 +208,12 @@ class AdminSchemaManager:
             self.logger.error(f"Failed to get schema info: {e}")
             raise NodeExecutionError(f"Failed to get schema info: {str(e)}")
 
-    def _drop_existing_schema(self):
+    def _drop_existing_schema(self, *, force_drop: bool = False):
         """Drop existing admin schema tables."""
+        if not force_drop:
+            raise ValueError(
+                "_drop_existing_schema() refused — pass force_drop=True to acknowledge data loss is irreversible"
+            )
         tables_to_drop = [
             "admin_audit_log",
             "user_sessions",

@@ -6,7 +6,9 @@ Utilities for parsing database connection strings.
 
 import logging
 from typing import Any, Dict, Optional
-from urllib.parse import parse_qs, quote, unquote, urlparse
+from urllib.parse import parse_qs, quote, urlparse
+
+from kailash.utils.url_credentials import decode_userinfo_or_raise
 
 from .exceptions import AdapterError
 
@@ -41,39 +43,19 @@ class ConnectionParser:
 
             parsed = urlparse(safe_connection_string)
 
-            # Basic components with proper username+password decoding.
-            # Both fields must be unquoted so special characters (@, #,
-            # %, :) round-trip from the URL to the driver. Leaving the
-            # username raw produced an asymmetric {user%40corp, password}
-            # dict that silently broke auth on any DB that does byte-
-            # exact comparison of credentials.
-            #
-            # Null-byte auth-bypass defense: if either decoded field
-            # contains \x00, refuse to return the components dict. The
-            # MySQL C client truncates credentials at the first null
-            # byte; accepting such a URL would silently hand the driver
-            # an empty password and enable an auth bypass against any
-            # account with an empty-password row in ``mysql.user``.
-            decoded_username = (
-                unquote(parsed.username)
-                if parsed.username is not None
-                else parsed.username
+            # Decode and validate userinfo through the shared helper.
+            # decode_userinfo_or_raise unquotes both fields and rejects
+            # null bytes, preventing the MySQL C client auth-bypass where
+            # a crafted %00 in the password truncates to an empty string.
+            decoded_username, decoded_password = decode_userinfo_or_raise(
+                parsed, default_user=""
             )
-            decoded_password = (
-                unquote(parsed.password)
-                if parsed.password is not None
-                else parsed.password
-            )
-            for field_name, value in (
-                ("username", decoded_username),
-                ("password", decoded_password),
-            ):
-                if value is not None and "\x00" in value:
-                    raise ValueError(
-                        f"Database credential field {field_name!r} contains "
-                        "a null byte after URL-decoding — refused to avoid "
-                        "auth-bypass truncation attacks."
-                    )
+            # Preserve None semantics for callers that distinguish
+            # "no username provided" from an empty string.
+            if not decoded_username and parsed.username is None:
+                decoded_username = None
+            if not decoded_password and parsed.password is None:
+                decoded_password = None
             components = {
                 "scheme": parsed.scheme,
                 "host": parsed.hostname,

@@ -240,6 +240,14 @@ class BulkCreateNode(AsyncSQLDatabaseNode, BulkOperationMixin):
         # Calculate execution time
         result.execution_time_ms = (datetime.now() - start_time).total_seconds() * 1000
 
+        if result.failed_records > 0:
+            logger.warning(
+                "bulk_create.partial_failure total=%d failed=%d first_error=%s",
+                result.total_records,
+                result.failed_records,
+                str(result.errors[0]) if result.errors else "unknown",
+            )
+
         return {
             "status": "success" if result.failed_records == 0 else "partial_success",
             "total_records": result.total_records,
@@ -785,6 +793,14 @@ class BulkUpsertNode(AsyncSQLDatabaseNode, BulkOperationMixin):
 
         # Calculate execution time
         result.execution_time_ms = (datetime.now() - start_time).total_seconds() * 1000
+
+        if result.failed_records > 0:
+            logger.warning(
+                "bulk_upsert.partial_failure total=%d failed=%d first_error=%s",
+                result.total_records,
+                result.failed_records,
+                str(result.errors[0]) if result.errors else "unknown",
+            )
 
         return {
             "status": "success" if result.failed_records == 0 else "partial_success",

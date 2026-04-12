@@ -13,7 +13,12 @@ import contextlib
 import logging
 from typing import Any, Dict, List, Optional
 
-from kailash.db.dialect import DatabaseType, QueryDialect, detect_dialect
+from kailash.db.dialect import (
+    DatabaseType,
+    QueryDialect,
+    _validate_identifier,
+    detect_dialect,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -95,12 +100,20 @@ class ConnectionManager:
         catches duplicate-index errors on MySQL (which does not support
         ``IF NOT EXISTS`` for indexes).
         """
+        _validate_identifier(index_name)
+        _validate_identifier(table)
+        for col in (c.strip() for c in columns.split(",")):
+            _validate_identifier(col)
         if self.dialect.database_type == DatabaseType.MYSQL:
             try:
                 await self.execute(f"CREATE INDEX {index_name} ON {table}({columns})")
             except Exception:
                 # MySQL raises error 1061 if index already exists
-                pass
+                logger.warning(
+                    "create_index.mysql_error index=%s table=%s",
+                    index_name,
+                    table,
+                )
         else:
             await self.execute(
                 f"CREATE INDEX IF NOT EXISTS {index_name} ON {table}({columns})"

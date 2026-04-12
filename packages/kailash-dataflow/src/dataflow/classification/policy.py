@@ -192,14 +192,28 @@ class ClassificationPolicy:
     def classify(self, model_name: str, field_name: str) -> str:
         """Return the classification level string for a field.
 
-        Returns ``"public"`` for unclassified fields.
+        Returns ``"highly_confidential"`` for unclassified fields
+        (fail-closed: unknown data is treated as most restrictive).
+
+        .. versionchanged:: 2.9.0
+            Default changed from ``"public"`` to ``"highly_confidential"``
+            for cross-SDK alignment with kailash-rs (fail-closed).
         """
         with self._lock:
             model_fields = self._registry.get(model_name, {})
             fc = model_fields.get(field_name)
             if fc is not None:
                 return fc.classification.value
-            return DataClassification.PUBLIC.value
+            logger.warning(
+                "classification.default_applied",
+                extra={
+                    "model": model_name,
+                    "field": field_name,
+                    "default": DataClassification.HIGHLY_CONFIDENTIAL.value,
+                    "reason": "fail-closed: unclassified field treated as most restrictive",
+                },
+            )
+            return DataClassification.HIGHLY_CONFIDENTIAL.value
 
     def get_retention_days(self, classification: str) -> Optional[int]:
         """Return retention period in days, or ``None`` for indefinite."""
