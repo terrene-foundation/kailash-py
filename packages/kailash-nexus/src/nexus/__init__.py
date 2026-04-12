@@ -38,7 +38,7 @@ from .registry import HandlerDef, HandlerParam, HandlerRegistry
 from .sse import register_sse_endpoint
 from .transports import HTTPTransport, MCPTransport, Transport
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 __all__ = [
     # Core
     "Nexus",

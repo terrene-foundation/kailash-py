@@ -2,14 +2,20 @@
 MongoDB Adapter for DataFlow.
 
 Provides document database operations using Motor async driver.
+
+Motor is imported lazily inside :meth:`MongoDBAdapter.connect` so that
+merely importing :mod:`dataflow` (e.g. ``from dataflow import DataFlow``)
+does not require motor/pymongo to be installed. The adapter raises a
+descriptive ``ImportError`` at connect time if motor is missing.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
-
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from dataflow.adapters.base_adapter import BaseAdapter
+
+if TYPE_CHECKING:  # pragma: no cover — typing-only import
+    from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +60,8 @@ class MongoDBAdapter(BaseAdapter):
         self.database_name = database_name
         self.client_options = kwargs
 
-        self._client: Optional[AsyncIOMotorClient] = None
-        self._db: Optional[AsyncIOMotorDatabase] = None
+        self._client: Optional["AsyncIOMotorClient"] = None
+        self._db: Optional["AsyncIOMotorDatabase"] = None
         self._connected = False
 
         logger.info(
@@ -94,6 +100,18 @@ class MongoDBAdapter(BaseAdapter):
             return
 
         try:
+            # Lazy import — motor/pymongo are optional for projects
+            # that don't use MongoDB. A descriptive ImportError here
+            # is better than a top-level ModuleNotFoundError every
+            # time `from dataflow import DataFlow` runs.
+            try:
+                from motor.motor_asyncio import AsyncIOMotorClient
+            except ImportError as exc:
+                raise ImportError(
+                    "MongoDB support requires the 'motor' driver. "
+                    "Install it with: pip install motor pymongo"
+                ) from exc
+
             # Create Motor client
             self._client = AsyncIOMotorClient(
                 self.connection_string, **self.client_options
@@ -976,27 +994,13 @@ class MongoDBAdapter(BaseAdapter):
         Returns:
             str: Sanitized connection string
         """
+        # Delegates to the canonical URL masker so that passwords
+        # containing encoded "@" (%40) and other special characters
+        # are handled via urlparse, not a fragile str.replace.
         try:
-            from urllib.parse import urlparse, urlunparse
+            from dataflow.utils.masking import mask_url
 
-            parsed = urlparse(connection_string)
-
-            # Replace password with asterisks
-            if parsed.password:
-                netloc = parsed.netloc.replace(f":{parsed.password}@", ":***@")
-                sanitized = urlunparse(
-                    (
-                        parsed.scheme,
-                        netloc,
-                        parsed.path,
-                        parsed.params,
-                        parsed.query,
-                        parsed.fragment,
-                    )
-                )
-                return sanitized
-
-            return connection_string
+            return mask_url(connection_string)
 
         except Exception:
             return "mongodb://***"

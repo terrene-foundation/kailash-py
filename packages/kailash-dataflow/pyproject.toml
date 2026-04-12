@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-dataflow"
-version = "2.0.3"
+version = "2.0.4"
 description = "Workflow-native database framework for Kailash SDK"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -45,9 +45,6 @@ dependencies = [
     "cryptography>=3.4.0",
     "flask>=2.0.0",
     "flask-jwt-extended>=4.0.0",
-    # Semantic
-    "numpy>=1.24.0",
-    "aiohttp>=3.9.0",
     # Performance
     "psutil>=5.9.0",
 ]

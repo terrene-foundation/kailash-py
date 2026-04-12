@@ -204,15 +204,25 @@ def _probe_mysql(database_url: str) -> Optional[int]:
 
     # Parse MySQL URL for pymysql connection
     # mysql://user:pass@host:port/dbname
+    # urlparse returns percent-encoded userinfo as-is; decode both fields
+    # so passwords/usernames containing @, #, %, etc. reach the driver
+    # in their literal form. The shared helper also rejects null bytes
+    # in decoded credentials — see ``kailash/utils/url_credentials.py``.
     try:
         from urllib.parse import urlparse
 
-        parsed = urlparse(database_url)
+        from kailash.utils.url_credentials import (
+            decode_userinfo_or_raise,
+            preencode_password_special_chars,
+        )
+
+        parsed = urlparse(preencode_password_special_chars(database_url))
+        user, password = decode_userinfo_or_raise(parsed, default_user="root")
         conn_kwargs = {
             "host": parsed.hostname or "localhost",
             "port": parsed.port or 3306,
-            "user": parsed.username or "root",
-            "password": parsed.password or "",
+            "user": user,
+            "password": password,
             "database": (parsed.path or "/").lstrip("/") or None,
             "connect_timeout": _PROBE_TIMEOUT_SECS,
         }

@@ -398,6 +398,10 @@ class TestReservedClaimsProtection:
         mw = JWTMiddleware.__new__(JWTMiddleware)
         mw.config = config
         mw._jwks_client = None
+        # SPEC-06: JWTMiddleware delegates crypto to JWTValidator.
+        from kailash.trust.auth.jwt import JWTValidator
+
+        mw._validator = JWTValidator(mw.config)
         return mw
 
     def test_extra_claims_cannot_override_sub(self):

@@ -97,6 +97,14 @@ class ModelRegistry:
             except RuntimeError:
                 self.runtime = LocalRuntime()
                 self._is_async = False
+                # The registry manages the runtime's lifecycle via
+                # close() → runtime.release() (ref-count cleanup). Tell
+                # the runtime not to emit the "use context manager"
+                # deprecation warning on first execute() — it's aimed
+                # at transient callers, not long-lived owners. Without
+                # this flag the registry path would produce a warning
+                # per instance. See rules/zero-tolerance.md Rule 1.
+                self.runtime._cleanup_registered = True
                 logger.debug("ModelRegistry: Detected sync context, using LocalRuntime")
             self._owns_runtime = True
 

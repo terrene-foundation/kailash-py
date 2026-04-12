@@ -130,9 +130,19 @@ class AdapterFactory:
             # Create adapter instance
             adapter = adapter_class(connection_string, **final_config)
 
+            # Mask credentials before logging — the connection string
+            # contains the password in the userinfo and possibly in
+            # query params. ``mask_url`` from dataflow.utils.masking
+            # routes through the same canonical 6-key sensitive set
+            # used by every other masking helper in the codebase.
+            from dataflow.utils.masking import mask_url
+
             logger.info(
                 "factory.created_adapter_for",
-                extra={"db_type": db_type, "connection_string": connection_string},
+                extra={
+                    "db_type": db_type,
+                    "connection_string": mask_url(connection_string),
+                },
             )
             return adapter
 

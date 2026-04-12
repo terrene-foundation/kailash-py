@@ -14,8 +14,7 @@ Investigation: See DATAFLOW_ASYNC_DEADLOCK_INVESTIGATION.md
 
 import logging
 import os
-import tempfile
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -33,19 +32,18 @@ def create_postgres_tables(db_url: str) -> None:
     """
     try:
         import psycopg2
-    except ImportError:
+    except ImportError as exc:
         raise ImportError(
-            "psycopg2 required for PostgreSQL table creation. "
-            "Run: pip install psycopg2-binary"
-        )
+            "psycopg2 required for PostgreSQL table creation. Run: pip install psycopg2-binary"
+        ) from exc
 
     parsed = urlparse(db_url)
     conn = psycopg2.connect(
         host=parsed.hostname,
         port=parsed.port or 5432,
         database=parsed.path.lstrip("/"),
-        user=parsed.username,
-        password=parsed.password,
+        user=unquote(parsed.username) if parsed.username else None,
+        password=unquote(parsed.password) if parsed.password else None,
     )
     conn.autocommit = True
     cursor = conn.cursor()
@@ -277,8 +275,7 @@ def initialize_orchestration_tables(db_url: str) -> None:
         create_sqlite_tables(db_url)
     else:
         raise ValueError(
-            f"Unsupported database type in URL: {db_url}. "
-            "Only PostgreSQL and SQLite are supported."
+            f"Unsupported database type in URL: {db_url}. Only PostgreSQL and SQLite are supported."
         )
 
 
@@ -301,8 +298,8 @@ def cleanup_tables(db_url: str) -> None:
             host=parsed.hostname,
             port=parsed.port or 5432,
             database=parsed.path.lstrip("/"),
-            user=parsed.username,
-            password=parsed.password,
+            user=unquote(parsed.username) if parsed.username else None,
+            password=unquote(parsed.password) if parsed.password else None,
         )
         conn.autocommit = True
         cursor = conn.cursor()

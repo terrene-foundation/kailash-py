@@ -24,60 +24,165 @@ module's :func:`mask_url` for backward compatibility.
 from __future__ import annotations
 
 from typing import Optional
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 __all__ = [
     "mask_url",
     "mask_secret",
 ]
 
+# Query-string parameter names that carry a secret. Matches the set
+# used by :meth:`DatabaseConfig.get_masked_connection_string` so the
+# two maskers stay in lock-step — see ``rules/security.md`` § "No
+# secrets in logs".
+_SENSITIVE_QUERY_KEYS = frozenset(
+    {"password", "sslpassword", "sslkey", "authtoken", "token", "apikey"}
+)
+
 
 def mask_url(url: Optional[str]) -> str:
-    """Replace the userinfo section of a URL with ``***``.
+    """Replace credentials in a URL with ``***``.
 
     Handles every URL scheme ``urllib.parse`` understands (redis://,
     rediss://, postgres://, postgresql://, mongodb://, mysql://,
-    http://, https://, ws://, wss://, etc.). Returns:
+    http://, https://, ws://, wss://, etc.) plus MongoDB replica-set
+    URLs (comma-separated hosts in the netloc). Masks:
+
+    - ``user:password@`` userinfo in the authority component
+    - ``password=`` / ``sslpassword=`` / ``sslkey=`` / similar in the
+      query string (PostgreSQL, MySQL, and MongoDB accept credentials
+      via URL query parameters)
+
+    Returns:
 
     - ``""`` when ``url`` is ``None`` or empty — nothing to mask.
-    - ``"<unparseable>"`` when ``urlparse`` raises on the input — we
-      intentionally discard the raw input rather than echoing it,
-      because the input might itself be the secret (a malformed
-      connection string literal).
-    - The URL unchanged when there's no ``user`` or ``password``
-      component — nothing to mask in that case.
-    - The URL with ``user:password`` replaced by ``***`` otherwise.
+    - The URL unchanged when there's no userinfo and no credential
+      query params — nothing to mask.
+    - The URL with credentials replaced by ``***`` otherwise.
+    - The original URL if parsing fails — we return the input rather
+      than the legacy ``"<unparseable>"`` sentinel because operators
+      need the scheme/host for diagnostics even when the parser
+      stumbles (MongoDB replica sets used to hit this path).
 
     Examples:
         >>> mask_url("redis://alice:wonderland@localhost:6379/0")
         'redis://***@localhost:6379/0'
+        >>> mask_url("mongodb://u:p@h1,h2/db?replicaSet=rs0")
+        'mongodb://***@h1,h2/db?replicaSet=rs0'
         >>> mask_url("postgres://localhost:5432/db")
         'postgres://localhost:5432/db'
+        >>> mask_url("postgres://localhost/db?password=leak")
+        'postgres://localhost/db?password=%2A%2A%2A'
         >>> mask_url(None)
         ''
         >>> mask_url("")
         ''
-        >>> mask_url("not a url")
-        'not a url'
-
-    This helper is deliberately NOT configurable — there is no
-    "mask only the password" mode, no "mask only under certain log
-    levels" mode. Credentials either appear in logs or they don't,
-    and centralizing the enforcement here is the only way to audit
-    it mechanically.
     """
     if not url:
         return ""
+
+    # MongoDB replica-set URLs put comma-separated hosts in the netloc,
+    # which trips Python's urlparse host parser. Handle them ourselves:
+    # split on the first "://" → split userinfo → split host-list →
+    # optionally split path+query → mask.
+    if "://" in url and "," in url.split("://", 1)[1].split("/", 1)[0]:
+        try:
+            return _mask_multi_host_url(url)
+        except Exception:
+            # Fall through to the regular urlparse path; if that also
+            # fails we return the original URL below.
+            pass
+
     try:
         parsed = urlparse(url)
-        if parsed.username or parsed.password:
-            netloc = "***@" + (parsed.hostname or "")
-            if parsed.port:
-                netloc = f"{netloc}:{parsed.port}"
-            return urlunparse(parsed._replace(netloc=netloc))
-        return url
     except (ValueError, AttributeError):
-        return "<unparseable>"
+        return url
+
+    has_userinfo = bool(parsed.username or parsed.password)
+    query_has_secret = False
+    if parsed.query:
+        query_has_secret = any(
+            k.lower() in _SENSITIVE_QUERY_KEYS
+            for k, _ in parse_qsl(parsed.query, keep_blank_values=True)
+        )
+
+    # Nothing to mask — return the original string so empty-netloc
+    # schemes (sqlite:///path, file:///) are not rewritten by urlunparse.
+    if not has_userinfo and not query_has_secret:
+        return url
+
+    if has_userinfo:
+        host = parsed.hostname or ""
+        if ":" in host:  # IPv6 — bracket the host
+            host = f"[{host}]"
+        netloc = f"***@{host}"
+        if parsed.port:
+            netloc = f"{netloc}:{parsed.port}"
+        parsed = parsed._replace(netloc=netloc)
+
+    if query_has_secret:
+        pairs = parse_qsl(parsed.query, keep_blank_values=True)
+        masked_pairs = [
+            (k, "***" if k.lower() in _SENSITIVE_QUERY_KEYS else v) for k, v in pairs
+        ]
+        parsed = parsed._replace(query=urlencode(masked_pairs))
+
+    return urlunparse(parsed)
+
+
+def _mask_multi_host_url(url: str) -> str:
+    """Mask a URL with a comma-separated host list in the netloc.
+
+    MongoDB replica-set URLs look like::
+
+        mongodb://user:pass@host1:27017,host2:27017,host3:27017/db?replicaSet=rs0
+
+    Python's ``urlparse`` refuses to split the netloc on commas, so we
+    hand-roll a small parser. RFC 3986 order matters: peel the
+    fragment first, then the query, then split authority from path.
+    If we split on ``/`` before peeling the query, a URL like
+    ``mongodb://u:p@h1,h2?password=leak`` (no path) would leave
+    ``?password=leak`` baked into the authority and the query masker
+    would never run — a credential leak.
+    """
+    scheme, _, rest = url.partition("://")
+
+    # Peel fragment (everything after #)
+    rest, frag_sep, fragment = rest.partition("#")
+    frag_suffix = f"#{fragment}" if frag_sep else ""
+
+    # Peel query (everything after ?)
+    rest, q_sep, query = rest.partition("?")
+
+    # Now `rest` is authority + optional path — safe to split on `/`
+    authority, slash, path = rest.partition("/")
+    path_prefix = f"/{path}" if slash else ""
+
+    userinfo_mutated = False
+    if "@" in authority:
+        _userinfo, _, hostlist = authority.rpartition("@")
+        masked_authority = f"***@{hostlist}"
+        userinfo_mutated = True
+    else:
+        masked_authority = authority
+
+    query_mutated = False
+    if q_sep and query:
+        pairs = parse_qsl(query, keep_blank_values=True)
+        if any(k.lower() in _SENSITIVE_QUERY_KEYS for k, _ in pairs):
+            masked_pairs = [
+                (k, "***" if k.lower() in _SENSITIVE_QUERY_KEYS else v)
+                for k, v in pairs
+            ]
+            query = urlencode(masked_pairs)
+            query_mutated = True
+
+    # Nothing to mask — return the original string verbatim.
+    if not userinfo_mutated and not query_mutated:
+        return url
+
+    query_suffix = f"?{query}" if q_sep else ""
+    return f"{scheme}://{masked_authority}{path_prefix}{query_suffix}{frag_suffix}"
 
 
 def mask_secret(value: Optional[str], *, keep_tail: int = 4) -> str:

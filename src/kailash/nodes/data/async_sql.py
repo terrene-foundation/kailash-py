@@ -46,7 +46,6 @@ from enum import Enum
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
 import yaml
-
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
@@ -61,9 +60,7 @@ try:
     from kailash.nodes.data.optimistic_locking import (
         LockStatus,  # type: ignore[assignment]
     )
-    from kailash.nodes.data.optimistic_locking import (
-        OptimisticLockingNode,
-    )
+    from kailash.nodes.data.optimistic_locking import OptimisticLockingNode
 
     OPTIMISTIC_LOCKING_AVAILABLE = True
 except ImportError:
@@ -636,7 +633,6 @@ class EnterpriseConnectionPool:
     def run(self, **kwargs) -> dict[str, Any]:
         """Execute the node's logic (Node ABC contract)."""
         return self.execute(**kwargs)
-
 
     async def execute_query(
         self, query: str, params: Optional[Union[tuple, dict]] = None, **kwargs
@@ -1333,16 +1329,26 @@ class MySQLAdapter(DatabaseAdapter):
 
         # Parse connection string if provided (aiomysql requires discrete params, not DSN)
         if self.config.connection_string:
-            from urllib.parse import unquote, urlparse
+            from urllib.parse import urlparse
 
-            # Handle special characters in password before parsing
-            conn_str = self.config.connection_string
+            from kailash.utils.url_credentials import (
+                decode_userinfo_or_raise,
+                preencode_password_special_chars,
+            )
+
+            # Pre-encode raw ``#$@?`` in password so operators who paste
+            # a literal DATABASE_URL without URL-encoding their special
+            # characters still get a working parse — see the helper's
+            # docstring for the Arbor P3 provenance.
+            conn_str = preencode_password_special_chars(self.config.connection_string)
             parsed = urlparse(conn_str)
 
             host = parsed.hostname or "localhost"
             port = parsed.port or 3306
-            user = parsed.username or "root"
-            password = unquote(parsed.password) if parsed.password else ""
+            # Decode username/password and reject null bytes in the
+            # decoded credentials via the shared helper — see
+            # ``kailash/utils/url_credentials.py``.
+            user, password = decode_userinfo_or_raise(parsed, default_user="root")
             database = parsed.path.lstrip("/") if parsed.path else ""
         else:
             host = self.config.host

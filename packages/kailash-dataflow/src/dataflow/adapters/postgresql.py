@@ -82,8 +82,16 @@ class PostgreSQLAdapter(DatabaseAdapter):
             self.connection_pool = await asyncpg.create_pool(**params)
             self.is_connected = True
 
+            # Structured log; host/port/database are connection
+            # coordinates not credentials, but we route through positional
+            # args anyway to satisfy ``rules/observability.md`` MUST NOT
+            # "No unstructured f-string log messages" and to clear
+            # CodeQL py/clear-text-logging taint flow.
             logger.info(
-                f"Created PostgreSQL connection pool: {self.host}:{self.port}/{self.database}"
+                "postgresql.connection_pool.created host=%s port=%s database=%s",
+                self.host,
+                self.port,
+                self.database,
             )
 
         except ImportError:

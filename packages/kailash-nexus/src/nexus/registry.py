@@ -53,12 +53,68 @@ class HandlerRegistry:
     def __init__(self, event_bus=None):
         self._handlers: Dict[str, HandlerDef] = {}
         self._workflows: Dict[str, Any] = {}  # name -> Workflow object
+        self._workflow_metadata: Dict[str, Dict[str, Any]] = {}  # name -> metadata
         self._handler_funcs: Dict[str, Dict[str, Any]] = {}  # compat dict
         self._event_bus = event_bus
 
-    def register_workflow(self, name: str, workflow) -> None:
-        """Register a workflow by name."""
+    # 64 KiB is the soft cap on caller-supplied workflow metadata. The
+    # metadata dict is stored on the Workflow object and in the registry
+    # but is not currently rendered in any hot path; the cap is a
+    # defensive bound against resource exhaustion via oversized or
+    # non-JSON-serializable inputs. Raise at registration time so the
+    # failure is attributed to the caller that supplied it.
+    _METADATA_MAX_BYTES = 64 * 1024
+
+    def register_workflow(
+        self,
+        name: str,
+        workflow,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Register a workflow by name with optional metadata.
+
+        Args:
+            name: Workflow identifier.
+            workflow: Workflow instance.
+            metadata: Arbitrary metadata dict (version, author, tags,
+                etc.). Must be JSON-serializable and fit within
+                ``_METADATA_MAX_BYTES``.
+
+        Raises:
+            ValueError: If ``metadata`` is not JSON-serializable or
+                exceeds the size cap.
+        """
+        if metadata is not None:
+            import json
+
+            try:
+                encoded = json.dumps(metadata)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Workflow '{name}' metadata is not JSON-serializable: {exc}"
+                ) from exc
+            if len(encoded.encode("utf-8")) > self._METADATA_MAX_BYTES:
+                raise ValueError(
+                    f"Workflow '{name}' metadata exceeds "
+                    f"{self._METADATA_MAX_BYTES} bytes"
+                )
         self._workflows[name] = workflow
+        if metadata is not None:
+            # Store a SHALLOW copy so caller-side top-level mutations
+            # after register() returns cannot retroactively change what
+            # the registry holds (``metadata["version"] = "X"`` is
+            # contained). Nested structures are still shared references:
+            # ``metadata["tags"].append(...)`` WILL be observed by the
+            # registry. Callers that need full isolation must pass a
+            # deep-copied metadata dict themselves — deep-copy by
+            # default would break legitimate non-JSON sentinel values
+            # and the size-cap validator already ensures the metadata
+            # is JSON-shaped for the common case.
+            self._workflow_metadata[name] = dict(metadata)
+
+    def get_workflow_metadata(self, name: str) -> Dict[str, Any]:
+        """Get metadata for a registered workflow. Returns empty dict if none."""
+        return self._workflow_metadata.get(name, {})
 
     def register_handler(
         self,

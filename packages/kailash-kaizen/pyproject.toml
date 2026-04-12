@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-kaizen"
-version = "2.7.1"
+version = "2.7.2"
 description = "Advanced AI agent framework built on Kailash SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -39,6 +39,7 @@ dependencies = [
     "tiktoken>=0.5.0",
     # Server
     "aiohttp>=3.13.3",
+    "requests>=2.32",
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
     "prometheus-client>=0.19.0",

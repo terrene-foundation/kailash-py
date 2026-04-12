@@ -1,0 +1,25 @@
+# Session Notes — Bug Sweep April 2026
+
+## What happened
+
+PR #376 merged — 10 issues resolved, 39 new tests, 4 commits:
+- `2aabc95a` fix(kaizen-agents): Ollama adapter (#361, #363, #364, #367)
+- `3fae47c3` fix(kaizen): Gemini provider (#340, #357)
+- `9520826a` fix(dataflow): Fabric (#362, #368)
+- `026b7341` fix(kaizen): BaseAgent MCP (#339)
+- #355 closed (already fixed)
+- #377 filed (sync SingleShotStrategy gap — follow-up from code review)
+
+## Security hardening applied
+- Tool error messages sanitized (no internal details to LLM context)
+- Ollama kwargs allowlist (prevents request body key overwrite)
+- Tool name validation regex before MCP execution
+- Error response bodies logged but not leaked in exceptions
+- Log injection prevention via repr() in stream parser
+
+## CI note
+CI Pipeline fails on all branches (including main) due to `kailash_mcp` module not found — MCP deprecation shims reference the package which only exists on `feat/platform-architecture-convergence`. This will resolve when convergence merges.
+
+## Follow-up
+- #377 — sync SingleShotStrategy needs same tool-call loop as async
+- Platform architecture convergence — resume from Task 4 (SPEC-07)

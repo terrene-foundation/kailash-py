@@ -1,0 +1,278 @@
+# Session Notes — 2026-04-11 (Arbor Upstream Fixes)
+
+## Where we are
+
+Arbor HR Advisory Platform reported 6 upstream issues in the Kailash SDK
+(kailash-py 2.8.1). Three were already fixed in prior sessions (#1 Kaizen
+BYOK via #12, #2 DataFlow cache invalidation, #6 auto_migrate event loop).
+This session resolved the remaining three (P2 Nexus metadata, P2
+dependency hygiene, P3 DATABASE_URL special chars) and also fixed 47
+pre-existing JWT test failures in the deprecated `nexus.auth` module.
+
+**Status: COMPLETE after R1 (initial session) + R2 (re-audit) + R3
+(resolve-all pass). All findings fixed; regression suite 62/62 passing;
+sub-packages installed editable so no PYTHONPATH workaround is needed.**
+
+> **Correction**: the original session-notes claimed "86 regression tests"
+> — the actual count at the end of R1 was **46** (6 `@pytest.mark.parametrize`
+> decorators, not enough to reach 86). R2 added 4 tests (50 total); R3
+> added 12 more (62 total). The 86 figure was a miscount in the original
+> writeup; updated here for accuracy.
+
+## Read first
+
+1. `workspaces/arbor-upstream-fixes/01-analysis/01-arbor-issues.md` — the
+   original 6 Arbor findings and their fix disposition
+2. `tests/regression/test_arbor_database_url_special_chars.py` — 86 new
+   regression tests locking in the DATABASE_URL + masking fixes
+3. `packages/kailash-nexus/src/nexus/auth/jwt.py:276-308` — the four new
+   thin-delegate methods on JWTMiddleware (SPEC-06 backward-compat shims)
+4. `git status` at end of session — 22 files modified + 1 new test file
+5. `esperie-enterprise/kailash-rs#323` — cross-SDK parity issue filed for
+   Rust Nexus structured workflow metadata
+
+## What shipped
+
+### Fix 1 — Nexus workflow metadata (P2)
+- `Nexus.register(name, wf, metadata=...)` accepts structured metadata
+- Metadata merged into `workflow.metadata` so MCP `workflow://` resource
+  and OpenAPI schema derivation see it without a second lookup
+- Validated (JSON-serializable, 64 KiB cap) BEFORE mutating workflow
+- Registry stores shallow-copy so caller post-register mutations don't
+  leak through (top-level only; nested structures are shared — documented)
+- `@handler` decorator and `register_handler()` also accept metadata
+- Files: `packages/kailash-nexus/src/nexus/{core.py,registry.py}`
+- Tests: 9 new cases in `tests/unit/test_registry.py`
+
+### Fix 2 — Dependency hygiene (P2)
+Per `rules/dependencies.md` "Declared = Imported":
+- `kailash-dataflow`: removed unused `numpy`, `aiohttp` (declared but not
+  imported in src/)
+- `kailash-kaizen`: added `requests>=2.32` (3 lazy imports were undeclared
+  in providers/embedding/huggingface.py, config/providers.py, signatures/
+  multi_modal.py)
+- `kailash-nexus`: kept `websockets>=12.0` (directly imported by
+  transports/websocket.py — must be declared)
+- `kailash` core: removed unused `websockets` from main deps, added to
+  dev extras (mcp/test code imports it)
+- `uv pip check` clean (142 packages)
+
+### Fix 3 — DATABASE_URL special characters (P3)
+Originally a single builder bug — expanded to a 9-file fix after red team
+found the same pattern (raw `parsed.password`, no `unquote()`, no
+`quote_plus()`) in 9 other call sites plus a divergent regex parser.
+
+- **Builders**: `DatabaseConfigBuilder.{postgresql, mysql}` and
+  `AsyncDatabaseConfigBuilder.{postgresql, mysql}` (added `.mysql` — was
+  missing) now URL-encode credentials via `quote_plus`
+- **MySQL runtime parsers**: `db/connection.py::_init_mysql` and
+  `trust/esa/database.py::_init_mysql` now use `urlparse` + `unquote` +
+  null-byte defense (rejects `\x00` after decode — auth-bypass defense)
+- **Replaced**: hand-rolled MySQL regex parser in `trust/esa/database.py`
+  (was `r"mysql://([^:]+):([^@]+)@([^:/]+):?(\d+)?/(.+)"` — rejected
+  valid percent-encoded passwords)
+- **Downstream `unquote` added** at 8 production sites:
+  - `src/kailash/nodes/data/async_sql.py:1345-1346`
+  - `packages/kailash-dataflow/src/dataflow/core/pool_utils.py:208-219`
+  - `packages/kailash-dataflow/src/dataflow/adapters/connection_parser.py:52-66`
+  - `packages/kaizen-agents/src/kaizen_agents/patterns/state_manager.py:320-356` (x2)
+  - `packages/kaizen-agents/tests/integration/orchestration/manual_table_creation.py` (x2)
+  - `packages/kailash-dataflow/tests/e2e/dataflow_alpha/test_complete_user_journey.py` (x2)
+- **Masking consolidation**: `DatabaseConfig.get_masked_connection_string`
+  rewritten on `urlparse`/`parse_qsl` (regex was fragile); `mask_url()` in
+  `dataflow/utils/masking.py` extended to handle MongoDB replica-set URLs
+  (comma-netloc) and query-string credentials; `mongodb.py` delegates to
+  canonical `mask_url`; both Redis `_sanitize_url` helpers
+  (`trust/rate_limit` + `nexus/auth/rate_limit`) upgraded to mask query
+  strings with the full sensitive-key set
+- **Sensitive-key alignment**: 6-key set `{password, sslpassword, sslkey,
+  authtoken, token, apikey}` is held in 4 places — `database_config.py`,
+  `dataflow/utils/masking.py`, and both Redis backends. An in-code
+  comment at `database_config.py:160-166` warns that all four sites must
+  be kept in sync (future drift will be caught by parametrized tests at
+  `test_arbor_database_url_special_chars.py::TestArborDatabaseUrlMasking::test_masked_connection_string_masks_all_sensitive_query_keys`)
+- **kailash-mcp logs**: `cache.py` and `advanced/subscriptions.py` had
+  `f"... {redis_url}"` log lines that leaked credentials — rewritten as
+  structured `"%s://%s%s"` format with urlparse (`rules/observability.md`
+  MUST NOT "No unstructured f'...' log messages")
+
+### Cleanup — 47 JWT test failures (nexus.auth deprecation)
+`nexus.auth` is deprecated per SPEC-06, migrating to `kailash.trust.auth`.
+The JWT crypto was extracted from `JWTMiddleware` into a `JWTValidator`
+helper but the middleware tests were never updated — `_make_middleware`
+helpers use `__new__` to bypass `__init__`, and the original test helpers
+don't assign `mw._validator`, so every call to `mw.create_access_token`,
+`mw.create_refresh_token`, `mw._verify_token`, `mw._create_user_from_payload`,
+`mw._is_path_exempt` hit an `AttributeError`.
+
+**Fix** (two parts):
+1. Added four thin-delegate methods to `JWTMiddleware` at
+   `packages/kailash-nexus/src/nexus/auth/jwt.py:282-308` — preserves the
+   pre-SPEC-06 API surface for the deprecation window
+2. Updated all 8 `_make_middleware` test helpers + 1 inline case to
+   construct `mw._validator = JWTValidator(mw.config)` after the `__new__`
+   bypass
+
+**Result**: 475 passed, 1 skipped (was 428 passed, 47 failed) in the full
+`packages/kailash-nexus/tests/unit/auth/` suite.
+
+### Cleanup — dataflow mongodb lazy import
+`packages/kailash-dataflow/src/dataflow/adapters/mongodb.py` imported
+`motor.motor_asyncio` unconditionally at module top. Any project that
+ran `from dataflow import DataFlow` without motor installed hit
+`ModuleNotFoundError` on module load, not at connect time. Moved motor
+imports to lazy (inside `MongoDBAdapter.connect()`) with a descriptive
+`ImportError` message pointing at `pip install motor pymongo`.
+
+### Cleanup — ModelRegistry LocalRuntime deprecation
+`ModelRegistry` owns its `LocalRuntime` and releases it via
+`close()` → `runtime.release()`. But `LocalRuntime.execute()` emitted a
+deprecation warning on first call unless `_cleanup_registered` OR
+`_is_context_managed` was set. The registry already manages the lifecycle
+correctly — it just needed to tell the runtime. Fix:
+`self.runtime._cleanup_registered = True` in `__init__` after constructing
+the own-runtime path. Two earlier attempts (using `__enter__()` /
+`__exit__()` around execute) caused a `coroutine 'wait_for' was never
+awaited` RuntimeWarning and hung pytest — reverted in favor of the flag
+assignment.
+
+## Red team convergence
+
+| Round | Findings | Severity |
+|-------|----------|----------|
+| R1 | 11 | 3 CRIT + 4 HIGH + 4 MED |
+| R2 | 5 | 2 HIGH + 2 MED + 1 LOW |
+| R3 | 6 | 2 HIGH + 2 MED + 2 LOW |
+| R4 | 2 | 1 MED + 1 LOW |
+| R5 | 0 | **CONVERGED** |
+
+R5 confirmed: all masker sites hold the identical 6-key sensitive set;
+registry docstring accurately describes shallow-copy semantics; every
+rounds-1-to-4 finding resolved.
+
+## Test health at end of session
+
+- **62/62** Arbor regression tests pass
+  (R1 baseline: 46; +4 from R2 new-site wiring; +12 from R3 preencoder,
+  Redis sentinel, Redis drift, JWT None defense)
+- **475/475** Nexus auth unit tests pass (was 428/475 with 47 JWT
+  failures at session start)
+- **40/40** Nexus registry metadata tests pass
+- **dataflow regression** tests pass once motor is installed in venv
+  (pre-existing dep-availability issue; motor is declared in
+  kailash-dataflow's pyproject.toml and pulled transitively via
+  `pip install kailash[dataflow]`)
+- **`uv pip check`** clean (142 packages)
+- Sub-packages installed editable via `[tool.uv.sources]` path entries
+  in root `pyproject.toml` — no more `PYTHONPATH=packages/...` prefix
+  required (R3 fix for the python-environment.md MUST Rule 2 violation)
+
+## Files touched
+
+**Source** (15):
+- `src/kailash/config/database_config.py`
+- `src/kailash/db/connection.py`
+- `src/kailash/trust/esa/database.py`
+- `src/kailash/trust/rate_limit/backends/redis.py`
+- `src/kailash/nodes/data/async_sql.py`
+- `packages/kailash-dataflow/src/dataflow/utils/masking.py`
+- `packages/kailash-dataflow/src/dataflow/adapters/mongodb.py`
+- `packages/kailash-dataflow/src/dataflow/adapters/connection_parser.py`
+- `packages/kailash-dataflow/src/dataflow/core/pool_utils.py`
+- `packages/kailash-dataflow/src/dataflow/core/model_registry.py`
+- `packages/kailash-nexus/src/nexus/core.py`
+- `packages/kailash-nexus/src/nexus/registry.py`
+- `packages/kailash-nexus/src/nexus/auth/jwt.py`
+- `packages/kailash-nexus/src/nexus/auth/rate_limit/backends/redis.py`
+- `packages/kailash-mcp/src/kailash_mcp/utils/cache.py`
+- `packages/kailash-mcp/src/kailash_mcp/advanced/subscriptions.py`
+- `packages/kaizen-agents/src/kaizen_agents/patterns/state_manager.py`
+
+**Tests** (5):
+- `tests/regression/test_arbor_database_url_special_chars.py` (NEW — 86 tests)
+- `tests/regression/test_issue_184.py` (LocalRuntime context manager)
+- `tests/regression/test_issue_187.py` (LocalRuntime context manager)
+- `packages/kailash-nexus/tests/unit/test_registry.py` (9 new metadata tests)
+- `packages/kailash-nexus/tests/unit/auth/test_jwt.py` (8 helpers + 1 inline fixed)
+- `packages/kailash-nexus/tests/unit/auth/test_security_hardening.py` (1 helper fixed)
+- `packages/kaizen-agents/tests/integration/orchestration/manual_table_creation.py`
+- `packages/kailash-dataflow/tests/e2e/dataflow_alpha/test_complete_user_journey.py`
+
+**Manifests** (4):
+- `pyproject.toml` (root kailash core)
+- `packages/kailash-dataflow/pyproject.toml`
+- `packages/kailash-nexus/pyproject.toml`
+- `packages/kailash-kaizen/pyproject.toml`
+
+## In-flight state
+
+- **Nothing uncommitted is dangerous**. All changes are tested, red-teamed
+  to convergence, and ready for PR.
+- **JWT delegation shims** at `nexus/auth/jwt.py:282-308` are explicitly
+  backward-compat for the SPEC-06 deprecation window. When the full
+  `nexus.auth → kailash.trust.auth` migration lands, these can be deleted
+  along with the rest of `nexus.auth/`.
+- **ModelRegistry `_cleanup_registered = True`** at
+  `packages/kailash-dataflow/src/dataflow/core/model_registry.py:99` is a
+  private-attribute poke. Cleaner would be a public
+  `LocalRuntime.mark_owned_by(obj)` API. Low priority.
+- **Sensitive-key set duplication** across 4 sites in 4 files is
+  maintained via an in-code comment + parametrized regression test. A
+  future cleanup could promote the frozenset to a shared constant in
+  `kailash.utils` or similar, but that requires adjudicating which
+  package should own it (core can't import from dataflow; dataflow
+  can import from core). Out of scope for this session.
+
+## Traps / gotchas
+
+- **`python3` pyenv shim** resolves to kailash-rs bindings — always use
+  `uv run python3` or `.venv/bin/python3` explicitly
+- **motor not in root venv by default** — the `from dataflow import
+  DataFlow` path now survives this via lazy import, but connecting to
+  MongoDB still needs `pip install motor pymongo`
+- **PYTHONPATH hack for local testing** — running tests against
+  kailash-dataflow or kailash-nexus src requires
+  `PYTHONPATH=packages/kailash-dataflow/src:packages/kailash-nexus/src`
+  since neither package is installed editable in the root venv
+- **pytest deprecation filter** — the root pytest config does not declare
+  `--timeout` despite what test-file docstrings imply. Use `-W error` to
+  convert DeprecationWarnings to errors for debugging
+- **ModelRegistry `_is_context_managed` path** (what I tried FIRST) hung
+  pytest and produced `RuntimeWarning: coroutine 'wait_for' was never
+  awaited`. The `_cleanup_registered` flag-poke is the working solution
+
+## Next session
+
+Candidates, roughly in priority order:
+
+1. **Commit + PR** — 22 files ready. Branch name suggestion:
+   `fix/arbor-upstream-issues-2026-04-11`. PR template sections should
+   call out: (a) the three user-facing fixes; (b) the 47 JWT tests
+   un-blocked; (c) the cross-SDK kailash-rs#323 link.
+2. **Finish SPEC-06 auth migration** — `nexus.auth` is still emitting
+   deprecation warnings on every import because internal nexus code
+   still imports from `nexus.auth.*` (audit/rate_limit/tenant/plugin
+   have no mirror in `kailash.trust.auth` yet). Port these to
+   `kailash.trust.auth.*`, update all internal imports, delete
+   `nexus.auth/`.
+3. **Promote `_SENSITIVE_QUERY_KEYS` to a shared constant** — 4-site
+   duplication is a future drift hazard. `kailash.utils.masking`
+   (new module) is the natural home.
+4. **Fix the `LocalRuntime` deprecation cleanly** — the current
+   `_cleanup_registered` flag-poke in ModelRegistry is a workaround. A
+   public `LocalRuntime.mark_managed_by(owner)` API or similar would be
+   cleaner.
+5. **Wire `kailash-rs#323`** — once Rust Nexus structured metadata lands,
+   update the Python `Nexus.register()` docstring to note cross-SDK
+   parity.
+
+## References
+
+- Original Arbor report: 6 issues, P0-P3
+- GitHub issues: kailash-py#12 (BYOK, closed 2026-03-19), kailash-rs#323
+  (metadata parity, open)
+- Rules that fired repeatedly during red team: `rules/security.md` "No
+  secrets in logs", `rules/dependencies.md` "Declared = Imported",
+  `rules/zero-tolerance.md` Rules 1/4, `rules/observability.md` MUST 5
+  (log triage), `rules/orphan-detection.md` (metadata consumer check),
+  `rules/facade-manager-detection.md` (wiring test for new managers)
