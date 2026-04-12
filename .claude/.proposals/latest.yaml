@@ -532,12 +532,30 @@ changes:
 # resets status to pending_review because the new entries have not been
 # classified by loom yet. The 51 prior entries remain intact.
 
-status: pending_review
+status: distributed
 reviewed_date: "2026-04-12"
-distributed_date: "2026-04-12"
-# Status reset to pending_review on 2026-04-12 (post-v2.8.4 codify) —
-# per rules/artifact-flow.md MUST "Reset Status on Append", new entries
-# appended below have not been classified by loom yet.
+distributed_date: "2026-04-12T00:00:00Z"
+# Re-reviewed 2026-04-12 post-v2.8.4 appended sessions.
+# Upstreamed to loom/ globals (coc tier):
+#   - rules/dataflow-identifier-safety.md (added Rule 5)
+#   - rules/python-environment.md (added Rule 4)
+#   - rules/observability.md (added Rule 8)
+#   - skills/01-core-sdk/runtime-progress.md (new)
+#   - skills/01-core-sdk/runtime-watchdog.md (new)
+#   - skills/02-dataflow/cache-cas-fail-closed.md (new)
+#   - skills/02-dataflow/dataflow-fabric-cache-consumers.md (new, paths stripped)
+#   - skills/02-dataflow/dataflow-provenance-audit.md (new, paths stripped)
+#   - skills/01-core-sdk/SKILL.md (added Runtime Diagnostics section)
+#   - skills/02-dataflow/SKILL.md (added fabric-cache-consumers, provenance-audit, cache-cas-fail-closed links)
+# Skipped (BUILD stale/drifted; loom already correct):
+#   - rules/refactor-invariants.md — kailash-py-specific paths
+#   - skills/01-core-sdk/cross-sdk-canonical-json.md — only BUILD-specific paths frontmatter
+#   - skills/29-pact/pact-enforcement-modes.md — only BUILD-specific paths frontmatter
+#   - skills/29-pact/SKILL.md — BUILD uses stale pact.governance imports; loom correct
+#   - skills/31-error-troubleshooting/SKILL.md — BUILD has stale FastAPI references
+#   - skills/12-testing-strategies/SKILL.md — BUILD has stale tier1_/tier2_/tier3_ paths
+#   - skills/34-kailash-ml/SKILL.md — identical
+#   - skills/04-kaizen/* — already upstreamed in prior cycle
 reviewed_notes: |
   Most of this proposal was already upstreamed in a prior sync cycle (identical
   in loom/ vs kailash-py/). Only two files had genuinely new changes from the
