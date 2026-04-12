@@ -13,7 +13,6 @@ Exit 0 if all checks pass, exit 1 with details on failure.
 
 from __future__ import annotations
 
-import ast
 import os
 import re
 import sys
