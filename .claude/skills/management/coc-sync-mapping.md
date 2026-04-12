@@ -101,7 +101,7 @@ Files that reference internal source code paths. Remove lines/paragraphs contain
 | `skills/10-deployment-git/`                   | Internal CI references                                                           |
 | `skills/12-testing-strategies/`               | Internal test infra references                                                   |
 | `rules/patterns.md`                           | `src/kailash/` internal references                                               |
-| `commands/codify.md`                          | Rewrite: output to `agents/project/`, `skills/project/` (user codification dirs) |
+| `commands/codify.md`                          | Rewrite: output to `agents/project/`, `skills/project/` (downstream USE-repo codification dirs; BUILD repos keep canonical locations) |
 
 ### Category 3: Fix Absolute Paths
 

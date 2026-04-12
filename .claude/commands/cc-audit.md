@@ -3,9 +3,18 @@ name: cc-audit
 description: "Audit project artifacts for quality, completeness, effectiveness, and template alignment"
 ---
 
-# CC Artifact Audit (Project)
+# CC Artifact Audit
 
-Reviews your project's artifacts for quality and template alignment. Checks that project-specific artifacts (agents/project/, skills/project/) are well-formed, and that shared artifacts are current with your upstream template.
+Reviews artifacts for quality and template alignment.
+
+## BUILD vs USE Repo Distinction (what gets audited?)
+
+Audit scope depends on repo type:
+
+- **BUILD repos** (kailash-py, kailash-rs, kailash-prism — source of truth): Audit **canonical locations** — `agents/frameworks/`, `agents/analysis/`, `skills/01-core-sdk/`, `skills/NN-name/`, `rules/*.md`, `commands/*.md`. BUILD repos MUST NOT have `agents/project/` or `skills/project/` — those are a USE-repo convention.
+- **USE/downstream project repos** (consumer projects): Audit `agents/project/`, `skills/project/` — project-specific local artifacts. Shared artifacts from the template are checked for drift (template wins on next `/sync`).
+
+This repo is a BUILD repo. Audit canonical locations.
 
 ## Your Role
 
@@ -13,7 +22,7 @@ Specify scope: `all`, `fidelity` (quality only), `sync` (template alignment only
 
 ## Phase 1: Fidelity Audit
 
-1. **Inventory**: List project-specific artifacts (agents/project/, skills/project/) with line counts.
+1. **Inventory**: List canonical artifacts (`agents/**/*.md`, `skills/**/*.md`, `rules/*.md`, `commands/*.md`) with line counts.
 
 2. **Four-dimension audit** per artifact:
    - **Competency**: Precise instructions? Knows its domain?
