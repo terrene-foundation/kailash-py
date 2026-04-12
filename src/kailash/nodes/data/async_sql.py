@@ -52,7 +52,11 @@ from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 logger = logging.getLogger(__name__)
 
-# Import optimistic locking for version control
+# Import optimistic locking for version control. Only the symbols
+# actually referenced downstream are imported here — ``ConflictResolution``
+# and ``LockStatus``. ``OptimisticLockingNode`` was historically
+# imported but never used; removed in arbor R3 to clear a CodeQL
+# ``py/unused-import`` false positive at the import site.
 try:
     from kailash.nodes.data.optimistic_locking import (
         ConflictResolution,  # type: ignore[assignment]
@@ -60,7 +64,6 @@ try:
     from kailash.nodes.data.optimistic_locking import (
         LockStatus,  # type: ignore[assignment]
     )
-    from kailash.nodes.data.optimistic_locking import OptimisticLockingNode
 
     OPTIMISTIC_LOCKING_AVAILABLE = True
 except ImportError:

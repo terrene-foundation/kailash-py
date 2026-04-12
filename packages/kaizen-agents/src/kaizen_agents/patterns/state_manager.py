@@ -58,15 +58,14 @@ from datetime import datetime
 from typing import Any
 
 # SQLAlchemy availability probe — DataFlow auto-generates the SQL schema
-# from Python type hints, so the symbols themselves are not imported as
-# names. The probe simply records whether the package is installed so
-# downstream code can emit a descriptive error at use time.
-try:
-    import sqlalchemy  # noqa: F401 -- availability probe, not a name import
+# from Python type hints, so the symbols themselves are never imported
+# as names. ``importlib.util.find_spec`` is the CodeQL-friendly probe:
+# it returns ``None`` when the package is missing without ever
+# triggering an import, so static analysis sees no "unused import"
+# false positive.
+import importlib.util as _importlib_util
 
-    SQLALCHEMY_AVAILABLE = True
-except ImportError:
-    SQLALCHEMY_AVAILABLE = False
+SQLALCHEMY_AVAILABLE = _importlib_util.find_spec("sqlalchemy") is not None
 
 # DataFlow imports
 try:
@@ -171,9 +170,7 @@ class OrchestrationStateManager:
             DatabaseConnectionError: If database connection fails
         """
         if not DATAFLOW_AVAILABLE:
-            raise ImportError(
-                "DataFlow not installed. Run: pip install kailash-dataflow"
-            )
+            raise ImportError("DataFlow not installed. Run: pip install kailash-dataflow")
 
         if not RUNTIME_AVAILABLE:
             raise ImportError("Kailash runtime not installed. Run: pip install kailash")
@@ -286,9 +283,7 @@ class OrchestrationStateManager:
             workflow_state_id: str  # Foreign key to WorkflowState
             checkpoint_number: int
             checkpoint_type: str
-            snapshot_data: dict | None = (
-                None  # JSON field - DataFlow handles serialization
-            )
+            snapshot_data: dict | None = None  # JSON field - DataFlow handles serialization
             created_at_timestamp: datetime
             size_bytes: int = 0
             compression_ratio: float = 1.0
@@ -323,9 +318,7 @@ class OrchestrationStateManager:
                 parsed = urlparse(self.connection_string)
                 # Decode userinfo and reject null bytes via the shared
                 # helper — see ``kailash/utils/url_credentials.py``.
-                user, password = decode_userinfo_or_raise(
-                    parsed, default_user="postgres"
-                )
+                user, password = decode_userinfo_or_raise(parsed, default_user="postgres")
                 conn = psycopg2.connect(
                     host=parsed.hostname,
                     port=parsed.port or 5432,
@@ -355,9 +348,7 @@ class OrchestrationStateManager:
                 # work uniformly, then decode + null-byte check via the
                 # shared helper (MySQL C client truncation makes a
                 # null-byte auth-bypass attack trivial without the check).
-                parsed = urlparse(
-                    preencode_password_special_chars(self.connection_string)
-                )
+                parsed = urlparse(preencode_password_special_chars(self.connection_string))
                 user, password = decode_userinfo_or_raise(parsed, default_user="root")
                 conn = pymysql.connect(
                     host=parsed.hostname,
@@ -439,9 +430,7 @@ class OrchestrationStateManager:
         """
         # Validate status
         if status not in WORKFLOW_STATUS_VALUES:
-            raise ValueError(
-                f"Invalid status: {status}. Must be one of {WORKFLOW_STATUS_VALUES}"
-            )
+            raise ValueError(f"Invalid status: {status}. Must be one of {WORKFLOW_STATUS_VALUES}")
 
         # Generate IDs
         workflow_state_id = workflow_id  # Use workflow_id as primary key for upsert
@@ -492,9 +481,7 @@ class OrchestrationStateManager:
 
         # Execute workflow
         try:
-            results, run_id = await self.runtime.execute_workflow_async(
-                workflow.build(), inputs={}
-            )
+            results, run_id = await self.runtime.execute_workflow_async(workflow.build(), inputs={})
 
             # Access result (DataFlow pattern: results[node_id]["result"])
             result = results.get("upsert_state", {})
@@ -565,9 +552,7 @@ class OrchestrationStateManager:
 
         # Execute workflow
         try:
-            results, run_id = await self.runtime.execute_workflow_async(
-                workflow.build(), inputs={}
-            )
+            results, run_id = await self.runtime.execute_workflow_async(workflow.build(), inputs={})
 
             # Parse workflow state
             state_result = results.get("read_state", {})
@@ -602,16 +587,12 @@ class OrchestrationStateManager:
                 elif isinstance(records_result, list):
                     agent_records = records_result
                 else:
-                    logger.warning(
-                        f"Unexpected records_result format: {type(records_result)}"
-                    )
+                    logger.warning(f"Unexpected records_result format: {type(records_result)}")
                     agent_records = []
 
                 # Ensure agent_records is a list
                 if not isinstance(agent_records, list):
-                    logger.warning(
-                        f"Agent records is not a list: {type(agent_records)}"
-                    )
+                    logger.warning(f"Agent records is not a list: {type(agent_records)}")
                     agent_records = []
 
                 # Parse JSON fields in each record
@@ -707,9 +688,7 @@ class OrchestrationStateManager:
 
         # Calculate compression metrics
         size_bytes = len(compressed)
-        compression_ratio = (
-            len(compressed) / len(json_str) if len(json_str) > 0 else 1.0
-        )
+        compression_ratio = len(compressed) / len(json_str) if len(json_str) > 0 else 1.0
 
         # Prepare data
         data = {
@@ -741,9 +720,7 @@ class OrchestrationStateManager:
 
         # Execute workflow
         try:
-            results, run_id = await self.runtime.execute_workflow_async(
-                workflow.build(), inputs={}
-            )
+            results, run_id = await self.runtime.execute_workflow_async(workflow.build(), inputs={})
 
             logger.info(
                 f"Checkpoint saved: checkpoint_id={checkpoint_id}, "
@@ -790,9 +767,7 @@ class OrchestrationStateManager:
 
         # Execute workflow
         try:
-            results, run_id = await self.runtime.execute_workflow_async(
-                workflow.build(), inputs={}
-            )
+            results, run_id = await self.runtime.execute_workflow_async(workflow.build(), inputs={})
 
             # Parse checkpoint
             checkpoint_result = results.get("read_checkpoint", {})
@@ -840,14 +815,10 @@ class OrchestrationStateManager:
             error_msg = str(e)
             if "not found" in error_msg.lower() and checkpoint_id in error_msg:
                 logger.warning(f"Checkpoint not found: {checkpoint_id}")
-                raise CheckpointNotFoundError(
-                    f"Checkpoint not found: {checkpoint_id}"
-                ) from e
+                raise CheckpointNotFoundError(f"Checkpoint not found: {checkpoint_id}") from e
 
             logger.error(f"Failed to load checkpoint: {e}")
-            raise DatabaseConnectionError(
-                f"Failed to load checkpoint {checkpoint_id}: {e}"
-            ) from e
+            raise DatabaseConnectionError(f"Failed to load checkpoint {checkpoint_id}: {e}") from e
 
     async def list_active_workflows(self) -> list[dict[str, Any]]:
         """
@@ -877,9 +848,7 @@ class OrchestrationStateManager:
 
         # Execute workflow
         try:
-            results, run_id = await self.runtime.execute_workflow_async(
-                workflow.build(), inputs={}
-            )
+            results, run_id = await self.runtime.execute_workflow_async(workflow.build(), inputs={})
 
             # Parse results with robust handling
             list_result = results.get("list_active", {})
@@ -903,9 +872,7 @@ class OrchestrationStateManager:
             for workflow_state in workflows:
                 # Ensure workflow_state is a dict
                 if not isinstance(workflow_state, dict):
-                    logger.warning(
-                        f"Skipping non-dict workflow_state: {type(workflow_state)}"
-                    )
+                    logger.warning(f"Skipping non-dict workflow_state: {type(workflow_state)}")
                     continue
 
                 # Handle None from database (Optional[dict] field)
@@ -924,9 +891,7 @@ class OrchestrationStateManager:
 
         except Exception as e:
             logger.error(f"Failed to list active workflows: {e}")
-            raise DatabaseConnectionError(
-                f"Failed to list active workflows: {e}"
-            ) from e
+            raise DatabaseConnectionError(f"Failed to list active workflows: {e}") from e
 
     async def _get_next_checkpoint_number(self, workflow_id: str) -> int:
         """
@@ -956,9 +921,7 @@ class OrchestrationStateManager:
         )
 
         try:
-            results, run_id = await self.runtime.execute_workflow_async(
-                workflow.build(), inputs={}
-            )
+            results, run_id = await self.runtime.execute_workflow_async(workflow.build(), inputs={})
 
             # Parse results with robust handling (consistent with list_active_workflows)
             list_result = results.get("list_checkpoints", {})
@@ -969,9 +932,7 @@ class OrchestrationStateManager:
             elif isinstance(list_result, list):
                 checkpoints = list_result
             else:
-                logger.warning(
-                    f"Unexpected list_checkpoints format: {type(list_result)}"
-                )
+                logger.warning(f"Unexpected list_checkpoints format: {type(list_result)}")
                 checkpoints = []
 
             # Ensure checkpoints is a list
@@ -986,9 +947,7 @@ class OrchestrationStateManager:
                     max_number = checkpoints[0].get("checkpoint_number", 0)
                     return max_number + 1
                 else:
-                    logger.warning(
-                        f"First checkpoint is not a dict: {type(checkpoints[0])}"
-                    )
+                    logger.warning(f"First checkpoint is not a dict: {type(checkpoints[0])}")
                     return 1
             else:
                 return 1

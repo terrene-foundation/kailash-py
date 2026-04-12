@@ -27,6 +27,55 @@ BUILD repos → /codify → proposal → loom/ → /sync → USE templates
 - BUILD repo does NOT sync to any other repo directly
 - Downstream repos: `/codify` stays local only, no proposal manifest
 
+## Proposal Lifecycle
+
+Proposals track artifact changes through a three-state lifecycle. Each direction (BUILD→loom, loom→atelier) follows the same lifecycle independently.
+
+```
+/codify creates proposal          /sync Gate 1 classifies         /sync Gate 2 distributes
+        │                                  │                                │
+  pending_review ──────────────→ reviewed ──────────────────────→ distributed
+        │                          ↑ │                                │
+        │  /codify appends         │ │ /codify appends (resets       │ /codify archives
+        └──────────────────────────┘ │ status to pending_review)     │ and creates fresh
+                                     └───────────────────────────────┘
+```
+
+| Status           | Meaning                                      | `/codify` behavior             | `/sync` behavior                |
+| ---------------- | -------------------------------------------- | ------------------------------ | ------------------------------- |
+| `pending_review` | New changes, not yet classified at loom/     | **Append** new changes         | Gate 1: review and classify     |
+| `reviewed`       | Classified but not yet distributed           | **Append** (resets to pending) | Gate 2: distribute to templates |
+| `distributed`    | Fully processed — classified AND distributed | **Archive** and create fresh   | Skip (already processed)        |
+
+### MUST: Append, Never Overwrite Unprocessed Proposals
+
+When `/codify` creates new artifact changes and a proposal already exists with `status: pending_review` or `status: reviewed`, `/codify` MUST append new entries to the existing `changes:` array, not replace the file.
+
+**Why:** Overwriting a `pending_review` proposal destroys unreviewed changes from earlier `/codify` sessions. This is silent data loss — the earlier session's knowledge extraction is permanently gone with no trace.
+
+**BLOCKED:**
+
+- "Creating fresh proposal" when status is `pending_review`
+- "Replacing existing proposal" when status is `reviewed`
+- ANY write to `latest.yaml` that does not preserve prior `changes:` entries
+
+### MUST: Reset Status on Append
+
+When appending to a `reviewed` proposal, `/codify` MUST reset the status to `pending_review`. The new entries have not been classified.
+
+**Why:** Without the reset, `/sync` Gate 1 sees `reviewed` and may skip classification of the newly appended changes.
+
+### MUST: Archive Before Fresh
+
+When creating a fresh proposal (status was `distributed` or file was missing), `/codify` MUST archive the old file to `.claude/.proposals/archive/{codify_date}-{source_repo}.yaml` before writing the new one.
+
+**Why:** Archived proposals are the audit trail of what knowledge was extracted and when. Without the archive, there is no history of prior codification cycles.
+
+### Applies to Both Directions
+
+- **BUILD → loom**: kailash-py and kailash-rs proposals (`/codify` Step 7)
+- **loom → atelier**: loom's CC/CO proposals (`/codify` Step 8)
+
 ## /sync Is the Only Outbound Path
 
 Only `/sync` at loom/ may write to template repos. No other command or manual process.

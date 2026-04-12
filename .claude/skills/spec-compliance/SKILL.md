@@ -190,6 +190,31 @@ Save to `workspaces/<project>/.spec-coverage-v2.md` (the `-v2` suffix prevents c
 3. No row says "exists: yes" — that is a banned phrase. Rows must show the literal command and its actual output count.
 4. Every CRITICAL/HIGH row has been fixed and re-verified, not deferred.
 
+## Spec Coverage Audit Cadence
+
+A single R0 grep pass is insufficient. The arbor-upstream-fixes
+session proved this: R0 found and fixed the null-byte vulnerability
+at 2 call sites, but a follow-up R1 grep audit found the same
+unprotected pattern at 5 additional sites that R0 missed because
+they used a slightly different variable name (`parsed.password` vs
+`result.password`).
+
+**Protocol after the first round of fixes:**
+
+1. Run the original grep pattern against the full codebase, not
+   just the files you touched in R0.
+2. Expand the grep to cover variant spellings (e.g., `parsed.password`,
+   `result.password`, `url_parts.password`, `unquote(.*password`).
+3. For each new match, verify the fix is present. Zero-match on
+   the expanded grep = confidence the pattern is fully addressed.
+4. Document the grep commands in the spec-coverage table so the
+   next round can re-run them.
+
+This "grep-for-pattern after R0" step catches drift between call
+sites that look different but share the same vulnerability. Without
+it, the audit converges on the sites it found first and misses the
+sites that use different variable names for the same concept.
+
 ## Anti-Patterns
 
 **BLOCKED audit behaviors:**

@@ -108,12 +108,48 @@ PYTHONPATH=packages/kailash-dataflow/src:packages/kailash-nexus/src \
 - "PYTHONPATH works for this one command"
 - "I'll add the editable install later"
 - "The sub-package has its own pytest config anyway"
+- "PYTHONPATH=packages/foo/src:packages/bar/src is fine for one test run"
 
 **Why:** Editable installs make the sub-package `src/` the canonical
 import path, so editors, type checkers, test runners, and scripts all
 agree on which code runs. A `PYTHONPATH` prefix is invisible to every
 tool except the single command that sets it, leaving IDE jump-to-def,
 Pyright, and ad-hoc scripts pointing at stale or absent installations.
+
+### 3. Monorepo `[tool.uv.sources]` Over PyPI Version Pin
+
+Root `pyproject.toml` constraints on monorepo sub-packages MUST be
+expressed as a `[tool.uv.sources]` editable path entry, NOT as a PyPI
+version pin. Version pins on sub-packages that are also installed
+editable are BLOCKED.
+
+```toml
+# DO — editable path entry in root pyproject.toml
+[tool.uv.sources]
+kailash-dataflow = { path = "packages/kailash-dataflow", editable = true }
+kailash-nexus = { path = "packages/kailash-nexus", editable = true }
+kailash-kaizen = { path = "packages/kailash-kaizen", editable = true }
+
+# DO NOT — PyPI version pin on a sub-package you're editing locally
+[project]
+dependencies = [
+    "kailash-dataflow>=2.0.3",   # uv sync downloads stale PyPI tarball
+    "kailash-nexus>=1.5.0",       # masks your local edits
+]
+```
+
+**BLOCKED rationalizations:**
+
+- "The PyPI pin ensures minimum version compatibility"
+- "Editable installs are only for dev, CI uses the pin"
+- "The version pin and local source happen to match"
+
+**Why:** A PyPI version pin on a sub-package the developer is editing
+forces `uv sync` to download a stale tarball from PyPI, masking the
+editable changes. This is recurring monorepo bootstrap pain that wastes
+debugging time every session.
+
+Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-12)
 
 ## Rules
 

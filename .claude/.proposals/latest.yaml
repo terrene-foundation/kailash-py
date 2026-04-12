@@ -391,7 +391,148 @@ changes:
       different mechanism, so variants/rs may need its own wording.
     diff_lines: "+85 -6"
 
-status: reviewed
+  # --- 2026-04-12: Arbor R1/R2/R3 codify + CodeQL + COC sync ---
+  # Origin: workspaces/arbor-upstream-fixes/.session-notes (2026-04-12)
+  # Session: fix/arbor-upstream-issues + chore/codify-arbor-2026-04-12
+  # SDK version at codify time: 2.8.2
+
+  - file: rules/security.md
+    action: modified
+    suggested_tier: coc
+    reason: "New section 'Credential Decode Helpers' — 2 MUST sub-clauses: null-byte rejection at every decode site via shared helper, pre-encoder consolidation. DO/DO NOT + BLOCKED + Why + Origin."
+    diff_lines: "+54"
+
+  - file: rules/observability.md
+    action: modified
+    suggested_tier: coc
+    reason: "New MUST Rule 6 'Mask Helper Output Forms' — 2 sub-clauses: mask failure sentinel distinct from masked output, mask form uniform (***@host) across all helpers. Existing Rule 6 renumbered to 7."
+    diff_lines: "+49"
+
+  - file: rules/zero-tolerance.md
+    action: modified
+    suggested_tier: coc
+    reason: "New sub-clauses 1a (scanner-surface symmetry — PR findings treated same as main) and 3a (typed delegate guards for None backing objects). Both with BLOCKED lists."
+    diff_lines: "+65"
+
+  - file: rules/git.md
+    action: modified
+    suggested_tier: coc
+    reason: "Two new sections: 'Issue Closure Discipline' (close MUST include commit ref) and 'Pre-Commit Hook Workarounds' (document core.hooksPath=/dev/null bypass, no silent --no-verify)."
+    diff_lines: "+57"
+
+  - file: rules/testing.md
+    action: modified
+    suggested_tier: coc
+    reason: "Two new MUST clauses: behavioral regression tests over source-grep (R3 broke 3 grep tests on refactor), verified numerical claims in session notes (86 → 46 miscount)."
+    diff_lines: "+43"
+
+  - file: rules/python-environment.md
+    action: modified
+    suggested_tier: coc
+    reason: "New MUST Rule 3 (monorepo [tool.uv.sources] over PyPI version pin) + strengthened Rule 2 BLOCKED list with literal PYTHONPATH workaround phrase."
+    diff_lines: "+36"
+
+  - file: skills/18-security-patterns/credential-url-handling.md
+    action: created
+    suggested_tier: coc-py
+    reason: "New skill documenting canonical encode/decode/mask pipeline — preencode_password_special_chars, decode_userinfo_or_raise, mask_url, safe_log_value. Standard adapter pattern + CodeQL sanitizer barrier registration."
+    diff_lines: "+116"
+
+  - file: skills/12-testing-strategies/SKILL.md
+    action: modified
+    suggested_tier: coc
+    reason: "New 'Regression Test Design' section with behavioral-over-grep pattern. Cross-reference to rules/testing.md."
+    diff_lines: "+25"
+
+  - file: skills/31-error-troubleshooting/SKILL.md
+    action: modified
+    suggested_tier: coc
+    reason: "New 'Git Hook Traps' subsection documenting pre-commit auto-stash phantom failure + root cause + workaround + mandatory follow-up."
+    diff_lines: "+28"
+
+  - file: skills/spec-compliance/SKILL.md
+    action: modified
+    suggested_tier: coc
+    reason: "New 'Spec Coverage Audit Cadence' section — R1 grep caught 5-site null-byte drift R0 missed. Protocol requires grep-for-pattern pass after first round of fixes."
+    diff_lines: "+25"
+
+  # --- CodeQL configuration ---
+
+  - file: .github/codeql/codeql-config.yml
+    action: created
+    suggested_tier: coc-py
+    reason: "CodeQL config declaring sanitizer pack + path scope. Limits scan to src/ and packages/*/src/ (excludes tests, examples, build artifacts)."
+    diff_lines: "+55"
+
+  - file: .github/codeql/sanitizers/qlpack.yml
+    action: created
+    suggested_tier: coc-py
+    reason: "CodeQL pack metadata for the kailash-py custom sanitizer barriers. Targets codeql/python-queries, declares sanitizers.model.yml as data extension."
+    diff_lines: "+15"
+
+  - file: .github/codeql/sanitizers/sanitizers.model.yml
+    action: created
+    suggested_tier: coc-py
+    reason: "Model-as-Data extension declaring mask_url and safe_log_value as taint barriers (summaryModel with kind=value) for py/clear-text-logging-sensitive-data. Stops CodeQL from tracing taint through our sanitizers."
+    diff_lines: "+40"
+
+  - file: .github/workflows/codeql.yml
+    action: modified
+    suggested_tier: coc-py
+    reason: "Wire codeql-action init to use config-file: .github/codeql/codeql-config.yml (loads the sanitizer pack + path scoping)."
+    diff_lines: "+5 -1"
+
+  # --- Code changes (Layer 1+3 CodeQL fixes) ---
+
+  - file: packages/kailash-dataflow/src/dataflow/utils/masking.py
+    action: modified
+    suggested_tier: skip
+    reason: "New safe_log_value() helper — sanitizer barrier for CodeQL taint analysis. Already in codebase; no loom sync needed."
+    diff_lines: "+42"
+
+  - file: packages/kailash-dataflow/src/dataflow/adapters/postgresql.py
+    action: modified
+    suggested_tier: skip
+    reason: "Route host/port/database through safe_log_value at connection-pool log site. CodeQL false-positive fix."
+    diff_lines: "+5 -3"
+
+  - file: packages/kailash-dataflow/src/dataflow/adapters/mysql.py
+    action: modified
+    suggested_tier: skip
+    reason: "Same as postgresql.py — safe_log_value wrapper at connection-pool log site."
+    diff_lines: "+5 -3"
+
+  - file: packages/kailash-dataflow/src/dataflow/adapters/factory.py
+    action: modified
+    suggested_tier: skip
+    reason: "Added safe_log_value to db_type extra field alongside existing mask_url for connection_string."
+    diff_lines: "+2 -1"
+
+  - file: packages/kailash-dataflow/src/dataflow/adapters/mongodb.py
+    action: modified
+    suggested_tier: skip
+    reason: "Removed TYPE_CHECKING block (CodeQL py/unused-import false positive). Motor types now typed as Optional[Any] with docstring-level type documentation. Forward refs replaced."
+    diff_lines: "+10 -3"
+
+  - file: packages/kaizen-agents/src/kaizen_agents/patterns/state_manager.py
+    action: modified
+    suggested_tier: skip
+    reason: "SQLAlchemy availability probe converted from try/import to importlib.util.find_spec (CodeQL-friendly). Eliminates py/unused-import false positive."
+    diff_lines: "+5 -6"
+
+  - file: src/kailash/nodes/data/async_sql.py
+    action: modified
+    suggested_tier: skip
+    reason: "Deleted genuinely unused OptimisticLockingNode import (CodeQL was correct on this one). ConflictResolution and LockStatus retained as they ARE used downstream."
+    diff_lines: "+5 -1"
+
+# --- Proposal lifecycle (per rules/artifact-flow.md) ---
+# Previous status was 'reviewed' (reviewed_date: 2026-04-11).
+# Per MUST "Reset Status on Append": appending to a reviewed proposal
+# resets status to pending_review because the new entries have not been
+# classified by loom yet. The 51 prior entries remain intact.
+
+status: pending_review
 reviewed_date: "2026-04-11"
 reviewed_notes: |
   Most of this proposal was already upstreamed in a prior sync cycle (identical

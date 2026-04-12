@@ -69,3 +69,60 @@ feat(dataflow): add logging to bulk create
 Added logger.warning call in _handle_batch_error method.
 Updated BulkResult to emit WARN in __post_init__.
 ```
+
+## Issue Closure Discipline
+
+Closing a GitHub issue as "completed" MUST include a commit SHA, PR number, or merged-PR link in the close comment. Closing with no code reference is BLOCKED.
+
+```bash
+# DO — close with delivered-code reference
+gh issue close 351 --comment "Fixed in #412 (commit a1b2c3d)"
+gh issue close 370 --comment "Resolved by PR #415 — kailash 2.8.1"
+
+# DO NOT — close with no code proof
+gh issue close 351 --comment "Resolved"
+gh issue close 374 --comment "Covered by recent refactor"
+```
+
+**BLOCKED rationalizations:**
+
+- "Already covered in another PR"
+- "Will reference later"
+- "Obsoleted by refactor"
+- "Resolved without code change"
+
+**Why:** Three issues (#351, #370, #374) were closed in this session's lineage with zero delivered code; the next-session plan only caught it on a manual re-audit. The commit-reference requirement is the cheapest structural gate against this failure.
+
+Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-12)
+
+## Pre-Commit Hook Workarounds
+
+When pre-commit auto-stash causes commits to fail despite hooks passing in direct invocation, the workaround `git -c core.hooksPath=/dev/null commit ...` MUST be documented in the commit body, AND a follow-up todo MUST be filed against the pre-commit configuration. Silent re-tries with `--no-verify` are BLOCKED.
+
+```bash
+# DO — document the bypass in the commit body and file a todo
+git -c core.hooksPath=/dev/null commit -m "$(cat <<'EOF'
+fix(security): add null-byte rejection to credential decode
+
+Pre-commit auto-stash fails to restore staged changes when
+hooks modify the working tree. Bypassed via core.hooksPath=/dev/null.
+TODO: fix pre-commit stash/restore interaction (#NNN).
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+
+# DO NOT — silent --no-verify with no documentation
+git commit --no-verify -m "fix(security): add null-byte rejection"
+# ↑ no record of why hooks were skipped; next session repeats discovery
+```
+
+**BLOCKED rationalizations:**
+
+- "Hooks passed when I ran them manually"
+- "--no-verify is faster and the CI will catch it"
+- "The auto-stash bug is a known issue"
+
+**Why:** Recurring across sessions; without documentation each session re-discovers the workaround at high cost. With documentation the next agent finds it via `git log --grep`.
+
+Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-12)

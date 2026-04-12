@@ -33,6 +33,60 @@ All database queries MUST use parameterized queries or ORM.
 ✅ User.query.filter_by(id=user_id)  # ORM
 ```
 
+## Credential Decode Helpers
+
+Connection strings carry credentials in URL-encoded form. Decoding them at a call site with `unquote(parsed.password)` is BLOCKED — every decode site MUST route through a shared helper module so the validation logic lives in exactly one place and drift between sites is impossible.
+
+### 1. Null-Byte Rejection At Every Credential Decode Site (MUST)
+
+Every URL parsing site that extracts `user`/`password` from `urlparse(connection_string)` MUST route through a single shared helper that rejects null bytes after percent-decoding. Hand-rolled `unquote(parsed.password)` at a call site is BLOCKED.
+
+```python
+# DO — route through the shared helper
+from kailash.utils.url_credentials import decode_userinfo_or_raise
+
+parsed = urlparse(connection_string)
+user, password = decode_userinfo_or_raise(parsed)  # raises on \x00 after unquote
+
+# DO NOT — hand-rolled at the call site
+from urllib.parse import unquote
+parsed = urlparse(connection_string)
+user = unquote(parsed.username or "")
+password = unquote(parsed.password or "")  # no null-byte check, drifts from other sites
+```
+
+**BLOCKED rationalizations:**
+
+- "The existing site already has the check"
+- "This is a new dialect, the rule doesn't apply yet"
+- "We'll consolidate later"
+- "The URL comes from a trusted config file, null bytes can't happen"
+
+**Why:** A crafted `mysql://user:%00bypass@host/db` decodes to `\x00bypass`; the MySQL C client truncates credentials at the first null byte and the driver sends an empty password, succeeding against any row in `mysql.user` with an empty `authentication_string`. Drift between sites that have the check and sites that don't is unauditable without a single helper.
+
+### 2. Pre-Encoder Consolidation (MUST)
+
+Password pre-encoding helpers (`quote_plus` of `#$@?` etc.) MUST live in the same shared helper module as the decode path. Per-adapter copies are BLOCKED.
+
+```python
+# DO — single helper module owns both halves of the contract
+from kailash.utils.url_credentials import (
+    preencode_password_special_chars,
+    decode_userinfo_or_raise,
+)
+url = preencode_password_special_chars(raw_url)
+parsed = urlparse(url)
+user, password = decode_userinfo_or_raise(parsed)
+
+# DO NOT — inline pre-encode in each adapter
+pwd = pwd.replace("@", "%40").replace(":", "%3A").replace("#", "%23")
+url = f"postgresql://{user}:{pwd}@{host}/{db}"  # drifts from decode path silently
+```
+
+**Why:** Encode and decode are dual halves of one contract; splitting them across modules guarantees one half drifts. Round-trip tests are only meaningful when both ends share the helper.
+
+Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-12)
+
 ## Input Validation
 
 All user input MUST be validated before use: type checking, length limits, format validation, whitelist when possible. Applies to API endpoints, CLI inputs, file uploads, form submissions.

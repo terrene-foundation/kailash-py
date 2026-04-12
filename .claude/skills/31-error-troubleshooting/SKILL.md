@@ -74,6 +74,34 @@ Common error patterns and solutions for Kailash SDK.
 - Azure using canonical env vars (`AZURE_ENDPOINT`, `AZURE_API_KEY`)?
 - `structured_output_mode="explicit"` for new agents?
 
+## Git Hook Traps
+
+### Pre-Commit Auto-Stash Phantom Failure
+
+**Symptom:** `git commit` fails with "stash pop" errors or silently
+drops staged changes, even though running `pre-commit run --all-files`
+directly passes every hook.
+
+**Root cause:** Pre-commit's auto-stash feature stashes unstaged
+changes before running hooks, then pops after. When a hook modifies
+the working tree (e.g., a formatter), the pop conflicts with the
+hook's changes, causing the commit to abort or lose staged hunks.
+
+**Workaround:** Bypass the hooks directory for this commit only:
+
+```bash
+git -c core.hooksPath=/dev/null commit -m "fix(scope): description"
+```
+
+**Mandatory follow-up:** Document the bypass in the commit body AND
+file a todo against the pre-commit configuration. See
+`rules/git.md` "Pre-Commit Hook Workarounds" for the full rule.
+Silent `--no-verify` retries are BLOCKED.
+
+**Frequency:** Recurring across sessions in kailash-py; the stash
+interaction is non-deterministic and depends on which files have
+unstaged changes at commit time.
+
 ## Debugging Tips
 
 1. **Always** check `.build()` was called
