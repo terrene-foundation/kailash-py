@@ -221,7 +221,7 @@ from kailash_ml.engines.drift_monitor import DriftMonitor, DriftSpec
 
 Detects distribution shifts in production data using PSI (Population Stability Index) and the Kolmogorov-Smirnov test. Stores reference distributions and drift reports in the database. Reports classify drift as `none`, `moderate`, or `severe` per feature and overall. Optionally augments reports with agent-powered interpretation (double opt-in).
 
-Key operations: `set_reference()`, `check_drift()`, `get_drift_history()`, `check_performance_degradation()`.
+Key operations: `set_reference_data()`, `check_drift()`, `get_drift_history()`, `check_performance_degradation()`.
 
 #### ExperimentTracker
 
@@ -641,7 +641,7 @@ monitor = DriftMonitor(conn)
 await monitor.initialize()
 
 # Set a reference distribution (e.g., from your training data)
-await monitor.set_reference("churn_model_v1", reference_df)
+await monitor.set_reference_data("churn_model_v1", reference_df)
 
 # Check drift against new production data
 report = await monitor.check_drift(

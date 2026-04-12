@@ -18,14 +18,6 @@ import warnings
 import numpy as np
 import polars as pl
 import pytest
-from sklearn.datasets import make_classification
-from sklearn.ensemble import (
-    GradientBoostingClassifier,
-    RandomForestClassifier,
-)
-from sklearn.linear_model import LogisticRegression
-
-from kailash.db.connection import ConnectionManager
 from kailash_ml.engines.automl_engine import AutoMLConfig, AutoMLEngine, AutoMLResult
 from kailash_ml.engines.data_explorer import DataExplorer, DataProfile
 from kailash_ml.engines.drift_monitor import DriftMonitor, DriftReport
@@ -41,10 +33,7 @@ from kailash_ml.engines.hyperparameter_search import (
     SearchSpace,
 )
 from kailash_ml.engines.inference_server import InferenceServer, PredictionResult
-from kailash_ml.engines.model_registry import (
-    LocalFileArtifactStore,
-    ModelRegistry,
-)
+from kailash_ml.engines.model_registry import LocalFileArtifactStore, ModelRegistry
 from kailash_ml.engines.preprocessing import PreprocessingPipeline, SetupResult
 from kailash_ml.engines.training_pipeline import (
     EvalSpec,
@@ -53,13 +42,12 @@ from kailash_ml.engines.training_pipeline import (
     TrainingResult,
 )
 from kailash_ml.interop import to_sklearn_input
-from kailash_ml.types import (
-    FeatureField,
-    FeatureSchema,
-    MetricSpec,
-    ModelSignature,
-)
+from kailash_ml.types import FeatureField, FeatureSchema, MetricSpec, ModelSignature
+from sklearn.datasets import make_classification
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 
+from kailash.db.connection import ConnectionManager
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -808,7 +796,7 @@ async def test_11_drift_monitoring(
     feature_cols = [f"feat_{i}" for i in range(10)]
 
     # Set reference distribution (production baseline)
-    await drift_monitor.set_reference("churn_v1", data, feature_cols)
+    await drift_monitor.set_reference_data("churn_v1", data, feature_cols)
 
     # Check drift against the same data -- should detect no drift
     report_no_drift: DriftReport = await drift_monitor.check_drift("churn_v1", data)
@@ -923,7 +911,7 @@ async def test_12_full_lifecycle(
 
     # ---- Step 6: Monitor drift ----
     feature_cols = [f"feat_{i}" for i in range(10)]
-    await drift_monitor.set_reference("lifecycle_model", data, feature_cols)
+    await drift_monitor.set_reference_data("lifecycle_model", data, feature_cols)
     report = await drift_monitor.check_drift("lifecycle_model", data)
     assert report.overall_drift_detected is False
 

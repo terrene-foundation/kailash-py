@@ -6,6 +6,11 @@ Detects distribution shifts using PSI (Population Stability Index) and
 KS-test (Kolmogorov-Smirnov). Stores reference distributions and drift
 reports in the database via ConnectionManager. Alerts when thresholds
 are breached.
+
+API cleanup (issue #351):
+- ``set_reference_data()`` stores per-feature reference distributions.
+- ``DriftCallback`` type alias for the ``on_drift_detected`` handler.
+- Internal helpers use ``_store_performance_baseline`` / ``_load_performance_baseline``.
 """
 from __future__ import annotations
 
@@ -13,20 +18,22 @@ import asyncio
 import json
 import logging
 import uuid
-from dataclasses import dataclass, field
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import numpy as np
 import polars as pl
+from kailash_ml.types import AgentInfusionProtocol
 from scipy.stats import ks_2samp
 
 from kailash.db.connection import ConnectionManager
-from kailash_ml.types import AgentInfusionProtocol
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "DriftCallback",
     "DriftMonitor",
     "DriftReport",
     "DriftSpec",
@@ -39,6 +46,16 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 _SEVERITY_ORDER = {"none": 0, "moderate": 1, "severe": 2}
+
+# ---------------------------------------------------------------------------
+# Callback type
+# ---------------------------------------------------------------------------
+
+DriftCallback = Callable[["DriftReport"], Awaitable[None]]
+"""Async callback invoked when drift is detected.
+
+Signature: ``async def handler(report: DriftReport) -> None``.
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +194,7 @@ class DriftSpec:
     feature_columns: list[str] | None = None
     psi_threshold: float | None = None
     ks_threshold: float | None = None
-    on_drift_detected: Any = None  # async callable or None
+    on_drift_detected: DriftCallback | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -273,12 +290,10 @@ def _compute_psi_categorical(
     cur_counts = cur_cast.value_counts()
 
     # Build frequency dicts
-    ref_name = ref_counts.columns[0]
     ref_dict: dict[str, int] = {}
     for row in ref_counts.iter_rows():
         ref_dict[str(row[0])] = row[1]
 
-    cur_name = cur_counts.columns[0]
     cur_dict: dict[str, int] = {}
     for row in cur_counts.iter_rows():
         cur_dict[str(row[0])] = row[1]
@@ -410,10 +425,10 @@ class DriftMonitor:
             self._initialized = True
 
     # ------------------------------------------------------------------
-    # set_reference
+    # set_reference_data
     # ------------------------------------------------------------------
 
-    async def set_reference(
+    async def set_reference_data(
         self,
         model_name: str,
         reference_data: pl.DataFrame,
@@ -550,7 +565,7 @@ class DriftMonitor:
         reference = self._references.get(model_name)
         if reference is None:
             raise ValueError(
-                f"No reference set for model '{model_name}'. Call set_reference() first."
+                f"No reference set for model '{model_name}'. Call set_reference_data() first."
             )
 
         feature_results: list[FeatureDriftResult] = []
@@ -686,10 +701,10 @@ class DriftMonitor:
 
         # Load or use provided baseline
         if baseline_metrics is None:
-            baseline_metrics = await self._load_baseline(model_name)
+            baseline_metrics = await self._load_performance_baseline(model_name)
             if baseline_metrics is None:
                 # No baseline -- store current as baseline
-                await self._store_baseline(model_name, current_metrics)
+                await self._store_performance_baseline(model_name, current_metrics)
                 baseline_metrics = current_metrics
 
         # Compute degradation
@@ -756,7 +771,7 @@ class DriftMonitor:
         """
         if model_name not in self._references:
             raise ValueError(
-                f"No reference set for model '{model_name}'. Call set_reference() first."
+                f"No reference set for model '{model_name}'. Call set_reference_data() first."
             )
         if interval.total_seconds() < 1:
             raise ValueError("Monitoring interval must be at least 1 second.")
@@ -839,7 +854,9 @@ class DriftMonitor:
             report.checked_at.isoformat(),
         )
 
-    async def _load_baseline(self, model_name: str) -> dict[str, float] | None:
+    async def _load_performance_baseline(
+        self, model_name: str
+    ) -> dict[str, float] | None:
         """Load stored performance baseline."""
         row = await self._conn.fetchone(
             "SELECT metrics FROM _kml_performance_baselines WHERE model_name = ?",
@@ -849,7 +866,9 @@ class DriftMonitor:
             return None
         return json.loads(row["metrics"])
 
-    async def _store_baseline(self, model_name: str, metrics: dict[str, float]) -> None:
+    async def _store_performance_baseline(
+        self, model_name: str, metrics: dict[str, float]
+    ) -> None:
         """Store performance baseline (transaction eliminates TOCTOU race)."""
         now_iso = datetime.now(timezone.utc).isoformat()
         async with self._conn.transaction() as tx:
