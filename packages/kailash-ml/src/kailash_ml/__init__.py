@@ -7,6 +7,11 @@ Use ``from kailash_ml import FeatureStore`` to load a specific engine.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from kailash_ml.engines.drift_monitor import DriftCallback as DriftCallback
+
 from kailash_ml._version import __version__
 from kailash_ml.engines.data_explorer import AlertConfig
 from kailash_ml.types import (

@@ -43,6 +43,7 @@ import logging
 import threading
 import time
 import traceback
+import warnings
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -187,7 +188,7 @@ class EventLoopWatchdog:
             try:
                 await self._heartbeat_task
             except asyncio.CancelledError:
-                pass
+                pass  # Expected: we just cancelled this task above
             self._heartbeat_task = None
 
         if self._watchdog_thread is not None and self._watchdog_thread.is_alive():
@@ -322,24 +323,16 @@ class EventLoopWatchdog:
             },
         )
 
-    def __del__(self, _warn_mod=None) -> None:
+    def __del__(self, _warnings=warnings) -> None:
         """Issue ResourceWarning if the watchdog was not stopped cleanly."""
         if (
             not getattr(self, "_closed", True)
             and getattr(self, "_watchdog_thread", None) is not None
         ):
-            import warnings
-
-            _mod = _warn_mod or warnings
-            _mod.warn_explicit(
-                message=(
-                    f"EventLoopWatchdog (loop_id={id(self._loop) if self._loop else 0}) "
-                    f"was not stopped before garbage collection. "
-                    f"Use 'async with EventLoopWatchdog() as wd: ...' for clean lifecycle."
-                ),
-                category=ResourceWarning,
-                filename=__file__,
-                lineno=0,
+            _warnings.warn(
+                f"EventLoopWatchdog was not stopped before garbage collection. "
+                f"Use 'async with EventLoopWatchdog() as wd: ...' for clean lifecycle.",
+                ResourceWarning,
+                stacklevel=1,
             )
-            # Best-effort cleanup: signal the thread to stop
             self._stop_event.set()

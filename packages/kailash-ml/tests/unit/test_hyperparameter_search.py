@@ -252,6 +252,11 @@ class TestBuildResult:
 # ---------------------------------------------------------------------------
 
 
+optuna = pytest.importorskip(
+    "optuna", reason="optuna required for successive halving tests"
+)
+
+
 class TestSuccessiveHalvingSearch:
     """Tests for successive halving with Optuna's SuccessiveHalvingPruner."""
 

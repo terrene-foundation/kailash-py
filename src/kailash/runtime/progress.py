@@ -113,7 +113,7 @@ class ProgressRegistry:
             try:
                 self._callbacks.remove(callback)
             except ValueError:
-                pass
+                pass  # Callback already unregistered; silently ignore duplicate removal
 
     def emit(self, update: ProgressUpdate) -> None:
         """Emit a progress update to all registered callbacks.
