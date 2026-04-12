@@ -156,9 +156,7 @@ class EventLoopWatchdog:
         with self._heartbeat_lock:
             self._last_heartbeat = time.monotonic()
 
-        self._heartbeat_task = asyncio.ensure_future(
-            self._heartbeat_loop(), loop=self._loop
-        )
+        self._heartbeat_task = self._loop.create_task(self._heartbeat_loop())
 
         self._watchdog_thread = threading.Thread(
             target=self._watchdog_loop,
