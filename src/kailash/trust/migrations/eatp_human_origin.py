@@ -36,12 +36,23 @@ Created: 2026-01-02
 import asyncio
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
 import asyncpg
 
 logger = logging.getLogger(__name__)
+
+_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def _quote_pg_identifier(name: str) -> str:
+    if not isinstance(name, str) or not _IDENTIFIER_RE.match(name) or len(name) > 63:
+        raise ValueError(
+            f"invalid SQL identifier (fingerprint={hash(name) & 0xFFFF:04x})"
+        )
+    return f'"{name}"'
 
 
 class EATPMigration:
@@ -201,7 +212,9 @@ class EATPMigration:
                 )
 
                 if not column_exists:
-                    await conn.execute(f"ALTER TABLE delegation_records ADD COLUMN {column_name} {column_type}")
+                    await conn.execute(
+                        f"ALTER TABLE delegation_records ADD COLUMN {_quote_pg_identifier(column_name)} {column_type}"
+                    )
                     changes.append(f"Added column {column_name} to delegation_records")
 
         return changes
@@ -267,7 +280,9 @@ class EATPMigration:
                 )
 
                 if not column_exists:
-                    await conn.execute(f"ALTER TABLE audit_anchors ADD COLUMN {column_name} {column_type}")
+                    await conn.execute(
+                        f"ALTER TABLE audit_anchors ADD COLUMN {_quote_pg_identifier(column_name)} {column_type}"
+                    )
                     changes.append(f"Added column {column_name} to audit_anchors")
 
         return changes
@@ -313,7 +328,9 @@ class EATPMigration:
             )
 
             if not index_exists:
-                await conn.execute(f"CREATE INDEX {index_name} ON {table_name} ({column_name})")
+                await conn.execute(
+                    f"CREATE INDEX {_quote_pg_identifier(index_name)} ON {_quote_pg_identifier(table_name)} ({_quote_pg_identifier(column_name)})"
+                )
                 changes.append(f"Created index {index_name} on {table_name}")
 
         return changes

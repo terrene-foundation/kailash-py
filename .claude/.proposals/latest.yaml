@@ -532,7 +532,7 @@ changes:
 # resets status to pending_review because the new entries have not been
 # classified by loom yet. The 51 prior entries remain intact.
 
-status: distributed
+status: reviewed
 reviewed_date: "2026-04-12"
 distributed_date: "2026-04-12"
 reviewed_notes: |
@@ -585,3 +585,69 @@ reviewed_notes: |
     suggested_tier: coc
     reason: "New 'Optional Dependency Testing' section — pytest.importorskip pattern for extras like [hpo], [redis], [vault]. Includes placement guidance (module scope vs function scope)"
     diff_lines: "+25"
+
+  # --- 2026-04-12: project/ cleanup — relocate to canonical locations ---
+  # Origin: skills/project/ was a USE-repo pattern wrongly applied to BUILD repo.
+  # /codify command says "canonical locations"; project/ is for downstream repos only.
+  # All 5 files relocated to their canonical skill directories.
+  # pool-safety.md deleted (duplicate of rules/connection-pool.md).
+
+  - file: skills/29-pact/pact-enforcement-modes.md
+    action: moved
+    suggested_tier: coc
+    reason: "Relocated from skills/project/ to canonical 29-pact/. PACT enforcement modes (ENFORCE/SHADOW/DISABLED), HELD verdict handling, envelope adapter. Not project-specific."
+    diff_lines: "+0 (moved, no content change)"
+
+  - file: skills/02-dataflow/dataflow-fabric-cache-consumers.md
+    action: moved
+    suggested_tier: coc-py
+    reason: "Relocated from skills/project/fabric-cache-consumers.md. Fabric cache control, consumer adapters, MCP tool generation, virtual products, graceful shutdown."
+    diff_lines: "+0 (moved, no content change)"
+
+  - file: skills/02-dataflow/dataflow-provenance-audit.md
+    action: moved
+    suggested_tier: coc-py
+    reason: "Relocated from skills/project/dataflow-provenance-audit.md. Provenance[T] field tracking, SourceType enum, audit trail persistence, EventStoreBackend."
+    diff_lines: "+0 (moved, no content change)"
+
+  - file: skills/34-kailash-ml/SKILL.md
+    action: created
+    suggested_tier: coc-py
+    reason: "New skill directory 34-kailash-ml with SKILL.md. Content from skills/project/ml-quick-reference.md — 13 engine index, internal modules, common patterns, interop table, security checklist, install matrix. Added frontmatter."
+    diff_lines: "+5 (frontmatter added to existing content)"
+
+  - file: skills/project/pool-safety.md
+    action: deleted
+    suggested_tier: skip
+    reason: "Duplicate of rules/connection-pool.md. Deleted, not relocated."
+
+  - file: skills/project/SKILL.md
+    action: deleted
+    suggested_tier: skip
+    reason: "Project skills directory removed from BUILD repo — USE-repo pattern only."
+
+  - file: skills/02-dataflow/SKILL.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Added 'Provenance & Audit' section referencing dataflow-provenance-audit.md and dataflow-fabric-cache-consumers.md"
+    diff_lines: "+4"
+
+  - file: skills/29-pact/SKILL.md
+    action: modified
+    suggested_tier: coc
+    reason: "Added pact-enforcement-modes.md to the skill file index table"
+    diff_lines: "+1"
+
+  # --- 2026-04-12: deferred files now authored ---
+
+  - file: rules/refactor-invariants.md
+    action: created
+    suggested_tier: coc
+    reason: "Previously listed as 'proposed' but never authored. Now created with full MUST rules: LOC invariant test in same commit as refactor, invariant tests in CI default path, stale-base detection gate. Origin: SPEC-04 regression."
+    diff_lines: "+75"
+
+  - file: skills/01-core-sdk/cross-sdk-canonical-json.md
+    action: created
+    suggested_tier: coc
+    reason: "Previously deferred. Documents trust._json module — canonical_json_loads (duplicate key + NaN/Inf rejection), canonical_json_dumps (sorted keys), DuplicateKeyError, 8-row parser differential table. Cross-SDK parity per EATP D6."
+    diff_lines: "+80"

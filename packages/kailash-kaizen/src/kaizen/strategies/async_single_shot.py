@@ -15,6 +15,8 @@ from typing import Any, Dict, List, Optional
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
+from kaizen.core.deprecation import deprecated
+
 logger = logging.getLogger(__name__)
 
 # Allowlist regex for MCP tool names — validates before execution
@@ -351,8 +353,16 @@ class AsyncSingleShotStrategy:
             logger.error(f"Workflow generation failed: {e}", exc_info=True)
             return None
 
+    @deprecated(
+        "Use composition wrappers (MonitoredAgent, GovernedAgent, StreamingAgent) instead.",
+        since="2.5.0",
+    )
     def pre_execute(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-        """Preprocess inputs before execution."""
+        """Preprocess inputs before execution.
+
+        .. deprecated:: 2.5.0
+            Use composition wrappers (MonitoredAgent, GovernedAgent, StreamingAgent) instead.
+        """
         return inputs
 
     def parse_result(self, raw_result: Dict[str, Any]) -> Dict[str, Any]:
@@ -401,8 +411,16 @@ class AsyncSingleShotStrategy:
 
         return raw_result
 
+    @deprecated(
+        "Use composition wrappers (MonitoredAgent, GovernedAgent, StreamingAgent) instead.",
+        since="2.5.0",
+    )
     def post_execute(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Post-process final result."""
+        """Post-process final result.
+
+        .. deprecated:: 2.5.0
+            Use composition wrappers (MonitoredAgent, GovernedAgent, StreamingAgent) instead.
+        """
         return result
 
     def _create_messages_from_inputs(

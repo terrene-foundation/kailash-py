@@ -123,6 +123,7 @@ class CacheNode(AsyncNode):
         self._memory_cache = {}
         self._access_times = {}
         self._access_counts = {}
+        self._version_tags: Dict[str, int] = {}  # CAS version tracking
         self._redis_client = None
         self._cache_stats = {
             "hits": 0,
@@ -130,6 +131,8 @@ class CacheNode(AsyncNode):
             "sets": 0,
             "deletes": 0,
             "evictions": 0,
+            "cas_successes": 0,
+            "cas_failures": 0,
         }
         self.logger.info(f"Initialized CacheNode: {self.id}")
 
@@ -235,6 +238,23 @@ class CacheNode(AsyncNode):
                 default="",
                 description="Key namespace prefix",
             ),
+            "tenant_id": NodeParameter(
+                name="tenant_id",
+                type=str,
+                required=False,
+                default="",
+                description="Tenant ID for multi-tenant key isolation. "
+                "When provided, all keys are prefixed with tenant context.",
+            ),
+            "expected_version": NodeParameter(
+                name="expected_version",
+                type=int,
+                required=False,
+                default=None,
+                description="Expected version tag for CAS (compare-and-swap) operations. "
+                "If set on a 'set' operation, the write succeeds only if the "
+                "current version matches. Use version from prior 'get' result.",
+            ),
         }
 
     def get_output_schema(self) -> Dict[str, NodeParameter]:
@@ -305,6 +325,28 @@ class CacheNode(AsyncNode):
         backend = CacheBackend(kwargs.get("backend", "memory"))
 
         start_time = time.time()
+
+        # Fail-closed guard: CAS (expected_version) is only supported
+        # with the in-process memory backend. Reject at the outer boundary
+        # so we never attempt backend initialization for a request that
+        # cannot be served correctly. See rules/zero-tolerance.md §2.
+        if (
+            operation == "set"
+            and kwargs.get("expected_version") is not None
+            and backend != CacheBackend.MEMORY
+        ):
+            return {
+                "success": False,
+                "key": kwargs.get("key", ""),
+                "cas_failed": True,
+                "error": (
+                    "CAS (expected_version) is only supported with "
+                    "backend='memory'. Redis and hybrid backends require "
+                    "server-side CAS (e.g., Redis WATCH/MULTI)."
+                ),
+                "operation_time": 0.0,
+                "backend_used": backend.value,
+            }
 
         try:
             # Initialize backend if needed
@@ -396,20 +438,35 @@ class CacheNode(AsyncNode):
                 pass  # Ignore errors during cleanup
             self._redis_client = None
 
-    def _build_key(self, key: str, namespace: str = "") -> str:
-        """Build a namespaced cache key."""
+    def _build_key(self, key: str, namespace: str = "", tenant_id: str = "") -> str:
+        """Build a namespaced, tenant-scoped cache key.
+
+        Key shape:
+        - No tenant, no namespace: ``key``
+        - No tenant, with namespace: ``namespace:key``
+        - With tenant, no namespace: ``tenant_id:key``
+        - With tenant and namespace: ``tenant_id:namespace:key``
+
+        Per ``rules/tenant-isolation.md`` MUST Rule 1, multi-tenant
+        cache keys MUST include ``tenant_id`` as a dimension.
+        """
+        parts = []
+        if tenant_id:
+            parts.append(tenant_id)
         if namespace:
-            return f"{namespace}:{key}"
-        return key
+            parts.append(namespace)
+        parts.append(key)
+        return ":".join(parts)
 
     async def _get(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """Get a value from cache."""
         key = kwargs["key"]
         namespace = kwargs.get("namespace", "")
+        tenant_id = kwargs.get("tenant_id", "")
         backend = CacheBackend(kwargs.get("backend", "memory"))
         serialization = SerializationFormat(kwargs.get("serialization", "json"))
 
-        full_key = self._build_key(key, namespace)
+        full_key = self._build_key(key, namespace, tenant_id)
 
         try:
             if backend == CacheBackend.REDIS and self._redis_client:
@@ -439,11 +496,15 @@ class CacheNode(AsyncNode):
             else:
                 self._cache_stats["misses"] += 1
 
+            # Include version tag for CAS operations
+            version = self._version_tags.get(full_key)
+
             return {
                 "success": True,
                 "value": value,
                 "hit": hit,
                 "key": full_key,
+                "version": version,
             }
 
         except Exception as e:
@@ -453,20 +514,61 @@ class CacheNode(AsyncNode):
                 "value": None,
                 "hit": False,
                 "key": full_key,
+                "version": None,
                 "error": str(e),
             }
 
     async def _set(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        """Set a value in cache."""
+        """Set a value in cache.
+
+        Supports CAS (compare-and-swap) via ``expected_version``:
+        if provided, the write only succeeds when the current version
+        tag matches.  The new version is returned in the result so the
+        caller can chain subsequent CAS operations.
+        """
         key = kwargs["key"]
         value = kwargs["value"]
         namespace = kwargs.get("namespace", "")
+        tenant_id = kwargs.get("tenant_id", "")
         backend = CacheBackend(kwargs.get("backend", "memory"))
         ttl = kwargs.get("ttl", 3600)
+        expected_version = kwargs.get("expected_version")
 
-        full_key = self._build_key(key, namespace)
+        full_key = self._build_key(key, namespace, tenant_id)
 
         try:
+            # CAS check: if expected_version is provided, verify it
+            # matches the current version before allowing the write.
+            # CAS is only supported for the memory backend — the version
+            # tags live in-process and cannot guarantee atomicity across
+            # Redis or hybrid backends (fail-closed per zero-tolerance §2).
+            if expected_version is not None and backend != CacheBackend.MEMORY:
+                return {
+                    "success": False,
+                    "key": full_key,
+                    "cas_failed": True,
+                    "error": (
+                        "CAS (expected_version) is only supported with "
+                        "backend='memory'. Redis and hybrid backends require "
+                        "server-side CAS (e.g., Redis WATCH/MULTI)."
+                    ),
+                }
+            if expected_version is not None:
+                current_version = self._version_tags.get(full_key)
+                if current_version != expected_version:
+                    self._cache_stats["cas_failures"] += 1
+                    return {
+                        "success": False,
+                        "key": full_key,
+                        "cas_failed": True,
+                        "expected_version": expected_version,
+                        "actual_version": current_version,
+                        "error": (
+                            f"CAS conflict: expected version {expected_version}, "
+                            f"actual {current_version}"
+                        ),
+                    }
+
             if backend == CacheBackend.REDIS and self._redis_client:
                 success = await self._redis_set(full_key, value, ttl, kwargs)
             elif backend == CacheBackend.HYBRID:
@@ -481,11 +583,19 @@ class CacheNode(AsyncNode):
 
             if success:
                 self._cache_stats["sets"] += 1
+                # Bump version tag on successful write
+                new_version = (self._version_tags.get(full_key, 0)) + 1
+                self._version_tags[full_key] = new_version
+                if expected_version is not None:
+                    self._cache_stats["cas_successes"] += 1
+            else:
+                new_version = self._version_tags.get(full_key)
 
             return {
                 "success": success,
                 "key": full_key,
                 "ttl_remaining": ttl if ttl > 0 else -1,
+                "version": new_version,
             }
 
         except Exception as e:
@@ -500,9 +610,10 @@ class CacheNode(AsyncNode):
         """Delete a value from cache."""
         key = kwargs["key"]
         namespace = kwargs.get("namespace", "")
+        tenant_id = kwargs.get("tenant_id", "")
         backend = CacheBackend(kwargs.get("backend", "memory"))
 
-        full_key = self._build_key(key, namespace)
+        full_key = self._build_key(key, namespace, tenant_id)
 
         try:
             deleted = False
@@ -531,6 +642,7 @@ class CacheNode(AsyncNode):
 
             if deleted:
                 self._cache_stats["deletes"] += 1
+                self._version_tags.pop(full_key, None)
 
             return {
                 "success": True,
@@ -551,9 +663,10 @@ class CacheNode(AsyncNode):
         """Check if a key exists in cache."""
         key = kwargs["key"]
         namespace = kwargs.get("namespace", "")
+        tenant_id = kwargs.get("tenant_id", "")
         backend = CacheBackend(kwargs.get("backend", "memory"))
 
-        full_key = self._build_key(key, namespace)
+        full_key = self._build_key(key, namespace, tenant_id)
 
         try:
             exists = False
@@ -586,48 +699,52 @@ class CacheNode(AsyncNode):
             }
 
     async def _clear(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        """Clear all cache entries."""
+        """Clear cache entries, optionally scoped to tenant and/or namespace."""
         backend = CacheBackend(kwargs.get("backend", "memory"))
         namespace = kwargs.get("namespace", "")
+        tenant_id = kwargs.get("tenant_id", "")
 
         try:
             cleared_count = 0
 
+            # Build the key prefix for scoped clearing.
+            # Per rules/tenant-isolation.md MUST Rule 3, invalidation
+            # entry points MUST accept tenant_id for scoped clearing.
+            prefix = self._build_key("", namespace, tenant_id).rstrip(":")
+            has_scope = bool(prefix)
+
+            def _matches(k: str) -> bool:
+                return k.startswith(f"{prefix}:") if has_scope else True
+
             if backend == CacheBackend.REDIS and self._redis_client:
-                if namespace:
-                    # Clear only namespaced keys
-                    pattern = f"{namespace}:*"
+                if has_scope:
+                    pattern = f"{prefix}:*"
                     keys = await self._redis_client.keys(pattern)
                     if keys:
                         cleared_count = await self._redis_client.delete(*keys)
                 else:
-                    # Clear all
                     await self._redis_client.flushdb()
                     cleared_count = -1  # Unknown count
 
             elif backend == CacheBackend.HYBRID:
                 # Clear memory
-                if namespace:
-                    mem_keys = [
-                        k
-                        for k in self._memory_cache.keys()
-                        if k.startswith(f"{namespace}:")
-                    ]
-                    for k in mem_keys:
-                        del self._memory_cache[k]
-                        del self._access_times[k]
-                        self._access_counts.pop(k, None)
-                    cleared_count += len(mem_keys)
-                else:
-                    cleared_count += len(self._memory_cache)
+                mem_keys = [k for k in self._memory_cache.keys() if _matches(k)]
+                for k in mem_keys:
+                    del self._memory_cache[k]
+                    del self._access_times[k]
+                    self._access_counts.pop(k, None)
+                    self._version_tags.pop(k, None)
+                cleared_count += len(mem_keys)
+                if not has_scope:
                     self._memory_cache.clear()
                     self._access_times.clear()
                     self._access_counts.clear()
+                    self._version_tags.clear()
 
                 # Clear Redis
                 if self._redis_client:
-                    if namespace:
-                        pattern = f"{namespace}:*"
+                    if has_scope:
+                        pattern = f"{prefix}:*"
                         keys = await self._redis_client.keys(pattern)
                         if keys:
                             cleared_count += await self._redis_client.delete(*keys)
@@ -636,22 +753,18 @@ class CacheNode(AsyncNode):
 
             else:
                 # Memory cache
-                if namespace:
-                    mem_keys = [
-                        k
-                        for k in self._memory_cache.keys()
-                        if k.startswith(f"{namespace}:")
-                    ]
-                    for k in mem_keys:
-                        del self._memory_cache[k]
-                        del self._access_times[k]
-                        self._access_counts.pop(k, None)
-                    cleared_count = len(mem_keys)
-                else:
-                    cleared_count = len(self._memory_cache)
+                mem_keys = [k for k in self._memory_cache.keys() if _matches(k)]
+                for k in mem_keys:
+                    del self._memory_cache[k]
+                    del self._access_times[k]
+                    self._access_counts.pop(k, None)
+                    self._version_tags.pop(k, None)
+                cleared_count = len(mem_keys)
+                if not has_scope:
                     self._memory_cache.clear()
                     self._access_times.clear()
                     self._access_counts.clear()
+                    self._version_tags.clear()
 
             return {
                 "success": True,
@@ -1149,6 +1262,7 @@ class CacheNode(AsyncNode):
                 del self._memory_cache[key]
                 del self._access_times[key]
                 self._access_counts.pop(key, None)
+                self._version_tags.pop(key, None)
                 self._cache_stats["evictions"] += 1
 
         elif eviction_policy == EvictionPolicy.LFU:
@@ -1160,6 +1274,7 @@ class CacheNode(AsyncNode):
                 del self._memory_cache[key]
                 del self._access_times[key]
                 del self._access_counts[key]
+                self._version_tags.pop(key, None)
                 self._cache_stats["evictions"] += 1
 
         elif eviction_policy == EvictionPolicy.TTL:
@@ -1177,6 +1292,7 @@ class CacheNode(AsyncNode):
                 del self._memory_cache[key]
                 del self._access_times[key]
                 self._access_counts.pop(key, None)
+                self._version_tags.pop(key, None)
                 self._cache_stats["evictions"] += 1
 
         elif eviction_policy == EvictionPolicy.FIFO:
@@ -1186,6 +1302,7 @@ class CacheNode(AsyncNode):
                 del self._memory_cache[key]
                 del self._access_times[key]
                 self._access_counts.pop(key, None)
+                self._version_tags.pop(key, None)
                 self._cache_stats["evictions"] += 1
 
     def run(self, **kwargs) -> Dict[str, Any]:

@@ -46,6 +46,19 @@ model-registry sync-in-async deadlock resolved.
    External callers that depended on the old dict-returning stubs
    will see real data for the first time.
 
+7. **`ClassificationPolicy.classify()` now fail-closed.**
+   Unclassified fields previously returned `"public"` (fail-open),
+   silently exposing data that was never explicitly classified.
+   The default is now `"highly_confidential"` (most restrictive),
+   matching kailash-rs semantics (cross-SDK alignment per EATP D6,
+   #418). A WARN log is emitted when the default is applied so
+   operators can identify and classify missing fields.
+   **Migration**: Audit your models for unclassified fields and
+   explicitly classify each one with the intended level. Fields that
+   should be publicly readable must now carry
+   `@classify("field", DataClassification.PUBLIC)`. Failure to
+   classify will result in redaction for most callers.
+
 ### Security fixes (9 CRITICAL vectors closed)
 
 - **SQL injection (13 sites) in `core/multi_tenancy.py`** — every

@@ -7,6 +7,13 @@ This module provides validation tools for ensuring production-ready code:
 - Security validation for enterprise deployments
 """
 
+from .core_error_enhancer import CoreErrorEnhancer, EnhancedCoreError
 from .import_validator import ImportIssue, ImportIssueType, ImportPathValidator
 
-__all__ = ["ImportPathValidator", "ImportIssue", "ImportIssueType"]
+__all__ = [
+    "ImportPathValidator",
+    "ImportIssue",
+    "ImportIssueType",
+    "CoreErrorEnhancer",
+    "EnhancedCoreError",
+]

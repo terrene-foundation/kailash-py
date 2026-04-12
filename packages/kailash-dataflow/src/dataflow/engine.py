@@ -412,7 +412,10 @@ class DataFlowEngine:
             Classification level string (e.g., ``"pii"``, ``"internal"``).
         """
         if self._classification is None:
-            return "public"
+            # Fail-closed: no policy means we cannot prove a field is
+            # safe to expose, so treat as the most restrictive level.
+            # Cross-SDK alignment with kailash-rs (#418).
+            return "highly_confidential"
         return self._classification.classify(model_name, field_name)
 
     def get_retention_days(self, classification: str) -> Optional[int]:

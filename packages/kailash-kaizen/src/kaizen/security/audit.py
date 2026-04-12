@@ -1,9 +1,12 @@
 """Audit trail system for Kaizen AI framework."""
 
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class AuditTrailProvider:
@@ -12,10 +15,17 @@ class AuditTrailProvider:
     Supports:
     - memory: In-memory storage (Tier 1 testing)
     - postgresql: PostgreSQL database (Tier 2+ production)
+
+    When ``canonical_store`` is provided, all events are also forwarded
+    to the canonical ``kailash.trust.audit_store`` for unified audit
+    trail querying (SPEC-08 convergence).
     """
 
     def __init__(
-        self, storage: str = "memory", connection_string: Optional[str] = None
+        self,
+        storage: str = "memory",
+        connection_string: Optional[str] = None,
+        canonical_store: Optional[Any] = None,
     ):
         """Initialize audit trail provider.
 
@@ -29,6 +39,7 @@ class AuditTrailProvider:
         self.storage = storage
         self.connection_string = connection_string
         self._conn = None
+        self._canonical_store = canonical_store
 
         if storage == "memory":
             # In-memory storage for Tier 1 tests
@@ -146,6 +157,22 @@ class AuditTrailProvider:
             )
             self._conn.commit()
             cursor.close()
+
+        # Forward to canonical audit store (SPEC-08 convergence)
+        if self._canonical_store is not None:
+            try:
+                self._canonical_store.append_sync(
+                    actor=user,
+                    action=action,
+                    resource=f"kaizen.security:{event_id}",
+                    details={"result": result, **(metadata or {})},
+                )
+            except Exception:
+                logger.warning(
+                    "audit.canonical_forward_failed event_id=%s",
+                    event_id,
+                    exc_info=True,
+                )
 
         return event_id
 
@@ -272,11 +299,15 @@ class AuditTrailProvider:
             order_dir = "DESC" if order == "desc" else "ASC"
             query += f" ORDER BY {sort_column} {order_dir}"
 
-            # Add pagination
+            # Add pagination — coerce to int to prevent SQL injection.
+            # Type annotations (Optional[int]) are not enforced at runtime,
+            # so a caller passing a string would interpolate into the query.
             if limit is not None:
-                query += f" LIMIT {limit}"
+                query += " LIMIT %s"
+                params.append(int(limit))
             if offset is not None:
-                query += f" OFFSET {offset}"
+                query += " OFFSET %s"
+                params.append(int(offset))
 
             cursor = self._conn.cursor()
             cursor.execute(query, params)

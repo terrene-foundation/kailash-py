@@ -49,7 +49,7 @@ class AdminSchemaManager:
 
             # Drop existing tables if requested
             if drop_existing:
-                self._drop_existing_schema()
+                self._drop_existing_schema(force_drop=True)
 
             # Load and execute schema
             schema_path = Path(__file__).parent / "schema.sql"
@@ -208,8 +208,12 @@ class AdminSchemaManager:
             self.logger.error(f"Failed to get schema info: {e}")
             raise NodeExecutionError(f"Failed to get schema info: {str(e)}")
 
-    def _drop_existing_schema(self):
+    def _drop_existing_schema(self, *, force_drop: bool = False):
         """Drop existing admin schema tables."""
+        if not force_drop:
+            raise ValueError(
+                "_drop_existing_schema() refused — pass force_drop=True to acknowledge data loss is irreversible"
+            )
         tables_to_drop = [
             "admin_audit_log",
             "user_sessions",
@@ -223,7 +227,12 @@ class AdminSchemaManager:
             "admin_schema_version",
         ]
 
+        # Defense-in-depth: validate each identifier even though the list
+        # is hardcoded. Prevents regression if the list ever becomes dynamic.
+        from kailash.db.dialect import _validate_identifier
+
         for table in tables_to_drop:
+            _validate_identifier(table)
             try:
                 self.db_node.execute(query=f"DROP TABLE IF EXISTS {table} CASCADE")
             except Exception as e:
@@ -393,10 +402,13 @@ class AdminSchemaManager:
 
     def _get_table_row_counts(self) -> Dict[str, int]:
         """Get row counts for all admin tables."""
+        from kailash.db.dialect import _validate_identifier
+
         tables = ["users", "roles", "user_role_assignments", "permission_cache"]
         counts = {}
 
         for table in tables:
+            _validate_identifier(table)  # Defense-in-depth
             try:
                 result = self.db_node.execute(
                     query=f"SELECT COUNT(*) as count FROM {table}",

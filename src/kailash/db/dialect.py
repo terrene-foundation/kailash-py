@@ -32,17 +32,34 @@ _IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 _JSON_PATH_RE = re.compile(r"^[a-zA-Z0-9_.]+$")
 
 
-def _validate_identifier(name: str) -> None:
+def _validate_identifier(name: str, *, max_length: int = 128) -> None:
     """Validate a SQL identifier (table or column name).
+
+    Parameters
+    ----------
+    name
+        The identifier to validate.
+    max_length
+        Maximum allowed length (default 128, the SQLite limit;
+        PostgreSQL is 63, MySQL is 64).
 
     Raises
     ------
     ValueError
-        If *name* contains characters that could enable SQL injection.
+        If *name* contains characters that could enable SQL injection,
+        or exceeds the length limit.
     """
+    if not isinstance(name, str) or len(name) > max_length:
+        raise ValueError(
+            f"Invalid SQL identifier "
+            f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+            f"exceeds {max_length}-char limit or not a string"
+        )
     if not _IDENTIFIER_RE.match(name):
         raise ValueError(
-            f"Invalid SQL identifier '{name}': must match [a-zA-Z_][a-zA-Z0-9_]*"
+            f"Invalid SQL identifier "
+            f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+            "must match [a-zA-Z_][a-zA-Z0-9_]*"
         )
 
 

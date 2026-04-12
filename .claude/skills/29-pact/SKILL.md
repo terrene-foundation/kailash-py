@@ -27,6 +27,7 @@ pip install kailash-kaizen>=2.0.0 # For governed Kaizen agents
 | [pact-governed-agents](pact-governed-agents.md)           | PactGovernedAgent, @governed_tool                                                                     |
 | [pact-kaizen-integration](pact-kaizen-integration.md)     | Wrapping Kaizen agents with governance                                                                |
 | [pact-mcp-governance](pact-mcp-governance.md)             | MCP tool governance: enforce, audit, middleware                                                       |
+| [pact-enforcement-modes](pact-enforcement-modes.md)       | ENFORCE/SHADOW/DISABLED modes, HELD verdict handling, envelope adapter                                |
 | [pact-conformance-features](pact-conformance-features.md) | N1-N6: KnowledgeFilter, EnvelopeCache, PlanSuspension, AuditTiers, ObservationSink, cross-SDK vectors |
 
 ## Key Types
