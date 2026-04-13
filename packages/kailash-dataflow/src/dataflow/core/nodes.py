@@ -75,6 +75,64 @@ def _error_enhancer():
     return _ERROR_ENHANCER_CACHE
 
 
+def _coerce_record_id(model_fields: Dict[str, Any], id_value: Any) -> Any:
+    """Coerce record_id to match the model's primary key type.
+
+    Handles Optional[int], Union[int, None], and other wrapped types
+    by normalizing the type annotation before comparison. Fixes #439:
+    express_sync.update/read/delete reject integer record IDs on PostgreSQL
+    when callers pass string IDs for integer primary key columns.
+    """
+    if id_value is None:
+        return None
+
+    id_field_info = model_fields.get("id", {})
+    id_type = id_field_info.get("type")
+
+    if id_type is None:
+        # No type info — try int conversion for backward compatibility
+        if isinstance(id_value, str):
+            try:
+                return int(id_value)
+            except (ValueError, TypeError):
+                return id_value
+        return id_value
+
+    # Normalize type annotation to handle Optional[int], Union[int, None], etc.
+    normalized = _normalize_id_type(id_type)
+
+    if normalized == int:
+        if isinstance(id_value, int):
+            return id_value
+        try:
+            return int(id_value)
+        except (ValueError, TypeError):
+            return id_value
+    elif normalized == str:
+        return str(id_value) if not isinstance(id_value, str) else id_value
+    else:
+        # Other types (UUID, custom) — preserve as-is
+        return id_value
+
+
+def _normalize_id_type(type_annotation: Any) -> Any:
+    """Normalize a type annotation for ID coercion, stripping Optional/Union wrappers."""
+    import typing
+
+    origin = getattr(type_annotation, "__origin__", None)
+    if origin is Union:
+        args = getattr(type_annotation, "__args__", ())
+        non_none_types = [arg for arg in args if arg is not type(None)]
+        if non_none_types:
+            return _normalize_id_type(non_none_types[0])
+        return str  # fallback
+
+    if isinstance(type_annotation, type):
+        return type_annotation
+
+    return str  # fallback for unknown
+
+
 def convert_datetime_fields(data_dict: dict, model_fields: dict, logger) -> dict:
     """
     Convert ISO 8601 datetime strings to Python datetime objects for datetime fields.
@@ -1824,32 +1882,21 @@ class NodeGenerator:
                     # Determine record_id from conditions or direct parameters
                     record_id = None
                     if conditions and "id" in conditions:
-                        record_id = conditions["id"]
+                        record_id = _coerce_record_id(
+                            self.model_fields, conditions["id"]
+                        )
                     else:
                         # Fall back to direct parameters for backward compatibility
                         # Prioritize record_id over id to avoid conflicts with node's own id
                         record_id = kwargs.get("record_id")
-                        if record_id is None:
-                            # Get the ID parameter for record lookup
+                        if record_id is not None:
+                            record_id = _coerce_record_id(self.model_fields, record_id)
+                        else:
                             id_param = kwargs.get("id")
                             if id_param is not None:
-                                # Type-aware ID conversion to fix string ID bug
-                                id_field_info = self.model_fields.get("id", {})
-                                id_type = id_field_info.get("type")
-
-                                if id_type == str:
-                                    # Model explicitly defines ID as string - preserve it
-                                    record_id = id_param
-                                elif id_type == int or id_type is None:
-                                    # Model defines ID as int OR no type info (backward compat)
-                                    try:
-                                        record_id = int(id_param)
-                                    except (ValueError, TypeError):
-                                        # If conversion fails, preserve original
-                                        record_id = id_param
-                                else:
-                                    # Other types (UUID, custom) - preserve as-is
-                                    record_id = id_param
+                                record_id = _coerce_record_id(
+                                    self.model_fields, id_param
+                                )
 
                     if record_id is None:
                         from kailash.sdk_exceptions import NodeValidationError
@@ -2062,14 +2109,17 @@ class NodeGenerator:
                     # Determine record_id from conditions or direct parameters
                     record_id = None
                     if conditions and "id" in conditions:
-                        record_id = conditions["id"]
+                        record_id = _coerce_record_id(
+                            self.model_fields, conditions["id"]
+                        )
                     else:
                         # Fall back to record_id parameter - prioritize this over 'id'
                         # since 'id' often contains the node ID which is not a record ID
                         record_id = kwargs.get("record_id")
-
-                        # Only use 'id' parameter if no record_id is available and 'id' looks like a record ID
-                        if record_id is None:
+                        if record_id is not None:
+                            record_id = _coerce_record_id(self.model_fields, record_id)
+                        else:
+                            # Only use 'id' parameter if no record_id is available and 'id' looks like a record ID
                             id_param = kwargs.get("id")
                             # Check if id_param looks like a record ID, not a node ID
                             if (
@@ -2086,23 +2136,9 @@ class NodeGenerator:
                                     and len(id_param) < 50
                                 )
                             ):  # Reasonable ID length
-                                # Type-aware ID conversion to fix string ID bug
-                                id_field_info = self.model_fields.get("id", {})
-                                id_type = id_field_info.get("type")
-
-                                if id_type == str:
-                                    # Model explicitly defines ID as string - preserve it
-                                    record_id = id_param
-                                elif id_type == int or id_type is None:
-                                    # Model defines ID as int OR no type info (backward compat)
-                                    try:
-                                        record_id = int(id_param)
-                                    except (ValueError, TypeError):
-                                        # If conversion fails, don't use this value
-                                        record_id = None
-                                else:
-                                    # Other types (UUID, custom) - preserve as-is
-                                    record_id = id_param
+                                record_id = _coerce_record_id(
+                                    self.model_fields, id_param
+                                )
 
                     if record_id is None:
                         from kailash.sdk_exceptions import NodeValidationError
@@ -2391,32 +2427,21 @@ class NodeGenerator:
                     # Determine record_id from conditions or direct parameters
                     record_id = None
                     if conditions and "id" in conditions:
-                        record_id = conditions["id"]
+                        record_id = _coerce_record_id(
+                            self.model_fields, conditions["id"]
+                        )
                     else:
                         # Fall back to direct parameters for backward compatibility
                         # Prioritize record_id over id to avoid conflicts with node's own id
                         record_id = kwargs.get("record_id")
-                        if record_id is None:
-                            # Get the ID parameter for record lookup
+                        if record_id is not None:
+                            record_id = _coerce_record_id(self.model_fields, record_id)
+                        else:
                             id_param = kwargs.get("id")
                             if id_param is not None:
-                                # Type-aware ID conversion to fix string ID bug
-                                id_field_info = self.model_fields.get("id", {})
-                                id_type = id_field_info.get("type")
-
-                                if id_type == str:
-                                    # Model explicitly defines ID as string - preserve it
-                                    record_id = id_param
-                                elif id_type == int or id_type is None:
-                                    # Model defines ID as int OR no type info (backward compat)
-                                    try:
-                                        record_id = int(id_param)
-                                    except (ValueError, TypeError):
-                                        # If conversion fails, preserve original
-                                        record_id = id_param
-                                else:
-                                    # Other types (UUID, custom) - preserve as-is
-                                    record_id = id_param
+                                record_id = _coerce_record_id(
+                                    self.model_fields, id_param
+                                )
 
                     if record_id is None:
                         raise _error_enhancer().enhance_delete_node_missing_id(

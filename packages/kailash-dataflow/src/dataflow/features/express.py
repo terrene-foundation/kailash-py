@@ -516,7 +516,7 @@ class DataFlowExpress:
     async def read(
         self,
         model: str,
-        id: str,
+        id: Union[str, int],
         cache_ttl: Optional[int] = None,
         use_primary: bool = False,  # TSG-105
     ) -> Optional[Dict[str, Any]]:
@@ -597,7 +597,7 @@ class DataFlowExpress:
         return await self._execute_with_timing(f"{model}.read", _read())
 
     async def update(
-        self, model: str, id: str, fields: Dict[str, Any]
+        self, model: str, id: Union[str, int], fields: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Update a single record.
@@ -649,7 +649,7 @@ class DataFlowExpress:
 
         return await self._execute_with_timing(f"{model}.update", _update())
 
-    async def delete(self, model: str, id: str) -> bool:
+    async def delete(self, model: str, id: Union[str, int]) -> bool:
         """
         Delete a single record.
 
@@ -1678,7 +1678,7 @@ class SyncExpress:
     def read(
         self,
         model: str,
-        id: str,
+        id: Union[str, int],
         cache_ttl: Optional[int] = None,
         use_primary: bool = False,  # TSG-105
     ) -> Optional[Dict[str, Any]]:
@@ -1697,7 +1697,9 @@ class SyncExpress:
             self._express.read(model, id, cache_ttl, use_primary=use_primary)
         )
 
-    def update(self, model: str, id: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+    def update(
+        self, model: str, id: Union[str, int], fields: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Update a single record (sync).
 
         Args:
@@ -1710,7 +1712,7 @@ class SyncExpress:
         """
         return self._run_sync(self._express.update(model, id, fields))
 
-    def delete(self, model: str, id: str) -> bool:
+    def delete(self, model: str, id: Union[str, int]) -> bool:
         """Delete a single record (sync).
 
         Args:
