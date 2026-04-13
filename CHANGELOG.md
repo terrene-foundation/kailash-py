@@ -15,6 +15,12 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash-dataflow 2.0.7 — 2026-04-13
+
+#### Fixed
+
+- **Integer record ID coercion for PostgreSQL** (`kailash-dataflow 2.0.7`): `express_sync.update/read/delete` rejected string IDs for integer primary key models on PostgreSQL because type coercion compared raw annotations (`Optional[int]`) against `int` directly. Additionally, the `conditions["id"]` path (used by update's filter dict) had zero type coercion. Extracted `_coerce_record_id()` helper that normalizes type annotations and applied at all 9 record ID paths. Express API type hints updated to accept `Union[str, int]`. Fixes #439. Cross-SDK: esperie-enterprise/kailash-rs#377.
+
 ### kailash 2.8.5 + kailash-mcp 0.2.2 — 2026-04-13
 
 #### Fixed
