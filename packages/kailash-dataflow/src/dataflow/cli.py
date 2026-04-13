@@ -10,6 +10,7 @@ import sys
 from typing import Optional
 
 import click
+from kailash.utils.url_credentials import mask_url
 
 # Add the parent directory to the path so we can import dataflow
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -32,7 +33,9 @@ def schema(database_url: Optional[str], model: Optional[str]):
     try:
         db = DataFlow(database_url=database_url)
         click.echo("DataFlow schema generation")
-        click.echo(f"Database URL: {database_url or 'Using default/environment'}")
+        click.echo(
+            f"Database URL: {mask_url(database_url) if database_url else 'Using default/environment'}"
+        )
         if model:
             click.echo(f"Model: {model}")
         else:
@@ -53,7 +56,9 @@ def init(database_url: Optional[str]):
     try:
         db = DataFlow(database_url=database_url)
         click.echo("Initializing DataFlow database...")
-        click.echo(f"Database URL: {database_url or 'Using default/environment'}")
+        click.echo(
+            f"Database URL: {mask_url(database_url) if database_url else 'Using default/environment'}"
+        )
 
         # TODO: Implement actual database initialization
         click.echo("Database initialization functionality coming soon...")

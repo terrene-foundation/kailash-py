@@ -12,6 +12,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
+from kailash.utils.url_credentials import mask_url
+
 
 @dataclass
 class ModelInfo:
@@ -165,7 +167,7 @@ class InstanceInfo:
 
         parts = []
         parts.append(f"{BLUE}{BOLD}DataFlow Instance: {self.name}{RESET}")
-        parts.append(f"Database: {self.database_url}")
+        parts.append(f"Database: {mask_url(self.database_url)}")
         parts.append("")
 
         # Health status

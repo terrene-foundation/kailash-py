@@ -106,8 +106,9 @@ class PostgreSQLDialect(SQLDialect):
     def quote_identifier(self, name: str) -> str:
         if not name or not _SAFE_IDENTIFIER_RE.match(name):
             raise InvalidIdentifierError(
-                f"Invalid SQL identifier: {name!r}. "
-                f"Identifiers must match {_SAFE_IDENTIFIER_RE.pattern}"
+                f"Invalid SQL identifier "
+                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"must match {_SAFE_IDENTIFIER_RE.pattern}"
             )
         return f'"{name}"'
 
@@ -203,8 +204,9 @@ class MySQLDialect(SQLDialect):
     def quote_identifier(self, name: str) -> str:
         if not name or not _SAFE_IDENTIFIER_RE.match(name):
             raise InvalidIdentifierError(
-                f"Invalid SQL identifier: {name!r}. "
-                f"Identifiers must match {_SAFE_IDENTIFIER_RE.pattern}"
+                f"Invalid SQL identifier "
+                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"must match {_SAFE_IDENTIFIER_RE.pattern}"
             )
         return f"`{name}`"
 
@@ -295,8 +297,9 @@ class SQLiteDialect(SQLDialect):
     def quote_identifier(self, name: str) -> str:
         if not name or not _SAFE_IDENTIFIER_RE.match(name):
             raise InvalidIdentifierError(
-                f"Invalid SQL identifier: {name!r}. "
-                f"Identifiers must match {_SAFE_IDENTIFIER_RE.pattern}"
+                f"Invalid SQL identifier "
+                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"must match {_SAFE_IDENTIFIER_RE.pattern}"
             )
         return f'"{name}"'
 

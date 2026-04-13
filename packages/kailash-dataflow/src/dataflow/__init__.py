@@ -48,7 +48,11 @@ from .core.config import DataFlowConfig, LoggingConfig, mask_sensitive
 from .core.engine import DataFlow
 from .core.logging_config import DEFAULT_SENSITIVE_PATTERNS
 from .core.logging_config import LoggingConfig as AdvancedLoggingConfig
-from .core.logging_config import SensitiveMaskingFilter, mask_sensitive_values
+from .core.logging_config import (
+    SensitiveMaskingFilter,
+    install_dataflow_logger_mask,
+    mask_sensitive_values,
+)
 from .core.model_registry import ModelRegistry
 from .core.models import DataFlowModel
 from .core.provenance import Provenance, ProvenanceMetadata, SourceType
@@ -86,6 +90,22 @@ from .validation import (
     validate_model,
 )
 
+# ----------------------------------------------------------------------
+# Round 2 red team fix (2026-04-13): auto-install credential masking on
+# the ``dataflow`` logger at package import time.
+#
+# This attaches a NullHandler+SensitiveMaskingFilter to the dataflow
+# logger so that any log record from any ``dataflow.*`` module is
+# masked in-place during propagation, even when the call site
+# interpolates a raw connection string into an f-string. This
+# addresses the engine.py credential leak sites (line 1640 WARN,
+# lines 7771/7831/7838 DEBUG) without per-call-site edits.
+#
+# See ``rules/security.md`` § "No secrets in logs" and
+# ``rules/observability.md`` Rule 6 for the policy this fix enforces.
+# ----------------------------------------------------------------------
+install_dataflow_logger_mask()
+
 # Legacy compatibility - maintain the original imports
 __version__ = "2.0.7"
 
@@ -117,6 +137,8 @@ __all__ = [
     "SensitiveMaskingFilter",
     "DEFAULT_SENSITIVE_PATTERNS",
     "AdvancedLoggingConfig",  # Phase 7C: Regex-based masking config
+    # Round 2 red team: auto-install hook
+    "install_dataflow_logger_mask",
     # Phase 7B: Logging Utilities
     "get_dataflow_logger",
     "dataflow_logging_context",

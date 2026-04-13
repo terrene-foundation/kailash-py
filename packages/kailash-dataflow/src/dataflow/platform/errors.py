@@ -1467,11 +1467,9 @@ class ErrorEnhancer:
             "model_name": model_name,
         }
         if database_url:
-            # Sanitize database URL to hide credentials
-            import re
+            from kailash.utils.url_credentials import mask_url
 
-            sanitized_url = re.sub(r"://([^:]+):([^@]+)@", r"://\1:****@", database_url)
-            context["database_url"] = sanitized_url
+            context["database_url"] = mask_url(database_url)
 
         if original_error:
             exc_context = cls._extract_context_from_exception(original_error)
@@ -1671,11 +1669,9 @@ class ErrorEnhancer:
         """
         context = {}
         if database_url:
-            # Sanitize database URL to hide credentials
-            import re
+            from kailash.utils.url_credentials import mask_url
 
-            sanitized_url = re.sub(r"://([^:]+):([^@]+)@", r"://\1:****@", database_url)
-            context["database_url"] = sanitized_url
+            context["database_url"] = mask_url(database_url)
         if error_message:
             context["error_message"] = error_message
 
@@ -1707,13 +1703,10 @@ class ErrorEnhancer:
         Returns:
             DataFlowError: Enhanced error with solutions
         """
-        # Sanitize database URL to hide credentials
-        import re
-
-        sanitized_url = re.sub(r"://([^:]+):([^@]+)@", r"://\1:****@", database_url)
+        from kailash.utils.url_credentials import mask_url
 
         context = {
-            "database_url": sanitized_url,
+            "database_url": mask_url(database_url),
         }
         if error_message:
             context["error_message"] = error_message

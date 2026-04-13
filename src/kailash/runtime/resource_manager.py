@@ -32,6 +32,7 @@ except ImportError:
     psutil = None  # Included in base install
 
 from kailash.sdk_exceptions import CircuitBreakerOpenError, ResourceLimitExceededError
+from kailash.utils.url_credentials import mask_url
 
 logger = logging.getLogger(__name__)
 
@@ -539,8 +540,13 @@ class ConnectionPoolManager:
         # Validate pool before wrapping
         if not await self._validate_pool(pool, "postgresql"):
             await pool.close()  # Clean up failed pool
+            # Round 2 red team fix: route connection_string through mask_url —
+            # the raw connection_string contained user:password userinfo and
+            # was being raised verbatim into a RuntimeError that propagated
+            # up the stack into logs and stack traces. See rules/security.md
+            # § "No secrets in logs" and rules/observability.md Rule 6.
             raise RuntimeError(
-                f"PostgreSQL pool validation failed for connection: {connection_string}"
+                f"PostgreSQL pool validation failed for connection: {mask_url(connection_string)}"
             )
 
         # Wrap pool to prevent premature closure by node-level cleanup

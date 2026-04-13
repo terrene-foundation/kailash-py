@@ -1,12 +1,23 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
-"""URL credential decoding helpers.
+"""URL credential decoding and masking helpers.
 
-Shared by every database driver that parses credentials out of a
-``DATABASE_URL``-style connection string. Callers MUST use
-``decode_userinfo_or_raise`` instead of calling ``unquote(parsed.password)``
-directly so that the null-byte auth-bypass defense runs uniformly
-everywhere.
+Shared by every database driver, log line, and error message that
+parses or renders credentials out of a ``DATABASE_URL``-style
+connection string. This module is the **single source of truth** for
+two related concerns:
+
+1. **Decoding credentials safely** — ``decode_userinfo_or_raise``
+   replaces hand-rolled ``unquote(parsed.password)`` with a helper
+   that runs the null-byte auth-bypass defense uniformly. Callers
+   MUST NOT call ``unquote(parsed.password)`` directly.
+
+2. **Masking credentials in logs/errors** — ``mask_url`` replaces
+   ``user:password@`` userinfo and credential query parameters
+   with ``***``. Every log line, error message, or stdout writeback
+   that mentions a connection string MUST route the URL through
+   ``mask_url`` first. See ``rules/security.md`` § "No secrets in
+   logs" and ``rules/observability.md`` § "Mask Helper Output Forms".
 
 Origin: ``workspaces/arbor-upstream-fixes`` red team round 1 — the
 session's initial fix added null-byte rejection at two MySQL credential
@@ -17,17 +28,43 @@ another would silently hand the truncated password to the MySQL C
 client, enabling an empty-password auth bypass against any row in
 ``mysql.user`` with an empty ``authentication_string``. Consolidating
 into a single helper makes the drift structurally impossible.
+
+Round 2 (2026-04-13): the masking helper that DataFlow shipped in
+``dataflow/utils/masking.py`` was returning the original URL on parse
+failure — a violation of ``rules/observability.md`` Rule 6.1 (mask
+helpers MUST return a distinct sentinel on failure). The fix promoted
+``mask_url`` into this module so core SDK code (``runtime``, ``db``,
+``trust``) and DataFlow can import the canonical implementation from
+one place. ``dataflow/utils/masking.py`` now re-exports from here.
 """
 
 from __future__ import annotations
 
 from typing import Optional, Tuple
-from urllib.parse import ParseResult, unquote
+from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse, urlunparse
 
 __all__ = [
     "decode_userinfo_or_raise",
     "preencode_password_special_chars",
+    "mask_url",
+    "mask_secret",
+    "UNPARSEABLE_URL_SENTINEL",
 ]
+
+
+# Distinct failure sentinel — see ``rules/observability.md`` Rule 6.1.
+# Returned when ``mask_url`` cannot parse its input. MUST be
+# distinguishable from any successful mask output. Grep-friendly so
+# log triage can find every helper bail.
+UNPARSEABLE_URL_SENTINEL = "<unparseable url>"
+
+# Query-string parameter names that carry a secret. Matches the set
+# used by :meth:`DatabaseConfig.get_masked_connection_string` so the
+# two maskers stay in lock-step — see ``rules/security.md`` § "No
+# secrets in logs".
+_SENSITIVE_QUERY_KEYS = frozenset(
+    {"password", "sslpassword", "sslkey", "authtoken", "token", "apikey"}
+)
 
 
 def preencode_password_special_chars(connection_string: Optional[str]) -> str:
@@ -159,3 +196,206 @@ def decode_userinfo_or_raise(
                 "MySQL C client."
             )
     return user, password
+
+
+def mask_url(url: Optional[str]) -> str:
+    """Replace credentials in a URL with ``***``.
+
+    Single source of truth for credential masking across the entire
+    Kailash codebase. Every log line, error message, exception
+    payload, or stdout writeback that mentions a connection string
+    MUST route the URL through this helper first. See
+    ``rules/security.md`` § "No secrets in logs" and
+    ``rules/observability.md`` § "Mask Helper Output Forms".
+
+    Handles every URL scheme ``urllib.parse`` understands (redis://,
+    rediss://, postgres://, postgresql://, mongodb://, mysql://,
+    http://, https://, ws://, wss://, etc.) plus MongoDB replica-set
+    URLs (comma-separated hosts in the netloc). Masks:
+
+    - ``user:password@`` userinfo in the authority component
+    - ``password=`` / ``sslpassword=`` / ``sslkey=`` / similar in the
+      query string (PostgreSQL, MySQL, and MongoDB accept credentials
+      via URL query parameters)
+
+    Returns:
+
+    - ``""`` when ``url`` is ``None`` or empty — nothing to mask.
+    - The URL unchanged when it parses cleanly AND has no userinfo
+      AND has no credential query params — there's no credential to
+      leak, safe to render verbatim.
+    - The URL with credentials replaced by ``***`` otherwise.
+    - ``UNPARSEABLE_URL_SENTINEL`` (``"<unparseable url>"``) when the
+      input cannot be parsed at all. This is a distinct failure
+      marker — never the original input — so a malformed URL with
+      embedded credentials is NOT written verbatim to logs.
+      See ``rules/observability.md`` Rule 6.1.
+
+    Examples:
+        >>> mask_url("redis://alice:wonderland@localhost:6379/0")
+        'redis://***@localhost:6379/0'
+        >>> mask_url("mongodb://u:p@h1,h2/db?replicaSet=rs0")
+        'mongodb://***@h1,h2/db?replicaSet=rs0'
+        >>> mask_url("postgres://localhost:5432/db")
+        'postgres://localhost:5432/db'
+        >>> mask_url("postgres://localhost/db?password=leak")
+        'postgres://localhost/db?password=%2A%2A%2A'
+        >>> mask_url(None)
+        ''
+        >>> mask_url("")
+        ''
+    """
+    if not url:
+        return ""
+
+    if not isinstance(url, str):
+        return UNPARSEABLE_URL_SENTINEL
+
+    # MongoDB replica-set URLs put comma-separated hosts in the netloc,
+    # which trips Python's urlparse host parser. Handle them ourselves:
+    # split on the first "://" → split userinfo → split host-list →
+    # optionally split path+query → mask.
+    if "://" in url and "," in url.split("://", 1)[1].split("/", 1)[0]:
+        try:
+            return _mask_multi_host_url(url)
+        except Exception:
+            # Multi-host parsing failed — fall through to the regular
+            # urlparse path. If that also fails we return the
+            # UNPARSEABLE_URL_SENTINEL below, which means a malformed
+            # multi-host URL with embedded credentials never reaches
+            # the log.
+            pass
+
+    try:
+        parsed = urlparse(url)
+    except (ValueError, AttributeError):
+        # Parse failure — Rule 6.1: distinct sentinel, NOT the original.
+        return UNPARSEABLE_URL_SENTINEL
+
+    has_userinfo = bool(parsed.username or parsed.password)
+    query_has_secret = False
+    if parsed.query:
+        query_has_secret = any(
+            k.lower() in _SENSITIVE_QUERY_KEYS
+            for k, _ in parse_qsl(parsed.query, keep_blank_values=True)
+        )
+
+    # Nothing to mask — return the original string so empty-netloc
+    # schemes (sqlite:///path, file:///) are not rewritten by urlunparse.
+    # This is safe: by construction the URL parsed cleanly AND has no
+    # userinfo AND has no sensitive query params, so there's no
+    # credential to leak.
+    if not has_userinfo and not query_has_secret:
+        return url
+
+    try:
+        if has_userinfo:
+            host = parsed.hostname or ""
+            if ":" in host:  # IPv6 — bracket the host
+                host = f"[{host}]"
+            netloc = f"***@{host}"
+            if parsed.port:
+                netloc = f"{netloc}:{parsed.port}"
+            parsed = parsed._replace(netloc=netloc)
+
+        if query_has_secret:
+            pairs = parse_qsl(parsed.query, keep_blank_values=True)
+            masked_pairs = [
+                (k, "***" if k.lower() in _SENSITIVE_QUERY_KEYS else v)
+                for k, v in pairs
+            ]
+            parsed = parsed._replace(query=urlencode(masked_pairs))
+
+        return urlunparse(parsed)
+    except Exception:
+        # Reconstruction failed — fall back to sentinel rather than
+        # risk leaking a partially-masked credential.
+        return UNPARSEABLE_URL_SENTINEL
+
+
+def _mask_multi_host_url(url: str) -> str:
+    """Mask a URL with a comma-separated host list in the netloc.
+
+    MongoDB replica-set URLs look like::
+
+        mongodb://user:pass@host1:27017,host2:27017,host3:27017/db?replicaSet=rs0
+
+    Python's ``urlparse`` refuses to split the netloc on commas, so we
+    hand-roll a small parser. RFC 3986 order matters: peel the
+    fragment first, then the query, then split authority from path.
+    If we split on ``/`` before peeling the query, a URL like
+    ``mongodb://u:p@h1,h2?password=leak`` (no path) would leave
+    ``?password=leak`` baked into the authority and the query masker
+    would never run — a credential leak.
+    """
+    scheme, _, rest = url.partition("://")
+
+    # Peel fragment (everything after #)
+    rest, frag_sep, fragment = rest.partition("#")
+    frag_suffix = f"#{fragment}" if frag_sep else ""
+
+    # Peel query (everything after ?)
+    rest, q_sep, query = rest.partition("?")
+
+    # Now `rest` is authority + optional path — safe to split on `/`
+    authority, slash, path = rest.partition("/")
+    path_prefix = f"/{path}" if slash else ""
+
+    userinfo_mutated = False
+    if "@" in authority:
+        _userinfo, _, hostlist = authority.rpartition("@")
+        masked_authority = f"***@{hostlist}"
+        userinfo_mutated = True
+    else:
+        masked_authority = authority
+
+    query_mutated = False
+    if q_sep and query:
+        pairs = parse_qsl(query, keep_blank_values=True)
+        if any(k.lower() in _SENSITIVE_QUERY_KEYS for k, _ in pairs):
+            masked_pairs = [
+                (k, "***" if k.lower() in _SENSITIVE_QUERY_KEYS else v)
+                for k, v in pairs
+            ]
+            query = urlencode(masked_pairs)
+            query_mutated = True
+
+    # Nothing to mask — return the original string verbatim. This is
+    # safe: by construction we successfully parsed the multi-host URL,
+    # found no userinfo, and found no sensitive query keys — there's
+    # no credential to leak.
+    if not userinfo_mutated and not query_mutated:
+        return url
+
+    query_suffix = f"?{query}" if q_sep else ""
+    return f"{scheme}://{masked_authority}{path_prefix}{query_suffix}{frag_suffix}"
+
+
+def mask_secret(value: Optional[str], *, keep_tail: int = 4) -> str:
+    """Mask a bearer token, API key, or opaque secret.
+
+    Returns the last ``keep_tail`` characters prefixed by ``***`` so
+    operators can still correlate two log lines that reference the
+    same secret without exposing the secret itself. When ``value`` is
+    shorter than ``keep_tail`` characters, returns ``"***"`` flat so
+    even a 1-character secret is not leaked.
+
+    Examples:
+        >>> mask_secret("sk-1234567890abcdef")
+        '***cdef'
+        >>> mask_secret("short")
+        '***'
+        >>> mask_secret(None)
+        ''
+        >>> mask_secret("")
+        ''
+
+    This is the secondary masker for values that don't have a URL
+    structure; :func:`mask_url` handles the URL case because userinfo
+    parsing is scheme-aware.
+    """
+    if not value:
+        return ""
+    if len(value) <= keep_tail:
+        return "***"
+    return "***" + value[-keep_tail:]

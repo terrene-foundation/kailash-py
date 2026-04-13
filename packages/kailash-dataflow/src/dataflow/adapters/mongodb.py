@@ -135,7 +135,13 @@ class MongoDBAdapter(BaseAdapter):
                 # mongodb://localhost:27017/mydb -> mydb
                 from urllib.parse import urlparse
 
-                parsed = urlparse(self.connection_string)
+                from kailash.utils.url_credentials import (
+                    preencode_password_special_chars,
+                )
+
+                parsed = urlparse(
+                    preencode_password_special_chars(self.connection_string)
+                )
                 db_name = parsed.path.lstrip("/")
                 if not db_name:
                     raise ValueError(

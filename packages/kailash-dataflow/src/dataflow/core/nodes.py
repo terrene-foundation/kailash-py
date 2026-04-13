@@ -6,6 +6,8 @@ Dynamic node generation for database operations.
 
 from typing import Any, Dict, List, Optional, Type, Union
 
+from kailash.utils.url_credentials import mask_url
+
 try:
     from kailash.nodes.base import Node, NodeParameter, NodeRegistry
 
@@ -2761,7 +2763,7 @@ class NodeGenerator:
                             "nodes.list_operation_with_params", extra={"params": params}
                         )
                         logger.debug(
-                            f"List operation - Connection: {mask_sensitive_values(connection_string[:50])}..."
+                            f"List operation - Connection: {mask_url(connection_string)}"
                         )
 
                         # Get or create cached AsyncSQLDatabaseNode for connection pooling
