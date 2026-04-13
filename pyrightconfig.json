@@ -1,0 +1,51 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.11",
+  "pythonPlatform": "All",
+  "include": [
+    "src",
+    "packages/kailash-dataflow/src",
+    "packages/kailash-nexus/src",
+    "packages/kailash-kaizen/src",
+    "packages/kailash-mcp/src",
+    "packages/kailash-pact/src",
+    "packages/kailash-ml/src",
+    "packages/kailash-align/src",
+    "packages/kailash-trust/src",
+    "packages/kaizen-agents/src",
+    "tests"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/.venv",
+    "**/build",
+    "**/.claude/worktrees",
+    "packages/*/build",
+    "packages/*/.venv"
+  ],
+  "extraPaths": [
+    "src",
+    "packages/kailash-dataflow/src",
+    "packages/kailash-nexus/src",
+    "packages/kailash-kaizen/src",
+    "packages/kailash-mcp/src",
+    "packages/kailash-pact/src",
+    "packages/kailash-ml/src",
+    "packages/kailash-align/src",
+    "packages/kailash-trust/src",
+    "packages/kaizen-agents/src"
+  ],
+  "reportMissingImports": "error",
+  "reportMissingTypeStubs": "none",
+  "reportOptionalMemberAccess": "warning",
+  "reportAttributeAccessIssue": "warning",
+  "reportGeneralTypeIssues": "warning",
+  "reportUnusedExpression": "none",
+  "reportUnusedImport": "none",
+  "reportUnusedVariable": "none",
+  "reportUnusedFunction": "none",
+  "reportUnusedClass": "none",
+  "reportUnreachable": "none",
+  "reportArgumentType": "warning"
+}
