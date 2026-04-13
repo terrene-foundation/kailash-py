@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 FIXTURE_PROJECT = Path(__file__).parent.parent.parent / "fixtures" / "mcp_test_project"
-SERVER_MODULE = "kailash.mcp.platform_server"
+SERVER_MODULE = "kailash_mcp.platform_server"
 
 
 async def _start_server(project_root: Path, timeout: float = 10.0):
@@ -91,13 +91,13 @@ class TestPlatformServerProtocol:
 
     async def test_server_module_importable(self) -> None:
         """The platform server module can be imported."""
-        from kailash.mcp.platform_server import create_platform_server
+        from kailash_mcp.platform_server import create_platform_server
 
         assert callable(create_platform_server)
 
     async def test_server_has_main_entry(self) -> None:
         """The platform server has a main() function for subprocess use."""
-        from kailash.mcp.platform_server import main
+        from kailash_mcp.platform_server import main
 
         assert callable(main)
 

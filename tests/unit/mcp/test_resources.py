@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-# The kailash.mcp.__init__ imports from a Rust native module (kailash._kailash).
+# The old kailash.mcp shim has been removed; import directly from kailash_mcp.
 # When the native module is not built, we need to import ResourceCache by path
 # manipulation to avoid the __init__ import chain.
 from kailash_mcp.advanced.resource_cache import ResourceCache

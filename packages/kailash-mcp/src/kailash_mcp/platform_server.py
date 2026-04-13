@@ -246,73 +246,16 @@ def get_health_status(server: Any) -> dict[str, Any]:
 
 
 def _get_fastmcp_class() -> type:
-    """Import FastMCP from the third-party ``mcp`` package.
+    """Import FastMCP from the third-party ``mcp`` package."""
+    try:
+        from mcp.server.fastmcp import FastMCP
 
-    The ``kailash.mcp`` sub-package shadows the top-level ``mcp`` package
-    when Python resolves imports inside this package.  ``find_spec("mcp")``
-    returns ``kailash.mcp`` even when scoped to site-packages, because the
-    ``kailash`` namespace package is installed there.
-
-    We work around this by directly locating the ``mcp`` directory inside
-    site-packages and loading it via its filesystem path.
-    """
-    import importlib.util as _ilu
-
-    # Fast path: if the third-party mcp is already in sys.modules, use it.
-    existing = sys.modules.get("mcp")
-    if existing is not None:
-        origin = getattr(existing, "__file__", "") or ""
-        if "site-packages" in origin and "kailash" not in origin:
-            try:
-                mod = importlib.import_module("mcp.server.fastmcp")
-                return getattr(mod, "FastMCP")
-            except (ImportError, AttributeError):
-                pass
-
-    # Walk site-packages to find the third-party mcp package by filesystem.
-    # The key challenge: our kailash.mcp package shadows the top-level mcp.
-    # We identify the third-party mcp by looking for mcp/ directly under a
-    # site-packages directory (the third-party mcp is a top-level package,
-    # not nested inside kailash/).
-    for path_entry in sys.path:
-        if "site-packages" not in path_entry:
-            continue
-        sp_dir = Path(path_entry)
-        candidate = sp_dir / "mcp" / "__init__.py"
-        if not candidate.exists():
-            continue
-        # Verify this is the third-party mcp, not kailash/mcp.
-        # The third-party mcp lives at <site-packages>/mcp/__init__.py
-        # Our kailash.mcp lives at <src>/kailash/mcp/__init__.py
-        # The parent of the candidate's parent should be site-packages.
-        # i.e., candidate.parent.parent should equal sp_dir.
-        if candidate.parent.parent != sp_dir:
-            continue
-
-        # Build a spec from the filesystem path and load it.
-        spec = _ilu.spec_from_file_location(
-            "mcp",
-            str(candidate),
-            submodule_search_locations=[str(candidate.parent)],
+        return FastMCP
+    except ImportError:
+        raise ImportError(
+            "Cannot import FastMCP from the third-party 'mcp' package. "
+            "Install it with: pip install 'mcp[cli]>=1.23.0'"
         )
-        if spec is None or spec.loader is None:
-            continue
-
-        mcp_pkg = _ilu.module_from_spec(spec)
-        sys.modules["mcp"] = mcp_pkg
-        try:
-            spec.loader.exec_module(mcp_pkg)
-            # Chain-import FastMCP through the normal import system.
-            mod = importlib.import_module("mcp.server.fastmcp")
-            return getattr(mod, "FastMCP")
-        except Exception:
-            sys.modules.pop("mcp", None)
-            continue
-
-    raise ImportError(
-        "Cannot import FastMCP from the third-party 'mcp' package. "
-        "Install it with: pip install 'mcp[cli]>=1.23.0,<2.0'"
-    )
 
 
 def _get_tool_names(server: Any) -> set[str]:

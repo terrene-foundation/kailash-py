@@ -12,14 +12,14 @@ from unittest.mock import patch
 import pytest
 
 try:
-    from kailash.mcp.platform_server import create_platform_server
+    from kailash_mcp.platform_server import create_platform_server
 except ImportError:
     pytest.skip(
         "Third-party 'mcp' package not available",
         allow_module_level=True,
     )
 
-from kailash.mcp.contrib.platform import (
+from kailash_mcp.contrib.platform import (
     _build_platform_map,
     _detect_agent_tool_connections,
     _detect_model_agent_connections,
@@ -28,7 +28,6 @@ from kailash.mcp.contrib.platform import (
     _get_project_info,
     _get_trust_summary,
 )
-
 
 # -------------------------------------------------------------------
 # Cross-framework connection detection
@@ -248,8 +247,8 @@ class TestPlatformToolRegistration:
     @pytest.fixture()
     def server(self, tmp_path: Path):
         with patch(
-            "kailash.mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
-            [("kailash.mcp.contrib.platform", "platform")],
+            "kailash_mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
+            [("kailash_mcp.contrib.platform", "platform")],
         ):
             return create_platform_server(project_root=tmp_path)
 

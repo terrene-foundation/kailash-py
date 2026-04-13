@@ -12,17 +12,14 @@ from unittest.mock import patch
 import pytest
 
 try:
-    from kailash.mcp.platform_server import create_platform_server
+    from kailash_mcp.platform_server import create_platform_server
 except ImportError:
     pytest.skip(
         "Third-party 'mcp' package not available",
         allow_module_level=True,
     )
 
-from kailash.mcp.contrib.pact import (
-    _extract_org_tree,
-    _find_org_definition,
-)
+from kailash_mcp.contrib.pact import _extract_org_tree, _find_org_definition
 
 
 class TestFindOrgDefinition:
@@ -163,8 +160,8 @@ class TestPactToolRegistration:
     def server(self, tmp_path: Path):
         """Create a server with only pact contributor."""
         with patch(
-            "kailash.mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
-            [("kailash.mcp.contrib.pact", "pact")],
+            "kailash_mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
+            [("kailash_mcp.contrib.pact", "pact")],
         ):
             return create_platform_server(project_root=tmp_path)
 

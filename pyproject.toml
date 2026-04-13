@@ -170,7 +170,6 @@ kailash = "kailash.cli:main"
 eatp = "kailash.trust.cli:main"
 attest = "kailash.trust.plane.cli.commands:main"
 trustplane-mcp = "kailash.trust.plane.mcp_server:main"
-kailash-mcp = "kailash.mcp.platform_server:main"
 
 [tool.ruff]
 line-length = 88

@@ -18,8 +18,8 @@ import pytest
 # If the third-party mcp package is truly unavailable, the import
 # of platform_server will raise ImportError.
 try:
-    from kailash.mcp.contrib import SecurityTier, is_tier_enabled
-    from kailash.mcp.platform_server import (
+    from kailash_mcp.contrib import SecurityTier, is_tier_enabled
+    from kailash_mcp.platform_server import (
         FRAMEWORK_CONTRIBUTORS,
         create_platform_server,
     )
@@ -93,7 +93,7 @@ class TestCreatePlatformServer:
         original_import_module = importlib.import_module
 
         def tracking_import(name, *args, **kwargs):
-            if name.startswith("kailash.mcp.contrib."):
+            if name.startswith("kailash_mcp.contrib."):
                 ns = name.rsplit(".", 1)[-1]
                 load_order.append(ns)
             return original_import_module(name, *args, **kwargs)
@@ -126,7 +126,7 @@ class TestContributorErrorHandling:
 
     def test_exception_in_register_tools_handled(self, tmp_path: Path, caplog):
         """A contributor raising Exception during register_tools is caught."""
-        bad_module = types.ModuleType("kailash.mcp.contrib.bad")
+        bad_module = types.ModuleType("kailash_mcp.contrib.bad")
 
         def bad_register(server, root, ns):
             raise TypeError("intentional test failure")
@@ -135,12 +135,12 @@ class TestContributorErrorHandling:
 
         with (
             patch(
-                "kailash.mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
-                [("kailash.mcp.contrib.bad", "bad")],
+                "kailash_mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
+                [("kailash_mcp.contrib.bad", "bad")],
             ),
             patch.dict(
                 "sys.modules",
-                {"kailash.mcp.contrib.bad": bad_module},
+                {"kailash_mcp.contrib.bad": bad_module},
             ),
             caplog.at_level(logging.ERROR),
         ):
@@ -160,7 +160,7 @@ class TestNamespaceValidation:
 
     def test_misnamed_tool_warns(self, tmp_path: Path, caplog):
         """A tool without the namespace prefix triggers a warning."""
-        bad_module = types.ModuleType("kailash.mcp.contrib.badns")
+        bad_module = types.ModuleType("kailash_mcp.contrib.badns")
 
         def bad_register(server, root, ns):
             @server.tool(name="wrong_prefix.something")
@@ -171,12 +171,12 @@ class TestNamespaceValidation:
 
         with (
             patch(
-                "kailash.mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
-                [("kailash.mcp.contrib.badns", "badns")],
+                "kailash_mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
+                [("kailash_mcp.contrib.badns", "badns")],
             ),
             patch.dict(
                 "sys.modules",
-                {"kailash.mcp.contrib.badns": bad_module},
+                {"kailash_mcp.contrib.badns": bad_module},
             ),
             caplog.at_level(logging.WARNING),
         ):
@@ -200,10 +200,10 @@ class TestCoreContributor:
     def server(self, tmp_path: Path):
         """Create a platform server with only core + platform contributors."""
         with patch(
-            "kailash.mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
+            "kailash_mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
             [
-                ("kailash.mcp.contrib.core", "core"),
-                ("kailash.mcp.contrib.platform", "platform"),
+                ("kailash_mcp.contrib.core", "core"),
+                ("kailash_mcp.contrib.platform", "platform"),
             ],
         ):
             return create_platform_server(project_root=tmp_path)

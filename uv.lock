@@ -2758,7 +2758,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "2.8.3"
+version = "2.8.4"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -3009,7 +3009,7 @@ provides-extras = ["rlhf", "eval", "serve", "online", "all", "dev"]
 
 [[package]]
 name = "kailash-dataflow"
-version = "2.0.5"
+version = "2.0.6"
 source = { editable = "packages/kailash-dataflow" }
 dependencies = [
     { name = "aiomysql" },
@@ -3081,7 +3081,7 @@ provides-extras = ["fabric", "cloud", "excel", "parquet", "streaming", "fabric-a
 
 [[package]]
 name = "kailash-kaizen"
-version = "2.7.2"
+version = "2.7.3"
 source = { editable = "packages/kailash-kaizen" }
 dependencies = [
     { name = "aiohttp" },

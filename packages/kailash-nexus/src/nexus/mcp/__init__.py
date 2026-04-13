@@ -4,7 +4,7 @@
     The Nexus-specific MCP server (``MCPServer``, ``SimpleMCPClient``,
     ``WebSocketServerTransport``, ``WebSocketClientTransport``) has been
     replaced by the unified ``kailash-platform`` MCP server at
-    ``kailash.mcp.platform_server``.  These classes have been removed.
+    ``kailash_mcp.platform_server``.  These classes have been removed.
 
     To start the new platform server::
 
@@ -12,7 +12,7 @@
 
     Or in Python::
 
-        from kailash.mcp.platform_server import create_platform_server
+        from kailash_mcp.platform_server import create_platform_server
         server = create_platform_server()
 """
 

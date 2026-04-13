@@ -260,7 +260,7 @@ def _build_platform_map(project_root: Path) -> dict[str, Any]:
     channels: list[dict[str, Any]] = []
     total_files = 0
 
-    scan_models = _safe_import_scanner("kailash.mcp.contrib.dataflow", "_scan_models")
+    scan_models = _safe_import_scanner("kailash_mcp.contrib.dataflow", "_scan_models")
     if scan_models is not None:
         try:
             result = scan_models(project_root)
@@ -272,7 +272,7 @@ def _build_platform_map(project_root: Path) -> dict[str, Any]:
         except Exception as exc:
             logger.debug("DataFlow scan failed: %s", exc)
 
-    scan_handlers = _safe_import_scanner("kailash.mcp.contrib.nexus", "_scan_handlers")
+    scan_handlers = _safe_import_scanner("kailash_mcp.contrib.nexus", "_scan_handlers")
     if scan_handlers is not None:
         try:
             result = scan_handlers(project_root)
@@ -284,7 +284,7 @@ def _build_platform_map(project_root: Path) -> dict[str, Any]:
         except Exception as exc:
             logger.debug("Nexus scan failed: %s", exc)
 
-    scan_agents = _safe_import_scanner("kailash.mcp.contrib.kaizen", "_scan_agents")
+    scan_agents = _safe_import_scanner("kailash_mcp.contrib.kaizen", "_scan_agents")
     if scan_agents is not None:
         try:
             result = scan_agents(project_root)
@@ -399,7 +399,7 @@ def register_tools(server: Any, project_root: Path, namespace: str) -> None:
 
     def _models_data() -> str:
         scan_models = _safe_import_scanner(
-            "kailash.mcp.contrib.dataflow", "_scan_models"
+            "kailash_mcp.contrib.dataflow", "_scan_models"
         )
         if scan_models is not None:
             try:
@@ -411,7 +411,7 @@ def register_tools(server: Any, project_root: Path, namespace: str) -> None:
 
     def _handlers_data() -> str:
         scan_handlers = _safe_import_scanner(
-            "kailash.mcp.contrib.nexus", "_scan_handlers"
+            "kailash_mcp.contrib.nexus", "_scan_handlers"
         )
         if scan_handlers is not None:
             try:
@@ -424,7 +424,7 @@ def register_tools(server: Any, project_root: Path, namespace: str) -> None:
         return json.dumps({"handlers": [], "installed": False}, indent=2)
 
     def _agents_data() -> str:
-        scan_agents = _safe_import_scanner("kailash.mcp.contrib.kaizen", "_scan_agents")
+        scan_agents = _safe_import_scanner("kailash_mcp.contrib.kaizen", "_scan_agents")
         if scan_agents is not None:
             try:
                 agents, meta = scan_agents(project_root)
@@ -435,7 +435,7 @@ def register_tools(server: Any, project_root: Path, namespace: str) -> None:
 
     def _node_types_data() -> str:
         scan_nodes = _safe_import_scanner(
-            "kailash.mcp.contrib.core", "_get_cached_node_types"
+            "kailash_mcp.contrib.core", "_get_cached_node_types"
         )
         if scan_nodes is not None:
             try:
@@ -488,7 +488,7 @@ def register_tools(server: Any, project_root: Path, namespace: str) -> None:
             framework: Optional framework filter (e.g., "dataflow", "core").
                        Empty string returns tools from all frameworks.
         """
-        from kailash.mcp.platform_server import FRAMEWORK_CONTRIBUTORS
+        from kailash_mcp.platform_server import FRAMEWORK_CONTRIBUTORS
 
         tool_inventory: dict[str, list[dict[str, str]]] = {}
 

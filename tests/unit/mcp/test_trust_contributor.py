@@ -12,14 +12,14 @@ from unittest.mock import patch
 import pytest
 
 try:
-    from kailash.mcp.platform_server import create_platform_server
+    from kailash_mcp.platform_server import create_platform_server
 except ImportError:
     pytest.skip(
         "Third-party 'mcp' package not available",
         allow_module_level=True,
     )
 
-from kailash.mcp.contrib.trust import _read_trust_status
+from kailash_mcp.contrib.trust import _read_trust_status
 
 
 class TestReadTrustStatus:
@@ -119,8 +119,8 @@ class TestTrustToolRegistration:
     def server(self, tmp_path: Path):
         """Create a server with only trust contributor."""
         with patch(
-            "kailash.mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
-            [("kailash.mcp.contrib.trust", "trust")],
+            "kailash_mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
+            [("kailash_mcp.contrib.trust", "trust")],
         ):
             return create_platform_server(project_root=tmp_path)
 
