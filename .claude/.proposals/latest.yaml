@@ -739,3 +739,17 @@ reviewed_notes: |
     suggested_tier: coc-py
     reason: "Added 'Cache Patterns' section referencing cache-cas-fail-closed.md"
     diff_lines: "+4"
+
+  # --- 2026-04-13: Issue #439 fix + DataFlow v2.0.7 release ---
+
+  - file: skills/02-dataflow/SKILL.md
+    action: modified
+    suggested_tier: coc-py
+    reason: "Updated Express API examples to use result['id'] directly instead of str(result['id']) — express now accepts Union[str, int] for record IDs after #439 fix"
+    diff_lines: "+3 -3"
+
+  - file: rules/patterns.md
+    action: modified
+    suggested_tier: coc
+    reason: "Updated DataFlow Express code examples to use result['id'] directly — express.read/update/delete now accept Union[str, int] after _coerce_record_id() fix (#439)"
+    diff_lines: "+3 -3"

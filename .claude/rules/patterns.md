@@ -38,10 +38,10 @@ Use `db.express` for all single-record CRUD. WorkflowBuilder only for multi-step
 
 ```python
 result = await db.express.create("User", {"name": "Alice", "email": "alice@example.com"})
-user = await db.express.read("User", str(result["id"]))
+user = await db.express.read("User", result["id"])  # accepts both str and int IDs
 users = await db.express.list("User", {"active": True})
-await db.express.update("User", str(result["id"]), {"name": "Bob"})
-await db.express.delete("User", str(result["id"]))
+await db.express.update("User", result["id"], {"name": "Bob"})
+await db.express.delete("User", result["id"])
 
 # ❌ Don't use WorkflowBuilder for simple CRUD — 23x slower
 ```
