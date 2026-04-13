@@ -15,7 +15,7 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
-### kailash-mcp 0.2.2 — 2026-04-13
+### kailash 2.8.5 + kailash-mcp 0.2.2 — 2026-04-13
 
 #### Fixed
 

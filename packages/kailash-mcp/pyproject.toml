@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: System :: Distributed Computing",
 ]
 dependencies = [
-    "kailash>=2.7.0",
+    "kailash>=2.8.5",
     "mcp[cli]>=1.23.0",
     "pydantic>=2.6",
 ]
