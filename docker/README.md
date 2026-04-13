@@ -26,12 +26,13 @@ This image bundles all Kailash frameworks and dependencies:
 
 | Framework         | Version  | What It Does                                                                      |
 | ----------------- | -------- | --------------------------------------------------------------------------------- |
-| **Core SDK**      | 2.2.1    | 140+ workflow nodes, sync/async runtimes, cyclic workflows                        |
-| **Kaizen**        | 2.3.1    | AI agents with signature-based programming and multi-agent coordination           |
-| **kaizen-agents** | 0.5.0    | Delegate architecture for supervised agent execution                              |
-| **DataFlow**      | 1.2.1    | Zero-config database operations — one decorator generates 11 CRUD nodes per model |
-| **Nexus**         | 1.6.0    | Deploy as REST API + CLI + MCP tool simultaneously                                |
-| **PACT**          | 0.4.1    | Organizational governance — D/T/R accountability, operating envelopes             |
+| **Core SDK**      | 2.8.5    | 140+ workflow nodes, sync/async runtimes, cyclic workflows                        |
+| **Kaizen**        | 2.7.3    | AI agents with signature-based programming and multi-agent coordination           |
+| **kaizen-agents** | 0.9.2    | Delegate architecture for supervised agent execution                              |
+| **DataFlow**      | 2.0.6    | Zero-config database operations — one decorator generates 11 CRUD nodes per model |
+| **Nexus**         | 2.0.0    | Deploy as REST API + CLI + MCP tool simultaneously                                |
+| **PACT**          | 0.8.1    | Organizational governance — D/T/R accountability, operating envelopes             |
+| **MCP**           | 0.2.3    | Unified MCP platform server for AI assistant introspection                        |
 | **Trust**         | included | CARE/EATP cryptographic trust chains, constraint propagation, audit trails        |
 
 Plus: PostgreSQL/MySQL/SQLite drivers, Redis, Prometheus, OpenTelemetry, MCP, authentication, scheduling, and more.
@@ -122,7 +123,7 @@ services:
 ## Tags
 
 - `latest` — latest stable release
-- `X.Y.Z` — specific version (e.g., `2.2.1`)
+- `X.Y.Z` — specific version (e.g., `2.8.5`)
 
 ## Links
 
