@@ -1,5 +1,6 @@
-# Kailash Python SDK — Full Image
-# Includes Core SDK + DataFlow + Nexus + Kaizen + PACT + Trust
+# Kailash Python SDK — Standard Image
+# Includes Core SDK + DataFlow + Nexus + Kaizen + PACT + ML + Trust
+# (kailash-align excluded — requires CUDA/GPU runtime)
 # Published to: docker.io/terrenefoundation/kailash
 #
 # Build:  docker build -t terrenefoundation/kailash .
@@ -23,9 +24,9 @@ WORKDIR /build
 COPY pyproject.toml README.md ./
 COPY src ./src
 
-# Install the full SDK with all extras
+# Install the SDK with standard extras (align excluded — requires CUDA/GPU)
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir ".[all]"
+    pip install --no-cache-dir ".[dataflow,nexus,kaizen,pact,ml]"
 
 # ============================================================================
 # Stage 2: Runtime — lean production image
