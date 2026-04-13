@@ -19,14 +19,10 @@ from unittest.mock import patch
 import pytest
 
 try:
-    from kailash.mcp.contrib import SecurityTier, is_tier_enabled
-    from kailash.mcp.platform_server import create_platform_server
-    from kailash.mcp.contrib.nexus import (
-        _execute_in_subprocess as nexus_execute,
-    )
-    from kailash.mcp.contrib.kaizen import (
-        _execute_in_subprocess as kaizen_execute,
-    )
+    from kailash_mcp.contrib import SecurityTier, is_tier_enabled
+    from kailash_mcp.contrib.kaizen import _execute_in_subprocess as kaizen_execute
+    from kailash_mcp.contrib.nexus import _execute_in_subprocess as nexus_execute
+    from kailash_mcp.platform_server import create_platform_server
 except ImportError:
     pytest.skip(
         "Third-party 'mcp' package not available",
@@ -182,9 +178,7 @@ class TestHandlerNotFound:
             pytest.skip("kaizen not installed")
 
         tool = server._tool_manager._tools["kaizen.test_agent"]
-        result = await tool.run(
-            {"agent_name": "nonexistent_agent", "task": "hello"}
-        )
+        result = await tool.run({"agent_name": "nonexistent_agent", "task": "hello"})
         # FastMCP tool.run() may return a dict or a list of content items
         if isinstance(result, dict):
             parsed = result

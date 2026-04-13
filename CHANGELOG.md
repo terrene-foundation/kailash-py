@@ -15,6 +15,13 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash-mcp 0.2.2 — 2026-04-13
+
+#### Fixed
+
+- **CLI entry point references wrong module path** (`kailash-mcp 0.2.2`): The root `kailash` package defined a conflicting `kailash-mcp` console script entry point that pointed at the deprecated `kailash.mcp.platform_server` shim. When both packages were installed, this overwrote the correct entry point, making `kailash-mcp --help` fail with `ModuleNotFoundError`. Fixed by removing the conflicting entry point and deleting the deprecated `kailash.mcp` shim entirely. Fixes #435.
+- **Simplified FastMCP import** (`kailash-mcp 0.2.2`): Removed the 60-line `_get_fastmcp_class()` workaround that was only needed because `kailash.mcp` shadowed the third-party `mcp` package. With the shim removed, FastMCP imports normally.
+
 ### Post-Convergence Security Hardening — 2026-04-12
 
 kailash 2.8.4 + kailash-dataflow 2.0.6 + kailash-kaizen 2.7.3

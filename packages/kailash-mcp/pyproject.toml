@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-mcp"
-version = "0.2.1"
+version = "0.2.2"
 description = "Production-ready Model Context Protocol (MCP) client, server, and platform for Kailash SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"

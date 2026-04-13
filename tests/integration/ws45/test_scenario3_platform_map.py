@@ -19,7 +19,7 @@ class TestPlatformMapGraph:
     async def test_platform_map_function_exists(self) -> None:
         """platform.py exposes _build_platform_map."""
         try:
-            from kailash.mcp.contrib.platform import _build_platform_map
+            from kailash_mcp.contrib.platform import _build_platform_map
         except ImportError:
             pytest.skip("kailash MCP contrib not installed")
 
@@ -28,7 +28,7 @@ class TestPlatformMapGraph:
     async def test_platform_map_returns_expected_keys(self) -> None:
         """platform_map result has models, handlers, agents, connections."""
         try:
-            from kailash.mcp.contrib.platform import _build_platform_map
+            from kailash_mcp.contrib.platform import _build_platform_map
         except ImportError:
             pytest.skip("kailash MCP contrib not installed")
 
@@ -41,7 +41,7 @@ class TestPlatformMapGraph:
     async def test_platform_map_discovers_fixture_model(self) -> None:
         """platform_map finds the User model from the fixture project."""
         try:
-            from kailash.mcp.contrib.platform import _build_platform_map
+            from kailash_mcp.contrib.platform import _build_platform_map
         except ImportError:
             pytest.skip("kailash MCP contrib not installed")
 
@@ -53,7 +53,7 @@ class TestPlatformMapGraph:
     async def test_platform_map_discovers_fixture_handler(self) -> None:
         """platform_map finds handlers from the fixture project."""
         try:
-            from kailash.mcp.contrib.platform import _build_platform_map
+            from kailash_mcp.contrib.platform import _build_platform_map
         except ImportError:
             pytest.skip("kailash MCP contrib not installed")
 
@@ -63,7 +63,7 @@ class TestPlatformMapGraph:
     async def test_connections_are_typed(self) -> None:
         """Each connection in platform_map has from, to, type fields."""
         try:
-            from kailash.mcp.contrib.platform import _build_platform_map
+            from kailash_mcp.contrib.platform import _build_platform_map
         except ImportError:
             pytest.skip("kailash MCP contrib not installed")
 

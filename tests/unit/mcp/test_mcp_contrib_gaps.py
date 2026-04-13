@@ -21,7 +21,7 @@ from unittest.mock import patch
 import pytest
 
 try:
-    from kailash.mcp.platform_server import (
+    from kailash_mcp.platform_server import (
         RateLimitMiddleware,
         TokenAuthMiddleware,
         create_platform_server,
@@ -33,8 +33,7 @@ except ImportError:
         allow_module_level=True,
     )
 
-from kailash.mcp.contrib.dataflow import _scan_models
-
+from kailash_mcp.contrib.dataflow import _scan_models
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -93,11 +92,11 @@ def project_with_models(tmp_path: Path) -> Path:
 def server_with_dataflow(project_with_models: Path):
     """Create a platform server with only dataflow + platform contributors."""
     with patch(
-        "kailash.mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
+        "kailash_mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
         [
-            ("kailash.mcp.contrib.core", "core"),
-            ("kailash.mcp.contrib.platform", "platform"),
-            ("kailash.mcp.contrib.dataflow", "dataflow"),
+            ("kailash_mcp.contrib.core", "core"),
+            ("kailash_mcp.contrib.platform", "platform"),
+            ("kailash_mcp.contrib.dataflow", "dataflow"),
         ],
     ):
         return create_platform_server(project_root=project_with_models)
@@ -107,10 +106,10 @@ def server_with_dataflow(project_with_models: Path):
 def full_server(tmp_path: Path):
     """Create a platform server with core + platform contributors only."""
     with patch(
-        "kailash.mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
+        "kailash_mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
         [
-            ("kailash.mcp.contrib.core", "core"),
-            ("kailash.mcp.contrib.platform", "platform"),
+            ("kailash_mcp.contrib.core", "core"),
+            ("kailash_mcp.contrib.platform", "platform"),
         ],
     ):
         return create_platform_server(project_root=tmp_path)

@@ -12,21 +12,20 @@ from unittest.mock import patch
 import pytest
 
 try:
-    from kailash.mcp.platform_server import create_platform_server
+    from kailash_mcp.platform_server import create_platform_server
 except ImportError:
     pytest.skip(
         "Third-party 'mcp' package not available",
         allow_module_level=True,
     )
 
-from kailash.mcp.contrib.dataflow import (
+from kailash_mcp.contrib.dataflow import (
     _build_integration_test,
     _build_unit_test,
     _generate_test_data,
     _test_value_for_field,
 )
-from kailash.mcp.contrib.kaizen import _build_base_agent_test, _build_delegate_test
-
+from kailash_mcp.contrib.kaizen import _build_base_agent_test, _build_delegate_test
 
 # -------------------------------------------------------------------
 # DataFlow test data generation
@@ -185,8 +184,8 @@ class User:
         )
 
         with patch(
-            "kailash.mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
-            [("kailash.mcp.contrib.dataflow", "dataflow")],
+            "kailash_mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
+            [("kailash_mcp.contrib.dataflow", "dataflow")],
         ):
             return create_platform_server(project_root=tmp_path)
 
@@ -285,8 +284,8 @@ async def create_user(request):
         )
 
         with patch(
-            "kailash.mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
-            [("kailash.mcp.contrib.nexus", "nexus")],
+            "kailash_mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
+            [("kailash_mcp.contrib.nexus", "nexus")],
         ):
             return create_platform_server(project_root=tmp_path)
 
@@ -331,8 +330,8 @@ class AnalysisAgent(BaseAgent):
         )
 
         with patch(
-            "kailash.mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
-            [("kailash.mcp.contrib.kaizen", "kaizen")],
+            "kailash_mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
+            [("kailash_mcp.contrib.kaizen", "kaizen")],
         ):
             return create_platform_server(project_root=tmp_path)
 

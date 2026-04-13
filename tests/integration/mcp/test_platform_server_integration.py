@@ -27,8 +27,8 @@ from unittest.mock import patch
 import pytest
 
 try:
-    from kailash.mcp.contrib import SecurityTier, is_tier_enabled
-    from kailash.mcp.platform_server import (
+    from kailash_mcp.contrib import SecurityTier, is_tier_enabled
+    from kailash_mcp.platform_server import (
         FRAMEWORK_CONTRIBUTORS,
         create_platform_server,
     )
@@ -335,10 +335,10 @@ class TestGracefulDegradation:
     def test_only_core_platform_when_no_frameworks(self, tmp_path: Path):
         """With only core + platform contributors, server starts with core tools."""
         with patch(
-            "kailash.mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
+            "kailash_mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
             [
-                ("kailash.mcp.contrib.core", "core"),
-                ("kailash.mcp.contrib.platform", "platform"),
+                ("kailash_mcp.contrib.core", "core"),
+                ("kailash_mcp.contrib.platform", "platform"),
             ],
         ):
             server = create_platform_server(project_root=tmp_path)
@@ -355,10 +355,10 @@ class TestGracefulDegradation:
     async def test_platform_map_empty_when_no_frameworks(self, tmp_path: Path):
         """platform.platform_map returns valid response without frameworks."""
         with patch(
-            "kailash.mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
+            "kailash_mcp.platform_server.FRAMEWORK_CONTRIBUTORS",
             [
-                ("kailash.mcp.contrib.core", "core"),
-                ("kailash.mcp.contrib.platform", "platform"),
+                ("kailash_mcp.contrib.core", "core"),
+                ("kailash_mcp.contrib.platform", "platform"),
             ],
         ):
             server = create_platform_server(project_root=tmp_path)
