@@ -2762,8 +2762,10 @@ class NodeGenerator:
                         logger.debug(
                             "nodes.list_operation_with_params", extra={"params": params}
                         )
+                        masked_conn = mask_url(connection_string)
                         logger.debug(
-                            f"List operation - Connection: {mask_url(connection_string)}"
+                            "nodes.list_operation_connection",
+                            extra={"connection": masked_conn},
                         )
 
                         # Get or create cached AsyncSQLDatabaseNode for connection pooling

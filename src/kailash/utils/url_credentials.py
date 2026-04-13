@@ -41,7 +41,14 @@ one place. ``dataflow/utils/masking.py`` now re-exports from here.
 from __future__ import annotations
 
 from typing import Optional, Tuple
-from urllib.parse import ParseResult, parse_qsl, unquote, urlencode, urlparse, urlunparse
+from urllib.parse import (
+    ParseResult,
+    parse_qsl,
+    unquote,
+    urlencode,
+    urlparse,
+    urlunparse,
+)
 
 __all__ = [
     "decode_userinfo_or_raise",
@@ -220,16 +227,16 @@ def mask_url(url: Optional[str]) -> str:
 
     Returns:
 
-    - ``""`` when ``url`` is ``None`` or empty — nothing to mask.
+    - ``UNPARSEABLE_URL_SENTINEL`` (``"<unparseable url>"``) when the
+      input is ``None``, empty, not a string, missing a ``://`` scheme
+      separator, or otherwise cannot be parsed. This is a distinct
+      failure marker — never the original input — so a malformed URL
+      with embedded credentials is NOT written verbatim to logs.
+      See ``rules/observability.md`` Rule 6.1.
     - The URL unchanged when it parses cleanly AND has no userinfo
       AND has no credential query params — there's no credential to
       leak, safe to render verbatim.
     - The URL with credentials replaced by ``***`` otherwise.
-    - ``UNPARSEABLE_URL_SENTINEL`` (``"<unparseable url>"``) when the
-      input cannot be parsed at all. This is a distinct failure
-      marker — never the original input — so a malformed URL with
-      embedded credentials is NOT written verbatim to logs.
-      See ``rules/observability.md`` Rule 6.1.
 
     Examples:
         >>> mask_url("redis://alice:wonderland@localhost:6379/0")
@@ -241,14 +248,20 @@ def mask_url(url: Optional[str]) -> str:
         >>> mask_url("postgres://localhost/db?password=leak")
         'postgres://localhost/db?password=%2A%2A%2A'
         >>> mask_url(None)
-        ''
+        '<unparseable url>'
         >>> mask_url("")
-        ''
+        '<unparseable url>'
     """
     if not url:
-        return ""
+        return UNPARSEABLE_URL_SENTINEL
 
     if not isinstance(url, str):
+        return UNPARSEABLE_URL_SENTINEL
+
+    # A string without "://" is not a URL — treat as unparseable rather
+    # than returning it verbatim (defense-in-depth: a non-URL string
+    # could contain credentials passed by mistake).
+    if "://" not in url:
         return UNPARSEABLE_URL_SENTINEL
 
     # MongoDB replica-set URLs put comma-separated hosts in the netloc,

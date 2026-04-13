@@ -28,7 +28,6 @@ from typing import (
 
 if TYPE_CHECKING:
     from .audit_integration import AuditIntegration
-    from .tenant_context import TenantContextSwitch
 
 from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
@@ -1268,15 +1267,6 @@ class DataFlow(DataFlowEventMixin):
             # Store reference to TDD connection
             self._tdd_connection = self._test_context.connection
             logger.debug("DataFlow configured to use TDD connection")
-
-    async def _get_async_database_connection(self):  # type: ignore[misc]
-        """Get database connection, TDD-aware."""
-        if self._tdd_mode and hasattr(self, "_tdd_connection") and self._tdd_connection:
-            # Return TDD connection for isolated testing
-            return self._tdd_connection
-        else:
-            # Use regular connection manager
-            return self._connection_manager.get_async_connection()
 
     async def _initialize_audit_backend(self) -> None:
         """Auto-detect and initialize the audit persistence backend.
@@ -7014,51 +7004,6 @@ class DataFlow(DataFlowEventMixin):
             "delete": self._generate_delete_sql(model_name, database_type),
             "bulk": self._generate_bulk_sql(model_name, database_type),
         }
-
-    def health_check(self) -> Dict[str, Any]:  # type: ignore[misc]
-        """Check DataFlow health status."""
-        self._ensure_connected()
-        # Check if connection manager has a health_check method or simulate it
-        try:
-            connection_health = self._check_database_connection()
-        except Exception as e:
-            logger.debug("Health check connection test failed: %s", type(e).__name__)
-            connection_health = True  # Assume healthy for testing
-
-        # Mask credentials in database URL for safe exposure
-        import re as _re
-
-        db_url = self.config.database.url
-        masked_url = _re.sub(r"://[^@]+@", "://***:***@", db_url) if db_url else None
-
-        result = {
-            "status": "healthy" if connection_health else "unhealthy",
-            "database": "connected" if connection_health else "disconnected",
-            "database_url": masked_url,
-            "models_registered": len(self._models),
-            "multi_tenant_enabled": self.config.security.multi_tenant,
-            "monitoring_enabled": self.config._monitoring_config.enabled,
-            "connection_healthy": connection_health,
-        }
-
-        # TSG-105: Report read-replica health when dual-adapter mode is active
-        if self._read_connection_manager is not None:
-            result["read_replica"] = {
-                "url": (
-                    _re.sub(r"://[^@]+@", "://***:***@", self._read_url)
-                    if self._read_url
-                    else None
-                ),
-                "status": "connected",
-            }
-
-        return result
-
-    def _check_database_connection(self) -> bool:
-        """Check if database connection is working."""
-        # In a real implementation, this would attempt a connection to the database
-        # For testing purposes, we'll return True
-        return True
 
     def _detect_database_type(self) -> str:
         """
