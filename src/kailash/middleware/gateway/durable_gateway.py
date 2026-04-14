@@ -13,8 +13,9 @@ import logging
 from datetime import UTC, datetime
 from typing import Any, Callable, Dict, List, Optional
 
-from fastapi import HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 from kailash.api.gateway import WorkflowAPIGateway
 

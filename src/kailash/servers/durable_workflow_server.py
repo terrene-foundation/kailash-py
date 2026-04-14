@@ -12,8 +12,9 @@ import logging
 from datetime import UTC, datetime
 from typing import Any, Callable, Dict, List, Optional
 
-from fastapi import HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 from ..middleware.gateway.checkpoint_manager import CheckpointManager
 from ..middleware.gateway.deduplicator import RequestDeduplicator

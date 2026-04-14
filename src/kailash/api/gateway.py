@@ -55,9 +55,11 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
-from fastapi import FastAPI, Request, Response, WebSocket
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI
+from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import Response, StreamingResponse
+from starlette.websockets import WebSocket
 from pydantic import BaseModel, Field
 
 from ..runtime.local import LocalRuntime

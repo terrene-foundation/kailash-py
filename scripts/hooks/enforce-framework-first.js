@@ -226,16 +226,24 @@ function isExcluded(filePath) {
   )
     return true;
 
-  // BUILD repo — only the adapter/backend/transport/store layer uses raw imports.
-  // Engines, features, API, servers MUST use the SDK's own primitives.
+  // BUILD repo — only the adapter/backend/transport/store layer and the
+  // Nexus engine-foundation layer use raw imports.
+  // The servers/ and api/ directories are the engine layer that Nexus wraps
+  // via HTTPTransport._gateway → create_gateway(). They cannot import from
+  // nexus without creating a circular dependency (kailash → nexus → kailash).
+  // See #445 architectural analysis.
   if (
     /[\\/]adapters[\\/]/.test(filePath) ||
     /[\\/]backends[\\/]/.test(filePath) ||
     /[\\/]transports[\\/]/.test(filePath) ||
     /[\\/]providers[\\/]/.test(filePath) ||
     /[\\/]drivers[\\/]/.test(filePath) ||
+    // Nexus engine-foundation: server hierarchy + API gateway layer
+    /[\\/]servers[\\/]/.test(filePath) ||
+    /[\\/]src[\\/]kailash[\\/]api[\\/]/.test(filePath) ||
+    /[\\/]middleware[\\/]auth[\\/]/.test(filePath) ||
+    /[\\/]middleware[\\/]gateway[\\/]/.test(filePath) ||
     /[\\/]middleware[\\/]database[\\/]/.test(filePath) ||
-    /[\\/]middleware[\\/]gateway[\\/]event_store/.test(filePath) ||
     /[\\/]trust[\\/].*store/.test(filePath) ||
     /[\\/]trust[\\/]constraints[\\/]/.test(filePath) ||
     /[\\/]trust[\\/]enforce[\\/]/.test(filePath) ||

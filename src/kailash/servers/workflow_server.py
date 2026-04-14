@@ -11,8 +11,10 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request, WebSocket
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI
+from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.websockets import WebSocket
 from pydantic import BaseModel, Field
 
 from ..api.workflow_api import WorkflowAPI

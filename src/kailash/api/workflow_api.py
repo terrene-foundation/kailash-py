@@ -14,8 +14,10 @@ from typing import Any
 import uvicorn
 
 logger = logging.getLogger(__name__)
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import BackgroundTasks, FastAPI
+from starlette.exceptions import HTTPException
+from starlette.requests import Request
+from starlette.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from kailash.runtime.local import LocalRuntime
