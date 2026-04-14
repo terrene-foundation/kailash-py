@@ -4,7 +4,7 @@
 """
 A2A HTTP Service.
 
-FastAPI-based HTTP service implementing the A2A protocol with EATP
+Nexus-based HTTP service implementing the A2A protocol with EATP
 trust extensions for secure agent-to-agent communication.
 
 Endpoints:
@@ -27,11 +27,9 @@ Example:
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
-from fastapi import FastAPI, Header, HTTPException, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from nexus import JSONResponse, Nexus, Request, Response
 
 from kailash.trust.a2a.agent_card import AgentCardCache, AgentCardGenerator
 from kailash.trust.a2a.auth import A2AAuthenticator, extract_token_from_header
@@ -51,7 +49,7 @@ class A2AService:
     """
     A2A HTTP Service implementation.
 
-    Provides a FastAPI application with A2A protocol endpoints
+    Provides a Nexus application with A2A protocol endpoints
     including Agent Card serving and JSON-RPC handling.
 
     Example:
@@ -128,47 +126,42 @@ class A2AService:
         # Track startup time for health checks
         self._started_at: Optional[datetime] = None
 
-    def create_app(self) -> FastAPI:
+    def create_app(self) -> Any:
         """
-        Create the FastAPI application.
+        Create the Nexus application.
 
         Returns:
-            Configured FastAPI application.
+            The underlying ASGI application (FastAPI), compatible with
+            uvicorn and TestClient.
         """
-        app = FastAPI(
-            title=f"A2A Service: {self._agent_name}",
-            description=self._description or f"A2A HTTP Service for {self._agent_id}",
-            version=self._agent_version,
-        )
-
-        # Add CORS middleware
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=self._cors_origins,
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
+        nexus_app = Nexus(
+            cors_origins=self._cors_origins,
+            cors_allow_methods=["*"],
+            cors_allow_headers=["*"],
+            cors_allow_credentials=True,
         )
 
         # Register routes
-        self._register_routes(app)
+        self._register_routes(nexus_app)
 
-        # Add startup/shutdown handlers
-        @app.on_event("startup")
+        # Add startup/shutdown handlers via the underlying ASGI app
+        fastapi_app = nexus_app.fastapi_app
+
+        @fastapi_app.on_event("startup")
         async def startup():
             self._started_at = datetime.now(timezone.utc)
-            logger.info(f"A2A Service started: {self._agent_id}")
+            logger.info("a2a_service.started", extra={"agent_id": self._agent_id})
 
-        @app.on_event("shutdown")
+        @fastapi_app.on_event("shutdown")
         async def shutdown():
-            logger.info(f"A2A Service shutting down: {self._agent_id}")
+            logger.info("a2a_service.shutdown", extra={"agent_id": self._agent_id})
 
-        return app
+        return fastapi_app
 
-    def _register_routes(self, app: FastAPI) -> None:
-        """Register all routes on the FastAPI app."""
+    def _register_routes(self, app: Nexus) -> None:
+        """Register all routes on the Nexus app."""
 
-        @app.get("/health")
+        @app.endpoint("/a2a/health", methods=["GET"])
         async def health_check():
             """Health check endpoint."""
             return {
@@ -180,11 +173,8 @@ class A2AService:
                 ),
             }
 
-        @app.get("/.well-known/agent.json")
-        async def get_agent_card(
-            request: Request,
-            if_none_match: Optional[str] = Header(None),
-        ):
+        @app.endpoint("/.well-known/agent.json", methods=["GET"])
+        async def get_agent_card(request: Request):
             """
             Serve the Agent Card.
 
@@ -208,6 +198,7 @@ class A2AService:
             etag = f'"{card.compute_etag()}"'
 
             # Check If-None-Match for conditional GET
+            if_none_match = request.headers.get("if-none-match")
             if if_none_match and if_none_match == etag:
                 return Response(status_code=304)
 
@@ -220,11 +211,8 @@ class A2AService:
                 },
             )
 
-        @app.post("/a2a/jsonrpc")
-        async def jsonrpc_handler(
-            request: Request,
-            authorization: Optional[str] = Header(None),
-        ):
+        @app.endpoint("/a2a/jsonrpc", methods=["POST"])
+        async def jsonrpc_handler(request: Request):
             """
             Handle JSON-RPC 2.0 requests.
 
@@ -235,7 +223,8 @@ class A2AService:
                 # Get raw body
                 body = await request.body()
 
-                # Extract auth token
+                # Extract auth token from Authorization header
+                authorization = request.headers.get("authorization")
                 auth_token = extract_token_from_header(authorization)
 
                 # Handle request
@@ -251,11 +240,8 @@ class A2AService:
                     status_code=400,
                 )
 
-        @app.post("/a2a/jsonrpc/batch")
-        async def jsonrpc_batch_handler(
-            request: Request,
-            authorization: Optional[str] = Header(None),
-        ):
+        @app.endpoint("/a2a/jsonrpc/batch", methods=["POST"])
+        async def jsonrpc_batch_handler(request: Request):
             """
             Handle batch JSON-RPC 2.0 requests.
 
@@ -264,6 +250,7 @@ class A2AService:
             """
             try:
                 body = await request.body()
+                authorization = request.headers.get("authorization")
                 auth_token = extract_token_from_header(authorization)
 
                 responses = await self._jsonrpc_handler.handle_batch(body, auth_token)
@@ -310,9 +297,9 @@ def create_a2a_app(
     private_key: str,
     capabilities: Optional[List[str]] = None,
     **kwargs,
-) -> FastAPI:
+) -> Any:
     """
-    Convenience function to create an A2A FastAPI app.
+    Convenience function to create an A2A app.
 
     Args:
         trust_operations: TrustOperations instance.
@@ -324,7 +311,7 @@ def create_a2a_app(
         **kwargs: Additional arguments for A2AService.
 
     Returns:
-        Configured FastAPI application.
+        ASGI application compatible with uvicorn and TestClient.
     """
     service = A2AService(
         trust_operations=trust_operations,

@@ -46,6 +46,15 @@ from .sse import register_sse_endpoint
 from .transports import HTTPTransport, MCPTransport, Transport
 from .websocket_handlers import Connection, MessageHandler, MessageHandlerRegistry
 
+# Re-export Starlette types so Nexus consumers can `from nexus import Request, ...`
+# instead of importing directly from starlette or fastapi. This allows the
+# enforce-framework-first hook to block raw starlette/fastapi imports in
+# application code while still providing the types Nexus endpoint handlers need.
+from starlette.exceptions import HTTPException
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response, StreamingResponse
+from starlette.websockets import WebSocket, WebSocketDisconnect
+
 __version__ = "2.0.1"
 __all__ = [
     # Core
@@ -95,4 +104,12 @@ __all__ = [
     "Connection",
     "MessageHandler",
     "MessageHandlerRegistry",
+    # Starlette type re-exports for endpoint handlers
+    "HTTPException",
+    "Request",
+    "Response",
+    "JSONResponse",
+    "StreamingResponse",
+    "WebSocket",
+    "WebSocketDisconnect",
 ]
