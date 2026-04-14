@@ -282,6 +282,15 @@ class Nexus:
         self._registry = HandlerRegistry(event_bus=self._event_bus)
         self._background_services: List[BackgroundService] = []
         self._transports: List[Transport] = []
+        # Class-based WebSocket message-handler registry (issue #448).
+        # Lazily populated by @app.websocket() decorator / app.register_websocket().
+        # Attached to the WebSocket transport when it's constructed.
+        from nexus.websocket_handlers import (  # noqa: E501 — local import to avoid cycle at import time
+            MessageHandlerRegistry,
+        )
+
+        self._ws_message_handlers: MessageHandlerRegistry = MessageHandlerRegistry()
+        self._ws_transport = None  # lazily built by _ensure_ws_transport()
         self._running = False
 
         # Middleware management (introspection-only — actual apply delegates to HTTPTransport)
@@ -461,8 +470,101 @@ class Nexus:
             self (for chaining).
         """
         self._transports.append(transport)
+        # Auto-wire class-based WebSocket message handlers (issue #448):
+        # if the transport is a WebSocketTransport that has no message
+        # handler registry of its own, point it at this Nexus's registry
+        # so @app.websocket() decorators are visible to the transport.
+        try:
+            from nexus.transports.websocket import (  # local import avoids cycle
+                WebSocketTransport,
+            )
+
+            if (
+                isinstance(transport, WebSocketTransport)
+                and transport._message_handlers is None
+            ):
+                transport._message_handlers = self._ws_message_handlers
+                self._ws_transport = transport
+        except Exception:  # noqa: BLE001 — best-effort wiring
+            logger.debug("ws.transport.auto_wire_failed", exc_info=True)
         logger.info(f"Transport registered: {transport.name}")
         return self
+
+    # ------------------------------------------------------------------
+    # Class-based WebSocket message handlers (issue #448)
+    # ------------------------------------------------------------------
+
+    def websocket(self, path: str):
+        """Register a class-based WebSocket message handler on ``path``.
+
+        Use as a class decorator. The decorated class MUST subclass
+        :class:`nexus.websocket_handlers.MessageHandler` and override
+        the lifecycle hooks it cares about (``on_connect``,
+        ``on_message``, ``on_disconnect``, ``on_event``).
+
+        Example::
+
+            from nexus import Nexus
+            from nexus.websocket_handlers import MessageHandler
+
+            app = Nexus()
+
+            @app.websocket("/events")
+            class EventStream(MessageHandler):
+                async def on_connect(self, conn):
+                    conn.state.subscriptions = set()
+
+                async def on_message(self, conn, msg):
+                    if msg.get("action") == "subscribe":
+                        conn.state.subscriptions.add(msg["topic"])
+
+                async def on_event(self, event):
+                    for c in self.connections:
+                        if event["topic"] in c.state.subscriptions:
+                            await c.send_json(event)
+
+        Args:
+            path: URL path for the WebSocket endpoint (e.g. ``"/events"``).
+                Must start with ``/``. Cannot collide with an existing
+                class-based handler path.
+
+        Returns:
+            A decorator that registers the class and returns it
+            unchanged so normal inheritance/introspection still works.
+        """
+
+        def _decorator(cls):
+            self.register_websocket(path, cls)
+            return cls
+
+        return _decorator
+
+    def register_websocket(self, path: str, handler_cls) -> Any:
+        """Imperative form of :meth:`websocket`.
+
+        Useful when the handler class is defined elsewhere and you
+        want to register it conditionally. Returns the instantiated
+        handler so the caller can wire external publishers.
+        """
+        return self._ws_message_handlers.register(path, handler_cls)
+
+    async def websocket_broadcast(self, path: str, event: Any) -> None:
+        """Fire ``on_event`` on the handler registered at ``path``.
+
+        This is the canonical entry point for server-originated
+        fanout — call it from a DataFlow change stream, a message
+        queue consumer, or any other publisher.
+
+        Raises:
+            KeyError: if no class-based handler is registered at
+                ``path``.
+        """
+        await self._ws_message_handlers.broadcast_event(path, event)
+
+    @property
+    def websocket_handlers(self):
+        """Read-only access to the class-based message handler registry."""
+        return self._ws_message_handlers
 
     # ------------------------------------------------------------------
     # Background service management

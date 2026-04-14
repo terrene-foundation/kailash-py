@@ -15,6 +15,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from nexus.registry import HandlerDef, HandlerRegistry
 from nexus.transports.base import Transport
+from nexus.websocket_handlers import MessageHandlerRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +130,7 @@ class WebSocketTransport(Transport):
         max_connections: Optional[int] = None,
         max_message_size: int = 1_048_576,
         runtime: Any = None,
+        message_handlers: Optional[MessageHandlerRegistry] = None,
     ) -> None:
         self._host = host
         self._port = port
@@ -138,6 +140,7 @@ class WebSocketTransport(Transport):
         self._max_connections = max_connections
         self._max_message_size = max_message_size
         self._injected_runtime = runtime
+        self._message_handlers = message_handlers
 
         self._running = False
         self._thread: Optional[threading.Thread] = None
@@ -386,14 +389,36 @@ class WebSocketTransport(Transport):
 
         Validates the request path, assigns a connection ID, runs the
         receive loop, and cleans up on disconnect.
+
+        If a :class:`MessageHandlerRegistry` is attached and the
+        requested path matches one of its registered handlers, the
+        connection is delegated to the class-based handler's
+        lifecycle (on_connect → on_message* → on_disconnect). The
+        default JSON-RPC dispatch path is used otherwise.
         """
         # Validate path — websockets 16 exposes request on the connection
         request_path = getattr(websocket, "request", None)
+        incoming_path: Optional[str] = None
         if request_path is not None:
-            path = getattr(request_path, "path", None)
-            if path is not None and path != self._path:
-                await websocket.close(4004, "Invalid path")
+            incoming_path = getattr(request_path, "path", None)
+
+        # Class-based MessageHandler routing (issue #448).
+        # Checked before the legacy single-path guard so the two modes
+        # can coexist on the same transport.
+        if (
+            self._message_handlers is not None
+            and incoming_path is not None
+            and incoming_path in self._message_handlers.paths
+        ):
+            handled = await self._message_handlers.handle_connection(
+                websocket, incoming_path
+            )
+            if handled:
                 return
+
+        if incoming_path is not None and incoming_path != self._path:
+            await websocket.close(4004, "Invalid path")
+            return
 
         # Enforce max_connections (H2: prevent resource exhaustion)
         if (
