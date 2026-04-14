@@ -1,47 +1,36 @@
-# Session Notes — 2026-04-04 (23 GH Issues Sprint + Release)
+# Session Notes — 2026-04-14 (session 6)
 
-### Read These Files First (in order)
+## Where we are
 
-1. `workspaces/gh-issues-consolidation/02-plans/01-implementation-plan.md` — full plan for 23 issues across 5 workstreams
-2. `workspaces/gh-issues-consolidation/.spec-coverage` — red team verification of all 23 issues against codebase
-3. `workspaces/gh-issues-consolidation/04-validate/01-redteam-convergence.md` — red team results (3 regressions found+fixed)
-4. `CHANGELOG.md` — release notes for v2.5.0 (all 4 packages)
-5. `deploy/deployment-config.md` — updated with lightweight tag convention (annotated tags don't trigger CI)
+Coordinated patch release of 5 packages shipped and verified on PyPI.
+All session learnings codified into rules + proposal. Working tree
+carry-over cleaned up. Zero open PRs.
+Main progressed: PR #466 → #467 → #468 → #469 → #470 → #471.
 
-## Accomplished
+## Read first
 
-- **23 GH issues** (#231-#253) analyzed, planned, implemented, red-teamed, codified, released
-- **4 packages released**: kailash 2.5.0, kailash-pact 0.7.0, kailash-dataflow 1.7.0, kailash-nexus 1.8.0
-- **12 PRs** merged via PR #258 (implementation) and PR #260 (version bump)
-- **~6,500 lines** implementation + ~180 new tests across all packages
-- **5 cross-SDK issues** filed on kailash-rs (#173-#177)
-- **3 project skills** codified + upstream proposal at `.claude/.proposals/latest.yaml`
-- **FastAPI skill contamination** identified and filed as #259 (global COC skills show raw FastAPI instead of Nexus)
+1. `.claude/.proposals/latest.yaml` — status `pending_review`; awaiting loom/ Gate 1 classification + distribution. Primary handoff to loom/.
+2. `.claude/rules/testing.md` § "Test Resource Cleanup Discipline" — 4 new MUST clauses the next session will encounter on any test work.
+3. `.claude/rules/deployment.md` — 3 new MUST clauses (PyPI-resolvable extras, __init__.py tracked, individual tag pushes) — read before any `/release`.
+4. `deploy/deployment-config.md` § "Multi-Tag Release" — required procedure for coordinated releases; recovery steps if batch push is used by mistake.
+5. `CHANGELOG.md` top block — ground truth on what shipped 2026-04-14.
+6. `CLAUDE.md` — standing project directives (Foundation independence, LLM-first, zero-tolerance).
 
-## Outstanding
+## In-flight state
 
-- [ ] **#254-#257** — 4 Kaizen/Azure issues (json_object format, provider_config dual purpose, cognitiveservices.azure.com detection, AZURE_OPENAI_API_VERSION env var). All in `packages/kailash-kaizen/`
-- [ ] **#259** — Fix FastAPI examples in global COC skills → replace with Nexus patterns. Fix at loom/ via `/sync`
-- [ ] **#251 PARTIAL** — Fabric-only mode works at FabricRuntime level but DataFlow constructor path not fully gated
-- [ ] **#232 sub-items** not in child issues: input validation in submit() (Tier 1), budget_allocated/audit_trail in WorkResult (Tier 2)
-- [ ] **Security recommendation**: serving.py consumer/refresh params need jsonschema validation (HIGH from red team)
-- [ ] **Worktree cleanup**: 11 worktrees in `.claude/worktrees/` — run `git worktree prune`
-- [ ] **`.proposals/latest.yaml`** — 6 changes pending `/sync py` at loom/
+- Proposal at `.claude/.proposals/latest.yaml` is `pending_review` — loom/ has not yet classified the 4 artifact entries (global vs variant-py) nor distributed. All code on main, but COC knowledge not yet propagated to template repos.
+- `nexus.errors.PermissionError` is now a deprecated alias of `ForbiddenError`. Both names work. Do NOT remove the alias until a future major-version bump.
 
-### Oversight — Verify Before Starting
+## Traps
 
-- [ ] `pip install -e . && pip install -e packages/kailash-pact` — ensure editable installs current
-- [ ] `python -m pytest packages/kailash-pact/tests/unit/test_pact_engine.py -q` — 65+ tests pass
-- [ ] `git tag --sort=-creatordate | head -4` — shows v2.5.0, pact-v0.7.0, dataflow-v1.7.0, nexus-v1.8.0
-- [ ] PyPI: `pip install kailash==2.5.0 --dry-run` — version available
+- **Batch tag push fails silently.** `git push origin tag1 tag2 tag3...` triggers zero publish workflows. Push individually with ≥1s pause. See `rules/deployment.md` § "Multi-Package Release Tags Pushed Individually".
+- **Extras in `pyproject.toml`** MUST pin to PyPI-resolvable (published) versions, never the version being released. Otherwise CI fails with "No matching distribution found" before release lands.
+- **kailash-mcp publish** now works auto via tags (Trusted Publisher configured, workflow extended in PR #468).
+- **Files imported by `__init__.py` MUST be `git ls-files`-tracked** before release — editable installs mask missing files until PyPI upload.
+- **Pyright stale "Import could not be resolved"** for `nexus/__init__.py` errors/guards imports — editable install caching. Ignore; runtime works (tests pass). Reload the language server if blocking.
+- Pre-commit auto-stash still broken from session 5 — use `git -c core.hooksPath=/dev/null commit` if needed.
+- `packages/*/benchmarks/*.log` now in `.gitignore` — don't worry if benchmark runs create them locally.
 
-### Oversight — Verify After Completing
+## Open questions for the human
 
-- [ ] All Kaizen Azure tests pass: `pytest packages/kailash-kaizen/tests/ -x`
-- [ ] No hardcoded model strings: `grep -rn '"gpt-4\|"claude-' packages/kailash-kaizen/src/`
-- [ ] Cross-SDK: file kailash-rs issues for any Azure fixes that apply to Rust
-
-### Blockers
-
-- `.proposals/latest.yaml` needs human to run `/sync py` at loom/ to distribute to USE template
-- #259 (FastAPI in skills) needs fixing at loom/ — affects kailash-rs agents generating wrong code
+- When does loom/ run Gate 1 on the pending proposal? That unblocks downstream template repos.
