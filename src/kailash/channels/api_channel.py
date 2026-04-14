@@ -5,8 +5,9 @@ import logging
 from typing import Any, Dict, Optional
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException
+from starlette.requests import Request
+from starlette.responses import Response
 
 from ..servers import EnterpriseWorkflowServer
 from ..workflow import Workflow
@@ -48,7 +49,7 @@ class APIChannel(Channel):
         else:
             self.workflow_server = self._create_workflow_server()
 
-        self.app: FastAPI = self.workflow_server.app
+        self.app: Any = self.workflow_server.app
         self._server: Optional[uvicorn.Server] = None
         self._server_task: Optional[asyncio.Task] = None
 

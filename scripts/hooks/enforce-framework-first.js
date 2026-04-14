@@ -241,6 +241,13 @@ function isExcluded(filePath) {
     // Nexus engine-foundation: server hierarchy + API gateway layer
     /[\\/]src[\\/]kailash[\\/]servers[\\/]/.test(filePath) ||
     /[\\/]src[\\/]kailash[\\/]api[\\/]/.test(filePath) ||
+    // Gateway + middleware engine layer: create FastAPI apps directly
+    // using APIRouter, Depends, BackgroundTasks, CORSMiddleware.
+    // Cannot import from nexus — circular: kailash → nexus → kailash.
+    // See #445 Track 3 architectural analysis.
+    /[\\/]src[\\/]kailash[\\/]gateway[\\/]/.test(filePath) ||
+    /[\\/]middleware[\\/]communication[\\/]/.test(filePath) ||
+    /[\\/]channels[\\/]/.test(filePath) ||
     /[\\/]middleware[\\/]auth[\\/]/.test(filePath) ||
     /[\\/]middleware[\\/]gateway[\\/]/.test(filePath) ||
     /[\\/]middleware[\\/]database[\\/]/.test(filePath) ||
