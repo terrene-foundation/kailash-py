@@ -38,6 +38,7 @@ class HandlerDef:
     description: str = ""
     tags: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
+    guard: Any = None  # Optional BaseGuard for per-handler RBAC
 
 
 class HandlerRegistry:
@@ -125,6 +126,7 @@ class HandlerRegistry:
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
         workflow=None,
+        guard: Any = None,
     ) -> HandlerDef:
         """Register a function-based handler.
 
@@ -136,6 +138,7 @@ class HandlerRegistry:
             metadata: Arbitrary metadata dict.
             workflow: The generated workflow for this handler (stored for
                 backward compatibility with core.py internals).
+            guard: Optional BaseGuard for per-handler RBAC enforcement.
 
         Returns:
             The created HandlerDef.
@@ -172,6 +175,7 @@ class HandlerRegistry:
             description=description or getattr(func, "__doc__", "") or "",
             tags=tags or [],
             metadata=metadata or {},
+            guard=guard,
         )
         self._handlers[name] = handler_def
         self._handler_funcs[name] = {

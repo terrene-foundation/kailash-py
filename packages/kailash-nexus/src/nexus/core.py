@@ -2166,6 +2166,7 @@ Check the documentation or explore available resources.
         description: str = "",
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        guard: Any = None,
     ):
         """Decorator to register an async function as a multi-channel workflow.
 
@@ -2181,22 +2182,33 @@ Check the documentation or explore available resources.
             description: Optional description for the workflow.
             tags: Optional tags for categorization.
             metadata: Optional structured metadata (version, author, tags, etc.).
+            guard: Optional AuthGuard for per-handler RBAC. The guard's
+                ``check(user, request_context)`` is called before the handler
+                executes. Requires NexusAuthPlugin (JWT middleware sets
+                ``request.state.user``).
 
         Returns:
             Decorator function.
 
         Example:
+            >>> from nexus.auth.guards import AuthGuard
             >>> @app.handler("greet", description="Greet a user")
             ... async def greet(name: str, greeting: str = "Hello") -> dict:
             ...     return {"message": f"{greeting}, {name}!"}
             ...
-            ... # Now available at POST /workflows/greet/execute
-            ... # And as MCP tool: workflow_greet
+            ... @app.handler("admin.reset", guard=AuthGuard.RequireRole("admin"))
+            ... async def reset_cache() -> dict:
+            ...     return {"status": "cleared"}
         """
 
         def decorator(func):
             self.register_handler(
-                name, func, description=description, tags=tags, metadata=metadata
+                name,
+                func,
+                description=description,
+                tags=tags,
+                metadata=metadata,
+                guard=guard,
             )
             return func
 
@@ -2210,6 +2222,7 @@ Check the documentation or explore available resources.
         tags: Optional[List[str]] = None,
         input_mapping: Optional[Dict[str, str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        guard: Any = None,
     ):
         """Register an async/sync function as a multi-channel workflow.
 
@@ -2225,6 +2238,7 @@ Check the documentation or explore available resources.
             input_mapping: Optional mapping of workflow input names to handler
                 parameter names. If None, identity mapping is used.
             metadata: Optional structured metadata (version, author, tags, etc.).
+            guard: Optional AuthGuard for per-handler RBAC enforcement.
 
         Raises:
             TypeError: If handler_func is not callable.
@@ -2254,6 +2268,7 @@ Check the documentation or explore available resources.
             tags=tags,
             metadata=metadata,
             workflow=workflow,
+            guard=guard,
         )
 
         # Delegate to register() for multi-channel exposure
