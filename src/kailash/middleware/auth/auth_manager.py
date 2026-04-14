@@ -14,8 +14,10 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 import jwt
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from starlette.exceptions import HTTPException
+from starlette.requests import Request
 
 from ...nodes.admin import PermissionCheckNode
 from ...nodes.data import AsyncSQLDatabaseNode

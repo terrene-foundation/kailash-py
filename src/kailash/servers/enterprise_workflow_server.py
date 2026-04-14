@@ -243,7 +243,7 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
                     ),
                 }
             except (KeyError, Exception) as e:
-                from fastapi import HTTPException
+                from starlette.exceptions import HTTPException
 
                 raise HTTPException(status_code=404, detail="Resource not found")
 
@@ -294,12 +294,12 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
         async def execute_workflow_async(workflow_id: str, request: dict):
             """Execute workflow asynchronously with resource resolution."""
             if not self.enable_async_execution:
-                from fastapi import HTTPException
+                from starlette.exceptions import HTTPException
 
                 raise HTTPException(status_code=503, detail="Async execution disabled")
 
             if workflow_id not in self.workflows:
-                from fastapi import HTTPException
+                from starlette.exceptions import HTTPException
 
                 raise HTTPException(
                     status_code=404, detail=f"Workflow '{workflow_id}' not found"
@@ -583,7 +583,7 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket):
             """WebSocket for real-time updates."""
-            from fastapi import WebSocket
+            from starlette.websockets import WebSocket
 
             await websocket.accept()
             try:
