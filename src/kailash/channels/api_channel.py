@@ -49,7 +49,9 @@ class APIChannel(Channel):
         else:
             self.workflow_server = self._create_workflow_server()
 
-        self.app: Any = self.workflow_server.app
+        self.app: Any = (
+            self.workflow_server.app
+        )  # FastAPI instance; typed Any to avoid circular nexus import
         self._server: Optional[uvicorn.Server] = None
         self._server_task: Optional[asyncio.Task] = None
 
