@@ -52,6 +52,30 @@ Nexus is a zero-configuration multi-channel workflow platform. A single `Nexus()
 
 Nexus sits at the **Primitives** layer. `NexusEngine` sits at the **Engine** layer. Applications use `NexusEngine.builder()` by default; drop to `Nexus()` only when the engine cannot express the behavior.
 
+### Import Architecture
+
+Nexus re-exports Starlette types so consumers can import from `nexus` instead of raw `starlette`/`fastapi`:
+
+```python
+# nexus/__init__.py re-exports:
+from starlette.exceptions import HTTPException
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response, StreamingResponse
+from starlette.websockets import WebSocket, WebSocketDisconnect
+```
+
+**Three import tiers:**
+
+| Tier                   | Who                                                  | Pattern                                           | Example                                           |
+| ---------------------- | ---------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------- |
+| Application code       | Nexus consumers                                      | `from nexus import Request, Response`             | A2A service, user-facing APIs                     |
+| kailash engine layer   | Modules in the `kailash→nexus` circular import chain | `from starlette.requests import Request`          | `realtime.py`, `api_channel.py`, `api_gateway.py` |
+| kailash infrastructure | Modules that create FastAPI apps directly            | `from fastapi import FastAPI, APIRouter, Depends` | `servers/`, `gateway/api.py`                      |
+
+**Circular import constraint:** `kailash-nexus` depends on `kailash` (for `create_gateway()`, workflow types). Modules inside `src/kailash/` that are imported during `kailash.middleware` or `kailash.servers` initialization **cannot** import from `nexus` — doing so triggers a circular `ImportError`. These modules import from `starlette` directly. The `enforce-framework-first` hook exempts these directories.
+
+**Modules in the circular chain** (as of #445): `middleware/communication/`, `channels/`, `gateway/`, `servers/`, `api/`, `middleware/auth/`, `middleware/gateway/`, `middleware/database/`.
+
 ---
 
 ## 2. Nexus Class

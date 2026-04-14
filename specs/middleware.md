@@ -13,6 +13,8 @@ Source of truth: `src/kailash/middleware/`
 - `gateway/` — `DurableGateway`, `DurableRequest`, event store, deduplicator, checkpoints
 - `mcp/` — `MiddlewareMCPServer`, `MCPToolNode`, `MCPResourceNode`, `MiddlewareMCPClient`
 
+**Import constraint:** `communication/`, `auth/`, `gateway/`, and `database/` are in the kailash→nexus circular import chain (loaded during `kailash.middleware.__init__`). These modules import HTTP types from `starlette` directly, NOT from `nexus`. See `specs/nexus-core.md` § Import Architecture. `api_gateway.py` uses full FastAPI features (Depends, CORSMiddleware, app creation); `realtime.py` uses only Starlette types (Request, Response, WebSocket, StreamingResponse).
+
 ## Public exports (`src/kailash/middleware/__init__.py`)
 
 The top-level `kailash.middleware` namespace re-exports:

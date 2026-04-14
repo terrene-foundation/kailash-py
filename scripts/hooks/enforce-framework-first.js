@@ -246,8 +246,10 @@ function isExcluded(filePath) {
     // Cannot import from nexus — circular: kailash → nexus → kailash.
     // See #445 Track 3 architectural analysis.
     /[\\/]src[\\/]kailash[\\/]gateway[\\/]/.test(filePath) ||
-    /[\\/]middleware[\\/]communication[\\/]/.test(filePath) ||
-    /[\\/]channels[\\/]/.test(filePath) ||
+    /[\\/]src[\\/]kailash[\\/]middleware[\\/]communication[\\/]/.test(
+      filePath,
+    ) ||
+    /[\\/]src[\\/]kailash[\\/]channels[\\/]/.test(filePath) ||
     /[\\/]middleware[\\/]auth[\\/]/.test(filePath) ||
     /[\\/]middleware[\\/]gateway[\\/]/.test(filePath) ||
     /[\\/]middleware[\\/]database[\\/]/.test(filePath) ||
