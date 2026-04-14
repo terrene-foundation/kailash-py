@@ -148,6 +148,21 @@ DataFlow uses lazy connection initialization. The constructor (`__init__`) store
 4. Wires the audit backend (if enabled)
 5. Initializes the cache integration
 
+#### Operations That Trigger Connection
+
+| Operation | Triggers `_ensure_connected()`? | Notes |
+| --------- | ------------------------------- | ----- |
+| `db.express.create/read/update/delete/list/count` | YES | Accessing `db.express` or `db.express_sync` triggers connection before the first CRUD call. |
+| `@db.model` registration | NO | Model registration queues the model for deferred table creation. The actual DDL runs inside `_ensure_connected()` when the first database-touching operation occurs. |
+| `db.start()` | YES | Explicit fabric runtime start calls `_ensure_connected()` as part of initialization. |
+| `await db.initialize()` | YES | Async initialization explicitly calls `_ensure_connected()` before validating database connectivity. |
+| `db.create_tables()` | YES | Batch table creation calls `_ensure_connected()`. |
+| `db.health_check()` | YES | Health check requires an active connection. |
+| `db.execute_lightweight_query()` | YES | Lightweight queries (e.g., health probes) trigger connection. |
+| `db.audit_query()` | YES | Audit queries require an active connection. |
+
+**Design rationale:** Lazy connection means `DataFlow("sqlite:///app.db")` returns instantly with zero I/O. This allows `@db.model` decorators to register models at import time without blocking module loading. Connection is deferred until the application actually needs the database, which also means misconfigured connection URLs fail at first use, not at import time.
+
 ### 1.5 Runtime Detection
 
 DataFlow detects whether it is running in an async or sync context at construction time:

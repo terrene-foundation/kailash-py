@@ -76,6 +76,33 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 **Modules in the circular chain** (as of #445): `middleware/communication/`, `channels/`, `gateway/`, `servers/`, `api/`, `middleware/auth/`, `middleware/gateway/`, `middleware/database/`.
 
+#### Import Tier Enumeration
+
+The `enforce-framework-first` hook (see `scripts/hooks/enforce-framework-first.js`) classifies every source file into one of three tiers. The hook exempts Tier 1 modules from the "import from `nexus`, not raw `starlette`/`fastapi`" rule.
+
+**Tier 1 — Engine/Foundation layer** (raw `starlette`/`fastapi` imports required):
+
+| Exempted directory            | Reason                                                                                                                                  |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/kailash/servers/`        | Server hierarchy creates FastAPI apps directly via `create_gateway()`. Importing from `nexus` would create `kailash -> nexus -> kailash` circular import. |
+| `src/kailash/api/`            | API route definitions consumed during `kailash` init; same circular import chain as `servers/`.                                         |
+| `src/kailash/gateway/`        | Gateway layer creates FastAPI apps and uses `APIRouter`, `Depends`, `BackgroundTasks`, `CORSMiddleware` directly. Circular: `kailash -> nexus -> kailash`. |
+| `src/kailash/middleware/communication/` | `APIGateway` and `RealtimeMiddleware` are loaded during `kailash.middleware.__init__`. `api_gateway.py` uses full FastAPI features; `realtime.py` uses Starlette types (`Request`, `Response`, `WebSocket`, `StreamingResponse`). |
+| `src/kailash/middleware/auth/` | Auth middleware is loaded during `kailash.middleware.__init__`. Uses `fastapi.Depends`, `HTTPBearer`, `starlette.requests.Request`, `starlette.exceptions.HTTPException`. |
+| `src/kailash/middleware/gateway/` | Durable gateway layer uses Starlette types directly. Loaded as part of the middleware init chain.                                     |
+| `src/kailash/middleware/database/` | Database middleware uses FastAPI dependency injection (`get_middleware_db_session`). Part of the middleware init chain.                |
+| `src/kailash/channels/`      | Channel implementations are loaded during `kailash` init; circular chain through `kailash.middleware -> nexus -> kailash`.               |
+| `adapters/`, `backends/`, `transports/`, `providers/`, `drivers/` | Infrastructure layer: database adapters, cache backends, transport implementations. These are below the framework abstraction and use raw driver imports. |
+| `trust/*store`, `trust/constraints/`, `trust/enforce/` | Trust plane persistence and enforcement layer operates below the framework boundary.                                                |
+
+**Tier 2 — Framework layer** (imports from `nexus` re-exports):
+
+Modules inside `packages/kailash-nexus/src/nexus/` that compose the Nexus framework itself. These import from `starlette`/`fastapi` at the definition site but re-export types through `nexus/__init__.py` for consumers.
+
+**Tier 3 — Application layer** (imports from `nexus` only):
+
+All other code — user applications, A2A services, test files, examples. These MUST import HTTP types from `nexus`, not from `starlette` or `fastapi` directly. The `enforce-framework-first` hook flags violations.
+
 ---
 
 ## 2. Nexus Class
