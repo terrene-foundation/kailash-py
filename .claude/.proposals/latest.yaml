@@ -1,13 +1,19 @@
 source_repo: kailash-py
-codify_date: "2026-04-14"
-codify_session: "feat(nexus): middleware decorator, subapp mounting, WebSocket message handlers"
-sdk_version: "2.6.0"
-coc_version: "1.0.3"
-status: pending_review
-
+codify_date: '2026-04-14'
+codify_session: 'feat(nexus): middleware decorator, subapp mounting, WebSocket message
+  handlers'
+sdk_version: 2.6.0
+coc_version: 1.0.3
+status: reviewed
 changes:
-  - file: agents/frameworks/nexus-specialist.md
-    action: modified
-    suggested_tier: global
-    reason: "Added Essential Patterns for use_middleware decorator (#449), mount() subapp composition (#447), and class-based WebSocket MessageHandler with per-connection state (#448)"
-    diff_lines: "+25"
+- file: agents/frameworks/nexus-specialist.md
+  action: modified
+  suggested_tier: global
+  reason: Added Essential Patterns for use_middleware decorator (#449), mount() subapp
+    composition (#447), and class-based WebSocket MessageHandler with per-connection
+    state (#448)
+  diff_lines: '+25'
+reviewed_date: '2026-04-14'
+reviewed_notes: "Classified as variant-py (not global per proposal) \u2014 the 3 new\
+  \ Nexus patterns (use_middleware, mount, @app.websocket class) are Python-specific;\
+  \ rs binding parity tracked in kailash-rs#386 and kailash-rs#387."
