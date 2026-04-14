@@ -608,10 +608,20 @@ class TestArborSharedMaskUrl:
         assert mask_url("sqlite:///tmp/app.db") == "sqlite:///tmp/app.db"
 
     def test_mask_url_none_and_empty(self):
-        from dataflow.utils.masking import mask_url
+        """None / empty input MUST return the unparseable sentinel.
 
-        assert mask_url(None) == ""
-        assert mask_url("") == ""
+        Updated 2026-04-14: the `mask_url` contract was hardened in PR #444
+        to return UNPARSEABLE_URL_SENTINEL for None, empty, and non-URL
+        inputs (defense-in-depth per observability rule 6.1). Returning ""
+        is BLOCKED because it conflates "no URL passed" with "URL has no
+        credentials to mask" — both produce empty strings, hiding bugs
+        where the helper was called with the wrong argument.
+        """
+        from dataflow.utils.masking import mask_url
+        from kailash.utils.url_credentials import UNPARSEABLE_URL_SENTINEL
+
+        assert mask_url(None) == UNPARSEABLE_URL_SENTINEL
+        assert mask_url("") == UNPARSEABLE_URL_SENTINEL
 
     def test_mask_url_multi_host_with_query_no_path(self):
         """Replica-set URL with query but NO path — query must still mask.
