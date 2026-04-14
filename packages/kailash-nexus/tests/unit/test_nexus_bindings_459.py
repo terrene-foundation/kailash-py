@@ -150,3 +150,72 @@ class TestHandlerGuardParameter:
         guard = AuthGuard.RequirePermission("items:delete")
         passed, reason = guard.check(None)
         assert passed is False
+
+
+class TestGuardEnforcement:
+    """Guard enforcement at function-wrapping level (cross-transport)."""
+
+    @pytest.mark.asyncio
+    async def test_guarded_async_handler_raises_on_no_user(self):
+        """Wrapped async handler raises NexusPermissionError when guard fails."""
+        from nexus import AuthGuard, NexusPermissionError
+        from nexus.core import _wrap_with_guard
+
+        guard = AuthGuard.RequireRole("admin")
+
+        async def my_handler(name: str) -> dict:
+            return {"name": name}
+
+        wrapped = _wrap_with_guard(my_handler, guard, "test.handler")
+
+        with pytest.raises(NexusPermissionError):
+            await wrapped(name="alice")
+
+    def test_guarded_sync_handler_raises_on_no_user(self):
+        """Wrapped sync handler raises NexusPermissionError when guard fails."""
+        from nexus import AuthGuard, NexusPermissionError
+        from nexus.core import _wrap_with_guard
+
+        guard = AuthGuard.RequireRole("admin")
+
+        def my_handler(name: str) -> dict:
+            return {"name": name}
+
+        wrapped = _wrap_with_guard(my_handler, guard, "test.handler")
+
+        with pytest.raises(NexusPermissionError):
+            wrapped(name="alice")
+
+    def test_guarded_handler_passes_with_valid_user(self):
+        """Wrapped handler passes when guard check succeeds."""
+        from nexus import AuthGuard
+        from nexus.core import _wrap_with_guard
+
+        guard = AuthGuard.RequireRole("admin")
+
+        class FakeRequest:
+            class state:
+                class user:
+                    roles = ["admin"]
+
+        def my_handler(request: object, name: str) -> dict:
+            return {"name": name}
+
+        wrapped = _wrap_with_guard(my_handler, guard, "test.handler")
+        result = wrapped(request=FakeRequest(), name="alice")
+        assert result == {"name": "alice"}
+
+    def test_wrapped_preserves_function_name(self):
+        """functools.wraps preserves the original function's metadata."""
+        from nexus import AuthGuard
+        from nexus.core import _wrap_with_guard
+
+        guard = AuthGuard.RequireRole("admin")
+
+        async def create_agent(name: str) -> dict:
+            """Create an agent."""
+            return {"name": name}
+
+        wrapped = _wrap_with_guard(create_agent, guard, "agent.create")
+        assert wrapped.__name__ == "create_agent"
+        assert wrapped.__doc__ == "Create an agent."

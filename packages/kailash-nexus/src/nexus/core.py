@@ -128,6 +128,63 @@ class NexusPluginProtocol(Protocol):
         ...
 
 
+def _extract_user_from_args(args: tuple, kwargs: dict) -> Any:
+    """Best-effort user extraction from handler arguments.
+
+    Checks positional and keyword arguments for a Starlette Request-like
+    object with ``state.user`` (set by JWTMiddleware). Returns None when
+    no authenticated user is available (MCP, CLI, unauthenticated HTTP).
+    """
+    for v in kwargs.values():
+        state = getattr(v, "state", None)
+        if state is not None and hasattr(state, "user"):
+            return state.user
+    for a in args:
+        state = getattr(a, "state", None)
+        if state is not None and hasattr(state, "user"):
+            return state.user
+    return None
+
+
+def _wrap_with_guard(func: Callable, guard: Any, handler_name: str) -> Callable:
+    """Wrap a handler function with guard enforcement.
+
+    Returns a function with the same signature that checks the guard
+    before delegating to the original. Works for both sync and async
+    functions and across all transports (HTTP, MCP, WebSocket, Webhook).
+    """
+    import functools
+
+    if asyncio.iscoroutinefunction(func):
+
+        @functools.wraps(func)
+        async def async_guarded(*args: Any, **kwargs: Any) -> Any:
+            user = _extract_user_from_args(args, kwargs)
+            ctx = {"handler": handler_name}
+            passed, reason = guard.check(user, ctx)
+            if not passed:
+                from nexus.errors import PermissionError as NexusPermError
+
+                raise NexusPermError(reason or "Access denied")
+            return await func(*args, **kwargs)
+
+        return async_guarded
+    else:
+
+        @functools.wraps(func)
+        def sync_guarded(*args: Any, **kwargs: Any) -> Any:
+            user = _extract_user_from_args(args, kwargs)
+            ctx = {"handler": handler_name}
+            passed, reason = guard.check(user, ctx)
+            if not passed:
+                from nexus.errors import PermissionError as NexusPermError
+
+                raise NexusPermError(reason or "Access denied")
+            return func(*args, **kwargs)
+
+        return sync_guarded
+
+
 class Nexus:
     """Zero-configuration workflow orchestration platform.
 
@@ -2253,6 +2310,13 @@ Check the documentation or explore available resources.
         from nexus.validation import validate_workflow_name
 
         validate_workflow_name(name)
+
+        # Wrap handler with guard enforcement BEFORE workflow creation so ALL
+        # transports (HTTP, MCP, WebSocket, Webhook) get the guard check
+        # automatically — the wrapped function is what goes into the workflow
+        # node and what's stored on HandlerDef.func.
+        if guard is not None:
+            handler_func = _wrap_with_guard(handler_func, guard, name)
 
         from kailash.nodes.handler import make_handler_workflow
 

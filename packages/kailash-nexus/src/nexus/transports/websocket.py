@@ -544,16 +544,6 @@ class WebSocketTransport(Transport):
         handlers are executed through the shared runtime. If a guard is
         attached, it is checked before dispatch.
         """
-        # Per-handler guard check (cross-SDK: kailash-rs#389 gap 3)
-        if handler_def.guard is not None:
-            user = (params or {}).get("_user") if isinstance(params, dict) else None
-            ctx = {"handler": handler_def.name, "transport": "websocket"}
-            passed, reason = handler_def.guard.check(user, ctx)
-            if not passed:
-                from nexus.errors import PermissionError as NexusPermissionError
-
-                raise NexusPermissionError(reason or "Access denied")
-
         if handler_def.func is not None:
             # Function-backed handler
             if isinstance(params, dict):
