@@ -239,7 +239,7 @@ function isExcluded(filePath) {
     /[\\/]providers[\\/]/.test(filePath) ||
     /[\\/]drivers[\\/]/.test(filePath) ||
     // Nexus engine-foundation: server hierarchy + API gateway layer
-    /[\\/]servers[\\/]/.test(filePath) ||
+    /[\\/]src[\\/]kailash[\\/]servers[\\/]/.test(filePath) ||
     /[\\/]src[\\/]kailash[\\/]api[\\/]/.test(filePath) ||
     /[\\/]middleware[\\/]auth[\\/]/.test(filePath) ||
     /[\\/]middleware[\\/]gateway[\\/]/.test(filePath) ||
