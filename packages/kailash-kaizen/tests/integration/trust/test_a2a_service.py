@@ -809,7 +809,7 @@ class TestHealthEndpoint:
 
     def test_health_check_returns_healthy(self, test_client):
         """Health check should return healthy status."""
-        response = test_client.get("/health")
+        response = test_client.get("/a2a/health")
 
         assert response.status_code == 200
         health = response.json()
@@ -936,7 +936,7 @@ class TestServiceConfiguration:
         )
 
         client = TestClient(app)
-        response = client.get("/health")
+        response = client.get("/a2a/health")
 
         assert response.status_code == 200
 
