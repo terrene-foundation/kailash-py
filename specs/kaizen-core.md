@@ -108,6 +108,17 @@ from kaizen import Signature, InputField, OutputField  # Signature system
 
 The deprecated sync `Agent` in `kaizen.agent` emits `DeprecationWarning` on import and will be removed in 3.0.0. Do not import from `kaizen.agent` directly.
 
+### Package Dependencies
+
+`kailash-kaizen` requires these Kailash packages at runtime:
+
+| Package              | Import name   | Required by                     | Reason                                   |
+| -------------------- | ------------- | ------------------------------- | ---------------------------------------- |
+| `kailash` (core SDK) | `kailash`     | Framework foundation            | Workflow, runtime, nodes                 |
+| `kailash-mcp`        | `kailash_mcp` | MCP tool integration (11 files) | `MCPClient`, `MCPServer`, auto-discovery |
+
+`kailash-mcp` is imported unconditionally in `base_agent.py`, `mcp_mixin.py`, `iterative_llm_agent.py`, `llm_agent.py`, and `mcp/builtin_server/server.py`. It MUST be a hard dependency, not optional.
+
 ---
 
 ## 3. BaseAgent
