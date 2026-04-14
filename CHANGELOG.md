@@ -15,6 +15,31 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash 2.8.6 + kailash-dataflow 2.0.8 + kailash-kaizen 2.7.4 + kailash-nexus 2.0.2 + kailash-mcp 0.2.4 — 2026-04-14
+
+#### Fixed
+
+- **All 63 unit test warnings resolved** (`kailash 2.8.6`, `kailash-mcp 0.2.4`): The test suite emitted 63 warnings across 10 categories (ResourceWarnings for unclosed CLIChannel/Runtime/aiosqlite/AsyncSQLDatabaseNode, RuntimeWarnings for never-awaited coroutines, InsecureKeyLengthWarnings for short JWT keys, datetime.utcnow() DeprecationWarning, PytestCollectionWarning for misnamed test class, UserWarning for hypothesis directory and instance-based API). All resolved at source — production fix in `kailash_mcp/advanced/subscriptions.py` replaces `datetime.utcnow()` with `datetime.now(UTC)`. Test fixtures now properly close resources via yield+cleanup. PR #466.
+
+#### Added (Nexus 2.0.2)
+
+- **Per-handler auth guards enforced at function-wrap level for all transports** (`kailash-nexus 2.0.2`): `AuthGuard` and `NexusAuthPlugin` now wrap handlers consistently across HTTP, WebSocket, and CLI transports. Typed errors (`NexusPermissionError`, `NexusAuthenticationError`) replace generic exceptions. PR #459/#460.
+- **WebSocket message handlers with per-connection state** (`kailash-nexus 2.0.2`): Composable per-connection handler registration via `@app.on_message`. PR #448.
+- **Composable HTTP middleware injection** (`kailash-nexus 2.0.2`): `@app.use_middleware` decorator for ordered middleware composition. PR #449.
+- **Subapp mounting** (`kailash-nexus 2.0.2`): Mount independent Nexus apps as subapps under a parent app. PR #447.
+- **A2A service migrated from raw FastAPI to Nexus** (`kailash 2.8.6`): A2A protocol service now uses Nexus instead of raw FastAPI imports. PR #445.
+
+#### Fixed (Security)
+
+- **DLQ identifier validation hoisted to `__init__` + spec corrected** (`kailash 2.8.6`): Workflow DLQ DDL identifiers now validated at construction time, not first use. PR #446.
+- **Identifier validator tolerates unhashable inputs** (`kailash 2.8.6`): `_validate_identifier` round 4 hardening — gracefully rejects unhashable inputs without raising `TypeError`.
+- **CodeQL alerts resolved on PR #444** (`kailash 2.8.6`, `kailash-dataflow 2.0.8`): Five CodeQL findings addressed; credential masking, identifier fingerprinting, preencode fixes, connection_string taint chain broken.
+- **Identifier length limit enforced** (`kailash-dataflow 2.0.8`): `quote_identifier` now rejects identifiers exceeding dialect max length (PostgreSQL 63, MySQL 64, SQLite 128).
+
+#### Refactored
+
+- **Track 3 fastapi → starlette import normalization** (`kailash 2.8.6`): Engine-layer Nexus imports normalized to Starlette base; channel app type annotated as `Any` with circular-import explanation. PR #445.
+
 ### kailash-dataflow 2.0.7 — 2026-04-13
 
 #### Fixed

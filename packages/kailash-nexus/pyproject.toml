@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-nexus"
-version = "2.0.1"
+version = "2.0.2"
 description = "Zero-configuration multi-channel workflow orchestration platform"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: System :: Distributed Computing",
 ]
 dependencies = [
-    "kailash>=2.8.1",
+    "kailash>=2.8.6",
     "starlette>=0.36.0",
     "fastapi>=0.104.0",
     # Directly imported by nexus/transports/websocket.py — per

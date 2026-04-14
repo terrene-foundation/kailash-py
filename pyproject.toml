@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash"
-version = "2.8.5"
+version = "2.8.6"
 description = "Python SDK for the Kailash container-node architecture"
 authors = [
     {name = "Terrene Foundation", email = "info@terrene.foundation"}
@@ -76,6 +76,8 @@ dependencies = [
 
 [project.optional-dependencies]
 # Sub-packages (separate PyPI packages)
+# Pins are MINIMUM compatible versions, not "latest" — bumping to unreleased
+# versions breaks CI which installs from PyPI before the release is published.
 dataflow = [
     "kailash-dataflow>=2.0.3",
 ]

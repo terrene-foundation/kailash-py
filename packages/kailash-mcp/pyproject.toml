@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash-mcp"
-version = "0.2.3"
+version = "0.2.4"
 description = "Production-ready Model Context Protocol (MCP) client, server, and platform for Kailash SDK"
 authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
 readme = "README.md"
@@ -22,7 +22,7 @@ classifiers = [
     "Topic :: System :: Distributed Computing",
 ]
 dependencies = [
-    "kailash>=2.8.5",
+    "kailash>=2.8.6",
     "mcp[cli]>=1.23.0",
     "pydantic>=2.6",
 ]
