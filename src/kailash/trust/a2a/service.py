@@ -10,7 +10,7 @@ trust extensions for secure agent-to-agent communication.
 Endpoints:
 - GET /.well-known/agent.json - Agent Card (public)
 - POST /a2a/jsonrpc - JSON-RPC 2.0 handler
-- GET /health - Health check
+- GET /a2a/health - Health check
 
 Example:
     >>> from kailash.trust.a2a import A2AService
