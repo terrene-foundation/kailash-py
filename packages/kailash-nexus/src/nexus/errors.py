@@ -41,7 +41,8 @@ __all__ = [
     "NotFoundError",
     "ConflictError",
     "UnauthorizedError",
-    "PermissionError",
+    "ForbiddenError",  # canonical name for 403
+    "PermissionError",  # deprecated alias for ForbiddenError (shadows stdlib)
     "RateLimitError",
     "ServiceUnavailableError",
     "BadGatewayError",
@@ -162,7 +163,7 @@ class UnauthorizedError(NexusError):
 
     Raised when the request has no credentials or the credentials are
     invalid.  Do NOT use for authorization failures (missing roles or
-    permissions) -- use ``PermissionError`` (403) instead.
+    permissions) -- use ``ForbiddenError`` (403) instead.
     """
 
     status_code: int = 401
@@ -177,13 +178,18 @@ class UnauthorizedError(NexusError):
         super().__init__(detail, context=context)
 
 
-class PermissionError(NexusError):
+class ForbiddenError(NexusError):
     """Authenticated but lacks required permission (403).
 
     The request was authenticated (valid JWT, API key, etc.) but the
     identity does not have the role or permission needed to access this
     resource.  The ``detail`` message intentionally does NOT reveal which
     permission is missing (information leakage).
+
+    .. note::
+        Renamed from ``PermissionError`` to avoid shadowing the stdlib
+        ``PermissionError`` exception. ``PermissionError`` remains as a
+        deprecated alias; use ``ForbiddenError`` for new code.
     """
 
     status_code: int = 403
@@ -196,6 +202,12 @@ class PermissionError(NexusError):
         context: Optional[Dict[str, Any]] = None,
     ) -> None:
         super().__init__(detail, context=context)
+
+
+# Deprecated alias — shadows stdlib PermissionError. New code MUST use
+# ForbiddenError. Kept for backwards compatibility with code that imports
+# ``from nexus.errors import PermissionError`` directly.
+PermissionError = ForbiddenError
 
 
 class RateLimitError(NexusError):

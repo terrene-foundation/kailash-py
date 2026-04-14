@@ -163,9 +163,9 @@ def _wrap_with_guard(func: Callable, guard: Any, handler_name: str) -> Callable:
             ctx = {"handler": handler_name}
             passed, reason = guard.check(user, ctx)
             if not passed:
-                from nexus.errors import PermissionError as NexusPermError
+                from nexus.errors import ForbiddenError
 
-                raise NexusPermError(reason or "Access denied")
+                raise ForbiddenError(reason or "Access denied")
             return await func(*args, **kwargs)
 
         return async_guarded
@@ -177,9 +177,9 @@ def _wrap_with_guard(func: Callable, guard: Any, handler_name: str) -> Callable:
             ctx = {"handler": handler_name}
             passed, reason = guard.check(user, ctx)
             if not passed:
-                from nexus.errors import PermissionError as NexusPermError
+                from nexus.errors import ForbiddenError
 
-                raise NexusPermError(reason or "Access denied")
+                raise ForbiddenError(reason or "Access denied")
             return func(*args, **kwargs)
 
         return sync_guarded

@@ -115,3 +115,29 @@ done
 **Why:** Editable installs see the local working tree, including untracked files. PyPI users get only what's in the wheel, which is built from `git ls-files`. PR #459/#460 merged with `nexus/__init__.py` importing `.auth.guards` and `.errors` — both untracked. Tests passed because the local files existed. The wheel published to PyPI would have failed with `ImportError` on every fresh install. Caught by `/release` audit and fixed in PR #467.
 
 Origin: PR #467 (2026-04-14) — bundled the missing nexus/auth/guards.py and nexus/errors.py files that PR #459/#460 left untracked.
+
+## MUST: Multi-Package Release Tags Pushed Individually
+
+Coordinated multi-package releases MUST push each release tag in a separate `git push` command, with a brief pause between pushes. Batch-pushing 3+ tags in a single command is BLOCKED — GitHub's `push.tags` webhook drops workflow triggers silently.
+
+```bash
+# DO — one tag per push, trigger fires reliably
+for tag in v2.8.6 dataflow-v2.0.8 kaizen-v2.7.4 nexus-v2.0.2 mcp-v0.2.4; do
+  git push origin "$tag"
+  sleep 1
+done
+
+# DO NOT — batch push, workflows silently skipped
+git push origin v2.8.6 dataflow-v2.0.8 kaizen-v2.7.4 nexus-v2.0.2 mcp-v0.2.4
+# Observed 2026-04-14: ZERO of 5 tags triggered publish-pypi.yml.
+# Required manual workflow_dispatch for each package.
+```
+
+**BLOCKED rationalizations:**
+
+- "Batch push is faster"
+- "The workflow should handle multiple tag events"
+- "We can check for missing runs after"
+- "It worked last time with 2 tags"
+
+**Why:** GitHub Actions' `push.tags` webhook delivery has undocumented rate-limiting when multiple tags arrive in a single push event. Batch pushes of 3+ tags fail to trigger the workflow for most (or all) of the tags. The failure is silent — the tags are created successfully, but `publish-pypi.yml` runs never appear in the Actions tab. Recovery requires manual `workflow_dispatch` per package, which is error-prone (must remember every package) and leaves a paper-trail asymmetry. Source: 2026-04-14 release where `git push origin v2.8.6 dataflow-v2.0.8 kaizen-v2.7.4 nexus-v2.0.2 mcp-v0.2.4` triggered zero workflow runs.
