@@ -112,6 +112,20 @@ class PersistentDLQ:
         self._conn.commit()
 
     def _initialize_schema(self) -> None:
+        # Defense-in-depth per dataflow-identifier-safety.md Rule 5: every
+        # hardcoded identifier interpolated into DDL MUST route through the
+        # validator at the call site. Hardcoded today; a future refactor that
+        # makes the table name configurable must not silently bypass the gate.
+        from kailash.db.dialect import _validate_identifier
+
+        for ident in (
+            "dlq",
+            "idx_dlq_status",
+            "idx_dlq_next_retry",
+            "idx_dlq_created",
+        ):
+            _validate_identifier(ident)
+
         cursor = self._conn.cursor()
         cursor.execute(
             """

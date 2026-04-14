@@ -76,6 +76,16 @@ class DBDeadLetterQueue:
     # ------------------------------------------------------------------
     async def initialize(self) -> None:
         """Create the DLQ table and indices if they do not exist."""
+        # Defense-in-depth per dataflow-identifier-safety.md Rule 5: validate
+        # every identifier interpolated into DDL, even hardcoded ones, so a
+        # future refactor that makes TABLE_NAME configurable cannot bypass
+        # the gate by accident.
+        from kailash.db.dialect import _validate_identifier
+
+        _validate_identifier(self.TABLE_NAME)
+        for suffix in ("status", "next_retry", "created"):
+            _validate_identifier(f"idx_{self.TABLE_NAME}_{suffix}")
+
         await self._conn.execute(
             f"""
             CREATE TABLE IF NOT EXISTS {self.TABLE_NAME} (
