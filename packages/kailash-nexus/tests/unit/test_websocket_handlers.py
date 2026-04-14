@@ -24,12 +24,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from nexus.websocket_handlers import (
-    Connection,
-    MessageHandler,
-    MessageHandlerRegistry,
-)
-
+from nexus.websocket_handlers import Connection, MessageHandler, MessageHandlerRegistry
 
 # ---------------------------------------------------------------------------
 # Fake websocket — async iterator that yields queued frames

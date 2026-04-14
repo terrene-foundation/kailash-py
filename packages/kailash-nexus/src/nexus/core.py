@@ -285,9 +285,9 @@ class Nexus:
         # Class-based WebSocket message-handler registry (issue #448).
         # Lazily populated by @app.websocket() decorator / app.register_websocket().
         # Attached to the WebSocket transport when it's constructed.
-        from nexus.websocket_handlers import (
+        from nexus.websocket_handlers import (  # noqa: E501 — local import to avoid cycle at import time
             MessageHandlerRegistry,
-        )  # noqa: E501 — local import to avoid cycle at import time
+        )
 
         self._ws_message_handlers: MessageHandlerRegistry = MessageHandlerRegistry()
         self._ws_transport = None  # lazily built by _ensure_ws_transport()
@@ -475,9 +475,9 @@ class Nexus:
         # handler registry of its own, point it at this Nexus's registry
         # so @app.websocket() decorators are visible to the transport.
         try:
-            from nexus.transports.websocket import (
+            from nexus.transports.websocket import (  # local import avoids cycle
                 WebSocketTransport,
-            )  # local import avoids cycle
+            )
 
             if (
                 isinstance(transport, WebSocketTransport)

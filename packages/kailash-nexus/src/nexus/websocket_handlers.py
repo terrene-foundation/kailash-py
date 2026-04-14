@@ -60,16 +60,7 @@ import logging
 import time
 import uuid
 from types import SimpleNamespace
-from typing import (
-    Any,
-    Awaitable,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Set,
-    Type,
-)
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Type
 
 logger = logging.getLogger(__name__)
 
