@@ -100,11 +100,26 @@ class SQLDialect(ABC):
 class PostgreSQLDialect(SQLDialect):
     """PostgreSQL dialect."""
 
+    _MAX_IDENTIFIER_LENGTH = 63  # PostgreSQL NAMEDATALEN-1
+
     def get_parameter_placeholder(self, position: int) -> str:
         return f"${position}"
 
     def quote_identifier(self, name: str) -> str:
-        if not name or not _SAFE_IDENTIFIER_RE.match(name):
+        if not isinstance(name, str) or not name:
+            raise InvalidIdentifierError(
+                f"Invalid SQL identifier "
+                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"must be a non-empty string"
+            )
+        if len(name) > self._MAX_IDENTIFIER_LENGTH:
+            raise InvalidIdentifierError(
+                f"Invalid SQL identifier "
+                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"exceeds {self._MAX_IDENTIFIER_LENGTH}-char PostgreSQL limit "
+                f"(len={len(name)})"
+            )
+        if not _SAFE_IDENTIFIER_RE.match(name):
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
                 f"(fingerprint={hash(name) & 0xFFFF:04x}): "
@@ -198,11 +213,26 @@ class PostgreSQLDialect(SQLDialect):
 class MySQLDialect(SQLDialect):
     """MySQL dialect."""
 
+    _MAX_IDENTIFIER_LENGTH = 64  # MySQL identifier length limit
+
     def get_parameter_placeholder(self, position: int) -> str:
         return "%s"
 
     def quote_identifier(self, name: str) -> str:
-        if not name or not _SAFE_IDENTIFIER_RE.match(name):
+        if not isinstance(name, str) or not name:
+            raise InvalidIdentifierError(
+                f"Invalid SQL identifier "
+                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"must be a non-empty string"
+            )
+        if len(name) > self._MAX_IDENTIFIER_LENGTH:
+            raise InvalidIdentifierError(
+                f"Invalid SQL identifier "
+                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"exceeds {self._MAX_IDENTIFIER_LENGTH}-char MySQL limit "
+                f"(len={len(name)})"
+            )
+        if not _SAFE_IDENTIFIER_RE.match(name):
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
                 f"(fingerprint={hash(name) & 0xFFFF:04x}): "
@@ -291,11 +321,26 @@ class MySQLDialect(SQLDialect):
 class SQLiteDialect(SQLDialect):
     """SQLite dialect."""
 
+    _MAX_IDENTIFIER_LENGTH = 128  # SQLite practical limit
+
     def get_parameter_placeholder(self, position: int) -> str:
         return "?"
 
     def quote_identifier(self, name: str) -> str:
-        if not name or not _SAFE_IDENTIFIER_RE.match(name):
+        if not isinstance(name, str) or not name:
+            raise InvalidIdentifierError(
+                f"Invalid SQL identifier "
+                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"must be a non-empty string"
+            )
+        if len(name) > self._MAX_IDENTIFIER_LENGTH:
+            raise InvalidIdentifierError(
+                f"Invalid SQL identifier "
+                f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+                f"exceeds {self._MAX_IDENTIFIER_LENGTH}-char SQLite limit "
+                f"(len={len(name)})"
+            )
+        if not _SAFE_IDENTIFIER_RE.match(name):
             raise InvalidIdentifierError(
                 f"Invalid SQL identifier "
                 f"(fingerprint={hash(name) & 0xFFFF:04x}): "
