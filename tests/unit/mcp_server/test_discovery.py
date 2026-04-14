@@ -21,7 +21,6 @@ from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-
 from kailash_mcp.discovery.discovery import (
     DiscoveryBackend,
     FileBasedDiscovery,
@@ -1087,17 +1086,21 @@ class TestNetworkDiscovery:
         with patch("ipaddress.IPv4Network") as mock_network:
             mock_network.return_value.hosts.return_value = mock_addresses
 
-            with patch("asyncio.wait_for") as mock_wait_for:
-                with patch("asyncio.open_connection") as mock_open_connection:
+            # Use new_callable=Mock (not AsyncMock) to avoid AsyncMock._execute_mock_call
+            # coroutine leaks. asyncio.wait_for is patched as a plain Mock whose side_effect
+            # is an async function — the production code awaits the returned coroutine directly,
+            # with no AsyncMock wrapper layer that could leak unawaited coroutines.
+            with patch("asyncio.wait_for", new_callable=Mock) as mock_wait_for:
+                with patch(
+                    "asyncio.open_connection", new_callable=Mock
+                ) as mock_open_connection:
                     # Mock successful connection
                     mock_reader = Mock()
                     mock_writer = Mock()
 
-                    # Make open_connection return an awaitable
-                    async def mock_open_connection_func(*args, **kwargs):
-                        return (mock_reader, mock_writer)
-
-                    mock_open_connection.side_effect = mock_open_connection_func
+                    # open_connection returns a plain value (not a coroutine) since
+                    # wait_for is also mocked and ignores the coroutine argument
+                    mock_open_connection.return_value = (mock_reader, mock_writer)
 
                     # Mock MCP discovery response
                     response = {
@@ -1118,12 +1121,25 @@ class TestNetworkDiscovery:
                     mock_writer.close.return_value = None
                     mock_writer.wait_closed.return_value = None
 
-                    # Make wait_for return proper results
-                    # wait_for is already mocked, so it doesn't need to be awaitable
-                    mock_wait_for.side_effect = [
-                        (mock_reader, mock_writer),  # open_connection result
-                        json.dumps(response).encode(),  # reader.read result
-                    ]
+                    # Use an async side_effect so the production code's `await wait_for(...)`
+                    # awaits a real coroutine. The plain Mock calls this function directly,
+                    # returning the coroutine for the caller to await — no AsyncMock wrapper.
+                    _wait_for_call_count = [0]
+                    _response_bytes = json.dumps(response).encode()
+
+                    async def _wait_for_side_effect(coro, timeout=None):
+                        # Close the coroutine argument to prevent "never awaited" warnings
+                        if hasattr(coro, "close"):
+                            coro.close()
+                        _wait_for_call_count[0] += 1
+                        if _wait_for_call_count[0] == 1:
+                            return (mock_reader, mock_writer)  # open_connection result
+                        elif _wait_for_call_count[0] == 2:
+                            return _response_bytes  # reader.read result
+                        else:
+                            raise ConnectionRefusedError("refused")
+
+                    mock_wait_for.side_effect = _wait_for_side_effect
 
                     # Run scan
                     import ipaddress
@@ -1141,14 +1157,27 @@ class TestNetworkDiscovery:
                 IPv4Address("192.168.1.100")
             ]
 
-            with patch("asyncio.wait_for") as mock_wait_for:
-                # Create a proper async mock for the coroutine
-                mock_wait_for.side_effect = ConnectionRefusedError("Connection refused")
+            with patch(
+                "asyncio.open_connection", new_callable=Mock
+            ) as mock_open_connection:
+                mock_open_connection.return_value = Mock()  # plain value, no coroutine
 
-                discovered = await self.discovery.scan_network("192.168.1.0/30")
+                # Use new_callable=Mock to prevent AsyncMock._execute_mock_call leaks.
+                # An AsyncMock with exception side_effect creates unawaited coroutines
+                # (1 per wait_for call, 4 ports × 1 IP = 4 leaked coroutines).
+                with patch("asyncio.wait_for", new_callable=Mock) as mock_wait_for:
 
-                # Should return empty list
-                assert discovered == []
+                    async def _refuse(*args, **kwargs):
+                        if args and hasattr(args[0], "close"):
+                            args[0].close()
+                        raise ConnectionRefusedError("Connection refused")
+
+                    mock_wait_for.side_effect = _refuse
+
+                    discovered = await self.discovery.scan_network("192.168.1.0/30")
+
+                    # Should return empty list
+                    assert discovered == []
 
     def test_network_discovery_send_message(self):
         """Test NetworkDiscovery _send_message method."""
@@ -1330,6 +1359,13 @@ class TestNetworkDiscovery:
         with patch("asyncio.get_running_loop") as mock_loop:
             with patch("asyncio.create_task") as mock_create_task:
                 mock_loop.return_value = Mock()
+
+                def _close_coro(coro):
+                    if hasattr(coro, "close"):
+                        coro.close()
+                    return Mock()
+
+                mock_create_task.side_effect = _close_coro
 
                 self.discovery.datagram_received(data, addr)
 

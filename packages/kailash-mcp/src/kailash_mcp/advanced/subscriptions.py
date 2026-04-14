@@ -371,7 +371,7 @@ class ResourceSubscription:
     connection_id: str
     uri_pattern: str
     cursor: Optional[str] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     # GraphQL-style field selection
     fields: Optional[List[str]] = None  # e.g., ["uri", "content.text", "metadata.size"]
     fragments: Optional[Dict[str, List[str]]] = (

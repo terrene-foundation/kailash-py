@@ -103,11 +103,17 @@ async def test_async_sql_database_node():
 
             print("✅ AsyncSQLDatabaseNode has process method")
 
+            # Clean up the node to avoid ResourceWarning
+            try:
+                await db_node.cleanup()
+            except Exception:
+                pass
+
         finally:
             # Clean up
             try:
                 os.unlink(temp_db.name)
-            except:
+            except OSError:
                 pass
 
 
@@ -126,6 +132,13 @@ async def test_middleware_components_integration():
         agent_ui = AgentUIMiddleware()
         event_stream = EventStream()
 
+        # Clean up the LocalRuntime inside AgentUIMiddleware to avoid ResourceWarning
+        try:
+            if hasattr(agent_ui, "runtime") and agent_ui.runtime is not None:
+                agent_ui.runtime.close()
+        except Exception:
+            pass
+
         # Test with temp database
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
             connection_string = f"sqlite:///{temp_db.name}"
@@ -137,10 +150,16 @@ async def test_middleware_components_integration():
 
                 print("✅ Middleware components import and instantiate correctly")
 
+                # Clean up the db_node to avoid ResourceWarning
+                try:
+                    await session_repo.db_node.cleanup()
+                except Exception:
+                    pass
+
             finally:
                 try:
                     os.unlink(temp_db.name)
-                except:
+                except OSError:
                     pass
 
     except ImportError as e:

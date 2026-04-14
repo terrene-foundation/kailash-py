@@ -249,7 +249,10 @@ class TestHandlerNode:
 # --- Tests for make_handler_workflow ---
 
 
+@pytest.mark.filterwarnings("ignore:Instance-based API usage detected:UserWarning")
 class TestMakeHandlerWorkflow:
+    """Tests for make_handler_workflow which intentionally uses instance-based add_node."""
+
     def test_creates_workflow(self):
         workflow = make_handler_workflow(async_greet, "greeter")
 

@@ -41,20 +41,26 @@ class TestSqliteUrl:
         from kailash.infrastructure.task_queue import SQLTaskQueue
 
         queue = await create_task_queue("sqlite:///:memory:")
-        assert queue is not None
-        assert isinstance(queue, SQLTaskQueue)
+        try:
+            assert queue is not None
+            assert isinstance(queue, SQLTaskQueue)
+        finally:
+            await queue._conn.close()
 
     async def test_sqlite_memory_queue_is_functional(self):
         """The returned SQLTaskQueue from sqlite:///:memory: can enqueue and dequeue."""
         queue = await create_task_queue("sqlite:///:memory:")
 
-        tid = await queue.enqueue({"job": "test"}, task_id="factory-task-1")
-        assert tid == "factory-task-1"
+        try:
+            tid = await queue.enqueue({"job": "test"}, task_id="factory-task-1")
+            assert tid == "factory-task-1"
 
-        msg = await queue.dequeue(worker_id="w1")
-        assert msg is not None
-        assert msg.task_id == "factory-task-1"
-        assert msg.payload == {"job": "test"}
+            msg = await queue.dequeue(worker_id="w1")
+            assert msg is not None
+            assert msg.task_id == "factory-task-1"
+            assert msg.payload == {"job": "test"}
+        finally:
+            await queue._conn.close()
 
     async def test_sqlite_file_url_returns_sql_task_queue(self, tmp_path):
         """sqlite:///path/to/file.db URL creates a SQLTaskQueue."""
@@ -63,8 +69,11 @@ class TestSqliteUrl:
         db_path = tmp_path / "test_queue.db"
         url = f"sqlite:///{db_path}"
         queue = await create_task_queue(url)
-        assert queue is not None
-        assert isinstance(queue, SQLTaskQueue)
+        try:
+            assert queue is not None
+            assert isinstance(queue, SQLTaskQueue)
+        finally:
+            await queue._conn.close()
 
 
 @pytest.mark.asyncio
@@ -147,8 +156,11 @@ class TestPlainFilePath:
 
         db_path = str(tmp_path / "queue_from_path.db")
         queue = await create_task_queue(db_path)
-        assert queue is not None
-        assert isinstance(queue, SQLTaskQueue)
+        try:
+            assert queue is not None
+            assert isinstance(queue, SQLTaskQueue)
+        finally:
+            await queue._conn.close()
 
     async def test_relative_file_path_returns_sql_task_queue(
         self, tmp_path, monkeypatch
@@ -158,8 +170,11 @@ class TestPlainFilePath:
 
         monkeypatch.chdir(tmp_path)
         queue = await create_task_queue("./queue_relative.db")
-        assert queue is not None
-        assert isinstance(queue, SQLTaskQueue)
+        try:
+            assert queue is not None
+            assert isinstance(queue, SQLTaskQueue)
+        finally:
+            await queue._conn.close()
 
 
 @pytest.mark.asyncio
@@ -170,8 +185,11 @@ class TestEnvVarAutoDetection:
 
         monkeypatch.setenv("KAILASH_QUEUE_URL", "sqlite:///:memory:")
         queue = await create_task_queue()
-        assert queue is not None
-        assert isinstance(queue, SQLTaskQueue)
+        try:
+            assert queue is not None
+            assert isinstance(queue, SQLTaskQueue)
+        finally:
+            await queue._conn.close()
 
     async def test_env_var_unset_returns_none(self, monkeypatch):
         """When KAILASH_QUEUE_URL is not set, factory returns None."""
@@ -191,5 +209,8 @@ class TestEnvVarAutoDetection:
 
         monkeypatch.setenv("KAILASH_QUEUE_URL", "ftp://should-not-be-used")
         queue = await create_task_queue("sqlite:///:memory:")
-        assert queue is not None
-        assert isinstance(queue, SQLTaskQueue)
+        try:
+            assert queue is not None
+            assert isinstance(queue, SQLTaskQueue)
+        finally:
+            await queue._conn.close()

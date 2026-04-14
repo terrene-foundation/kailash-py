@@ -418,7 +418,13 @@ class TestConfigurableAsyncSQLNode:
         mock_sql_instance = MagicMock()
         mock_sql_instance.async_run = AsyncMock(return_value={"rows": []})
         mock_sql_class.return_value = mock_sql_instance
-        mock_asyncio_run.return_value = {"rows": []}
+
+        def _close_and_return(coro):
+            if hasattr(coro, "close"):
+                coro.close()
+            return {"rows": []}
+
+        mock_asyncio_run.side_effect = _close_and_return
 
         node = ConfigurableAsyncSQLNode()
 
