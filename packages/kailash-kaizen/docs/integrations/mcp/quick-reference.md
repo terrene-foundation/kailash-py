@@ -8,19 +8,19 @@
 
 ```python
 # Client
-from kailash.mcp_server import MCPClient
+from kailash_mcp import MCPClient
 
 # Server
-from kailash.mcp_server import MCPServer, SimpleMCPServer
+from kailash_mcp import MCPServer, SimpleMCPServer
 
 # Authentication
-from kailash.mcp_server.auth import APIKeyAuth, JWTAuth, BearerTokenAuth
+from kailash_mcp.auth import APIKeyAuth, JWTAuth, BearerTokenAuth
 
 # Discovery
-from kailash.mcp_server import ServiceRegistry, ServerInfo, enable_auto_discovery
+from kailash_mcp import ServiceRegistry, ServerInfo, enable_auto_discovery
 
 # Error Handling
-from kailash.mcp_server.errors import (
+from kailash_mcp.errors import (
     MCPError, AuthenticationError, ToolError, TransportError
 )
 ```
@@ -30,7 +30,7 @@ from kailash.mcp_server.errors import (
 ## Client Pattern (3 Lines)
 
 ```python
-from kailash.mcp_server import MCPClient
+from kailash_mcp import MCPClient
 
 client = MCPClient(enable_metrics=True)
 tools = await client.discover_tools(server_config)
@@ -42,7 +42,7 @@ result = await client.call_tool(server_config, "tool_name", {"arg": "value"})
 ## Simple Server Pattern (5 Lines)
 
 ```python
-from kailash.mcp_server import SimpleMCPServer
+from kailash_mcp import SimpleMCPServer
 
 server = SimpleMCPServer("my-tools")
 
@@ -131,7 +131,7 @@ results, _ = runtime.execute(
 ### API Key
 
 ```python
-from kailash.mcp_server.auth import APIKeyAuth
+from kailash_mcp.auth import APIKeyAuth
 
 auth = APIKeyAuth({
     "admin_key": {"permissions": ["read", "write", "admin"]},
@@ -143,7 +143,7 @@ server = MCPServer("secure-server", auth_provider=auth)
 ### JWT
 
 ```python
-from kailash.mcp_server.auth import JWTAuth
+from kailash_mcp.auth import JWTAuth
 
 auth = JWTAuth(secret="my-secret", expiration=3600)
 token = auth.create_token({"user": "alice", "permissions": ["read", "write"]})
@@ -154,8 +154,8 @@ token = auth.create_token({"user": "alice", "permissions": ["read", "write"]})
 ## Production Server
 
 ```python
-from kailash.mcp_server import MCPServer
-from kailash.mcp_server.auth import JWTAuth
+from kailash_mcp import MCPServer
+from kailash_mcp.auth import JWTAuth
 
 auth = JWTAuth(secret="production-secret")
 server = MCPServer(
@@ -179,7 +179,7 @@ server.run()
 ## Service Discovery
 
 ```python
-from kailash.mcp_server import ServiceRegistry, ServerInfo
+from kailash_mcp import ServiceRegistry, ServerInfo
 
 registry = ServiceRegistry()
 
@@ -201,7 +201,7 @@ servers = await registry.discover_servers(capability="weather.get")
 ## Error Handling
 
 ```python
-from kailash.mcp_server.errors import (
+from kailash_mcp.errors import (
     MCPError, AuthenticationError, ToolError, TransportError
 )
 
@@ -223,7 +223,7 @@ except TransportError:
 ## Retry Strategies
 
 ```python
-from kailash.mcp_server import MCPClient
+from kailash_mcp import MCPClient
 
 # Exponential backoff
 client = MCPClient(retry_strategy="exponential")
@@ -243,7 +243,7 @@ client = MCPClient(
 
 ```python
 def test_mcp_client():
-    from kailash.mcp_server import MCPClient
+    from kailash_mcp import MCPClient
     client = MCPClient(enable_metrics=True)
     assert client.metrics is not None
 ```
@@ -253,7 +253,7 @@ def test_mcp_client():
 ```python
 @pytest.mark.integration
 async def test_real_server():
-    from kailash.mcp_server import MCPClient, MCPServer
+    from kailash_mcp import MCPClient, MCPServer
 
     server = MCPServer("test")
     @server.tool()
@@ -323,7 +323,7 @@ if health["status"] == "healthy":
 
 ## For Kaizen Integration
 
-1. **Replace** `from kaizen.mcp import ...` with `from kailash.mcp_server import ...`
+1. **Replace** `from kaizen.mcp import ...` with `from kailash_mcp import ...`
 2. **Use** Kailash's proven patterns instead of custom implementations
 3. **Follow** Kailash's 3-tier testing strategy
 4. **Reference** Kailash MCP docs in Kaizen documentation

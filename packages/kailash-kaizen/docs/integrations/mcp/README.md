@@ -25,13 +25,13 @@ Kaizen integrates with the Model Context Protocol (MCP) through Kailash SDK's pr
 MCP is included with Kailash SDK (no additional installation needed):
 
 ```bash
-pip install kailash  # Includes kailash.mcp_server
+pip install kailash  # Includes kailash_mcp
 ```
 
 ### Basic Client (3 lines)
 
 ```python
-from kailash.mcp_server import MCPClient
+from kailash_mcp import MCPClient
 
 client = MCPClient(enable_metrics=True)
 result = await client.call_tool(server_config, "tool_name", {"arg": "value"})
@@ -40,7 +40,7 @@ result = await client.call_tool(server_config, "tool_name", {"arg": "value"})
 ### Basic Server (5 lines)
 
 ```python
-from kailash.mcp_server import SimpleMCPServer
+from kailash_mcp import SimpleMCPServer
 
 server = SimpleMCPServer("my-tools")
 
@@ -144,7 +144,7 @@ result = await agent.execute_mcp_tool(
 │   (BaseAgent + MCP integration)     │
 ├─────────────────────────────────────┤
 │   Kailash MCP Server                │
-│   (kailash.mcp_server)               │
+│   (kailash_mcp)               │
 │   - MCPClient, MCPServer             │
 │   - ServiceRegistry, ServiceMesh     │
 │   - Auth, Discovery, Load Balancing  │
@@ -161,11 +161,11 @@ result = await agent.execute_mcp_tool(
 
 | Component | Purpose | Location |
 |-----------|---------|----------|
-| **MCPClient** | Connect to MCP servers, invoke tools | `kailash.mcp_server.MCPClient` |
-| **MCPServer** | Expose tools/resources/prompts | `kailash.mcp_server.MCPServer` |
-| **SimpleMCPServer** | Lightweight server for prototyping | `kailash.mcp_server.SimpleMCPServer` |
-| **ServiceRegistry** | Service discovery & registration | `kailash.mcp_server.ServiceRegistry` |
-| **ServiceMesh** | Load balancing & failover | `kailash.mcp_server.ServiceMesh` |
+| **MCPClient** | Connect to MCP servers, invoke tools | `kailash_mcp.MCPClient` |
+| **MCPServer** | Expose tools/resources/prompts | `kailash_mcp.MCPServer` |
+| **SimpleMCPServer** | Lightweight server for prototyping | `kailash_mcp.SimpleMCPServer` |
+| **ServiceRegistry** | Service discovery & registration | `kailash_mcp.ServiceRegistry` |
+| **ServiceMesh** | Load balancing & failover | `kailash_mcp.ServiceMesh` |
 
 ### Why Use Kailash SDK MCP?
 
@@ -198,7 +198,7 @@ result = await agent.execute_mcp_tool(
 
 ```python
 from kaizen.core.base_agent import BaseAgent
-from kailash.mcp_server import MCPClient, discover_mcp_servers
+from kailash_mcp import MCPClient, discover_mcp_servers
 
 class ResearchAgent(BaseAgent):
     async def setup_mcp(self):
@@ -245,7 +245,7 @@ class ResearchAgent(BaseAgent):
 
 ```python
 from kaizen.core.base_agent import BaseAgent
-from kailash.mcp_server.auth import APIKeyAuth
+from kailash_mcp.auth import APIKeyAuth
 
 class AnalysisAgent(BaseAgent):
     def start_as_server(self):
@@ -284,8 +284,8 @@ class AnalysisAgent(BaseAgent):
 
 ```python
 from kaizen.core.base_agent import BaseAgent
-from kailash.mcp_server import MCPServer, enable_auto_discovery
-from kailash.mcp_server.auth import APIKeyAuth
+from kailash_mcp import MCPServer, enable_auto_discovery
+from kailash_mcp.auth import APIKeyAuth
 
 class AnalysisAgent(BaseAgent):
     def expose_as_mcp_server(self):
@@ -336,7 +336,7 @@ class AnalysisAgent(BaseAgent):
 **Use Case**: Intelligent routing across multiple MCP servers
 
 ```python
-from kailash.mcp_server import ServiceRegistry, ServiceMesh
+from kailash_mcp import ServiceRegistry, ServiceMesh
 
 class MultiServerAgent(BaseAgent):
     async def setup_service_mesh(self):
@@ -408,7 +408,7 @@ Test with mock MCP servers (fast, no external dependencies):
 
 ```python
 import pytest
-from kailash.mcp_server import SimpleMCPServer
+from kailash_mcp import SimpleMCPServer
 
 @pytest.fixture
 def mock_mcp_server():
@@ -433,7 +433,7 @@ Test with real MCP servers and real LLM providers:
 
 ```python
 import pytest
-from kailash.mcp_server import MCPClient
+from kailash_mcp import MCPClient
 
 @pytest.mark.asyncio
 async def test_real_mcp_integration():
@@ -478,9 +478,9 @@ See [testing-guide.md](./testing-guide.md) for comprehensive testing patterns.
 
 ## Migration Guide
 
-### Migrating from `kaizen.mcp` to `kailash.mcp_server`
+### Migrating from `kaizen.mcp` to `kailash_mcp`
 
-If you're using the deprecated `kaizen.mcp` module, migrate to `kailash.mcp_server`:
+If you're using the deprecated `kaizen.mcp` module, migrate to `kailash_mcp`:
 
 #### Before (Deprecated - Mocked Implementation)
 
@@ -503,7 +503,7 @@ result = connection.call_tool("search", {"query": "AI"})
 #### After (Recommended - Real Implementation)
 
 ```python
-from kailash.mcp_server import MCPClient, discover_mcp_servers
+from kailash_mcp import MCPClient, discover_mcp_servers
 
 # Real MCP client with production features
 client = MCPClient(
@@ -545,14 +545,14 @@ See [migration-guide.md](./migration-guide.md) for step-by-step migration instru
 - **[Implementation Guide](./implementation-guide.md)** - Detailed implementation patterns
 - **[Quick Reference](./quick-reference.md)** - Common patterns and code snippets
 - **[Testing Guide](./testing-guide.md)** - Comprehensive testing strategies
-- **[Migration Guide](./migration-guide.md)** - Migrate from kaizen.mcp to kailash.mcp_server
+- **[Migration Guide](./migration-guide.md)** - Migrate from kaizen.mcp to kailash_mcp
 
 ### Kailash SDK Documentation
 
 For comprehensive Kailash SDK MCP documentation, refer to the main Kailash repository:
 
 - **MCP Server Implementation** - `src/kailash/mcp_server/` in Kailash SDK repository
-- **API Reference** - Import docstrings: `from kailash.mcp_server import MCPClient, MCPServer`
+- **API Reference** - Import docstrings: `from kailash_mcp import MCPClient, MCPServer`
 - **Test Examples** - `tests/integration/mcp_server/` in Kailash SDK repository
 
 ### Example Implementations
@@ -594,8 +594,8 @@ def sync_call_tool(server, tool, args):
 **A**: Use auth providers:
 
 ```python
-from kailash.mcp_server import MCPClient
-from kailash.mcp_server.auth import APIKeyAuth
+from kailash_mcp import MCPClient
+from kailash_mcp.auth import APIKeyAuth
 
 auth = APIKeyAuth({"user": "secret-key"})
 client = MCPClient(auth_provider=auth)
@@ -620,7 +620,7 @@ client = MCPClient(
 **A**: Yes, use ServiceMesh for load balancing:
 
 ```python
-from kailash.mcp_server import ServiceRegistry, ServiceMesh
+from kailash_mcp import ServiceRegistry, ServiceMesh
 
 registry = ServiceRegistry()
 mesh = ServiceMesh(registry)

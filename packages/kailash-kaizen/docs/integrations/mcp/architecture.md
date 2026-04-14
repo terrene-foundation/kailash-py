@@ -10,7 +10,7 @@
 
 **Finding**: Kailash SDK has a **COMPLETE, production-ready MCP implementation** using the official Anthropic MCP SDK. Kaizen's `mcp/` module is a **partial recreation** with mocked implementations.
 
-**Recommendation**: **MIGRATE** to Kailash SDK MCP implementation. Delete `kaizen/mcp/` and use `kailash.mcp_server` directly.
+**Recommendation**: **MIGRATE** to Kailash SDK MCP implementation. Delete `kaizen/mcp/` and use `kailash_mcp` directly.
 
 **Rationale**: "We should always extend and not recreate" - The official MCP SDK is already integrated into Kailash SDK with comprehensive enterprise features. Recreating this in Kaizen violates DRY principles and creates maintenance burden.
 
@@ -18,7 +18,7 @@
 
 ## Comparison: Kailash SDK vs. Kaizen MCP
 
-### Kailash SDK MCP (`kailash.mcp_server`) ✅
+### Kailash SDK MCP (`kailash_mcp`) ✅
 
 **Foundation**: Built on official Anthropic MCP Python SDK
 - `from mcp import ClientSession, StdioServerParameters` ← Official SDK
@@ -203,7 +203,7 @@ class MCPClientAgent(BaseAgent):
 **Should Be** (using Kailash SDK):
 ```python
 # Using Kailash SDK MCP implementation
-from kailash.mcp_server import MCPClient, discover_mcp_servers, get_mcp_client
+from kailash_mcp import MCPClient, discover_mcp_servers, get_mcp_client
 
 class MCPClientAgent(BaseAgent):
     async def _setup_mcp_connections(self):
@@ -323,7 +323,7 @@ grep -r "from mcp import"
 
 ### Option 1: Migrate to Kailash SDK (RECOMMENDED) ✅
 
-**Approach**: Delete `kaizen/mcp/` and use `kailash.mcp_server` directly
+**Approach**: Delete `kaizen/mcp/` and use `kailash_mcp` directly
 
 **Rationale**:
 1. **DRY Principle**: Don't recreate what already exists and is better
@@ -344,7 +344,7 @@ tools = connection.available_tools  # ← String matching
 result = connection.call_tool("search", {"query": "AI"})  # ← Hardcoded
 
 # After (Kailash SDK - REAL)
-from kailash.mcp_server import MCPClient, discover_mcp_servers, get_mcp_client
+from kailash_mcp import MCPClient, discover_mcp_servers, get_mcp_client
 
 # Discover servers
 servers = await discover_mcp_servers(capability="search")
@@ -361,7 +361,7 @@ result = await client.call_tool(server_config, "search", {"query": "AI"})
 
 **Migration Steps**:
 1. ✅ Delete `src/kaizen/mcp/` directory
-2. ✅ Update imports in examples to use `kailash.mcp_server`
+2. ✅ Update imports in examples to use `kailash_mcp`
 3. ✅ Update agent-as-client to use `MCPClient`
 4. ✅ Update agent-as-server to use `MCPServer`
 5. ✅ Remove test helpers (no longer needed with real implementation)
@@ -387,14 +387,14 @@ result = await client.call_tool(server_config, "search", {"query": "AI"})
 
 ### Option 2: Keep Kaizen mcp/ as Extension Layer (NOT RECOMMENDED) ❌
 
-**Approach**: Keep `kaizen/mcp/` but make it extend `kailash.mcp_server`
+**Approach**: Keep `kaizen/mcp/` but make it extend `kailash_mcp`
 
 **Rationale**: If Kaizen needs MCP-specific extensions that don't belong in Kailash SDK
 
 **Implementation**:
 ```python
 # kaizen/mcp/__init__.py
-from kailash.mcp_server import (
+from kailash_mcp import (
     MCPClient,
     MCPServer,
     ServiceRegistry,
@@ -437,7 +437,7 @@ __all__ = [
 
 ### Option 3: Move Kailash SDK MCP to Kaizen (STRONGLY NOT RECOMMENDED) ❌❌
 
-**Approach**: Move `kailash.mcp_server` to `kaizen.mcp`
+**Approach**: Move `kailash_mcp` to `kaizen.mcp`
 
 **Rationale**: If MCP is only for LLM/agent usage
 
@@ -475,12 +475,12 @@ __all__ = [
 
 ### Phase 1: Immediate (1 day)
 1. ✅ **Audit current usage** of `kaizen.mcp` in examples and tests
-2. ✅ **Document migration path** from `kaizen.mcp` to `kailash.mcp_server`
+2. ✅ **Document migration path** from `kaizen.mcp` to `kailash_mcp`
 3. ✅ **Create migration guide** for examples
 
 ### Phase 2: Migration (1-2 days)
-1. ✅ **Update agent-as-client example** to use `kailash.mcp_server.MCPClient`
-2. ✅ **Update agent-as-server example** to use `kailash.mcp_server.MCPServer`
+1. ✅ **Update agent-as-client example** to use `kailash_mcp.MCPClient`
+2. ✅ **Update agent-as-server example** to use `kailash_mcp.MCPServer`
 3. ✅ **Remove test helpers** (`populate_agent_tools` - no longer needed)
 4. ✅ **Update integration tests** to use real protocol
 5. ✅ **Delete `src/kaizen/mcp/`** directory
@@ -527,9 +527,9 @@ class MCPClientAgent(BaseAgent):
         return result
 ```
 
-**After** (using `kailash.mcp_server` - real):
+**After** (using `kailash_mcp` - real):
 ```python
-from kailash.mcp_server import MCPClient, discover_mcp_servers
+from kailash_mcp import MCPClient, discover_mcp_servers
 
 class MCPClientAgent(BaseAgent):
     async def _setup_mcp_connections(self):
@@ -593,10 +593,10 @@ class MCPServerAgent(BaseAgent):
         self.registry.register_server(self.mcp_server_config)
 ```
 
-**After** (using `kailash.mcp_server` - real):
+**After** (using `kailash_mcp` - real):
 ```python
-from kailash.mcp_server import MCPServer, enable_auto_discovery
-from kailash.mcp_server.auth import APIKeyAuth
+from kailash_mcp import MCPServer, enable_auto_discovery
+from kailash_mcp.auth import APIKeyAuth
 
 class MCPServerAgent(BaseAgent):
     def start_server(self):
@@ -669,7 +669,7 @@ class MCPServerAgent(BaseAgent):
 
 ### Recommendation: MIGRATE ✅
 
-**Delete `src/kaizen/mcp/` and use `kailash.mcp_server` directly.**
+**Delete `src/kaizen/mcp/` and use `kailash_mcp` directly.**
 
 **Rationale**:
 - ✅ "Extend, not recreate" principle
@@ -689,7 +689,7 @@ class MCPServerAgent(BaseAgent):
 ## Next Steps
 
 1. **Immediate**: Review this recommendation with team
-2. **Decision**: Approve migration to `kailash.mcp_server`
+2. **Decision**: Approve migration to `kailash_mcp`
 3. **Implementation**: Execute migration plan (Phases 1-3)
 4. **Validation**: Verify all tests pass with real implementation
 5. **Optional**: Evaluate if Kaizen-specific extensions needed (Phase 4)

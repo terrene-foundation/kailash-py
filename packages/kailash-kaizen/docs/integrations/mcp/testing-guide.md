@@ -60,7 +60,7 @@ Test agent logic in isolation without network overhead or external dependencies.
 
 ```python
 import pytest
-from kailash.mcp_server import SimpleMCPServer
+from kailash_mcp import SimpleMCPServer
 
 @pytest.fixture
 def mock_mcp_server():
@@ -170,7 +170,7 @@ Test real MCP client-server communication with real JSON-RPC protocol.
 
 ```python
 import pytest
-from kailash.mcp_server import MCPClient, SimpleMCPServer
+from kailash_mcp import MCPClient, SimpleMCPServer
 
 @pytest.fixture
 async def real_mcp_server():
@@ -313,8 +313,8 @@ async def test_baseagent_call_mcp_tool():
 @pytest.mark.asyncio
 async def test_mcp_server_authentication():
     """Test MCP server with authentication."""
-    from kailash.mcp_server import MCPServer
-    from kailash.mcp_server.auth import APIKeyAuth
+    from kailash_mcp import MCPServer
+    from kailash_mcp.auth import APIKeyAuth
 
     # Create server with auth
     auth = APIKeyAuth({
@@ -465,7 +465,7 @@ async def test_mcp_workflow_performance():
 # tests/conftest.py
 
 import pytest
-from kailash.mcp_server import SimpleMCPServer, MCPClient
+from kailash_mcp import SimpleMCPServer, MCPClient
 
 @pytest.fixture
 def mock_mcp_server():
@@ -527,7 +527,7 @@ def mcp_server_configs():
 async def wait_for_server_ready(server_config, timeout=10):
     """Wait for MCP server to be ready."""
     import asyncio
-    from kailash.mcp_server import MCPClient
+    from kailash_mcp import MCPClient
 
     client = MCPClient()
     start_time = asyncio.get_event_loop().time()

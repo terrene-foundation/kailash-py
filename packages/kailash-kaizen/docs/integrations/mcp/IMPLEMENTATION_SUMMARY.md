@@ -9,7 +9,7 @@
 ## Executive Summary
 
 Successfully implemented production-ready MCP integration for Kaizen by:
-1. **Using Kailash SDK's complete MCP implementation** (kailash.mcp_server)
+1. **Using Kailash SDK's complete MCP implementation** (kailash_mcp)
 2. **Deleting partial/mocked kaizen.mcp module** (eliminated technical debt)
 3. **Adding MCP helpers to BaseAgent** (3 new async methods)
 4. **Creating comprehensive documentation** (5 guides in docs/integrations/mcp/)
@@ -23,7 +23,7 @@ Successfully implemented production-ready MCP integration for Kaizen by:
 
 ### 1. Architecture Decision ✅
 
-**Decision**: USE Kailash SDK MCP (kailash.mcp_server) - DO NOT recreate
+**Decision**: USE Kailash SDK MCP (kailash_mcp) - DO NOT recreate
 
 **Rationale**:
 - ✅ **100% MCP Spec Compliant** - Tools, Resources, Prompts + advanced features
@@ -81,7 +81,7 @@ async def setup_mcp_client(
 ```
 
 **Features**:
-- Real MCPClient from kailash.mcp_server
+- Real MCPClient from kailash_mcp
 - Real tool discovery via JSON-RPC
 - Multiple transport support (STDIO, HTTP, SSE, WebSocket)
 - Circuit breaker retry strategy
@@ -145,7 +145,7 @@ def expose_as_mcp_server(
 ```
 
 **Features**:
-- Real MCPServer from kailash.mcp_server
+- Real MCPServer from kailash_mcp
 - Auto-detect public agent methods
 - Wrap methods as async MCP tools
 - Optional authentication (API Key, JWT, etc.)
@@ -153,7 +153,7 @@ def expose_as_mcp_server(
 
 **Example**:
 ```python
-from kailash.mcp_server.auth import APIKeyAuth
+from kailash_mcp.auth import APIKeyAuth
 
 auth = APIKeyAuth({"client1": "secret-key"})
 server = agent.expose_as_mcp_server(
@@ -176,7 +176,7 @@ server.run()
 - Architecture overview
 - 4 implementation patterns
 - Testing guide (3-tier strategy)
-- Migration guide (kaizen.mcp → kailash.mcp_server)
+- Migration guide (kaizen.mcp → kailash_mcp)
 - FAQ and troubleshooting
 
 #### 4.2 Architecture Guide - `architecture.md` (24.5KB)
@@ -218,7 +218,7 @@ server.run()
 **Task**: Find Kailash SDK MCP implementation patterns
 
 **Findings**:
-- Located 30+ MCP files in kailash.mcp_server
+- Located 30+ MCP files in kailash_mcp
 - Identified MCPClient, MCPServer, ServiceRegistry, ServiceMesh
 - Found 407 tests (100% pass rate)
 - Documented all transports, auth providers, enterprise features
@@ -230,11 +230,11 @@ server.run()
 
 **Task**: Validate MCP integration approach
 
-**Decision**: ✅ USE kailash.mcp_server (8/8 score)
+**Decision**: ✅ USE kailash_mcp (8/8 score)
 
 **Recommendations**:
 1. Delete kaizen.mcp entirely ✅ DONE
-2. Use kailash.mcp_server directly ✅ DONE
+2. Use kailash_mcp directly ✅ DONE
 3. Add BaseAgent helpers ✅ DONE
 4. Update examples (PENDING)
 5. Update tests (PENDING)
@@ -264,7 +264,7 @@ Kaizen Application
       ↓
 BaseAgent MCP Helpers
       ↓
-kailash.mcp_server (production)
+kailash_mcp (production)
    - MCPClient (real protocol)
    - MCPServer (real protocol)
    - ServiceRegistry, ServiceMesh
@@ -352,7 +352,7 @@ parameters = {
 1. Current implementation is mocked (test-only)
 2. Kailash SDK MCP is comprehensive
 3. No Kaizen-specific extensions identified
-4. Direct imports clearer (`from kailash.mcp_server import MCPClient`)
+4. Direct imports clearer (`from kailash_mcp import MCPClient`)
 5. Zero maintenance burden
 
 **Alternative Considered**: Keep thin wrapper
@@ -367,7 +367,7 @@ parameters = {
 **Rationale**:
 1. Convenient for all agent types
 2. Natural integration with signature/memory
-3. Thin layer - delegates to kailash.mcp_server
+3. Thin layer - delegates to kailash_mcp
 4. Async methods match MCP protocol
 5. Auto memory storage integration
 
@@ -401,7 +401,7 @@ from kaizen.mcp import MCPConnection, MCPRegistry
 
 **After** (production):
 ```python
-from kailash.mcp_server import MCPClient, ServiceRegistry
+from kailash_mcp import MCPClient, ServiceRegistry
 ```
 
 ### API Changes
@@ -452,8 +452,8 @@ mcp_servers = [
 # Find all kaizen.mcp imports
 grep -r "from kaizen.mcp import" packages/kailash-kaizen/
 
-# Replace with kailash.mcp_server
-sed -i '' 's/from kaizen.mcp import/from kailash.mcp_server import/g' file.py
+# Replace with kailash_mcp
+sed -i '' 's/from kaizen.mcp import/from kailash_mcp import/g' file.py
 ```
 
 **Step 2**: Update to async
@@ -517,7 +517,7 @@ class MyAgent(BaseAgent):
 
 **Use SimpleMCPServer for fast tests**:
 ```python
-from kailash.mcp_server import SimpleMCPServer
+from kailash_mcp import SimpleMCPServer
 
 @pytest.fixture
 def mock_mcp_server():
@@ -681,7 +681,7 @@ Successfully implemented production-ready MCP integration for Kaizen by:
 
 **Architecture**: Clean, maintainable, production-ready
 - Zero code duplication
-- Single source of truth (kailash.mcp_server)
+- Single source of truth (kailash_mcp)
 - 100% MCP spec compliance
 - Enterprise features included
 
