@@ -9,9 +9,10 @@ import os
 
 import pytest
 from fastapi import APIRouter
-from nexus import Nexus
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.testclient import TestClient
+
+from nexus import Nexus
 
 # =============================================================================
 # Fixtures
@@ -486,3 +487,73 @@ class TestCombinedFeatures:
         assert app.cors_config["allow_origins"] == ["http://example.com"]
         assert app.is_origin_allowed("http://example.com") is True
         assert app.is_origin_allowed("http://evil.com") is False
+
+
+# =============================================================================
+# Tests: @app.use_middleware (GH #449) — function-style middleware
+# =============================================================================
+
+
+class TestUseMiddlewareIntegration:
+    """Tier 2 integration tests: function-style middleware runs on real requests."""
+
+    def test_use_middleware_executes_in_request_path(self):
+        """A function decorated with @app.use_middleware runs on every request."""
+        execution_log = []
+
+        app = Nexus(enable_durability=False)
+
+        @app.use_middleware
+        async def tracking_middleware(request, call_next):
+            execution_log.append("before")
+            response = await call_next(request)
+            execution_log.append("after")
+            return response
+
+        client = _make_client(app)
+        response = client.get("/health")
+
+        assert response.status_code == 200
+        assert execution_log == ["before", "after"]
+
+    def test_use_middleware_can_add_response_header(self):
+        """Decorated middleware can mutate the response (FastAPI-style timing header)."""
+        import time as _time
+
+        app = Nexus(enable_durability=False)
+
+        @app.use_middleware
+        async def timing_middleware(request, call_next):
+            t0 = _time.monotonic()
+            response = await call_next(request)
+            response.headers["X-Process-Time"] = f"{_time.monotonic() - t0:.6f}"
+            return response
+
+        client = _make_client(app)
+        response = client.get("/health")
+
+        assert response.status_code == 200
+        assert "X-Process-Time" in response.headers
+        # It should be a non-negative number
+        assert float(response.headers["X-Process-Time"]) >= 0.0
+
+    def test_use_middleware_can_short_circuit(self):
+        """Decorated middleware can bail out without calling call_next."""
+        from starlette.responses import JSONResponse
+
+        app = Nexus(enable_durability=False)
+
+        @app.use_middleware
+        async def guard_middleware(request, call_next):
+            if request.headers.get("X-Block") == "yes":
+                return JSONResponse({"blocked": True}, status_code=418)
+            return await call_next(request)
+
+        client = _make_client(app)
+
+        ok = client.get("/health")
+        assert ok.status_code == 200
+
+        blocked = client.get("/health", headers={"X-Block": "yes"})
+        assert blocked.status_code == 418
+        assert blocked.json() == {"blocked": True}

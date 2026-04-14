@@ -1295,6 +1295,93 @@ Check the documentation or explore available resources.
         """List of registered middleware in application order."""
         return self._middleware_stack.copy()
 
+    def use_middleware(self, func: Callable) -> Callable:
+        """Decorator to register a function as HTTP middleware.
+
+        Provides a FastAPI-style ``@app.middleware("http")`` equivalent for
+        Nexus. The decorated function receives ``(request, call_next)`` and
+        must return a ``Response``. Internally wraps the function in a
+        Starlette :class:`~starlette.middleware.base.BaseHTTPMiddleware`
+        subclass and delegates to :meth:`add_middleware`.
+
+        The ``use_middleware`` name is used (instead of ``middleware``) to
+        avoid colliding with the :attr:`middleware` introspection property
+        that returns the registered middleware list.
+
+        Args:
+            func: An async function with signature
+                ``async def mw(request: Request, call_next) -> Response``.
+                Synchronous functions are rejected because the underlying
+                ``BaseHTTPMiddleware.dispatch`` contract requires an
+                awaitable — running a sync function on the event loop
+                would block all concurrent requests.
+
+        Returns:
+            The original function (unmodified) so the decorator can be
+            stacked or the function still called directly in tests.
+
+        Raises:
+            TypeError: If *func* is not callable, is a class (use
+                :meth:`add_middleware` for class-based middleware), or
+                is a synchronous function.
+
+        Example:
+            >>> @app.use_middleware
+            ... async def timing_middleware(request, call_next):
+            ...     import time
+            ...     t0 = time.monotonic()
+            ...     response = await call_next(request)
+            ...     response.headers["X-Process-Time"] = str(
+            ...         time.monotonic() - t0
+            ...     )
+            ...     return response
+        """
+        # Validate: reject non-callable
+        if not callable(func):
+            raise TypeError(
+                f"use_middleware expects an async function, got "
+                f"{type(func).__name__}"
+            )
+
+        # Validate: reject classes — use add_middleware for those
+        if isinstance(func, type):
+            raise TypeError(
+                "use_middleware expects a function, got a class. "
+                "Use add_middleware() to register a middleware class."
+            )
+
+        # Validate: reject sync functions — BaseHTTPMiddleware.dispatch
+        # must return an awaitable. A sync function would block the event
+        # loop and surface as a "coroutine expected" error at request time.
+        if not asyncio.iscoroutinefunction(func):
+            func_name = getattr(func, "__name__", repr(func))
+            raise TypeError(
+                f"use_middleware expects an async function, got sync "
+                f"function {func_name!r}. Define with "
+                f"'async def {func_name}(request, call_next): ...'"
+            )
+
+        from starlette.middleware.base import BaseHTTPMiddleware
+
+        # Build a middleware class that captures the user function.
+        # Each decorated function gets its own class so add_middleware's
+        # duplicate-class detection works correctly (two decorated
+        # functions produce two distinct classes).
+        class _FuncMiddleware(BaseHTTPMiddleware):
+            async def dispatch(self, request, call_next):  # noqa: N805
+                return await func(request, call_next)
+
+        # Preserve the original function name for logging / introspection.
+        _FuncMiddleware.__name__ = f"FuncMiddleware[{func.__name__}]"
+        _FuncMiddleware.__qualname__ = _FuncMiddleware.__name__
+
+        logger.info(
+            "nexus.use_middleware.registered",
+            extra={"func": func.__name__},
+        )
+        self.add_middleware(_FuncMiddleware)
+        return func
+
     # =========================================================================
     # Public Router API (WS01 - TODO-300B)
     # =========================================================================

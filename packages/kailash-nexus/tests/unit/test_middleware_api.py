@@ -8,6 +8,7 @@ import logging
 from datetime import UTC, datetime
 
 import pytest
+
 from nexus import Nexus
 from nexus.core import MiddlewareInfo
 
@@ -394,3 +395,97 @@ class TestDuplicateMiddlewareDetection:
 
         # Both should be in the stack (warning is non-blocking)
         assert len(app.middleware) == 2
+
+
+# =============================================================================
+# Tests: @app.use_middleware decorator (GH #449)
+# =============================================================================
+
+
+class TestUseMiddlewareDecorator:
+    """Tests for the @app.use_middleware function-style middleware decorator."""
+
+    def test_use_middleware_registers_async_function(self):
+        """@app.use_middleware registers an async function as middleware."""
+        app = Nexus(enable_durability=False)
+
+        @app.use_middleware
+        async def timing_middleware(request, call_next):
+            response = await call_next(request)
+            return response
+
+        # The decorator should register a BaseHTTPMiddleware subclass
+        # that wraps the function. The stack should grow by exactly one.
+        assert len(app._middleware_stack) >= 1
+        # Find our wrapper (name includes the function name)
+        names = [m.name for m in app.middleware]
+        assert any("timing_middleware" in n for n in names)
+
+    def test_use_middleware_rejects_sync_function(self):
+        """Sync functions are rejected — BaseHTTPMiddleware.dispatch requires async."""
+        app = Nexus(enable_durability=False)
+
+        def sync_middleware(request, call_next):  # not async
+            return call_next(request)
+
+        with pytest.raises(TypeError, match="async function"):
+            app.use_middleware(sync_middleware)
+
+    def test_use_middleware_rejects_non_callable(self):
+        """Non-callable inputs are rejected."""
+        app = Nexus(enable_durability=False)
+
+        with pytest.raises(TypeError, match="async function"):
+            app.use_middleware("not a function")  # type: ignore[arg-type]
+
+        with pytest.raises(TypeError, match="async function"):
+            app.use_middleware(42)  # type: ignore[arg-type]
+
+    def test_use_middleware_rejects_class(self):
+        """Classes are rejected — use add_middleware() for class-based middleware."""
+        app = Nexus(enable_durability=False)
+
+        with pytest.raises(TypeError, match="class"):
+            app.use_middleware(DummyMiddleware)
+
+    def test_use_middleware_returns_original_function(self):
+        """Decorator returns the original function unmodified so it can be called/stacked."""
+        app = Nexus(enable_durability=False)
+
+        async def my_middleware(request, call_next):
+            return await call_next(request)
+
+        result = app.use_middleware(my_middleware)
+
+        assert result is my_middleware
+        assert result.__name__ == "my_middleware"
+
+    def test_use_middleware_wrapper_has_readable_name(self):
+        """The generated wrapper class carries the original function name for introspection."""
+        app = Nexus(enable_durability=False)
+
+        @app.use_middleware
+        async def cors_inject(request, call_next):
+            return await call_next(request)
+
+        # The wrapper class name should be grep-able for the original fn name
+        names = [m.name for m in app.middleware]
+        assert any(
+            "cors_inject" in n for n in names
+        ), f"Expected a middleware whose name references 'cors_inject'; got {names}"
+
+    def test_use_middleware_two_functions_produce_distinct_wrappers(self):
+        """Two decorated functions produce two distinct middleware entries."""
+        app = Nexus(enable_durability=False)
+
+        @app.use_middleware
+        async def first(request, call_next):
+            return await call_next(request)
+
+        @app.use_middleware
+        async def second(request, call_next):
+            return await call_next(request)
+
+        names = [m.name for m in app.middleware]
+        assert sum(1 for n in names if "first" in n) == 1
+        assert sum(1 for n in names if "second" in n) == 1
