@@ -105,3 +105,29 @@ def test_dlq_identifier_validator_rejects_injection_attempts() -> None:
     for payload in injection_payloads:
         with pytest.raises(ValueError):
             _validate_identifier(payload)
+
+
+@pytest.mark.regression
+def test_dlq_identifier_validator_raises_valueerror_on_unhashable_input() -> None:
+    """Issue #446 (round 4): unhashable non-string inputs MUST raise
+    ``ValueError`` — not ``TypeError``.
+
+    Regression guard: an earlier implementation called ``hash(name)``
+    inside the error-message f-string BEFORE the ``ValueError`` was
+    raised. For unhashable inputs (``dict``, ``list``, ``set``) the
+    ``hash()`` call itself raised ``TypeError: unhashable type``,
+    swallowing the typed ValueError contract and surfacing a
+    non-actionable error. The fingerprint helper must tolerate
+    unhashable inputs and return a fallback marker so the caller sees
+    the typed ValueError it expected.
+    """
+    from kailash.db.dialect import _validate_identifier
+
+    unhashable_payloads = [
+        {"a": 1},
+        [1, 2, 3],
+        {1, 2, 3},
+    ]
+    for payload in unhashable_payloads:
+        with pytest.raises(ValueError, match="must be a string"):
+            _validate_identifier(payload)  # type: ignore[arg-type]

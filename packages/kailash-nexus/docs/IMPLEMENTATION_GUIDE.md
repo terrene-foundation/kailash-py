@@ -37,7 +37,7 @@ self._gateway = create_gateway(
 ### 2. MCPClient (Production MCP)
 
 ```python
-from kailash.mcp_server.client import MCPClient
+from kailash_mcp.client import MCPClient
 
 # Use SDK's production MCP client
 mcp_client = MCPClient(
