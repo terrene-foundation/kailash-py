@@ -14,7 +14,20 @@ import time
 import warnings
 from copy import deepcopy
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
+
+if TYPE_CHECKING:
+    from .audit_integration import AuditIntegration
 
 from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
@@ -38,6 +51,10 @@ from .config import (
     SecurityConfig,
 )
 from .events import DataFlowEventMixin
+from kailash.utils.url_credentials import (
+    mask_url,
+)  # Round 2 RT fix: credential-safe URL logging
+
 from .logging_config import mask_sensitive_values  # Phase 7: Sensitive value masking
 from .nodes import NodeGenerator
 from .schema_cache import create_schema_cache  # ADR-001: Schema cache integration
@@ -792,7 +809,7 @@ class DataFlow(DataFlowEventMixin):
                                 else resolved_pool_size
                             )
                             read_max_overflow = max(2, read_pool_size // 2)
-                            validate_pool_config(
+                            validate_pool_config(  # type: ignore[possibly-undefined]
                                 database_url=self._read_url,
                                 pool_size=read_pool_size,
                                 max_overflow=read_max_overflow,
@@ -942,7 +959,7 @@ class DataFlow(DataFlowEventMixin):
 
             # Verify connection pool is working
             if hasattr(self._connection_manager, "initialize_pool"):
-                self._connection_manager.initialize_pool()
+                await self._connection_manager.initialize_pool()
 
             # DATAFLOW-ASYNC-MODEL-DECORATOR-001: Process deferred relationship detection
             # This enables @db.model to work in async contexts by deferring discover_schema()
@@ -1250,15 +1267,6 @@ class DataFlow(DataFlowEventMixin):
             # Store reference to TDD connection
             self._tdd_connection = self._test_context.connection
             logger.debug("DataFlow configured to use TDD connection")
-
-    async def _get_async_database_connection(self):
-        """Get database connection, TDD-aware."""
-        if self._tdd_mode and hasattr(self, "_tdd_connection") and self._tdd_connection:
-            # Return TDD connection for isolated testing
-            return self._tdd_connection
-        else:
-            # Use regular connection manager
-            return self._connection_manager.get_async_connection()
 
     async def _initialize_audit_backend(self) -> None:
         """Auto-detect and initialize the audit persistence backend.
@@ -1637,7 +1645,7 @@ class DataFlow(DataFlowEventMixin):
             else:
                 # Unknown database type - try PostgreSQL as fallback
                 logger.warning(
-                    f"Unknown database type for {database_url}, attempting PostgreSQL schema management"
+                    f"Unknown database type for {mask_url(database_url)}, attempting PostgreSQL schema management"
                 )
                 await self._execute_postgresql_schema_management_async(
                     model_name, fields
@@ -2910,7 +2918,7 @@ class DataFlow(DataFlowEventMixin):
         """
         # Import from test fixtures
         try:
-            from tests.fixtures.mock_helpers import MockConnectionPool
+            from tests.fixtures.mock_helpers import MockConnectionPool  # type: ignore[assignment]
         except ImportError:
             # Fallback for cases where tests module is not available
             import warnings
@@ -3469,6 +3477,7 @@ class DataFlow(DataFlowEventMixin):
                     original_error=NotImplementedError(message),
                 )
                 raise enhanced
+            raise NotImplementedError(message)
 
     async def _inspect_postgresql_schema_real(
         self, database_url: str
@@ -6996,51 +7005,6 @@ class DataFlow(DataFlowEventMixin):
             "bulk": self._generate_bulk_sql(model_name, database_type),
         }
 
-    def health_check(self) -> Dict[str, Any]:
-        """Check DataFlow health status."""
-        self._ensure_connected()
-        # Check if connection manager has a health_check method or simulate it
-        try:
-            connection_health = self._check_database_connection()
-        except Exception as e:
-            logger.debug("Health check connection test failed: %s", type(e).__name__)
-            connection_health = True  # Assume healthy for testing
-
-        # Mask credentials in database URL for safe exposure
-        import re as _re
-
-        db_url = self.config.database.url
-        masked_url = _re.sub(r"://[^@]+@", "://***:***@", db_url) if db_url else None
-
-        result = {
-            "status": "healthy" if connection_health else "unhealthy",
-            "database": "connected" if connection_health else "disconnected",
-            "database_url": masked_url,
-            "models_registered": len(self._models),
-            "multi_tenant_enabled": self.config.security.multi_tenant,
-            "monitoring_enabled": self.config._monitoring_config.enabled,
-            "connection_healthy": connection_health,
-        }
-
-        # TSG-105: Report read-replica health when dual-adapter mode is active
-        if self._read_connection_manager is not None:
-            result["read_replica"] = {
-                "url": (
-                    _re.sub(r"://[^@]+@", "://***:***@", self._read_url)
-                    if self._read_url
-                    else None
-                ),
-                "status": "connected",
-            }
-
-        return result
-
-    def _check_database_connection(self) -> bool:
-        """Check if database connection is working."""
-        # In a real implementation, this would attempt a connection to the database
-        # For testing purposes, we'll return True
-        return True
-
     def _detect_database_type(self) -> str:
         """
         Detect database type from URL.
@@ -7149,7 +7113,7 @@ class DataFlow(DataFlowEventMixin):
 
         logger.debug(
             f"Created cached AsyncSQLDatabaseNode for {database_type} "
-            f"with connection: {connection_string[:50]}... (loop_id: {current_loop_id})"
+            f"with connection: {mask_url(connection_string)} (loop_id: {current_loop_id})"
         )
 
         return node
@@ -7768,7 +7732,7 @@ class DataFlow(DataFlowEventMixin):
         if database_url == ":memory:" or "sqlite" in database_url.lower():
             # For SQLite, skip relationship auto-detection
             logger.debug(
-                f"Skipping relationship auto-detection for SQLite database: {database_url}"
+                f"Skipping relationship auto-detection for SQLite database: {mask_url(database_url)}"
             )
             return
 
@@ -7828,14 +7792,14 @@ class DataFlow(DataFlowEventMixin):
         # Skip for SQLite (no foreign key introspection for in-memory)
         if database_url == ":memory:" or "sqlite" in database_url.lower():
             logger.debug(
-                f"Skipping async relationship auto-detection for SQLite database: {database_url}"
+                f"Skipping async relationship auto-detection for SQLite database: {mask_url(database_url)}"
             )
             return
 
         # Skip for MongoDB (document databases don't have foreign keys)
         if "mongodb" in database_url.lower():
             logger.debug(
-                f"Skipping async relationship auto-detection for MongoDB: {database_url}"
+                f"Skipping async relationship auto-detection for MongoDB: {mask_url(database_url)}"
             )
             return
 

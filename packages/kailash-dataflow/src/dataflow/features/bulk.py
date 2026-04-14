@@ -5,7 +5,9 @@ High-performance bulk database operations.
 """
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
+from kailash.utils.url_credentials import mask_url
 
 from ..nodes.bulk_result_processor import BulkCreateResultProcessor
 
@@ -316,8 +318,14 @@ class BulkOperations:
                 "table_name"
             ) or self.dataflow._class_name_to_table_name(model_name)
 
+            # Round 2 red team fix: route connection_string through mask_url —
+            # NO truncation. Slicing connection_string[:50] cuts BEFORE the
+            # ``@`` separator on long URLs, which would leak the credential
+            # tail through a "looks truncated, looks safe" log line.
+            # See rules/security.md § "No secrets in logs" and
+            # rules/observability.md Rule 6.
             logger.warning(
-                f"BULK_CREATE: conn={connection_string[:50]}..., db_type={database_type}, table={table_name}"
+                f"BULK_CREATE: conn={mask_url(connection_string)}, db_type={database_type}, table={table_name}"
             )
 
             # Build INSERT query from data
@@ -439,9 +447,9 @@ class BulkOperations:
     async def bulk_update(
         self,
         model_name: str,
-        data: List[Dict[str, Any]] = None,
-        filter_criteria: Dict[str, Any] = None,
-        update_values: Dict[str, Any] = None,
+        data: Optional[List[Dict[str, Any]]] = None,
+        filter_criteria: Optional[Dict[str, Any]] = None,
+        update_values: Optional[Dict[str, Any]] = None,
         batch_size: int = 1000,
         **kwargs,
     ) -> Dict[str, Any]:
@@ -526,8 +534,10 @@ class BulkOperations:
                     "table_name"
                 ) or self.dataflow._class_name_to_table_name(model_name)
 
+                # Round 2 red team fix: route connection_string through mask_url —
+                # NO truncation. See bulk_create above.
                 logger.warning(
-                    f"BULK_UPDATE: conn={connection_string[:50]}..., db_type={database_type}, table={table_name}"
+                    f"BULK_UPDATE: conn={mask_url(connection_string)}, db_type={database_type}, table={table_name}"
                 )
 
                 # Build SET clause from update_values
@@ -667,16 +677,18 @@ class BulkOperations:
                     "table_name"
                 ) or self.dataflow._class_name_to_table_name(model_name)
 
+                # Round 2 red team fix: route connection_string through mask_url —
+                # NO truncation. See bulk_create above.
                 logger.warning(
-                    f"BULK_UPDATE: conn={connection_string[:50]}..., db_type={database_type}, table={table_name}"
+                    f"BULK_UPDATE: conn={mask_url(connection_string)}, db_type={database_type}, table={table_name}"
                 )
 
                 total_updated = 0
                 batches_processed = 0
 
                 # Process in batches
-                for i in range(0, len(data), batch_size):
-                    batch = data[i : i + batch_size]
+                for i in range(0, len(data), batch_size):  # type: ignore[arg-type]
+                    batch = data[i : i + batch_size]  # type: ignore[index]
 
                     # Execute individual UPDATEs for each record
                     for record in batch:
@@ -789,8 +801,8 @@ class BulkOperations:
     async def bulk_delete(
         self,
         model_name: str,
-        data: List[Dict[str, Any]] = None,
-        filter_criteria: Dict[str, Any] = None,
+        data: Optional[List[Dict[str, Any]]] = None,
+        filter_criteria: Optional[Dict[str, Any]] = None,
         batch_size: int = 1000,
         **kwargs,
     ) -> Dict[str, Any]:
@@ -844,8 +856,10 @@ class BulkOperations:
                     "table_name"
                 ) or self.dataflow._class_name_to_table_name(model_name)
 
+                # Round 2 red team fix: route connection_string through mask_url —
+                # NO truncation. See bulk_create above.
                 logger.warning(
-                    f"BULK_DELETE: conn={connection_string[:50]}..., db_type={database_type}, table={table_name}"
+                    f"BULK_DELETE: conn={mask_url(connection_string)}, db_type={database_type}, table={table_name}"
                 )
 
                 # Build WHERE clause from filter using shared helper
@@ -1051,8 +1065,10 @@ class BulkOperations:
                 "table_name"
             ) or self.dataflow._class_name_to_table_name(model_name)
 
+            # Round 2 red team fix: route connection_string through mask_url —
+            # NO truncation. See bulk_create above.
             logger.warning(
-                f"BULK_UPSERT: conn={connection_string[:50]}..., db_type={database_type}, "
+                f"BULK_UPSERT: conn={mask_url(connection_string)}, db_type={database_type}, "
                 f"table={table_name}, conflict_resolution={conflict_resolution}"
             )
 

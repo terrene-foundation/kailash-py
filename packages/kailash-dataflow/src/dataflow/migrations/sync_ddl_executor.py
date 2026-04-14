@@ -21,6 +21,8 @@ import logging
 import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 
+from kailash.utils.url_credentials import mask_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -61,9 +63,13 @@ class SyncDDLExecutor:
             # MongoDB is a document database - no SQL DDL needed
             return "mongodb"
         else:
-            # Default to SQLite for safety
+            # Default to SQLite for safety.
+            # Round 2 red team fix: route the URL through mask_url so
+            # operators see a hint about what failed without leaking
+            # the userinfo into the log. See rules/security.md
+            # § "No secrets in logs".
             logger.warning(
-                f"Unknown database type in URL, defaulting to SQLite: {self.database_url}"
+                f"Unknown database type in URL, defaulting to SQLite: {mask_url(self.database_url)}"
             )
             return "sqlite"
 

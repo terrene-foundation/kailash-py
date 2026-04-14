@@ -2,16 +2,16 @@
 OrchestrationStateManager - DataFlow-based workflow state persistence.
 
 Provides persistent state tracking for multi-agent workflow orchestration using DataFlow.
-Auto-generates 33 CRUD nodes (11 per model × 3 models) via DataFlow integration.
+Auto-generates 33 CRUD nodes (11 per model x 3 models) via DataFlow integration.
 
 Architecture:
     OrchestrationStateManager
-    ├── DataFlow instance (one per database)
-    ├── AsyncLocalRuntime (async execution)
-    └── 3 Models → 33 Auto-Generated Nodes
-        ├── WorkflowState (11 nodes)
-        ├── AgentExecutionRecord (11 nodes)
-        └── WorkflowCheckpoint (11 nodes)
+    |- DataFlow instance (one per database)
+    |- AsyncLocalRuntime (async execution)
+    +- 3 Models -> 33 Auto-Generated Nodes
+        |- WorkflowState (11 nodes)
+        |- AgentExecutionRecord (11 nodes)
+        +- WorkflowCheckpoint (11 nodes)
 
 Key Features:
 - Automatic node generation from models (no manual CRUD code)
@@ -56,6 +56,27 @@ import logging
 import uuid
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
+
+
+def _mask_connection_string(connection_string: str) -> str:
+    """Return connection string with credentials masked for safe logging.
+
+    Emits canonical ``scheme://***@host[:port]/path`` form per
+    ``rules/observability.md`` § 6.2. Returns a distinct sentinel when
+    the URL cannot be parsed so log triage can grep failure vs success.
+    """
+    try:
+        parsed = urlparse(connection_string)
+    except Exception:
+        return "<unparseable connection string>"
+    if not parsed.scheme or not parsed.hostname:
+        return "<unparseable connection string>"
+    host = parsed.hostname
+    port = f":{parsed.port}" if parsed.port else ""
+    path = parsed.path or ""
+    return f"{parsed.scheme}://***@{host}{port}{path}"
+
 
 # SQLAlchemy availability probe — DataFlow auto-generates the SQL schema
 # from Python type hints, so the symbols themselves are never imported
@@ -213,9 +234,9 @@ class OrchestrationStateManager:
         self._register_models()
 
         logger.info(
-            f"OrchestrationStateManager initialized: "
+            "OrchestrationStateManager initialized: "
             f"db_instance={db_instance_name}, "
-            f"connection={connection_string}"
+            f"connection={_mask_connection_string(connection_string)}"
         )
 
     def _register_models(self):
@@ -313,11 +334,15 @@ class OrchestrationStateManager:
 
                 import psycopg2
 
-                from kailash.utils.url_credentials import decode_userinfo_or_raise
+                from kailash.utils.url_credentials import (
+                    decode_userinfo_or_raise,
+                    preencode_password_special_chars,
+                )
 
-                parsed = urlparse(self.connection_string)
-                # Decode userinfo and reject null bytes via the shared
-                # helper — see ``kailash/utils/url_credentials.py``.
+                # Pre-encode raw ``#$@?`` in password so raw DATABASE_URLs
+                # work uniformly, then decode + null-byte check via the
+                # shared helper — see ``kailash/utils/url_credentials.py``.
+                parsed = urlparse(preencode_password_special_chars(self.connection_string))
                 user, password = decode_userinfo_or_raise(parsed, default_user="postgres")
                 conn = psycopg2.connect(
                     host=parsed.hostname,
@@ -386,8 +411,8 @@ class OrchestrationStateManager:
 
             else:
                 logger.warning(
-                    f"Unknown database type in connection string, skipping validation: "
-                    f"{self.connection_string}"
+                    "Unknown database type in connection string, skipping validation: "
+                    f"{_mask_connection_string(self.connection_string)}"
                 )
 
         except ImportError as e:

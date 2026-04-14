@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import logging
 import re
+
+from kailash.utils.url_credentials import mask_url
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -72,7 +74,11 @@ def _validate_json_path(path: str) -> None:
         If *path* contains characters that could enable SQL injection.
     """
     if not _JSON_PATH_RE.match(path):
-        raise ValueError(f"Invalid JSON path '{path}': must match [a-zA-Z0-9_.]+")
+        raise ValueError(
+            f"Invalid JSON path "
+            f"(fingerprint={hash(path) & 0xFFFF:04x}): "
+            "must match [a-zA-Z0-9_.]+"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -501,24 +507,26 @@ def detect_dialect(url: str) -> QueryDialect:
 
     # PostgreSQL
     if url_lower.startswith(("postgresql://", "postgresql+", "postgres://")):
-        logger.debug("Detected PostgreSQL dialect from URL: %s", url[:40])
+        logger.debug("Detected PostgreSQL dialect from URL: %s", mask_url(url))
         return PostgresDialect()
 
     # MySQL
     if url_lower.startswith(("mysql://", "mysql+")):
-        logger.debug("Detected MySQL dialect from URL: %s", url[:40])
+        logger.debug("Detected MySQL dialect from URL: %s", mask_url(url))
         return MySQLDialect()
 
     # SQLite
     if url_lower.startswith("sqlite://"):
-        logger.debug("Detected SQLite dialect from URL: %s", url[:40])
+        logger.debug("Detected SQLite dialect from URL: %s", mask_url(url))
         return SQLiteDialect()
 
     # Plain file path (relative or absolute) -> SQLite
     if url.startswith(("/", "./", "../")) or not re.match(
         r"^[a-zA-Z][a-zA-Z0-9+.-]*://", url
     ):
-        logger.debug("No scheme detected; treating as SQLite file path: %s", url[:40])
+        logger.debug(
+            "No scheme detected; treating as SQLite file path: %s", mask_url(url)
+        )
         return SQLiteDialect()
 
     # Unknown scheme

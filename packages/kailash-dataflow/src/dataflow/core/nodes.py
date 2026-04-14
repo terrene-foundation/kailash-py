@@ -2761,7 +2761,8 @@ class NodeGenerator:
                             "nodes.list_operation_with_params", extra={"params": params}
                         )
                         logger.debug(
-                            f"List operation - Connection: {mask_sensitive_values(connection_string[:50])}..."
+                            "nodes.list_operation_connection",
+                            extra={"db_type": db_type},
                         )
 
                         # Get or create cached AsyncSQLDatabaseNode for connection pooling
