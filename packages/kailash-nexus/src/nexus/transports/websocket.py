@@ -541,7 +541,8 @@ class WebSocketTransport(Transport):
         """Invoke a handler function or execute a workflow.
 
         Function-backed handlers are called directly. Workflow-backed
-        handlers are executed through the shared runtime.
+        handlers are executed through the shared runtime. If a guard is
+        attached, it is checked before dispatch.
         """
         if handler_def.func is not None:
             # Function-backed handler

@@ -128,6 +128,63 @@ class NexusPluginProtocol(Protocol):
         ...
 
 
+def _extract_user_from_args(args: tuple, kwargs: dict) -> Any:
+    """Best-effort user extraction from handler arguments.
+
+    Checks positional and keyword arguments for a Starlette Request-like
+    object with ``state.user`` (set by JWTMiddleware). Returns None when
+    no authenticated user is available (MCP, CLI, unauthenticated HTTP).
+    """
+    for v in kwargs.values():
+        state = getattr(v, "state", None)
+        if state is not None and hasattr(state, "user"):
+            return state.user
+    for a in args:
+        state = getattr(a, "state", None)
+        if state is not None and hasattr(state, "user"):
+            return state.user
+    return None
+
+
+def _wrap_with_guard(func: Callable, guard: Any, handler_name: str) -> Callable:
+    """Wrap a handler function with guard enforcement.
+
+    Returns a function with the same signature that checks the guard
+    before delegating to the original. Works for both sync and async
+    functions and across all transports (HTTP, MCP, WebSocket, Webhook).
+    """
+    import functools
+
+    if asyncio.iscoroutinefunction(func):
+
+        @functools.wraps(func)
+        async def async_guarded(*args: Any, **kwargs: Any) -> Any:
+            user = _extract_user_from_args(args, kwargs)
+            ctx = {"handler": handler_name}
+            passed, reason = guard.check(user, ctx)
+            if not passed:
+                from nexus.errors import PermissionError as NexusPermError
+
+                raise NexusPermError(reason or "Access denied")
+            return await func(*args, **kwargs)
+
+        return async_guarded
+    else:
+
+        @functools.wraps(func)
+        def sync_guarded(*args: Any, **kwargs: Any) -> Any:
+            user = _extract_user_from_args(args, kwargs)
+            ctx = {"handler": handler_name}
+            passed, reason = guard.check(user, ctx)
+            if not passed:
+                from nexus.errors import PermissionError as NexusPermError
+
+                raise NexusPermError(reason or "Access denied")
+            return func(*args, **kwargs)
+
+        return sync_guarded
+
+
 class Nexus:
     """Zero-configuration workflow orchestration platform.
 
@@ -2166,6 +2223,7 @@ Check the documentation or explore available resources.
         description: str = "",
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        guard: Any = None,
     ):
         """Decorator to register an async function as a multi-channel workflow.
 
@@ -2181,22 +2239,33 @@ Check the documentation or explore available resources.
             description: Optional description for the workflow.
             tags: Optional tags for categorization.
             metadata: Optional structured metadata (version, author, tags, etc.).
+            guard: Optional AuthGuard for per-handler RBAC. The guard's
+                ``check(user, request_context)`` is called before the handler
+                executes. Requires NexusAuthPlugin (JWT middleware sets
+                ``request.state.user``).
 
         Returns:
             Decorator function.
 
         Example:
+            >>> from nexus.auth.guards import AuthGuard
             >>> @app.handler("greet", description="Greet a user")
             ... async def greet(name: str, greeting: str = "Hello") -> dict:
             ...     return {"message": f"{greeting}, {name}!"}
             ...
-            ... # Now available at POST /workflows/greet/execute
-            ... # And as MCP tool: workflow_greet
+            ... @app.handler("admin.reset", guard=AuthGuard.RequireRole("admin"))
+            ... async def reset_cache() -> dict:
+            ...     return {"status": "cleared"}
         """
 
         def decorator(func):
             self.register_handler(
-                name, func, description=description, tags=tags, metadata=metadata
+                name,
+                func,
+                description=description,
+                tags=tags,
+                metadata=metadata,
+                guard=guard,
             )
             return func
 
@@ -2210,6 +2279,7 @@ Check the documentation or explore available resources.
         tags: Optional[List[str]] = None,
         input_mapping: Optional[Dict[str, str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        guard: Any = None,
     ):
         """Register an async/sync function as a multi-channel workflow.
 
@@ -2225,6 +2295,7 @@ Check the documentation or explore available resources.
             input_mapping: Optional mapping of workflow input names to handler
                 parameter names. If None, identity mapping is used.
             metadata: Optional structured metadata (version, author, tags, etc.).
+            guard: Optional AuthGuard for per-handler RBAC enforcement.
 
         Raises:
             TypeError: If handler_func is not callable.
@@ -2240,6 +2311,13 @@ Check the documentation or explore available resources.
 
         validate_workflow_name(name)
 
+        # Wrap handler with guard enforcement BEFORE workflow creation so ALL
+        # transports (HTTP, MCP, WebSocket, Webhook) get the guard check
+        # automatically — the wrapped function is what goes into the workflow
+        # node and what's stored on HandlerDef.func.
+        if guard is not None:
+            handler_func = _wrap_with_guard(handler_func, guard, name)
+
         from kailash.nodes.handler import make_handler_workflow
 
         workflow = make_handler_workflow(
@@ -2254,6 +2332,7 @@ Check the documentation or explore available resources.
             tags=tags,
             metadata=metadata,
             workflow=workflow,
+            guard=guard,
         )
 
         # Delegate to register() for multi-channel exposure
