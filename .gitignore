@@ -126,6 +126,9 @@ packages/*/uv.lock
 
 # Benchmarks
 .benchmarks/
+# Ephemeral benchmark output logs (re-generated on each run; source lives
+# in benchmarks/*.py). Prevents re-committing after rm.
+packages/*/benchmarks/*.log
 
 # Mypy / Ruff caches
 .mypy_cache/
