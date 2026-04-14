@@ -116,6 +116,12 @@ class AgentUIMiddleware:
 
 There is NO `enable_event_streaming` parameter. Event streaming is always on — the constructor unconditionally creates `self.event_stream = EventStream(enable_batching=True)`.
 
+**Always-on streaming design:** Streaming is architecturally always-on because `AgentUIMiddleware` uses the `EventStream` internally for coordination between session management, workflow execution, and real-time transports. Disabling it would break internal event routing. To control event delivery without disabling the stream:
+
+- **Filter-based suppression:** Subscribe with an `EventFilter` that matches nothing (e.g., `EventFilter(event_types=[])`) to receive zero events while keeping the stream operational.
+- **Ignore the stream:** Simply do not call `subscribe_to_events()` — events are emitted but discarded when there are no subscribers.
+- **Verify streaming is working:** Subscribe with a permissive filter and check that `workflow.started` events arrive when `create_session()` is called. The `get_stats()` method reports `events_emitted` as a counter.
+
 **State initialized in `__init__`:**
 
 - `self.enable_dynamic_workflows`, `self.max_sessions`, `self.session_timeout_minutes`, `self.enable_workflow_sharing`
@@ -503,6 +509,33 @@ class AuthLevel(Enum):
 ### `MiddlewareAccessControlManager` / `MiddlewareAuthenticationMiddleware` (`auth/access_control.py`)
 
 Higher-level access control building on top of `MiddlewareAuthManager`. These are conditionally imported by `auth/__init__.py` (wrapped in a `try/except ImportError` to avoid circular dependencies with communication).
+
+#### Auth Dependencies and Conditional Imports
+
+The `auth/__init__.py` module uses a two-phase import strategy to handle circular dependencies:
+
+**Always available** (unconditional imports):
+
+| Import | Source | Required by |
+| ------ | ------ | ----------- |
+| `JWTAuthManager` | `auth/jwt_auth.py` | Core JWT operations (HS256/RS256, refresh tokens, blacklisting) |
+| `JWTConfig`, `TokenPayload`, `TokenPair`, `UserClaims`, `AuthenticationResult` | `auth/models.py` | Data models for auth operations |
+| `AuthenticationError`, `InvalidTokenError`, `TokenExpiredError`, `TokenBlacklistedError`, `PermissionDeniedError` | `auth/exceptions.py` | Exception hierarchy |
+| `generate_secret_key`, `generate_key_pair`, `parse_bearer_token` | `auth/utils.py` | Key generation and token parsing utilities |
+
+**Conditionally available** (wrapped in `try/except ImportError`):
+
+| Import | Source | Why conditional | What happens when missing |
+| ------ | ------ | --------------- | ------------------------ |
+| `MiddlewareAuthManager`, `AuthLevel` | `auth/auth_manager.py` | Imports `fastapi.Depends`, `fastapi.security.HTTPBearer`, and Kailash security nodes (`CredentialManagerNode`, `RotatingCredentialNode`, etc.). These may trigger circular imports when `auth/` is loaded during `kailash.middleware.__init__` before `communication/` is fully initialized. | `_has_access_control` is set to `False`. These symbols are omitted from `__all__`. Code that needs `MiddlewareAuthManager` should import it directly: `from kailash.middleware.auth.auth_manager import MiddlewareAuthManager`. |
+| `MiddlewareAccessControlManager`, `MiddlewareAuthenticationMiddleware` | `auth/access_control.py` | Same circular dependency chain — `access_control.py` imports from `communication/` which may not be fully initialized yet. | Same as above — omitted from `__all__` when unavailable. |
+
+**Runtime dependencies of `MiddlewareAuthManager`:**
+
+- `jwt` (PyJWT) — required, used directly for `jwt.encode()`/`jwt.decode()` with HS256
+- `fastapi` — required, used for `Depends`, `HTTPBearer`, `HTTPAuthorizationCredentials`
+- `starlette` — required, used for `HTTPException`, `Request`
+- Kailash SDK nodes: `CredentialManagerNode`, `RotatingCredentialNode`, `PermissionCheckNode`, `SecurityEventNode`, `AuditLogNode`, `AsyncSQLDatabaseNode`, `DataTransformer` — all from `kailash.nodes.*`
 
 ### Supporting models and utilities (`auth/models.py`, `auth/utils.py`)
 
