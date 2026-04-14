@@ -51,11 +51,17 @@ def _validate_identifier(name: str, *, max_length: int = 128) -> None:
         If *name* contains characters that could enable SQL injection,
         or exceeds the length limit.
     """
-    if not isinstance(name, str) or len(name) > max_length:
+    if not isinstance(name, str):
         raise ValueError(
             f"Invalid SQL identifier "
             f"(fingerprint={hash(name) & 0xFFFF:04x}): "
-            f"exceeds {max_length}-char limit or not a string"
+            f"must be a string, got {type(name).__name__}"
+        )
+    if len(name) > max_length:
+        raise ValueError(
+            f"Invalid SQL identifier "
+            f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+            f"exceeds {max_length}-char limit (len={len(name)})"
         )
     if not _IDENTIFIER_RE.match(name):
         raise ValueError(

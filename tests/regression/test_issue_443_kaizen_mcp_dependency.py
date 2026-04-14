@@ -61,17 +61,18 @@ def test_kailash_kaizen_declares_kailash_mcp_dependency():
     (per rules/testing.md) — it reads the actual install metadata that pip
     and uv use at install time.
     """
+    from packaging.requirements import Requirement
+
     requires = importlib.metadata.requires("kailash-kaizen")
     assert (
         requires is not None
     ), "kailash-kaizen has no requires metadata — package may be broken"
 
-    has_kailash_mcp = any(
-        req.split()[0].split(";")[0].split(">=")[0].split("==")[0].strip()
-        == "kailash-mcp"
-        for req in requires
-    )
-    assert has_kailash_mcp, (
+    # Use the canonical requirement parser instead of hand-rolled split()
+    # chains: handles >=, <=, ~=, !=, ==, extras, environment markers,
+    # and combined specifiers like "kailash-mcp>=0.2.3,<1.0".
+    declared_names = {Requirement(req).name for req in requires}
+    assert "kailash-mcp" in declared_names, (
         f"kailash-kaizen does NOT declare kailash-mcp as a dependency. "
-        f"Requirements: {requires}"
+        f"Declared: {sorted(declared_names)}"
     )
