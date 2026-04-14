@@ -77,6 +77,34 @@ async def greet(name: str, greeting: str = "Hello") -> dict:
 
 # DataFlow integration — CRITICAL: prevents startup blocking
 app = Nexus(auto_discovery=False)
+
+# Function-based middleware (#449)
+@app.use_middleware
+async def timing(request, call_next):
+    t0 = time.monotonic()
+    response = await call_next(request)
+    response.headers["X-Process-Time"] = str(time.monotonic() - t0)
+    return response
+
+# Subapp mounting (#447) — compose Nexus instances
+admin = Nexus()
+admin.register("users_admin", admin_workflow.build())
+app.mount("/admin", admin)
+
+# Class-based WebSocket handlers (#448) — per-connection state
+from nexus.websocket_handlers import MessageHandler, Connection
+
+@app.websocket("/events")
+class EventStream(MessageHandler):
+    async def on_connect(self, conn: Connection) -> None:
+        conn.state.subscriptions = set()
+    async def on_message(self, conn: Connection, msg: dict) -> None:
+        if msg.get("action") == "subscribe":
+            conn.state.subscriptions.add(msg["topic"])
+    async def on_event(self, event: dict) -> None:
+        for conn in self.connections:
+            if event["topic"] in conn.state.subscriptions:
+                await conn.send_json(event)
 ```
 
 ## Transport Layer
