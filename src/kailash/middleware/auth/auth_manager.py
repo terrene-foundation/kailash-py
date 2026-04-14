@@ -1,21 +1,34 @@
-"""
-SDK-based Authentication Manager for Kailash Middleware
+"""SDK-based authentication manager for Kailash middleware.
 
 This module provides authentication management using SDK security nodes
 instead of manual JWT handling and custom implementations.
 
-Moved from middleware/auth.py to resolve directory/file confusion.
+Migration note (#445 Wave 1)
+----------------------------
+This module previously imported FastAPI (``Depends``, ``HTTPException``,
+``HTTPBearer``) to expose auth as a FastAPI dependency. Per the
+framework-first policy (only the adapter/transport layer may touch raw
+HTTP libraries), the auth manager now exposes a transport-agnostic
+``authenticate_request`` method and raises Kailash trust-auth exceptions
+(``AuthenticationError``, ``AuthorizationError``, ...) rather than
+``fastapi.HTTPException``. The Nexus transport layer / NexusAuthPlugin
+middleware is responsible for mapping those exceptions to HTTP status
+codes via the ``status_code`` attribute on
+:class:`~kailash.trust.auth.exceptions.AuthError`.
+
+The removed ``get_current_user_dependency`` helper and the non-functional
+``require_auth`` stub have been deleted; they had no production callers
+and ``NotImplementedError`` stubs are BLOCKED by the zero-tolerance
+policy (rules/zero-tolerance.md Rule 2).
 """
 
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import jwt
-from fastapi import Depends, HTTPException, Request
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from ...nodes.admin import PermissionCheckNode
 from ...nodes.data import AsyncSQLDatabaseNode
@@ -26,6 +39,14 @@ from ...nodes.security import (
     SecurityEventNode,
 )
 from ...nodes.transform import DataTransformer
+from ...trust.auth.exceptions import (
+    AuthenticationError,
+    AuthError,
+    AuthorizationError,
+    ExpiredTokenError,
+    InsufficientPermissionError,
+    InvalidTokenError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,18 +62,21 @@ class AuthLevel(Enum):
 
 
 class MiddlewareAuthManager:
-    """
-    Authentication manager using SDK security nodes.
+    """Authentication manager using SDK security nodes.
 
     Provides:
-    - JWT token management with CredentialManagerNode
-    - API key rotation with RotatingCredentialNode
-    - Permission checking with PermissionCheckNode
-    - Security event logging with SecurityEventNode
-    - Audit trail with AuditLogNode
+        * JWT token management with :class:`CredentialManagerNode`
+        * API key rotation with :class:`RotatingCredentialNode`
+        * Permission checking with :class:`PermissionCheckNode`
+        * Security event logging with :class:`SecurityEventNode`
+        * Audit trail with :class:`AuditLogNode`
 
-    This replaces manual JWT handling with SDK components for better
-    security, performance, and consistency.
+    The manager is transport-agnostic. It raises Kailash
+    :class:`~kailash.trust.auth.exceptions.AuthError` subclasses (whose
+    ``status_code`` attribute carries the HTTP semantic: 401 for
+    authentication failures, 403 for authorization failures). The Nexus
+    transport layer / :class:`nexus.auth.plugin.NexusAuthPlugin` middleware
+    maps these to HTTP responses.
     """
 
     def __init__(
@@ -63,15 +87,16 @@ class MiddlewareAuthManager:
         enable_audit: bool = True,
         database_url: Optional[str] = None,
     ):
-        """
-        Initialize SDK Auth Manager.
+        """Initialize the middleware auth manager.
 
         Args:
-            secret_key: Secret key for JWT signing (will use CredentialManager)
-            token_expiry_hours: Token expiration time in hours
-            enable_api_keys: Enable API key authentication
-            enable_audit: Enable audit logging
-            database_url: Database URL for persistence
+            secret_key: Secret key for JWT signing. In production, JWT
+                secrets should come from the environment or a secrets
+                manager (vault), not from configuration.
+            token_expiry_hours: Token expiration time in hours.
+            enable_api_keys: Enable API key authentication.
+            enable_audit: Enable audit logging.
+            database_url: Database URL for persistence.
         """
         self.token_expiry_hours = token_expiry_hours
         self.enable_api_keys = enable_api_keys
@@ -80,17 +105,13 @@ class MiddlewareAuthManager:
         # Initialize SDK security nodes
         self._initialize_security_nodes(secret_key or "", database_url or "")
 
-        # FastAPI security scheme
-        self.bearer_scheme = HTTPBearer(auto_error=False)
-
     def _initialize_security_nodes(self, secret_key: str, database_url: str):
         """Initialize all SDK security nodes."""
-
         # Store the secret key in memory for JWT operations
         self.secret_key = secret_key
 
-        # Credential manager for fetching other credentials (not for JWT secret)
-        # In production, JWT secret would come from environment or vault
+        # Credential manager for fetching other credentials (not for JWT secret).
+        # In production, JWT secret would come from environment or vault.
         self.credential_manager = CredentialManagerNode(
             credential_name="api_credentials",
             credential_type="api_key",
@@ -101,8 +122,8 @@ class MiddlewareAuthManager:
         if self.enable_api_keys:
             self.api_key_manager = RotatingCredentialNode(
                 name="api_key_rotator"
-                # Note: RotatingCredentialNode doesn't require credential_name or rotation_interval_days in __init__
-                # These are passed during execution
+                # RotatingCredentialNode doesn't require credential_name or
+                # rotation_interval_days in __init__; they're passed at execute.
             )
 
         # Permission checker
@@ -129,21 +150,23 @@ class MiddlewareAuthManager:
     async def create_access_token(
         self,
         user_id: str,
-        permissions: List[str] | None = None,
-        metadata: Dict[str, Any] | None = None,
+        permissions: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
-        """
-        Create JWT access token using SDK nodes.
+        """Create a JWT access token.
 
         Args:
-            user_id: User identifier
-            permissions: List of permissions
-            metadata: Additional metadata
+            user_id: User identifier.
+            permissions: List of permissions.
+            metadata: Additional metadata.
 
         Returns:
-            JWT token string
+            JWT token string.
+
+        Raises:
+            AuthError: If the token cannot be signed (e.g. misconfigured
+                secret).
         """
-        # Create token payload
         payload = {
             "user_id": user_id,
             "permissions": permissions or [],
@@ -153,18 +176,13 @@ class MiddlewareAuthManager:
             "iat": datetime.now(timezone.utc),
         }
 
-        # Create JWT token
-        # In production, this would use a more sophisticated approach
-        # For now, we'll use the JWT library directly
         try:
             token = jwt.encode(payload, self.secret_key, algorithm="HS256")
-            token_result = {"token": token}
         except Exception as e:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to create token: {str(e)}"
-            )
+            logger.error("create_access_token.failed", extra={"error": str(e)})
+            raise AuthError(f"Failed to create token: {e}") from e
 
-        # Log token creation
+        # Audit token creation
         if self.enable_audit:
             self.audit_logger.execute(
                 user_id=user_id,
@@ -174,61 +192,72 @@ class MiddlewareAuthManager:
                 details={"permissions": permissions},
             )
 
-        return token_result.get("token") or ""
+        return token
 
     async def verify_token(self, token: str) -> Dict[str, Any]:
-        """
-        Verify and decode JWT token using SDK nodes.
+        """Verify and decode a JWT token.
 
         Args:
-            token: JWT token string
+            token: JWT token string.
 
         Returns:
-            Decoded token payload
+            Decoded token payload.
 
         Raises:
-            HTTPException: If token is invalid
+            ExpiredTokenError: If the token has expired.
+            InvalidTokenError: If the token signature or structure is
+                invalid.
         """
         try:
-            # Verify JWT token
             payload = jwt.decode(token, self.secret_key, algorithms=["HS256"])
-
-            # Check expiration
-            if payload.get("exp", 0) < datetime.now(timezone.utc).timestamp():
-                raise HTTPException(status_code=401, detail="Token has expired")
-
-            return payload
-
+        except jwt.ExpiredSignatureError as e:
+            self.security_logger.execute(
+                event_type="token_expired",
+                severity="warning",
+                details={"error": str(e)},
+            )
+            raise ExpiredTokenError("Token has expired") from e
         except Exception as e:
-            # Log security event
             self.security_logger.execute(
                 event_type="token_verification_failed",
                 severity="warning",
                 details={"error": str(e)},
             )
-            raise HTTPException(status_code=401, detail="Invalid authentication token")
+            raise InvalidTokenError("Invalid authentication token") from e
+
+        # Defensive expiration check (PyJWT already validates exp; this
+        # preserves the original behavior for payloads decoded via paths
+        # that somehow bypass the library check).
+        exp = payload.get("exp", 0)
+        if exp and exp < datetime.now(timezone.utc).timestamp():
+            raise ExpiredTokenError("Token has expired")
+
+        return payload
 
     async def create_api_key(
-        self, user_id: str, key_name: str, permissions: Optional[List[str]] = None
+        self,
+        user_id: str,
+        key_name: str,
+        permissions: Optional[List[str]] = None,
     ) -> str:
-        """
-        Create API key using RotatingCredentialNode.
+        """Create an API key using :class:`CredentialManagerNode`.
 
         Args:
-            user_id: User identifier
-            key_name: Name for the API key
-            permissions: List of permissions
+            user_id: User identifier.
+            key_name: Human-readable name for the API key.
+            permissions: List of permissions.
 
         Returns:
-            API key string
+            The generated API key string.
+
+        Raises:
+            AuthError: If API keys are disabled or storage fails.
         """
         if not self.enable_api_keys:
-            raise HTTPException(status_code=400, detail="API keys are disabled")
+            raise AuthError("API keys are disabled")
 
-        # Generate a secure API key
         api_key = f"sk_{secrets.token_urlsafe(32)}"
 
-        # Store API key metadata using credential manager
         result = self.credential_manager.execute(
             operation="store_credential",
             credential_name=api_key,
@@ -242,9 +271,8 @@ class MiddlewareAuthManager:
         )
 
         if not result.get("success", False):
-            raise HTTPException(status_code=500, detail="Failed to create API key")
+            raise AuthError("Failed to create API key")
 
-        # Audit log
         if self.enable_audit:
             self.audit_logger.execute(
                 user_id=user_id,
@@ -257,57 +285,54 @@ class MiddlewareAuthManager:
         return api_key
 
     async def verify_api_key(self, api_key: str) -> Dict[str, Any]:
-        """
-        Verify API key using SDK nodes.
+        """Verify an API key.
 
         Args:
-            api_key: API key string
+            api_key: API key string.
 
         Returns:
-            API key metadata including user_id and permissions
+            API key metadata (``user_id``, ``permissions``, ...).
 
         Raises:
-            HTTPException: If API key is invalid
+            AuthenticationError: If API keys are disabled or the key is
+                invalid.
         """
         if not self.enable_api_keys:
-            raise HTTPException(status_code=400, detail="API keys are disabled")
+            raise AuthError("API keys are disabled")
 
         try:
-            # Verify using credential manager since rotating credential node doesn't have verify
             result = self.credential_manager.execute(
                 operation="get_credential", credential_name=api_key
             )
-
-            if not result.get("success", False):
-                raise HTTPException(status_code=401, detail="Invalid API key")
-
-            credential_data = result.get("credential", {})
-            return credential_data.get("metadata", {})
-
-        except HTTPException:
-            raise
         except Exception as e:
-            # Log security event
             self.security_logger.execute(
                 event_type="api_key_verification_failed",
                 severity="warning",
                 details={"error": str(e)},
             )
-            raise HTTPException(status_code=401, detail="Invalid API key")
+            raise AuthenticationError("Invalid API key") from e
+
+        if not result.get("success", False):
+            raise AuthenticationError("Invalid API key")
+
+        credential_data = result.get("credential", {})
+        return credential_data.get("metadata", {})
 
     async def check_permission(
-        self, user_id: str, permission: str, resource: Optional[Dict[str, Any]] = None  # type: ignore[assignment]
+        self,
+        user_id: str,
+        permission: str,
+        resource: Optional[Dict[str, Any]] = None,
     ) -> bool:
-        """
-        Check user permission using PermissionCheckNode.
+        """Check whether *user_id* holds *permission*.
 
         Args:
-            user_id: User identifier
-            permission: Permission to check
-            resource: Optional resource context
+            user_id: User identifier.
+            permission: Permission to check.
+            resource: Optional resource context.
 
         Returns:
-            True if permission is granted
+            ``True`` if the permission is granted.
         """
         result = self.permission_checker.execute(
             user_context={"user_id": user_id},
@@ -317,7 +342,6 @@ class MiddlewareAuthManager:
 
         granted = result.get("authorized", False)
 
-        # Audit permission check
         if self.enable_audit:
             self.audit_logger.execute(
                 user_id=user_id,
@@ -329,94 +353,125 @@ class MiddlewareAuthManager:
 
         return granted
 
-    def get_current_user_dependency(self, required_permissions: List[str] = None):  # type: ignore[reportArgumentType]
-        """
-        Create FastAPI dependency for user authentication.
+    async def authenticate_request(
+        self,
+        authorization_header: Optional[str] = None,
+        api_key_header: Optional[str] = None,
+        required_permissions: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Authenticate a request and return the resolved user context.
+
+        Transport-agnostic replacement for the old FastAPI
+        ``get_current_user_dependency``. Nexus middleware (or any HTTP
+        adapter) should call this with the raw header values and handle
+        the resulting exceptions by mapping them to HTTP status codes via
+        the ``status_code`` attribute on
+        :class:`~kailash.trust.auth.exceptions.AuthError`.
 
         Args:
-            required_permissions: List of required permissions
+            authorization_header: Value of the ``Authorization`` header
+                (e.g. ``"Bearer <token>"``).
+            api_key_header: Value of the ``X-API-Key`` header.
+            required_permissions: Permissions the caller must hold.
 
         Returns:
-            FastAPI dependency function
+            Dict with ``user_id``, ``permissions``, and ``metadata``.
+
+        Raises:
+            AuthenticationError: No valid credentials were supplied.
+            InsufficientPermissionError: Credentials are valid but lack a
+                required permission.
         """
+        last_auth_error: Optional[AuthError] = None
 
-        async def verify_user(
-            request: Request,
-            credentials: HTTPAuthorizationCredentials = Depends(self.bearer_scheme),
-        ) -> Dict[str, Any]:
-            """Verify user from request."""
+        # Try bearer token first.
+        bearer_token = _extract_bearer_token(authorization_header)
+        if bearer_token:
+            try:
+                payload = await self.verify_token(bearer_token)
+                user_id = payload.get("user_id")
+                token_permissions = payload.get("permissions", [])
+                await self._enforce_permissions(
+                    user_id, token_permissions, required_permissions
+                )
+                return {
+                    "user_id": user_id,
+                    "permissions": token_permissions,
+                    "metadata": payload.get("metadata", {}),
+                }
+            except AuthorizationError:
+                # Authorization failures are terminal — don't silently
+                # fall through to API keys when a valid token is present
+                # but lacks a permission (that would mask the real reason).
+                raise
+            except AuthError as e:
+                last_auth_error = e
 
-            # Try bearer token first
-            if credentials and credentials.credentials:
-                try:
-                    payload = await self.verify_token(credentials.credentials)
-                    user_id = payload.get("user_id")
+        # Try API key from header.
+        if api_key_header:
+            try:
+                metadata = await self.verify_api_key(api_key_header)
+                user_id = metadata.get("user_id")
+                key_permissions = metadata.get("permissions", [])
+                await self._enforce_permissions(
+                    user_id, key_permissions, required_permissions
+                )
+                return {
+                    "user_id": user_id,
+                    "permissions": key_permissions,
+                    "metadata": metadata,
+                }
+            except AuthorizationError:
+                raise
+            except AuthError as e:
+                last_auth_error = e
 
-                    # Check permissions if required
-                    if required_permissions:
-                        user_permissions = payload.get("permissions", [])
-                        for perm in required_permissions:
-                            if perm not in user_permissions:
-                                # Check using permission node
-                                if not await self.check_permission(user_id, perm):  # type: ignore[reportArgumentType]
-                                    raise HTTPException(
-                                        status_code=403,
-                                        detail=f"Missing required permission: {perm}",
-                                    )
+        # No valid authentication — surface the most specific error if we
+        # have one, otherwise a generic authentication failure.
+        if last_auth_error is not None:
+            raise last_auth_error
+        raise AuthenticationError("Not authenticated")
 
-                    return {
-                        "user_id": user_id,
-                        "permissions": payload.get("permissions", []),
-                        "metadata": payload.get("metadata", {}),
-                    }
-                except HTTPException:
-                    pass
-
-            # Try API key from header
-            api_key = request.headers.get("X-API-Key")
-            if api_key:
-                try:
-                    metadata = await self.verify_api_key(api_key)
-                    user_id = metadata.get("user_id")
-
-                    # Check permissions
-                    if required_permissions:
-                        key_permissions = metadata.get("permissions", [])
-                        for perm in required_permissions:
-                            if perm not in key_permissions:
-                                if not await self.check_permission(user_id, perm):  # type: ignore[reportArgumentType]
-                                    raise HTTPException(
-                                        status_code=403,
-                                        detail=f"Missing required permission: {perm}",
-                                    )
-
-                    return {
-                        "user_id": user_id,
-                        "permissions": metadata.get("permissions", []),
-                        "metadata": metadata,
-                    }
-                except HTTPException:
-                    pass
-
-            # No valid authentication
-            raise HTTPException(status_code=401, detail="Not authenticated")
-
-        return verify_user
+    async def _enforce_permissions(
+        self,
+        user_id: Optional[str],
+        held_permissions: List[str],
+        required_permissions: Optional[List[str]],
+    ) -> None:
+        """Raise :class:`InsufficientPermissionError` if any required
+        permission is missing, falling back to the permission node when
+        the held-permissions list is incomplete.
+        """
+        if not required_permissions:
+            return
+        for perm in required_permissions:
+            if perm in held_permissions:
+                continue
+            if user_id is None or not await self.check_permission(user_id, perm):
+                raise InsufficientPermissionError(
+                    f"Missing required permission: {perm}"
+                )
 
 
-# Convenience function for creating auth dependencies
-def require_auth(permissions: List[str] = None):  # type: ignore[reportArgumentType]
+def _extract_bearer_token(authorization_header: Optional[str]) -> Optional[str]:
+    """Extract the token from an ``Authorization: Bearer <token>`` header.
+
+    Returns ``None`` if the header is missing, malformed, or uses a
+    different scheme. Case-insensitive on the scheme name per RFC 7235.
     """
-    Create authentication dependency with required permissions.
+    if not authorization_header:
+        return None
+    parts = authorization_header.strip().split(None, 1)
+    if len(parts) != 2:
+        return None
+    scheme, token = parts
+    if scheme.lower() != "bearer":
+        return None
+    token = token.strip()
+    return token or None
 
-    Args:
-        permissions: List of required permissions
 
-    Returns:
-        FastAPI dependency
-    """
-    # This would use a global auth manager instance
-    # In practice, this would be configured at app startup
-    raise NotImplementedError(
-        "Use auth_manager.get_current_user_dependency(permissions) instead"
-    )
+__all__ = [
+    "AuthLevel",
+    "MiddlewareAuthManager",
+]

@@ -5,6 +5,19 @@ This module provides:
 - Automatic request deduplication
 - Event sourcing integration
 - Backward compatibility with existing gateway
+
+Migration note (#445 Wave 1)
+----------------------------
+Raw FastAPI imports have been moved to ``kailash.adapters.http_compat``
+per the framework-first policy (only adapter/transport code may touch
+raw HTTP libraries). When Waves 2-3 migrate the parent
+:class:`WorkflowAPIGateway` off FastAPI, the compat module is the single
+seam to update.
+
+The HTTP middleware decoration here is written as
+``@self.app.middleware("http")``. Once :class:`WorkflowAPIGateway` becomes
+a Nexus app, this can be rewritten as ``@self.app.use_middleware`` (see
+PR #454). Both patterns expect the same ``(request, call_next)`` contract.
 """
 
 import asyncio
@@ -13,9 +26,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any, Callable, Dict, List, Optional
 
-from fastapi import HTTPException, Request, Response
-from fastapi.responses import JSONResponse
-
+from kailash.adapters.http_compat import HTTPException, JSONResponse, Request, Response
 from kailash.api.gateway import WorkflowAPIGateway
 
 from .checkpoint_manager import CheckpointManager

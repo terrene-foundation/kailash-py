@@ -20,7 +20,7 @@ from ..runtime.shutdown import ShutdownCoordinator
 from ..workflow import Workflow
 from .connection_metrics_router import (
     ConnectionMetricsProvider,
-    create_connection_metrics_router,
+    register_connection_metrics,
 )
 
 logger = logging.getLogger(__name__)
@@ -160,12 +160,14 @@ class WorkflowServer:
                 allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
             )
 
-        # Connection metrics
+        # Connection metrics — registered via Nexus-compatible adapter
+        # (see connection_metrics_router.py module docstring for migration notes)
         self._connection_metrics_provider = ConnectionMetricsProvider()
-        self._connection_metrics_router = create_connection_metrics_router(
+        register_connection_metrics(
+            self.app,
             self._connection_metrics_provider,
+            prefix="/connections",
         )
-        self.app.include_router(self._connection_metrics_router, prefix="/connections")
 
         # Live dashboard endpoint
         self._register_dashboard_endpoint()

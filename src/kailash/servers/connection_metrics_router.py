@@ -1,23 +1,31 @@
-"""FastAPI router for connection pool metrics.
+"""Connection pool metrics endpoints.
 
 Exposes connection pool health, utilization, and alert data collected by the
 :class:`~kailash.nodes.monitoring.connection_dashboard.ConnectionDashboardNode`
-as REST endpoints that can be mounted on a :class:`WorkflowServer`.
+as REST endpoints that can be registered on a :class:`WorkflowServer`.
 
-Endpoints:
-    GET /metrics        -- Current pool metrics (JSON)
-    GET /pools          -- Per-pool status summary
-    GET /alerts         -- Active alerts and rules
+Endpoints registered at *prefix* (default ``/connections``):
+    GET {prefix}/metrics  -- Current pool metrics (JSON)
+    GET {prefix}/pools    -- Per-pool status summary
+    GET {prefix}/alerts   -- Active alerts and rules
 
-The router also contributes Prometheus-formatted gauge lines to the
+The provider also contributes Prometheus-formatted gauge lines to the
 server-level ``/metrics`` endpoint via :func:`get_prometheus_lines`.
+
+Migration note
+--------------
+Prior revisions of this module exposed ``create_connection_metrics_router``
+which returned a FastAPI ``APIRouter``. As part of the FastAPI -> Nexus
+migration (#445 Wave 1), the router factory has been replaced with
+:func:`register_connection_metrics` which registers handlers directly via
+the ``add_api_route`` method present on both FastAPI apps and Nexus apps.
+This keeps engine-level code free of raw FastAPI imports while preserving
+the external HTTP contract.
 """
 
 import logging
 import time
 from typing import Any, Dict, List, Optional
-
-from fastapi import APIRouter
 
 logger = logging.getLogger(__name__)
 
@@ -102,25 +110,14 @@ class ConnectionMetricsProvider:
         return lines
 
 
-def create_connection_metrics_router(
-    provider: Optional[ConnectionMetricsProvider] = None,
-) -> APIRouter:
-    """Create a FastAPI router for connection metrics.
+def _build_endpoint_handlers(provider: ConnectionMetricsProvider):
+    """Construct the three endpoint coroutines bound to *provider*.
 
-    Args:
-        provider: Optional provider instance.  A default (empty) provider
-            is created if none is supplied.
-
-    Returns:
-        Configured :class:`APIRouter`.
+    Extracted so :func:`register_connection_metrics` stays simple and so
+    tests can exercise the handler logic independently of any HTTP app.
     """
-    if provider is None:
-        provider = ConnectionMetricsProvider()
 
-    router = APIRouter(tags=["connections"])
-
-    @router.get("/metrics")
-    async def connection_metrics():
+    async def connection_metrics() -> Dict[str, Any]:
         """Current connection pool metrics."""
         pool_data = await provider.collect()
         return {
@@ -128,11 +125,10 @@ def create_connection_metrics_router(
             "pools": pool_data,
         }
 
-    @router.get("/pools")
-    async def connection_pools():
+    async def connection_pools() -> Dict[str, Dict[str, Any]]:
         """Per-pool status summary."""
         pool_data = await provider.collect()
-        summary = {}
+        summary: Dict[str, Dict[str, Any]] = {}
         for name, stats in pool_data.items():
             utilization = stats.get("utilization", 0.0)
             if utilization >= 0.95:
@@ -147,8 +143,7 @@ def create_connection_metrics_router(
             }
         return summary
 
-    @router.get("/alerts")
-    async def connection_alerts():
+    async def connection_alerts() -> Dict[str, Any]:
         """Active connection alerts based on pool thresholds."""
         pool_data = await provider.collect()
         alerts: List[Dict[str, Any]] = []
@@ -188,7 +183,64 @@ def create_connection_metrics_router(
                 )
         return {"active_alerts": alerts, "total": len(alerts)}
 
-    # Stash provider on router for external access (e.g. Prometheus merge)
-    router.provider = provider  # type: ignore[attr-defined]
+    return connection_metrics, connection_pools, connection_alerts
 
-    return router
+
+def register_connection_metrics(
+    app: Any,
+    provider: Optional[ConnectionMetricsProvider] = None,
+    *,
+    prefix: str = "/connections",
+    tags: Optional[List[str]] = None,
+) -> ConnectionMetricsProvider:
+    """Register connection metrics endpoints on *app*.
+
+    The *app* argument is duck-typed: any object with an ``add_api_route``
+    method (FastAPI ``FastAPI`` / ``APIRouter`` instances, Nexus apps) will
+    work. This keeps engine-level code free of FastAPI-specific imports.
+
+    Args:
+        app: Application/router object exposing
+            ``add_api_route(path, endpoint, methods=[...], tags=[...])``.
+        provider: Optional provider instance. A default (empty) provider
+            is created if none is supplied.
+        prefix: URL prefix for the endpoints (default ``/connections``).
+        tags: Optional OpenAPI tags (default ``["connections"]``).
+
+    Returns:
+        The :class:`ConnectionMetricsProvider` bound to the endpoints, so
+        callers can register pool sources and later generate Prometheus
+        lines from the same provider instance.
+    """
+    if provider is None:
+        provider = ConnectionMetricsProvider()
+    effective_tags = tags if tags is not None else ["connections"]
+
+    metrics_handler, pools_handler, alerts_handler = _build_endpoint_handlers(provider)
+
+    app.add_api_route(
+        f"{prefix}/metrics",
+        metrics_handler,
+        methods=["GET"],
+        tags=effective_tags,
+    )
+    app.add_api_route(
+        f"{prefix}/pools",
+        pools_handler,
+        methods=["GET"],
+        tags=effective_tags,
+    )
+    app.add_api_route(
+        f"{prefix}/alerts",
+        alerts_handler,
+        methods=["GET"],
+        tags=effective_tags,
+    )
+
+    return provider
+
+
+__all__ = [
+    "ConnectionMetricsProvider",
+    "register_connection_metrics",
+]

@@ -4,6 +4,14 @@ This module provides :class:`DurableWorkflowServer`, which extends
 :class:`WorkflowServer` with request durability features: automatic
 checkpointing, idempotent deduplication, event-sourced audit trail,
 and recovery from the latest checkpoint via :class:`DurableRequest`.
+
+Migration note (#445 Wave 1)
+----------------------------
+Raw FastAPI imports have been moved to ``kailash.adapters.http_compat``
+per the framework-first policy. The HTTP middleware decoration is
+written as ``@self.app.middleware("http")``; once :class:`WorkflowServer`
+becomes a Nexus app (Wave 2+), it can be rewritten as
+``@self.app.use_middleware`` (PR #454).
 """
 
 import asyncio
@@ -12,9 +20,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any, Callable, Dict, List, Optional
 
-from fastapi import HTTPException, Request, Response
-from fastapi.responses import JSONResponse
-
+from ..adapters.http_compat import HTTPException, JSONResponse, Request, Response
 from ..middleware.gateway.checkpoint_manager import CheckpointManager
 from ..middleware.gateway.deduplicator import RequestDeduplicator
 from ..middleware.gateway.durable_request import (

@@ -1,16 +1,22 @@
-"""Tests for the connection metrics FastAPI router.
+"""Tests for the connection metrics endpoint registration.
 
 Validates the /connections/metrics, /connections/pools, and
 /connections/alerts endpoints as well as Prometheus line generation.
+
+Post-migration note (#445 Wave 1): the module now exposes
+``register_connection_metrics`` (registers handlers directly on the host
+app/router via ``add_api_route``) instead of the old
+``create_connection_metrics_router`` factory. These tests construct a
+minimal FastAPI app *in test scope* (exempt from the framework-first
+hook) and verify the handler behavior end-to-end.
 """
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.kailash.servers.connection_metrics_router import (
     ConnectionMetricsProvider,
-    create_connection_metrics_router,
+    register_connection_metrics,
 )
 
 
@@ -25,15 +31,14 @@ class _FakePool:
 
 
 def _make_app(provider: ConnectionMetricsProvider | None = None) -> FastAPI:
-    """Create a minimal FastAPI app with the connection metrics router."""
+    """Create a minimal FastAPI app with the connection metrics handlers."""
     app = FastAPI()
-    router = create_connection_metrics_router(provider)
-    app.include_router(router, prefix="/connections")
+    register_connection_metrics(app, provider, prefix="/connections")
     return app
 
 
 class TestConnectionMetricsRouter:
-    """Endpoint tests for the connection metrics router."""
+    """Endpoint tests for the connection metrics handlers."""
 
     def test_metrics_endpoint_empty(self):
         """GET /connections/metrics returns empty pool data when no sources."""
@@ -134,3 +139,22 @@ class TestPrometheusLines:
         for line in lines:
             assert line.startswith("kailash_connection_")
             assert 'pool="main_pool"' in line
+
+    def test_prometheus_lines_empty(self):
+        """Empty pool data produces no lines."""
+        provider = ConnectionMetricsProvider()
+        assert provider.get_prometheus_lines({}) == []
+
+    def test_prometheus_lines_skips_error_field(self):
+        """String 'error' field does not produce a Prometheus line."""
+        provider = ConnectionMetricsProvider()
+        pool_data = {
+            "bad_pool": {
+                "health_score": 0,
+                "error": "connection refused",
+            }
+        }
+        lines = provider.get_prometheus_lines(pool_data)
+        # Only numeric fields produce lines; string "error" is skipped
+        assert all('error="' not in line for line in lines)
+        assert any("health_score" in line for line in lines)
