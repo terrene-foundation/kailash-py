@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash"
-version = "2.8.5"
+version = "2.8.6"
 description = "Python SDK for the Kailash container-node architecture"
 authors = [
     {name = "Terrene Foundation", email = "info@terrene.foundation"}
@@ -77,13 +77,13 @@ dependencies = [
 [project.optional-dependencies]
 # Sub-packages (separate PyPI packages)
 dataflow = [
-    "kailash-dataflow>=2.0.3",
+    "kailash-dataflow>=2.0.8",
 ]
 nexus = [
-    "kailash-nexus>=2.0.0",
+    "kailash-nexus>=2.0.2",
 ]
 kaizen = [
-    "kailash-kaizen>=2.7.1",
+    "kailash-kaizen>=2.7.4",
     "kaizen-agents>=0.9.0",
 ]
 pact = [
@@ -131,7 +131,7 @@ dev = [
     "websockets>=12.0",
     # Sub-packages required for test collection (pact/mcp tests import these)
     "kailash-pact>=0.8.1",
-    "kailash-mcp>=0.1.0",
+    "kailash-mcp>=0.2.4",
 ]
 # Documentation
 docs = [
@@ -146,9 +146,9 @@ docs = [
 ]
 # Everything (core + all sub-packages with their optional deps)
 all = [
-    "kailash-dataflow>=2.0.3",
-    "kailash-nexus>=2.0.0",
-    "kailash-kaizen>=2.7.1",
+    "kailash-dataflow>=2.0.8",
+    "kailash-nexus>=2.0.2",
+    "kailash-kaizen>=2.7.4",
     "kaizen-agents>=0.9.0",
     "kailash-pact>=0.8.1",
     "kailash-ml[all]>=0.8.1",

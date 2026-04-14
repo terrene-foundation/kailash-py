@@ -25,6 +25,11 @@ Usage:
     app.start()
 """
 
+# Auth symbols — importable from nexus without triggering the nexus.auth
+# deprecation warning (SPEC-06 consolidation moves auth to kailash.trust.auth,
+# but these re-exports keep the cross-SDK API surface stable).
+import warnings as _warnings
+
 from .background import BackgroundService
 from .core import (
     MiddlewareInfo,
@@ -46,27 +51,10 @@ from .sse import register_sse_endpoint
 from .transports import HTTPTransport, MCPTransport, Transport
 from .websocket_handlers import Connection, MessageHandler, MessageHandlerRegistry
 
-# Auth symbols — importable from nexus without triggering the nexus.auth
-# deprecation warning (SPEC-06 consolidation moves auth to kailash.trust.auth,
-# but these re-exports keep the cross-SDK API surface stable).
-import warnings as _warnings
-
 with _warnings.catch_warnings():
     _warnings.simplefilter("ignore", DeprecationWarning)
     from .auth.guards import AuthGuard
     from .auth.plugin import NexusAuthPlugin
-from .errors import (
-    BadGatewayError,
-    ConflictError,
-    NotFoundError,
-    NexusError,
-    PermissionError as NexusPermissionError,
-    RateLimitError,
-    ServiceUnavailableError,
-    TimeoutError as NexusTimeoutError,
-    UnauthorizedError,
-    ValidationError,
-)
 
 # Re-export Starlette types so Nexus consumers can `from nexus import Request, ...`
 # instead of importing directly from starlette or fastapi. This allows the
@@ -77,7 +65,13 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-__version__ = "2.0.1"
+from .errors import BadGatewayError, ConflictError, NexusError, NotFoundError
+from .errors import PermissionError as NexusPermissionError
+from .errors import RateLimitError, ServiceUnavailableError
+from .errors import TimeoutError as NexusTimeoutError
+from .errors import UnauthorizedError, ValidationError
+
+__version__ = "2.0.2"
 __all__ = [
     # Core
     "Nexus",
