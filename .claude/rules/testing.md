@@ -130,6 +130,115 @@ Any numerical claim about test counts, file counts, or coverage in session notes
 
 Origin: `workspaces/arbor-upstream-fixes/.session-notes` (2026-04-12)
 
+## Test Resource Cleanup Discipline
+
+The unit test suite is a leading indicator of production hygiene. Warnings emitted during `pytest` are not "noise" — every `ResourceWarning`, `RuntimeWarning`, or `DeprecationWarning` is a real bug in either the test or the code-under-test that will surface as a production incident in a different shape.
+
+### MUST: Fixtures Yield + Cleanup, Never Return
+
+Any fixture that constructs a resource (channel, runtime, server, connection, pool) MUST use `yield` and call the resource's cleanup method after `yield`. `return` in a fixture that creates a stateful resource is BLOCKED.
+
+```python
+# DO — yield + cleanup, resource closed when test exits
+@pytest.fixture
+def cli_channel(channel_config, mock_input_stream, mock_output_stream):
+    channel = CLIChannel(
+        config=channel_config,
+        input_stream=mock_input_stream,
+        output_stream=mock_output_stream,
+    )
+    yield channel
+    channel.close()
+
+# DO NOT — return without cleanup, resource leaks until GC
+@pytest.fixture
+def cli_channel(channel_config, mock_input_stream, mock_output_stream):
+    return CLIChannel(
+        config=channel_config,
+        input_stream=mock_input_stream,
+        output_stream=mock_output_stream,
+    )
+```
+
+**BLOCKED rationalizations:**
+
+- "The class has a `__del__` so the GC will clean it up"
+- "It's a unit test, the process exits anyway"
+- "The mock makes the resource fake, no real cleanup needed"
+
+**Why:** Resource classes that emit `ResourceWarning` from `__del__` (CLIChannel, LocalRuntime, AsyncLocalRuntime, AsyncSQLDatabaseNode) flood the test runner with warnings that hide real signals. Fixtures using `return` accumulate orphan resources across the test session — 36 unclosed channels in `test_cli_channel_comprehensive.py` produced 36 warnings before this rule landed (PR #466).
+
+### MUST: AsyncMock Replaced By Mock When side_effect Is `async def`
+
+When patching an awaitable function (e.g. `asyncio.open_connection`, `asyncio.wait_for`) with a side_effect that is itself an `async def`, MUST use `Mock(new_callable=Mock)` not the default `AsyncMock`. The `async def` side_effect already returns the coroutine — `AsyncMock` wraps it again and the inner wrapper is never awaited.
+
+```python
+# DO — Mock with async side_effect, no double-wrap
+async def fake_open(*args, **kwargs):
+    return (mock_reader, mock_writer)
+
+with patch("asyncio.open_connection", new_callable=Mock) as mock_oc:
+    mock_oc.side_effect = fake_open
+    # production code awaits mock_oc(...) → fake_open() → coroutine awaited
+    await production_code()
+
+# DO NOT — AsyncMock + async side_effect, leaks _execute_mock_call coroutine
+async def fake_open(*args, **kwargs):
+    return (mock_reader, mock_writer)
+
+with patch("asyncio.open_connection") as mock_oc:  # default = AsyncMock for awaitables
+    mock_oc.side_effect = fake_open
+    # AsyncMock._execute_mock_call wraps fake_open() into another coroutine that's never awaited
+    # → RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+```
+
+**Why:** `AsyncMock` introspects the patched target; if it's a coroutine function, every `__call__` creates an internal `_execute_mock_call` coroutine that wraps the side_effect. When the side_effect itself is `async def`, the wrapper coroutine is created but never awaited — the warning surfaces during garbage collection, hours after the test passed. Source: PR #466 fix in `tests/unit/mcp_server/test_discovery.py`.
+
+### MUST: Test Helper Classes Without `__init__` Use Stub Naming
+
+Classes in test files that act as helper implementations (subclasses of production base classes) MUST NOT use the `Test` prefix. pytest collects every class matching `python_classes = Test*`, and a helper class with `__init__(self, **kwargs)` raises `PytestCollectionWarning: cannot collect test class because it has a __init__ constructor`.
+
+```python
+# DO — Stub naming bypasses pytest collection
+class ConditionalRuntimeStub(BaseRuntime, ConditionalExecutionMixin):
+    """Helper runtime for testing the mixin in isolation."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.executed_nodes = []
+
+# DO NOT — Test prefix triggers collection warning + skipped tests
+class TestConditionalRuntime(BaseRuntime, ConditionalExecutionMixin):
+    """Helper runtime — but pytest tries to collect it as a test class."""
+
+    def __init__(self, **kwargs):  # <-- triggers PytestCollectionWarning
+        super().__init__(**kwargs)
+```
+
+**Why:** A `Test*` class with `__init__` is silently dropped from collection AND pollutes the warning summary. The `Stub` / `Helper` / `Fake` suffix signals intent and stays out of pytest's collection path. Source: PR #466 fix in `tests/unit/runtime/mixins/test_conditional_execution_mixin.py`.
+
+### MUST: JWT Test Secrets ≥ 32 Bytes (RFC 7518 §3.2)
+
+JWT test fixtures using HS256 / HS384 / HS512 MUST use a secret of at least 32 bytes. Short test secrets trigger `InsecureKeyLengthWarning` from PyJWT and produce false-positive security signals in CI logs.
+
+```python
+# DO — 32-byte test secret per RFC 7518
+class TestJWTAuth:
+    JWT_TEST_SECRET = "test-secret-key-minimum-32-bytes!"
+
+    def test_create_token(self):
+        auth = JWTAuth(self.JWT_TEST_SECRET, algorithm="HS256")
+        # ...
+
+# DO NOT — short test secret
+def test_create_token():
+    auth = JWTAuth("secret_key", algorithm="HS256")  # 10 bytes → InsecureKeyLengthWarning
+```
+
+**Why:** Short HMAC keys reduce brute-force resistance and are the same code path as production. A test that ships with a 10-byte key teaches the next contributor that 10 bytes is acceptable. Source: PR #466 fix in `tests/unit/mcp_server/test_auth.py`.
+
+Origin: PR #466 (2026-04-14) — eliminated 63 unit test warnings across 10 categories. Each pattern above resolves a category that recurred until the rule was added.
+
 ## 3-Tier Testing
 
 ### Tier 1 (Unit): Mocking allowed, <1s per test
