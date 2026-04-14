@@ -108,6 +108,24 @@ from kaizen import Signature, InputField, OutputField  # Signature system
 
 The deprecated sync `Agent` in `kaizen.agent` emits `DeprecationWarning` on import and will be removed in 3.0.0. Do not import from `kaizen.agent` directly.
 
+### Package Dependencies
+
+`kailash-kaizen` requires these Kailash packages at runtime:
+
+| Package              | Import name   | Required by                    | Reason                                   |
+| -------------------- | ------------- | ------------------------------ | ---------------------------------------- |
+| `kailash` (core SDK) | `kailash`     | Framework foundation           | Workflow, runtime, nodes                 |
+| `kailash-mcp`        | `kailash_mcp` | MCP tool integration (6 files) | `MCPClient`, `MCPServer`, auto-discovery |
+
+`kailash-mcp` is imported unconditionally at module load in **2 files** (verified by `rg '^from kailash_mcp|^import kailash_mcp' packages/kailash-kaizen/src/`):
+
+- `kaizen/core/base_agent.py` — base class for every Kaizen agent; the unconditional import here is what makes `kailash-mcp` a hard dependency rather than an optional extra.
+- `kaizen/mcp/builtin_server/server.py` — the bundled built-in MCP server.
+
+4 additional files (`mcp_mixin.py`, `iterative_llm_agent.py`, `llm_agent.py`, `mcp/builtin_server/tools/__init__.py`) use lazy imports inside method bodies. These would not, by themselves, force a hard dependency — but `base_agent.py` is the base class of every agent, so any `import kaizen` triggers the kailash-mcp import path.
+
+Verified by `tests/regression/test_issue_443_kaizen_mcp_dependency.py` which asserts `kailash-mcp` appears in `kailash-kaizen`'s install metadata via `importlib.metadata.requires()` AND exercises the actual import chain (`from kaizen.core.base_agent import BaseAgent` → `from kaizen_agents import Delegate`).
+
 ---
 
 ## 3. BaseAgent

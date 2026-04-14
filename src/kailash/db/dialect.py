@@ -34,6 +34,21 @@ _IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 _JSON_PATH_RE = re.compile(r"^[a-zA-Z0-9_.]+$")
 
 
+def _identifier_fingerprint(name: object) -> str:
+    """Return a 4-hex-digit fingerprint of *name* safe on unhashable inputs.
+
+    The fingerprint is a stable, non-reversible tag that lets operators
+    correlate errors in logs without echoing the raw (possibly malicious)
+    payload. Unhashable inputs (``dict``, ``list``, ``set``) that would
+    otherwise crash ``hash()`` are fingerprinted as ``"____"`` so the
+    caller can still raise a typed ``ValueError`` with a useful marker.
+    """
+    try:
+        return f"{hash(name) & 0xFFFF:04x}"
+    except TypeError:
+        return "____"
+
+
 def _validate_identifier(name: str, *, max_length: int = 128) -> None:
     """Validate a SQL identifier (table or column name).
 
@@ -48,19 +63,28 @@ def _validate_identifier(name: str, *, max_length: int = 128) -> None:
     Raises
     ------
     ValueError
-        If *name* contains characters that could enable SQL injection,
-        or exceeds the length limit.
+        If *name* is not a string, exceeds the length limit, or
+        contains characters that could enable SQL injection.
+        Unhashable non-string inputs (``dict``, ``list``, ``set``)
+        raise ``ValueError`` — NOT ``TypeError`` — because the
+        fingerprint helper is safe on unhashable values.
     """
-    if not isinstance(name, str) or len(name) > max_length:
+    if not isinstance(name, str):
         raise ValueError(
             f"Invalid SQL identifier "
-            f"(fingerprint={hash(name) & 0xFFFF:04x}): "
-            f"exceeds {max_length}-char limit or not a string"
+            f"(fingerprint={_identifier_fingerprint(name)}): "
+            f"must be a string, got {type(name).__name__}"
+        )
+    if len(name) > max_length:
+        raise ValueError(
+            f"Invalid SQL identifier "
+            f"(fingerprint={_identifier_fingerprint(name)}): "
+            f"exceeds {max_length}-char limit (len={len(name)})"
         )
     if not _IDENTIFIER_RE.match(name):
         raise ValueError(
             f"Invalid SQL identifier "
-            f"(fingerprint={hash(name) & 0xFFFF:04x}): "
+            f"(fingerprint={_identifier_fingerprint(name)}): "
             "must match [a-zA-Z_][a-zA-Z0-9_]*"
         )
 

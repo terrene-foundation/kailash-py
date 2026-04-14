@@ -11,7 +11,7 @@ Creating a Server
 
 .. code-block:: python
 
-   from kailash.mcp_server import MCPServer
+   from kailash_mcp import MCPServer
 
    # Basic server
    server = MCPServer("my-server")
@@ -119,7 +119,7 @@ Error Handling
 
 .. code-block:: python
 
-   from kailash.mcp_server.errors import (
+   from kailash_mcp.errors import (
        ToolExecutionError,
        ValidationError,
        ResourceNotFoundError
@@ -205,7 +205,7 @@ Bearer Token
 
 .. code-block:: python
 
-   from kailash.mcp_server.auth import BearerTokenAuth
+   from kailash_mcp.auth import BearerTokenAuth
 
    auth = BearerTokenAuth(token="secret-token")
    server = MCPServer("secure-server", auth=auth)
@@ -215,7 +215,7 @@ API Key
 
 .. code-block:: python
 
-   from kailash.mcp_server.auth import APIKeyAuth
+   from kailash_mcp.auth import APIKeyAuth
 
    auth = APIKeyAuth(
        api_keys=["key1", "key2", "key3"],
@@ -228,7 +228,7 @@ JWT Authentication
 
 .. code-block:: python
 
-   from kailash.mcp_server.auth import JWTAuth
+   from kailash_mcp.auth import JWTAuth
 
    auth = JWTAuth(
        secret_key="your-secret-key",
@@ -244,7 +244,7 @@ Custom Authentication
 
 .. code-block:: python
 
-   from kailash.mcp_server.auth import AuthHandler
+   from kailash_mcp.auth import AuthHandler
 
    class DatabaseAuth(AuthHandler):
        def __init__(self, db_connection):
@@ -298,7 +298,7 @@ Middleware
 
 .. code-block:: python
 
-   from kailash.mcp_server import Middleware
+   from kailash_mcp import Middleware
 
    class LoggingMiddleware(Middleware):
        async def process_request(self, request, context):
@@ -316,7 +316,7 @@ Rate Limiting
 
 .. code-block:: python
 
-   from kailash.mcp_server.middleware import RateLimiter
+   from kailash_mcp.middleware import RateLimiter
 
    # Global rate limit
    rate_limiter = RateLimiter(
@@ -459,7 +459,7 @@ Unit Testing Tools
 .. code-block:: python
 
    import pytest
-   from kailash.mcp_server import MCPServer
+   from kailash_mcp import MCPServer
 
    @pytest.fixture
    def test_server():

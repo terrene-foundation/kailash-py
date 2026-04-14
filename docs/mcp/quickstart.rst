@@ -21,7 +21,7 @@ Create a simple MCP server with basic tools:
 
    # mcp_server.py
    import asyncio
-   from kailash.mcp_server import MCPServer
+   from kailash_mcp import MCPServer
 
    # Create server
    server = MCPServer("quickstart-server")
@@ -86,7 +86,7 @@ Create a client to connect to your server:
 
    # mcp_client.py
    import asyncio
-   from kailash.mcp_server import MCPClient
+   from kailash_mcp import MCPClient
 
    async def main():
        # Create client
@@ -193,7 +193,7 @@ Here's a complete example of an MCP-powered math tutor:
    # math_tutor_server.py
    import asyncio
    import math
-   from kailash.mcp_server import MCPServer
+   from kailash_mcp import MCPServer
 
    server = MCPServer("math-tutor")
 

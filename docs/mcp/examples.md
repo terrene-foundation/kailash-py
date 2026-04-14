@@ -23,7 +23,7 @@ This document provides practical code examples and recipes for common MCP (Model
 
 ```python
 # server/hello_world.py
-from kailash.mcp_server import MCPServer
+from kailash_mcp import MCPServer
 
 # Create MCP server
 server = MCPServer("Hello World Server")
@@ -51,7 +51,7 @@ if __name__ == "__main__":
 ```python
 # client/hello_world.py
 import asyncio
-from kailash.mcp_server.client import MCPClient
+from kailash_mcp.client import MCPClient
 
 async def main():
     # Connect to server
@@ -984,8 +984,8 @@ async def clear_cache(pattern: str = "*") -> Dict[str, Any]:
 
 ```python
 # patterns/rate_limiting.py
-from kailash.mcp_server import MCPServer
-from kailash.mcp_server.auth import APIKeyAuth
+from kailash_mcp import MCPServer
+from kailash_mcp.auth import APIKeyAuth
 
 # Create server with rate limiting
 auth = APIKeyAuth(keys=["api-key-1", "api-key-2"])

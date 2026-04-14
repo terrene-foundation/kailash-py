@@ -46,13 +46,13 @@ Kailash SDK has a **complete, production-ready MCP implementation** in `src/kail
 ### 2.1 Basic Client Creation
 
 ```python
-from kailash.mcp_server import MCPClient
+from kailash_mcp import MCPClient
 
 # Minimal client
 client = MCPClient()
 
 # Client with authentication
-from kailash.mcp_server.auth import APIKeyAuth
+from kailash_mcp.auth import APIKeyAuth
 
 auth = APIKeyAuth({"user1": "secret-key"})
 client = MCPClient(
@@ -205,7 +205,7 @@ async with client:
 ### 3.1 Simple Server (Prototyping)
 
 ```python
-from kailash.mcp_server import SimpleMCPServer
+from kailash_mcp import SimpleMCPServer
 
 # Lightweight server for development
 server = SimpleMCPServer("my-tools")
@@ -234,8 +234,8 @@ if __name__ == "__main__":
 ### 3.2 Production Server with Features
 
 ```python
-from kailash.mcp_server import MCPServer
-from kailash.mcp_server.auth import APIKeyAuth
+from kailash_mcp import MCPServer
+from kailash_mcp.auth import APIKeyAuth
 
 # Create production server
 auth = APIKeyAuth({
@@ -268,7 +268,7 @@ if __name__ == "__main__":
 ### 3.3 Server Base Class Pattern
 
 ```python
-from kailash.mcp_server import MCPServerBase
+from kailash_mcp import MCPServerBase
 
 class MyCustomServer(MCPServerBase):
     """Custom MCP server with specific tools."""
@@ -301,8 +301,8 @@ server.start()
 ### 3.4 WebSocket Server Transport
 
 ```python
-from kailash.mcp_server import MCPServer
-from kailash.mcp_server.transports import WebSocketTransport
+from kailash_mcp import MCPServer
+from kailash_mcp.transports import WebSocketTransport
 
 # Create WebSocket server
 server = MCPServer(
@@ -333,7 +333,7 @@ if __name__ == "__main__":
 ### 4.1 Server Registration
 
 ```python
-from kailash.mcp_server import ServiceRegistry, ServerInfo
+from kailash_mcp import ServiceRegistry, ServerInfo
 
 # Create registry
 registry = ServiceRegistry()
@@ -370,7 +370,7 @@ for server in servers:
 ### 4.3 Auto-Discovery with Registration
 
 ```python
-from kailash.mcp_server import MCPServer, enable_auto_discovery
+from kailash_mcp import MCPServer, enable_auto_discovery
 
 # Create server
 server = MCPServer("my-server")
@@ -396,7 +396,7 @@ registrar.start_with_registration()
 ### 4.4 Health Checking
 
 ```python
-from kailash.mcp_server.discovery import HealthChecker
+from kailash_mcp.discovery import HealthChecker
 
 # Create health checker
 health_checker = HealthChecker(registry)
@@ -419,7 +419,7 @@ else:
 ### 5.1 API Key Authentication
 
 ```python
-from kailash.mcp_server.auth import APIKeyAuth
+from kailash_mcp.auth import APIKeyAuth
 
 # Simple API key auth
 auth = APIKeyAuth(["secret-key-1", "secret-key-2"])
@@ -443,7 +443,7 @@ client = MCPClient(auth_provider=auth)
 ### 5.2 JWT Authentication
 
 ```python
-from kailash.mcp_server.auth import JWTAuth
+from kailash_mcp.auth import JWTAuth
 
 # Create JWT auth provider
 auth = JWTAuth(
@@ -467,7 +467,7 @@ client = MCPClient(auth_provider=auth)
 ### 5.3 Bearer Token Authentication
 
 ```python
-from kailash.mcp_server.auth import BearerTokenAuth
+from kailash_mcp.auth import BearerTokenAuth
 
 # Simple bearer tokens
 auth = BearerTokenAuth(tokens=["bearer-token-123"])
@@ -491,7 +491,7 @@ auth = BearerTokenAuth(
 ### 5.4 Permission Management
 
 ```python
-from kailash.mcp_server.auth import PermissionManager
+from kailash_mcp.auth import PermissionManager
 
 # Create permission manager
 perm_manager = PermissionManager()
@@ -513,7 +513,7 @@ can_admin = perm_manager.has_permission(user_perms, "tools.admin")  # False
 ### 5.5 Rate Limiting
 
 ```python
-from kailash.mcp_server.auth import RateLimiter
+from kailash_mcp.auth import RateLimiter
 
 # Create rate limiter
 rate_limiter = RateLimiter(
@@ -655,7 +655,7 @@ tool_discovery_config = {
 ### 7.1 Error Hierarchy
 
 ```python
-from kailash.mcp_server.errors import (
+from kailash_mcp.errors import (
     MCPError,                    # Base error
     AuthenticationError,         # Auth failures
     AuthorizationError,          # Permission denied
@@ -668,7 +668,7 @@ from kailash.mcp_server.errors import (
 )
 
 # Error codes
-from kailash.mcp_server.errors import MCPErrorCode
+from kailash_mcp.errors import MCPErrorCode
 
 MCPErrorCode.AUTHENTICATION_FAILED
 MCPErrorCode.AUTHORIZATION_FAILED
@@ -684,7 +684,7 @@ MCPErrorCode.TRANSPORT_ERROR
 ### 7.2 Retry Strategies
 
 ```python
-from kailash.mcp_server.errors import (
+from kailash_mcp.errors import (
     ExponentialBackoffRetry,
     CircuitBreakerRetry,
     RetryableOperation
@@ -717,7 +717,7 @@ result = await operation.execute(async_function)
 ### 7.3 Error Aggregation
 
 ```python
-from kailash.mcp_server.errors import ErrorAggregator
+from kailash_mcp.errors import ErrorAggregator
 
 # Collect errors from multiple operations
 aggregator = ErrorAggregator()
@@ -750,8 +750,8 @@ if aggregator.has_errors():
 
 ```python
 import pytest
-from kailash.mcp_server import MCPClient
-from kailash.mcp_server.auth import APIKeyAuth
+from kailash_mcp import MCPClient
+from kailash_mcp.auth import APIKeyAuth
 
 def test_mcp_client_initialization():
     """Test client initialization."""
@@ -788,7 +788,7 @@ async def test_tool_discovery():
 
 ```python
 import pytest
-from kailash.mcp_server import MCPClient, MCPServer
+from kailash_mcp import MCPClient, MCPServer
 
 @pytest.mark.integration
 async def test_real_mcp_server_communication():
@@ -874,8 +874,8 @@ async def test_llm_agent_with_mcp_tools():
 ### 9.1 Server Configuration
 
 ```python
-from kailash.mcp_server import MCPServer
-from kailash.mcp_server.auth import JWTAuth
+from kailash_mcp import MCPServer
+from kailash_mcp.auth import JWTAuth
 
 # Production server setup
 auth = JWTAuth(
@@ -937,8 +937,8 @@ if __name__ == "__main__":
 ### 9.2 Client Configuration
 
 ```python
-from kailash.mcp_server import MCPClient
-from kailash.mcp_server.auth import JWTAuth
+from kailash_mcp import MCPClient
+from kailash_mcp.auth import JWTAuth
 
 # Production client
 auth = JWTAuth(secret=os.getenv("JWT_SECRET"))
@@ -1009,17 +1009,17 @@ CMD ["python", "-m", "mcp_server"]
 
 ```python
 # MCP Client
-from kailash.mcp_server import MCPClient
+from kailash_mcp import MCPClient
 
 # Authentication
-from kailash.mcp_server.auth import (
+from kailash_mcp.auth import (
     APIKeyAuth,
     BearerTokenAuth,
     JWTAuth
 )
 
 # Error Handling
-from kailash.mcp_server.errors import (
+from kailash_mcp.errors import (
     MCPError,
     AuthenticationError,
     ToolError,
@@ -1029,7 +1029,7 @@ from kailash.mcp_server.errors import (
 )
 
 # Discovery
-from kailash.mcp_server import (
+from kailash_mcp import (
     discover_mcp_servers,
     get_mcp_client
 )
@@ -1039,21 +1039,21 @@ from kailash.mcp_server import (
 
 ```python
 # MCP Server
-from kailash.mcp_server import (
+from kailash_mcp import (
     MCPServer,           # Production server
     SimpleMCPServer,     # Prototyping server
     MCPServerBase        # Custom server base class
 )
 
 # Service Discovery
-from kailash.mcp_server import (
+from kailash_mcp import (
     ServiceRegistry,
     ServerInfo,
     enable_auto_discovery
 )
 
 # Authentication
-from kailash.mcp_server.auth import (
+from kailash_mcp.auth import (
     AuthProvider,
     APIKeyAuth,
     JWTAuth,
@@ -1090,7 +1090,7 @@ from kailash.nodes.ai import LLMAgentNode
 from kaizen.mcp import MCPClient  # ❌ Partial implementation
 
 # Use Kailash's proven implementation
-from kailash.mcp_server import MCPClient  # ✅ Production-ready
+from kailash_mcp import MCPClient  # ✅ Production-ready
 ```
 
 ### 11.2 Example Updates
@@ -1100,7 +1100,7 @@ Update Kaizen examples to use Kailash MCP patterns:
 ```python
 # examples/5-mcp-integration/agent-as-client/workflow.py
 
-from kailash.mcp_server import MCPClient
+from kailash_mcp import MCPClient
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
@@ -1159,9 +1159,9 @@ See [Kailash MCP Quick Start](../../kailash_python_sdk/sdk-users/1-quickstart/mc
 
 ## Patterns
 
-- Client: Use `kailash.mcp_server.MCPClient`
-- Server: Use `kailash.mcp_server.MCPServer`
-- Auth: Use `kailash.mcp_server.auth` module
+- Client: Use `kailash_mcp.MCPClient`
+- Server: Use `kailash_mcp.MCPServer`
+- Auth: Use `kailash_mcp.auth` module
 ```
 
 ---
@@ -1199,7 +1199,7 @@ See [Kailash MCP Quick Start](../../kailash_python_sdk/sdk-users/1-quickstart/mc
 ## 13. Next Steps for Kaizen Integration
 
 1. **Remove partial MCP implementation** in `src/kaizen/mcp/`
-2. **Update imports** in Kaizen examples to use `kailash.mcp_server`
+2. **Update imports** in Kaizen examples to use `kailash_mcp`
 3. **Add MCP examples** following Kailash patterns
 4. **Implement tests** using 3-tier strategy
 5. **Update documentation** to reference Kailash MCP docs

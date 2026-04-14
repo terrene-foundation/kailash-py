@@ -3009,7 +3009,7 @@ provides-extras = ["rlhf", "eval", "serve", "online", "all", "dev"]
 
 [[package]]
 name = "kailash-dataflow"
-version = "2.0.6"
+version = "2.0.7"
 source = { editable = "packages/kailash-dataflow" }
 dependencies = [
     { name = "aiomysql" },
@@ -3097,6 +3097,7 @@ dependencies = [
     { name = "gitpython" },
     { name = "google-genai" },
     { name = "kailash" },
+    { name = "kailash-mcp" },
     { name = "numpy" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-sdk" },
@@ -3131,6 +3132,7 @@ requires-dist = [
     { name = "google-genai", specifier = ">=1.21.0" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.12" },
     { name = "kailash", specifier = ">=2.8.1" },
+    { name = "kailash-mcp", specifier = ">=0.2.3" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "opentelemetry-api", specifier = ">=1.20.0" },
     { name = "opentelemetry-sdk", specifier = ">=1.20.0" },
@@ -3155,7 +3157,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "kailash-mcp"
-version = "0.2.2"
+version = "0.2.3"
 source = { editable = "packages/kailash-mcp" }
 dependencies = [
     { name = "kailash" },
