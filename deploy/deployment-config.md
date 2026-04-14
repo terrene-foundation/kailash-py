@@ -20,7 +20,7 @@
 | kailash (core)   | `v*`               | 2.8.6           |
 | kailash-dataflow | `dataflow-v*`      | 2.0.8           |
 | kailash-kaizen   | `kaizen-v*`        | 2.7.4           |
-| kailash-nexus    | `nexus-v*`         | 2.0.2           |
+| kailash-nexus    | `nexus-v*`         | 2.0.3           |
 | kailash-pact     | `pact-v*`          | 0.8.1           |
 | kailash-ml       | `ml-v*`            | 0.9.0           |
 | kailash-align    | `align-v*`         | 0.3.1           |
@@ -66,3 +66,33 @@ git tag v2.5.0 -m "Release message"
 
 GitHub Actions `push.tags` webhook processing handles lightweight tags
 more reliably than annotated tags pushed after creation.
+
+## Multi-Tag Release — Push Individually
+
+When releasing multiple packages at once (coordinated patch release), tags
+MUST be pushed individually, NOT in a single batch. Batch pushes of 3+ tags
+fail to trigger the publish workflow reliably.
+
+```bash
+# CORRECT — push tags one at a time
+git push origin v2.8.6
+git push origin dataflow-v2.0.8
+git push origin kaizen-v2.7.4
+git push origin nexus-v2.0.2
+git push origin mcp-v0.2.4
+
+# WRONG — batch push silently skips workflow triggers
+git push origin v2.8.6 dataflow-v2.0.8 kaizen-v2.7.4 nexus-v2.0.2 mcp-v0.2.4
+# ↑ observed on 2026-04-14: ZERO of 5 tags triggered publish-pypi.yml.
+# Required manual workflow_dispatch for each package.
+```
+
+**Why:** GitHub Actions' `push.tags` webhook delivery has undocumented
+rate-limiting/batching behavior when multiple tags arrive in a single push
+event. The first observed failure mode (2026-04-14): 5 tags pushed at once
+triggered zero workflow runs. Individual pushes with a brief pause (≥1s)
+between them trigger reliably.
+
+**Recovery if a batch push was already done**: use `workflow_dispatch` to
+manually trigger publishing for each affected package. The tags themselves
+are still valid — only the auto-trigger was missed.

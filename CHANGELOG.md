@@ -15,6 +15,16 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### kailash-nexus 2.0.3 — 2026-04-14
+
+#### Added
+
+- **`ForbiddenError` canonical 403 class** (`kailash-nexus 2.0.3`): Added `nexus.ForbiddenError` as the canonical name for authorization failures. Avoids shadowing Python's stdlib `PermissionError` for any consumer that `from nexus.errors import *` or rebinds `PermissionError` locally. The previous `PermissionError` class is kept as a deprecated alias — `from nexus.errors import PermissionError` and `from nexus import NexusPermissionError` continue to work unchanged. Resolves security-review finding M1.
+
+#### Changed
+
+- **Internal `core.py` callers migrated to `ForbiddenError`** — the guard-failure code path (`_wrap_with_guard` for both sync and async) now raises `ForbiddenError` directly. The runtime class is identical (`PermissionError is ForbiddenError`), so existing `except nexus.NexusPermissionError` handlers continue to catch it.
+
 ### kailash 2.8.6 + kailash-dataflow 2.0.8 + kailash-kaizen 2.7.4 + kailash-nexus 2.0.2 + kailash-mcp 0.2.4 — 2026-04-14
 
 #### Fixed

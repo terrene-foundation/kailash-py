@@ -65,13 +65,19 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from .errors import BadGatewayError, ConflictError, NexusError, NotFoundError
-from .errors import PermissionError as NexusPermissionError
+from .errors import (
+    BadGatewayError,
+    ConflictError,
+    ForbiddenError,
+    NexusError,
+    NotFoundError,
+)
+from .errors import PermissionError as NexusPermissionError  # deprecated alias
 from .errors import RateLimitError, ServiceUnavailableError
 from .errors import TimeoutError as NexusTimeoutError
 from .errors import UnauthorizedError, ValidationError
 
-__version__ = "2.0.2"
+__version__ = "2.0.3"
 __all__ = [
     # Core
     "Nexus",
@@ -129,7 +135,8 @@ __all__ = [
     "NotFoundError",
     "ConflictError",
     "UnauthorizedError",
-    "NexusPermissionError",
+    "ForbiddenError",  # canonical name for 403
+    "NexusPermissionError",  # deprecated alias for ForbiddenError
     "RateLimitError",
     "ServiceUnavailableError",
     "BadGatewayError",

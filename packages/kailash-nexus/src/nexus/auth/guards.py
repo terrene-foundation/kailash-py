@@ -7,7 +7,7 @@ AuthGuard provides a declarative way to attach RBAC constraints to
 individual handlers rather than relying solely on route-scoped
 middleware. When a handler is registered with ``guard=``, the guard's
 ``check()`` method is called before the handler function executes. If
-the check fails, a ``PermissionError`` is raised and the handler never
+the check fails, a ``ForbiddenError`` is raised and the handler never
 runs.
 
 Usage::
